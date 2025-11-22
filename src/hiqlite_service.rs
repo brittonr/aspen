@@ -294,13 +294,29 @@ impl HiqliteService {
 
     /// Check cluster health and connectivity
     pub async fn health_check(&self) -> Result<ClusterHealth> {
-        // TODO: Query hiqlite for cluster status
-        // For now, return a simple health check
-        Ok(ClusterHealth {
-            is_healthy: true,
-            node_count: 1,
-            has_leader: true,
-        })
+        // Query hiqlite for actual cluster metrics
+        match self.client.metrics_db().await {
+            Ok(metrics) => {
+                let membership = metrics.membership_config.membership();
+                let node_count = membership.nodes().count();
+                let has_leader = metrics.current_leader.is_some();
+                let is_healthy = self.client.is_healthy_db().await.is_ok();
+
+                Ok(ClusterHealth {
+                    is_healthy,
+                    node_count,
+                    has_leader,
+                })
+            }
+            Err(e) => {
+                tracing::warn!("Failed to get cluster metrics: {}", e);
+                Ok(ClusterHealth {
+                    is_healthy: false,
+                    node_count: 0,
+                    has_leader: false,
+                })
+            }
+        }
     }
 }
 
