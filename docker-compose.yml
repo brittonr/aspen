@@ -15,7 +15,8 @@ services:
       - IROH_BLOBS_PATH=/data/iroh
     ports:
       - "3020:3020"
-      - "9001:9001"
+      - "9000:9000"  # Raft consensus
+      - "9001:9001"  # Hiqlite API
     networks:
       cluster:
         ipv4_address: 192.168.100.11
@@ -26,6 +27,9 @@ services:
     image: mvm-ci-cluster:latest
     container_name: mvm-ci-node2
     hostname: node2
+    depends_on:
+      node1:
+        condition: service_started
     environment:
       - NODE_ID=2
       - HTTP_PORT=3020
@@ -36,7 +40,8 @@ services:
       - IROH_BLOBS_PATH=/data/iroh
     ports:
       - "3021:3020"
-      - "9002:9001"
+      - "9010:9000"  # Raft consensus (external port to avoid conflict)
+      - "9011:9001"  # Hiqlite API
     networks:
       cluster:
         ipv4_address: 192.168.100.12
@@ -47,6 +52,11 @@ services:
     image: mvm-ci-cluster:latest
     container_name: mvm-ci-node3
     hostname: node3
+    depends_on:
+      node1:
+        condition: service_started
+      node2:
+        condition: service_started
     environment:
       - NODE_ID=3
       - HTTP_PORT=3020
@@ -57,7 +67,8 @@ services:
       - IROH_BLOBS_PATH=/data/iroh
     ports:
       - "3022:3020"
-      - "9003:9001"
+      - "9020:9000"  # Raft consensus (external port to avoid conflict)
+      - "9021:9001"  # Hiqlite API
     networks:
       cluster:
         ipv4_address: 192.168.100.13

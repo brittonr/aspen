@@ -92,6 +92,9 @@ async fn main() {
     println!("Work Queue Ticket: {}", work_ticket);
     println!();
 
+    // Create shared application state
+    let state = AppState::new(module, iroh_service, hiqlite_service, work_queue);
+
     let app = Router::new()
         .route("/", get(index))
         .route("/timeout", get(timeout))
@@ -115,7 +118,7 @@ async fn main() {
         .route("/queue/status/{job_id}", post(queue_update_status))
         // Hiqlite API routes
         .route("/hiqlite/health", get(hiqlite_health))
-        .with_state(AppState::new(module, iroh_service, hiqlite_service, work_queue));
+        .with_state(state.clone());
 
     // Clone router for dual listeners
     let local_app = app.clone();
@@ -138,6 +141,62 @@ async fn main() {
         axum::serve(listener, local_app)
             .await
             .expect("Local HTTP server failed");
+    });
+
+    // Spawn background worker to claim and process jobs from distributed queue
+    let worker_state = state.clone();
+    tokio::spawn(async move {
+        println!("Starting distributed work queue processor...");
+        println!("  - Polling for jobs every 2 seconds");
+        println!("  - Load balanced across all cluster nodes");
+
+        loop {
+            // Try to claim work from the distributed queue
+            match worker_state.work_queue().claim_work().await {
+                Ok(Some(work_item)) => {
+                    tracing::info!(
+                        job_id = %work_item.job_id,
+                        "Claimed job from distributed queue"
+                    );
+
+                    // Parse the payload to get job details
+                    let payload = &work_item.payload;
+                    if let (Some(id), Some(url)) = (payload.get("id").and_then(|v| v.as_u64()), payload.get("url").and_then(|v| v.as_str())) {
+                        let url = url.to_string();
+                        let id = id as usize;
+
+                        // Execute the workflow
+                        tracing::info!(job_id = %work_item.job_id, url = %url, "Starting workflow execution");
+
+                        if let Err(e) = worker_state
+                            .module()
+                            .start::<module1::start_crawler>(Job { id, url: url.clone() })
+                            .await
+                        {
+                            tracing::error!(job_id = %work_item.job_id, error = %e, "Workflow execution failed");
+                            worker_state.work_queue()
+                                .update_status(&work_item.job_id, work_queue::WorkStatus::Failed)
+                                .await
+                                .ok();
+                        } else {
+                            tracing::info!(job_id = %work_item.job_id, "Workflow completed successfully");
+                            worker_state.work_queue()
+                                .update_status(&work_item.job_id, work_queue::WorkStatus::Completed)
+                                .await
+                                .ok();
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // No work available, wait before polling again
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "Failed to claim work from queue");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
     });
 
     // Main thread runs P2P listener for distributed communication
@@ -267,19 +326,8 @@ async fn new_job(State(state): State<AppState>, Form(job): Form<NewJob>) -> impl
         .await
         .expect("Failed to publish work to hiqlite");
 
-    // Start the workflow in flawless
-    state
-        .module()
-        .start::<module1::start_crawler>(Job { id, url: url.clone() })
-        .await
-        .unwrap();
-
-    // Update hiqlite to mark workflow as started (InProgress)
-    state
-        .work_queue()
-        .update_status(&job_id, work_queue::WorkStatus::InProgress)
-        .await
-        .expect("Failed to update workflow status in hiqlite");
+    // Job is now in the queue - background workers will claim and process it
+    tracing::info!(job_id = %job_id, url = %url, "Job published to distributed queue");
 
     list(State(state)).await
 }
