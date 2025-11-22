@@ -10,11 +10,21 @@ echo "Aggregating Flawless workflow logs from all nodes"
 echo "Press Ctrl+C to stop"
 echo ""
 
+# Check if containers are running
+for node in 1 2 3; do
+    if ! docker ps --format '{{.Names}}' | grep -q "mvm-ci-node${node}"; then
+        echo "Warning: Container mvm-ci-node${node} not running"
+    fi
+done
+echo ""
+
 # Function to follow flawless logs from a specific node
 follow_flawless() {
     local node=$1
     local color=$2
-    docker exec mvm-ci-node${node} tail -f /var/log/flawless.log 2>/dev/null | while IFS= read -r line; do
+
+    # Use docker logs to get flawless output since it redirects to /var/log/flawless.log
+    docker logs -f --tail=20 mvm-ci-node${node} 2>&1 | grep -E "flawless|workflow|Echo|Job" | while IFS= read -r line; do
         echo -e "${color}[Node${node}]${RESET_COLOR} $line"
     done &
 }
@@ -24,5 +34,6 @@ follow_flawless 1 $NODE1_COLOR
 follow_flawless 2 $NODE2_COLOR
 follow_flawless 3 $NODE3_COLOR
 
-# Wait for all background processes
+# Keep the script running
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
 wait
