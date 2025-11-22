@@ -187,6 +187,15 @@ impl WorkQueue {
     pub async fn claim_work(&self) -> Result<Option<WorkItem>> {
         let now = chrono::Utc::now().timestamp();
 
+        // Refresh cache from hiqlite to get latest state from distributed database
+        let fresh_cache = Self::load_from_hiqlite(&self.hiqlite).await?;
+
+        // Update our cache with fresh data
+        {
+            let mut cache = self.cache.write().await;
+            *cache = fresh_cache;
+        }
+
         // Find first pending work item in cache
         let mut cache = self.cache.write().await;
 
@@ -236,12 +245,19 @@ impl WorkQueue {
 
         // If job is completing or failing, record which node completed it
         if status == WorkStatus::Completed || status == WorkStatus::Failed {
-            self.hiqlite
+            // State machine guard: prevent regression from terminal states
+            // Allow idempotent updates (completed→completed or failed→failed)
+            let rows_affected = self.hiqlite
                 .execute(
-                    "UPDATE workflows SET status = $1, completed_by = $2, updated_at = $3 WHERE id = $4",
+                    "UPDATE workflows SET status = $1, completed_by = $2, updated_at = $3 WHERE id = $4 AND (status NOT IN ('completed', 'failed') OR status = $1)",
                     params!(status_str, self.node_id.clone(), now, job_id),
                 )
                 .await?;
+
+            if rows_affected == 0 {
+                tracing::debug!(job_id = %job_id, new_status = ?status, "Status update rejected by state machine (job may already be in terminal state)");
+                return Ok(());
+            }
 
             // Update local cache
             let mut cache = self.cache.write().await;
@@ -252,12 +268,18 @@ impl WorkQueue {
             }
         } else {
             // For other status updates, don't touch completed_by
-            self.hiqlite
+            // State machine guard: prevent any updates to terminal states
+            let rows_affected = self.hiqlite
                 .execute(
-                    "UPDATE workflows SET status = $1, updated_at = $2 WHERE id = $3",
+                    "UPDATE workflows SET status = $1, updated_at = $2 WHERE id = $3 AND status NOT IN ('completed', 'failed')",
                     params!(status_str, now, job_id),
                 )
                 .await?;
+
+            if rows_affected == 0 {
+                tracing::debug!(job_id = %job_id, new_status = ?status, "Status update rejected by state machine (job is in terminal state)");
+                return Ok(());
+            }
 
             // Update local cache
             let mut cache = self.cache.write().await;

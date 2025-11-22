@@ -24,7 +24,7 @@ use hiqlite_service::HiqliteService;
 use work_queue::WorkQueue;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for logs
     tracing_subscriber::fmt::init();
 
@@ -159,6 +159,14 @@ async fn main() {
                         "Claimed job from distributed queue"
                     );
 
+                    // Immediately mark as in-progress to prevent re-claiming
+                    if let Err(e) = worker_state.work_queue()
+                        .update_status(&work_item.job_id, work_queue::WorkStatus::InProgress)
+                        .await
+                    {
+                        tracing::error!(job_id = %work_item.job_id, error = %e, "Failed to mark job as in-progress");
+                    }
+
                     // Parse the payload to get job details
                     let payload = &work_item.payload;
                     if let (Some(id), Some(url)) = (payload.get("id").and_then(|v| v.as_u64()), payload.get("url").and_then(|v| v.as_str())) {
@@ -203,9 +211,17 @@ async fn main() {
     println!("Starting HTTP/3 server over iroh for P2P...");
     println!("  - Remote instances can connect via P2P");
     println!("  - Blob storage and gossip coordination");
-    h3_iroh::axum::serve(endpoint, p2p_app)
-        .await
-        .expect("HTTP/3 over iroh server failed");
+
+    match h3_iroh::axum::serve(endpoint, p2p_app).await {
+        Ok(_) => {
+            tracing::info!("HTTP/3 over iroh server shut down gracefully");
+            Ok(())
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "HTTP/3 over iroh server failed - relay connection may be lost");
+            Err(Box::new(e))
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

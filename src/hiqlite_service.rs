@@ -89,11 +89,25 @@ impl HiqliteService {
         if expected_nodes > 1 {
             tracing::info!(
                 node_id = ?node_id,
-                "Waiting for Raft cluster to form with {} nodes...",
-                expected_nodes
+                expected_nodes = expected_nodes,
+                "Waiting for Raft cluster to form..."
             );
 
+            let start_time = std::time::Instant::now();
+            let mut last_log_time = std::time::Instant::now();
+
             loop {
+                let elapsed = start_time.elapsed();
+
+                // Warn if cluster formation is taking too long
+                if elapsed > std::time::Duration::from_secs(60) {
+                    tracing::warn!(
+                        node_id = ?node_id,
+                        elapsed_secs = elapsed.as_secs(),
+                        "Cluster formation is taking longer than expected - check network connectivity and hiqlite configuration"
+                    );
+                }
+
                 // Check if cluster is healthy
                 match client.is_healthy_db().await {
                     Ok(_) => {
@@ -102,32 +116,51 @@ impl HiqliteService {
                             let membership = metrics.membership_config.membership();
                             let online_nodes = membership.nodes().count();
                             let voter_nodes = membership.voter_ids().count();
+                            let learner_nodes = membership.learner_ids().count();
+
+                            // Log member node IDs for debugging
+                            let member_ids: Vec<_> = membership.nodes().map(|(id, _)| *id).collect();
+                            let voter_ids: Vec<_> = membership.voter_ids().cloned().collect();
 
                             if online_nodes == expected_nodes && voter_nodes == expected_nodes {
                                 tracing::info!(
                                     node_id = ?node_id,
                                     online_nodes = online_nodes,
                                     voter_nodes = voter_nodes,
+                                    member_ids = ?member_ids,
+                                    elapsed_secs = elapsed.as_secs(),
                                     "Raft cluster fully formed - all nodes are voting members"
                                 );
                                 break;
                             } else {
-                                tracing::info!(
-                                    node_id = ?node_id,
-                                    online_nodes = online_nodes,
-                                    voter_nodes = voter_nodes,
-                                    expected = expected_nodes,
-                                    "Waiting for all nodes to join cluster..."
-                                );
+                                // Log progress every 5 seconds to avoid spam
+                                if last_log_time.elapsed() > std::time::Duration::from_secs(5) {
+                                    tracing::info!(
+                                        node_id = ?node_id,
+                                        online_nodes = online_nodes,
+                                        voter_nodes = voter_nodes,
+                                        learner_nodes = learner_nodes,
+                                        expected_nodes = expected_nodes,
+                                        member_ids = ?member_ids,
+                                        voter_ids = ?voter_ids,
+                                        "Waiting for all nodes to join cluster..."
+                                    );
+                                    last_log_time = std::time::Instant::now();
+                                }
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::debug!(
-                            node_id = ?node_id,
-                            error = %e,
-                            "Cluster not yet healthy, waiting..."
-                        );
+                        // Log at INFO level during cluster formation instead of DEBUG
+                        if last_log_time.elapsed() > std::time::Duration::from_secs(5) {
+                            tracing::info!(
+                                node_id = ?node_id,
+                                error = %e,
+                                elapsed_secs = elapsed.as_secs(),
+                                "Cluster not yet healthy, waiting..."
+                            );
+                            last_log_time = std::time::Instant::now();
+                        }
                     }
                 }
 
@@ -144,11 +177,46 @@ impl HiqliteService {
     async fn build_config() -> Result<NodeConfig> {
         // Try loading from TOML file first, fall back to environment
         if let Ok(config) = NodeConfig::from_toml("hiqlite.toml", None, None).await {
+            tracing::info!(
+                node_id = ?config.node_id,
+                data_dir = ?config.data_dir,
+                nodes_count = config.nodes.len(),
+                "Loaded hiqlite config from hiqlite.toml"
+            );
+
+            // Log detailed node configuration for debugging
+            for node in &config.nodes {
+                tracing::debug!(
+                    node_id = node.id,
+                    addr_raft = %node.addr_raft,
+                    addr_api = %node.addr_api,
+                    "Configured hiqlite node"
+                );
+            }
+
             return Ok(config);
         }
 
         // Otherwise build from environment with defaults
         let config = NodeConfig::from_env();
+
+        tracing::info!(
+            node_id = ?config.node_id,
+            data_dir = ?config.data_dir,
+            nodes_count = config.nodes.len(),
+            "Loaded hiqlite config from environment variables"
+        );
+
+        // Log detailed node configuration for debugging
+        for node in &config.nodes {
+            tracing::debug!(
+                node_id = node.id,
+                addr_raft = %node.addr_raft,
+                addr_api = %node.addr_api,
+                "Configured hiqlite node"
+            );
+        }
+
         Ok(config)
     }
 
