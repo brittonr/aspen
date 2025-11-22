@@ -23,8 +23,13 @@ follow_flawless() {
     local node=$1
     local color=$2
 
-    # Use docker logs to get flawless output since it redirects to /var/log/flawless.log
-    docker logs -f --tail=20 mvm-ci-node${node} 2>&1 | grep -E "flawless|workflow|Echo|Job" | while IFS= read -r line; do
+    # Use docker exec to tail the flawless log file inside the container
+    # If the file doesn't exist yet, wait for it to be created
+    while ! docker exec mvm-ci-node${node} test -f /var/log/flawless.log 2>/dev/null; do
+        sleep 1
+    done
+
+    docker exec mvm-ci-node${node} tail -f /var/log/flawless.log 2>/dev/null | while IFS= read -r line; do
         echo -e "${color}[Node${node}]${RESET_COLOR} $line"
     done &
 }
