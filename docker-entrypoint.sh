@@ -15,14 +15,9 @@ envsubst < /etc/hiqlite.toml.template > /data/hiqlite.toml
 ln -s /data/hiqlite.toml /hiqlite.toml
 echo "✓ Generated hiqlite config"
 
-# Staggered startup for Raft cluster formation
-# Node1 starts immediately as the bootstrap leader
-# Node2 and Node3 wait to allow Node1 to initialize
-if [ "${NODE_ID}" != "1" ]; then
-  DELAY=$((5 * ${NODE_ID}))
-  echo "Waiting ${DELAY} seconds for node1 to initialize Raft cluster..."
-  sleep ${DELAY}
-fi
+# For Raft cluster formation, all nodes must start simultaneously
+# The auto_init feature requires all nodes to be online before initialization
+# Remove any artificial delays - let Docker's depends_on handle ordering
 
 # Start flawless in background
 echo "Starting flawless server..."

@@ -68,10 +68,13 @@ impl HiqliteService {
     /// ```
     pub async fn new() -> Result<Self> {
         let config = Self::build_config().await?;
+        let node_id = config.node_id;
+        let expected_nodes = config.nodes.len();
 
         tracing::info!(
-            node_id = ?config.node_id,
+            node_id = ?node_id,
             data_dir = ?config.data_dir,
+            expected_cluster_size = expected_nodes,
             "Initializing hiqlite node"
         );
 
@@ -79,7 +82,60 @@ impl HiqliteService {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to start hiqlite node: {}", e))?;
 
-        tracing::info!("Hiqlite node initialized successfully");
+        // Give hiqlite time to start up
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+        // Wait for cluster to form (only if we have multiple nodes configured)
+        if expected_nodes > 1 {
+            tracing::info!(
+                node_id = ?node_id,
+                "Waiting for Raft cluster to form with {} nodes...",
+                expected_nodes
+            );
+
+            loop {
+                // Check if cluster is healthy
+                match client.is_healthy_db().await {
+                    Ok(_) => {
+                        // Now check if all nodes are members
+                        if let Ok(metrics) = client.metrics_db().await {
+                            let membership = metrics.membership_config.membership();
+                            let online_nodes = membership.nodes().count();
+                            let voter_nodes = membership.voter_ids().count();
+
+                            if online_nodes == expected_nodes && voter_nodes == expected_nodes {
+                                tracing::info!(
+                                    node_id = ?node_id,
+                                    online_nodes = online_nodes,
+                                    voter_nodes = voter_nodes,
+                                    "Raft cluster fully formed - all nodes are voting members"
+                                );
+                                break;
+                            } else {
+                                tracing::info!(
+                                    node_id = ?node_id,
+                                    online_nodes = online_nodes,
+                                    voter_nodes = voter_nodes,
+                                    expected = expected_nodes,
+                                    "Waiting for all nodes to join cluster..."
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            node_id = ?node_id,
+                            error = %e,
+                            "Cluster not yet healthy, waiting..."
+                        );
+                    }
+                }
+
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
+
+        tracing::info!(node_id = ?node_id, "Hiqlite node initialized successfully");
 
         Ok(Self { client })
     }

@@ -27,9 +27,6 @@ services:
     image: mvm-ci-cluster:latest
     container_name: mvm-ci-node2
     hostname: node2
-    depends_on:
-      node1:
-        condition: service_started
     environment:
       - NODE_ID=2
       - HTTP_PORT=3020
@@ -52,11 +49,6 @@ services:
     image: mvm-ci-cluster:latest
     container_name: mvm-ci-node3
     hostname: node3
-    depends_on:
-      node1:
-        condition: service_started
-      node2:
-        condition: service_started
     environment:
       - NODE_ID=3
       - HTTP_PORT=3020
