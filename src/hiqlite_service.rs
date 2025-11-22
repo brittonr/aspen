@@ -120,7 +120,7 @@ impl HiqliteService {
 
                             // Log member node IDs for debugging
                             let member_ids: Vec<_> = membership.nodes().map(|(id, _)| *id).collect();
-                            let voter_ids: Vec<_> = membership.voter_ids().cloned().collect();
+                            let voter_ids: Vec<_> = membership.voter_ids().collect();
 
                             if online_nodes == expected_nodes && voter_nodes == expected_nodes {
                                 tracing::info!(

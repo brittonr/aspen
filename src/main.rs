@@ -219,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             tracing::error!(error = %e, "HTTP/3 over iroh server failed - relay connection may be lost");
-            Err(Box::new(e))
+            Err(e.into())
         }
     }
 }
