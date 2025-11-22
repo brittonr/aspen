@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Color codes for different nodes
 NODE1_COLOR="\033[0;32m"  # Green

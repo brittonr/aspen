@@ -33,7 +33,8 @@
       "Bash(bash:*)",
       "Bash(zcat:*)",
       "Bash(cpio:*)",
-      "Bash(sudo docker logs:*)"
+      "Bash(sudo docker logs:*)",
+      "Bash(timeout 5 ./view-workflow-activity.sh:*)"
     ],
     "deny": [],
     "ask": []

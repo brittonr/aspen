@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Show only workflow execution activity
 NODE1_COLOR="\033[0;32m"
