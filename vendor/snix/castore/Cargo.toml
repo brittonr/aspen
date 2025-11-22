@@ -1,0 +1,119 @@
+[package]
+name = "snix-castore"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+
+[dependencies]
+async-compression = { workspace = true, features = ["tokio", "zstd"] }
+async-stream.workspace = true
+blake3 = { workspace = true, features = ["rayon", "std", "traits-preview"] }
+bstr.workspace = true
+bytes.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
+data-encoding.workspace = true
+digest.workspace = true
+fastcdc = { workspace = true, features = ["tokio"] }
+futures.workspace = true
+object_store = { workspace = true, features = ["http"] }
+parking_lot.workspace = true
+pin-project-lite.workspace = true
+prost.workspace = true
+thiserror.workspace = true
+tokio-stream = { workspace = true, features = ["fs", "net"] }
+tokio-util = { workspace = true, features = ["io", "io-util", "codec"] }
+tokio-tar.workspace = true
+tokio = { workspace = true, features = [
+  "fs",
+  "macros",
+  "net",
+  "rt",
+  "rt-multi-thread",
+  "signal",
+] }
+tokio-listener = { workspace = true, features = [
+  "clap",
+  "multi-listener",
+  "sd_listen",
+  "tonic012",
+] }
+toml = { version = "0.8.19", optional = true }
+tonic.workspace = true
+tonic-health.workspace = true
+tower.workspace = true
+tower-http = { workspace = true, features = ["trace"] }
+tracing.workspace = true
+tracing-indicatif.workspace = true
+snix-tracing = { path = "../tracing", features = ["tonic"] }
+url.workspace = true
+walkdir.workspace = true
+zstd.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_with.workspace = true
+serde_qs.workspace = true
+petgraph.workspace = true
+pin-project.workspace = true
+erased-serde.workspace = true
+serde_tagged.workspace = true
+hyper-util.workspace = true
+redb = { workspace = true, features = ["logging"] }
+bigtable_rs = { workspace = true, optional = true }
+fuse-backend-rs = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
+threadpool = { workspace = true, optional = true }
+tonic-reflection = { workspace = true, optional = true }
+vhost = { workspace = true, optional = true }
+vhost-user-backend = { workspace = true, optional = true }
+virtio-queue = { workspace = true, optional = true }
+vm-memory = { workspace = true, optional = true }
+vmm-sys-util = { workspace = true, optional = true }
+virtio-bindings = { workspace = true, optional = true }
+wu-manber.workspace = true
+auto_impl = "1.2.0"
+hashbrown.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+tonic-build.workspace = true
+
+[dev-dependencies]
+async-process.workspace = true
+rstest.workspace = true
+tempfile.workspace = true
+tokio-retry.workspace = true
+hex-literal.workspace = true
+rstest_reuse.workspace = true
+xattr.workspace = true
+serde_json.workspace = true
+tokio-test.workspace = true
+
+[features]
+default = ["cloud"]
+cloud = [
+  "dep:bigtable_rs",
+  "object_store/aws",
+  "object_store/azure",
+  "object_store/gcp",
+]
+fs = ["dep:fuse-backend-rs", "dep:threadpool", "dep:libc"]
+virtiofs = [
+  "fs",
+  "dep:vhost",
+  "dep:vhost-user-backend",
+  "dep:virtio-queue",
+  "dep:vm-memory",
+  "dep:vmm-sys-util",
+  "dep:virtio-bindings",
+  "fuse-backend-rs?/vhost-user-fs", # impl FsCacheReqHandler for SlaveFsCacheReq
+  "fuse-backend-rs?/virtiofs",
+]
+fuse = ["fs"]
+tonic-reflection = ["dep:tonic-reflection"]
+xp-composition-cli = ["toml", "xp-composition-url-refs"]
+# This feature enables anonymous url syntax which might inherently expose
+# arbitrary composition possibilities to the user.
+xp-composition-url-refs = []
+# Whether to run the integration tests.
+# Requires the following packages in $PATH:
+# cbtemulator, google-cloud-bigtable-tool
+integration = []

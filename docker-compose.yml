@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  node1:
+    image: mvm-ci-cluster:latest
+    container_name: mvm-ci-node1
+    hostname: node1
+    environment:
+      - NODE_ID=1
+      - HTTP_PORT=3020
+      - HIQLITE_NODE_ID=1
+      - HIQLITE_ADDR_API=0.0.0.0
+      - HIQLITE_ADDR_RAFT=0.0.0.0
+      - FLAWLESS_URL=http://localhost:27288
+      - IROH_BLOBS_PATH=/data/iroh
+    ports:
+      - "3020:3020"
+      - "9001:9001"
+    networks:
+      cluster:
+        ipv4_address: 192.168.100.11
+    volumes:
+      - node1-data:/data
+
+  node2:
+    image: mvm-ci-cluster:latest
+    container_name: mvm-ci-node2
+    hostname: node2
+    environment:
+      - NODE_ID=2
+      - HTTP_PORT=3020
+      - HIQLITE_NODE_ID=2
+      - HIQLITE_ADDR_API=0.0.0.0
+      - HIQLITE_ADDR_RAFT=0.0.0.0
+      - FLAWLESS_URL=http://localhost:27288
+      - IROH_BLOBS_PATH=/data/iroh
+    ports:
+      - "3021:3020"
+      - "9002:9001"
+    networks:
+      cluster:
+        ipv4_address: 192.168.100.12
+    volumes:
+      - node2-data:/data
+
+  node3:
+    image: mvm-ci-cluster:latest
+    container_name: mvm-ci-node3
+    hostname: node3
+    environment:
+      - NODE_ID=3
+      - HTTP_PORT=3020
+      - HIQLITE_NODE_ID=3
+      - HIQLITE_ADDR_API=0.0.0.0
+      - HIQLITE_ADDR_RAFT=0.0.0.0
+      - FLAWLESS_URL=http://localhost:27288
+      - IROH_BLOBS_PATH=/data/iroh
+    ports:
+      - "3022:3020"
+      - "9003:9001"
+    networks:
+      cluster:
+        ipv4_address: 192.168.100.13
+    volumes:
+      - node3-data:/data
+
+networks:
+  cluster:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:

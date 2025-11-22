@@ -1,0 +1,53 @@
+[package]
+name = "mvm-ci"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+module1= { path = "workflows/module1" }
+askama = "0.12"
+axum = "0.8"
+flawless = "1.0.0-beta.3"
+flawless-http = "1.0.0-beta.3"
+flawless-utils = "1.0.0-beta.3"
+iroh = "0.95.1"
+iroh-blobs = "0.97.0"
+iroh-gossip = "0.95.0"
+iroh-docs = "0.95.0"
+irpc = "0.11.0"
+nar-bridge = { git = "https://git.snix.dev/snix/snix.git" }
+nix-compat = { git = "https://git.snix.dev/snix/snix.git" }
+nix-compat-derive = { git = "https://git.snix.dev/snix/snix.git" }
+nix-daemon = { git = "https://git.snix.dev/snix/snix.git" }
+redb = "3.1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+snix-build = { git = "https://git.snix.dev/snix/snix.git" }
+snix-castore = { git = "https://git.snix.dev/snix/snix.git" }
+snix-castore-http = { git = "https://git.snix.dev/snix/snix.git" }
+snix-cli = { git = "https://git.snix.dev/snix/snix.git" }
+snix-eval = { git = "https://git.snix.dev/snix/snix.git" }
+snix-glue = { git = "https://git.snix.dev/snix/snix.git" }
+snix-serde = { git = "https://git.snix.dev/snix/snix.git" }
+snix-store = { git = "https://git.snix.dev/snix/snix.git" }
+snix-tracing = { git = "https://git.snix.dev/snix/snix.git" }
+snafu = "0.8.9"
+tokio = { version = "1.48.0", features = ["full"] }
+bytes = "1.5"
+anyhow = "1.0"
+futures = "0.3"
+async-stream = "0.3"
+hex = "0.4"
+h3-iroh = { path = "./vendor/h3-iroh", features = ["axum"] }
+iroh-tickets = "0.2"
+hiqlite = "0.11.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = "3.8"
+chrono = "0.4"
+
+[build-dependencies]
+flawless-utils = "1.0.0-beta.3"
+
+[workspace]
+members = ["workflows/module1"]

@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "WebFetch(domain:www.iroh.computer)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo build:*)",
+      "Bash(pkill:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:flawless.dev)",
+      "WebSearch",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:news.ycombinator.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cat:*)",
+      "Bash(cargo run:*)",
+      "Bash(mv:*)",
+      "Bash(find:*)",
+      "Bash(xargs cat:*)",
+      "Bash(flawless:*)",
+      "WebFetch(domain:rqlite.io)",
+      "WebFetch(domain:fly.io)",
+      "Bash(nix-shell:*)",
+      "Bash(chmod:*)",
+      "Bash(nix develop:*)",
+      "Bash(fusermount:*)",
+      "Bash(timeout 10 cargo run:*)",
+      "Bash(timeout 10 ./target/debug/mvm-ci:*)",
+      "Bash(cargo metadata:*)",
+      "Bash(bash:*)",
+      "Bash(zcat:*)",
+      "Bash(cpio:*)",
+      "Bash(sudo docker logs:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

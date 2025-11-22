@@ -1,0 +1,8 @@
+[hiqlite]
+node_id = 1
+listen_addr = "127.0.0.1:9000"
+data_dir = "./data/hiqlite-node1"
+secret_raft = "SuperSecureSecret1337ForRaft"
+secret_api = "SuperSecureSecret1337ForAPI"
+enc_keys = ["bVCyTsGaggVy5yqQ/UzluN29DZW41M3hTSkx6Y3NtZmRuQkR2TnJxUTYzcjQ="]
+enc_key_active = "bVCyTsGaggVy5yqQ"

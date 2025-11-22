@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: MIT
+// Copyright © 2022 The Tvix Authors
+// Copyright © 2025 The Snix Project
+syntax = "proto3";
+
+package snix.build.v1;
+
+import "snix/build/protos/build.proto";
+
+option go_package = "snix.dev/build/proto;buildv1";
+
+service BuildService {
+  rpc DoBuild(BuildRequest) returns (BuildResponse);
+}

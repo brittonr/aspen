@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: edef <edef@unfathomable.blue>
+// SPDX-License-Identifier: OSL-3.0 OR MIT OR Apache-2.0
+// Copyright © 2025 The Snix Project
+
+syntax = "proto3";
+
+package snix.castore.v1;
+
+option go_package = "snix.dev/castore/proto;castorev1";
+
+// A Directory can contain Directory, File or Symlink entries.
+// Each of these nodes have a name attribute, which is the basename in that
+// directory and node type specific attributes.
+// The name attribute:
+//  - MUST not contain slashes or null bytes
+//  - MUST not be '.' or '..'
+//  - MUST be unique across all three lists
+// Elements in each list need to be lexicographically ordered by the name
+// attribute.
+message Directory {
+  repeated DirectoryEntry directories = 1;
+  repeated FileEntry files = 2;
+  repeated SymlinkEntry symlinks = 3;
+}
+
+// A DirectoryEntry represents a directory.
+message DirectoryEntry {
+  // The (base)name of the directory
+  bytes name = 1;
+  // The blake3 digest of a Directory message.
+  bytes digest = 2;
+  // Number of child elements in the Directory referred to by `digest`.
+  // Calculated by summing up the numbers of `directories`, `files` and
+  // `symlinks`, and for each directory, its size field. Used for inode number
+  // calculation.
+  // This field is precisely as verifiable as any other Merkle tree edge.
+  // Resolve `digest`, and you can compute it incrementally. Resolve the entire
+  // tree, and you can fully compute it from scratch.
+  // A credulous implementation won't reject an excessive size, but this is
+  // harmless: you'll have some ordinals without nodes. Undersizing is obvious
+  // and easy to reject: you won't have an ordinal for some nodes.
+  uint64 size = 3;
+}
+
+// A FileEntry represents a regular or executable file.
+message FileEntry {
+  // The (base)name of the file
+  bytes name = 1;
+  // The blake3 digest of the file contents
+  bytes digest = 2;
+  // The file content size
+  uint64 size = 3;
+  // Whether the file is executable
+  bool executable = 4;
+}
+
+// A SymlinkEntry represents a symbolic link.
+message SymlinkEntry {
+  // The (base)name of the symlink
+  bytes name = 1;
+  // The target of the symlink.
+  bytes target = 2;
+}
+
+// A Entry is either a DirectoryEntry, FileEntry or SymlinkEntry.
+message Entry {
+  oneof entry {
+    DirectoryEntry directory = 1;
+    FileEntry file = 2;
+    SymlinkEntry symlink = 3;
+  }
+}

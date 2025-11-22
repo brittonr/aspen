@@ -1,0 +1,13 @@
+/target
+/nix-closure
+/flawless-binary
+/data
+/vm-test-data
+/workflows/*/target
+/result
+*.db
+*.db-shm
+*.db-wal
+*.wal
+*.hql
+lock

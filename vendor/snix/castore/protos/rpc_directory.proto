@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MIT
+// Copyright © 2022 The Tvix Authors
+// Copyright © 2025 The Snix Project
+syntax = "proto3";
+
+package snix.castore.v1;
+
+import "snix/castore/protos/castore.proto";
+
+option go_package = "snix.dev/castore/proto;castorev1";
+
+service DirectoryService {
+  // Get retrieves a stream of Directory messages, by using the lookup
+  // parameters in GetDirectoryRequest.
+  // Keep in mind multiple DirectoryNodes in different parts of the graph might
+  // have the same digest if they have the same underlying contents,
+  // so sending subsequent ones can be omitted.
+  //
+  // It is okay for certain implementations to only allow retrieval of
+  // Directory digests that are at the "root", aka the last element that's
+  // sent in a Put. This makes sense for implementations bundling closures of
+  // directories together in batches.
+  rpc Get(GetDirectoryRequest) returns (stream Directory);
+
+  // Put uploads a graph of Directory messages.
+  // Individual Directory messages need to be send in an order walking up
+  // from the leaves to the root - a Directory message can only refer to
+  // Directory messages previously sent in the same stream.
+  // Keep in mind multiple DirectoryNodes in different parts of the graph might
+  // have the same digest if they have the same underlying contents,
+  // so sending subsequent ones can be omitted.
+  // We might add a separate method, allowing to send partial graphs at a later
+  // time, if requiring to send the full graph turns out to be a problem.
+  rpc Put(stream Directory) returns (PutDirectoryResponse);
+}
+
+message GetDirectoryRequest {
+  oneof by_what {
+    // The blake3 hash of the (root) Directory message, serialized in
+    // protobuf canonical form.
+    // Keep in mind this can be a subtree of another root.
+    bytes digest = 1;
+  }
+
+  // If set to true, recursively resolve all child Directory messages.
+  // Directory messages SHOULD be streamed in a recursive breadth-first walk,
+  // but other orders are also fine, as long as Directory messages are only
+  // sent after they are referred to from previously sent Directory messages.
+  bool recursive = 2;
+}
+
+message PutDirectoryResponse {
+  bytes root_digest = 1;
+}

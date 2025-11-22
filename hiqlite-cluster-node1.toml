@@ -1,0 +1,16 @@
+[hiqlite]
+node_id = 1
+data_dir = "./data/hiqlite-node1"
+secret_raft = "SuperSecureSecret1337ForRaft"
+secret_api = "SuperSecureSecret1337ForAPI"
+enc_keys = ["bVCyTsGaggVy5yqQ/UzluN29DZW41M3hTSkx6Y3NtZmRuQkR2TnJxUTYzcjQ="]
+enc_key_active = "bVCyTsGaggVy5yqQ"
+
+# Raft cluster members (format: "id addr_raft addr_api")
+nodes = [
+    "1 127.0.0.1:9000 127.0.0.1:9001",
+    "2 127.0.0.1:9002 127.0.0.1:9003",
+]
+
+listen_addr_api = "0.0.0.0"
+listen_addr_raft = "0.0.0.0"
