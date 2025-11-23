@@ -9,12 +9,16 @@ use crate::iroh_service::IrohService;
 use crate::hiqlite_service::HiqliteService;
 use crate::work_queue::WorkQueue;
 
+pub mod factory;
 pub mod infrastructure;
 pub mod services;
 
 // Re-export sub-states for convenience
 pub use infrastructure::InfrastructureState;
 pub use services::DomainServices;
+
+// Re-export factory types for convenience
+pub use factory::{InfrastructureFactory, ProductionInfrastructureFactory};
 
 /// Root application state
 ///

@@ -7,6 +7,11 @@ edition = "2024"
 name = "mvm_ci"
 path = "src/lib.rs"
 
+[features]
+default = []
+# Enables test utilities (mocks, test factories) for integration tests
+test-utils = []
+
 [[bin]]
 name = "mvm-ci"
 path = "src/main.rs"

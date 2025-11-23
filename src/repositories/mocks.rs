@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::hiqlite_service::ClusterHealth;
 use crate::repositories::{StateRepository, WorkRepository};
-use crate::work_queue::{WorkItem, WorkQueueStats, WorkStatus};
+use crate::domain::types::{Job, JobStatus, QueueStats};
 
 /// Mock implementation of StateRepository for testing
 #[derive(Clone)]
@@ -44,16 +44,17 @@ impl StateRepository for MockStateRepository {
 /// Mock implementation of WorkRepository for testing
 #[derive(Clone)]
 pub struct MockWorkRepository {
-    work_items: Arc<Mutex<Vec<WorkItem>>>,
-    stats: Arc<Mutex<WorkQueueStats>>,
+    jobs: Arc<Mutex<Vec<Job>>>,
+    stats: Arc<Mutex<QueueStats>>,
 }
 
 impl MockWorkRepository {
     /// Create a new mock repository with empty queue
     pub fn new() -> Self {
         Self {
-            work_items: Arc::new(Mutex::new(Vec::new())),
-            stats: Arc::new(Mutex::new(WorkQueueStats {
+            jobs: Arc::new(Mutex::new(Vec::new())),
+            stats: Arc::new(Mutex::new(QueueStats {
+                total: 0,
                 pending: 0,
                 claimed: 0,
                 in_progress: 0,
@@ -63,57 +64,70 @@ impl MockWorkRepository {
         }
     }
 
-    /// Add work items for testing
-    pub async fn add_work_items(&self, items: Vec<WorkItem>) {
-        let mut work_items = self.work_items.lock().await;
-        work_items.extend(items);
+    /// Add jobs for testing
+    pub async fn add_jobs(&self, jobs: Vec<Job>) {
+        let mut job_list = self.jobs.lock().await;
+        job_list.extend(jobs);
     }
 
     /// Set the stats to return
-    pub async fn set_stats(&self, stats: WorkQueueStats) {
+    pub async fn set_stats(&self, stats: QueueStats) {
         *self.stats.lock().await = stats;
+    }
+
+    /// Get current timestamp for testing
+    fn current_timestamp() -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
     }
 }
 
 #[async_trait]
 impl WorkRepository for MockWorkRepository {
     async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()> {
-        let work_item = WorkItem {
-            job_id,
-            status: WorkStatus::Pending,
+        let now = Self::current_timestamp();
+        let job = Job {
+            id: job_id,
+            status: JobStatus::Pending,
             claimed_by: None,
             completed_by: None,
-            created_at: 0,
-            updated_at: 0,
+            created_at: now,
+            updated_at: now,
             payload,
         };
-        self.work_items.lock().await.push(work_item);
+        self.jobs.lock().await.push(job);
         Ok(())
     }
 
-    async fn claim_work(&self) -> Result<Option<WorkItem>> {
-        let mut items = self.work_items.lock().await;
-        Ok(items.iter_mut()
-            .find(|item| item.status == WorkStatus::Pending)
-            .map(|item| {
-                item.status = WorkStatus::Claimed;
-                item.clone()
+    async fn claim_work(&self) -> Result<Option<Job>> {
+        let mut jobs = self.jobs.lock().await;
+        let now = Self::current_timestamp();
+        Ok(jobs.iter_mut()
+            .find(|job| job.status == JobStatus::Pending)
+            .map(|job| {
+                job.status = JobStatus::Claimed;
+                job.updated_at = now;
+                job.clone()
             }))
     }
 
-    async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()> {
-        let mut items = self.work_items.lock().await;
-        if let Some(item) = items.iter_mut().find(|item| item.job_id == job_id) {
-            item.status = status;
+    async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
+        let mut jobs = self.jobs.lock().await;
+        let now = Self::current_timestamp();
+        if let Some(job) = jobs.iter_mut().find(|job| job.id == job_id) {
+            job.status = status;
+            job.updated_at = now;
         }
         Ok(())
     }
 
-    async fn list_work(&self) -> Result<Vec<WorkItem>> {
-        Ok(self.work_items.lock().await.clone())
+    async fn list_work(&self) -> Result<Vec<Job>> {
+        Ok(self.jobs.lock().await.clone())
     }
 
-    async fn stats(&self) -> WorkQueueStats {
+    async fn stats(&self) -> QueueStats {
         self.stats.lock().await.clone()
     }
 }

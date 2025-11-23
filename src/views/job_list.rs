@@ -2,8 +2,7 @@
 
 use askama::Template;
 use crate::domain::job_lifecycle::EnrichedJob;
-use crate::domain::{format_duration, format_time_ago};
-use crate::work_queue::WorkStatus;
+use crate::domain::{format_duration, format_time_ago, JobStatus};
 
 /// Individual job row for display
 #[derive(Debug, Clone)]
@@ -21,11 +20,11 @@ pub struct JobRow {
 impl From<EnrichedJob> for JobRow {
     fn from(job: EnrichedJob) -> Self {
         let status_class = match job.status {
-            WorkStatus::Pending => "status-pending",
-            WorkStatus::Claimed => "status-claimed",
-            WorkStatus::InProgress => "status-in-progress",
-            WorkStatus::Completed => "status-completed",
-            WorkStatus::Failed => "status-failed",
+            JobStatus::Pending => "status-pending",
+            JobStatus::Claimed => "status-claimed",
+            JobStatus::InProgress => "status-in-progress",
+            JobStatus::Completed => "status-completed",
+            JobStatus::Failed => "status-failed",
         };
 
         let status_text = format!("{:?}", job.status);

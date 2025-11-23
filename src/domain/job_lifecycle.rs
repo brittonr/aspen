@@ -1,168 +1,97 @@
-//! Job lifecycle business logic
+//! Job lifecycle business logic (Facade over Command/Query services)
 //!
-//! Encapsulates job creation, status transitions, validation, and querying.
-//! Enforces business rules and state machine constraints.
+//! This service provides a unified API over JobCommandService and JobQueryService,
+//! maintaining backward compatibility while following CQRS principles internally.
+//!
+//! New code should prefer using JobCommandService and JobQueryService directly
+//! for clearer intent (mutation vs read).
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::Result;
 
-use crate::repositories::WorkRepository;
-use crate::work_queue::{WorkItem, WorkStatus, WorkQueueStats};
+use crate::domain::job_commands::JobCommandService;
+use crate::domain::job_queries::JobQueryService;
+use crate::domain::types::{Job, JobStatus, QueueStats};
 
-/// Job submission parameters
-#[derive(Debug, Clone)]
-pub struct JobSubmission {
-    pub url: String,
-}
+// Re-export types for backward compatibility
+pub use crate::domain::job_commands::JobSubmission;
+pub use crate::domain::job_queries::{EnrichedJob, JobSortOrder};
 
-/// Job with enriched metadata for display
-#[derive(Debug, Clone)]
-pub struct EnrichedJob {
-    pub job_id: String,
-    pub status: WorkStatus,
-    pub url: String,
-    pub duration_seconds: i64,
-    pub time_ago_seconds: i64,
-    pub claimed_by: Option<String>,
-}
-
-/// Job sorting options
-#[derive(Debug, Clone, Copy)]
-pub enum JobSortOrder {
-    Time,
-    Status,
-    JobId,
-}
-
-impl JobSortOrder {
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "status" => Self::Status,
-            "job_id" => Self::JobId,
-            _ => Self::Time,
-        }
-    }
-}
-
-/// Domain service for job lifecycle operations
+/// Facade service providing unified job lifecycle API
+///
+/// This service delegates to JobCommandService (writes) and JobQueryService (reads)
+/// following the CQRS pattern. It exists for backward compatibility and convenience.
+///
+/// **Recommendation:** New code should use JobCommandService and JobQueryService
+/// directly for clearer separation of concerns.
 pub struct JobLifecycleService {
-    work_repo: Arc<dyn WorkRepository>,
-    job_counter: Arc<AtomicUsize>,
+    commands: Arc<JobCommandService>,
+    queries: Arc<JobQueryService>,
 }
 
 impl JobLifecycleService {
-    /// Create a new job lifecycle service
-    pub fn new(work_repo: Arc<dyn WorkRepository>) -> Self {
-        Self {
-            work_repo,
-            job_counter: Arc::new(AtomicUsize::new(1)),
-        }
+    /// Create a new job lifecycle service from repository
+    ///
+    /// This creates both command and query services internally.
+    pub fn new(work_repo: Arc<dyn crate::repositories::WorkRepository>) -> Self {
+        let commands = Arc::new(JobCommandService::new(work_repo.clone()));
+        let queries = Arc::new(JobQueryService::new(work_repo));
+
+        Self { commands, queries }
     }
 
-    /// Submit a new job to the queue
+    /// Create from pre-built command and query services
+    ///
+    /// Useful when you want to inject event publishers into commands.
+    pub fn from_services(
+        commands: Arc<JobCommandService>,
+        queries: Arc<JobQueryService>,
+    ) -> Self {
+        Self { commands, queries }
+    }
+
+    // ===== Command methods (delegate to JobCommandService) =====
+
+    /// Submit a new job to the queue (Command)
     pub async fn submit_job(&self, submission: JobSubmission) -> Result<String> {
-        // Validate URL (basic validation)
-        if submission.url.is_empty() {
-            anyhow::bail!("URL cannot be empty");
+        self.commands.submit_job(submission).await
+    }
+
+    /// Claim a work item from the queue (Command)
+    pub async fn claim_work(&self) -> Result<Option<Job>> {
+        match self.commands.claim_job().await? {
+            Some(job_id) => {
+                // Need to fetch the full job for backward compatibility
+                self.queries.get_job(&job_id).await
+            }
+            None => Ok(None),
         }
-
-        // Generate unique job ID
-        let id = self.job_counter.fetch_add(1, Ordering::SeqCst);
-        let job_id = format!("job-{}", id);
-
-        // Create job payload
-        let payload = serde_json::json!({
-            "id": id,
-            "url": submission.url,
-        });
-
-        // Publish to distributed queue
-        self.work_repo.publish_work(job_id.clone(), payload).await?;
-
-        tracing::info!(job_id = %job_id, url = %submission.url, "Job submitted");
-
-        Ok(job_id)
     }
 
-    /// Get queue statistics
-    pub async fn get_queue_stats(&self) -> WorkQueueStats {
-        self.work_repo.stats().await
+    /// Update work item status (Command)
+    pub async fn update_work_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
+        self.commands.update_job_status(job_id, status).await
     }
 
-    /// List jobs with optional sorting and enrichment
+    // ===== Query methods (delegate to JobQueryService) =====
+
+    /// List all work items (Query)
+    pub async fn list_all_work(&self) -> Result<Vec<Job>> {
+        self.queries.list_all_jobs().await
+    }
+
+    /// Get queue statistics (Query)
+    pub async fn get_queue_stats(&self) -> QueueStats {
+        self.queries.get_queue_stats().await
+    }
+
+    /// List jobs with optional sorting and enrichment (Query)
     pub async fn list_jobs(
         &self,
         sort_order: JobSortOrder,
         limit: usize,
     ) -> Result<Vec<EnrichedJob>> {
-        let mut work_items = self.work_repo.list_work().await?;
-
-        // Apply sorting
-        self.sort_jobs(&mut work_items, sort_order);
-
-        // Take limited subset
-        let work_items: Vec<_> = work_items.into_iter().take(limit).collect();
-
-        // Enrich with computed metadata
-        let now = Self::current_timestamp();
-        let enriched = work_items
-            .into_iter()
-            .map(|item| self.enrich_job(item, now))
-            .collect();
-
-        Ok(enriched)
-    }
-
-    /// Sort jobs according to specified order
-    fn sort_jobs(&self, jobs: &mut Vec<WorkItem>, sort_order: JobSortOrder) {
-        match sort_order {
-            JobSortOrder::Status => {
-                jobs.sort_by(|a, b| {
-                    match format!("{:?}", a.status).cmp(&format!("{:?}", b.status)) {
-                        std::cmp::Ordering::Equal => b.updated_at.cmp(&a.updated_at),
-                        other => other,
-                    }
-                });
-            }
-            JobSortOrder::JobId => {
-                jobs.sort_by(|a, b| a.job_id.cmp(&b.job_id));
-            }
-            JobSortOrder::Time => {
-                // Most recent first
-                jobs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-            }
-        }
-    }
-
-    /// Enrich a work item with computed metadata
-    fn enrich_job(&self, item: WorkItem, now: i64) -> EnrichedJob {
-        let url = item
-            .payload
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or("-")
-            .to_string();
-
-        let duration_seconds = item.updated_at - item.created_at;
-        let time_ago_seconds = now - item.updated_at;
-
-        EnrichedJob {
-            job_id: item.job_id,
-            status: item.status,
-            url,
-            duration_seconds,
-            time_ago_seconds,
-            claimed_by: item.claimed_by,
-        }
-    }
-
-    /// Get current Unix timestamp
-    fn current_timestamp() -> i64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64
+        self.queries.list_jobs_with_options(sort_order, limit).await
     }
 }
 
@@ -193,5 +122,116 @@ pub fn format_time_ago(seconds: i64) -> String {
         format!("{}h ago", seconds / 3600)
     } else {
         format!("{}d ago", seconds / 86400)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repositories::mocks::MockWorkRepository;
+
+    #[tokio::test]
+    async fn test_submit_job_validates_empty_url() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        let service = JobLifecycleService::new(mock_repo);
+
+        // Act
+        let result = service.submit_job(JobSubmission {
+            url: String::new(),
+        }).await;
+
+        // Assert
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "URL cannot be empty");
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_generates_unique_ids() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        let service = JobLifecycleService::new(mock_repo.clone());
+
+        // Act
+        let job_id_1 = service.submit_job(JobSubmission {
+            url: "https://example.com".to_string(),
+        }).await.unwrap();
+
+        let job_id_2 = service.submit_job(JobSubmission {
+            url: "https://example.org".to_string(),
+        }).await.unwrap();
+
+        // Assert
+        assert_ne!(job_id_1, job_id_2);
+        assert!(job_id_1.starts_with("job-"));
+        assert!(job_id_2.starts_with("job-"));
+    }
+
+    #[tokio::test]
+    async fn test_claim_work_delegates_to_repository() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        let service = JobLifecycleService::new(mock_repo.clone());
+
+        // Add a work item
+        service.submit_job(JobSubmission {
+            url: "https://example.com".to_string(),
+        }).await.unwrap();
+
+        // Act
+        let result = service.claim_work().await;
+
+        // Assert
+        assert!(result.is_ok());
+        let job = result.unwrap();
+        assert!(job.is_some());
+        assert_eq!(job.unwrap().status, JobStatus::Claimed);
+    }
+
+    #[tokio::test]
+    async fn test_update_status_delegates_to_repository() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        let service = JobLifecycleService::new(mock_repo.clone());
+
+        // Submit and claim a job
+        let job_id = service.submit_job(JobSubmission {
+            url: "https://example.com".to_string(),
+        }).await.unwrap();
+
+        // Act
+        let result = service.update_work_status(&job_id, JobStatus::InProgress).await;
+
+        // Assert
+        assert!(result.is_ok());
+
+        // Verify the status was updated
+        let jobs = service.list_all_work().await.unwrap();
+        let job = jobs.iter().find(|job| job.id == job_id).unwrap();
+        assert_eq!(job.status, JobStatus::InProgress);
+    }
+
+    #[tokio::test]
+    async fn test_list_all_work_returns_raw_items() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        let service = JobLifecycleService::new(mock_repo.clone());
+
+        // Submit multiple jobs
+        service.submit_job(JobSubmission {
+            url: "https://example.com".to_string(),
+        }).await.unwrap();
+
+        service.submit_job(JobSubmission {
+            url: "https://example.org".to_string(),
+        }).await.unwrap();
+
+        // Act
+        let result = service.list_all_work().await;
+
+        // Assert
+        assert!(result.is_ok());
+        let jobs = result.unwrap();
+        assert_eq!(jobs.len(), 2);
     }
 }

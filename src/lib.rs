@@ -24,8 +24,15 @@ pub use config::AppConfig;
 mod work_queue;
 mod work_state_machine;
 mod work_item_cache;
-mod hiqlite_service;
-mod iroh_service;
 mod persistent_store;
 mod hiqlite_persistent_store;
 mod services;
+mod iroh_service;
+mod handlers;
+mod views;
+mod domain;
+
+// Export modules needed for testing
+pub mod hiqlite_service;
+pub mod repositories;
+pub mod state;

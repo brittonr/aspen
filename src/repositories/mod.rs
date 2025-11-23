@@ -7,13 +7,14 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
-use crate::work_queue::{WorkItem, WorkQueueStats, WorkStatus};
+use crate::domain::types::{Job, JobStatus, QueueStats};
 use crate::hiqlite_service::ClusterHealth;
 
 pub mod hiqlite_repository;
 pub mod work_queue_repository;
 
-#[cfg(test)]
+// Export mocks module for testing (both unit tests and integration tests)
+#[cfg(any(test, feature = "test-utils"))]
 pub mod mocks;
 
 // Re-export concrete implementations
@@ -32,20 +33,22 @@ pub trait StateRepository: Send + Sync {
 /// Repository abstraction for work queue operations
 ///
 /// Wraps WorkQueue to provide a testable interface for job lifecycle operations.
+/// All methods use domain types (Job, JobStatus, QueueStats) instead of
+/// infrastructure types, maintaining proper layer separation.
 #[async_trait]
 pub trait WorkRepository: Send + Sync {
     /// Publish a new work item to the queue
     async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()>;
 
     /// Claim the next available work item
-    async fn claim_work(&self) -> Result<Option<WorkItem>>;
+    async fn claim_work(&self) -> Result<Option<Job>>;
 
     /// Update the status of a work item
-    async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()>;
+    async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()>;
 
     /// List all work items in the queue
-    async fn list_work(&self) -> Result<Vec<WorkItem>>;
+    async fn list_work(&self) -> Result<Vec<Job>>;
 
     /// Get aggregate statistics for the work queue
-    async fn stats(&self) -> WorkQueueStats;
+    async fn stats(&self) -> QueueStats;
 }

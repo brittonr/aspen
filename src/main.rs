@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 // Internal modules
 mod config;
 mod domain;
@@ -19,12 +17,8 @@ mod work_queue;
 mod work_state_machine;
 
 use config::AppConfig;
-use hiqlite_persistent_store::HiqlitePersistentStore;
-use hiqlite_service::HiqliteService;
-use iroh_service::IrohService;
 use server::ServerConfig;
-use state::AppState;
-use work_queue::WorkQueue;
+use state::{AppState, InfrastructureFactory, ProductionInfrastructureFactory};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,17 +27,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load centralized configuration
     let config = AppConfig::load().expect("Failed to load configuration");
-
-    // Initialize hiqlite distributed state store
-    println!("Initializing hiqlite distributed state...");
-    let hiqlite_service = HiqliteService::new(config.storage.hiqlite_data_dir.clone())
-        .await
-        .expect("Failed to initialize hiqlite");
-    hiqlite_service
-        .initialize_schema()
-        .await
-        .expect("Failed to initialize hiqlite schema");
-    println!("✓ Hiqlite initialized");
 
     // Each node can have its own flawless server
     let flawless_url = config.flawless.flawless_url.clone();
@@ -67,27 +50,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to connect to relay");
 
-    // Initialize iroh service
-    let iroh_service = IrohService::new(config.storage.iroh_blobs_path.clone(), endpoint.clone());
-
-    // Initialize work queue with persistent store abstraction
-    println!("Initializing distributed work queue...");
     let node_id = endpoint.id().to_string();
 
-    // Create persistent store adapter for Hiqlite
-    let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite_service.clone()));
-
-    let work_queue = WorkQueue::new(endpoint.clone(), node_id, persistent_store)
+    // Create application state using factory pattern (enables dependency injection)
+    println!("Initializing application infrastructure...");
+    let factory = ProductionInfrastructureFactory::new();
+    let state = factory
+        .build_app_state(&config, module, endpoint.clone(), node_id)
         .await
-        .expect("Failed to initialize work queue");
-    let work_ticket = work_queue.get_ticket();
-    println!("✓ Work queue initialized");
+        .expect("Failed to build application state");
+
+    // Display work queue ticket for worker connections
+    let work_ticket = state.infrastructure().work_queue().get_ticket();
+    println!("✓ Application infrastructure initialized");
     println!("Work Queue Ticket: {}", work_ticket);
     println!();
-
-    // Create shared application state with modular architecture
-    // (Services implement traits but are stored as concrete types)
-    let state = AppState::from_infrastructure(module, iroh_service, hiqlite_service, work_queue);
 
     // NOTE: Worker loop removed - now handled by separate worker binary
     // Control plane is now a pure API server (no job execution)

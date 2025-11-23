@@ -1,7 +1,7 @@
 //! Queue statistics view model
 
 use askama::Template;
-use crate::work_queue::WorkQueueStats;
+use crate::domain::QueueStats;
 
 /// View model for queue statistics display
 #[derive(Template)]
@@ -13,8 +13,8 @@ pub struct QueueStatsView {
     pub failed: usize,
 }
 
-impl From<WorkQueueStats> for QueueStatsView {
-    fn from(stats: WorkQueueStats) -> Self {
+impl From<QueueStats> for QueueStatsView {
+    fn from(stats: QueueStats) -> Self {
         Self {
             pending: stats.pending,
             in_progress: stats.in_progress,
