@@ -252,10 +252,12 @@ impl HiqliteService {
             },
         ];
 
+        let data_dir_str = data_dir.to_string_lossy().to_string();
+
         let mut config = NodeConfig::default();
         config.node_id = node_id;
         config.nodes = nodes;
-        config.data_dir = data_dir.to_string_lossy().into();
+        config.data_dir = data_dir_str.into();
         config.secret_raft = "test-secret-raft-123456".to_string();
         config.secret_api = "test-secret-api-123456".to_string();
         config.log_statements = true;

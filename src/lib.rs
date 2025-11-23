@@ -22,5 +22,9 @@ pub use config::AppConfig;
 
 // Internal modules (used by main binary)
 mod work_queue;
+mod work_state_machine;
+mod work_item_cache;
 mod hiqlite_service;
 mod iroh_service;
+mod persistent_store;
+mod hiqlite_persistent_store;

@@ -1,18 +1,18 @@
-//! Work Queue with hiqlite-backed distributed state
+//! Work Queue - Thin Coordinator
 //!
-//! This module provides a distributed work queue where:
-//! - Jobs are published and persisted to hiqlite (Raft-replicated SQLite)
-//! - Workers claim jobs with strong consistency guarantees
-//! - State is replicated across all nodes via Raft consensus
-//! - Local cache provides fast reads with hiqlite as source of truth
+//! This module provides a distributed work queue that coordinates:
+//! - WorkItemCache: In-memory caching layer for fast reads
+//! - PersistentStore: Distributed storage with strong consistency
+//! - WorkStateMachine: Business logic for state transitions
+//!
+//! WorkQueue is now a thin orchestrator with no embedded business logic.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use crate::hiqlite_service::HiqliteService;
-use crate::params;
+use crate::persistent_store::PersistentStore;
+use crate::work_item_cache::WorkItemCache;
+use crate::work_state_machine::WorkStateMachine;
 
 /// Work item representing a job in the distributed queue
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,109 +48,57 @@ pub enum WorkStatus {
     Failed,
 }
 
-/// Work Queue service with hiqlite-backed persistence
+/// Work Queue - Coordinates cache, persistence, and state machine
 #[derive(Clone)]
 pub struct WorkQueue {
-    /// Local cache of work items (for fast reads)
-    cache: Arc<RwLock<HashMap<String, WorkItem>>>,
+    /// In-memory cache for fast local reads
+    cache: WorkItemCache,
     /// Our node identifier
     node_id: String,
-    /// Hiqlite service for distributed state
-    hiqlite: HiqliteService,
+    /// Persistent store for distributed state (trait allows swapping implementations)
+    store: Arc<dyn PersistentStore>,
 }
 
 impl std::fmt::Debug for WorkQueue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkQueue")
             .field("node_id", &self.node_id)
-            .field("hiqlite", &"<HiqliteService>")
+            .field("cache", &self.cache)
+            .field("store", &"<dyn PersistentStore>")
             .finish()
     }
 }
 
 impl WorkQueue {
-    /// Create a new work queue with hiqlite backend
+    /// Create a new work queue with persistent store backend
     pub async fn new(
         _endpoint: iroh::Endpoint,
         node_id: String,
-        hiqlite: HiqliteService,
+        store: Arc<dyn PersistentStore>,
     ) -> Result<Self> {
         tracing::info!(
             node_id = %node_id,
-            "Work queue initialized with hiqlite backend"
+            "Work queue initialized with persistent store"
         );
 
-        // Load existing workflows from hiqlite into cache
-        let cache = Self::load_from_hiqlite(&hiqlite).await?;
+        // Load existing workflows from persistent store into cache
+        let work_items = store.load_all_workflows().await?;
+        let cache = WorkItemCache::from_items(work_items.clone());
+
+        tracing::info!(count = work_items.len(), "Loaded workflows from persistent store");
 
         Ok(Self {
-            cache: Arc::new(RwLock::new(cache)),
+            cache,
             node_id,
-            hiqlite,
+            store,
         })
     }
 
-    /// Load all workflows from hiqlite into local cache
-    async fn load_from_hiqlite(hiqlite: &HiqliteService) -> Result<HashMap<String, WorkItem>> {
-        #[derive(Debug, serde::Deserialize)]
-        struct WorkflowRow {
-            id: String,
-            status: String,
-            claimed_by: Option<String>,
-            completed_by: Option<String>,
-            created_at: i64,
-            updated_at: i64,
-            data: Option<String>,
-        }
-
-        impl From<hiqlite::Row<'static>> for WorkflowRow {
-            fn from(mut row: hiqlite::Row<'static>) -> Self {
-                Self {
-                    id: row.get("id"),
-                    status: row.get("status"),
-                    claimed_by: row.get("claimed_by"),
-                    completed_by: row.get("completed_by"),
-                    created_at: row.get("created_at"),
-                    updated_at: row.get("updated_at"),
-                    data: row.get("data"),
-                }
-            }
-        }
-
-        let rows: Vec<WorkflowRow> = hiqlite
-            .query_as("SELECT id, status, claimed_by, completed_by, created_at, updated_at, data FROM workflows", params!())
-            .await?;
-
-        let mut cache = HashMap::new();
-        for row in rows {
-            let status = match row.status.as_str() {
-                "pending" => WorkStatus::Pending,
-                "claimed" => WorkStatus::Claimed,
-                "in_progress" => WorkStatus::InProgress,
-                "completed" => WorkStatus::Completed,
-                "failed" => WorkStatus::Failed,
-                _ => WorkStatus::Pending,
-            };
-
-            let payload = row.data
-                .and_then(|d| serde_json::from_str(&d).ok())
-                .unwrap_or(serde_json::Value::Null);
-
-            let work_item = WorkItem {
-                job_id: row.id.clone(),
-                status,
-                claimed_by: row.claimed_by,
-                completed_by: row.completed_by,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                payload,
-            };
-
-            cache.insert(row.id, work_item);
-        }
-
-        tracing::info!(count = cache.len(), "Loaded workflows from hiqlite");
-        Ok(cache)
+    /// Refresh cache from persistent store
+    async fn refresh_cache(&self) -> Result<()> {
+        let work_items = self.store.load_all_workflows().await?;
+        self.cache.replace_all(work_items).await;
+        Ok(())
     }
 
     /// Publish a new work item to the queue
@@ -167,19 +115,13 @@ impl WorkQueue {
             payload: payload.clone(),
         };
 
-        // Persist to hiqlite first (strong consistency)
-        let payload_str = serde_json::to_string(&payload)?;
-        self.hiqlite
-            .execute(
-                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, completed_by, created_at, updated_at, data) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                params!(job_id.clone(), "pending", None::<String>, None::<String>, now, now, payload_str),
-            )
-            .await?;
+        // Persist to store first (strong consistency via underlying implementation)
+        self.store.upsert_workflow(&work_item).await?;
 
         // Update local cache
-        self.cache.write().await.insert(job_id.clone(), work_item);
+        self.cache.upsert(work_item).await;
 
-        tracing::info!(job_id = %job_id, "Work item published to hiqlite");
+        tracing::info!(job_id = %job_id, "Work item published to persistent store");
         Ok(())
     }
 
@@ -187,65 +129,61 @@ impl WorkQueue {
     pub async fn claim_work(&self) -> Result<Option<WorkItem>> {
         let now = chrono::Utc::now().timestamp();
 
-        // Refresh cache from hiqlite to get latest state from distributed database
-        let fresh_cache = Self::load_from_hiqlite(&self.hiqlite).await?;
-
-        // Update our cache with fresh data
-        {
-            let mut cache = self.cache.write().await;
-            *cache = fresh_cache;
-        }
-
-        // Find first pending work item in cache
-        let mut cache = self.cache.write().await;
+        // Refresh cache from persistent store to get latest distributed state
+        self.refresh_cache().await?;
 
         // Count pending jobs for debugging
-        let pending_count = cache.values().filter(|w| w.status == WorkStatus::Pending).count();
+        let pending_count = self.cache.count_by_status(WorkStatus::Pending).await;
+        let total_count = self.cache.len().await;
+
         tracing::info!(
             pending_count = pending_count,
-            total_count = cache.len(),
+            total_count = total_count,
             node_id = %self.node_id,
             "Attempting to claim work"
         );
 
-        for (job_id, work_item) in cache.iter_mut() {
+        // Try to claim first pending work item
+        let all_items = self.cache.get_all().await;
+        for work_item in all_items {
             if work_item.status == WorkStatus::Pending {
                 tracing::info!(
-                    job_id = %job_id,
+                    job_id = %work_item.job_id,
                     node_id = %self.node_id,
                     "Attempting to claim pending job"
                 );
 
-                // Claim it in hiqlite first (atomic operation via Raft)
-                let rows_affected = self.hiqlite
-                    .execute(
-                        "UPDATE workflows SET status = $1, claimed_by = $2, updated_at = $3 WHERE id = $4 AND status = 'pending'",
-                        params!("claimed", self.node_id.clone(), now, job_id.clone()),
-                    )
+                // Claim it via persistent store (atomic operation)
+                let rows_affected = self.store
+                    .claim_workflow(&work_item.job_id, &self.node_id, now)
                     .await?;
 
                 tracing::info!(
-                    job_id = %job_id,
+                    job_id = %work_item.job_id,
                     rows_affected = rows_affected,
-                    "Claim UPDATE result"
+                    "Claim operation result"
                 );
 
-                // If hiqlite update succeeded, update local cache
+                // If store update succeeded, update local cache and return
                 if rows_affected > 0 {
-                    work_item.status = WorkStatus::Claimed;
-                    work_item.claimed_by = Some(self.node_id.clone());
-                    work_item.updated_at = now;
+                    let claimed = self.cache.update(&work_item.job_id, |item| {
+                        item.status = WorkStatus::Claimed;
+                        item.claimed_by = Some(self.node_id.clone());
+                        item.updated_at = now;
+                    }).await;
 
-                    tracing::info!(
-                        job_id = %job_id,
-                        node_id = %self.node_id,
-                        "Work item claimed via hiqlite"
-                    );
-
-                    return Ok(Some(work_item.clone()));
+                    if claimed {
+                        let claimed_item = self.cache.get(&work_item.job_id).await.unwrap();
+                        tracing::info!(
+                            job_id = %claimed_item.job_id,
+                            node_id = %self.node_id,
+                            "Work item claimed successfully"
+                        );
+                        return Ok(Some(claimed_item));
+                    }
                 } else {
-                    // Another node claimed it first - refresh from hiqlite
-                    tracing::warn!(job_id = %job_id, "Claim race detected - another node claimed first");
+                    // Another node claimed it first
+                    tracing::warn!(job_id = %work_item.job_id, "Claim race detected - another node claimed first");
                 }
             }
         }
@@ -260,74 +198,54 @@ impl WorkQueue {
     /// Update work item status
     pub async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()> {
         let now = chrono::Utc::now().timestamp();
-        let status_str = match status {
-            WorkStatus::Pending => "pending",
-            WorkStatus::Claimed => "claimed",
-            WorkStatus::InProgress => "in_progress",
-            WorkStatus::Completed => "completed",
-            WorkStatus::Failed => "failed",
+
+        // Determine completed_by using state machine logic
+        let completed_by = if WorkStateMachine::requires_completed_by(&status) {
+            Some(self.node_id.as_str())
+        } else {
+            None
         };
 
-        // If job is completing or failing, record which node completed it
-        if status == WorkStatus::Completed || status == WorkStatus::Failed {
-            // State machine guard: prevent regression from terminal states
-            // Allow idempotent updates (completed→completed or failed→failed)
-            let rows_affected = self.hiqlite
-                .execute(
-                    "UPDATE workflows SET status = $1, completed_by = $2, updated_at = $3 WHERE id = $4 AND (status NOT IN ('completed', 'failed') OR status = $1)",
-                    params!(status_str, self.node_id.clone(), now, job_id),
-                )
-                .await?;
+        // Update via persistent store (includes state machine guards)
+        let rows_affected = self.store
+            .update_workflow_status(job_id, &status, completed_by, now)
+            .await?;
 
-            if rows_affected == 0 {
-                tracing::debug!(job_id = %job_id, new_status = ?status, "Status update rejected by state machine (job may already be in terminal state)");
-                return Ok(());
-            }
-
-            // Update local cache
-            let mut cache = self.cache.write().await;
-            if let Some(work_item) = cache.get_mut(job_id) {
-                work_item.status = status.clone();
-                work_item.completed_by = Some(self.node_id.clone());
-                work_item.updated_at = now;
-            }
-        } else {
-            // For other status updates, don't touch completed_by
-            // State machine guard: prevent any updates to terminal states
-            let rows_affected = self.hiqlite
-                .execute(
-                    "UPDATE workflows SET status = $1, updated_at = $2 WHERE id = $3 AND status NOT IN ('completed', 'failed')",
-                    params!(status_str, now, job_id),
-                )
-                .await?;
-
-            if rows_affected == 0 {
-                tracing::debug!(job_id = %job_id, new_status = ?status, "Status update rejected by state machine (job is in terminal state)");
-                return Ok(());
-            }
-
-            // Update local cache
-            let mut cache = self.cache.write().await;
-            if let Some(work_item) = cache.get_mut(job_id) {
-                work_item.status = status.clone();
-                work_item.updated_at = now;
-            }
+        if rows_affected == 0 {
+            tracing::debug!(
+                job_id = %job_id,
+                new_status = ?status,
+                "Status update rejected by state machine (job may already be in terminal state)"
+            );
+            return Ok(());
         }
 
-        tracing::info!(job_id = %job_id, status = ?status, node_id = %self.node_id, "Work status updated in hiqlite");
+        // Update local cache
+        self.cache.update(job_id, |work_item| {
+            work_item.status = status.clone();
+            work_item.updated_at = now;
+            if let Some(completed_by_node) = completed_by {
+                work_item.completed_by = Some(completed_by_node.to_string());
+            }
+        }).await;
+
+        tracing::info!(
+            job_id = %job_id,
+            status = ?status,
+            node_id = %self.node_id,
+            "Work status updated in persistent store"
+        );
 
         Ok(())
     }
 
-    /// List all work items (refreshed from hiqlite)
+    /// List all work items (refreshed from persistent store)
     pub async fn list_work(&self) -> Result<Vec<WorkItem>> {
-        // Always refresh from hiqlite to get distributed state
-        let fresh_cache = Self::load_from_hiqlite(&self.hiqlite).await?;
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
 
-        // Update our local cache with fresh data
-        *self.cache.write().await = fresh_cache.clone();
-
-        Ok(fresh_cache.values().cloned().collect())
+        // Return all cached items
+        Ok(self.cache.get_all().await)
     }
 
     /// Get a placeholder ticket (iroh-docs integration pending)
@@ -335,52 +253,16 @@ impl WorkQueue {
         format!("work-queue://{}", self.node_id)
     }
 
-    /// Get work queue statistics (refreshed from hiqlite)
+    /// Get work queue statistics (refreshed from persistent store)
     pub async fn stats(&self) -> WorkQueueStats {
-        // Refresh from hiqlite to get distributed state
-        let fresh_cache = match Self::load_from_hiqlite(&self.hiqlite).await {
-            Ok(cache) => cache,
-            Err(e) => {
-                tracing::warn!("Failed to refresh cache from hiqlite: {}", e);
-                // Fall back to local cache
-                return self.stats_from_cache().await;
-            }
-        };
-
-        // Update our local cache
-        *self.cache.write().await = fresh_cache.clone();
-
-        let mut stats = WorkQueueStats::default();
-
-        for work_item in fresh_cache.values() {
-            match work_item.status {
-                WorkStatus::Pending => stats.pending += 1,
-                WorkStatus::Claimed => stats.claimed += 1,
-                WorkStatus::InProgress => stats.in_progress += 1,
-                WorkStatus::Completed => stats.completed += 1,
-                WorkStatus::Failed => stats.failed += 1,
-            }
+        // Try to refresh from persistent store to get distributed state
+        if let Err(e) = self.refresh_cache().await {
+            tracing::warn!("Failed to refresh cache from persistent store: {}", e);
+            // Fall back to stale cache (better than nothing)
         }
 
-        stats
-    }
-
-    /// Get stats from local cache only (fallback)
-    async fn stats_from_cache(&self) -> WorkQueueStats {
-        let cache = self.cache.read().await;
-        let mut stats = WorkQueueStats::default();
-
-        for work_item in cache.values() {
-            match work_item.status {
-                WorkStatus::Pending => stats.pending += 1,
-                WorkStatus::Claimed => stats.claimed += 1,
-                WorkStatus::InProgress => stats.in_progress += 1,
-                WorkStatus::Completed => stats.completed += 1,
-                WorkStatus::Failed => stats.failed += 1,
-            }
-        }
-
-        stats
+        // Compute stats from cache (using dedicated cache method)
+        self.cache.compute_stats().await
     }
 }
 

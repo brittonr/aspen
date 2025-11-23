@@ -3,13 +3,18 @@ use axum::{
     routing::{get, post},
 };
 use iroh_tickets::endpoint::EndpointTicket;
+use std::sync::Arc;
 
 // Internal modules
 mod config;
 mod iroh_service;
 mod iroh_api;
 mod hiqlite_service;
+mod persistent_store;
+mod hiqlite_persistent_store;
 mod work_queue;
+mod work_state_machine;
+mod work_item_cache;
 mod state;
 mod domain;
 mod repositories;
@@ -19,6 +24,7 @@ mod views;
 use config::AppConfig;
 use iroh_service::IrohService;
 use hiqlite_service::HiqliteService;
+use hiqlite_persistent_store::HiqlitePersistentStore;
 use work_queue::WorkQueue;
 use state::AppState;
 use handlers::*;
@@ -81,10 +87,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize iroh service
     let iroh_service = IrohService::new(config.storage.iroh_blobs_path.clone(), endpoint.clone());
 
-    // Initialize work queue with hiqlite backend
+    // Initialize work queue with persistent store abstraction
     println!("Initializing distributed work queue...");
     let node_id = endpoint.id().to_string();
-    let work_queue = WorkQueue::new(endpoint.clone(), node_id, hiqlite_service.clone())
+
+    // Create persistent store adapter for Hiqlite
+    let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite_service.clone()));
+
+    let work_queue = WorkQueue::new(endpoint.clone(), node_id, persistent_store)
         .await
         .expect("Failed to initialize work queue");
     let work_ticket = work_queue.get_ticket();
