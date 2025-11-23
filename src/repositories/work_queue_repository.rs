@@ -93,6 +93,44 @@ impl WorkRepository for WorkQueueWorkRepository {
         self.work_queue.update_status(job_id, infra_status).await
     }
 
+    async fn find_by_id(&self, job_id: &str) -> Result<Option<Job>> {
+        // Get specific work item by ID and map to domain Job
+        let work_item = self.work_queue.get_work_by_id(job_id).await?;
+        Ok(work_item.map(Self::to_domain_job))
+    }
+
+    async fn find_by_status(&self, status: JobStatus) -> Result<Vec<Job>> {
+        // Map domain status to infrastructure status
+        let infra_status = Self::to_infra_status(status);
+
+        // Get work items by status and map to domain Jobs
+        let work_items = self.work_queue.list_work_by_status(infra_status).await?;
+        Ok(work_items.into_iter().map(Self::to_domain_job).collect())
+    }
+
+    async fn find_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
+        // Get work items by worker and map to domain Jobs
+        let work_items = self.work_queue.list_work_by_worker(worker_id).await?;
+        Ok(work_items.into_iter().map(Self::to_domain_job).collect())
+    }
+
+    async fn find_paginated(&self, offset: usize, limit: usize) -> Result<Vec<Job>> {
+        // Get paginated work items and map to domain Jobs
+        let work_items = self.work_queue.list_work_paginated(offset, limit).await?;
+        Ok(work_items.into_iter().map(Self::to_domain_job).collect())
+    }
+
+    async fn find_by_status_and_worker(&self, status: JobStatus, worker_id: &str) -> Result<Vec<Job>> {
+        // Map domain status to infrastructure status
+        let infra_status = Self::to_infra_status(status);
+
+        // Get work items by composite filter and map to domain Jobs
+        let work_items = self.work_queue
+            .list_work_by_status_and_worker(infra_status, worker_id)
+            .await?;
+        Ok(work_items.into_iter().map(Self::to_domain_job).collect())
+    }
+
     async fn list_work(&self) -> Result<Vec<Job>> {
         // List infrastructure work items and map to domain Jobs
         let work_items = self.work_queue.list_work().await?;

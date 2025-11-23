@@ -122,6 +122,64 @@ impl WorkRepository for MockWorkRepository {
         Ok(())
     }
 
+    async fn find_by_id(&self, job_id: &str) -> Result<Option<Job>> {
+        let jobs = self.jobs.lock().await;
+        Ok(jobs.iter().find(|job| job.id == job_id).cloned())
+    }
+
+    async fn find_by_status(&self, status: JobStatus) -> Result<Vec<Job>> {
+        let jobs = self.jobs.lock().await;
+        Ok(jobs
+            .iter()
+            .filter(|job| job.status == status)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
+        let jobs = self.jobs.lock().await;
+        Ok(jobs
+            .iter()
+            .filter(|job| {
+                job.claimed_by
+                    .as_ref()
+                    .map(|id| id == worker_id)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn find_paginated(&self, offset: usize, limit: usize) -> Result<Vec<Job>> {
+        let mut jobs = self.jobs.lock().await.clone();
+
+        // Sort by updated_at (most recent first)
+        jobs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+        // Apply pagination
+        Ok(jobs
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .collect())
+    }
+
+    async fn find_by_status_and_worker(&self, status: JobStatus, worker_id: &str) -> Result<Vec<Job>> {
+        let jobs = self.jobs.lock().await;
+        Ok(jobs
+            .iter()
+            .filter(|job| {
+                job.status == status
+                    && job
+                        .claimed_by
+                        .as_ref()
+                        .map(|id| id == worker_id)
+                        .unwrap_or(false)
+            })
+            .cloned()
+            .collect())
+    }
+
     async fn list_work(&self) -> Result<Vec<Job>> {
         Ok(self.jobs.lock().await.clone())
     }

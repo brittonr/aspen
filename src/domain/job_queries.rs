@@ -108,6 +108,7 @@ impl JobQueryService {
     /// Get job by ID
     ///
     /// This is a **query** - it retrieves a single job by identifier.
+    /// Uses repository-level filtering for efficient data access.
     ///
     /// # Arguments
     /// * `job_id` - The job identifier to look up
@@ -115,8 +116,8 @@ impl JobQueryService {
     /// # Returns
     /// The job if found, None otherwise
     pub async fn get_job(&self, job_id: &str) -> Result<Option<Job>> {
-        let jobs = self.work_repo.list_work().await?;
-        Ok(jobs.into_iter().find(|job| job.id == job_id))
+        // Use repository-level filtering instead of loading all jobs
+        self.work_repo.find_by_id(job_id).await
     }
 
     /// Get queue statistics
@@ -133,6 +134,7 @@ impl JobQueryService {
     /// Count jobs by status
     ///
     /// This is a **query** - it filters and counts jobs.
+    /// Uses repository-level filtering for efficient data access.
     ///
     /// # Arguments
     /// * `status` - The status to count
@@ -143,13 +145,15 @@ impl JobQueryService {
         &self,
         status: crate::domain::types::JobStatus,
     ) -> Result<usize> {
-        let jobs = self.work_repo.list_work().await?;
-        Ok(jobs.iter().filter(|job| job.status == status).count())
+        // Use repository-level filtering instead of loading all jobs
+        let jobs = self.work_repo.find_by_status(status).await?;
+        Ok(jobs.len())
     }
 
     /// Get jobs claimed by a specific worker
     ///
     /// This is a **query** - it filters jobs by worker.
+    /// Uses repository-level filtering for efficient data access.
     ///
     /// # Arguments
     /// * `worker_id` - The worker node ID
@@ -157,16 +161,44 @@ impl JobQueryService {
     /// # Returns
     /// All jobs claimed by the specified worker
     pub async fn get_jobs_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
-        let jobs = self.work_repo.list_work().await?;
-        Ok(jobs
-            .into_iter()
-            .filter(|job| {
-                job.claimed_by
-                    .as_ref()
-                    .map(|id| id == worker_id)
-                    .unwrap_or(false)
-            })
-            .collect())
+        // Use repository-level filtering instead of loading all jobs
+        self.work_repo.find_by_worker(worker_id).await
+    }
+
+    /// Get paginated jobs (most recent first)
+    ///
+    /// This is a **query** - it retrieves a paginated subset of jobs.
+    /// Uses repository-level pagination for efficient data access with large result sets.
+    ///
+    /// # Arguments
+    /// * `offset` - Number of items to skip (0-based)
+    /// * `limit` - Maximum number of items to return
+    ///
+    /// # Returns
+    /// Paginated slice of jobs (ordered by update time, most recent first)
+    pub async fn get_jobs_paginated(&self, offset: usize, limit: usize) -> Result<Vec<Job>> {
+        // Use repository-level pagination instead of loading all jobs
+        self.work_repo.find_paginated(offset, limit).await
+    }
+
+    /// Get jobs by status for a specific worker (composite query)
+    ///
+    /// This is a **composite query** - it filters by multiple criteria.
+    /// Uses repository-level filtering for efficient data access.
+    ///
+    /// # Arguments
+    /// * `status` - The status to filter by
+    /// * `worker_id` - The worker node ID to filter by
+    ///
+    /// # Returns
+    /// All jobs matching both criteria
+    pub async fn get_jobs_by_status_and_worker(
+        &self,
+        status: crate::domain::types::JobStatus,
+        worker_id: &str,
+    ) -> Result<Vec<Job>> {
+        // Use repository-level composite filtering
+        self.work_repo.find_by_status_and_worker(status, worker_id).await
     }
 
     /// Sort jobs according to specified order
@@ -466,5 +498,628 @@ mod tests {
         // Assert
         assert_eq!(worker1_jobs.len(), 2);
         assert!(worker1_jobs.iter().all(|job| job.claimed_by.as_deref() == Some("worker-1")));
+    }
+}
+
+// Tests for repository-level filtering methods
+#[cfg(test)]
+mod repository_filtering_tests {
+    use super::*;
+    use crate::repositories::mocks::MockWorkRepository;
+    use crate::domain::types::{Job, JobStatus};
+
+    #[tokio::test]
+    async fn test_find_by_id_returns_job_when_exists() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({"url": "https://example.com"}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let result = mock_repo.find_by_id("job-1").await.unwrap();
+
+        // Assert
+        assert!(result.is_some());
+        let job = result.unwrap();
+        assert_eq!(job.id, "job-1");
+        assert_eq!(job.status, JobStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_id_returns_none_when_not_exists() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let result = mock_repo.find_by_id("nonexistent").await.unwrap();
+
+        // Assert
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_status_returns_matching_jobs() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1200,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-4".to_string(),
+                status: JobStatus::Failed,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1300,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let pending_jobs = mock_repo.find_by_status(JobStatus::Pending).await.unwrap();
+        let completed_jobs = mock_repo.find_by_status(JobStatus::Completed).await.unwrap();
+        let failed_jobs = mock_repo.find_by_status(JobStatus::Failed).await.unwrap();
+
+        // Assert
+        assert_eq!(pending_jobs.len(), 2);
+        assert!(pending_jobs.iter().all(|job| job.status == JobStatus::Pending));
+        assert_eq!(pending_jobs[0].id, "job-1");
+        assert_eq!(pending_jobs[1].id, "job-3");
+
+        assert_eq!(completed_jobs.len(), 1);
+        assert_eq!(completed_jobs[0].id, "job-2");
+
+        assert_eq!(failed_jobs.len(), 1);
+        assert_eq!(failed_jobs[0].id, "job-4");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_status_returns_empty_when_no_matches() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let completed_jobs = mock_repo.find_by_status(JobStatus::Completed).await.unwrap();
+
+        // Assert
+        assert_eq!(completed_jobs.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_query_service_uses_find_by_id() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "target-job".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({"url": "https://example.com"}),
+            },
+            Job {
+                id: "other-job".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        let service = JobQueryService::new(mock_repo);
+
+        // Act
+        let result = service.get_job("target-job").await.unwrap();
+
+        // Assert - should use repository filtering, not load all jobs
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "target-job");
+    }
+
+    #[tokio::test]
+    async fn test_query_service_uses_find_by_status_for_count() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1010,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1020,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        let service = JobQueryService::new(mock_repo);
+
+        // Act
+        let pending_count = service.count_jobs_by_status(JobStatus::Pending).await.unwrap();
+        let completed_count = service.count_jobs_by_status(JobStatus::Completed).await.unwrap();
+
+        // Assert - should use repository filtering for efficiency
+        assert_eq!(pending_count, 2);
+        assert_eq!(completed_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_worker_returns_matching_jobs() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-2".to_string()),
+                completed_by: Some("worker-2".to_string()),
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: Some("worker-1".to_string()),
+                created_at: 1000,
+                updated_at: 1200,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let worker1_jobs = mock_repo.find_by_worker("worker-1").await.unwrap();
+        let worker2_jobs = mock_repo.find_by_worker("worker-2").await.unwrap();
+
+        // Assert
+        assert_eq!(worker1_jobs.len(), 2);
+        assert!(worker1_jobs.iter().all(|job| job.claimed_by.as_deref() == Some("worker-1")));
+        assert_eq!(worker1_jobs[0].id, "job-1");
+        assert_eq!(worker1_jobs[1].id, "job-3");
+
+        assert_eq!(worker2_jobs.len(), 1);
+        assert_eq!(worker2_jobs[0].id, "job-2");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_worker_returns_empty_when_no_matches() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let result = mock_repo.find_by_worker("nonexistent-worker").await.unwrap();
+
+        // Assert
+        assert_eq!(result.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_paginated_returns_correct_page() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,  // Oldest
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1200,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-4".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1300,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-5".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1400,  // Newest
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act - First page (offset 0, limit 2)
+        let page1 = mock_repo.find_paginated(0, 2).await.unwrap();
+
+        // Act - Second page (offset 2, limit 2)
+        let page2 = mock_repo.find_paginated(2, 2).await.unwrap();
+
+        // Act - Third page (offset 4, limit 2)
+        let page3 = mock_repo.find_paginated(4, 2).await.unwrap();
+
+        // Assert - Pages should be ordered by updated_at (most recent first)
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page1[0].id, "job-5");  // Newest
+        assert_eq!(page1[1].id, "job-4");
+
+        assert_eq!(page2.len(), 2);
+        assert_eq!(page2[0].id, "job-3");
+        assert_eq!(page2[1].id, "job-2");
+
+        assert_eq!(page3.len(), 1);
+        assert_eq!(page3[0].id, "job-1");  // Oldest
+    }
+
+    #[tokio::test]
+    async fn test_find_paginated_returns_empty_when_offset_exceeds_total() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let result = mock_repo.find_paginated(10, 5).await.unwrap();
+
+        // Assert
+        assert_eq!(result.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_status_and_worker_returns_matching_jobs() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: Some("worker-1".to_string()),
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-2".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1200,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-4".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-2".to_string()),
+                completed_by: Some("worker-2".to_string()),
+                created_at: 1000,
+                updated_at: 1300,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act
+        let worker1_in_progress = mock_repo
+            .find_by_status_and_worker(JobStatus::InProgress, "worker-1")
+            .await
+            .unwrap();
+
+        let worker1_completed = mock_repo
+            .find_by_status_and_worker(JobStatus::Completed, "worker-1")
+            .await
+            .unwrap();
+
+        let worker2_in_progress = mock_repo
+            .find_by_status_and_worker(JobStatus::InProgress, "worker-2")
+            .await
+            .unwrap();
+
+        // Assert
+        assert_eq!(worker1_in_progress.len(), 1);
+        assert_eq!(worker1_in_progress[0].id, "job-1");
+
+        assert_eq!(worker1_completed.len(), 1);
+        assert_eq!(worker1_completed[0].id, "job-2");
+
+        assert_eq!(worker2_in_progress.len(), 1);
+        assert_eq!(worker2_in_progress[0].id, "job-3");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_status_and_worker_returns_empty_when_no_matches() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        // Act - Wrong status
+        let result1 = mock_repo
+            .find_by_status_and_worker(JobStatus::Completed, "worker-1")
+            .await
+            .unwrap();
+
+        // Act - Wrong worker
+        let result2 = mock_repo
+            .find_by_status_and_worker(JobStatus::InProgress, "worker-2")
+            .await
+            .unwrap();
+
+        // Assert
+        assert_eq!(result1.len(), 0);
+        assert_eq!(result2.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_query_service_uses_find_by_worker() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-2".to_string()),
+                completed_by: Some("worker-2".to_string()),
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        let service = JobQueryService::new(mock_repo);
+
+        // Act
+        let worker1_jobs = service.get_jobs_by_worker("worker-1").await.unwrap();
+
+        // Assert - should use repository filtering, not load all jobs
+        assert_eq!(worker1_jobs.len(), 1);
+        assert_eq!(worker1_jobs[0].id, "job-1");
+    }
+
+    #[tokio::test]
+    async fn test_query_service_get_jobs_paginated() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-3".to_string(),
+                status: JobStatus::Pending,
+                claimed_by: None,
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1200,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        let service = JobQueryService::new(mock_repo);
+
+        // Act
+        let page1 = service.get_jobs_paginated(0, 2).await.unwrap();
+        let page2 = service.get_jobs_paginated(2, 2).await.unwrap();
+
+        // Assert - should use repository pagination
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page1[0].id, "job-3");  // Most recent first
+        assert_eq!(page1[1].id, "job-2");
+
+        assert_eq!(page2.len(), 1);
+        assert_eq!(page2[0].id, "job-1");  // Oldest
+    }
+
+    #[tokio::test]
+    async fn test_query_service_get_jobs_by_status_and_worker() {
+        // Arrange
+        let mock_repo = Arc::new(MockWorkRepository::new());
+        mock_repo.add_jobs(vec![
+            Job {
+                id: "job-1".to_string(),
+                status: JobStatus::InProgress,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: None,
+                created_at: 1000,
+                updated_at: 1000,
+                payload: serde_json::json!({}),
+            },
+            Job {
+                id: "job-2".to_string(),
+                status: JobStatus::Completed,
+                claimed_by: Some("worker-1".to_string()),
+                completed_by: Some("worker-1".to_string()),
+                created_at: 1000,
+                updated_at: 1100,
+                payload: serde_json::json!({}),
+            },
+        ]).await;
+
+        let service = JobQueryService::new(mock_repo);
+
+        // Act
+        let in_progress_jobs = service
+            .get_jobs_by_status_and_worker(JobStatus::InProgress, "worker-1")
+            .await
+            .unwrap();
+
+        // Assert - should use repository composite filtering
+        assert_eq!(in_progress_jobs.len(), 1);
+        assert_eq!(in_progress_jobs[0].id, "job-1");
     }
 }

@@ -248,6 +248,100 @@ impl WorkQueue {
         Ok(self.cache.get_all().await)
     }
 
+    /// Get a specific work item by ID
+    ///
+    /// This method performs data access filtering at the infrastructure layer,
+    /// avoiding the need to load all work items.
+    pub async fn get_work_by_id(&self, job_id: &str) -> Result<Option<WorkItem>> {
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
+
+        // Get from cache
+        Ok(self.cache.get(job_id).await)
+    }
+
+    /// List work items filtered by status
+    ///
+    /// This method performs data access filtering at the infrastructure layer,
+    /// avoiding the need to load and filter all work items in the domain layer.
+    pub async fn list_work_by_status(&self, status: WorkStatus) -> Result<Vec<WorkItem>> {
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
+
+        // Filter by status from cache
+        let all_items = self.cache.get_all().await;
+        Ok(all_items
+            .into_iter()
+            .filter(|item| item.status == status)
+            .collect())
+    }
+
+    /// List work items claimed by a specific worker
+    ///
+    /// This method performs data access filtering at the infrastructure layer.
+    pub async fn list_work_by_worker(&self, worker_id: &str) -> Result<Vec<WorkItem>> {
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
+
+        // Filter by worker from cache
+        let all_items = self.cache.get_all().await;
+        Ok(all_items
+            .into_iter()
+            .filter(|item| {
+                item.claimed_by
+                    .as_ref()
+                    .map(|id| id == worker_id)
+                    .unwrap_or(false)
+            })
+            .collect())
+    }
+
+    /// List work items with pagination (ordered by update time, most recent first)
+    ///
+    /// This method performs pagination at the infrastructure layer,
+    /// avoiding the need to load all items when only a subset is needed.
+    pub async fn list_work_paginated(&self, offset: usize, limit: usize) -> Result<Vec<WorkItem>> {
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
+
+        // Get all items and sort by updated_at (most recent first)
+        let mut all_items = self.cache.get_all().await;
+        all_items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+
+        // Apply pagination
+        Ok(all_items
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .collect())
+    }
+
+    /// List work items filtered by status AND worker (composite query)
+    ///
+    /// This method performs multiple filters at the infrastructure layer.
+    pub async fn list_work_by_status_and_worker(
+        &self,
+        status: WorkStatus,
+        worker_id: &str,
+    ) -> Result<Vec<WorkItem>> {
+        // Refresh from persistent store to get latest distributed state
+        self.refresh_cache().await?;
+
+        // Filter by both status and worker from cache
+        let all_items = self.cache.get_all().await;
+        Ok(all_items
+            .into_iter()
+            .filter(|item| {
+                item.status == status
+                    && item
+                        .claimed_by
+                        .as_ref()
+                        .map(|id| id == worker_id)
+                        .unwrap_or(false)
+            })
+            .collect())
+    }
+
     /// Get a placeholder ticket (iroh-docs integration pending)
     pub fn get_ticket(&self) -> String {
         format!("work-queue://{}", self.node_id)
