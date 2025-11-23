@@ -14,7 +14,7 @@ pub mod cluster_status;
 pub mod job_lifecycle;
 
 // Re-export key types for convenience
-pub use cluster_status::{ClusterHealth, ClusterStatusService, ControlPlaneNode, WorkerStats};
+pub use cluster_status::ClusterStatusService;
 pub use job_lifecycle::{
-    EnrichedJob, JobLifecycleService, JobSortOrder, JobSubmission, format_duration, format_time_ago,
+    JobLifecycleService, JobSortOrder, JobSubmission, format_duration, format_time_ago,
 };

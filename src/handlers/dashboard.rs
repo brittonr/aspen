@@ -10,7 +10,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::state::AppState;
-use crate::domain::{ClusterStatusService, JobLifecycleService, JobSortOrder, JobSubmission, format_duration, format_time_ago};
+use crate::domain::{JobSortOrder, JobSubmission, format_duration, format_time_ago};
 use crate::work_queue;
 
 /// Main dashboard template

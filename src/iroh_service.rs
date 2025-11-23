@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use iroh::{Endpoint, EndpointAddr, EndpointId};
 

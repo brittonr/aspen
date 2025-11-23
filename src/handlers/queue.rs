@@ -13,7 +13,7 @@ use crate::work_queue;
 
 /// Hiqlite health check endpoint
 pub async fn hiqlite_health(State(state): State<AppState>) -> impl IntoResponse {
-    match state.hiqlite().health_check().await {
+    match state.infrastructure().hiqlite().health_check().await {
         Ok(health) => Json(health).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -35,7 +35,7 @@ pub async fn queue_publish(
     State(state): State<AppState>,
     Json(req): Json<PublishWorkRequest>,
 ) -> impl IntoResponse {
-    match state.work_queue().publish_work(req.job_id, req.payload).await {
+    match state.infrastructure().work_queue().publish_work(req.job_id, req.payload).await {
         Ok(()) => (StatusCode::OK, "Work item published").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -47,7 +47,7 @@ pub async fn queue_publish(
 
 /// Claim an available work item from the queue
 pub async fn queue_claim(State(state): State<AppState>) -> impl IntoResponse {
-    match state.work_queue().claim_work().await {
+    match state.infrastructure().work_queue().claim_work().await {
         Ok(Some(work_item)) => Json(work_item).into_response(),
         Ok(None) => (StatusCode::NO_CONTENT, "No work available").into_response(),
         Err(e) => (
@@ -60,7 +60,7 @@ pub async fn queue_claim(State(state): State<AppState>) -> impl IntoResponse {
 
 /// List all work items in the queue
 pub async fn queue_list(State(state): State<AppState>) -> impl IntoResponse {
-    match state.work_queue().list_work().await {
+    match state.infrastructure().work_queue().list_work().await {
         Ok(work_items) => Json(work_items).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -72,7 +72,7 @@ pub async fn queue_list(State(state): State<AppState>) -> impl IntoResponse {
 
 /// Get queue statistics
 pub async fn queue_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let stats = state.work_queue().stats().await;
+    let stats = state.infrastructure().work_queue().stats().await;
     Json(stats).into_response()
 }
 
@@ -88,7 +88,7 @@ pub async fn queue_update_status(
     Path(job_id): Path<String>,
     Json(req): Json<UpdateStatusRequest>,
 ) -> impl IntoResponse {
-    match state.work_queue().update_status(&job_id, req.status).await {
+    match state.infrastructure().work_queue().update_status(&job_id, req.status).await {
         Ok(()) => (StatusCode::OK, "Status updated").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

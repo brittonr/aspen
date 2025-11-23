@@ -11,7 +11,6 @@ use axum::{
 use serde::Deserialize;
 
 use crate::state::{AppState, JobProgress, UpdateUI};
-use crate::state::ui::Status;
 use crate::domain::JobSubmission;
 
 /// Index page template
@@ -58,7 +57,7 @@ struct ListTemplate {
 
 /// Job list handler
 pub async fn list(State(state): State<AppState>) -> impl IntoResponse {
-    let progress = state.progress().await;
+    let progress = state.ui().progress().await;
     // Display max 10 last requests.
     let progress = progress
         .iter()

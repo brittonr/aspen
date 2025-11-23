@@ -2,7 +2,6 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use flawless_utils::DeployedModule;
 use iroh_tickets::endpoint::EndpointTicket;
 
 // Internal modules

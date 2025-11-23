@@ -15,7 +15,7 @@ pub mod services;
 
 // Re-export sub-states for convenience
 pub use infrastructure::InfrastructureState;
-pub use ui::{UiState, Status, UpdateUI, JobProgress};
+pub use ui::{UiState, UpdateUI, JobProgress};
 pub use services::DomainServices;
 
 /// Root application state
@@ -77,44 +77,5 @@ impl AppState {
     /// Get domain services
     pub fn services(&self) -> &DomainServices {
         &self.services
-    }
-
-    // === Backward compatibility accessors ===
-    // These allow existing handlers to continue working during migration.
-    // Can be removed once all handlers are updated to use services.
-
-    /// Get Flawless module (backward compat)
-    pub fn module(&self) -> &DeployedModule {
-        self.infrastructure.module()
-    }
-
-    /// Get Iroh service (backward compat)
-    pub fn iroh(&self) -> &IrohService {
-        self.infrastructure.iroh()
-    }
-
-    /// Get Hiqlite service (backward compat)
-    pub fn hiqlite(&self) -> &HiqliteService {
-        self.infrastructure.hiqlite()
-    }
-
-    /// Get work queue (backward compat)
-    pub fn work_queue(&self) -> &WorkQueue {
-        self.infrastructure.work_queue()
-    }
-
-    /// Get job progress (backward compat for legacy UI)
-    pub async fn progress(&self) -> Vec<JobProgress> {
-        self.ui.progress().await
-    }
-
-    /// Add job to progress tracker (backward compat)
-    pub async fn add_job(&self, url: String) -> usize {
-        self.ui.add_job(url).await
-    }
-
-    /// Update job status (backward compat)
-    pub async fn update_job(&self, id: usize, status: Status, url: String) {
-        self.ui.update_job(id, status, url).await
     }
 }
