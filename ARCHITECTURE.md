@@ -1029,40 +1029,477 @@ let handle = server::start(ServerConfig { config, endpoint, state }).await?;
 handle.run().await?;
 ```
 
-## Future Improvements
+## Event-Driven Architecture ✅ IMPLEMENTED
 
-### Event-Driven Architecture
+**Status:** Fully integrated in domain layer
 
-**Motivation:** Improve observability and enable distributed tracing
+The application now publishes domain events for all significant state changes, enabling:
+- **Observability** - Structured logging of all job lifecycle events
+- **Audit trails** - Complete history of state transitions
+- **Metrics collection** - Foundation for monitoring dashboards
+- **Future extensibility** - Easy to add webhooks, notifications, event sourcing
 
-**Approach:**
-- Introduce domain events (`JobSubmitted`, `JobCompleted`, `WorkerJoined`)
-- Publish events from domain services
-- Subscribe in handlers or separate event processors
-- Enable event sourcing for audit logs
+### Architecture
 
-**Example:**
+```
+┌──────────────────────────────────────────────────────────┐
+│          JobCommandService (Domain Service)              │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │  1. Validate business rules                        │ │
+│  │  2. Execute command (via repository)               │ │
+│  │  3. Publish domain event ──────────────────────────┼─┼──> EventPublisher
+│  └────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────┘
+                                                             │
+                    ┌────────────────────────────────────────┘
+                    │
+                    ▼
+    ┌───────────────────────────────────────────┐
+    │     EventPublisher Implementations        │
+    ├───────────────────────────────────────────┤
+    │ • LoggingEventPublisher (production)      │
+    │ • InMemoryEventPublisher (testing)        │
+    │ • NoOpEventPublisher (disabled)           │
+    └───────────────────────────────────────────┘
+```
+
+### Domain Events
+
+All events are defined in `src/domain/events.rs`:
+
+- `JobSubmitted` - A new job was queued
+- `JobClaimed` - A worker claimed a pending job
+- `JobStatusChanged` - Generic status transition
+- `JobCompleted` - Job finished successfully
+- `JobFailed` - Job failed with error
+- `JobCancelled` - Job was cancelled
+- `JobRetried` - Failed job reset for retry
+
+Events include:
+- Job ID (for correlation)
+- Timestamp (Unix seconds)
+- Context-specific data (URL, worker ID, error, etc.)
+
+### Event Publishers
+
+**LoggingEventPublisher** (default for production):
+```rust
+// Automatically injected by DomainServices::from_repositories()
+let event_publisher = Arc::new(LoggingEventPublisher::new());
+```
+
+Logs events at INFO level with structured fields:
+```
+[INFO] Domain event: Job job-123 submitted for URL https://example.com
+       event_type=JobSubmitted job_id=job-123 timestamp=1704067200
+```
+
+**InMemoryEventPublisher** (for testing):
+```rust
+// Use in tests to verify events were published
+let event_publisher = Arc::new(InMemoryEventPublisher::new());
+let service = JobCommandService::with_events(repo, event_publisher.clone());
+
+// ... perform operations ...
+
+let events = event_publisher.get_events().await;
+assert_eq!(events.len(), 3);
+```
+
+**NoOpEventPublisher** (disable events):
+```rust
+// For performance testing or when events aren't needed
+let event_publisher = Arc::new(NoOpEventPublisher::new());
+```
+
+### Dependency Injection
+
+Events are injected through the service layer:
 
 ```rust
-pub trait EventPublisher: Send + Sync {
-    async fn publish(&self, event: DomainEvent) -> Result<()>;
-}
+// Production (automatic)
+let services = DomainServices::from_repositories(state_repo, work_repo);
+// Uses LoggingEventPublisher internally
 
-impl JobLifecycleService {
-    pub async fn submit_job(&self, submission: JobSubmission) -> Result<String> {
-        // ... existing logic ...
+// Testing (manual control)
+let event_publisher = Arc::new(InMemoryEventPublisher::new());
+let services = DomainServices::from_repositories_with_events(
+    state_repo,
+    work_repo,
+    event_publisher,
+);
+```
 
-        // Publish domain event
-        self.event_publisher.publish(DomainEvent::JobSubmitted {
-            job_id: job_id.clone(),
-            url: submission.url,
-            timestamp: now(),
-        }).await?;
+### Usage Example
 
-        Ok(job_id)
+```rust
+// Command service automatically publishes events
+let commands = JobCommandService::with_events(work_repo, event_publisher);
+
+// Submit job -> publishes JobSubmitted event
+let job_id = commands.submit_job(JobSubmission {
+    url: "https://example.com".to_string(),
+}).await?;
+
+// Claim job -> publishes JobClaimed event
+commands.claim_job().await?;
+
+// Update status -> publishes JobStatusChanged/JobCompleted/JobFailed
+commands.update_job_status(&job_id, JobStatus::Completed).await?;
+```
+
+### Testing Events
+
+See `src/domain/job_commands.rs` tests for comprehensive examples:
+
+```rust
+#[tokio::test]
+async fn test_submit_job_publishes_job_submitted_event() {
+    let mock_repo = Arc::new(MockWorkRepository::new());
+    let event_publisher = Arc::new(InMemoryEventPublisher::new());
+    let service = JobCommandService::with_events(mock_repo, event_publisher.clone());
+
+    let job_id = service.submit_job(JobSubmission {
+        url: "https://example.com".to_string(),
+    }).await.unwrap();
+
+    let events = event_publisher.get_events().await;
+    assert_eq!(events.len(), 1);
+
+    match &events[0] {
+        DomainEvent::JobSubmitted { job_id: id, url, .. } => {
+            assert_eq!(id, &job_id);
+            assert_eq!(url, "https://example.com");
+        }
+        _ => panic!("Expected JobSubmitted event"),
     }
 }
 ```
+
+### Future Enhancements
+
+The event infrastructure is now ready for:
+- **External event streams** (Kafka, Redis pub/sub)
+- **Webhook notifications** (notify external systems)
+- **Event sourcing** (rebuild state from events)
+- **Metrics dashboards** (aggregate event data)
+- **Distributed tracing** (correlate across services)
+
+## State Machine Validation ✅ IMPLEMENTED
+
+**Status:** Fully integrated in domain layer
+
+The application enforces strict state transition rules for jobs, preventing invalid operations like transitioning from Completed back to Pending. This ensures data integrity and makes business rules explicit and testable.
+
+### State Machine Diagram
+
+```
+   Pending ───────> Claimed ───────> InProgress ───────> Completed ⊗
+      │                │                  │
+      │                │                  │
+      └────────────────┴──────────────────┴────────────> Failed
+                                                            │
+                                                            └──────> Pending (retry)
+
+Legend:
+  → Valid forward transition
+  ⊗ Terminal state (immutable)
+```
+
+### Business Rules
+
+**Valid Transitions:**
+
+| From | To | Rule |
+|------|------|------|
+| Pending | Claimed | Worker takes ownership |
+| Claimed | InProgress | Worker starts execution |
+| InProgress | Completed | Execution succeeds (terminal) |
+| Pending | Failed | Validation failure before claiming |
+| Claimed | Failed | Worker decides not to process |
+| InProgress | Failed | Execution error |
+| Failed | Pending | Reset for retry (only from Failed) |
+| Any | Same | Idempotent updates allowed |
+
+**Invalid Transitions:**
+
+- **Completed → any other state** - Completed is immutable (terminal state)
+- **Backward transitions** - Cannot unclaim or revert (e.g., Claimed → Pending)
+- **Skip transitions** - Must follow proper flow (e.g., cannot go Pending → InProgress without Claimed)
+
+### Implementation
+
+The state machine is implemented as a pure stateless validator in `src/domain/state_machine.rs`:
+
+```rust
+use mvm_ci::domain::{JobStateMachine, JobStatus};
+
+// Validate a transition
+match JobStateMachine::validate_transition(JobStatus::Pending, JobStatus::Claimed) {
+    Ok(()) => println!("Valid transition"),
+    Err(e) => println!("Invalid: {}", e.reason),
+}
+
+// Check state properties
+assert!(!JobStateMachine::is_terminal(JobStatus::Failed));  // Can retry
+assert!(JobStateMachine::is_terminal(JobStatus::Completed));  // Immutable
+assert!(JobStateMachine::is_retriable(JobStatus::Failed));
+```
+
+### Integration Points
+
+**JobCommandService** validates all state transitions before executing:
+
+```rust
+// src/domain/job_commands.rs
+
+pub async fn update_job_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
+    // Get current job
+    let current_job = /* ... */;
+
+    // Validate transition using business rules
+    JobStateMachine::validate_transition(current_job.status, status)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Transition is valid - proceed
+    self.work_repo.update_status(job_id, status).await?;
+    // ... publish events ...
+}
+```
+
+All command methods validate transitions:
+- `update_job_status()` - General status updates
+- `cancel_job()` - Validates can transition to Failed
+- `retry_job()` - Validates job is Failed before resetting to Pending
+
+### Error Handling
+
+Invalid transitions return descriptive errors:
+
+```rust
+// Example error from attempting Completed → Pending:
+StateTransitionError {
+    from: JobStatus::Completed,
+    to: JobStatus::Pending,
+    reason: "Completed jobs are immutable (terminal state)"
+}
+```
+
+These errors propagate to HTTP handlers with appropriate status codes (400 Bad Request).
+
+### Testing
+
+Comprehensive test coverage in `src/domain/state_machine.rs` (14 tests) and `src/domain/job_commands.rs` (11 integration tests):
+
+**State Machine Tests:**
+- Valid forward transitions (happy path)
+- Failure transitions (can fail from any non-terminal state)
+- Retry transition (Failed → Pending)
+- Idempotent updates (same state transitions)
+- Terminal state rejection (Completed → any)
+- Invalid backward transitions
+- Invalid skip transitions
+- Invalid Failed transitions
+- Helper functions (`is_terminal`, `is_retriable`, `requires_worker`)
+
+**Integration Tests:**
+- Reject invalid skip transitions (Pending → InProgress)
+- Reject backward transitions (Claimed → Pending)
+- Reject transitions from Completed (terminal)
+- Reject cancelling completed jobs
+- Reject retrying non-failed jobs
+- Accept idempotent updates
+- Accept retrying failed jobs
+- Accept all valid failure transitions
+
+### Benefits
+
+**Data Integrity:**
+- Prevents impossible states (e.g., Completed job becoming Pending)
+- Ensures consistent job lifecycle across distributed system
+- Catches logic errors at runtime before corrupting data
+
+**Explicit Business Rules:**
+- State transitions are self-documenting
+- Rules are testable independently of infrastructure
+- Easy to audit and verify compliance
+
+**Better Error Messages:**
+- Descriptive errors explain why transitions are invalid
+- Helps debugging and operator understanding
+- Enables better UX in frontend applications
+
+### Future Enhancements
+
+The state machine is ready for:
+- **Conditional transitions** - Add context-based rules (e.g., only certain workers can claim jobs)
+- **State metadata** - Track retry counts, transition history
+- **Visual tooling** - Generate state diagrams from code
+- **Audit logging** - Integrate with event system for compliance
+- **Rate limiting** - Prevent too many retries
+
+## Router Modularization ✅ IMPLEMENTED
+
+**Status:** Fully implemented in server layer
+
+The application now organizes routes into focused sub-routers, providing clear API boundaries and enabling route-specific middleware.
+
+### Router Structure
+
+```text
+/
+├── /dashboard/*       - HTMX monitoring UI (browser access)
+│   ├── GET  /                     - Main dashboard page
+│   ├── GET  /cluster-health       - Cluster health HTMX fragment
+│   ├── GET  /queue-stats          - Queue statistics fragment
+│   ├── GET  /recent-jobs          - Recent jobs list fragment
+│   ├── GET  /control-plane-nodes  - Control plane nodes fragment
+│   ├── GET  /workers              - Worker nodes fragment
+│   └── POST /submit-job           - Submit new job via web UI
+│
+├── /api/queue/*       - Work queue REST API (worker access)
+│   ├── POST /publish              - Submit new job to queue
+│   ├── POST /claim                - Claim next available job
+│   ├── GET  /list                 - List all jobs
+│   ├── GET  /stats                - Get queue statistics
+│   └── POST /status/{job_id}      - Update job status
+│
+├── /api/iroh/*        - P2P blob storage and gossip API
+│   ├── POST /blob/store           - Store content-addressed blob
+│   ├── GET  /blob/{hash}          - Retrieve blob by hash
+│   ├── POST /gossip/join          - Join gossip topic
+│   ├── POST /gossip/broadcast     - Broadcast message to topic
+│   ├── GET  /gossip/subscribe/{topic_id} - Subscribe to topic (SSE)
+│   ├── POST /connect              - Connect to peer
+│   └── GET  /info                 - Get endpoint information
+│
+└── /health/*          - Health check endpoints
+    └── GET  /hiqlite              - Hiqlite database health check
+```
+
+### Implementation
+
+The router is organized in `src/server/router.rs` with focused sub-routers:
+
+```rust
+pub fn build_router(state: &AppState) -> Router {
+    Router::new()
+        .nest("/dashboard", dashboard_router())
+        .nest("/api/queue", queue_api_router())
+        .nest("/api/iroh", iroh_api_router())
+        .nest("/health", health_router())
+        .with_state(state.clone())
+}
+
+fn dashboard_router() -> Router<AppState> {
+    Router::new()
+        .route("/", get(dashboard))
+        .route("/cluster-health", get(dashboard_cluster_health))
+        // ... other dashboard routes
+        // Future: Add dashboard-specific middleware
+        // .layer(/* HTMX headers, caching policy, etc. */)
+}
+
+fn queue_api_router() -> Router<AppState> {
+    Router::new()
+        .route("/publish", post(queue_publish))
+        .route("/claim", post(queue_claim))
+        // ... other queue API routes
+        // Future: Add API-specific middleware
+        // .layer(/* rate limiting, API versioning, auth, etc. */)
+}
+```
+
+### Benefits
+
+**Clear API Boundaries:**
+- Logical grouping of related routes
+- Self-describing URL structure (`/api/queue/claim` vs `/queue/claim`)
+- Easy to understand what each route group does
+
+**Route-Specific Middleware:**
+- Apply middleware to entire route groups
+- Dashboard: HTMX headers, caching policies
+- Queue API: Rate limiting, authentication, versioning
+- Health: No middleware (fast response)
+
+**Easier Maintenance:**
+- Add/remove routes within focused sub-routers
+- Change middleware for entire API surface at once
+- Reduces merge conflicts (changes isolated to sub-routers)
+
+**Better Documentation:**
+- Routes self-document through URL structure
+- Each sub-router has comprehensive doc comments
+- Clear separation between UI, API, and operations
+
+### Middleware Ready
+
+Each sub-router has placeholder comments for future middleware:
+
+**Dashboard Router:**
+```rust
+// .layer(tower_http::set_header::SetRequestHeader::if_not_present(
+//     header::HeaderName::from_static("hx-request"),
+//     header::HeaderValue::from_static("true"),
+// ))
+// .layer(tower_http::compression::CompressionLayer::new())
+```
+
+**Queue API Router:**
+```rust
+// .layer(tower::limit::RateLimitLayer::new(100, Duration::from_secs(1)))
+// .layer(tower_http::validate_request::ValidateRequestHeaderLayer::bearer("secret"))
+// .layer(tower_http::set_header::SetResponseHeader::overriding(
+//     header::CONTENT_TYPE,
+//     HeaderValue::from_static("application/json"),
+// ))
+```
+
+**Iroh API Router:**
+```rust
+// .layer(PeerAuthenticationLayer::new())
+// .layer(EncryptionVerificationLayer::new())
+```
+
+**Health Router:**
+```rust
+// Keep minimal - no middleware for fastest health check response
+```
+
+### Migration Notes
+
+**Route Changes:**
+
+Old routes remain backward compatible during transition:
+
+| Old Route | New Route | Notes |
+|-----------|-----------|-------|
+| `/queue/publish` | `/api/queue/publish` | Old still works |
+| `/iroh/blob/store` | `/api/iroh/blob/store` | Old still works |
+| `/hiqlite/health` | `/health/hiqlite` | Old still works |
+
+**Why keep both?**
+- Gradual migration for existing clients
+- Workers/CLI tools may hardcode old URLs
+- Can deprecate old routes after migration period
+
+**To fully migrate:**
+1. Update worker binaries to use `/api/*` routes
+2. Update CLI tools configuration
+3. Add deprecation warnings to old routes
+4. Remove old routes after transition period
+
+### Future Enhancements
+
+The modular router is ready for:
+- **API Versioning** - `/api/v2/queue/*` alongside `/api/queue/*`
+- **OpenAPI Documentation** - Generate from router structure
+- **Route-specific observability** - Metrics per sub-router
+- **Dynamic routes** - Plugin system for additional routes
+- **GraphQL endpoint** - Add `/api/graphql` alongside REST
+
+## Future Improvements
 
 ### gRPC Adapter (Protocol Independence)
 

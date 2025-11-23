@@ -17,6 +17,7 @@ pub mod health_service;
 pub mod job_commands;
 pub mod job_lifecycle;
 pub mod job_queries;
+pub mod state_machine;
 pub mod types;
 
 // Re-export key types for convenience
@@ -27,4 +28,5 @@ pub use health_service::HealthService;
 pub use job_commands::{JobCommandService, JobSubmission};
 pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
 pub use job_queries::{JobQueryService, JobSortOrder, EnrichedJob};
+pub use state_machine::{JobStateMachine, StateTransitionError};
 pub use types::{Job, JobStatus, QueueStats};

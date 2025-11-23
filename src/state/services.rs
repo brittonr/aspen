@@ -4,7 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::domain::{ClusterStatusService, HealthService, JobLifecycleService};
+use crate::domain::{ClusterStatusService, HealthService, JobLifecycleService, JobCommandService, JobQueryService};
+use crate::domain::{EventPublisher, LoggingEventPublisher};
 use crate::repositories::{HiqliteStateRepository, StateRepository, WorkQueueWorkRepository, WorkRepository};
 use crate::state::InfrastructureState;
 
@@ -40,6 +41,8 @@ impl DomainServices {
     /// This constructor enables dependency injection by accepting repository trait objects,
     /// allowing tests to inject mock implementations.
     ///
+    /// Uses LoggingEventPublisher by default for production observability.
+    ///
     /// # Arguments
     /// * `state_repo` - Repository for cluster state operations
     /// * `work_repo` - Repository for work queue operations
@@ -47,6 +50,34 @@ impl DomainServices {
         state_repo: Arc<dyn StateRepository>,
         work_repo: Arc<dyn WorkRepository>,
     ) -> Self {
+        // Use LoggingEventPublisher for production observability
+        let event_publisher = Arc::new(LoggingEventPublisher::new());
+        Self::from_repositories_with_events(state_repo, work_repo, event_publisher)
+    }
+
+    /// Create domain services with custom event publisher (for testing)
+    ///
+    /// This constructor provides full control over event publishing, useful for:
+    /// - Testing with InMemoryEventPublisher to verify events
+    /// - Disabling events with NoOpEventPublisher
+    /// - Using custom event publishers (external systems, metrics)
+    ///
+    /// # Arguments
+    /// * `state_repo` - Repository for cluster state operations
+    /// * `work_repo` - Repository for work queue operations
+    /// * `event_publisher` - Publisher for domain events
+    pub fn from_repositories_with_events(
+        state_repo: Arc<dyn StateRepository>,
+        work_repo: Arc<dyn WorkRepository>,
+        event_publisher: Arc<dyn EventPublisher>,
+    ) -> Self {
+        // Create command and query services (CQRS pattern)
+        let commands = Arc::new(JobCommandService::with_events(
+            work_repo.clone(),
+            event_publisher.clone(),
+        ));
+        let queries = Arc::new(JobQueryService::new(work_repo.clone()));
+
         // Create domain services with injected repositories
         let cluster_status = Arc::new(ClusterStatusService::new(
             state_repo.clone(),
@@ -55,7 +86,8 @@ impl DomainServices {
 
         let health = Arc::new(HealthService::new(state_repo.clone()));
 
-        let job_lifecycle = Arc::new(JobLifecycleService::new(work_repo.clone()));
+        // JobLifecycleService wraps command and query services
+        let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
 
         Self {
             cluster_status,

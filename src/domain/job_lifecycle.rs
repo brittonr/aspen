@@ -199,6 +199,9 @@ mod tests {
             url: "https://example.com".to_string(),
         }).await.unwrap();
 
+        // Follow valid transition: Pending → Claimed → InProgress
+        service.claim_work().await.unwrap();
+
         // Act
         let result = service.update_work_status(&job_id, JobStatus::InProgress).await;
 
