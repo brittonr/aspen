@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::WorkItem;
+use crate::Job;
 
 /// Result of job execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,15 +56,15 @@ impl WorkResult {
 /// # Example
 /// ```no_run
 /// use async_trait::async_trait;
-/// use mvm_ci::{WorkerBackend, WorkItem, WorkResult};
+/// use mvm_ci::{WorkerBackend, Job, WorkResult};
 ///
 /// struct MyWorker;
 ///
 /// #[async_trait]
 /// impl WorkerBackend for MyWorker {
-///     async fn execute(&self, job: WorkItem) -> anyhow::Result<WorkResult> {
+///     async fn execute(&self, job: Job) -> anyhow::Result<WorkResult> {
 ///         // Process the job
-///         println!("Processing job: {}", job.job_id);
+///         println!("Processing job: {}", job.id);
 ///         Ok(WorkResult::success())
 ///     }
 /// }
@@ -79,7 +79,7 @@ pub trait WorkerBackend: Send + Sync {
     /// 3. Return success or failure
     ///
     /// The worker loop will handle status updates to the control plane.
-    async fn execute(&self, job: WorkItem) -> Result<WorkResult>;
+    async fn execute(&self, job: Job) -> Result<WorkResult>;
 
     /// Optional: Initialize the worker backend
     ///

@@ -1,6 +1,6 @@
 //! Work Item Cache - In-Memory Caching Layer
 //!
-//! This module provides a thread-safe in-memory cache for WorkItems.
+//! This module provides a thread-safe in-memory cache for Jobs.
 //! It handles:
 //! - Fast local reads without hitting persistent storage
 //! - Cache invalidation and refresh
@@ -10,7 +10,7 @@
 //! The cache serves as a performance optimization, with the persistent store
 //! remaining the source of truth for distributed state.
 
-use crate::work_queue::{WorkItem, WorkStatus, WorkQueueStats};
+use crate::domain::types::{Job, JobStatus, QueueStats};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -22,8 +22,8 @@ use tokio::sync::RwLock;
 /// to stay in sync with distributed state.
 #[derive(Clone)]
 pub struct WorkItemCache {
-    /// Internal cache storage (job_id → WorkItem)
-    cache: Arc<RwLock<HashMap<String, WorkItem>>>,
+    /// Internal cache storage (job_id → Job)
+    cache: Arc<RwLock<HashMap<String, Job>>>,
 }
 
 impl WorkItemCache {
@@ -35,10 +35,10 @@ impl WorkItemCache {
     }
 
     /// Create a cache from initial work items
-    pub fn from_items(items: Vec<WorkItem>) -> Self {
-        let cache: HashMap<String, WorkItem> = items
+    pub fn from_items(items: Vec<Job>) -> Self {
+        let cache: HashMap<String, Job> = items
             .into_iter()
-            .map(|item| (item.job_id.clone(), item))
+            .map(|item| (item.id.clone(), item))
             .collect();
 
         Self {
@@ -47,13 +47,13 @@ impl WorkItemCache {
     }
 
     /// Insert or update a work item in the cache
-    pub async fn upsert(&self, work_item: WorkItem) {
+    pub async fn upsert(&self, job: Job) {
         let mut cache = self.cache.write().await;
-        cache.insert(work_item.job_id.clone(), work_item);
+        cache.insert(job.id.clone(), job);
     }
 
     /// Get a work item by job ID
-    pub async fn get(&self, job_id: &str) -> Option<WorkItem> {
+    pub async fn get(&self, job_id: &str) -> Option<Job> {
         let cache = self.cache.read().await;
         cache.get(job_id).cloned()
     }
@@ -63,11 +63,11 @@ impl WorkItemCache {
     /// Returns `true` if the item existed and was updated, `false` otherwise.
     pub async fn update<F>(&self, job_id: &str, updater: F) -> bool
     where
-        F: FnOnce(&mut WorkItem),
+        F: FnOnce(&mut Job),
     {
         let mut cache = self.cache.write().await;
-        if let Some(work_item) = cache.get_mut(job_id) {
-            updater(work_item);
+        if let Some(job) = cache.get_mut(job_id) {
+            updater(job);
             true
         } else {
             false
@@ -77,10 +77,10 @@ impl WorkItemCache {
     /// Replace the entire cache contents
     ///
     /// This is typically used when refreshing from persistent storage.
-    pub async fn replace_all(&self, items: Vec<WorkItem>) {
-        let new_cache: HashMap<String, WorkItem> = items
+    pub async fn replace_all(&self, items: Vec<Job>) {
+        let new_cache: HashMap<String, Job> = items
             .into_iter()
-            .map(|item| (item.job_id.clone(), item))
+            .map(|item| (item.id.clone(), item))
             .collect();
 
         let mut cache = self.cache.write().await;
@@ -88,21 +88,21 @@ impl WorkItemCache {
     }
 
     /// Get all work items as a vector
-    pub async fn get_all(&self) -> Vec<WorkItem> {
+    pub async fn get_all(&self) -> Vec<Job> {
         let cache = self.cache.read().await;
         cache.values().cloned().collect()
     }
 
     /// Get all work items as a HashMap (clone of internal state)
-    pub async fn get_all_map(&self) -> HashMap<String, WorkItem> {
+    pub async fn get_all_map(&self) -> HashMap<String, Job> {
         let cache = self.cache.read().await;
         cache.clone()
     }
 
     /// Find the first work item matching a predicate
-    pub async fn find_first<F>(&self, predicate: F) -> Option<WorkItem>
+    pub async fn find_first<F>(&self, predicate: F) -> Option<Job>
     where
-        F: Fn(&WorkItem) -> bool,
+        F: Fn(&Job) -> bool,
     {
         let cache = self.cache.read().await;
         cache.values().find(|item| predicate(item)).cloned()
@@ -111,14 +111,14 @@ impl WorkItemCache {
     /// Count work items matching a predicate
     pub async fn count<F>(&self, predicate: F) -> usize
     where
-        F: Fn(&WorkItem) -> bool,
+        F: Fn(&Job) -> bool,
     {
         let cache = self.cache.read().await;
         cache.values().filter(|item| predicate(item)).count()
     }
 
     /// Count work items by status
-    pub async fn count_by_status(&self, status: WorkStatus) -> usize {
+    pub async fn count_by_status(&self, status: JobStatus) -> usize {
         self.count(|item| item.status == status).await
     }
 
@@ -138,21 +138,10 @@ impl WorkItemCache {
     ///
     /// This provides a fast way to get queue stats without querying
     /// persistent storage, but may be stale if cache hasn't been refreshed.
-    pub async fn compute_stats(&self) -> WorkQueueStats {
+    pub async fn compute_stats(&self) -> QueueStats {
         let cache = self.cache.read().await;
-        let mut stats = WorkQueueStats::default();
-
-        for work_item in cache.values() {
-            match work_item.status {
-                WorkStatus::Pending => stats.pending += 1,
-                WorkStatus::Claimed => stats.claimed += 1,
-                WorkStatus::InProgress => stats.in_progress += 1,
-                WorkStatus::Completed => stats.completed += 1,
-                WorkStatus::Failed => stats.failed += 1,
-            }
-        }
-
-        stats
+        let jobs: Vec<Job> = cache.values().cloned().collect();
+        QueueStats::from_jobs(&jobs)
     }
 
     /// Clear all items from the cache
@@ -171,7 +160,7 @@ impl Default for WorkItemCache {
 impl std::fmt::Debug for WorkItemCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WorkItemCache")
-            .field("cache", &"<HashMap<String, WorkItem>>")
+            .field("cache", &"<HashMap<String, Job>>")
             .finish()
     }
 }
@@ -181,9 +170,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn create_test_item(job_id: &str, status: WorkStatus) -> WorkItem {
-        WorkItem {
-            job_id: job_id.to_string(),
+    fn create_test_item(job_id: &str, status: JobStatus) -> Job {
+        Job {
+            id: job_id.to_string(),
             status,
             claimed_by: None,
             completed_by: None,
@@ -203,31 +192,31 @@ mod tests {
     #[tokio::test]
     async fn test_upsert_and_get() {
         let cache = WorkItemCache::new();
-        let item = create_test_item("job1", WorkStatus::Pending);
+        let item = create_test_item("job1", JobStatus::Pending);
 
         cache.upsert(item.clone()).await;
 
         let retrieved = cache.get("job1").await;
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().job_id, "job1");
+        assert_eq!(retrieved.unwrap().id, "job1");
     }
 
     #[tokio::test]
     async fn test_update_in_place() {
         let cache = WorkItemCache::new();
-        let item = create_test_item("job1", WorkStatus::Pending);
+        let item = create_test_item("job1", JobStatus::Pending);
         cache.upsert(item).await;
 
         let updated = cache
             .update("job1", |item| {
-                item.status = WorkStatus::Claimed;
+                item.status = JobStatus::Claimed;
             })
             .await;
 
         assert!(updated);
 
         let retrieved = cache.get("job1").await.unwrap();
-        assert_eq!(retrieved.status, WorkStatus::Claimed);
+        assert_eq!(retrieved.status, JobStatus::Claimed);
     }
 
     #[tokio::test]
@@ -236,7 +225,7 @@ mod tests {
 
         let updated = cache
             .update("nonexistent", |item| {
-                item.status = WorkStatus::Claimed;
+                item.status = JobStatus::Claimed;
             })
             .await;
 
@@ -246,11 +235,11 @@ mod tests {
     #[tokio::test]
     async fn test_replace_all() {
         let cache = WorkItemCache::new();
-        cache.upsert(create_test_item("old1", WorkStatus::Pending)).await;
+        cache.upsert(create_test_item("old1", JobStatus::Pending)).await;
 
         let new_items = vec![
-            create_test_item("new1", WorkStatus::Pending),
-            create_test_item("new2", WorkStatus::Claimed),
+            create_test_item("new1", JobStatus::Pending),
+            create_test_item("new2", JobStatus::Claimed),
         ];
 
         cache.replace_all(new_items).await;
@@ -264,40 +253,40 @@ mod tests {
     #[tokio::test]
     async fn test_find_first() {
         let cache = WorkItemCache::new();
-        cache.upsert(create_test_item("job1", WorkStatus::Completed)).await;
-        cache.upsert(create_test_item("job2", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job3", WorkStatus::Pending)).await;
+        cache.upsert(create_test_item("job1", JobStatus::Completed)).await;
+        cache.upsert(create_test_item("job2", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job3", JobStatus::Pending)).await;
 
         let found = cache
-            .find_first(|item| item.status == WorkStatus::Pending)
+            .find_first(|item| item.status == JobStatus::Pending)
             .await;
 
         assert!(found.is_some());
         let found_item = found.unwrap();
-        assert!(found_item.job_id == "job2" || found_item.job_id == "job3");
+        assert!(found_item.id == "job2" || found_item.id == "job3");
     }
 
     #[tokio::test]
     async fn test_count_by_status() {
         let cache = WorkItemCache::new();
-        cache.upsert(create_test_item("job1", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job2", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job3", WorkStatus::Claimed)).await;
+        cache.upsert(create_test_item("job1", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job2", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job3", JobStatus::Claimed)).await;
 
-        assert_eq!(cache.count_by_status(WorkStatus::Pending).await, 2);
-        assert_eq!(cache.count_by_status(WorkStatus::Claimed).await, 1);
-        assert_eq!(cache.count_by_status(WorkStatus::Completed).await, 0);
+        assert_eq!(cache.count_by_status(JobStatus::Pending).await, 2);
+        assert_eq!(cache.count_by_status(JobStatus::Claimed).await, 1);
+        assert_eq!(cache.count_by_status(JobStatus::Completed).await, 0);
     }
 
     #[tokio::test]
     async fn test_compute_stats() {
         let cache = WorkItemCache::new();
-        cache.upsert(create_test_item("job1", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job2", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job3", WorkStatus::Claimed)).await;
-        cache.upsert(create_test_item("job4", WorkStatus::InProgress)).await;
-        cache.upsert(create_test_item("job5", WorkStatus::Completed)).await;
-        cache.upsert(create_test_item("job6", WorkStatus::Failed)).await;
+        cache.upsert(create_test_item("job1", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job2", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job3", JobStatus::Claimed)).await;
+        cache.upsert(create_test_item("job4", JobStatus::InProgress)).await;
+        cache.upsert(create_test_item("job5", JobStatus::Completed)).await;
+        cache.upsert(create_test_item("job6", JobStatus::Failed)).await;
 
         let stats = cache.compute_stats().await;
 
@@ -311,8 +300,8 @@ mod tests {
     #[tokio::test]
     async fn test_from_items() {
         let items = vec![
-            create_test_item("job1", WorkStatus::Pending),
-            create_test_item("job2", WorkStatus::Claimed),
+            create_test_item("job1", JobStatus::Pending),
+            create_test_item("job2", JobStatus::Claimed),
         ];
 
         let cache = WorkItemCache::from_items(items);
@@ -325,8 +314,8 @@ mod tests {
     #[tokio::test]
     async fn test_clear() {
         let cache = WorkItemCache::new();
-        cache.upsert(create_test_item("job1", WorkStatus::Pending)).await;
-        cache.upsert(create_test_item("job2", WorkStatus::Claimed)).await;
+        cache.upsert(create_test_item("job1", JobStatus::Pending)).await;
+        cache.upsert(create_test_item("job2", JobStatus::Claimed)).await;
 
         assert_eq!(cache.len().await, 2);
 

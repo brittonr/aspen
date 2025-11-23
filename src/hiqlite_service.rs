@@ -10,7 +10,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use hiqlite::{Client, NodeConfig, Param};
 use std::borrow::Cow;
-use tokio::sync::OnceCell;
 
 use crate::services::traits::{DatabaseHealth, DatabaseLifecycle, DatabaseQueries, DatabaseSchema};
 
@@ -386,7 +385,7 @@ impl HiqliteService {
     }
 
     /// Check cluster health and connectivity
-    pub async fn health_check(&self) -> Result<ClusterHealth> {
+    pub async fn health_check(&self) -> Result<crate::domain::types::HealthStatus> {
         // Query hiqlite for actual cluster metrics
         match self.client.metrics_db().await {
             Ok(metrics) => {
@@ -395,7 +394,7 @@ impl HiqliteService {
                 let has_leader = metrics.current_leader.is_some();
                 let is_healthy = self.client.is_healthy_db().await.is_ok();
 
-                Ok(ClusterHealth {
+                Ok(crate::domain::types::HealthStatus {
                     is_healthy,
                     node_count,
                     has_leader,
@@ -403,7 +402,7 @@ impl HiqliteService {
             }
             Err(e) => {
                 tracing::warn!("Failed to get cluster metrics: {}", e);
-                Ok(ClusterHealth {
+                Ok(crate::domain::types::HealthStatus {
                     is_healthy: false,
                     node_count: 0,
                     has_leader: false,
@@ -413,13 +412,7 @@ impl HiqliteService {
     }
 }
 
-/// Cluster health status
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ClusterHealth {
-    pub is_healthy: bool,
-    pub node_count: usize,
-    pub has_leader: bool,
-}
+// ClusterHealth type removed - use domain::types::HealthStatus instead
 
 // =============================================================================
 // TRAIT IMPLEMENTATIONS
@@ -469,7 +462,7 @@ impl DatabaseQueries for HiqliteService {
 
 #[async_trait]
 impl DatabaseHealth for HiqliteService {
-    async fn health_check(&self) -> Result<ClusterHealth> {
+    async fn health_check(&self) -> Result<crate::domain::types::HealthStatus> {
         // Query hiqlite for actual cluster metrics
         match self.client.metrics_db().await {
             Ok(metrics) => {
@@ -478,7 +471,7 @@ impl DatabaseHealth for HiqliteService {
                 let has_leader = metrics.current_leader.is_some();
                 let is_healthy = self.client.is_healthy_db().await.is_ok();
 
-                Ok(ClusterHealth {
+                Ok(crate::domain::types::HealthStatus {
                     is_healthy,
                     node_count,
                     has_leader,
@@ -486,7 +479,7 @@ impl DatabaseHealth for HiqliteService {
             }
             Err(e) => {
                 tracing::warn!("Failed to get cluster metrics: {}", e);
-                Ok(ClusterHealth {
+                Ok(crate::domain::types::HealthStatus {
                     is_healthy: false,
                     node_count: 0,
                     has_leader: false,
@@ -539,28 +532,6 @@ impl DatabaseLifecycle for HiqliteService {
             .await;
         Ok(())
     }
-}
-
-/// Global hiqlite service instance
-static HIQLITE: OnceCell<HiqliteService> = OnceCell::const_new();
-
-/// Initialize the global hiqlite service
-pub async fn init_hiqlite() -> Result<()> {
-    let service = HiqliteService::new(None).await?;
-    service.initialize_schema().await?;
-
-    HIQLITE
-        .set(service)
-        .map_err(|_| anyhow::anyhow!("Hiqlite already initialized"))?;
-
-    Ok(())
-}
-
-/// Get the global hiqlite service instance
-pub fn hiqlite() -> &'static HiqliteService {
-    HIQLITE
-        .get()
-        .expect("Hiqlite not initialized - call init_hiqlite() first")
 }
 
 #[cfg(test)]

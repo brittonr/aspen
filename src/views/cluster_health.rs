@@ -1,7 +1,7 @@
 //! Cluster health view model
 
 use askama::Template;
-use crate::domain::cluster_status::ClusterHealth;
+use crate::domain::cluster_status::AggregatedClusterHealth;
 
 /// View model for cluster health display
 #[derive(Template)]
@@ -15,8 +15,8 @@ pub struct ClusterHealthView {
     pub active_worker_count: usize,
 }
 
-impl From<ClusterHealth> for ClusterHealthView {
-    fn from(health: ClusterHealth) -> Self {
+impl From<AggregatedClusterHealth> for ClusterHealthView {
+    fn from(health: AggregatedClusterHealth) -> Self {
         Self {
             is_healthy: health.is_healthy,
             health_status_text: if health.is_healthy {

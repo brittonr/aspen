@@ -11,8 +11,10 @@ use crate::repositories::{StateRepository, WorkRepository};
 use crate::domain::types::Job;
 
 /// Aggregated cluster health information
+///
+/// Combines database cluster health (from HealthStatus) with worker activity metrics.
 #[derive(Debug, Clone)]
-pub struct ClusterHealth {
+pub struct AggregatedClusterHealth {
     pub is_healthy: bool,
     pub node_count: usize,
     pub has_leader: bool,
@@ -50,7 +52,7 @@ impl ClusterStatusService {
     }
 
     /// Get aggregated cluster health status
-    pub async fn get_cluster_health(&self) -> Result<ClusterHealth> {
+    pub async fn get_cluster_health(&self) -> Result<AggregatedClusterHealth> {
         // Get control plane health from state repository
         let health_check = self.state_repo.health_check().await?;
 
@@ -58,7 +60,7 @@ impl ClusterStatusService {
         let jobs = self.work_repo.list_work().await?;
         let active_workers = Self::count_active_workers(&jobs);
 
-        Ok(ClusterHealth {
+        Ok(AggregatedClusterHealth {
             is_healthy: health_check.is_healthy,
             node_count: health_check.node_count,
             has_leader: health_check.has_leader,

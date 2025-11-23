@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::traits::*;
-use crate::hiqlite_service::ClusterHealth;
+use crate::domain::types::HealthStatus;
 
 // =============================================================================
 // IROH NETWORKING MOCKS
@@ -315,13 +315,13 @@ impl DatabaseQueries for MockDatabaseQueries {
 /// Mock implementation of DatabaseHealth for testing
 #[derive(Clone)]
 pub struct MockDatabaseHealth {
-    health: Arc<Mutex<ClusterHealth>>,
+    health: Arc<Mutex<HealthStatus>>,
 }
 
 impl MockDatabaseHealth {
     pub fn new() -> Self {
         Self {
-            health: Arc::new(Mutex::new(ClusterHealth {
+            health: Arc::new(Mutex::new(HealthStatus {
                 is_healthy: true,
                 node_count: 1,
                 has_leader: true,
@@ -330,14 +330,14 @@ impl MockDatabaseHealth {
     }
 
     /// Set cluster health for testing
-    pub async fn set_health(&self, health: ClusterHealth) {
+    pub async fn set_health(&self, health: HealthStatus) {
         *self.health.lock().await = health;
     }
 }
 
 #[async_trait]
 impl DatabaseHealth for MockDatabaseHealth {
-    async fn health_check(&self) -> Result<ClusterHealth> {
+    async fn health_check(&self) -> Result<HealthStatus> {
         Ok(self.health.lock().await.clone())
     }
 }

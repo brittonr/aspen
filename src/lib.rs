@@ -8,8 +8,8 @@ pub mod work_queue_client;
 pub mod worker_trait;
 pub mod worker_flawless;
 
-// Re-export common types from work_queue module
-pub use work_queue::{WorkItem, WorkStatus, WorkQueueStats};
+// Re-export domain types (WorkQueue now uses these internally)
+pub use domain::types::{Job, JobStatus, QueueStats};
 
 // Re-export client for convenience
 pub use work_queue_client::WorkQueueClient;
@@ -30,7 +30,7 @@ mod services;
 mod iroh_service;
 mod handlers;
 mod views;
-mod domain;
+pub mod domain;
 
 // Export modules needed for testing
 pub mod hiqlite_service;

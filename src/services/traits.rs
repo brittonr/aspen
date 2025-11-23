@@ -34,8 +34,8 @@ use std::borrow::Cow;
 pub use hiqlite::Param;
 pub use iroh::{EndpointAddr, EndpointId};
 
-// Re-export ClusterHealth from hiqlite_service
-use crate::hiqlite_service::ClusterHealth;
+// Use domain HealthStatus type
+use crate::domain::types::HealthStatus;
 
 // =============================================================================
 // IROH NETWORKING TRAITS
@@ -247,7 +247,7 @@ pub trait DatabaseHealth: Send + Sync {
     ///
     /// # Returns
     /// Cluster health information including node count and leader status
-    async fn health_check(&self) -> Result<ClusterHealth>;
+    async fn health_check(&self) -> Result<HealthStatus>;
 }
 
 /// Database schema management

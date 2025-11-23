@@ -1,7 +1,7 @@
 //! Persistent Store Abstraction
 //!
 //! This module defines the `PersistentStore` trait that abstracts persistence operations
-//! for workflow data. By operating at the domain level (WorkItem types) rather than
+//! for workflow data. By operating at the domain level (Job types) rather than
 //! exposing raw SQL, this trait enables:
 //! - Testing with mock implementations
 //! - Swapping storage backends without changing business logic
@@ -9,7 +9,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::work_queue::{WorkItem, WorkStatus};
+use crate::domain::types::{Job, JobStatus};
 
 /// Persistent storage abstraction for workflow data
 ///
@@ -19,14 +19,14 @@ use crate::work_queue::{WorkItem, WorkStatus};
 pub trait PersistentStore: Send + Sync {
     /// Load all workflows from persistent storage
     ///
-    /// Returns a vector of all WorkItems currently in storage, regardless of status.
-    async fn load_all_workflows(&self) -> Result<Vec<WorkItem>>;
+    /// Returns a vector of all Jobs currently in storage, regardless of status.
+    async fn load_all_workflows(&self) -> Result<Vec<Job>>;
 
     /// Insert or replace a workflow in persistent storage
     ///
     /// If a workflow with the same job_id exists, it will be replaced.
     /// This operation should be atomic.
-    async fn upsert_workflow(&self, work_item: &WorkItem) -> Result<()>;
+    async fn upsert_workflow(&self, job: &Job) -> Result<()>;
 
     /// Atomically claim a pending workflow
     ///
@@ -53,7 +53,7 @@ pub trait PersistentStore: Send + Sync {
     async fn update_workflow_status(
         &self,
         job_id: &str,
-        status: &WorkStatus,
+        status: &JobStatus,
         completed_by: Option<&str>,
         updated_at: i64,
     ) -> Result<usize>;

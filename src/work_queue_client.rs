@@ -10,7 +10,7 @@ use iroh_tickets::endpoint::EndpointTicket;
 use serde::Serialize;
 use std::{future, str::FromStr};
 
-use crate::{WorkItem, WorkStatus, WorkQueueStats};
+use crate::{Job, JobStatus, QueueStats};
 
 /// HTTP client for Work Queue API over iroh+h3
 pub struct WorkQueueClient {
@@ -62,7 +62,7 @@ impl WorkQueueClient {
     /// Claim an available work item from the queue
     ///
     /// Returns None if no work is available
-    pub async fn claim_work(&self) -> Result<Option<WorkItem>> {
+    pub async fn claim_work(&self) -> Result<Option<Job>> {
         tracing::info!("claim_work() called - about to POST to /queue/claim");
         let response = self.post("/queue/claim", &()).await?;
         tracing::info!(status = response.status, body_len = response.body.len(), "POST response received");
@@ -78,16 +78,16 @@ impl WorkQueueClient {
             return Err(anyhow!("Failed to claim work: HTTP {}", response.status));
         }
 
-        let work_item: WorkItem = serde_json::from_slice(&response.body)?;
-        tracing::info!(job_id = %work_item.job_id, "Work item parsed successfully");
-        Ok(Some(work_item))
+        let job: Job = serde_json::from_slice(&response.body)?;
+        tracing::info!(job_id = %job.id, "Work item parsed successfully");
+        Ok(Some(job))
     }
 
     /// Update the status of a work item
-    pub async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()> {
+    pub async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
         #[derive(Serialize)]
         struct StatusUpdate {
-            status: WorkStatus,
+            status: JobStatus,
         }
 
         let path = format!("/queue/status/{}", job_id);
@@ -105,26 +105,26 @@ impl WorkQueueClient {
     }
 
     /// List all work items in the queue
-    pub async fn list_work(&self) -> Result<Vec<WorkItem>> {
+    pub async fn list_work(&self) -> Result<Vec<Job>> {
         let response = self.get("/queue/list").await?;
 
         if response.status != 200 {
             return Err(anyhow!("Failed to list work: HTTP {}", response.status));
         }
 
-        let items: Vec<WorkItem> = serde_json::from_slice(&response.body)?;
-        Ok(items)
+        let jobs: Vec<Job> = serde_json::from_slice(&response.body)?;
+        Ok(jobs)
     }
 
     /// Get queue statistics
-    pub async fn stats(&self) -> Result<WorkQueueStats> {
+    pub async fn stats(&self) -> Result<QueueStats> {
         let response = self.get("/queue/stats").await?;
 
         if response.status != 200 {
             return Err(anyhow!("Failed to get stats: HTTP {}", response.status));
         }
 
-        let stats: WorkQueueStats = serde_json::from_slice(&response.body)?;
+        let stats: QueueStats = serde_json::from_slice(&response.body)?;
         Ok(stats)
     }
 

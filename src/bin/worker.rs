@@ -5,7 +5,7 @@
 // Cache bust: 1732360124
 
 use anyhow::Result;
-use mvm_ci::{AppConfig, WorkQueueClient, WorkStatus, WorkerBackend, worker_flawless::FlawlessWorker};
+use mvm_ci::{AppConfig, WorkQueueClient, JobStatus, WorkerBackend, worker_flawless::FlawlessWorker};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,42 +43,42 @@ async fn main() -> Result<()> {
         match client.claim_work().await {
             Ok(Some(job)) => {
                 tracing::info!(
-                    job_id = %job.job_id,
+                    job_id = %job.id,
                     status = ?job.status,
                     "Claimed job from control plane"
                 );
 
                 // Mark as in-progress
-                if let Err(e) = client.update_status(&job.job_id, WorkStatus::InProgress).await {
-                    tracing::error!(job_id = %job.job_id, error = %e, "Failed to mark job as in-progress");
+                if let Err(e) = client.update_status(&job.id, JobStatus::InProgress).await {
+                    tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as in-progress");
                 }
 
                 // Execute the job using the worker backend
                 match worker.execute(job.clone()).await {
                     Ok(result) if result.success => {
-                        tracing::info!(job_id = %job.job_id, "Job completed successfully");
-                        if let Err(e) = client.update_status(&job.job_id, WorkStatus::Completed).await {
-                            tracing::error!(job_id = %job.job_id, error = %e, "Failed to mark job as completed");
+                        tracing::info!(job_id = %job.id, "Job completed successfully");
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Completed).await {
+                            tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as completed");
                         }
                     }
                     Ok(result) => {
                         tracing::error!(
-                            job_id = %job.job_id,
+                            job_id = %job.id,
                             error = ?result.error,
                             "Job failed"
                         );
-                        if let Err(e) = client.update_status(&job.job_id, WorkStatus::Failed).await {
-                            tracing::error!(job_id = %job.job_id, error = %e, "Failed to mark job as failed");
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed).await {
+                            tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as failed");
                         }
                     }
                     Err(e) => {
                         tracing::error!(
-                            job_id = %job.job_id,
+                            job_id = %job.id,
                             error = %e,
                             "Job execution error"
                         );
-                        if let Err(e) = client.update_status(&job.job_id, WorkStatus::Failed).await {
-                            tracing::error!(job_id = %job.job_id, error = %e, "Failed to mark job as failed");
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed).await {
+                            tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as failed");
                         }
                     }
                 }

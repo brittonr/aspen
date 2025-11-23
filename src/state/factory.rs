@@ -133,8 +133,7 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
 // TEST INFRASTRUCTURE
 // =============================================================================
 
-#[cfg(any(test, feature = "test-utils"))]
-mod test_factory {
+pub mod test_factory {
     use super::*;
     use crate::repositories::mocks::{MockStateRepository, MockWorkRepository};
 

@@ -8,45 +8,11 @@
 //! WorkQueue is now a thin orchestrator with no embedded business logic.
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use crate::persistent_store::PersistentStore;
 use crate::work_item_cache::WorkItemCache;
 use crate::work_state_machine::WorkStateMachine;
-
-/// Work item representing a job in the distributed queue
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkItem {
-    /// Unique job identifier
-    pub job_id: String,
-    /// Job status
-    pub status: WorkStatus,
-    /// Node that claimed this work (if any)
-    pub claimed_by: Option<String>,
-    /// Node that completed this work (if any)
-    pub completed_by: Option<String>,
-    /// Timestamp when job was created
-    pub created_at: i64,
-    /// Timestamp when job was last updated
-    pub updated_at: i64,
-    /// Job payload (JSON)
-    pub payload: serde_json::Value,
-}
-
-/// Work status enum
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum WorkStatus {
-    /// Job is available for claiming
-    Pending,
-    /// Job has been claimed by a worker
-    Claimed,
-    /// Job is being executed
-    InProgress,
-    /// Job completed successfully
-    Completed,
-    /// Job failed
-    Failed,
-}
+use crate::domain::types::{Job, JobStatus, QueueStats};
 
 /// Work Queue - Coordinates cache, persistence, and state machine
 #[derive(Clone)]
@@ -105,9 +71,9 @@ impl WorkQueue {
     pub async fn publish_work(&self, job_id: String, payload: serde_json::Value) -> Result<()> {
         let now = chrono::Utc::now().timestamp();
 
-        let work_item = WorkItem {
-            job_id: job_id.clone(),
-            status: WorkStatus::Pending,
+        let job = Job {
+            id: job_id.clone(),
+            status: JobStatus::Pending,
             claimed_by: None,
             completed_by: None,
             created_at: now,
@@ -116,24 +82,24 @@ impl WorkQueue {
         };
 
         // Persist to store first (strong consistency via underlying implementation)
-        self.store.upsert_workflow(&work_item).await?;
+        self.store.upsert_workflow(&job).await?;
 
         // Update local cache
-        self.cache.upsert(work_item).await;
+        self.cache.upsert(job).await;
 
         tracing::info!(job_id = %job_id, "Work item published to persistent store");
         Ok(())
     }
 
     /// Claim available work from the queue
-    pub async fn claim_work(&self) -> Result<Option<WorkItem>> {
+    pub async fn claim_work(&self) -> Result<Option<Job>> {
         let now = chrono::Utc::now().timestamp();
 
         // Refresh cache from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
         // Count pending jobs for debugging
-        let pending_count = self.cache.count_by_status(WorkStatus::Pending).await;
+        let pending_count = self.cache.count_by_status(JobStatus::Pending).await;
         let total_count = self.cache.len().await;
 
         tracing::info!(
@@ -145,37 +111,37 @@ impl WorkQueue {
 
         // Try to claim first pending work item
         let all_items = self.cache.get_all().await;
-        for work_item in all_items {
-            if work_item.status == WorkStatus::Pending {
+        for job in all_items {
+            if job.status == JobStatus::Pending {
                 tracing::info!(
-                    job_id = %work_item.job_id,
+                    job_id = %job.id,
                     node_id = %self.node_id,
                     "Attempting to claim pending job"
                 );
 
                 // Claim it via persistent store (atomic operation)
                 let rows_affected = self.store
-                    .claim_workflow(&work_item.job_id, &self.node_id, now)
+                    .claim_workflow(&job.id, &self.node_id, now)
                     .await?;
 
                 tracing::info!(
-                    job_id = %work_item.job_id,
+                    job_id = %job.id,
                     rows_affected = rows_affected,
                     "Claim operation result"
                 );
 
                 // If store update succeeded, update local cache and return
                 if rows_affected > 0 {
-                    let claimed = self.cache.update(&work_item.job_id, |item| {
-                        item.status = WorkStatus::Claimed;
+                    let claimed = self.cache.update(&job.id, |item| {
+                        item.status = JobStatus::Claimed;
                         item.claimed_by = Some(self.node_id.clone());
                         item.updated_at = now;
                     }).await;
 
                     if claimed {
-                        let claimed_item = self.cache.get(&work_item.job_id).await.unwrap();
+                        let claimed_item = self.cache.get(&job.id).await.unwrap();
                         tracing::info!(
-                            job_id = %claimed_item.job_id,
+                            job_id = %claimed_item.id,
                             node_id = %self.node_id,
                             "Work item claimed successfully"
                         );
@@ -183,7 +149,7 @@ impl WorkQueue {
                     }
                 } else {
                     // Another node claimed it first
-                    tracing::warn!(job_id = %work_item.job_id, "Claim race detected - another node claimed first");
+                    tracing::warn!(job_id = %job.id, "Claim race detected - another node claimed first");
                 }
             }
         }
@@ -196,7 +162,7 @@ impl WorkQueue {
     }
 
     /// Update work item status
-    pub async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()> {
+    pub async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
         let now = chrono::Utc::now().timestamp();
 
         // Determine completed_by using state machine logic
@@ -221,11 +187,11 @@ impl WorkQueue {
         }
 
         // Update local cache
-        self.cache.update(job_id, |work_item| {
-            work_item.status = status.clone();
-            work_item.updated_at = now;
+        self.cache.update(job_id, |job| {
+            job.status = status;
+            job.updated_at = now;
             if let Some(completed_by_node) = completed_by {
-                work_item.completed_by = Some(completed_by_node.to_string());
+                job.completed_by = Some(completed_by_node.to_string());
             }
         }).await;
 
@@ -240,7 +206,7 @@ impl WorkQueue {
     }
 
     /// List all work items (refreshed from persistent store)
-    pub async fn list_work(&self) -> Result<Vec<WorkItem>> {
+    pub async fn list_work(&self) -> Result<Vec<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -252,7 +218,7 @@ impl WorkQueue {
     ///
     /// This method performs data access filtering at the infrastructure layer,
     /// avoiding the need to load all work items.
-    pub async fn get_work_by_id(&self, job_id: &str) -> Result<Option<WorkItem>> {
+    pub async fn get_work_by_id(&self, job_id: &str) -> Result<Option<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -264,7 +230,7 @@ impl WorkQueue {
     ///
     /// This method performs data access filtering at the infrastructure layer,
     /// avoiding the need to load and filter all work items in the domain layer.
-    pub async fn list_work_by_status(&self, status: WorkStatus) -> Result<Vec<WorkItem>> {
+    pub async fn list_work_by_status(&self, status: JobStatus) -> Result<Vec<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -279,7 +245,7 @@ impl WorkQueue {
     /// List work items claimed by a specific worker
     ///
     /// This method performs data access filtering at the infrastructure layer.
-    pub async fn list_work_by_worker(&self, worker_id: &str) -> Result<Vec<WorkItem>> {
+    pub async fn list_work_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -300,7 +266,7 @@ impl WorkQueue {
     ///
     /// This method performs pagination at the infrastructure layer,
     /// avoiding the need to load all items when only a subset is needed.
-    pub async fn list_work_paginated(&self, offset: usize, limit: usize) -> Result<Vec<WorkItem>> {
+    pub async fn list_work_paginated(&self, offset: usize, limit: usize) -> Result<Vec<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -321,9 +287,9 @@ impl WorkQueue {
     /// This method performs multiple filters at the infrastructure layer.
     pub async fn list_work_by_status_and_worker(
         &self,
-        status: WorkStatus,
+        status: JobStatus,
         worker_id: &str,
-    ) -> Result<Vec<WorkItem>> {
+    ) -> Result<Vec<Job>> {
         // Refresh from persistent store to get latest distributed state
         self.refresh_cache().await?;
 
@@ -348,7 +314,7 @@ impl WorkQueue {
     }
 
     /// Get work queue statistics (refreshed from persistent store)
-    pub async fn stats(&self) -> WorkQueueStats {
+    pub async fn stats(&self) -> QueueStats {
         // Try to refresh from persistent store to get distributed state
         if let Err(e) = self.refresh_cache().await {
             tracing::warn!("Failed to refresh cache from persistent store: {}", e);
@@ -358,14 +324,4 @@ impl WorkQueue {
         // Compute stats from cache (using dedicated cache method)
         self.cache.compute_stats().await
     }
-}
-
-/// Work queue statistics
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct WorkQueueStats {
-    pub pending: usize,
-    pub claimed: usize,
-    pub in_progress: usize,
-    pub completed: usize,
-    pub failed: usize,
 }

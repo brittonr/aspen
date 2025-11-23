@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use crate::hiqlite_service::HiqliteService;
 use crate::persistent_store::PersistentStore;
-use crate::work_queue::{WorkItem, WorkStatus};
+use crate::domain::types::{Job, JobStatus};
 use crate::params;
 
 /// Hiqlite-backed implementation of PersistentStore
@@ -29,7 +29,7 @@ impl HiqlitePersistentStore {
 
 #[async_trait]
 impl PersistentStore for HiqlitePersistentStore {
-    async fn load_all_workflows(&self) -> Result<Vec<WorkItem>> {
+    async fn load_all_workflows(&self) -> Result<Vec<Job>> {
         // Define row structure matching database schema
         #[derive(Debug, serde::Deserialize)]
         struct WorkflowRow {
@@ -64,23 +64,23 @@ impl PersistentStore for HiqlitePersistentStore {
             )
             .await?;
 
-        // Transform database rows into domain WorkItems
-        let work_items = rows.into_iter().map(|row| {
+        // Transform database rows into domain Jobs
+        let jobs = rows.into_iter().map(|row| {
             let status = match row.status.as_str() {
-                "pending" => WorkStatus::Pending,
-                "claimed" => WorkStatus::Claimed,
-                "in_progress" => WorkStatus::InProgress,
-                "completed" => WorkStatus::Completed,
-                "failed" => WorkStatus::Failed,
-                _ => WorkStatus::Pending, // Default to pending for unknown statuses
+                "pending" => JobStatus::Pending,
+                "claimed" => JobStatus::Claimed,
+                "in_progress" => JobStatus::InProgress,
+                "completed" => JobStatus::Completed,
+                "failed" => JobStatus::Failed,
+                _ => JobStatus::Pending, // Default to pending for unknown statuses
             };
 
             let payload = row.data
                 .and_then(|d| serde_json::from_str(&d).ok())
                 .unwrap_or(serde_json::Value::Null);
 
-            WorkItem {
-                job_id: row.id,
+            Job {
+                id: row.id,
                 status,
                 claimed_by: row.claimed_by,
                 completed_by: row.completed_by,
@@ -90,23 +90,23 @@ impl PersistentStore for HiqlitePersistentStore {
             }
         }).collect();
 
-        Ok(work_items)
+        Ok(jobs)
     }
 
-    async fn upsert_workflow(&self, work_item: &WorkItem) -> Result<()> {
-        let status_str = status_to_string(&work_item.status);
-        let payload_str = serde_json::to_string(&work_item.payload)?;
+    async fn upsert_workflow(&self, job: &Job) -> Result<()> {
+        let status_str = status_to_string(&job.status);
+        let payload_str = serde_json::to_string(&job.payload)?;
 
         self.hiqlite
             .execute(
                 "INSERT OR REPLACE INTO workflows (id, status, claimed_by, completed_by, created_at, updated_at, data) VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 params!(
-                    work_item.job_id.clone(),
+                    job.id.clone(),
                     status_str,
-                    work_item.claimed_by.clone(),
-                    work_item.completed_by.clone(),
-                    work_item.created_at,
-                    work_item.updated_at,
+                    job.claimed_by.clone(),
+                    job.completed_by.clone(),
+                    job.created_at,
+                    job.updated_at,
                     payload_str
                 ),
             )
@@ -136,14 +136,14 @@ impl PersistentStore for HiqlitePersistentStore {
     async fn update_workflow_status(
         &self,
         job_id: &str,
-        status: &WorkStatus,
+        status: &JobStatus,
         completed_by: Option<&str>,
         updated_at: i64,
     ) -> Result<usize> {
         let status_str = status_to_string(status);
 
         // Handle terminal states differently (completed/failed set completed_by)
-        let rows_affected = if *status == WorkStatus::Completed || *status == WorkStatus::Failed {
+        let rows_affected = if *status == JobStatus::Completed || *status == JobStatus::Failed {
             // State machine guard: prevent regression from terminal states
             // Allow idempotent updates (completed→completed or failed→failed)
             self.hiqlite
@@ -167,13 +167,13 @@ impl PersistentStore for HiqlitePersistentStore {
     }
 }
 
-/// Convert WorkStatus enum to database string representation
-fn status_to_string(status: &WorkStatus) -> &'static str {
+/// Convert JobStatus enum to database string representation
+fn status_to_string(status: &JobStatus) -> &'static str {
     match status {
-        WorkStatus::Pending => "pending",
-        WorkStatus::Claimed => "claimed",
-        WorkStatus::InProgress => "in_progress",
-        WorkStatus::Completed => "completed",
-        WorkStatus::Failed => "failed",
+        JobStatus::Pending => "pending",
+        JobStatus::Claimed => "claimed",
+        JobStatus::InProgress => "in_progress",
+        JobStatus::Completed => "completed",
+        JobStatus::Failed => "failed",
     }
 }

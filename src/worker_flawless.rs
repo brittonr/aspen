@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use flawless_utils::{DeployedModule, Server};
 
 use crate::worker_trait::{WorkerBackend, WorkResult};
-use crate::WorkItem;
+use crate::Job;
 
 /// Worker backend that executes jobs using Flawless WASM workflows
 pub struct FlawlessWorker {
@@ -37,7 +37,7 @@ impl FlawlessWorker {
 
 #[async_trait]
 impl WorkerBackend for FlawlessWorker {
-    async fn execute(&self, job: WorkItem) -> Result<WorkResult> {
+    async fn execute(&self, job: Job) -> Result<WorkResult> {
         // Parse the job payload to get id and url
         let payload = &job.payload;
 
@@ -53,7 +53,7 @@ impl WorkerBackend for FlawlessWorker {
             .ok_or_else(|| anyhow!("Missing 'url' in job payload"))?
             .to_string();
 
-        tracing::info!(job_id = %job.job_id, url = %url, "Executing Flawless workflow");
+        tracing::info!(job_id = %job.id, url = %url, "Executing Flawless workflow");
 
         // Execute the workflow via Flawless
         match self
@@ -62,11 +62,11 @@ impl WorkerBackend for FlawlessWorker {
             .await
         {
             Ok(_) => {
-                tracing::info!(job_id = %job.job_id, "Workflow completed successfully");
+                tracing::info!(job_id = %job.id, "Workflow completed successfully");
                 Ok(WorkResult::success())
             }
             Err(e) => {
-                tracing::error!(job_id = %job.job_id, error = %e, "Workflow execution failed");
+                tracing::error!(job_id = %job.id, error = %e, "Workflow execution failed");
                 Ok(WorkResult::failure(format!("Workflow failed: {}", e)))
             }
         }

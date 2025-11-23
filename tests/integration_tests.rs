@@ -3,7 +3,7 @@
 //! These tests verify that the factory pattern enables testing without real infrastructure.
 
 use mvm_ci::config::AppConfig;
-use mvm_ci::state::factory::TestInfrastructureFactory;
+use mvm_ci::state::factory::test_factory::TestInfrastructureFactory;
 
 #[tokio::test]
 async fn test_app_state_with_test_factory() {
@@ -62,7 +62,7 @@ async fn test_production_factory_exists() {
 
 #[tokio::test]
 async fn test_mock_state_repository_operations() {
-    use mvm_ci::hiqlite_service::ClusterHealth;
+    use mvm_ci::domain::types::HealthStatus;
     use mvm_ci::repositories::mocks::MockStateRepository;
     use mvm_ci::repositories::StateRepository;
 
@@ -75,7 +75,7 @@ async fn test_mock_state_repository_operations() {
     assert!(health.has_leader);
 
     // Test setting custom health
-    mock_repo.set_health(ClusterHealth {
+    mock_repo.set_health(HealthStatus {
         is_healthy: false,
         node_count: 1,
         has_leader: false,
@@ -91,7 +91,7 @@ async fn test_mock_state_repository_operations() {
 async fn test_mock_work_repository_operations() {
     use mvm_ci::repositories::mocks::MockWorkRepository;
     use mvm_ci::repositories::WorkRepository;
-    use mvm_ci::{WorkItem, WorkStatus};
+    use mvm_ci::{Job, JobStatus};
     use serde_json::json;
 
     let mock_repo = MockWorkRepository::new();
@@ -105,22 +105,22 @@ async fn test_mock_work_repository_operations() {
     // Test listing work
     let work_items = mock_repo.list_work().await.unwrap();
     assert_eq!(work_items.len(), 1);
-    assert_eq!(work_items[0].job_id, "job-1");
-    assert_eq!(work_items[0].status, WorkStatus::Pending);
+    assert_eq!(work_items[0].id, "job-1");
+    assert_eq!(work_items[0].status, JobStatus::Pending);
 
     // Test claiming work
     let claimed = mock_repo.claim_work().await.unwrap();
     assert!(claimed.is_some());
     let claimed_item = claimed.unwrap();
-    assert_eq!(claimed_item.job_id, "job-1");
-    assert_eq!(claimed_item.status, WorkStatus::Claimed);
+    assert_eq!(claimed_item.id, "job-1");
+    assert_eq!(claimed_item.status, JobStatus::Claimed);
 
     // Test updating status
     mock_repo
-        .update_status("job-1", WorkStatus::Completed)
+        .update_status("job-1", JobStatus::Completed)
         .await
         .unwrap();
 
     let work_items = mock_repo.list_work().await.unwrap();
-    assert_eq!(work_items[0].status, WorkStatus::Completed);
+    assert_eq!(work_items[0].status, JobStatus::Completed);
 }

@@ -13,7 +13,6 @@ pub mod hiqlite_repository;
 pub mod work_queue_repository;
 
 // Export mocks module for testing (both unit tests and integration tests)
-#[cfg(any(test, feature = "test-utils"))]
 pub mod mocks;
 
 // Re-export concrete implementations
