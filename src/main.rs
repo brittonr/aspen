@@ -143,69 +143,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .expect("Local HTTP server failed");
     });
 
-    // Spawn background worker to claim and process jobs from distributed queue
-    let worker_state = state.clone();
-    tokio::spawn(async move {
-        println!("Starting distributed work queue processor...");
-        println!("  - Polling for jobs every 2 seconds");
-        println!("  - Load balanced across all cluster nodes");
-
-        loop {
-            // Try to claim work from the distributed queue
-            match worker_state.work_queue().claim_work().await {
-                Ok(Some(work_item)) => {
-                    tracing::info!(
-                        job_id = %work_item.job_id,
-                        "Claimed job from distributed queue"
-                    );
-
-                    // Immediately mark as in-progress to prevent re-claiming
-                    if let Err(e) = worker_state.work_queue()
-                        .update_status(&work_item.job_id, work_queue::WorkStatus::InProgress)
-                        .await
-                    {
-                        tracing::error!(job_id = %work_item.job_id, error = %e, "Failed to mark job as in-progress");
-                    }
-
-                    // Parse the payload to get job details
-                    let payload = &work_item.payload;
-                    if let (Some(id), Some(url)) = (payload.get("id").and_then(|v| v.as_u64()), payload.get("url").and_then(|v| v.as_str())) {
-                        let url = url.to_string();
-                        let id = id as usize;
-
-                        // Execute the workflow
-                        tracing::info!(job_id = %work_item.job_id, url = %url, "Starting workflow execution");
-
-                        if let Err(e) = worker_state
-                            .module()
-                            .start::<module1::start_crawler>(Job { id, url: url.clone() })
-                            .await
-                        {
-                            tracing::error!(job_id = %work_item.job_id, error = %e, "Workflow execution failed");
-                            worker_state.work_queue()
-                                .update_status(&work_item.job_id, work_queue::WorkStatus::Failed)
-                                .await
-                                .ok();
-                        } else {
-                            tracing::info!(job_id = %work_item.job_id, "Workflow completed successfully");
-                            worker_state.work_queue()
-                                .update_status(&work_item.job_id, work_queue::WorkStatus::Completed)
-                                .await
-                                .ok();
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // No work available, wait before polling again
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Failed to claim work from queue");
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                }
-            }
-        }
-    });
+    // NOTE: Worker loop removed - now handled by separate worker binary
+    // Control plane is now a pure API server (no job execution)
+    //
+    // To run jobs, start the worker binary:
+    //   CONTROL_PLANE_TICKET="iroh+h3://..." worker
+    //
+    // Or to run an embedded worker (backward compat), add back the worker loop
+    // See src/bin/worker.rs for reference implementation
 
     // Main thread runs P2P listener for distributed communication
     println!("Starting HTTP/3 server over iroh for P2P...");

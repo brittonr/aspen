@@ -169,6 +169,12 @@
             {
               name = "synthetic-events";
             }
+            {
+              name = "mvm-ci";
+            }
+            {
+              name = "worker";
+            }
           ]);
       in
         bins

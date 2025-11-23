@@ -3,7 +3,20 @@ name = "mvm-ci"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "mvm_ci"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mvm-ci"
+path = "src/main.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
 [dependencies]
+async-trait = "0.1"
 module1= { path = "workflows/module1" }
 askama = "0.12"
 axum = "0.8"
@@ -39,6 +52,8 @@ futures = "0.3"
 async-stream = "0.3"
 hex = "0.4"
 h3-iroh = { path = "./vendor/h3-iroh", features = ["axum"] }
+h3 = "0.0.8"
+http = "1.0"
 iroh-tickets = "0.2"
 hiqlite = "0.11.0"
 tracing = "0.1"
