@@ -11,6 +11,7 @@ mod iroh_api;
 mod hiqlite_service;
 mod work_queue;
 mod state;
+mod domain;
 mod handlers;
 
 use iroh_service::IrohService;

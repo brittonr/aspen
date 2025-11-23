@@ -4,11 +4,13 @@ use askama::Template;
 use axum::{
     Form,
     extract::{Query, State},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
+    http::{StatusCode, header},
 };
 use serde::Deserialize;
 
 use crate::state::AppState;
+use crate::domain::{ClusterStatusService, JobLifecycleService, JobSortOrder, JobSubmission, format_duration, format_time_ago};
 use crate::work_queue;
 
 /// Main dashboard template
@@ -23,18 +25,20 @@ pub async fn dashboard() -> impl IntoResponse {
 
 /// Dashboard cluster health endpoint (HTMX partial)
 pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl IntoResponse {
-    let health_check = state.hiqlite().health_check().await.ok();
-    let is_healthy = health_check.as_ref().map(|h| h.is_healthy).unwrap_or(false);
-    let node_count = health_check.as_ref().map(|h| h.node_count).unwrap_or(0);
-    let has_leader = health_check.as_ref().map(|h| h.has_leader).unwrap_or(false);
+    // Use domain service for cluster health
+    let cluster_service = ClusterStatusService::new(
+        state.hiqlite().clone(),
+        state.work_queue().clone(),
+    );
 
-    // Count active workers from recent jobs
-    let work_items = state.work_queue().list_work().await.unwrap_or_default();
-    let active_workers: std::collections::HashSet<String> = work_items
-        .iter()
-        .filter_map(|item| item.claimed_by.clone())
-        .collect();
-    let worker_count = active_workers.len();
+    let health = match cluster_service.get_cluster_health().await {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::error!("Failed to get cluster health: {}", e);
+            let error_html = r#"<h2>Cluster Health</h2><p>Error loading health status</p>"#.to_string();
+            return ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], error_html);
+        }
+    };
 
     let html = format!(
         r#"<h2>Cluster Health</h2>
@@ -49,14 +53,14 @@ pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl Int
     <span class="stat-label">Active Workers</span>
     <span class="stat-value">{}</span>
 </div>"#,
-        if is_healthy { "healthy" } else { "unhealthy" },
-        node_count,
-        if has_leader { ", leader elected" } else { ", no leader" },
-        if is_healthy { "Healthy" } else { "Unhealthy" },
-        worker_count
+        if health.is_healthy { "healthy" } else { "unhealthy" },
+        health.node_count,
+        if health.has_leader { ", leader elected" } else { ", no leader" },
+        if health.is_healthy { "Healthy" } else { "Unhealthy" },
+        health.active_worker_count
     );
 
-    Html(html)
+    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], html)
 }
 
 /// Dashboard queue statistics endpoint (HTMX partial)
