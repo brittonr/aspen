@@ -6,12 +6,12 @@ use axum::{
     Form, Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode, header},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
 };
 use serde::Deserialize;
 
 use crate::state::{AppState, JobProgress, Status, UpdateUI};
-use crate::work_queue;
+use crate::domain::{JobLifecycleService, JobSubmission};
 
 /// Index page template
 #[derive(Template)]
@@ -30,27 +30,24 @@ pub struct NewJob {
 }
 
 /// Job submission handler (legacy UI)
-pub async fn new_job(State(state): State<AppState>, Form(job): Form<NewJob>) -> impl IntoResponse {
-    let url = job.url;
-    let id = state.add_job(url.clone()).await;
-    let job_id = format!("job-{}", id);
+pub async fn new_job(State(state): State<AppState>, Form(job): Form<NewJob>) -> Response {
+    let job_service = JobLifecycleService::new(
+        state.work_queue().clone(),
+        state.clone(),
+    );
 
-    // Publish work to hiqlite-backed queue
-    let payload = serde_json::json!({
-        "id": id,
-        "url": url,
-    });
+    let submission = JobSubmission { url: job.url };
 
-    state
-        .work_queue()
-        .publish_work(job_id.clone(), payload)
-        .await
-        .expect("Failed to publish work to hiqlite");
-
-    // Job is now in the queue - background workers will claim and process it
-    tracing::info!(job_id = %job_id, url = %url, "Job published to distributed queue");
-
-    list(State(state)).await
+    match job_service.submit_job(submission).await {
+        Ok(job_id) => {
+            tracing::info!(job_id = %job_id, "Job published to distributed queue");
+            list(State(state)).await.into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to submit job: {}", e);
+            Html(format!("<p>Error: {}</p>", e)).into_response()
+        }
+    }
 }
 
 /// Job list template
@@ -81,22 +78,18 @@ pub async fn ui_update(
     State(state): State<AppState>,
     Json(ui_update): Json<UpdateUI>,
 ) -> impl IntoResponse {
-    // Update local UI state
-    state
-        .update_job(ui_update.id, ui_update.status.clone(), ui_update.url.clone())
-        .await;
+    let job_service = JobLifecycleService::new(
+        state.work_queue().clone(),
+        state.clone(),
+    );
 
-    // Sync to hiqlite as the single source of truth
     let job_id = format!("job-{}", ui_update.id);
-    let work_status = match ui_update.status {
-        Status::Request | Status::Parse => work_queue::WorkStatus::InProgress,
-        Status::Done => work_queue::WorkStatus::Completed,
-        Status::Error => work_queue::WorkStatus::Failed,
-    };
 
-    // Update hiqlite workflow state
-    if let Err(e) = state.work_queue().update_status(&job_id, work_status).await {
-        tracing::warn!("Failed to sync workflow status to hiqlite: {}", e);
+    if let Err(e) = job_service
+        .update_job_status(&job_id, ui_update.status, ui_update.url, ui_update.id)
+        .await
+    {
+        tracing::warn!("Failed to update job status: {}", e);
     }
 
     Html("OK")
