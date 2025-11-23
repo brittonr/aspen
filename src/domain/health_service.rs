@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::repositories::StateRepository;
-use crate::hiqlite_service::ClusterHealth;
+use crate::domain::types::HealthStatus;
 
 /// Domain service for health check operations
 ///
@@ -27,7 +27,7 @@ impl HealthService {
     ///
     /// Returns health information about the distributed database cluster,
     /// including node count, leader status, and overall health.
-    pub async fn check_database_health(&self) -> Result<ClusterHealth> {
+    pub async fn check_database_health(&self) -> Result<HealthStatus> {
         self.state_repo.health_check().await
     }
 
@@ -78,7 +78,7 @@ mod tests {
     async fn test_check_database_health_returns_health_info() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: true,
             node_count: 3,
             has_leader: true,
@@ -99,7 +99,7 @@ mod tests {
     async fn test_is_database_healthy_when_healthy() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: true,
             node_count: 3,
             has_leader: true,
@@ -118,7 +118,7 @@ mod tests {
     async fn test_is_database_healthy_when_no_leader() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: true,
             node_count: 2,
             has_leader: false, // No leader
@@ -137,7 +137,7 @@ mod tests {
     async fn test_is_database_healthy_when_unhealthy() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: false,
             node_count: 1,
             has_leader: false,
@@ -156,7 +156,7 @@ mod tests {
     async fn test_database_health_summary_when_healthy() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: true,
             node_count: 3,
             has_leader: true,
@@ -175,7 +175,7 @@ mod tests {
     async fn test_database_health_summary_when_degraded() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: true,
             node_count: 2,
             has_leader: false,
@@ -194,7 +194,7 @@ mod tests {
     async fn test_database_health_summary_when_unhealthy() {
         // Arrange
         let state_repo = Arc::new(MockStateRepository::new());
-        state_repo.set_health(ClusterHealth {
+        state_repo.set_health(HealthStatus {
             is_healthy: false,
             node_count: 1,
             has_leader: false,

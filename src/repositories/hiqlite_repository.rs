@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::hiqlite_service::ClusterHealth;
+use crate::domain::types::HealthStatus;
 use crate::repositories::StateRepository;
 use crate::services::traits::DatabaseHealth;
 
@@ -26,7 +26,14 @@ impl HiqliteStateRepository {
 
 #[async_trait]
 impl StateRepository for HiqliteStateRepository {
-    async fn health_check(&self) -> Result<ClusterHealth> {
-        self.db_health.health_check().await
+    async fn health_check(&self) -> Result<HealthStatus> {
+        let cluster_health = self.db_health.health_check().await?;
+
+        // Map infrastructure ClusterHealth to domain HealthStatus
+        Ok(HealthStatus {
+            is_healthy: cluster_health.is_healthy,
+            node_count: cluster_health.node_count,
+            has_leader: cluster_health.has_leader,
+        })
     }
 }

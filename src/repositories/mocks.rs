@@ -6,21 +6,20 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::hiqlite_service::ClusterHealth;
 use crate::repositories::{StateRepository, WorkRepository};
-use crate::domain::types::{Job, JobStatus, QueueStats};
+use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus};
 
 /// Mock implementation of StateRepository for testing
 #[derive(Clone)]
 pub struct MockStateRepository {
-    health: Arc<Mutex<ClusterHealth>>,
+    health: Arc<Mutex<HealthStatus>>,
 }
 
 impl MockStateRepository {
     /// Create a new mock repository with default healthy cluster
     pub fn new() -> Self {
         Self {
-            health: Arc::new(Mutex::new(ClusterHealth {
+            health: Arc::new(Mutex::new(HealthStatus {
                 is_healthy: true,
                 node_count: 3,
                 has_leader: true,
@@ -29,14 +28,14 @@ impl MockStateRepository {
     }
 
     /// Set the cluster health to return
-    pub async fn set_health(&self, health: ClusterHealth) {
+    pub async fn set_health(&self, health: HealthStatus) {
         *self.health.lock().await = health;
     }
 }
 
 #[async_trait]
 impl StateRepository for MockStateRepository {
-    async fn health_check(&self) -> Result<ClusterHealth> {
+    async fn health_check(&self) -> Result<HealthStatus> {
         Ok(self.health.lock().await.clone())
     }
 }

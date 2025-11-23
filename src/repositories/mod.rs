@@ -7,8 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
-use crate::domain::types::{Job, JobStatus, QueueStats};
-use crate::hiqlite_service::ClusterHealth;
+use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
 
 pub mod hiqlite_repository;
 pub mod work_queue_repository;
@@ -24,10 +23,13 @@ pub use work_queue_repository::WorkQueueWorkRepository;
 /// Repository abstraction for cluster state and database operations
 ///
 /// Wraps HiqliteService to provide a testable interface for domain services.
+/// Returns domain types to maintain proper layer separation.
 #[async_trait]
 pub trait StateRepository: Send + Sync {
-    /// Get cluster health information
-    async fn health_check(&self) -> Result<ClusterHealth>;
+    /// Get database cluster health information
+    ///
+    /// Returns health status using domain types, independent of infrastructure.
+    async fn health_check(&self) -> Result<HealthStatus>;
 }
 
 /// Repository abstraction for work queue operations

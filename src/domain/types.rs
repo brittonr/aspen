@@ -146,6 +146,20 @@ impl QueueStats {
     }
 }
 
+/// Database cluster health status
+///
+/// Domain representation of distributed database health, independent of
+/// infrastructure implementation (hiqlite, postgres, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HealthStatus {
+    /// Whether the database cluster is operating normally
+    pub is_healthy: bool,
+    /// Number of nodes in the database cluster
+    pub node_count: usize,
+    /// Whether the cluster has an elected leader
+    pub has_leader: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
