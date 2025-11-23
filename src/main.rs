@@ -107,14 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build Axum router with all routes
     let app = Router::new()
-        // Job UI routes (legacy)
-        .route("/", get(index))
-        .route("/timeout", get(timeout))
-        .route("/new-job", post(new_job))
-        .route("/list", get(list))
-        .route("/ui-update", post(ui_update))
-        .route("/assets/{*path}", get(handle_assets))
-        // Dashboard routes (HTMX monitoring UI)
+        // Dashboard routes (HTMX monitoring UI - primary UI)
         .route("/dashboard", get(dashboard))
         .route("/dashboard/cluster-health", get(dashboard_cluster_health))
         .route("/dashboard/queue-stats", get(dashboard_queue_stats))

@@ -4,11 +4,11 @@
 //! Enforces business rules and state machine constraints.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::Result;
 
 use crate::repositories::WorkRepository;
 use crate::work_queue::{WorkItem, WorkStatus, WorkQueueStats};
-use crate::state::ui::{UiState, Status};
 
 /// Job submission parameters
 #[derive(Debug, Clone)]
@@ -48,15 +48,15 @@ impl JobSortOrder {
 /// Domain service for job lifecycle operations
 pub struct JobLifecycleService {
     work_repo: Arc<dyn WorkRepository>,
-    ui_state: UiState,
+    job_counter: Arc<AtomicUsize>,
 }
 
 impl JobLifecycleService {
     /// Create a new job lifecycle service
-    pub fn new(work_repo: Arc<dyn WorkRepository>, ui_state: UiState) -> Self {
+    pub fn new(work_repo: Arc<dyn WorkRepository>) -> Self {
         Self {
             work_repo,
-            ui_state,
+            job_counter: Arc::new(AtomicUsize::new(1)),
         }
     }
 
@@ -67,8 +67,8 @@ impl JobLifecycleService {
             anyhow::bail!("URL cannot be empty");
         }
 
-        // Add to local progress tracking (for legacy UI)
-        let id = self.ui_state.add_job(submission.url.clone()).await;
+        // Generate unique job ID
+        let id = self.job_counter.fetch_add(1, Ordering::SeqCst);
         let job_id = format!("job-{}", id);
 
         // Create job payload
@@ -83,32 +83,6 @@ impl JobLifecycleService {
         tracing::info!(job_id = %job_id, url = %submission.url, "Job submitted");
 
         Ok(job_id)
-    }
-
-    /// Update job status (called by workflows)
-    pub async fn update_job_status(
-        &self,
-        job_id: &str,
-        ui_status: Status,
-        url: String,
-        internal_id: usize,
-    ) -> Result<()> {
-        // Update local UI state
-        self.ui_state
-            .update_job(internal_id, ui_status.clone(), url)
-            .await;
-
-        // Map UI status to work queue status
-        let work_status = match ui_status {
-            Status::Request | Status::Parse => WorkStatus::InProgress,
-            Status::Done => WorkStatus::Completed,
-            Status::Error => WorkStatus::Failed,
-        };
-
-        // Update distributed queue state
-        self.work_repo.update_status(job_id, work_status).await?;
-
-        Ok(())
     }
 
     /// Get queue statistics

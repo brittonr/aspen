@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::domain::{ClusterStatusService, JobLifecycleService};
 use crate::repositories::{HiqliteStateRepository, WorkQueueWorkRepository};
-use crate::state::{InfrastructureState, UiState};
+use crate::state::InfrastructureState;
 
 /// Container for pre-constructed domain services
 ///
@@ -20,7 +20,7 @@ pub struct DomainServices {
 
 impl DomainServices {
     /// Create domain services with repository dependencies
-    pub fn new(infra: &InfrastructureState, ui: &UiState) -> Self {
+    pub fn new(infra: &InfrastructureState) -> Self {
         // Create repository implementations
         let state_repo = Arc::new(HiqliteStateRepository::new(infra.hiqlite().clone()));
         let work_repo = Arc::new(WorkQueueWorkRepository::new(infra.work_queue().clone()));
@@ -31,10 +31,7 @@ impl DomainServices {
             work_repo.clone(),
         ));
 
-        let job_lifecycle = Arc::new(JobLifecycleService::new(
-            work_repo.clone(),
-            ui.clone(),
-        ));
+        let job_lifecycle = Arc::new(JobLifecycleService::new(work_repo.clone()));
 
         Self {
             cluster_status,
