@@ -1,0 +1,16 @@
+<div class="node-list">
+    {% if nodes.is_empty() %}
+    <p style="color: #94a3b8; text-align: center;">No control plane nodes detected</p>
+    {% else %}
+    {% for node in nodes %}
+    <div class="node-item{{ node.leader_css_class }}">
+        <div class="node-label">
+            Node {{ node.node_number }}
+            {{ node.badge_html|safe }}
+        </div>
+        <div class="node-id">Status: Active</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+<div class="refresh-indicator">Auto-refreshing every 2s</div>

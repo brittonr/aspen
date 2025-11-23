@@ -1,0 +1,12 @@
+<h2>Cluster Health</h2>
+<div class="stat">
+    <span class="stat-label">
+        <span class="health-indicator health-{{ health_css_class }}"></span>
+        Control Plane ({{ node_count }} nodes{{ leader_status }})
+    </span>
+    <span class="stat-value">{{ health_status_text }}</span>
+</div>
+<div class="stat">
+    <span class="stat-label">Active Workers</span>
+    <span class="stat-value">{{ active_worker_count }}</span>
+</div>

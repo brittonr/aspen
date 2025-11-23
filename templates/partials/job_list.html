@@ -1,0 +1,29 @@
+<table>
+    <thead>
+        <tr>
+            <th>Job ID</th>
+            <th>Status</th>
+            <th>URL</th>
+            <th>Duration</th>
+            <th>Updated</th>
+            <th>Claimed By</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if jobs.is_empty() %}
+        <tr><td colspan="6" style="text-align: center; color: #94a3b8;">No jobs yet</td></tr>
+        {% else %}
+        {% for job in jobs %}
+        <tr>
+            <td>{{ job.job_id }}</td>
+            <td><span class="status-badge {{ job.status_class }}">{{ job.status_text }}</span></td>
+            <td><div class="job-url" title="{{ job.url }}">{{ job.url }}</div></td>
+            <td><span class="duration {{ job.duration_class }}">{{ job.duration_text }}</span></td>
+            <td><span class="time-ago">{{ job.time_ago }}</span></td>
+            <td>{{ job.node_id|safe }}</td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+    </tbody>
+</table>
+<div class="refresh-indicator">Auto-refreshing every 2s</div>

@@ -13,6 +13,7 @@ mod state;
 mod domain;
 mod repositories;
 mod handlers;
+mod views;
 
 use iroh_service::IrohService;
 use hiqlite_service::HiqliteService;

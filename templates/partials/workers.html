@@ -1,0 +1,26 @@
+<div class="node-list">
+    {% if workers.is_empty() %}
+    <p style="color: #94a3b8; text-align: center;">No workers have claimed jobs yet</p>
+    {% else %}
+    {% for worker in workers %}
+    <div class="worker-item{{ worker.active_css_class }}">
+        <div class="node-label">{{ worker.node_id_short }}</div>
+        <div class="worker-stats">
+            <div class="worker-stat-item">
+                <span>Active Jobs:</span>
+                <strong>{{ worker.active_jobs }}</strong>
+            </div>
+            <div class="worker-stat-item">
+                <span>Completed:</span>
+                <strong>{{ worker.completed_jobs }}</strong>
+            </div>
+            <div class="worker-stat-item">
+                <span>Last Seen:</span>
+                <strong>{{ worker.last_seen }}</strong>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+<div class="refresh-indicator">Auto-refreshing every 2s</div>
