@@ -1,7 +1,7 @@
 // Library exports for mvm-ci
 //
 // This allows other binaries (like worker) to use the core functionality
-// Add enhanced job metrics to dashboard: 1732375990
+// Refactor handlers into modular architecture: 1732376490
 
 pub mod work_queue_client;
 pub mod worker_trait;
