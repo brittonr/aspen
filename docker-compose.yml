@@ -70,6 +70,47 @@ services:
     volumes:
       - node3-data:/data
 
+  # Worker containers (isolated execution with own Flawless instance)
+  worker1:
+    image: mvm-ci-cluster:latest
+    container_name: mvm-ci-worker1
+    hostname: worker1
+    command: ["/bin/sh", "/bin/worker-entrypoint.sh"]
+    environment:
+      - WORKER_ID=1
+      - CONTROL_PLANE_TICKET=${CONTROL_PLANE_TICKET}
+      - FLAWLESS_URL=http://localhost:27288
+      - RUST_LOG=info
+    networks:
+      cluster:
+        ipv4_address: 192.168.100.21
+    volumes:
+      - worker1-data:/data
+    depends_on:
+      - node1
+      - node2
+      - node3
+
+  worker2:
+    image: mvm-ci-cluster:latest
+    container_name: mvm-ci-worker2
+    hostname: worker2
+    command: ["/bin/sh", "/bin/worker-entrypoint.sh"]
+    environment:
+      - WORKER_ID=2
+      - CONTROL_PLANE_TICKET=${CONTROL_PLANE_TICKET}
+      - FLAWLESS_URL=http://localhost:27288
+      - RUST_LOG=info
+    networks:
+      cluster:
+        ipv4_address: 192.168.100.22
+    volumes:
+      - worker2-data:/data
+    depends_on:
+      - node1
+      - node2
+      - node3
+
 networks:
   cluster:
     driver: bridge
@@ -81,3 +122,5 @@ volumes:
   node1-data:
   node2-data:
   node3-data:
+  worker1-data:
+  worker2-data:

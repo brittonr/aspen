@@ -251,11 +251,13 @@
           pkgs.coreutils
           pkgs.gettext  # for envsubst
           pkgs.cacert
-          # Add entrypoint script and config template
+          # Add entrypoint scripts and config template
           (pkgs.runCommand "mvm-ci-extras" {} ''
             mkdir -p $out/bin $out/etc
             cp ${./docker-entrypoint.sh} $out/bin/docker-entrypoint.sh
+            cp ${./worker-entrypoint.sh} $out/bin/worker-entrypoint.sh
             chmod +x $out/bin/docker-entrypoint.sh
+            chmod +x $out/bin/worker-entrypoint.sh
             cp ${./hiqlite-cluster.toml.template} $out/etc/hiqlite.toml.template
           '')
         ];
