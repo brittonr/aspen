@@ -239,8 +239,8 @@
 
       packages.default = mvm-ci;
 
-      # Docker image for cluster testing
-      packages.dockerImage = pkgs.dockerTools.buildLayeredImage {
+      # Docker image for cluster testing (using streamLayeredImage for better caching)
+      packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
         name = "mvm-ci-cluster";
         tag = "latest";
 
