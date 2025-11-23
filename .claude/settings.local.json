@@ -36,7 +36,16 @@
       "Bash(sudo docker logs:*)",
       "Bash(timeout 5 ./view-workflow-activity.sh:*)",
       "Bash(docker exec:*)",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "Bash(for i in {1..100})",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(cargo tree:*)",
+      "Bash(git add:*)",
+      "Bash(wait)",
+      "Bash(docker run:*)",
+      "Bash(docker compose:*)",
+      "Bash(mvm-ci-cluster:latest /bin/worker)"
     ],
     "deny": [],
     "ask": []

@@ -199,8 +199,23 @@ impl WorkQueue {
         // Find first pending work item in cache
         let mut cache = self.cache.write().await;
 
+        // Count pending jobs for debugging
+        let pending_count = cache.values().filter(|w| w.status == WorkStatus::Pending).count();
+        tracing::info!(
+            pending_count = pending_count,
+            total_count = cache.len(),
+            node_id = %self.node_id,
+            "Attempting to claim work"
+        );
+
         for (job_id, work_item) in cache.iter_mut() {
             if work_item.status == WorkStatus::Pending {
+                tracing::info!(
+                    job_id = %job_id,
+                    node_id = %self.node_id,
+                    "Attempting to claim pending job"
+                );
+
                 // Claim it in hiqlite first (atomic operation via Raft)
                 let rows_affected = self.hiqlite
                     .execute(
@@ -208,6 +223,12 @@ impl WorkQueue {
                         params!("claimed", self.node_id.clone(), now, job_id.clone()),
                     )
                     .await?;
+
+                tracing::info!(
+                    job_id = %job_id,
+                    rows_affected = rows_affected,
+                    "Claim UPDATE result"
+                );
 
                 // If hiqlite update succeeded, update local cache
                 if rows_affected > 0 {
@@ -224,11 +245,15 @@ impl WorkQueue {
                     return Ok(Some(work_item.clone()));
                 } else {
                     // Another node claimed it first - refresh from hiqlite
-                    tracing::debug!(job_id = %job_id, "Claim race detected - another node claimed first");
+                    tracing::warn!(job_id = %job_id, "Claim race detected - another node claimed first");
                 }
             }
         }
 
+        tracing::info!(
+            pending_count = pending_count,
+            "No work claimed - returning None"
+        );
         Ok(None)
     }
 

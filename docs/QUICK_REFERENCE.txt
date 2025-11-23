@@ -1,0 +1,284 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║         MVM-CI WORKER DEPLOYMENT: QUICK REFERENCE GUIDE                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+THE QUESTION:
+─────────────────────────────────────────────────────────────────────────────────
+  How should workers access Flawless WASM execution in separate containers?
+
+THE ANSWER:
+─────────────────────────────────────────────────────────────────────────────────
+  Phase 1: Shared Flawless (testing)  →  Phase 2: Individual Flawless (production)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ OPTION COMPARISON                                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─ OPTION 1: Each Worker Runs Flawless ─────────────────────────────────────┐
+│                                                                             │
+│  Architecture:  CP → [Worker+Flawless] [Worker+Flawless] [Worker+Flawless] │
+│                                                                             │
+│  Pros:          ✓ Complete isolation         ✓ Scales linearly             │
+│                 ✓ No bottleneck              ✓ Production-ready            │
+│                 ✓ etcd-like architecture     ✓ Failure independent         │
+│                                                                             │
+│  Cons:          ✗ Memory overhead (100MB×N) ✗ Deployment complex          │
+│                 ✗ Cold start time (~5s)      ✗ N Flawless to monitor      │
+│                                                                             │
+│  When to Use:   Production with 20+ workers                               │
+│                 MicroVM deployment                                         │
+│                 Long-term scalability needed                               │
+│                                                                             │
+│  Max Workers:   1000+ (resource-limited)    Scalability: LINEAR           │
+│  Effort:        4-6 weeks                    Timeline: Weeks 7-14         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ OPTION 2: Workers Share Control Plane Flawless (P2P) ─────────────────────┐
+│                                                                             │
+│  Architecture:  [CP+Flawless] ← P2P → [Worker] [Worker] [Worker]          │
+│                                                                             │
+│  Pros:          ✓ Minimal memory            ✓ Single to manage            │
+│                 ✓ Simple setup              ✓ Fast deployment             │
+│                                                                             │
+│  Cons:          ✗ Single point of failure   ✗ Resource bottleneck         │
+│                 ✗ Not scalable               ✗ Network complexity         │
+│                 ✗ Contention under load     ✗ Couples control/worker     │
+│                                                                             │
+│  When to Use:   NEVER (Option 4 is better)                                │
+│                 Only tiny POCs (≤5 workers)                               │
+│                                                                             │
+│  Max Workers:   5-10                        Scalability: POOR             │
+│  Effort:        Low                         Status: Don't do this         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ OPTION 3: Dedicated Flawless Service (Load Balanced) ────────────────────┐
+│                                                                             │
+│  Architecture:  [CP] → [Worker] [Worker] [Worker]                         │
+│                          ↓    ↓    ↓                                      │
+│                       [Flawless1] [Flawless2] [Flawless3]                 │
+│                                                                             │
+│  Pros:          ✓ Load distribution         ✓ Redundancy                  │
+│                 ✓ Kubernetes-friendly       ✓ Better than Option 2        │
+│                                                                             │
+│  Cons:          ✗ High complexity           ✗ Service discovery needed    │
+│                 ✗ Load balancing overhead   ✗ Session affinity issues     │
+│                 ✗ More containers           ✗ Operational burden          │
+│                                                                             │
+│  When to Use:   Large scale with Kubernetes (100+ workers)               │
+│                 When Flawless is expensive to run                         │
+│                                                                             │
+│  Max Workers:   500+                        Scalability: GOOD             │
+│  Effort:        6-8 weeks                   Complexity: HIGH              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ OPTION 4: Workers Share Control Plane Flawless (Docker Network) ─────────┐
+│                                                                             │
+│  Architecture:  ┌──────────────────┐                                      │
+│                 │ [CP+Flawless]    │  ← Same container or network         │
+│                 └──────────────────┘                                      │
+│                        ↓                                                   │
+│                   [Worker] [Worker] [Worker]                              │
+│                                                                             │
+│  Pros:          ✓ Minimal effort             ✓ Validates quickly          │
+│                 ✓ Docker Compose simple      ✓ Tests architecture         │
+│                 ✓ Clear testing path                                      │
+│                                                                             │
+│  Cons:          ✗ Single bottleneck          ✗ Not production-ready       │
+│                 ✗ Max ~20 workers            ✗ Failure domain             │
+│                 ✗ Network configuration      ✗ Limited scalability        │
+│                                                                             │
+│  When to Use:   SHORT-TERM TESTING ✓ ← RECOMMENDED FIRST PHASE            │
+│                 Validation (weeks 1-2)                                     │
+│                 Architecture proof-of-concept                              │
+│                                                                             │
+│  Max Workers:   10-20                       Scalability: POOR             │
+│  Effort:        2-3 days                    Status: START HERE            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ RECOMMENDED TIMELINE                                                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PHASE 1: Testing & Validation (Weeks 1-2) ✓ START HERE
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Use: OPTION 4 (Docker Compose + Shared Flawless)                        │
+│ Goals: Validate architecture, test P2P connectivity, execute jobs       │
+│ Artifacts: docker-compose.yml, Dockerfiles, testing checklist           │
+│ Effort: 2-3 days implementation + 2-3 days testing                      │
+│ Deliverable: Working cluster with 3-5 workers                           │
+│ Success: All workers connect, jobs execute, status updates propagate    │
+└──────────────────────────────────────────────────────────────────────────┘
+
+PHASE 2: Load Testing & Monitoring (Weeks 3-6)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Keep: OPTION 4, Add: Prometheus metrics                                 │
+│ Goals: Find bottleneck, document performance, capacity planning         │
+│ Tests: 100, 500, 1000 concurrent jobs                                  │
+│ Question Answered: "Max workers per Flawless = X"                       │
+│ Decision Point: Proceed with Option 1?                                  │
+│ Effort: 1-2 weeks                                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+
+PHASE 3: Production Implementation (Weeks 7-14)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Switch to: OPTION 1 (Each Worker Has Flawless)                         │
+│ Goals: MicroVM deployment, health checks, graceful shutdown             │
+│ Build: Nix packages, MicroVM images, deployment automation              │
+│ Test: 5-10 workers, P2P connectivity, failure recovery                 │
+│ Effort: 4-6 weeks                                                       │
+│ Deliverable: Production-ready deployment framework                      │
+└──────────────────────────────────────────────────────────────────────────┘
+
+PHASE 4: Production Scaling (Weeks 15+)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Use: OPTION 1 at Scale                                                  │
+│ Deploy: 50+ workers, monitoring, orchestration                          │
+│ Optimize: Based on real-world usage patterns                            │
+│ Support: Incident response, capacity management                         │
+└──────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ DECISION TREE: WHICH OPTION TO CHOOSE?                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Are you validating the worker architecture?
+├─ YES → Use OPTION 4 (docker-compose)
+│
+Are you deploying to production?
+├─ NO → Done! Use OPTION 4
+│
+Will you have fewer than 20 workers?
+├─ YES → Use OPTION 4 + move to OPTION 1 later
+│
+Will you have 20-1000 workers?
+├─ YES → Use OPTION 1 (each worker gets Flawless)
+│
+Will you have 1000+ workers AND have Kubernetes?
+├─ YES → Consider OPTION 3 (dedicated Flawless service)
+│
+Otherwise:
+└─ Use OPTION 1 (simpler than Option 3, more scalable than Option 4)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ KEY METRICS TO TRACK                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PHASE 1 (Testing):
+  ✓ Time to start cluster: < 1 minute
+  ✓ Workers connecting: Within 30 seconds
+  ✓ Job latency: < 500ms per job
+  ✓ Memory per worker: < 300MB
+  ✓ CPU scaling: Linear with job count
+
+PHASE 2 (Load Testing):
+  ✓ Max workers per Flawless: THE KEY METRIC
+  ✓ Job throughput: Jobs/second at saturation
+  ✓ Latency at saturation: How much slower?
+  ✓ Memory growth: Bounded or unbounded?
+  ✓ P2P stability: Any disconnects?
+
+PHASE 3 (Production):
+  ✓ Worker startup: < 10 seconds
+  ✓ P2P latency: < 200ms
+  ✓ Job execution: Within SLA
+  ✓ Failure recovery: Job status on timeout
+  ✓ Monitoring: Metrics exported correctly
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ CURRENT STATUS                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Architecture: 90% COMPLETE ✓
+  ✓ Worker binary exists
+  ✓ P2P framework works
+  ✓ Work queue API ready
+  ✓ Flawless backend implemented
+
+Missing: DEPLOYMENT & OPERATIONS (not architecture)
+  ✗ Docker/container setup
+  ✗ Flawless deployment decision
+  ✗ Monitoring/metrics
+  ✗ Load testing
+
+Status: READY TO START PHASE 1
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ IMPLEMENTATION CHECKLIST: WEEK 1                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Day 1-2: Setup Docker Files
+  [ ] Create Dockerfile.control-plane
+  [ ] Create Dockerfile.worker
+  [ ] Create docker-compose.yml
+  [ ] Modify src/main.rs to export endpoint ticket
+  [ ] Update flake.nix to add worker package
+
+Day 3-4: Test Basic Connectivity
+  [ ] Build Docker images
+  [ ] Start control plane
+  [ ] Verify endpoint ticket generation
+  [ ] Start 3 workers
+  [ ] Verify P2P connections
+  [ ] Submit test job
+  [ ] Verify job execution
+
+Day 5: Documentation & Baseline
+  [ ] Document startup procedure
+  [ ] Document scaling procedure
+  [ ] Measure baseline performance
+  [ ] Create troubleshooting guide
+  [ ] Write Phase 2 plan
+
+Success Criteria:
+  ✓ Control plane starts without errors
+  ✓ Workers connect successfully
+  ✓ Jobs execute via Flawless
+  ✓ Status updates propagate
+  ✓ No crashes in 30-minute run
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ WHO SHOULD READ WHAT?                                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Project Manager / Tech Lead:
+  → README_DEPLOYMENT.md
+  → EXECUTIVE_SUMMARY.txt
+  → DEPLOYMENT_SUMMARY.txt
+
+Architects:
+  → DEPLOYMENT_STRATEGY.md (all sections)
+  → DEPLOYMENT_SUMMARY.txt
+
+Developers (Implementation):
+  → IMPLEMENTATION_GUIDE.md
+  → README_DEPLOYMENT.md
+
+DevOps / Operations:
+  → DEPLOYMENT_SUMMARY.txt
+  → IMPLEMENTATION_GUIDE.md (Docker sections)
+  → DEPLOYMENT_STRATEGY.md (Risk Analysis section)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ BOTTOM LINE                                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Question: How do we deploy Flawless for workers?
+
+Answer:
+  1. Test with Option 4 (shared Flawless via Docker Compose)
+     Timeline: 2 weeks
+     Effort: 2-3 days implementation + testing
+     Goal: Validate architecture, find bottleneck
+
+  2. Move to Option 1 (each worker has Flawless)
+     Timeline: 4-6 weeks
+     Effort: MicroVM packaging + testing
+     Goal: Production-ready, scalable deployment
+
+Expected Timeline: 14 weeks to production-ready
+Current Status: Ready to start Phase 1 THIS WEEK
+Risk Level: Medium (P2P connectivity + Flawless performance unknown)
+
+RECOMMENDATION: Start with OPTION 4 immediately. It's the fastest path to
+validation and provides clear data for the production decision.
+
