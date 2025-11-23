@@ -3,11 +3,12 @@
 //! Encapsulates job creation, status transitions, validation, and querying.
 //! Enforces business rules and state machine constraints.
 
+use std::sync::Arc;
 use anyhow::Result;
-use serde_json::Value as JsonValue;
 
-use crate::work_queue::{WorkQueue, WorkItem, WorkStatus, WorkQueueStats};
-use crate::state::{AppState, Status};
+use crate::repositories::WorkRepository;
+use crate::work_queue::{WorkItem, WorkStatus, WorkQueueStats};
+use crate::state::ui::{UiState, Status};
 
 /// Job submission parameters
 #[derive(Debug, Clone)]
@@ -46,16 +47,16 @@ impl JobSortOrder {
 
 /// Domain service for job lifecycle operations
 pub struct JobLifecycleService {
-    work_queue: WorkQueue,
-    app_state: AppState,
+    work_repo: Arc<dyn WorkRepository>,
+    ui_state: UiState,
 }
 
 impl JobLifecycleService {
     /// Create a new job lifecycle service
-    pub fn new(work_queue: WorkQueue, app_state: AppState) -> Self {
+    pub fn new(work_repo: Arc<dyn WorkRepository>, ui_state: UiState) -> Self {
         Self {
-            work_queue,
-            app_state,
+            work_repo,
+            ui_state,
         }
     }
 
@@ -67,7 +68,7 @@ impl JobLifecycleService {
         }
 
         // Add to local progress tracking (for legacy UI)
-        let id = self.app_state.add_job(submission.url.clone()).await;
+        let id = self.ui_state.add_job(submission.url.clone()).await;
         let job_id = format!("job-{}", id);
 
         // Create job payload
@@ -77,7 +78,7 @@ impl JobLifecycleService {
         });
 
         // Publish to distributed queue
-        self.work_queue.publish_work(job_id.clone(), payload).await?;
+        self.work_repo.publish_work(job_id.clone(), payload).await?;
 
         tracing::info!(job_id = %job_id, url = %submission.url, "Job submitted");
 
@@ -93,7 +94,7 @@ impl JobLifecycleService {
         internal_id: usize,
     ) -> Result<()> {
         // Update local UI state
-        self.app_state
+        self.ui_state
             .update_job(internal_id, ui_status.clone(), url)
             .await;
 
@@ -105,14 +106,14 @@ impl JobLifecycleService {
         };
 
         // Update distributed queue state
-        self.work_queue.update_status(job_id, work_status).await?;
+        self.work_repo.update_status(job_id, work_status).await?;
 
         Ok(())
     }
 
     /// Get queue statistics
     pub async fn get_queue_stats(&self) -> WorkQueueStats {
-        self.work_queue.stats().await
+        self.work_repo.stats().await
     }
 
     /// List jobs with optional sorting and enrichment
@@ -121,7 +122,7 @@ impl JobLifecycleService {
         sort_order: JobSortOrder,
         limit: usize,
     ) -> Result<Vec<EnrichedJob>> {
-        let mut work_items = self.work_queue.list_work().await?;
+        let mut work_items = self.work_repo.list_work().await?;
 
         // Apply sorting
         self.sort_jobs(&mut work_items, sort_order);

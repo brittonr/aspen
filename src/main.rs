@@ -12,6 +12,7 @@ mod hiqlite_service;
 mod work_queue;
 mod state;
 mod domain;
+mod repositories;
 mod handlers;
 
 use iroh_service::IrohService;
@@ -89,8 +90,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Work Queue Ticket: {}", work_ticket);
     println!();
 
-    // Create shared application state
-    let state = AppState::new(module, iroh_service, hiqlite_service, work_queue);
+    // Create shared application state with modular architecture
+    let state = AppState::from_infrastructure(module, iroh_service, hiqlite_service, work_queue);
 
     // Build Axum router with all routes
     let app = Router::new()

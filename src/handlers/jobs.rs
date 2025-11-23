@@ -10,8 +10,9 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::state::{AppState, JobProgress, Status, UpdateUI};
-use crate::domain::{JobLifecycleService, JobSubmission};
+use crate::state::{AppState, JobProgress, UpdateUI};
+use crate::state::ui::Status;
+use crate::domain::JobSubmission;
 
 /// Index page template
 #[derive(Template)]
@@ -31,10 +32,8 @@ pub struct NewJob {
 
 /// Job submission handler (legacy UI)
 pub async fn new_job(State(state): State<AppState>, Form(job): Form<NewJob>) -> Response {
-    let job_service = JobLifecycleService::new(
-        state.work_queue().clone(),
-        state.clone(),
-    );
+    // Use pre-built domain service
+    let job_service = state.services().job_lifecycle();
 
     let submission = JobSubmission { url: job.url };
 
@@ -78,10 +77,8 @@ pub async fn ui_update(
     State(state): State<AppState>,
     Json(ui_update): Json<UpdateUI>,
 ) -> impl IntoResponse {
-    let job_service = JobLifecycleService::new(
-        state.work_queue().clone(),
-        state.clone(),
-    );
+    // Use pre-built domain service
+    let job_service = state.services().job_lifecycle();
 
     let job_id = format!("job-{}", ui_update.id);
 

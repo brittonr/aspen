@@ -1,0 +1,51 @@
+//! Repository traits for infrastructure abstraction
+//!
+//! This module defines trait-based abstractions over infrastructure services,
+//! enabling dependency injection and testability in the domain layer.
+
+use anyhow::Result;
+use async_trait::async_trait;
+use serde_json::Value as JsonValue;
+
+use crate::work_queue::{WorkItem, WorkQueueStats, WorkStatus};
+use crate::hiqlite_service::ClusterHealth;
+
+pub mod hiqlite_repository;
+pub mod work_queue_repository;
+
+#[cfg(test)]
+pub mod mocks;
+
+// Re-export concrete implementations
+pub use hiqlite_repository::HiqliteStateRepository;
+pub use work_queue_repository::WorkQueueWorkRepository;
+
+/// Repository abstraction for cluster state and database operations
+///
+/// Wraps HiqliteService to provide a testable interface for domain services.
+#[async_trait]
+pub trait StateRepository: Send + Sync {
+    /// Get cluster health information
+    async fn health_check(&self) -> Result<ClusterHealth>;
+}
+
+/// Repository abstraction for work queue operations
+///
+/// Wraps WorkQueue to provide a testable interface for job lifecycle operations.
+#[async_trait]
+pub trait WorkRepository: Send + Sync {
+    /// Publish a new work item to the queue
+    async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()>;
+
+    /// Claim the next available work item
+    async fn claim_work(&self) -> Result<Option<WorkItem>>;
+
+    /// Update the status of a work item
+    async fn update_status(&self, job_id: &str, status: WorkStatus) -> Result<()>;
+
+    /// List all work items in the queue
+    async fn list_work(&self) -> Result<Vec<WorkItem>>;
+
+    /// Get aggregate statistics for the work queue
+    async fn stats(&self) -> WorkQueueStats;
+}

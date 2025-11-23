@@ -4,10 +4,11 @@
 //! and node information by aggregating data from multiple services.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use anyhow::Result;
 
-use crate::hiqlite_service::HiqliteService;
-use crate::work_queue::{WorkQueue, WorkItem};
+use crate::repositories::{StateRepository, WorkRepository};
+use crate::work_queue::WorkItem;
 
 /// Aggregated cluster health information
 #[derive(Debug, Clone)]
@@ -38,23 +39,23 @@ pub struct ControlPlaneNode {
 
 /// Domain service for cluster status operations
 pub struct ClusterStatusService {
-    hiqlite: HiqliteService,
-    work_queue: WorkQueue,
+    state_repo: Arc<dyn StateRepository>,
+    work_repo: Arc<dyn WorkRepository>,
 }
 
 impl ClusterStatusService {
     /// Create a new cluster status service
-    pub fn new(hiqlite: HiqliteService, work_queue: WorkQueue) -> Self {
-        Self { hiqlite, work_queue }
+    pub fn new(state_repo: Arc<dyn StateRepository>, work_repo: Arc<dyn WorkRepository>) -> Self {
+        Self { state_repo, work_repo }
     }
 
     /// Get aggregated cluster health status
     pub async fn get_cluster_health(&self) -> Result<ClusterHealth> {
-        // Get control plane health from hiqlite
-        let health_check = self.hiqlite.health_check().await?;
+        // Get control plane health from state repository
+        let health_check = self.state_repo.health_check().await?;
 
         // Count active workers from recent job activity
-        let work_items = self.work_queue.list_work().await?;
+        let work_items = self.work_repo.list_work().await?;
         let active_workers = Self::count_active_workers(&work_items);
 
         Ok(ClusterHealth {
@@ -67,7 +68,7 @@ impl ClusterStatusService {
 
     /// Get detailed statistics for all workers
     pub async fn get_worker_stats(&self) -> Result<Vec<WorkerStats>> {
-        let work_items = self.work_queue.list_work().await?;
+        let work_items = self.work_repo.list_work().await?;
         let stats_map = Self::aggregate_worker_stats(&work_items);
 
         let now = Self::current_timestamp();
@@ -93,7 +94,7 @@ impl ClusterStatusService {
 
     /// Get control plane node information
     pub async fn get_control_plane_nodes(&self) -> Result<Vec<ControlPlaneNode>> {
-        let health_check = self.hiqlite.health_check().await?;
+        let health_check = self.state_repo.health_check().await?;
 
         let mut nodes = Vec::new();
         for i in 1..=health_check.node_count {

@@ -25,11 +25,8 @@ pub async fn dashboard() -> impl IntoResponse {
 
 /// Dashboard cluster health endpoint (HTMX partial)
 pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl IntoResponse {
-    // Use domain service for cluster health
-    let cluster_service = ClusterStatusService::new(
-        state.hiqlite().clone(),
-        state.work_queue().clone(),
-    );
+    // Use pre-built domain service (no per-request construction!)
+    let cluster_service = state.services().cluster_status();
 
     let health = match cluster_service.get_cluster_health().await {
         Ok(h) => h,
@@ -65,10 +62,8 @@ pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl Int
 
 /// Dashboard queue statistics endpoint (HTMX partial)
 pub async fn dashboard_queue_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let job_service = JobLifecycleService::new(
-        state.work_queue().clone(),
-        state.clone(),
-    );
+    // Use pre-built domain service
+    let job_service = state.services().job_lifecycle();
 
     let stats = job_service.get_queue_stats().await;
 
@@ -110,10 +105,8 @@ pub async fn dashboard_recent_jobs(
     State(state): State<AppState>,
     Query(query): Query<SortQuery>,
 ) -> impl IntoResponse {
-    let job_service = JobLifecycleService::new(
-        state.work_queue().clone(),
-        state.clone(),
-    );
+    // Use pre-built domain service
+    let job_service = state.services().job_lifecycle();
 
     // Parse sort order from query
     let sort_by = query.sort.as_deref().unwrap_or("time");
@@ -194,10 +187,8 @@ pub async fn dashboard_recent_jobs(
 
 /// Dashboard control plane nodes endpoint (HTMX partial)
 pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = ClusterStatusService::new(
-        state.hiqlite().clone(),
-        state.work_queue().clone(),
-    );
+    // Use pre-built domain service
+    let cluster_service = state.services().cluster_status();
 
     let nodes = match cluster_service.get_control_plane_nodes().await {
         Ok(nodes) => nodes,
@@ -243,10 +234,8 @@ pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> imp
 
 /// Dashboard workers endpoint (HTMX partial)
 pub async fn dashboard_workers(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = ClusterStatusService::new(
-        state.hiqlite().clone(),
-        state.work_queue().clone(),
-    );
+    // Use pre-built domain service
+    let cluster_service = state.services().cluster_status();
 
     let workers = match cluster_service.get_worker_stats().await {
         Ok(workers) => workers,
@@ -321,10 +310,8 @@ pub async fn dashboard_submit_job(
     State(state): State<AppState>,
     Form(job): Form<NewJob>,
 ) -> Response {
-    let job_service = JobLifecycleService::new(
-        state.work_queue().clone(),
-        state.clone(),
-    );
+    // Use pre-built domain service
+    let job_service = state.services().job_lifecycle();
 
     let submission = JobSubmission { url: job.url };
 
