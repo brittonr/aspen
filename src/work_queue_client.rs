@@ -63,18 +63,23 @@ impl WorkQueueClient {
     ///
     /// Returns None if no work is available
     pub async fn claim_work(&self) -> Result<Option<WorkItem>> {
+        tracing::info!("claim_work() called - about to POST to /queue/claim");
         let response = self.post("/queue/claim", &()).await?;
+        tracing::info!(status = response.status, body_len = response.body.len(), "POST response received");
 
         if response.status == 204 {
             // No content = no work available
+            tracing::info!("No work available (204 status)");
             return Ok(None);
         }
 
         if response.status != 200 {
+            tracing::error!(status = response.status, "Non-200 status from claim");
             return Err(anyhow!("Failed to claim work: HTTP {}", response.status));
         }
 
         let work_item: WorkItem = serde_json::from_slice(&response.body)?;
+        tracing::info!(job_id = %work_item.job_id, "Work item parsed successfully");
         Ok(Some(work_item))
     }
 
@@ -141,17 +146,23 @@ impl WorkQueueClient {
 
     // Internal: Generic HTTP request over iroh+h3
     async fn request(&self, method: &str, path: &str, body: Option<Vec<u8>>) -> Result<HttpResponse> {
+        tracing::debug!(method = method, path = path, "Starting HTTP request");
+
         // Connect to control plane via iroh P2P
+        tracing::debug!("Connecting to control plane via iroh");
         let conn = self.endpoint
             .connect(self.control_plane_addr.clone(), b"iroh+h3")
             .await
             .map_err(|e| anyhow!("Failed to connect to control plane: {}", e))?;
+        tracing::debug!("iroh connection established");
 
         // Create HTTP/3 connection
+        tracing::debug!("Creating h3 connection");
         let conn = h3_iroh::Connection::new(conn);
         let (mut driver, mut send_request) = h3::client::new(conn)
             .await
             .map_err(|e| anyhow!("Failed to create h3 client: {}", e))?;
+        tracing::debug!("h3 client created successfully");
 
         // Build HTTP request
         let req = http::Request::builder()
@@ -189,24 +200,31 @@ impl WorkQueueClient {
             Ok::<HttpResponse, anyhow::Error>(HttpResponse { status, body })
         };
 
-        let drive_fut = async move {
+        // Spawn driver task in background - it will keep connection alive
+        // We don't wait for it to complete, just let it drive the connection
+        tracing::debug!("Spawning driver task in background");
+        tokio::spawn(async move {
+            tracing::debug!("drive_task: Starting to drive connection");
             let err = future::poll_fn(|cx| driver.poll_close(cx)).await;
+            tracing::debug!("drive_task: poll_close completed");
             match err {
                 h3::error::ConnectionError::Local { ref error, .. } => {
                     if matches!(error, h3::error::LocalError::Closing { .. }) {
-                        Ok(())
+                        tracing::debug!("drive_task: Connection closed normally");
                     } else {
-                        Err(err)
+                        tracing::warn!("drive_task: Local error - {:?}", error);
                     }
                 }
-                _ => Err(err),
+                _ => {
+                    tracing::warn!("drive_task: Connection error - {:?}", err);
+                }
             }
-        };
+            tracing::debug!("drive_task: Exiting");
+        });
 
-        // Run both concurrently
-        let (response_result, drive_result) = tokio::join!(response_fut, drive_fut);
-        drive_result.map_err(|e| anyhow!("h3 connection error: {}", e))?;
-        response_result
+        // Wait for response (driver runs independently)
+        tracing::debug!("Waiting for response");
+        response_fut.await
     }
 }
 

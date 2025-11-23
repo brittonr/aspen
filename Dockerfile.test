@@ -1,0 +1,47 @@
+# Temporary Dockerfile for testing cargo-built binaries
+# This bypasses Nix caching to verify the h3 fix works
+
+FROM nixos/nix:latest AS flawless-builder
+RUN nix-channel --update && \
+    nix-env -iA nixpkgs.cacert nixpkgs.bash nixpkgs.coreutils
+
+# Download flawless binary
+RUN mkdir -p /tmp/flawless && \
+    cd /tmp/flawless && \
+    nix-shell -p curl --run 'curl -L -o flawless https://downloads.flawless.dev/1.0.0-beta.3/x64-linux/flawless' && \
+    chmod +x flawless
+
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y \
+        ca-certificates \
+        libssl3 \
+        bash \
+        coreutils \
+        gettext-base && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy cargo-built binaries
+COPY target/release/mvm-ci /bin/mvm-ci
+COPY target/release/worker /bin/worker
+
+# Copy flawless from builder
+COPY --from=flawless-builder /tmp/flawless/flawless /bin/flawless
+
+# Copy entrypoint scripts
+COPY docker-entrypoint.sh /bin/docker-entrypoint.sh
+COPY worker-entrypoint.sh /bin/worker-entrypoint.sh
+COPY hiqlite-cluster.toml.template /etc/hiqlite.toml.template
+
+RUN chmod +x /bin/docker-entrypoint.sh /bin/worker-entrypoint.sh /bin/mvm-ci /bin/worker /bin/flawless
+
+ENV PATH=/bin:/usr/bin:/usr/local/bin
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+EXPOSE 3020 9000 9001 27288
+
+WORKDIR /
+
+CMD ["/bin/bash", "/bin/docker-entrypoint.sh"]

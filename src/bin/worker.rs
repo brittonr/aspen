@@ -2,6 +2,7 @@
 //
 // A worker that connects to the control plane via iroh+h3 and executes jobs
 // using a pluggable backend (Flawless WASM by default).
+// Cache bust: 1732360124
 
 use anyhow::Result;
 use mvm_ci::{WorkQueueClient, WorkStatus, WorkerBackend, worker_flawless::FlawlessWorker};
@@ -36,6 +37,8 @@ async fn main() -> Result<()> {
 
     // Main worker loop
     loop {
+        tracing::info!("Loop iteration starting - about to call claim_work()");
+
         match client.claim_work().await {
             Ok(Some(job)) => {
                 tracing::info!(
@@ -81,11 +84,15 @@ async fn main() -> Result<()> {
             }
             Ok(None) => {
                 // No work available, wait before polling again
+                tracing::info!("No work available - sleeping for 2 seconds");
                 tokio::time::sleep(Duration::from_secs(2)).await;
+                tracing::info!("Sleep completed - looping again");
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to claim work from control plane");
+                tracing::info!("Error occurred - sleeping for 5 seconds");
                 tokio::time::sleep(Duration::from_secs(5)).await;
+                tracing::info!("Error sleep completed - looping again");
             }
         }
     }

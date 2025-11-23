@@ -80,7 +80,8 @@ services:
       - WORKER_ID=1
       - CONTROL_PLANE_TICKET=${CONTROL_PLANE_TICKET}
       - FLAWLESS_URL=http://localhost:27288
-      - RUST_LOG=info
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
     networks:
       cluster:
         ipv4_address: 192.168.100.21
@@ -100,7 +101,8 @@ services:
       - WORKER_ID=2
       - CONTROL_PLANE_TICKET=${CONTROL_PLANE_TICKET}
       - FLAWLESS_URL=http://localhost:27288
-      - RUST_LOG=info
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
     networks:
       cluster:
         ipv4_address: 192.168.100.22
