@@ -1,33 +1,30 @@
-use axum::{
-    Router,
-    routing::{get, post},
-};
-use iroh_tickets::endpoint::EndpointTicket;
 use std::sync::Arc;
 
 // Internal modules
 mod config;
-mod iroh_service;
-mod iroh_api;
-mod hiqlite_service;
-mod persistent_store;
+mod domain;
+mod handlers;
 mod hiqlite_persistent_store;
+mod hiqlite_service;
+mod iroh_api;
+mod iroh_service;
+mod persistent_store;
+mod repositories;
+mod server;
+mod services;
+mod state;
+mod views;
+mod work_item_cache;
 mod work_queue;
 mod work_state_machine;
-mod work_item_cache;
-mod state;
-mod domain;
-mod repositories;
-mod handlers;
-mod views;
 
 use config::AppConfig;
-use iroh_service::IrohService;
-use hiqlite_service::HiqliteService;
 use hiqlite_persistent_store::HiqlitePersistentStore;
-use work_queue::WorkQueue;
+use hiqlite_service::HiqliteService;
+use iroh_service::IrohService;
+use server::ServerConfig;
 use state::AppState;
-use handlers::*;
+use work_queue::WorkQueue;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,25 +61,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to create iroh endpoint");
 
     println!("Iroh Endpoint ID: {}", endpoint.id());
-    println!("Waiting for endpoint to be online...");
 
     // Wait for direct addresses and relay connection
-    endpoint.online().await;
-
-    // Generate and display endpoint ticket
-    let ticket = EndpointTicket::new(endpoint.addr());
-    let base_url = format!("iroh+h3://{}", ticket);
-    println!("==================================================");
-    println!("Iroh Endpoint Ticket:");
-    println!("  {}/", base_url);
-    println!("==================================================");
-    println!("Workflows will connect using this P2P URL");
-    println!();
-
-    // Set environment variable for workflows to use
-    unsafe {
-        std::env::set_var("SERVER_BASE_URL", &base_url);
-    }
+    server::wait_for_online(&endpoint)
+        .await
+        .expect("Failed to connect to relay");
 
     // Initialize iroh service
     let iroh_service = IrohService::new(config.storage.iroh_blobs_path.clone(), endpoint.clone());
@@ -103,56 +86,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Create shared application state with modular architecture
+    // (Services implement traits but are stored as concrete types)
     let state = AppState::from_infrastructure(module, iroh_service, hiqlite_service, work_queue);
-
-    // Build Axum router with all routes
-    let app = Router::new()
-        // Dashboard routes (HTMX monitoring UI - primary UI)
-        .route("/dashboard", get(dashboard))
-        .route("/dashboard/cluster-health", get(dashboard_cluster_health))
-        .route("/dashboard/queue-stats", get(dashboard_queue_stats))
-        .route("/dashboard/recent-jobs", get(dashboard_recent_jobs))
-        .route("/dashboard/control-plane-nodes", get(dashboard_control_plane_nodes))
-        .route("/dashboard/workers", get(dashboard_workers))
-        .route("/dashboard/submit-job", post(dashboard_submit_job))
-        // Iroh API routes (P2P blob storage and gossip)
-        .route("/iroh/blob/store", post(iroh_api::store_blob))
-        .route("/iroh/blob/{hash}", get(iroh_api::retrieve_blob))
-        .route("/iroh/gossip/join", post(iroh_api::join_gossip_topic))
-        .route("/iroh/gossip/broadcast", post(iroh_api::broadcast_gossip))
-        .route("/iroh/gossip/subscribe/{topic_id}", get(iroh_api::subscribe_gossip))
-        .route("/iroh/connect", post(iroh_api::connect_peer))
-        .route("/iroh/info", get(iroh_api::endpoint_info))
-        // Work Queue API routes (for workers)
-        .route("/queue/publish", post(queue_publish))
-        .route("/queue/claim", post(queue_claim))
-        .route("/queue/list", get(queue_list))
-        .route("/queue/stats", get(queue_stats))
-        .route("/queue/status/{job_id}", post(queue_update_status))
-        // Hiqlite API routes (health check)
-        .route("/hiqlite/health", get(hiqlite_health))
-        .with_state(state.clone());
-
-    // Clone router for dual listeners
-    let local_app = app.clone();
-    let p2p_app = app;
-
-    // Spawn localhost HTTP listener for workflows and Web UI
-    let http_port = config.network.http_port;
-    let http_bind_addr = config.network.http_bind_addr.clone();
-
-    tokio::spawn(async move {
-        let addr = format!("{}:{}", http_bind_addr, http_port);
-        let listener = tokio::net::TcpListener::bind(&addr)
-            .await
-            .expect(&format!("Failed to bind {}", addr));
-        println!("Local HTTP server: http://0.0.0.0:{}", http_port);
-        println!("  - WASM workflows can connect here");
-        println!("  - Web UI accessible in browser");
-        axum::serve(listener, local_app)
-            .await
-            .expect("Local HTTP server failed");
-    });
 
     // NOTE: Worker loop removed - now handled by separate worker binary
     // Control plane is now a pure API server (no job execution)
@@ -163,19 +98,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Or to run an embedded worker (backward compat), add back the worker loop
     // See src/bin/worker.rs for reference implementation
 
-    // Main thread runs P2P listener for distributed communication
-    println!("Starting HTTP/3 server over iroh for P2P...");
-    println!("  - Remote instances can connect via P2P");
-    println!("  - Blob storage and gossip coordination");
+    // Start dual-listener server (localhost HTTP + P2P iroh+h3)
+    let server_config = ServerConfig {
+        app_config: config,
+        endpoint,
+        state,
+    };
 
-    match h3_iroh::axum::serve(endpoint, p2p_app).await {
-        Ok(_) => {
-            tracing::info!("HTTP/3 over iroh server shut down gracefully");
-            Ok(())
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "HTTP/3 over iroh server failed - relay connection may be lost");
-            Err(e.into())
-        }
-    }
+    let handle = server::start(server_config)
+        .await
+        .expect("Failed to start server");
+
+    // Run server (blocks until shutdown or error)
+    handle.run().await.map_err(|e| e.into())
 }

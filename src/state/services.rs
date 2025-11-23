@@ -22,7 +22,9 @@ impl DomainServices {
     /// Create domain services with repository dependencies
     pub fn new(infra: &InfrastructureState) -> Self {
         // Create repository implementations
-        let state_repo = Arc::new(HiqliteStateRepository::new(infra.hiqlite().clone()));
+        let state_repo = Arc::new(HiqliteStateRepository::new(
+            Arc::new(infra.hiqlite().clone())
+        ));
         let work_repo = Arc::new(WorkQueueWorkRepository::new(infra.work_queue().clone()));
 
         // Create domain services with injected repositories

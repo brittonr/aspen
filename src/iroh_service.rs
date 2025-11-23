@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use bytes::Bytes;
 use iroh::{Endpoint, EndpointAddr, EndpointId};
+
+use crate::services::traits::{BlobStorage, EndpointInfo, GossipNetwork, PeerConnection};
 
 /// Service wrapping iroh functionality for the application
 ///
@@ -58,6 +61,57 @@ impl IrohService {
 
     // Placeholder for peer connection - to be implemented with correct API
     pub async fn connect_peer(&self, _endpoint_addr_str: String) -> Result<()> {
+        anyhow::bail!("Peer connection not yet implemented - API verification needed")
+    }
+}
+
+// =============================================================================
+// TRAIT IMPLEMENTATIONS
+// =============================================================================
+
+impl EndpointInfo for IrohService {
+    fn endpoint_id(&self) -> EndpointId {
+        self.endpoint.id()
+    }
+
+    fn endpoint_addr(&self) -> EndpointAddr {
+        self.endpoint.addr()
+    }
+
+    fn local_endpoints(&self) -> Vec<String> {
+        self.endpoint
+            .bound_sockets()
+            .into_iter()
+            .map(|addr| addr.to_string())
+            .collect()
+    }
+}
+
+#[async_trait]
+impl BlobStorage for IrohService {
+    async fn store_blob(&self, _data: Bytes) -> Result<String> {
+        anyhow::bail!("Blob storage not yet implemented - API verification needed")
+    }
+
+    async fn retrieve_blob(&self, _hash: &str) -> Result<Bytes> {
+        anyhow::bail!("Blob retrieval not yet implemented - API verification needed")
+    }
+}
+
+#[async_trait]
+impl GossipNetwork for IrohService {
+    async fn join_topic(&self, _topic_id: &str) -> Result<()> {
+        anyhow::bail!("Gossip not yet implemented - API verification needed")
+    }
+
+    async fn broadcast_message(&self, _topic_id: &str, _message: Bytes) -> Result<()> {
+        anyhow::bail!("Gossip broadcast not yet implemented - API verification needed")
+    }
+}
+
+#[async_trait]
+impl PeerConnection for IrohService {
+    async fn connect_peer(&self, _endpoint_addr_str: &str) -> Result<()> {
         anyhow::bail!("Peer connection not yet implemented - API verification needed")
     }
 }

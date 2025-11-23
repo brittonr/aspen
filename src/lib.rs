@@ -28,3 +28,4 @@ mod hiqlite_service;
 mod iroh_service;
 mod persistent_store;
 mod hiqlite_persistent_store;
+mod services;

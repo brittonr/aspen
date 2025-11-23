@@ -267,7 +267,7 @@ impl WorkQueue {
 }
 
 /// Work queue statistics
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct WorkQueueStats {
     pub pending: usize,
     pub claimed: usize,

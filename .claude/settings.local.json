@@ -45,7 +45,8 @@
       "Bash(wait)",
       "Bash(docker run:*)",
       "Bash(docker compose:*)",
-      "Bash(mvm-ci-cluster:latest /bin/worker)"
+      "Bash(mvm-ci-cluster:latest /bin/worker)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

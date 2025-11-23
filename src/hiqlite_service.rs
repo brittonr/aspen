@@ -7,9 +7,12 @@
 //! - Automatic leader failover and self-healing
 
 use anyhow::Result;
+use async_trait::async_trait;
 use hiqlite::{Client, NodeConfig, Param};
 use std::borrow::Cow;
 use tokio::sync::OnceCell;
+
+use crate::services::traits::{DatabaseHealth, DatabaseLifecycle, DatabaseQueries, DatabaseSchema};
 
 /// Macro to create hiqlite parameters
 #[macro_export]
@@ -416,6 +419,126 @@ pub struct ClusterHealth {
     pub is_healthy: bool,
     pub node_count: usize,
     pub has_leader: bool,
+}
+
+// =============================================================================
+// TRAIT IMPLEMENTATIONS
+// =============================================================================
+
+#[async_trait]
+impl DatabaseQueries for HiqliteService {
+    async fn execute(
+        &self,
+        query: impl Into<Cow<'static, str>> + Send,
+        params: Vec<Param>,
+    ) -> Result<usize> {
+        self.client
+            .execute(query, params)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to execute query: {}", e))
+    }
+
+    async fn query_as<T>(
+        &self,
+        query: impl Into<Cow<'static, str>> + Send,
+        params: Vec<Param>,
+    ) -> Result<Vec<T>>
+    where
+        T: serde::de::DeserializeOwned + From<hiqlite::Row<'static>> + Send + 'static,
+    {
+        self.client
+            .query_as(query, params)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query: {}", e))
+    }
+
+    async fn query_as_one<T>(
+        &self,
+        query: impl Into<Cow<'static, str>> + Send,
+        params: Vec<Param>,
+    ) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned + From<hiqlite::Row<'static>> + Send + 'static,
+    {
+        self.client
+            .query_as_one(query, params)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query: {}", e))
+    }
+}
+
+#[async_trait]
+impl DatabaseHealth for HiqliteService {
+    async fn health_check(&self) -> Result<ClusterHealth> {
+        // Query hiqlite for actual cluster metrics
+        match self.client.metrics_db().await {
+            Ok(metrics) => {
+                let membership = metrics.membership_config.membership();
+                let node_count = membership.nodes().count();
+                let has_leader = metrics.current_leader.is_some();
+                let is_healthy = self.client.is_healthy_db().await.is_ok();
+
+                Ok(ClusterHealth {
+                    is_healthy,
+                    node_count,
+                    has_leader,
+                })
+            }
+            Err(e) => {
+                tracing::warn!("Failed to get cluster metrics: {}", e);
+                Ok(ClusterHealth {
+                    is_healthy: false,
+                    node_count: 0,
+                    has_leader: false,
+                })
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl DatabaseSchema for HiqliteService {
+    async fn initialize_schema(&self) -> Result<()> {
+        tracing::info!("Initializing hiqlite schema");
+
+        // Create workflows table
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS workflows (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                claimed_by TEXT,
+                completed_by TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                data TEXT
+            )",
+            params!(),
+        ).await?;
+
+        // Create heartbeats table for node health tracking
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS heartbeats (
+                node_id TEXT PRIMARY KEY,
+                last_seen INTEGER NOT NULL,
+                status TEXT NOT NULL
+            )",
+            params!(),
+        ).await?;
+
+        tracing::info!("Schema initialization complete");
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DatabaseLifecycle for HiqliteService {
+    async fn shutdown(&self) -> Result<()> {
+        tracing::info!("Shutting down hiqlite node gracefully");
+        self.client
+            .shutdown()
+            .await;
+        Ok(())
+    }
 }
 
 /// Global hiqlite service instance
