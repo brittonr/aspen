@@ -1,7 +1,7 @@
 // Library exports for mvm-ci
 //
 // This allows other binaries (like worker) to use the core functionality
-// Fix h3 driver with background task: 1732362924
+// Add enhanced job metrics to dashboard: 1732375990
 
 pub mod work_queue_client;
 pub mod worker_trait;
