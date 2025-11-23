@@ -5,6 +5,7 @@ use axum::{
 use iroh_tickets::endpoint::EndpointTicket;
 
 // Internal modules
+mod config;
 mod iroh_service;
 mod iroh_api;
 mod hiqlite_service;
@@ -15,6 +16,7 @@ mod repositories;
 mod handlers;
 mod views;
 
+use config::AppConfig;
 use iroh_service::IrohService;
 use hiqlite_service::HiqliteService;
 use work_queue::WorkQueue;
@@ -26,9 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for logs
     tracing_subscriber::fmt::init();
 
+    // Load centralized configuration
+    let config = AppConfig::load().expect("Failed to load configuration");
+
     // Initialize hiqlite distributed state store
     println!("Initializing hiqlite distributed state...");
-    let hiqlite_service = HiqliteService::new()
+    let hiqlite_service = HiqliteService::new(config.storage.hiqlite_data_dir.clone())
         .await
         .expect("Failed to initialize hiqlite");
     hiqlite_service
@@ -38,8 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Hiqlite initialized");
 
     // Each node can have its own flawless server
-    let flawless_url = std::env::var("FLAWLESS_URL")
-        .unwrap_or_else(|_| "http://localhost:27288".to_string());
+    let flawless_url = config.flawless.flawless_url.clone();
 
     tracing::info!("Connecting to flawless server at {}", flawless_url);
     let flawless = flawless_utils::Server::new(&flawless_url, None);
@@ -48,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize iroh endpoint with HTTP/3 ALPN
     let endpoint = iroh::Endpoint::builder()
-        .alpns(vec![b"iroh+h3".to_vec()])
+        .alpns(vec![config.network.iroh_alpn.clone()])
         .bind()
         .await
         .expect("Failed to create iroh endpoint");
@@ -75,9 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Initialize iroh service
-    let iroh_blob_path = std::env::var("IROH_BLOBS_PATH")
-        .unwrap_or_else(|_| "./data/iroh-blobs".to_string());
-    let iroh_service = IrohService::new(iroh_blob_path.into(), endpoint.clone());
+    let iroh_service = IrohService::new(config.storage.iroh_blobs_path.clone(), endpoint.clone());
 
     // Initialize work queue with hiqlite backend
     println!("Initializing distributed work queue...");
@@ -133,13 +135,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let p2p_app = app;
 
     // Spawn localhost HTTP listener for workflows and Web UI
-    let http_port = std::env::var("HTTP_PORT")
-        .unwrap_or_else(|_| "3020".to_string())
-        .parse::<u16>()
-        .expect("HTTP_PORT must be a valid port number");
+    let http_port = config.network.http_port;
+    let http_bind_addr = config.network.http_bind_addr.clone();
 
     tokio::spawn(async move {
-        let addr = format!("0.0.0.0:{}", http_port);
+        let addr = format!("{}:{}", http_bind_addr, http_port);
         let listener = tokio::net::TcpListener::bind(&addr)
             .await
             .expect(&format!("Failed to bind {}", addr));

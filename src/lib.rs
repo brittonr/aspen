@@ -3,6 +3,7 @@
 // This allows other binaries (like worker) to use the core functionality
 // Refactor handlers into modular architecture: 1732376490
 
+pub mod config;
 pub mod work_queue_client;
 pub mod worker_trait;
 pub mod worker_flawless;
@@ -15,6 +16,9 @@ pub use work_queue_client::WorkQueueClient;
 
 // Re-export trait for convenience
 pub use worker_trait::{WorkerBackend, WorkResult};
+
+// Re-export config for convenience
+pub use config::AppConfig;
 
 // Internal modules (used by main binary)
 mod work_queue;

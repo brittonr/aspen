@@ -51,6 +51,9 @@ impl HiqliteService {
 
     /// Initialize a new hiqlite node from environment variables or configuration file
     ///
+    /// # Parameters
+    /// - `data_dir`: Optional data directory override (uses HQL_DATA_DIR env var if None)
+    ///
     /// # Environment Variables
     /// - `HQL_NODE_ID`: Unique node identifier (required)
     /// - `HQL_DATA_DIR`: Data directory (default: ./data/hiqlite)
@@ -64,10 +67,10 @@ impl HiqliteService {
     /// ```no_run
     /// use hiqlite_service::HiqliteService;
     ///
-    /// let service = HiqliteService::new().await?;
+    /// let service = HiqliteService::new(Some("./data/custom".into())).await?;
     /// ```
-    pub async fn new() -> Result<Self> {
-        let config = Self::build_config().await?;
+    pub async fn new(data_dir: impl Into<Option<std::path::PathBuf>>) -> Result<Self> {
+        let config = Self::build_config(data_dir.into()).await?;
         let node_id = config.node_id;
         let expected_nodes = config.nodes.len();
 
@@ -82,7 +85,7 @@ impl HiqliteService {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to start hiqlite node: {}", e))?;
 
-        // Give hiqlite time to start up
+        // Give hiqlite time to start up (use hardcoded value here as timing config not available)
         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
         // Wait for cluster to form (only if we have multiple nodes configured)
@@ -174,9 +177,19 @@ impl HiqliteService {
     }
 
     /// Build NodeConfig from environment variables with sensible defaults
-    async fn build_config() -> Result<NodeConfig> {
+    ///
+    /// # Parameters
+    /// - `data_dir_override`: Optional data directory to override default/env/TOML values
+    async fn build_config(data_dir_override: Option<std::path::PathBuf>) -> Result<NodeConfig> {
         // Try loading from TOML file first, fall back to environment
-        if let Ok(config) = NodeConfig::from_toml("hiqlite.toml", None, None).await {
+        if let Ok(mut config) = NodeConfig::from_toml("hiqlite.toml", None, None).await {
+            // Apply data_dir override if provided
+            if let Some(dir) = data_dir_override {
+                let dir_str = dir.to_string_lossy().to_string();
+                config.data_dir = Cow::Owned(dir_str.clone());
+                tracing::info!(data_dir = ?dir_str, "Overriding hiqlite data_dir from configuration");
+            }
+
             tracing::info!(
                 node_id = ?config.node_id,
                 data_dir = ?config.data_dir,
@@ -198,7 +211,14 @@ impl HiqliteService {
         }
 
         // Otherwise build from environment with defaults
-        let config = NodeConfig::from_env();
+        let mut config = NodeConfig::from_env();
+
+        // Apply data_dir override if provided
+        if let Some(dir) = data_dir_override {
+            let dir_str = dir.to_string_lossy().to_string();
+            config.data_dir = Cow::Owned(dir_str.clone());
+            tracing::info!(data_dir = ?dir_str, "Overriding hiqlite data_dir from configuration");
+        }
 
         tracing::info!(
             node_id = ?config.node_id,
@@ -243,7 +263,7 @@ impl HiqliteService {
     }
 
     /// Initialize with custom configuration (for testing)
-    pub async fn with_config(mut config: NodeConfig) -> Result<Self> {
+    pub async fn with_config(config: NodeConfig) -> Result<Self> {
         tracing::info!(
             node_id = ?config.node_id,
             "Starting hiqlite with custom config"
@@ -401,7 +421,7 @@ static HIQLITE: OnceCell<HiqliteService> = OnceCell::const_new();
 
 /// Initialize the global hiqlite service
 pub async fn init_hiqlite() -> Result<()> {
-    let service = HiqliteService::new().await?;
+    let service = HiqliteService::new(None).await?;
     service.initialize_schema().await?;
 
     HIQLITE

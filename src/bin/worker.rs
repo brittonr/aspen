@@ -5,8 +5,7 @@
 // Cache bust: 1732360124
 
 use anyhow::Result;
-use mvm_ci::{WorkQueueClient, WorkStatus, WorkerBackend, worker_flawless::FlawlessWorker};
-use std::time::Duration;
+use mvm_ci::{AppConfig, WorkQueueClient, WorkStatus, WorkerBackend, worker_flawless::FlawlessWorker};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,13 +14,15 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting mvm-ci worker");
 
-    // Get control plane ticket from environment
+    // Load centralized configuration
+    let config = AppConfig::load().expect("Failed to load configuration");
+
+    // Get control plane ticket from environment (worker-specific, not in config)
     let control_plane_ticket = std::env::var("CONTROL_PLANE_TICKET")
         .expect("CONTROL_PLANE_TICKET environment variable must be set");
 
-    // Get Flawless server URL (defaults to localhost)
-    let flawless_url = std::env::var("FLAWLESS_URL")
-        .unwrap_or_else(|_| "http://localhost:27288".to_string());
+    // Get Flawless server URL from config
+    let flawless_url = config.flawless.flawless_url.clone();
 
     // Connect to control plane
     tracing::info!("Connecting to control plane via iroh+h3");
@@ -84,14 +85,16 @@ async fn main() -> Result<()> {
             }
             Ok(None) => {
                 // No work available, wait before polling again
-                tracing::info!("No work available - sleeping for 2 seconds");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                let sleep_duration = config.timing.worker_no_work_sleep();
+                tracing::info!("No work available - sleeping for {:?}", sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
                 tracing::info!("Sleep completed - looping again");
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to claim work from control plane");
-                tracing::info!("Error occurred - sleeping for 5 seconds");
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                let sleep_duration = config.timing.worker_error_sleep();
+                tracing::info!("Error occurred - sleeping for {:?}", sleep_duration);
+                tokio::time::sleep(sleep_duration).await;
                 tracing::info!("Error sleep completed - looping again");
             }
         }
