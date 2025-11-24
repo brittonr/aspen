@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
-use crate::domain::{ClusterStatusService, HealthService, JobLifecycleService, JobCommandService, JobQueryService};
+use crate::domain::{ClusterStatusService, HealthService, JobLifecycleService, JobCommandService, JobQueryService, WorkerManagementService};
 use crate::domain::{EventPublisher, LoggingEventPublisher};
-use crate::repositories::{HiqliteStateRepository, StateRepository, WorkQueueWorkRepository, WorkRepository};
+use crate::repositories::{HiqliteStateRepository, StateRepository, WorkQueueWorkRepository, WorkRepository, HiqliteWorkerRepository, WorkerRepository};
 use crate::state::InfrastructureState;
 
 /// Container for pre-constructed domain services
@@ -18,6 +18,7 @@ pub struct DomainServices {
     cluster_status: Arc<ClusterStatusService>,
     health: Arc<HealthService>,
     job_lifecycle: Arc<JobLifecycleService>,
+    worker_management: Arc<WorkerManagementService>,
 }
 
 impl DomainServices {
@@ -32,8 +33,11 @@ impl DomainServices {
             Arc::new(infra.hiqlite().clone())
         ));
         let work_repo = Arc::new(WorkQueueWorkRepository::new(infra.work_queue().clone()));
+        let worker_repo = Arc::new(HiqliteWorkerRepository::new(
+            Arc::new(infra.hiqlite().clone())
+        ));
 
-        Self::from_repositories(state_repo, work_repo)
+        Self::from_repositories(state_repo, work_repo, worker_repo)
     }
 
     /// Create domain services with injected repository abstractions
@@ -46,13 +50,15 @@ impl DomainServices {
     /// # Arguments
     /// * `state_repo` - Repository for cluster state operations
     /// * `work_repo` - Repository for work queue operations
+    /// * `worker_repo` - Repository for worker management operations
     pub fn from_repositories(
         state_repo: Arc<dyn StateRepository>,
         work_repo: Arc<dyn WorkRepository>,
+        worker_repo: Arc<dyn WorkerRepository>,
     ) -> Self {
         // Use LoggingEventPublisher for production observability
         let event_publisher = Arc::new(LoggingEventPublisher::new());
-        Self::from_repositories_with_events(state_repo, work_repo, event_publisher)
+        Self::from_repositories_with_events(state_repo, work_repo, worker_repo, event_publisher)
     }
 
     /// Create domain services with custom event publisher (for testing)
@@ -65,10 +71,12 @@ impl DomainServices {
     /// # Arguments
     /// * `state_repo` - Repository for cluster state operations
     /// * `work_repo` - Repository for work queue operations
+    /// * `worker_repo` - Repository for worker management operations
     /// * `event_publisher` - Publisher for domain events
     pub fn from_repositories_with_events(
         state_repo: Arc<dyn StateRepository>,
         work_repo: Arc<dyn WorkRepository>,
+        worker_repo: Arc<dyn WorkerRepository>,
         event_publisher: Arc<dyn EventPublisher>,
     ) -> Self {
         // Create command and query services (CQRS pattern)
@@ -89,10 +97,18 @@ impl DomainServices {
         // JobLifecycleService wraps command and query services
         let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
 
+        // WorkerManagementService with worker and work repositories
+        let worker_management = Arc::new(WorkerManagementService::new(
+            worker_repo.clone(),
+            work_repo.clone(),
+            Some(60), // Default heartbeat timeout: 60 seconds
+        ));
+
         Self {
             cluster_status,
             health,
             job_lifecycle,
+            worker_management,
         }
     }
 
@@ -109,5 +125,10 @@ impl DomainServices {
     /// Get the job lifecycle service
     pub fn job_lifecycle(&self) -> Arc<JobLifecycleService> {
         self.job_lifecycle.clone()
+    }
+
+    /// Get the worker management service
+    pub fn worker_management(&self) -> Arc<WorkerManagementService> {
+        self.worker_management.clone()
     }
 }

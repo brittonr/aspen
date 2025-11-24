@@ -62,18 +62,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Display work queue ticket for worker connections
     let work_ticket = state.infrastructure().work_queue().get_ticket();
-    println!("✓ Application infrastructure initialized");
-    println!("Work Queue Ticket: {}", work_ticket);
-    println!();
 
-    // NOTE: Worker loop removed - now handled by separate worker binary
-    // Control plane is now a pure API server (no job execution)
-    //
-    // To run jobs, start the worker binary:
-    //   CONTROL_PLANE_TICKET="iroh+h3://..." worker
-    //
-    // Or to run an embedded worker (backward compat), add back the worker loop
-    // See src/bin/worker.rs for reference implementation
+    println!();
+    println!("╔═══════════════════════════════════════════════════════════════════════════╗");
+    println!("║                    MVM-CI Control Plane Started                          ║");
+    println!("╚═══════════════════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("✓ Application infrastructure initialized");
+    println!("✓ Hiqlite Raft cluster ready");
+    println!("✓ Iroh P2P endpoint online");
+    println!();
+    println!("╭───────────────────────────────────────────────────────────────────────────╮");
+    println!("│ Control Plane Ticket (use this to connect workers):                      │");
+    println!("╰───────────────────────────────────────────────────────────────────────────╯");
+    println!();
+    println!("  {}", work_ticket);
+    println!();
+    println!("╭───────────────────────────────────────────────────────────────────────────╮");
+    println!("│ To start workers:                                                         │");
+    println!("╰───────────────────────────────────────────────────────────────────────────╯");
+    println!();
+    println!("  WASM Worker (Flawless):");
+    println!("    WORKER_TYPE=wasm \\");
+    println!("    CONTROL_PLANE_TICKET=\"{}\" \\", work_ticket);
+    println!("    ./target/debug/worker");
+    println!();
+    println!("  Firecracker Worker (MicroVM):");
+    println!("    WORKER_TYPE=firecracker \\");
+    println!("    CONTROL_PLANE_TICKET=\"{}\" \\", work_ticket);
+    println!("    FIRECRACKER_DEFAULT_MEMORY_MB=1024 \\");
+    println!("    FIRECRACKER_DEFAULT_VCPUS=2 \\");
+    println!("    ./target/debug/worker");
+    println!();
+    println!("╭───────────────────────────────────────────────────────────────────────────╮");
+    println!("│ Web Interfaces:                                                           │");
+    println!("╰───────────────────────────────────────────────────────────────────────────╯");
+    println!();
+    println!("  Dashboard:  http://localhost:3020/");
+    println!("  Queue:      http://localhost:3020/queue/list");
+    println!("  Workers:    http://localhost:3020/api/workers");
+    println!("  Health:     http://localhost:3020/api/health");
+    println!();
+    println!("═══════════════════════════════════════════════════════════════════════════");
+    println!();
 
     // Start dual-listener server (localhost HTTP + P2P iroh+h3)
     let server_config = ServerConfig {

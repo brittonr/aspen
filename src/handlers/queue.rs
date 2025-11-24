@@ -58,11 +58,43 @@ pub async fn queue_publish(
     }
 }
 
+/// Query parameters for claiming work
+#[derive(Debug, serde::Deserialize)]
+pub struct ClaimWorkQuery {
+    /// Worker ID to assign the job to
+    pub worker_id: Option<String>,
+    /// Worker type for filtering compatible jobs
+    pub worker_type: Option<String>,
+}
+
 /// Claim an available work item from the queue
-pub async fn queue_claim(State(state): State<AppState>) -> impl IntoResponse {
+///
+/// Optional query parameters:
+/// - worker_id: Worker ID to assign the job to
+/// - worker_type: Worker type for filtering (wasm, firecracker)
+pub async fn queue_claim(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<ClaimWorkQuery>,
+) -> impl IntoResponse {
     let job_service = state.services().job_lifecycle();
 
-    match job_service.claim_work().await {
+    // Parse worker_type if provided
+    let worker_type = match query.worker_type.as_deref() {
+        Some(type_str) => {
+            match type_str.parse::<crate::domain::types::WorkerType>() {
+                Ok(wt) => Some(wt),
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Invalid worker_type: {}", e),
+                    ).into_response();
+                }
+            }
+        }
+        None => None,
+    };
+
+    match job_service.claim_work(query.worker_id.as_deref(), worker_type).await {
         Ok(Some(work_item)) => Json(work_item).into_response(),
         Ok(None) => (StatusCode::NO_CONTENT, "No work available").into_response(),
         Err(e) => (

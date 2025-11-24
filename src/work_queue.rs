@@ -75,6 +75,7 @@ impl WorkQueue {
             id: job_id.clone(),
             status: JobStatus::Pending,
             claimed_by: None,
+            assigned_worker_id: None,
             completed_by: None,
             created_at: now,
             updated_at: now,
@@ -82,6 +83,7 @@ impl WorkQueue {
             error_message: None,
             retry_count: 0,
             payload: payload.clone(),
+            compatible_worker_types: Vec::new(), // Empty = any worker type can claim
         };
 
         // Persist to store first (strong consistency via underlying implementation)
@@ -95,7 +97,10 @@ impl WorkQueue {
     }
 
     /// Claim available work from the queue
-    pub async fn claim_work(&self) -> Result<Option<Job>> {
+    ///
+    /// If worker_id is provided, the claim will be associated with that worker
+    /// and only jobs compatible with that worker's type will be considered.
+    pub async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
         let now = chrono::Utc::now().timestamp();
 
         // Refresh cache from persistent store to get latest distributed state
@@ -109,22 +114,49 @@ impl WorkQueue {
             pending_count = pending_count,
             total_count = total_count,
             node_id = %self.node_id,
+            worker_type = ?worker_type,
             "Attempting to claim work"
         );
 
-        // Try to claim first pending work item
+        // Try to claim first pending work item that matches worker type
         let all_items = self.cache.get_all().await;
         for job in all_items {
             if job.status == JobStatus::Pending {
+                // Check if job is compatible with worker type
+                let is_compatible = match worker_type {
+                    Some(wt) => {
+                        // If job has no worker type constraints, it's compatible with all workers
+                        if job.compatible_worker_types.is_empty() {
+                            true
+                        } else {
+                            // Otherwise, check if worker type is in the list
+                            job.compatible_worker_types.contains(&wt)
+                        }
+                    }
+                    // If no worker type specified, allow claiming any job
+                    None => true,
+                };
+
+                if !is_compatible {
+                    tracing::debug!(
+                        job_id = %job.id,
+                        worker_type = ?worker_type,
+                        compatible_types = ?job.compatible_worker_types,
+                        "Skipping job - incompatible worker type"
+                    );
+                    continue;
+                }
+
                 tracing::info!(
                     job_id = %job.id,
                     node_id = %self.node_id,
+                    worker_id = ?worker_id,
                     "Attempting to claim pending job"
                 );
 
                 // Claim it via persistent store (atomic operation)
                 let rows_affected = self.store
-                    .claim_workflow(&job.id, &self.node_id, now)
+                    .claim_workflow(&job.id, &self.node_id, worker_id, now)
                     .await?;
 
                 tracing::info!(
@@ -138,6 +170,7 @@ impl WorkQueue {
                     let claimed = self.cache.update(&job.id, |item| {
                         item.status = JobStatus::Claimed;
                         item.claimed_by = Some(self.node_id.clone());
+                        item.assigned_worker_id = worker_id.map(|s| s.to_string());
                         item.updated_at = now;
                     }).await;
 
@@ -146,6 +179,7 @@ impl WorkQueue {
                         tracing::info!(
                             job_id = %claimed_item.id,
                             node_id = %self.node_id,
+                            worker_id = ?worker_id,
                             "Work item claimed successfully"
                         );
                         return Ok(Some(claimed_item));
@@ -159,6 +193,7 @@ impl WorkQueue {
 
         tracing::info!(
             pending_count = pending_count,
+            worker_type = ?worker_type,
             "No work claimed - returning None"
         );
         Ok(None)

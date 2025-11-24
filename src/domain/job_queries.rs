@@ -270,6 +270,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -282,6 +284,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -310,6 +314,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -322,6 +328,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -355,6 +363,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -367,6 +377,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -379,6 +391,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -409,6 +423,8 @@ mod tests {
             started_at: None,
             error_message: None,
             retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
         }]).await;
 
         let service = JobQueryService::new(mock_repo);
@@ -450,6 +466,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -462,6 +480,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -474,6 +494,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -505,6 +527,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -517,6 +541,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -529,6 +555,8 @@ mod tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -566,6 +594,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -578,6 +608,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -607,6 +639,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -633,6 +667,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -645,6 +681,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -657,6 +695,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-4".to_string(),
@@ -669,6 +709,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -706,6 +748,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -732,6 +776,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "other-job".to_string(),
@@ -744,6 +790,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -773,6 +821,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -785,6 +835,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -797,6 +849,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -827,6 +881,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -839,6 +895,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -851,6 +909,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -884,6 +944,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -910,6 +972,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -922,6 +986,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -934,6 +1000,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-4".to_string(),
@@ -946,6 +1014,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-5".to_string(),
@@ -958,6 +1028,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -999,6 +1071,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -1025,6 +1099,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -1037,6 +1113,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -1049,6 +1127,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-4".to_string(),
@@ -1061,6 +1141,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -1107,6 +1189,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -1143,6 +1227,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -1155,6 +1241,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -1184,6 +1272,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -1196,6 +1286,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-3".to_string(),
@@ -1208,6 +1300,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 
@@ -1242,6 +1336,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
             Job {
                 id: "job-2".to_string(),
@@ -1254,6 +1350,8 @@ mod repository_filtering_tests {
                 started_at: None,
                 error_message: None,
                 retry_count: 0,
+                assigned_worker_id: None,
+                compatible_worker_types: Vec::new(),
             },
         ]).await;
 

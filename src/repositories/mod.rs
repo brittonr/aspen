@@ -7,10 +7,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
-use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
+use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats, Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats};
 
 pub mod hiqlite_repository;
 pub mod work_queue_repository;
+pub mod worker;
 
 // Export mocks module for testing (both unit tests and integration tests)
 pub mod mocks;
@@ -18,6 +19,7 @@ pub mod mocks;
 // Re-export concrete implementations
 pub use hiqlite_repository::HiqliteStateRepository;
 pub use work_queue_repository::WorkQueueWorkRepository;
+pub use worker::{HiqliteWorkerRepository, WorkerRepository};
 
 /// Repository abstraction for cluster state and database operations
 ///
@@ -42,7 +44,10 @@ pub trait WorkRepository: Send + Sync {
     async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()>;
 
     /// Claim the next available work item
-    async fn claim_work(&self) -> Result<Option<Job>>;
+    ///
+    /// If worker_id and worker_type are provided, only jobs compatible with that
+    /// worker type will be considered, and the job will be assigned to that worker.
+    async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>>;
 
     /// Update the status of a work item
     async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()>;

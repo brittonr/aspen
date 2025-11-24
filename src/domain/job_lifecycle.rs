@@ -58,8 +58,12 @@ impl JobLifecycleService {
     }
 
     /// Claim a work item from the queue (Command)
-    pub async fn claim_work(&self) -> Result<Option<Job>> {
-        match self.commands.claim_job().await? {
+    ///
+    /// # Arguments
+    /// * `worker_id` - Optional worker ID to assign the job to
+    /// * `worker_type` - Optional worker type for filtering compatible jobs
+    pub async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
+        match self.commands.claim_job(worker_id, worker_type).await? {
             Some(job_id) => {
                 // Need to fetch the full job for backward compatibility
                 self.queries.get_job(&job_id).await
@@ -184,7 +188,7 @@ mod tests {
         }).await.unwrap();
 
         // Act
-        let result = service.claim_work().await;
+        let result = service.claim_work(None, None).await;
 
         // Assert
         assert!(result.is_ok());
@@ -205,7 +209,7 @@ mod tests {
         }).await.unwrap();
 
         // Follow valid transition: Pending → Claimed → InProgress
-        service.claim_work().await.unwrap();
+        service.claim_work(None, None).await.unwrap();
 
         // Act
         let result = service.update_work_status(&job_id, JobStatus::InProgress, None).await;

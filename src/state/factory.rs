@@ -13,7 +13,7 @@ use crate::config::AppConfig;
 use crate::hiqlite_persistent_store::HiqlitePersistentStore;
 use crate::hiqlite_service::HiqliteService;
 use crate::iroh_service::IrohService;
-use crate::repositories::{StateRepository, WorkRepository};
+use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::{AppState, DomainServices, InfrastructureState};
 use crate::work_queue::WorkQueue;
 
@@ -48,6 +48,9 @@ pub trait InfrastructureFactory: Send + Sync {
     /// Create work repository abstraction
     fn create_work_repository(&self, work_queue: WorkQueue) -> Arc<dyn WorkRepository>;
 
+    /// Create worker repository abstraction
+    fn create_worker_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository>;
+
     /// Build complete application state (orchestrator method)
     ///
     /// This method coordinates the creation of all infrastructure components
@@ -70,11 +73,13 @@ pub trait InfrastructureFactory: Send + Sync {
         let infrastructure = InfrastructureState::new(module, iroh, hiqlite.clone(), work_queue.clone());
 
         // Create repository abstractions
-        let state_repo = self.create_state_repository(Arc::new(hiqlite));
+        let hiqlite_arc = Arc::new(hiqlite);
+        let state_repo = self.create_state_repository(hiqlite_arc.clone());
         let work_repo = self.create_work_repository(work_queue);
+        let worker_repo = self.create_worker_repository(hiqlite_arc);
 
         // Create domain services with injected repositories
-        let services = DomainServices::from_repositories(state_repo, work_repo);
+        let services = DomainServices::from_repositories(state_repo, work_repo, worker_repo);
 
         Ok(AppState::new(infrastructure, services))
     }
@@ -127,6 +132,11 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
         use crate::repositories::WorkQueueWorkRepository;
         Arc::new(WorkQueueWorkRepository::new(work_queue))
     }
+
+    fn create_worker_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository> {
+        use crate::repositories::HiqliteWorkerRepository;
+        Arc::new(HiqliteWorkerRepository::new(hiqlite))
+    }
 }
 
 // =============================================================================
@@ -135,7 +145,7 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
 
 pub mod test_factory {
     use super::*;
-    use crate::repositories::mocks::{MockStateRepository, MockWorkRepository};
+    use crate::repositories::mocks::{MockStateRepository, MockWorkRepository, MockWorkerRepository};
 
     /// Test implementation of InfrastructureFactory
     ///
@@ -186,6 +196,11 @@ pub mod test_factory {
         fn create_work_repository(&self, _work_queue: WorkQueue) -> Arc<dyn WorkRepository> {
             // Return mock repository for testing
             Arc::new(MockWorkRepository::new())
+        }
+
+        fn create_worker_repository(&self, _hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository> {
+            // Return mock repository for testing
+            Arc::new(MockWorkerRepository::new())
         }
     }
 }

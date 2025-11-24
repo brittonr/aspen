@@ -36,6 +36,7 @@ impl PersistentStore for HiqlitePersistentStore {
             id: String,
             status: String,
             claimed_by: Option<String>,
+            assigned_worker_id: Option<String>,
             completed_by: Option<String>,
             created_at: i64,
             updated_at: i64,
@@ -43,6 +44,7 @@ impl PersistentStore for HiqlitePersistentStore {
             error_message: Option<String>,
             retry_count: i64,
             data: Option<String>,
+            compatible_worker_types: Option<String>,
         }
 
         impl From<hiqlite::Row<'static>> for WorkflowRow {
@@ -51,6 +53,7 @@ impl PersistentStore for HiqlitePersistentStore {
                     id: row.get("id"),
                     status: row.get("status"),
                     claimed_by: row.get("claimed_by"),
+                    assigned_worker_id: row.get("assigned_worker_id"),
                     completed_by: row.get("completed_by"),
                     created_at: row.get("created_at"),
                     updated_at: row.get("updated_at"),
@@ -58,6 +61,7 @@ impl PersistentStore for HiqlitePersistentStore {
                     error_message: row.get("error_message"),
                     retry_count: row.get("retry_count"),
                     data: row.get("data"),
+                    compatible_worker_types: row.get("compatible_worker_types"),
                 }
             }
         }
@@ -65,7 +69,7 @@ impl PersistentStore for HiqlitePersistentStore {
         // Query all workflows from hiqlite
         let rows: Vec<WorkflowRow> = self.hiqlite
             .query_as(
-                "SELECT id, status, claimed_by, completed_by, created_at, updated_at, data FROM workflows",
+                "SELECT id, status, claimed_by, assigned_worker_id, completed_by, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types FROM workflows",
                 params!()
             )
             .await?;
@@ -85,10 +89,15 @@ impl PersistentStore for HiqlitePersistentStore {
                 .and_then(|d| serde_json::from_str(&d).ok())
                 .unwrap_or(serde_json::Value::Null);
 
+            let compatible_worker_types = row.compatible_worker_types
+                .and_then(|types_str| serde_json::from_str(&types_str).ok())
+                .unwrap_or_else(Vec::new);
+
             Job {
                 id: row.id,
                 status,
                 claimed_by: row.claimed_by,
+                assigned_worker_id: row.assigned_worker_id,
                 completed_by: row.completed_by,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
@@ -96,6 +105,7 @@ impl PersistentStore for HiqlitePersistentStore {
                 error_message: row.error_message,
                 retry_count: row.retry_count as u32,
                 payload,
+                compatible_worker_types,
             }
         }).collect();
 
@@ -105,21 +115,28 @@ impl PersistentStore for HiqlitePersistentStore {
     async fn upsert_workflow(&self, job: &Job) -> Result<()> {
         let status_str = status_to_string(&job.status);
         let payload_str = serde_json::to_string(&job.payload)?;
+        let compatible_worker_types_str = if job.compatible_worker_types.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&job.compatible_worker_types)?)
+        };
 
         self.hiqlite
             .execute(
-                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, completed_by, created_at, updated_at, started_at, error_message, retry_count, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, assigned_worker_id, completed_by, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
                 params!(
                     job.id.clone(),
                     status_str,
                     job.claimed_by.clone(),
+                    job.assigned_worker_id.clone(),
                     job.completed_by.clone(),
                     job.created_at,
                     job.updated_at,
                     job.started_at,
                     job.error_message.clone(),
                     job.retry_count as i64,
-                    payload_str
+                    payload_str,
+                    compatible_worker_types_str
                 ),
             )
             .await?;
@@ -131,14 +148,15 @@ impl PersistentStore for HiqlitePersistentStore {
         &self,
         job_id: &str,
         claimed_by: &str,
+        assigned_worker_id: Option<&str>,
         updated_at: i64,
     ) -> Result<usize> {
         // Atomic claim operation with optimistic locking
         // Only succeeds if status is currently 'pending'
         let rows_affected = self.hiqlite
             .execute(
-                "UPDATE workflows SET status = $1, claimed_by = $2, updated_at = $3 WHERE id = $4 AND status = 'pending'",
-                params!("claimed", claimed_by, updated_at, job_id),
+                "UPDATE workflows SET status = $1, claimed_by = $2, assigned_worker_id = $3, updated_at = $4 WHERE id = $5 AND status = 'pending'",
+                params!("claimed", claimed_by, assigned_worker_id, updated_at, job_id),
             )
             .await?;
 

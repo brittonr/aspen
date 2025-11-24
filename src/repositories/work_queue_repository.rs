@@ -30,8 +30,8 @@ impl WorkRepository for WorkQueueWorkRepository {
         self.work_queue.publish_work(job_id, payload).await
     }
 
-    async fn claim_work(&self) -> Result<Option<Job>> {
-        self.work_queue.claim_work().await
+    async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
+        self.work_queue.claim_work(worker_id, worker_type).await
     }
 
     async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {

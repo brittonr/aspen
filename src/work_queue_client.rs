@@ -10,9 +10,10 @@ use iroh_tickets::endpoint::EndpointTicket;
 use serde::Serialize;
 use std::{future, str::FromStr};
 
-use crate::{Job, JobStatus, QueueStats};
+use crate::{Job, JobStatus, QueueStats, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats};
 
 /// HTTP client for Work Queue API over iroh+h3
+#[derive(Clone)]
 pub struct WorkQueueClient {
     endpoint: Endpoint,
     control_plane_addr: EndpointAddr,
@@ -61,10 +62,29 @@ impl WorkQueueClient {
 
     /// Claim an available work item from the queue
     ///
+    /// # Arguments
+    /// * `worker_id` - Optional worker ID to assign the job to
+    /// * `worker_type` - Optional worker type for filtering compatible jobs
+    ///
     /// Returns None if no work is available
-    pub async fn claim_work(&self) -> Result<Option<Job>> {
-        tracing::info!("claim_work() called - about to POST to /queue/claim");
-        let response = self.post("/queue/claim", &()).await?;
+    pub async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
+        tracing::info!(worker_id = ?worker_id, worker_type = ?worker_type, "claim_work() called - about to POST to /queue/claim");
+
+        // Build query parameters
+        let mut url = "/queue/claim".to_string();
+        let mut query_parts = Vec::new();
+        if let Some(wid) = worker_id {
+            query_parts.push(format!("worker_id={}", urlencoding::encode(wid)));
+        }
+        if let Some(wt) = worker_type {
+            query_parts.push(format!("worker_type={}", wt));
+        }
+        if !query_parts.is_empty() {
+            url.push('?');
+            url.push_str(&query_parts.join("&"));
+        }
+
+        let response = self.post(&url, &()).await?;
         tracing::info!(status = response.status, body_len = response.body.len(), "POST response received");
 
         if response.status == 204 {
@@ -126,6 +146,135 @@ impl WorkQueueClient {
         }
 
         let stats: QueueStats = serde_json::from_slice(&response.body)?;
+        Ok(stats)
+    }
+
+    // =========================================================================
+    // WORKER MANAGEMENT API
+    // =========================================================================
+
+    /// Register a worker with the control plane
+    ///
+    /// Called by worker binaries on startup to register with the orchestrator.
+    /// Returns the assigned worker ID.
+    pub async fn register_worker(&self, registration: WorkerRegistration) -> Result<Worker> {
+        #[derive(serde::Deserialize)]
+        struct RegisterResponse {
+            worker_id: String,
+            message: String,
+        }
+
+        let response = self.post("/workers/register", &registration).await?;
+
+        if response.status != 201 {
+            return Err(anyhow!("Failed to register worker: HTTP {}", response.status));
+        }
+
+        // Parse the full worker object from the response
+        let worker: Worker = serde_json::from_slice(&response.body)
+            .or_else(|_: serde_json::Error| -> std::result::Result<Worker, serde_json::Error> {
+                // Fallback: If the response is just {worker_id, message}, construct a Worker
+                let register_resp: RegisterResponse = serde_json::from_slice(&response.body)?;
+                Ok(Worker {
+                    id: register_resp.worker_id.clone(),
+                    worker_type: registration.worker_type,
+                    status: crate::WorkerStatus::Online,
+                    endpoint_id: registration.endpoint_id,
+                    registered_at: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64,
+                    last_heartbeat: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64,
+                    cpu_cores: registration.cpu_cores,
+                    memory_mb: registration.memory_mb,
+                    active_jobs: 0,
+                    total_jobs_completed: 0,
+                    metadata: registration.metadata,
+                })
+            })?;
+
+        Ok(worker)
+    }
+
+    /// Send worker heartbeat
+    ///
+    /// Called periodically by workers to indicate they're alive and update their status.
+    pub async fn send_heartbeat(&self, worker_id: &str, heartbeat: WorkerHeartbeat) -> Result<()> {
+        let path = format!("/workers/{}/heartbeat", worker_id);
+        let response = self.post(&path, &heartbeat).await?;
+
+        if response.status != 200 {
+            return Err(anyhow!(
+                "Failed to send heartbeat for worker {}: HTTP {}",
+                worker_id,
+                response.status
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// List all workers
+    pub async fn list_workers(&self) -> Result<Vec<Worker>> {
+        let response = self.get("/workers").await?;
+
+        if response.status != 200 {
+            return Err(anyhow!("Failed to list workers: HTTP {}", response.status));
+        }
+
+        let workers: Vec<Worker> = serde_json::from_slice(&response.body)?;
+        Ok(workers)
+    }
+
+    /// Get worker details
+    pub async fn get_worker(&self, worker_id: &str) -> Result<Option<Worker>> {
+        let path = format!("/workers/{}", worker_id);
+        let response = self.get(&path).await?;
+
+        if response.status == 404 {
+            return Ok(None);
+        }
+
+        if response.status != 200 {
+            return Err(anyhow!(
+                "Failed to get worker {}: HTTP {}",
+                worker_id,
+                response.status
+            ));
+        }
+
+        let worker: Worker = serde_json::from_slice(&response.body)?;
+        Ok(Some(worker))
+    }
+
+    /// Mark worker as draining (graceful shutdown)
+    pub async fn drain_worker(&self, worker_id: &str) -> Result<()> {
+        let path = format!("/workers/{}/drain", worker_id);
+        let response = self.post(&path, &()).await?;
+
+        if response.status != 200 {
+            return Err(anyhow!(
+                "Failed to drain worker {}: HTTP {}",
+                worker_id,
+                response.status
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Get worker pool statistics
+    pub async fn worker_stats(&self) -> Result<WorkerStats> {
+        let response = self.get("/workers/stats").await?;
+
+        if response.status != 200 {
+            return Err(anyhow!("Failed to get worker stats: HTTP {}", response.status));
+        }
+
+        let stats: WorkerStats = serde_json::from_slice(&response.body)?;
         Ok(stats)
     }
 

@@ -116,6 +116,68 @@ impl FlawlessConfig {
     }
 }
 
+/// Firecracker MicroVM configuration
+#[derive(Debug, Clone)]
+pub struct FirecrackerConfig {
+    /// Path to microvm flake directory
+    pub flake_dir: std::path::PathBuf,
+    /// Path to store VM state and logs
+    pub state_dir: std::path::PathBuf,
+    /// Default memory allocation for VMs (MB)
+    pub default_memory_mb: u32,
+    /// Default vCPU count for VMs
+    pub default_vcpus: u32,
+    /// Maximum number of concurrent VMs
+    pub max_concurrent_vms: usize,
+}
+
+impl FirecrackerConfig {
+    /// Load Firecracker configuration from environment variables
+    pub fn load() -> Result<Self, ConfigError> {
+        let flake_dir = std::env::var("FIRECRACKER_FLAKE_DIR")
+            .unwrap_or_else(|_| "./microvms".to_string())
+            .into();
+
+        let state_dir = std::env::var("FIRECRACKER_STATE_DIR")
+            .unwrap_or_else(|_| "./data/firecracker-vms".to_string())
+            .into();
+
+        let default_memory_mb = std::env::var("FIRECRACKER_DEFAULT_MEMORY_MB")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(512);
+
+        let default_vcpus = std::env::var("FIRECRACKER_DEFAULT_VCPUS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1);
+
+        let max_concurrent_vms = std::env::var("FIRECRACKER_MAX_CONCURRENT_VMS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10);
+
+        Ok(Self {
+            flake_dir,
+            state_dir,
+            default_memory_mb,
+            default_vcpus,
+            max_concurrent_vms,
+        })
+    }
+
+    /// Get default configuration (useful for testing)
+    pub fn default() -> Self {
+        Self {
+            flake_dir: "./microvms".into(),
+            state_dir: "./data/firecracker-vms".into(),
+            default_memory_mb: 512,
+            default_vcpus: 1,
+            max_concurrent_vms: 10,
+        }
+    }
+}
+
 /// Timing and timeout configuration
 #[derive(Debug, Clone)]
 pub struct TimingConfig {
@@ -183,6 +245,7 @@ pub struct AppConfig {
     pub network: NetworkConfig,
     pub storage: StorageConfig,
     pub flawless: FlawlessConfig,
+    pub firecracker: FirecrackerConfig,
     pub timing: TimingConfig,
 }
 
@@ -196,6 +259,7 @@ impl AppConfig {
             network: NetworkConfig::load()?,
             storage: StorageConfig::load()?,
             flawless: FlawlessConfig::load()?,
+            firecracker: FirecrackerConfig::load()?,
             timing: TimingConfig::load()?,
         })
     }
@@ -206,6 +270,7 @@ impl AppConfig {
             network: NetworkConfig::default(),
             storage: StorageConfig::default(),
             flawless: FlawlessConfig::default(),
+            firecracker: FirecrackerConfig::default(),
             timing: TimingConfig::default(),
         }
     }

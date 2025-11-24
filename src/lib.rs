@@ -7,9 +7,10 @@ pub mod config;
 pub mod work_queue_client;
 pub mod worker_trait;
 pub mod worker_flawless;
+pub mod worker_firecracker;
 
 // Re-export domain types (WorkQueue now uses these internally)
-pub use domain::types::{Job, JobStatus, QueueStats};
+pub use domain::types::{Job, JobStatus, QueueStats, Worker, WorkerStatus, WorkerType, WorkerRegistration, WorkerHeartbeat, WorkerStats};
 
 // Re-export client for convenience
 pub use work_queue_client::WorkQueueClient;

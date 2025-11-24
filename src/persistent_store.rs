@@ -31,14 +31,15 @@ pub trait PersistentStore: Send + Sync {
     /// Atomically claim a pending workflow
     ///
     /// Attempts to update a workflow from 'pending' status to 'claimed' status,
-    /// setting the claimed_by field. This operation uses optimistic locking via
-    /// the WHERE clause to prevent race conditions.
+    /// setting the claimed_by and optionally assigned_worker_id fields. This operation
+    /// uses optimistic locking via the WHERE clause to prevent race conditions.
     ///
     /// Returns the number of rows affected (0 if already claimed, 1 if successful).
     async fn claim_workflow(
         &self,
         job_id: &str,
         claimed_by: &str,
+        assigned_worker_id: Option<&str>,
         updated_at: i64,
     ) -> Result<usize>;
 

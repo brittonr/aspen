@@ -179,6 +179,7 @@ mod tests {
             id: job_id.to_string(),
             status,
             claimed_by: None,
+            assigned_worker_id: None,
             completed_by: None,
             created_at: 0,
             updated_at: 0,
@@ -186,6 +187,7 @@ mod tests {
             started_at: None,
             error_message: None,
             retry_count: 0,
+            compatible_worker_types: Vec::new(),
         }
     }
 

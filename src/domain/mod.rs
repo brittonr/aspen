@@ -19,6 +19,7 @@ pub mod job_lifecycle;
 pub mod job_queries;
 pub mod state_machine;
 pub mod types;
+pub mod worker_management;
 
 // Re-export key types for convenience
 pub use cluster_status::ClusterStatusService;
@@ -28,4 +29,5 @@ pub use health_service::HealthService;
 pub use job_commands::{JobCommandService, JobSubmission};
 pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
 pub use job_queries::{JobQueryService, JobSortOrder};
-pub use types::{JobStatus, QueueStats};
+pub use types::{JobStatus, QueueStats, Worker, WorkerStats, WorkerType, WorkerStatus};
+pub use worker_management::WorkerManagementService;

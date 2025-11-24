@@ -22,6 +22,7 @@ use axum::{routing::{get, post}, Router};
 
 use crate::handlers::dashboard::*;
 use crate::handlers::queue::*;
+use crate::handlers::worker::*;
 use crate::iroh_api;
 use crate::state::AppState;
 
@@ -39,6 +40,7 @@ pub fn build_router(state: &AppState) -> Router {
     Router::new()
         .nest("/dashboard", dashboard_router())
         .nest("/api/queue", queue_api_router())
+        .nest("/api/workers", worker_api_router())
         .nest("/api/iroh", iroh_api_router())
         .nest("/health", health_router())
         .with_state(state.clone())
@@ -90,6 +92,30 @@ fn queue_api_router() -> Router<AppState> {
         .route("/status/{job_id}", post(queue_update_status))
     // Future: Add API-specific middleware
     // .layer(/* rate limiting, API versioning, auth, etc. */)
+}
+
+/// Worker Management API routes - Worker lifecycle
+///
+/// REST API for worker registration, heartbeats, and management.
+/// Used by worker binaries to register with the control plane.
+///
+/// Routes:
+/// - `POST /api/workers/register` - Register a new worker
+/// - `POST /api/workers/{worker_id}/heartbeat` - Send worker heartbeat
+/// - `GET  /api/workers` - List all workers
+/// - `GET  /api/workers/{worker_id}` - Get worker details
+/// - `POST /api/workers/{worker_id}/drain` - Mark worker as draining
+/// - `GET  /api/workers/stats` - Get worker pool statistics
+fn worker_api_router() -> Router<AppState> {
+    Router::new()
+        .route("/register", post(worker_register))
+        .route("/:worker_id/heartbeat", post(worker_heartbeat))
+        .route("/", get(worker_list))
+        .route("/:worker_id", get(worker_get))
+        .route("/:worker_id/drain", post(worker_drain))
+        .route("/stats", get(worker_stats))
+    // Future: Add worker-specific middleware
+    // .layer(/* worker authentication, rate limiting, etc. */)
 }
 
 /// Iroh P2P API routes - Blob storage and gossip
