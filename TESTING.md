@@ -1,237 +1,216 @@
-# Testing Multi-Node mvm-ci with Flawless
+# Testing Guide for MVM-CI
 
-## Current Setup Summary
+## Overview
 
-You now have a fully functional mvm-ci system where **hiqlite acts as the shim layer** between the distributed work queue and flawless workflow execution.
+Comprehensive testing infrastructure for mvm-ci with integration tests, fixtures, and helpers.
 
-### What's Working
+## Test Architecture
 
-✅ **Hiqlite Integration**
-- Raft-based distributed SQLite for workflow state
-- Schema with `workflows` and `heartbeats` tables
-- Atomic operations for job claiming
+### Layered Testing Strategy
 
-✅ **Flawless Integration**
-- WASM workflow execution
-- Workflows sync status back to hiqlite
-- Checkpoint/resume capabilities (local SQLite)
+```
+Scenario-Based Integration Tests (tests/scenario_tests.rs)
+    ↓
+Test Fixtures (ControlPlaneFixture, TestWorkerFixture)
+    ↓
+Test Helpers (wait functions, job utils)
+    ↓
+Domain Layer (Mock repositories, Services)
+```
 
-✅ **Hiqlite Shim Layer**
-- `new_job` → publishes to hiqlite → starts flawless workflow → updates hiqlite
-- `ui_update` → syncs workflow progress to hiqlite
-- Work queue API reads from hiqlite
+## Quick Start
 
-✅ **Configurable Ports**
-- `HTTP_PORT` - Local HTTP server port (default: 3020)
-- `FLAWLESS_URL` - Flawless server URL (default: http://localhost:27288)
-
-## Single Node Test
+### Running Tests
 
 ```bash
-# Terminal 1: Start flawless server
-cd /path/to/mvm-ci
-flawless up
+# Unit tests (fast, no infrastructure)
+cargo test --lib
 
-# Terminal 2: Start mvm-ci
-./target/debug/mvm-ci
+# Integration tests (requires infrastructure)
+cargo test --test scenario_tests
 
-# Terminal 3: Submit a job
-curl -X POST http://localhost:3020/new-job \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "url=https://example.com"
-
-# Check status
-curl http://localhost:3020/queue/list | jq
-curl http://localhost:3020/queue/stats | jq
+# All tests
+cargo test
 ```
 
-## Multi-Node Test (Shared Flawless)
+## Test Fixtures
 
-Currently, nodes can run independently but use a shared flawless server:
+### ControlPlaneFixture
 
-```bash
-# Terminal 1: Flawless server
-flawless up
+Manages a real control plane server for integration testing.
 
-# Terminal 2: Node 1
-./target/debug/mvm-ci
+**Features:**
+- Deploys test WASM module to flawless server
+- Creates iroh P2P endpoint
+- Starts dual-listener server (HTTP + P2P)
+- Provides real endpoint tickets
+- Graceful shutdown
 
-# Terminal 3: Node 2 (different HTTP port, different hiqlite DB)
-cat > hiqlite.toml <<'EOF'
-[hiqlite]
-node_id = 2
-listen_addr = "127.0.0.1:9002"
-data_dir = "./data/hiqlite-node2"
-secret_raft = "SuperSecureSecret1337ForRaft"
-secret_api = "SuperSecureSecret1337ForAPI"
-enc_keys = ["bVCyTsGaggVy5yqQ/UzluN29DZW41M3hTSkx6Y3NtZmRuQkR2TnJxUTYzcjQ="]
-enc_key_active = "bVCyTsGaggVy5yqQ"
-EOF
-
-HTTP_PORT=3021 IROH_BLOBS_PATH=./data/iroh-blobs-node2 ./target/debug/mvm-ci
-
-# Terminal 4: Submit to both nodes
-curl -X POST http://localhost:3020/new-job -H "Content-Type: application/x-www-form-urlencoded" -d "url=https://node1.com"
-curl -X POST http://localhost:3021/new-job -H "Content-Type: application/x-www-form-urlencoded" -d "url=https://node2.com"
-
-# Check each node's queue
-curl http://localhost:3020/queue/list | jq -r '.[] | "\(.job_id): \(.status)"'
-curl http://localhost:3021/queue/list | jq -r '.[] | "\(.job_id): \(.status)"'
+**Usage:**
+```rust
+let control_plane = ControlPlaneFixture::new(3030).await?;
+let client = control_plane.client().await;
+// ... tests ...
+control_plane.shutdown().await?;
 ```
 
-## Current Limitations
+### TestWorkerFixture
 
-### ✗ Nodes Don't Share Work
-- Each node has a separate hiqlite database
-- Jobs submitted to Node 1 are NOT visible to Node 2
-- No work distribution across nodes
+Simulates worker with full lifecycle.
 
-### Why?
-- Hiqlite is configured as single-node clusters (no Raft replication)
-- Each node has `node_id = 1` or `node_id = 2` but not part of same cluster
+**Features:**
+- Worker registration
+- Periodic heartbeats
+- Job claiming
+- Job completion/failure reporting
+- Automatic cleanup
 
-## Distributed Raft Cluster Setup (WORKING!)
-
-To enable work sharing between nodes via Raft consensus:
-
-### Configuration Files
-
-Create `hiqlite-cluster-node1.toml`:
-```toml
-[hiqlite]
-node_id = 1
-data_dir = "./data/hiqlite-node1"
-secret_raft = "SuperSecureSecret1337ForRaft"
-secret_api = "SuperSecureSecret1337ForAPI"
-enc_keys = ["bVCyTsGaggVy5yqQ/UzluN29DZW41M3hTSkx6Y3NtZmRuQkR2TnJxUTYzcjQ="]
-enc_key_active = "bVCyTsGaggVy5yqQ"
-
-# Raft cluster members (format: "id addr_raft addr_api")
-nodes = [
-    "1 127.0.0.1:9000 127.0.0.1:9001",
-    "2 127.0.0.1:9002 127.0.0.1:9003",
-]
-
-listen_addr_api = "0.0.0.0"
-listen_addr_raft = "0.0.0.0"
+**Usage:**
+```rust
+let mut worker = TestWorkerFixture::new(ticket, WorkerType::Wasm).await?;
+worker.register().await?;
+worker.start_heartbeat();
+let job = worker.claim_work().await?;
+worker.shutdown().await;
 ```
 
-Create `hiqlite-cluster-node2.toml` (same nodes list, different node_id and data_dir):
-```toml
-[hiqlite]
-node_id = 2
-data_dir = "./data/hiqlite-node2"
-secret_raft = "SuperSecureSecret1337ForRaft"
-secret_api = "SuperSecureSecret1337ForAPI"
-enc_keys = ["bVCyTsGaggVy5yqQ/UzluN29DZW41M3hTSkx6Y3NtZmRuQkR2TnJxUTYzcjQ="]
-enc_key_active = "bVCyTsGaggVy5yqQ"
+## Test Coverage
 
-# Raft cluster members (format: "id addr_raft addr_api")
-nodes = [
-    "1 127.0.0.1:9000 127.0.0.1:9001",
-    "2 127.0.0.1:9002 127.0.0.1:9003",
-]
+### ✅ Implemented (10 Scenario Tests)
 
-listen_addr_api = "0.0.0.0"
-listen_addr_raft = "0.0.0.0"
-```
+1. **Worker Registration** (2 tests)
+   - Single worker registration
+   - Multiple workers of different types
 
-### Running the Cluster
+2. **Heartbeat Monitoring** (2 tests)
+   - Heartbeat lifecycle
+   - Active job count tracking
 
-```bash
-# Automated test script (recommended)
-./test-clustered-hiqlite.sh
-```
+3. **Job Claiming** (2 tests)
+   - Worker type filtering
+   - Compatibility matching
 
-Or manually:
+4. **Orphaned Job Recovery** (2 tests)
+   - Worker failure recovery
+   - Heartbeat keepalive
 
-```bash
-# Terminal 1: Flawless server
-flawless up
+5. **End-to-End Execution** (2 tests)
+   - Complete workflow
+   - Error handling
 
-# Terminal 2: Node 1
-cp hiqlite-cluster-node1.toml hiqlite.toml
-HTTP_PORT=3020 FLAWLESS_URL=http://localhost:27288 ./target/debug/mvm-ci
+### 📝 TODO
 
-# Terminal 3: Node 2
-cp hiqlite-cluster-node2.toml hiqlite.toml
-HTTP_PORT=3021 FLAWLESS_URL=http://localhost:27288 ./target/debug/mvm-ci
-
-# Terminal 4: Submit job to Node 1, verify visible on Node 2
-curl -X POST http://localhost:3020/new-job -d "url=https://example.com"
-curl http://localhost:3021/queue/list | jq  # Should see the job!
-```
-
-### What You Get:
-- ✅ Shared workflow state across nodes (Raft replication)
-- ✅ Work distribution and load balancing
-- ✅ Automatic failover if a node goes down
-- ✅ Strong consistency guarantees (linearizable reads/writes)
-- ✅ Atomic job claiming (no race conditions)
-
-## Architecture Diagram
-
-```
-                    Shared Flawless Server
-                    (localhost:27288)
-                           ▲
-                           │
-          ┌────────────────┴────────────────┐
-          │                                 │
-    ┌─────┴──────┐                  ┌──────┴─────┐
-    │  Node 1    │                  │  Node 2    │
-    │  :3020     │                  │  :3021     │
-    ├────────────┤                  ├────────────┤
-    │ Hiqlite 1  │                  │ Hiqlite 2  │
-    │ (separate) │                  │ (separate) │
-    └────────────┘                  └────────────┘
-```
-
-With Raft clustering (CURRENT WORKING STATE):
-
-```
-                    Shared Flawless Server
-                    (localhost:27288)
-                           ▲
-                           │
-          ┌────────────────┴────────────────┐
-          │                                 │
-    ┌─────┴──────┐                  ┌──────┴─────┐
-    │  Node 1    │                  │  Node 2    │
-    │  :3020     │                  │  :3021     │
-    ├────────────┤    Raft Sync    ├────────────┤
-    │ Hiqlite 1  │◄────────────────►│ Hiqlite 2  │
-    │ (clustered)│                  │ (clustered)│
-    └────────────┘                  └────────────┘
-         Shared workflow state
-             (replicated)
-```
-
-**Key Achievement:** Jobs submitted to Node 1 are immediately visible on Node 2 via Raft consensus!
-
-## Environment Variables
-
-- `HTTP_PORT` - HTTP server port (default: 3020)
-- `FLAWLESS_URL` - Flawless server URL (default: http://localhost:27288)
-- `IROH_BLOBS_PATH` - Iroh blob storage path (default: ./data/iroh-blobs)
-- Hiqlite config is read from `hiqlite.toml`
+- Job submission helpers
+- Worker stats verification
+- Property-based tests (scheduler invariants)
+- Firecracker backend tests
 
 ## Files Created
 
-- `src/main.rs` - Added configurable HTTP_PORT and FLAWLESS_URL
-- `src/work_queue.rs` - Hiqlite-backed work queue with shim layer
-- `src/hiqlite_service.rs` - Hiqlite client wrapper
-- `hiqlite.toml` - Hiqlite configuration
-
-## Verification
-
-The hiqlite shim is working when you see:
-```bash
-curl http://localhost:3020/queue/stats
-# Shows: completed jobs with accurate counts
-
-curl http://localhost:3020/queue/list | jq -r '.[] | "\(.job_id): \(.status)"'
-# Shows: job-0: Completed, job-1: InProgress, etc.
+```
+tests/
+├── common/
+│   ├── mod.rs              # Module exports
+│   ├── fixtures.rs         # ControlPlaneFixture, TestWorkerFixture (305 lines)
+│   └── helpers.rs          # Test utilities (170 lines)
+├── integration_tests.rs    # Domain layer tests
+└── scenario_tests.rs       # Integration scenarios (380 lines)
 ```
 
-The workflows are syncing state to hiqlite!
+## Troubleshooting
+
+**"Failed to deploy test module"**
+- Ensure flawless server is running at http://localhost:27288
+
+**"Failed to parse endpoint ticket"**
+- Server startup failed, check logs
+- Increase startup wait time
+
+**Tests timeout**
+- Run with: `cargo test -- --test-threads=1 --nocapture`
+
+**Port conflicts**
+- Each test uses unique port (3030+)
+- Kill hanging processes: `pkill -f mvm-ci`
+
+## Best Practices
+
+1. **Use unique ports** for parallel tests
+2. **Always clean up** fixtures
+3. **Use test helpers** for common operations
+4. **Assert specific state**, not just existence
+
+## Performance
+
+- Unit tests: <100ms
+- Integration fixture setup: ~2-3s
+- Full scenario test: ~3-5s
+- All scenarios: ~30-60s
+
+
+## Nix-Based Testing (Recommended)
+
+The project includes a Nix-based test infrastructure that automatically manages all dependencies, including the flawless server.
+
+### Quick Start with Nix
+
+```bash
+# Run integration tests (starts flawless server automatically)
+nix run .#integration-tests
+
+# Run as a check (for CI/CD)
+nix flake check -L
+
+# Run specific check
+nix build .#checks.x86_64-linux.integration-tests -L
+```
+
+### What the Nix Test Runner Does
+
+1. **Automatically starts flawless server** in the background
+2. **Waits for server to be ready** (health check polling)
+3. **Runs integration tests** with proper environment setup
+4. **Cleans up** server and temporary files on exit
+5. **Reports results** with colored output
+
+### Benefits of Nix-Based Testing
+
+✅ **No manual setup** - All dependencies managed by Nix
+✅ **Reproducible** - Same environment every time
+✅ **Isolated** - No conflicts with system packages
+✅ **CI-ready** - Can be used in CI/CD pipelines
+✅ **Declarative** - Test infrastructure as code
+
+### Script Location
+
+The test runner script is at: `scripts/run-integration-tests.sh`
+
+### Environment Variables
+
+The Nix runner automatically sets:
+- `FLAWLESS_URL=http://localhost:27288`
+- `RUST_LOG=info` (can be overridden)
+- `SNIX_BUILD_SANDBOX_SHELL` (for snix crates)
+
+### Troubleshooting Nix Tests
+
+**"flawless server failed to start"**
+```bash
+# Check flawless logs
+cat /tmp/flawless-test-*.log
+
+# Ensure port 27288 is available
+lsof -i :27288
+```
+
+**"Nix sandbox issues"**
+- The integration test check uses `__noChroot = true` to allow network access
+- This is required for flawless server to bind to ports
+
+**"Rebuild flake cache"**
+```bash
+# Clear flake evaluation cache
+nix flake update
+nix build .#checks.x86_64-linux.integration-tests -L --rebuild
+```
+

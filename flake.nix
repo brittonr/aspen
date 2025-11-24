@@ -235,6 +235,59 @@
             # set in tests.
             env.CARGO_PROFILE = "dev";
           });
+
+        # Integration tests with flawless server
+        # Run with: nix run .#integration-tests
+        # Or check with: nix flake check -L
+        integration-tests = pkgs.stdenv.mkDerivation {
+          name = "mvm-ci-integration-tests";
+          src = ./.;
+
+          nativeBuildInputs = [
+            rustToolChain
+            flawless
+            pkgs.bash
+            pkgs.curl
+            pkgs.git
+            pkgs.jq
+            pkgs.sqlite
+            pkgs.pkg-config
+            pkgs.openssl.dev
+            pkgs.protobuf
+          ];
+
+          buildInputs = [
+            pkgs.openssl
+          ];
+
+          # Required environment variables
+          env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+          env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
+
+          # Disable sandbox for network access (flawless server needs it)
+          __noChroot = true;
+
+          buildPhase = ''
+            export HOME=$TMPDIR
+            export CARGO_HOME=$TMPDIR/.cargo
+            mkdir -p $CARGO_HOME
+
+            echo "Building project for tests..."
+            cargo build --tests
+          '';
+
+          checkPhase = ''
+            echo "Running integration test script..."
+            bash ${./scripts/run-integration-tests.sh}
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            echo "Integration tests passed" > $out/result
+          '';
+
+          doCheck = true;
+        };
       };
 
       packages.default = mvm-ci;
@@ -288,6 +341,25 @@
 
       apps.synthetic-events = flake-utils.lib.mkApp {
         drv = self.bins.${system}.synthetic-events;
+      };
+
+      # Integration tests app - starts flawless server and runs tests
+      apps.integration-tests = {
+        type = "app";
+        program = "${pkgs.writeShellScript "run-integration-tests" ''
+          export PATH="${pkgs.lib.makeBinPath [
+            rustToolChain
+            flawless
+            pkgs.bash
+            pkgs.curl
+            pkgs.coreutils
+            pkgs.cargo-nextest
+          ]}:$PATH"
+          export SNIX_BUILD_SANDBOX_SHELL="${pkgs.busybox}/bin/sh"
+
+          echo "Running integration tests with flawless server..."
+          exec ${./scripts/run-integration-tests.sh}
+        ''}";
       };
 
       devShells.default = craneLib.devShell {
