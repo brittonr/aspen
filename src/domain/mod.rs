@@ -22,11 +22,10 @@ pub mod types;
 
 // Re-export key types for convenience
 pub use cluster_status::ClusterStatusService;
-pub use event_publishers::{InMemoryEventPublisher, LoggingEventPublisher, NoOpEventPublisher};
-pub use events::{DomainEvent, EventPublisher};
+pub use event_publishers::LoggingEventPublisher;
+pub use events::EventPublisher;
 pub use health_service::HealthService;
 pub use job_commands::{JobCommandService, JobSubmission};
 pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
-pub use job_queries::{JobQueryService, JobSortOrder, EnrichedJob};
-pub use state_machine::{JobStateMachine, StateTransitionError};
-pub use types::{Job, JobStatus, QueueStats};
+pub use job_queries::{JobQueryService, JobSortOrder};
+pub use types::{JobStatus, QueueStats};

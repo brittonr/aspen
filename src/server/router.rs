@@ -20,7 +20,8 @@
 
 use axum::{routing::{get, post}, Router};
 
-use crate::handlers::*;
+use crate::handlers::dashboard::*;
+use crate::handlers::queue::*;
 use crate::iroh_api;
 use crate::state::AppState;
 

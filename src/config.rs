@@ -3,6 +3,8 @@
 //! This module provides a single source of truth for all application configuration,
 //! supporting environment variables with sensible defaults and validation.
 
+#![allow(dead_code)] // Config methods for future configuration patterns
+
 use std::path::PathBuf;
 use std::time::Duration;
 

@@ -1,5 +1,7 @@
 //! Dashboard handlers for cluster monitoring and job management
 
+#![allow(dead_code)] // Used via wildcard import in router
+
 use askama::Template;
 use axum::{
     Form,

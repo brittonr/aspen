@@ -5,21 +5,3 @@
 
 pub mod traits;
 pub mod mocks;
-
-// Re-export main traits for convenience
-pub use traits::{
-    // Iroh networking
-    EndpointInfo,
-    BlobStorage,
-    GossipNetwork,
-    PeerConnection,
-    // Hiqlite database
-    DatabaseQueries,
-    DatabaseHealth,
-    DatabaseSchema,
-    DatabaseLifecycle,
-    // Common types
-    EndpointId,
-    EndpointAddr,
-    Param,
-};

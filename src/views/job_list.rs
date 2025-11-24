@@ -1,4 +1,5 @@
 //! Job list view model
+#![allow(dead_code)] // View models used in handlers
 
 use askama::Template;
 use crate::domain::job_lifecycle::EnrichedJob;

@@ -3,6 +3,8 @@
 //! Provides in-memory mock implementations that follow the established
 //! testing patterns (Arc<Mutex<T>> for state management).
 
+#![allow(dead_code)] // Mocks are for future tests
+
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;

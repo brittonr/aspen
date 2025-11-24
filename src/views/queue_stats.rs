@@ -1,4 +1,5 @@
 //! Queue statistics view model
+#![allow(dead_code)] // View models used in handlers
 
 use askama::Template;
 use crate::domain::QueueStats;

@@ -18,7 +18,7 @@ mod work_state_machine;
 
 use config::AppConfig;
 use server::ServerConfig;
-use state::{AppState, InfrastructureFactory, ProductionInfrastructureFactory};
+use state::{InfrastructureFactory, ProductionInfrastructureFactory};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

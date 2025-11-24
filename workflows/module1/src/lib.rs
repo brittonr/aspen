@@ -11,6 +11,9 @@ use log::info;
 flawless::module! { name = "crawler", version = "0.1.8" }
 
 // ===== Iroh Helper Functions =====
+// These functions demonstrate iroh integration patterns and serve as examples
+// for future workflow development.
+#[allow(dead_code)]
 
 /// Store data as a blob and return its hash
 fn store_blob(data: &[u8]) -> String {
@@ -29,6 +32,7 @@ fn store_blob(data: &[u8]) -> String {
 }
 
 /// Retrieve blob data by hash
+#[allow(dead_code)]
 fn retrieve_blob(hash: &str) -> Vec<u8> {
     let url = format!("http://localhost:3020/iroh/blob/{}", hash);
     flawless_http::get(&url)
@@ -38,6 +42,7 @@ fn retrieve_blob(hash: &str) -> Vec<u8> {
 }
 
 /// Join a gossip topic (topic_id should be 64-char hex string)
+#[allow(dead_code)]
 fn join_gossip_topic(topic_id: &str) {
     let body = serde_json::json!({ "topic_id": topic_id });
     flawless_http::post("http://localhost:3020/iroh/gossip/join")
@@ -47,6 +52,7 @@ fn join_gossip_topic(topic_id: &str) {
 }
 
 /// Broadcast a message to a gossip topic
+#[allow(dead_code)]
 fn broadcast_to_topic(topic_id: &str, message: &str) {
     let body = serde_json::json!({
         "topic_id": topic_id,
@@ -59,6 +65,7 @@ fn broadcast_to_topic(topic_id: &str, message: &str) {
 }
 
 /// Connect to a peer by node address
+#[allow(dead_code)]
 fn connect_to_peer(node_addr: &str) {
     let body = serde_json::json!({ "node_addr": node_addr });
     flawless_http::post("http://localhost:3020/iroh/connect")
@@ -68,6 +75,7 @@ fn connect_to_peer(node_addr: &str) {
 }
 
 /// Get iroh node information
+#[allow(dead_code)]
 fn get_node_info() -> (String, Vec<String>) {
     let response = flawless_http::get("http://localhost:3020/iroh/info")
         .send()

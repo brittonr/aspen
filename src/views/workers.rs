@@ -1,4 +1,5 @@
 //! Workers view model
+#![allow(dead_code)] // View models used in handlers
 
 use askama::Template;
 use crate::domain::cluster_status::WorkerStats;
@@ -50,12 +51,6 @@ impl WorkersView {
     pub fn new(workers: Vec<WorkerStats>) -> Self {
         Self {
             workers: workers.into_iter().map(WorkerRow::from).collect(),
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            workers: Vec::new(),
         }
     }
 }

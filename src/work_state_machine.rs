@@ -33,6 +33,7 @@ impl WorkStateMachine {
     /// - Claimed can go to InProgress or Failed
     /// - InProgress can go to Completed or Failed
     /// - Terminal states can only transition to themselves (idempotent)
+    #[allow(dead_code)] // Used in tests
     pub fn validate_transition(from: &JobStatus, to: &JobStatus) -> Result<(), String> {
         use JobStatus::*;
 
@@ -78,6 +79,7 @@ impl WorkStateMachine {
     /// Get the next valid states from a given state
     ///
     /// Returns a list of states that are valid transitions from the current state.
+    #[allow(dead_code)] // Used in tests
     pub fn next_valid_states(from: &JobStatus) -> Vec<JobStatus> {
         use JobStatus::*;
 

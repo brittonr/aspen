@@ -1,5 +1,7 @@
 //! Work queue API handlers (REST API for workers and control plane operations)
 
+#![allow(dead_code)] // Used via wildcard import in router
+
 use axum::{
     Json,
     extract::{Path, State},

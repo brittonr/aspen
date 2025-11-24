@@ -3,6 +3,8 @@
 //! Provides concrete implementations of the EventPublisher trait for various
 //! use cases (logging, in-memory storage, external systems).
 
+#![allow(dead_code)] // Event publishers for future testing and production use
+
 use async_trait::async_trait;
 use anyhow::Result;
 use std::sync::Arc;

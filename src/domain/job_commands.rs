@@ -200,6 +200,7 @@ impl JobCommandService {
     ///
     /// # Errors
     /// Returns error if the job is already in progress or completed
+    #[allow(dead_code)] // Future API feature
     pub async fn cancel_job(&self, job_id: &str) -> Result<()> {
         // Get current job to validate cancellation
         let jobs = self.work_repo.list_work().await?;
@@ -236,6 +237,7 @@ impl JobCommandService {
     ///
     /// # Errors
     /// Returns error if the job is not in Failed status
+    #[allow(dead_code)] // Future API feature
     pub async fn retry_job(&self, job_id: &str) -> Result<()> {
         // Get current job to validate retry
         let jobs = self.work_repo.list_work().await?;

@@ -94,12 +94,14 @@ impl WorkItemCache {
     }
 
     /// Get all work items as a HashMap (clone of internal state)
+    #[allow(dead_code)] // Used in tests
     pub async fn get_all_map(&self) -> HashMap<String, Job> {
         let cache = self.cache.read().await;
         cache.clone()
     }
 
     /// Find the first work item matching a predicate
+    #[allow(dead_code)] // Used in tests
     pub async fn find_first<F>(&self, predicate: F) -> Option<Job>
     where
         F: Fn(&Job) -> bool,
@@ -129,6 +131,7 @@ impl WorkItemCache {
     }
 
     /// Check if the cache is empty
+    #[allow(dead_code)] // Utility method for future use
     pub async fn is_empty(&self) -> bool {
         let cache = self.cache.read().await;
         cache.is_empty()
@@ -145,6 +148,7 @@ impl WorkItemCache {
     }
 
     /// Clear all items from the cache
+    #[allow(dead_code)] // Utility method for future use
     pub async fn clear(&self) {
         let mut cache = self.cache.write().await;
         cache.clear();
