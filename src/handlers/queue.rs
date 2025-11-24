@@ -98,6 +98,7 @@ pub async fn queue_stats(State(state): State<AppState>) -> impl IntoResponse {
 #[derive(Debug, Deserialize)]
 pub struct UpdateStatusRequest {
     pub status: JobStatus,
+    pub error_message: Option<String>,
 }
 
 /// Update the status of a specific work item
@@ -108,7 +109,7 @@ pub async fn queue_update_status(
 ) -> impl IntoResponse {
     let job_service = state.services().job_lifecycle();
 
-    match job_service.update_work_status(&job_id, req.status).await {
+    match job_service.update_work_status(&job_id, req.status, req.error_message).await {
         Ok(()) => (StatusCode::OK, "Status updated").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

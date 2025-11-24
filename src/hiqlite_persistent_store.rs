@@ -39,6 +39,9 @@ impl PersistentStore for HiqlitePersistentStore {
             completed_by: Option<String>,
             created_at: i64,
             updated_at: i64,
+            started_at: Option<i64>,
+            error_message: Option<String>,
+            retry_count: i64,
             data: Option<String>,
         }
 
@@ -51,6 +54,9 @@ impl PersistentStore for HiqlitePersistentStore {
                     completed_by: row.get("completed_by"),
                     created_at: row.get("created_at"),
                     updated_at: row.get("updated_at"),
+                    started_at: row.get("started_at"),
+                    error_message: row.get("error_message"),
+                    retry_count: row.get("retry_count"),
                     data: row.get("data"),
                 }
             }
@@ -86,6 +92,9 @@ impl PersistentStore for HiqlitePersistentStore {
                 completed_by: row.completed_by,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                started_at: row.started_at,
+                error_message: row.error_message,
+                retry_count: row.retry_count as u32,
                 payload,
             }
         }).collect();
@@ -99,7 +108,7 @@ impl PersistentStore for HiqlitePersistentStore {
 
         self.hiqlite
             .execute(
-                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, completed_by, created_at, updated_at, data) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, completed_by, created_at, updated_at, started_at, error_message, retry_count, data) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
                 params!(
                     job.id.clone(),
                     status_str,
@@ -107,6 +116,9 @@ impl PersistentStore for HiqlitePersistentStore {
                     job.completed_by.clone(),
                     job.created_at,
                     job.updated_at,
+                    job.started_at,
+                    job.error_message.clone(),
+                    job.retry_count as i64,
                     payload_str
                 ),
             )
@@ -142,8 +154,9 @@ impl PersistentStore for HiqlitePersistentStore {
     ) -> Result<usize> {
         let status_str = status_to_string(status);
 
-        // Handle terminal states differently (completed/failed set completed_by)
+        // Handle different status transitions
         let rows_affected = if *status == JobStatus::Completed || *status == JobStatus::Failed {
+            // Terminal states: set completed_by
             // State machine guard: prevent regression from terminal states
             // Allow idempotent updates (completed→completed or failed→failed)
             self.hiqlite
@@ -152,8 +165,17 @@ impl PersistentStore for HiqlitePersistentStore {
                     params!(status_str, completed_by, updated_at, job_id),
                 )
                 .await?
+        } else if *status == JobStatus::InProgress {
+            // InProgress: set started_at if not already set
+            // State machine guard: prevent updates to terminal states
+            self.hiqlite
+                .execute(
+                    "UPDATE workflows SET status = $1, started_at = COALESCE(started_at, $2), updated_at = $2 WHERE id = $3 AND status NOT IN ('completed', 'failed')",
+                    params!(status_str, updated_at, job_id),
+                )
+                .await?
         } else {
-            // Non-terminal states: don't touch completed_by
+            // Other non-terminal states: just update status and timestamp
             // State machine guard: prevent any updates to terminal states
             self.hiqlite
                 .execute(

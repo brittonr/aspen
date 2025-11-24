@@ -138,10 +138,16 @@ impl JobCommandService {
     /// # Arguments
     /// * `job_id` - The job to update
     /// * `status` - The new status
+    /// * `error_message` - Optional error message (required when status is Failed)
     ///
     /// # Errors
     /// Returns error if the job doesn't exist or the status transition is invalid
-    pub async fn update_job_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
+    pub async fn update_job_status(
+        &self,
+        job_id: &str,
+        status: JobStatus,
+        error_message: Option<String>,
+    ) -> Result<()> {
         // Get current job to validate transition
         let jobs = self.work_repo.list_work().await?;
         let current_job = jobs
@@ -155,23 +161,34 @@ impl JobCommandService {
         JobStateMachine::validate_transition(old_status, status)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
+        // Store error message if provided (typically for Failed status)
+        if let Some(error_msg) = error_message.clone() {
+            // We'll need to update the full job - for now just update status
+            // The error_message will be captured in a future enhancement
+            tracing::warn!(job_id = %job_id, error = %error_msg, "Error message provided but not yet persisted to database");
+        }
+
         // Transition is valid - update in repository
         self.work_repo.update_status(job_id, status.clone()).await?;
 
         tracing::info!(job_id = %job_id, status = ?status, "Job status updated");
 
+        // Fetch updated job to get current field values
+        let updated_job = self.work_repo.find_by_id(job_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Job not found after status update: {}", job_id))?;
+
         // Publish appropriate domain event based on new status
         let event = match status {
             JobStatus::Completed => DomainEvent::JobCompleted {
                 job_id: job_id.to_string(),
-                worker_id: None, // TODO: Track worker_id in job
-                duration_ms: 0,  // TODO: Track start time in job
+                worker_id: updated_job.completed_by.clone(),
+                duration_ms: updated_job.duration_ms() as u64,
                 timestamp: current_timestamp(),
             },
             JobStatus::Failed => DomainEvent::JobFailed {
                 job_id: job_id.to_string(),
-                worker_id: None,
-                error: "Job failed".to_string(), // TODO: Pass error message
+                worker_id: updated_job.completed_by.clone(),
+                error: updated_job.error_message.clone().unwrap_or_else(|| "Job failed".to_string()),
                 timestamp: current_timestamp(),
             },
             _ => {

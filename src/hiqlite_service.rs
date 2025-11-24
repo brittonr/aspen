@@ -365,10 +365,30 @@ impl HiqliteService {
                 completed_by TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
+                started_at INTEGER,
+                error_message TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0,
                 data TEXT
             )",
             params!(),
         ).await?;
+
+        // Add new columns to existing workflows table (migrations for existing databases)
+        // These will fail silently if columns already exist
+        let _ = self.execute(
+            "ALTER TABLE workflows ADD COLUMN started_at INTEGER",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "ALTER TABLE workflows ADD COLUMN error_message TEXT",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "ALTER TABLE workflows ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
+            params!(),
+        ).await;
 
         // Create heartbeats table for node health tracking
         self.execute(
@@ -492,34 +512,8 @@ impl DatabaseHealth for HiqliteService {
 #[async_trait]
 impl DatabaseSchema for HiqliteService {
     async fn initialize_schema(&self) -> Result<()> {
-        tracing::info!("Initializing hiqlite schema");
-
-        // Create workflows table
-        self.execute(
-            "CREATE TABLE IF NOT EXISTS workflows (
-                id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                claimed_by TEXT,
-                completed_by TEXT,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                data TEXT
-            )",
-            params!(),
-        ).await?;
-
-        // Create heartbeats table for node health tracking
-        self.execute(
-            "CREATE TABLE IF NOT EXISTS heartbeats (
-                node_id TEXT PRIMARY KEY,
-                last_seen INTEGER NOT NULL,
-                status TEXT NOT NULL
-            )",
-            params!(),
-        ).await?;
-
-        tracing::info!("Schema initialization complete");
-        Ok(())
+        // Delegate to the public method
+        Self::initialize_schema(self).await
     }
 }
 

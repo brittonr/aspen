@@ -94,6 +94,9 @@ impl WorkRepository for MockWorkRepository {
             completed_by: None,
             created_at: now,
             updated_at: now,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
             payload,
         };
         self.jobs.lock().await.push(job);

@@ -69,8 +69,13 @@ impl JobLifecycleService {
     }
 
     /// Update work item status (Command)
-    pub async fn update_work_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
-        self.commands.update_job_status(job_id, status).await
+    pub async fn update_work_status(
+        &self,
+        job_id: &str,
+        status: JobStatus,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        self.commands.update_job_status(job_id, status, error_message).await
     }
 
     // ===== Query methods (delegate to JobQueryService) =====

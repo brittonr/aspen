@@ -55,6 +55,12 @@ pub struct Job {
     pub created_at: i64,
     /// Timestamp when job was last updated (Unix epoch seconds)
     pub updated_at: i64,
+    /// Timestamp when job execution started (Unix epoch seconds)
+    pub started_at: Option<i64>,
+    /// Error message if job failed
+    pub error_message: Option<String>,
+    /// Number of times this job has been retried
+    pub retry_count: u32,
     /// Job payload (application-specific data)
     pub payload: JsonValue,
 }
@@ -66,8 +72,22 @@ impl Job {
     }
 
     /// Calculate duration of job execution in seconds
+    ///
+    /// Returns the time from when the job started executing (InProgress)
+    /// to when it was last updated. Returns 0 if job hasn't started yet.
     pub fn duration_seconds(&self) -> i64 {
-        self.updated_at - self.created_at
+        match self.started_at {
+            Some(start) => self.updated_at - start,
+            None => 0,
+        }
+    }
+
+    /// Calculate duration of job execution in milliseconds
+    ///
+    /// Returns the time from when the job started executing (InProgress)
+    /// to when it was last updated. Returns 0 if job hasn't started yet.
+    pub fn duration_ms(&self) -> i64 {
+        self.duration_seconds() * 1000
     }
 
     /// Calculate time since last update in seconds
@@ -179,6 +199,9 @@ mod tests {
             completed_by: None,
             created_at: 1000,
             updated_at: 1000,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
             payload: serde_json::json!({
                 "url": "https://example.com"
             }),
@@ -196,10 +219,33 @@ mod tests {
             completed_by: None,
             created_at: 1000,
             updated_at: 1030,
+            started_at: Some(1000),
+            error_message: None,
+            retry_count: 0,
             payload: serde_json::json!({}),
         };
 
         assert_eq!(job.duration_seconds(), 30);
+        assert_eq!(job.duration_ms(), 30000);
+    }
+
+    #[test]
+    fn test_job_duration_without_start() {
+        let job = Job {
+            id: "job-1".to_string(),
+            status: JobStatus::Pending,
+            claimed_by: None,
+            completed_by: None,
+            created_at: 1000,
+            updated_at: 1030,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
+            payload: serde_json::json!({}),
+        };
+
+        assert_eq!(job.duration_seconds(), 0);
+        assert_eq!(job.duration_ms(), 0);
     }
 
     #[test]
@@ -211,6 +257,9 @@ mod tests {
             completed_by: None,
             created_at: 1000,
             updated_at: 1000,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
             payload: serde_json::json!({}),
         };
 
@@ -247,6 +296,9 @@ mod tests {
                 completed_by: None,
                 created_at: 1000,
                 updated_at: 1000,
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
                 payload: serde_json::json!({}),
             },
             Job {
@@ -256,6 +308,9 @@ mod tests {
                 completed_by: None,
                 created_at: 1000,
                 updated_at: 1010,
+                started_at: Some(1005),
+                error_message: None,
+                retry_count: 0,
                 payload: serde_json::json!({}),
             },
             Job {
@@ -265,6 +320,9 @@ mod tests {
                 completed_by: Some("worker-1".to_string()),
                 created_at: 1000,
                 updated_at: 1020,
+                started_at: Some(1005),
+                error_message: None,
+                retry_count: 0,
                 payload: serde_json::json!({}),
             },
         ];

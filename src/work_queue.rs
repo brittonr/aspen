@@ -78,6 +78,9 @@ impl WorkQueue {
             completed_by: None,
             created_at: now,
             updated_at: now,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
             payload: payload.clone(),
         };
 
@@ -190,6 +193,12 @@ impl WorkQueue {
         self.cache.update(job_id, |job| {
             job.status = status;
             job.updated_at = now;
+
+            // Set started_at timestamp when transitioning to InProgress
+            if status == JobStatus::InProgress && job.started_at.is_none() {
+                job.started_at = Some(now);
+            }
+
             if let Some(completed_by_node) = completed_by {
                 job.completed_by = Some(completed_by_node.to_string());
             }
