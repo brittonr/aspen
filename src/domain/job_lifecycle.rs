@@ -208,7 +208,7 @@ mod tests {
         service.claim_work().await.unwrap();
 
         // Act
-        let result = service.update_work_status(&job_id, JobStatus::InProgress).await;
+        let result = service.update_work_status(&job_id, JobStatus::InProgress, None).await;
 
         // Assert
         assert!(result.is_ok());

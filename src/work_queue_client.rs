@@ -84,14 +84,15 @@ impl WorkQueueClient {
     }
 
     /// Update the status of a work item
-    pub async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
+    pub async fn update_status(&self, job_id: &str, status: JobStatus, error_message: Option<String>) -> Result<()> {
         #[derive(Serialize)]
         struct StatusUpdate {
             status: JobStatus,
+            error_message: Option<String>,
         }
 
         let path = format!("/queue/status/{}", job_id);
-        let response = self.post(&path, &StatusUpdate { status }).await?;
+        let response = self.post(&path, &StatusUpdate { status, error_message }).await?;
 
         if response.status != 200 {
             return Err(anyhow!(

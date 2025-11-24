@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
                 );
 
                 // Mark as in-progress
-                if let Err(e) = client.update_status(&job.id, JobStatus::InProgress).await {
+                if let Err(e) = client.update_status(&job.id, JobStatus::InProgress, None).await {
                     tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as in-progress");
                 }
 
@@ -57,27 +57,29 @@ async fn main() -> Result<()> {
                 match worker.execute(job.clone()).await {
                     Ok(result) if result.success => {
                         tracing::info!(job_id = %job.id, "Job completed successfully");
-                        if let Err(e) = client.update_status(&job.id, JobStatus::Completed).await {
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Completed, None).await {
                             tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as completed");
                         }
                     }
                     Ok(result) => {
+                        let error_msg = result.error.clone().unwrap_or_else(|| "Job failed".to_string());
                         tracing::error!(
                             job_id = %job.id,
-                            error = ?result.error,
+                            error = %error_msg,
                             "Job failed"
                         );
-                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed).await {
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed, Some(error_msg)).await {
                             tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as failed");
                         }
                     }
                     Err(e) => {
+                        let error_msg = e.to_string();
                         tracing::error!(
                             job_id = %job.id,
-                            error = %e,
+                            error = %error_msg,
                             "Job execution error"
                         );
-                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed).await {
+                        if let Err(e) = client.update_status(&job.id, JobStatus::Failed, Some(error_msg)).await {
                             tracing::error!(job_id = %job.id, error = %e, "Failed to mark job as failed");
                         }
                     }

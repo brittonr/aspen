@@ -386,7 +386,7 @@ mod tests {
 
         // Act - Follow valid state transitions: Pending → Claimed → InProgress
         service.claim_job().await.unwrap(); // Claim first
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
 
         // Assert
         let jobs = mock_repo.list_work().await.unwrap();
@@ -424,7 +424,7 @@ mod tests {
         }).await.unwrap();
 
         // Simulate failure
-        service.update_job_status(&job_id, JobStatus::Failed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Failed, None).await.unwrap();
 
         // Act
         service.retry_job(&job_id).await.unwrap();
@@ -507,12 +507,12 @@ mod tests {
 
         // Follow valid transitions: Pending → Claimed → InProgress → Completed
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
 
         event_publisher.clear().await;
 
         // Act
-        service.update_job_status(&job_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Completed, None).await.unwrap();
 
         // Assert
         let events = event_publisher.get_events().await;
@@ -540,7 +540,7 @@ mod tests {
         event_publisher.clear().await;
 
         // Act
-        service.update_job_status(&job_id, JobStatus::Failed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Failed, None).await.unwrap();
 
         // Assert
         let events = event_publisher.get_events().await;
@@ -572,7 +572,7 @@ mod tests {
         event_publisher.clear().await;
 
         // Act
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
 
         // Assert
         let events = event_publisher.get_events().await;
@@ -628,7 +628,7 @@ mod tests {
             url: "https://example.com".to_string(),
         }).await.unwrap();
 
-        service.update_job_status(&job_id, JobStatus::Failed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Failed, None).await.unwrap();
 
         event_publisher.clear().await;
 
@@ -660,8 +660,8 @@ mod tests {
         }).await.unwrap();
 
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
-        service.update_job_status(&job_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Completed, None).await.unwrap();
 
         // Assert
         let events = event_publisher.get_events().await;
@@ -692,8 +692,8 @@ mod tests {
 
         // Follow valid transitions for job1: Pending → Claimed → InProgress → Completed
         service.claim_job().await.unwrap(); // Claims job1
-        service.update_job_status(&job1_id, JobStatus::InProgress).await.unwrap();
-        service.update_job_status(&job1_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job1_id, JobStatus::InProgress, None).await.unwrap();
+        service.update_job_status(&job1_id, JobStatus::Completed, None).await.unwrap();
 
         // Assert
         let job1_events = event_publisher.get_events_for_job(&job1_id).await;
@@ -718,7 +718,7 @@ mod tests {
         }).await.unwrap();
 
         // Act - Try to skip Claimed state
-        let result = service.update_job_status(&job_id, JobStatus::InProgress).await;
+        let result = service.update_job_status(&job_id, JobStatus::InProgress, None).await;
 
         // Assert
         assert!(result.is_err());
@@ -737,7 +737,7 @@ mod tests {
         }).await.unwrap();
 
         // Act - Try to skip directly to Completed
-        let result = service.update_job_status(&job_id, JobStatus::Completed).await;
+        let result = service.update_job_status(&job_id, JobStatus::Completed, None).await;
 
         // Assert
         assert!(result.is_err());
@@ -758,7 +758,7 @@ mod tests {
         service.claim_job().await.unwrap();
 
         // Act - Try to go backward
-        let result = service.update_job_status(&job_id, JobStatus::Pending).await;
+        let result = service.update_job_status(&job_id, JobStatus::Pending, None).await;
 
         // Assert
         assert!(result.is_err());
@@ -777,10 +777,10 @@ mod tests {
         }).await.unwrap();
 
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
 
         // Act - Try to go backward
-        let result = service.update_job_status(&job_id, JobStatus::Claimed).await;
+        let result = service.update_job_status(&job_id, JobStatus::Claimed, None).await;
 
         // Assert
         assert!(result.is_err());
@@ -799,11 +799,11 @@ mod tests {
         }).await.unwrap();
 
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
-        service.update_job_status(&job_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Completed, None).await.unwrap();
 
         // Act - Try to change completed job
-        let result = service.update_job_status(&job_id, JobStatus::Pending).await;
+        let result = service.update_job_status(&job_id, JobStatus::Pending, None).await;
 
         // Assert
         assert!(result.is_err());
@@ -822,8 +822,8 @@ mod tests {
         }).await.unwrap();
 
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
-        service.update_job_status(&job_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Completed, None).await.unwrap();
 
         // Act - Try to cancel completed job
         let result = service.cancel_job(&job_id).await;
@@ -846,8 +846,8 @@ mod tests {
 
         // Move to Completed (terminal state)
         service.claim_job().await.unwrap();
-        service.update_job_status(&job_id, JobStatus::InProgress).await.unwrap();
-        service.update_job_status(&job_id, JobStatus::Completed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::InProgress, None).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Completed, None).await.unwrap();
 
         // Act - Try to retry a completed job
         let result = service.retry_job(&job_id).await;
@@ -869,7 +869,7 @@ mod tests {
         }).await.unwrap();
 
         // Act - Update to same status (idempotent)
-        let result = service.update_job_status(&job_id, JobStatus::Pending).await;
+        let result = service.update_job_status(&job_id, JobStatus::Pending, None).await;
 
         // Assert - Should be allowed
         assert!(result.is_ok());
@@ -885,7 +885,7 @@ mod tests {
             url: "https://example.com".to_string(),
         }).await.unwrap();
 
-        service.update_job_status(&job_id, JobStatus::Failed).await.unwrap();
+        service.update_job_status(&job_id, JobStatus::Failed, None).await.unwrap();
 
         // Act - Retry failed job (valid transition)
         let result = service.retry_job(&job_id).await;
@@ -908,21 +908,21 @@ mod tests {
         let job1_id = service.submit_job(JobSubmission {
             url: "https://example.com".to_string(),
         }).await.unwrap();
-        assert!(service.update_job_status(&job1_id, JobStatus::Failed).await.is_ok());
+        assert!(service.update_job_status(&job1_id, JobStatus::Failed, None).await.is_ok());
 
         // From Claimed
         let job2_id = service.submit_job(JobSubmission {
             url: "https://example.org".to_string(),
         }).await.unwrap();
         service.claim_job().await.unwrap();
-        assert!(service.update_job_status(&job2_id, JobStatus::Failed).await.is_ok());
+        assert!(service.update_job_status(&job2_id, JobStatus::Failed, None).await.is_ok());
 
         // From InProgress
         let job3_id = service.submit_job(JobSubmission {
             url: "https://example.net".to_string(),
         }).await.unwrap();
         service.claim_job().await.unwrap();
-        service.update_job_status(&job3_id, JobStatus::InProgress).await.unwrap();
-        assert!(service.update_job_status(&job3_id, JobStatus::Failed).await.is_ok());
+        service.update_job_status(&job3_id, JobStatus::InProgress, None).await.unwrap();
+        assert!(service.update_job_status(&job3_id, JobStatus::Failed, None).await.is_ok());
     }
 }

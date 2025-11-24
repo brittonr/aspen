@@ -267,6 +267,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({"url": "https://example.com"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -276,6 +279,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({"url": "https://example.org"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -301,6 +307,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000, // Older
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -310,6 +319,9 @@ mod tests {
                 created_at: 2000,
                 updated_at: 2000, // Newer
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -340,6 +352,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -349,6 +364,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -358,6 +376,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -385,6 +406,9 @@ mod tests {
             created_at: 1000,
             updated_at: 1000,
             payload: serde_json::json!({}),
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
         }]).await;
 
         let service = JobQueryService::new(mock_repo);
@@ -423,6 +447,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -432,6 +459,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -441,6 +471,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -469,6 +502,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -478,6 +514,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -487,6 +526,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -521,6 +563,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({"url": "https://example.com"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -530,6 +575,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -556,6 +604,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -579,6 +630,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -588,6 +642,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -597,6 +654,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1200,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-4".to_string(),
@@ -606,6 +666,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1300,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -640,6 +703,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -663,6 +729,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({"url": "https://example.com"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "other-job".to_string(),
@@ -672,6 +741,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -698,6 +770,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -707,6 +782,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -716,6 +794,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -743,6 +824,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -752,6 +836,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -761,6 +848,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1200,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -791,6 +881,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -814,6 +907,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,  // Oldest
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -823,6 +919,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -832,6 +931,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1200,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-4".to_string(),
@@ -841,6 +943,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1300,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-5".to_string(),
@@ -850,6 +955,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1400,  // Newest
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -888,6 +996,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -911,6 +1022,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -920,6 +1034,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -929,6 +1046,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1200,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-4".to_string(),
@@ -938,6 +1058,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1300,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -981,6 +1104,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -1014,6 +1140,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -1023,6 +1152,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -1049,6 +1181,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -1058,6 +1193,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -1067,6 +1205,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1200,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -1098,6 +1239,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -1107,6 +1251,9 @@ mod repository_filtering_tests {
                 created_at: 1000,
                 updated_at: 1100,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 

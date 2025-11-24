@@ -188,6 +188,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({"url": "https://example.com"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -197,6 +200,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({"url": "https://example.org"}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -234,6 +240,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -243,6 +252,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1015,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -275,6 +287,9 @@ mod tests {
                 created_at: now - 100,
                 updated_at: now - 10, // Recent activity
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -284,6 +299,9 @@ mod tests {
                 created_at: now - 200,
                 updated_at: now - 20,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -293,6 +311,9 @@ mod tests {
                 created_at: now - 150,
                 updated_at: now - 100, // Old activity
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -332,6 +353,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1100, // Older
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -341,6 +365,9 @@ mod tests {
                 created_at: 2000,
                 updated_at: 2500, // More recent
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ]).await;
 
@@ -423,6 +450,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1000,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -432,6 +462,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ];
 
@@ -455,6 +488,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1010,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-2".to_string(),
@@ -464,6 +500,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1015,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-3".to_string(),
@@ -473,6 +512,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1020,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
             Job {
                 id: "job-4".to_string(),
@@ -482,6 +524,9 @@ mod tests {
                 created_at: 1000,
                 updated_at: 1025,
                 payload: serde_json::json!({}),
+                started_at: None,
+                error_message: None,
+                retry_count: 0,
             },
         ];
 

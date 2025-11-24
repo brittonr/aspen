@@ -183,6 +183,9 @@ mod tests {
             created_at: 0,
             updated_at: 0,
             payload: json!({}),
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
         }
     }
 
