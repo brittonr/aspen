@@ -254,98 +254,100 @@
 
         # Service VM configuration - long-running, processes multiple jobs
         service-worker-vm = pkgs.writeShellScriptBin "service-worker-vm" ''
+          #!/usr/bin/env bash
           set -euo pipefail
 
           # Parse arguments
           VM_ID="''${1:-$(${pkgs.util-linux}/bin/uuidgen)}"
           CONTROL_SOCKET="''${2:-/tmp/vm-$VM_ID.sock}"
-          CONFIG_FILE="''${3:-}"
 
           echo "Starting service worker VM:"
           echo "  VM ID: $VM_ID"
           echo "  Control socket: $CONTROL_SOCKET"
-          echo "  Config: $CONFIG_FILE"
 
           # Create VM directories
-          VM_DIR="$HOME/mvm-ci-test/vms/$VM_ID"
           JOB_DIR="$HOME/mvm-ci-test/jobs/$VM_ID"
-          mkdir -p "$VM_DIR" "$JOB_DIR"
+          mkdir -p "$JOB_DIR"
 
-          # Create control socket handler script
-          cat > "$VM_DIR/control-handler.sh" << 'HANDLER_EOF'
-          #!/usr/bin/env bash
-          set -e
+          # Create simple handler script
+          cat > "$JOB_DIR/handler.sh" << 'EOF'
+#!/usr/bin/env bash
+while read -r line; do
+  echo "Received: $line" >&2
 
-          SOCKET="$1"
-          JOB_DIR="$2"
+  # Parse command type
+  CMD=$(echo "$line" | ${pkgs.jq}/bin/jq -r .type 2>/dev/null || echo "invalid")
 
-          # Create socket if it doesn't exist
-          rm -f "$SOCKET"
-          exec ${pkgs.socat}/bin/socat UNIX-LISTEN:"$SOCKET",fork EXEC:"/bin/bash -c '
-            read -r line
-            echo \"Received: $line\" >&2
+  case "$CMD" in
+    Ping)
+      echo '{"type":"Pong","uptime_secs":100,"jobs_completed":5}'
+      ;;
+    ExecuteJob)
+      JOB=$(echo "$line" | ${pkgs.jq}/bin/jq .job 2>/dev/null)
+      if [ -n "$JOB" ] && [ "$JOB" != "null" ]; then
+        echo "$JOB" > "JOB_DIR_PLACEHOLDER/next-job.json"
+        echo '{"type":"Ack"}'
+      else
+        echo '{"type":"Error","message":"Invalid job data"}'
+      fi
+      ;;
+    Shutdown)
+      echo '{"type":"Ack"}'
+      exit 0
+      ;;
+    *)
+      echo '{"type":"Error","message":"Unknown command"}'
+      ;;
+  esac
+done
+EOF
 
-            # Parse command
-            CMD=$(echo \"$line\" | ${pkgs.jq}/bin/jq -r .type 2>/dev/null || echo \"invalid\")
+          # Replace placeholder with actual job directory
+          sed -i "s|JOB_DIR_PLACEHOLDER|$JOB_DIR|g" "$JOB_DIR/handler.sh"
+          chmod +x "$JOB_DIR/handler.sh"
 
-            case \"$CMD\" in
-              Ping)
-                echo \"{\\\"type\\\":\\\"Pong\\\",\\\"uptime_secs\\\":100,\\\"jobs_completed\\\":5}\"
-                ;;
-              ExecuteJob)
-                JOB=$(echo \"$line\" | ${pkgs.jq}/bin/jq .job)
-                echo \"$JOB\" > \"$JOB_DIR/next-job.json\"
-                echo \"{\\\"type\\\":\\\"Ack\\\"}\"
-                ;;
-              Shutdown)
-                echo \"{\\\"type\\\":\\\"Ack\\\"}\"
-                sleep 1
-                pkill -f socat
-                ;;
-              *)
-                echo \"{\\\"type\\\":\\\"Error\\\",\\\"message\\\":\\\"Unknown command\\\"}\"
-                ;;
-            esac
-          '"
-          HANDLER_EOF
+          # Create job processor
+          cat > "$JOB_DIR/processor.sh" << 'EOF'
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+while true; do
+  if [ -f "next-job.json" ]; then
+    echo "[Processor] Processing job..."
+    mv next-job.json current-job.json
 
-          chmod +x "$VM_DIR/control-handler.sh"
-
-          # Start control socket handler
-          "$VM_DIR/control-handler.sh" "$CONTROL_SOCKET" "$JOB_DIR" &
-          HANDLER_PID=$!
-
-          echo "Control socket handler started (PID: $HANDLER_PID)"
-
-          # Create job processor script
-          cat > "$JOB_DIR/processor.sh" << 'PROCESSOR_EOF'
-          #!/usr/bin/env bash
-          while true; do
-            if [ -f "next-job.json" ]; then
-              echo "Processing job..."
-              mv next-job.json current-job.json
-              # Simulate job processing with mock worker
-              ${mvm-ci-worker}/bin/worker
-              rm -f current-job.json
-              echo "Job completed"
-            fi
-            sleep 1
-          done
-          PROCESSOR_EOF
-
+    if [ -f "current-job.json" ]; then
+      echo "[Processor] Job content:"
+      cat current-job.json
+      echo "[Processor] Executing job..."
+      sleep 2
+      echo "[Processor] Job completed successfully"
+      rm -f current-job.json
+    fi
+  fi
+  sleep 1
+done
+EOF
           chmod +x "$JOB_DIR/processor.sh"
 
-          # Run job processor
-          cd "$JOB_DIR"
+          # Start job processor in background
           "$JOB_DIR/processor.sh" &
           PROCESSOR_PID=$!
+          echo "Job processor started (PID: $PROCESSOR_PID)"
+
+          # Start control socket handler
+          rm -f "$CONTROL_SOCKET"
+          echo "Starting control socket handler..."
+          ${pkgs.socat}/bin/socat UNIX-LISTEN:"$CONTROL_SOCKET",fork EXEC:"$JOB_DIR/handler.sh" &
+          HANDLER_PID=$!
 
           echo "Service VM ready"
           echo "  Control handler PID: $HANDLER_PID"
           echo "  Job processor PID: $PROCESSOR_PID"
+          echo ""
+          echo "Send commands with: echo '{\"type\":\"Ping\"}' | socat - UNIX-CONNECT:$CONTROL_SOCKET"
 
-          # Wait for shutdown signal
-          trap "kill $HANDLER_PID $PROCESSOR_PID 2>/dev/null; exit" INT TERM
+          # Wait for handler to exit
+          trap "kill $PROCESSOR_PID $HANDLER_PID 2>/dev/null; exit" INT TERM
           wait $HANDLER_PID
         '';
 
@@ -457,9 +459,6 @@
         vm-image = self.nixosConfigurations.worker-vm.config.microvm.runner.microvmConfig;
 
         default = run-worker-vm;
-
-        # Export service VM runner
-        inherit service-worker-vm;
       };
 
       # Development shell
