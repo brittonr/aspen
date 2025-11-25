@@ -48,7 +48,6 @@ urlencoding = "2.1"
 num_cpus = "1.16"
 hostname = "0.4"
 dashmap = "6.1.0"
-rusqlite = "0.37.0"
 nix = { version = "0.30.1", features = ["process", "signal"] }
 libc = "0.2.177"
 regex = "1.12.2"

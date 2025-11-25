@@ -124,9 +124,9 @@ impl FlawlessConfig {
     }
 }
 
-/// Firecracker MicroVM configuration
+/// Virtual Machine configuration (Cloud Hypervisor)
 #[derive(Debug, Clone)]
-pub struct FirecrackerConfig {
+pub struct VmConfig {
     /// Path to microvm flake directory
     pub flake_dir: std::path::PathBuf,
     /// Path to store VM state and logs
@@ -139,8 +139,8 @@ pub struct FirecrackerConfig {
     pub max_concurrent_vms: usize,
 }
 
-impl FirecrackerConfig {
-    /// Load Firecracker configuration from environment variables
+impl VmConfig {
+    /// Load VM configuration from environment variables
     pub fn load() -> Result<Self, ConfigError> {
         let flake_dir = std::env::var("FIRECRACKER_FLAKE_DIR")
             .unwrap_or_else(|_| "./microvms".to_string())
@@ -253,7 +253,7 @@ pub struct AppConfig {
     pub network: NetworkConfig,
     pub storage: StorageConfig,
     pub flawless: FlawlessConfig,
-    pub firecracker: FirecrackerConfig,
+    pub vm: VmConfig,
     pub timing: TimingConfig,
 }
 
@@ -267,7 +267,7 @@ impl AppConfig {
             network: NetworkConfig::load()?,
             storage: StorageConfig::load()?,
             flawless: FlawlessConfig::load()?,
-            firecracker: FirecrackerConfig::load()?,
+            vm: VmConfig::load()?,
             timing: TimingConfig::load()?,
         })
     }
@@ -278,7 +278,7 @@ impl AppConfig {
             network: NetworkConfig::default(),
             storage: StorageConfig::default(),
             flawless: FlawlessConfig::default(),
-            firecracker: FirecrackerConfig::default(),
+            vm: VmConfig::default(),
             timing: TimingConfig::default(),
         }
     }

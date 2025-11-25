@@ -64,7 +64,7 @@
                   proto = "virtiofs";  # Use virtiofs instead of 9p for better performance
                 }
                 {
-                  source = "/home/brittonr/mvm-ci-test/jobs";
+                  source = "/home/brittonr/git/blixard/mvm-ci-state/jobs";
                   mountPoint = "/mnt/jobs";
                   tag = "jobs";
                   proto = "virtiofs";
@@ -253,7 +253,7 @@
                 # Job data directory for passing jobs to VMs
                 {
                   # Use home directory for testing (change to /var/lib/mvm-ci/jobs for production)
-                  source = "/home/brittonr/mvm-ci-test/jobs";
+                  source = "/home/brittonr/git/blixard/mvm-ci-state/jobs";
                   mountPoint = "/mnt/jobs";
                   tag = "jobs";
                   proto = "virtiofs";

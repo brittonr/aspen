@@ -2835,7 +2835,6 @@ dependencies = [
  "nix",
  "num_cpus",
  "regex",
- "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

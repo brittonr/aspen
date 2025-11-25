@@ -59,7 +59,7 @@ impl Default for VmManagerConfig {
             auto_scaling: true,
             pre_warm_count: 2,
             flake_dir: std::path::PathBuf::from("./microvms"),
-            state_dir: std::path::PathBuf::from("/var/lib/mvm-ci"),
+            state_dir: std::path::PathBuf::from("./mvm-ci-state"),
             default_memory_mb: 512,
             default_vcpus: 1,
         }

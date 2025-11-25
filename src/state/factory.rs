@@ -151,13 +151,13 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
     ) -> Result<Arc<VmManager>> {
         // Configure VM manager from app config
         let vm_config = VmManagerConfig {
-            max_vms: config.firecracker.max_concurrent_vms,
+            max_vms: config.vm.max_concurrent_vms,
             auto_scaling: true,
             pre_warm_count: 2,
-            flake_dir: config.firecracker.flake_dir.clone(),
+            flake_dir: config.vm.flake_dir.clone(),
             state_dir: config.storage.vm_state_dir.clone(),
-            default_memory_mb: config.firecracker.default_memory_mb,
-            default_vcpus: config.firecracker.default_vcpus,
+            default_memory_mb: config.vm.default_memory_mb,
+            default_vcpus: config.vm.default_vcpus,
         };
 
         let vm_manager = VmManager::new(vm_config, hiqlite).await?;

@@ -20,3 +20,9 @@ hiqlite.toml
 !hiqlite.toml.template
 microvms/result
 microvms/result-service
+microvms/result-service-*
+microvms/mvm-ci-state/
+microvms/*.pid
+microvms/*.log
+microvms/*.sock
+microvms/flake.nix.old-backup

@@ -7,8 +7,6 @@ pub mod config;
 pub mod work_queue_client;
 pub mod worker_trait;
 pub mod worker_flawless;
-pub mod worker_firecracker;
-pub mod worker_firecracker_v2;
 pub mod worker_microvm;
 
 // Re-export domain types (WorkQueue now uses these internally)

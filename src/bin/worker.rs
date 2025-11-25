@@ -5,7 +5,7 @@
 // Cache bust: 1732360124
 
 use anyhow::{anyhow, Result};
-use mvm_ci::{AppConfig, WorkQueueClient, JobStatus, WorkerBackend, worker_flawless::FlawlessWorker, worker_firecracker::{FirecrackerWorker, FirecrackerConfig as FirecrackerWorkerConfig}, WorkerRegistration, WorkerType, WorkerHeartbeat};
+use mvm_ci::{AppConfig, WorkQueueClient, JobStatus, WorkerBackend, worker_flawless::FlawlessWorker, worker_microvm::{MicroVmWorker, MicroVmWorkerConfig}, WorkerRegistration, WorkerType, WorkerHeartbeat};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::time::Duration;
@@ -51,16 +51,18 @@ async fn main() -> Result<()> {
             Box::new(worker)
         }
         WorkerType::Firecracker => {
-            tracing::info!("Initializing Firecracker MicroVM worker backend");
-            let firecracker_config = FirecrackerWorkerConfig {
-                flake_dir: config.firecracker.flake_dir.clone(),
-                state_dir: config.firecracker.state_dir.clone(),
-                default_memory_mb: config.firecracker.default_memory_mb,
-                default_vcpus: config.firecracker.default_vcpus,
-                control_plane_ticket: control_plane_ticket.clone(),
-                max_concurrent_vms: config.firecracker.max_concurrent_vms,
+            tracing::info!("Initializing MicroVM worker backend");
+            let microvm_config = MicroVmWorkerConfig {
+                flake_dir: config.vm.flake_dir.clone(),
+                state_dir: config.vm.state_dir.clone(),
+                max_vms: config.vm.max_concurrent_vms,
+                ephemeral_memory_mb: config.vm.default_memory_mb,
+                service_memory_mb: config.vm.default_memory_mb,
+                default_vcpus: config.vm.default_vcpus,
+                enable_service_vms: false,
+                service_vm_queues: vec![],
             };
-            let worker = FirecrackerWorker::new(firecracker_config)?;
+            let worker = MicroVmWorker::new(microvm_config).await?;
             Box::new(worker)
         }
     };

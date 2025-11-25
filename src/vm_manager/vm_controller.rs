@@ -117,8 +117,8 @@ impl VmController {
         cmd.env("VM_VCPUS", vm.config.vcpus.to_string());
         cmd.env("JOB_DIR", job_dir.to_str().unwrap());
 
-        // Set working directory to VM directory
-        cmd.current_dir(&vm_dir);
+        // Set working directory to flake directory (where virtiofs sockets are created)
+        cmd.current_dir(&self.config.flake_dir);
 
         // Redirect stdout/stderr to files for debugging
         let stdout_file = tokio::fs::File::create(vm_dir.join("stdout.log")).await?;
@@ -176,6 +176,7 @@ impl VmController {
 
         // Build the microvm runner path for service VMs
         let runner_path = self.config.flake_dir.join("result-service/bin/microvm-run");
+        let virtiofsd_path = self.config.flake_dir.join("result-service/bin/virtiofsd-run");
 
         // If result symlink doesn't exist, build it first
         if !runner_path.exists() {
@@ -199,6 +200,47 @@ impl VmController {
             }
         }
 
+        // Start virtiofsd daemons first (required for Cloud Hypervisor)
+        tracing::info!(vm_id = %vm_id, "Starting virtiofsd for VM");
+
+        // Clean up any existing sockets (they'll be created in the flake directory)
+        let store_sock = self.config.flake_dir.join("service-vm-virtiofs-store.sock");
+        let jobs_sock = self.config.flake_dir.join("service-vm-virtiofs-jobs.sock");
+        let _ = tokio::fs::remove_file(&store_sock).await;
+        let _ = tokio::fs::remove_file(&jobs_sock).await;
+
+        // Start virtiofsd-run in the project/flake directory (where relative paths resolve correctly)
+        let mut virtiofsd_cmd = Command::new(&virtiofsd_path);
+        virtiofsd_cmd.current_dir(&self.config.flake_dir);
+
+        // Redirect virtiofsd output to log files
+        let virtiofsd_stdout = tokio::fs::File::create(vm_dir.join("virtiofsd.stdout.log")).await?;
+        let virtiofsd_stderr = tokio::fs::File::create(vm_dir.join("virtiofsd.stderr.log")).await?;
+        virtiofsd_cmd.stdout(virtiofsd_stdout.into_std().await);
+        virtiofsd_cmd.stderr(virtiofsd_stderr.into_std().await);
+
+        let virtiofsd_child = virtiofsd_cmd.spawn()?;
+        let virtiofsd_pid = virtiofsd_child.id().expect("Failed to get virtiofsd PID");
+
+        tracing::info!(vm_id = %vm_id, pid = virtiofsd_pid, "Started virtiofsd daemon");
+
+        // Wait for virtiofs sockets to be created
+        let mut retries = 0;
+        loop {
+            if store_sock.exists() && jobs_sock.exists() {
+                tracing::info!(vm_id = %vm_id, "virtiofs sockets ready");
+                break;
+            }
+            if retries >= 30 {
+                return Err(anyhow!("virtiofs sockets not created after 15 seconds"));
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            retries += 1;
+        }
+
+        // Store virtiofsd PID for cleanup later (you may want to add this to VmInstance struct)
+        // vm.virtiofsd_pid = Some(virtiofsd_pid);
+
         // Run the VM directly using cloud-hypervisor via microvm-run
         let mut cmd = Command::new(&runner_path);
 
@@ -210,8 +252,8 @@ impl VmController {
         cmd.env("CONTROL_SOCKET", control_socket.to_str().unwrap());
         cmd.env("JOB_DIR", job_dir.to_str().unwrap());
 
-        // Set working directory to VM directory
-        cmd.current_dir(&vm_dir);
+        // Set working directory to flake directory (where virtiofs sockets are created)
+        cmd.current_dir(&self.config.flake_dir);
 
         // Redirect stdout/stderr to files for debugging
         let stdout_file = tokio::fs::File::create(vm_dir.join("stdout.log")).await?;

@@ -46,7 +46,13 @@
       "Bash(docker run:*)",
       "Bash(docker compose:*)",
       "Bash(mvm-ci-cluster:latest /bin/worker)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(readlink:*)",
+      "Bash(journalctl:*)",
+      "Bash(ip link:*)",
+      "Bash(systemctl:*)",
+      "Bash(ldd:*)",
+      "Bash(strace:*)"
     ],
     "deny": [],
     "ask": []
