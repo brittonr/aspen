@@ -80,7 +80,7 @@ impl VmController {
         vm.job_dir = Some(job_dir.clone());
 
         // Get job data (would normally fetch from queue)
-        let job_file = job_dir.join("job.json");
+        let _job_file = job_dir.join("job.json");
 
         // Build the microvm runner path
         let runner_path = self.config.flake_dir.join("result/bin/microvm-run");

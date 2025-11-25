@@ -253,20 +253,11 @@ async fn test_orphaned_job_recovery_when_worker_dies() -> Result<()> {
     let worker_id = worker.register().await?;
     worker.start_heartbeat();
 
-    // TODO: Submit and claim a job
-    // let job_id = client.publish_work(...)?;
-    // let claimed_job = worker.claim_work().await?;
-
     // Simulate worker death (stop heartbeat and shutdown)
     worker.stop_heartbeat();
     worker.shutdown().await;
 
-    // Wait for heartbeat timeout + orphan detection
-    // tokio::time::sleep(Duration::from_secs(config.heartbeat_timeout_secs + 5)).await;
-
-    // TODO: Verify job is back in Pending status
-    // let job = client.get_job(&job_id).await?;
-    // assert_eq!(job.status, JobStatus::Pending);
+    // NOTE: Job submission and orphan recovery testing pending implementation
 
     control_plane.shutdown().await?;
 
@@ -286,15 +277,7 @@ async fn test_job_not_orphaned_if_heartbeat_continues() -> Result<()> {
     worker.register().await?;
     worker.start_heartbeat();
 
-    // TODO: Claim a job
-    // let claimed_job = worker.claim_work().await?;
-
-    // Keep heartbeat alive for longer than timeout
-    // tokio::time::sleep(Duration::from_secs(config.heartbeat_timeout_secs + 2)).await;
-
-    // TODO: Verify job is still Claimed/InProgress, not Pending
-    // let job = client.get_job(&job_id).await?;
-    // assert!(job.status == JobStatus::Claimed || job.status == JobStatus::InProgress);
+    // NOTE: Job claiming and heartbeat persistence testing pending implementation
 
     worker.stop_heartbeat();
     worker.shutdown().await;
@@ -321,23 +304,7 @@ async fn test_end_to_end_job_execution() -> Result<()> {
     worker.register().await?;
     worker.start_heartbeat();
 
-    // TODO: Submit a job
-    // let job_id = client.publish_work("https://example.com")?;
-
-    // Worker claims the job
-    // let claimed_job = worker.claim_work().await?;
-    // assert!(claimed_job.is_some());
-    // let job = claimed_job.unwrap();
-
-    // Worker processes job (simulated)
-    // tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Worker marks job as completed
-    // worker.complete_job(&job.id).await?;
-
-    // Verify job is marked as Completed
-    // let final_job = client.get_job(&job.id).await?;
-    // assert_eq!(final_job.status, JobStatus::Completed);
+    // NOTE: End-to-end job execution testing pending implementation
 
     worker.stop_heartbeat();
     worker.shutdown().await;
@@ -359,18 +326,7 @@ async fn test_job_failure_with_error_message() -> Result<()> {
     worker.register().await?;
     worker.start_heartbeat();
 
-    // TODO: Submit and claim job
-    // let job = worker.claim_work().await?.unwrap();
-
-    // Worker encounters error
-    // let error_msg = "Test error: network timeout";
-    // worker.fail_job(&job.id, error_msg).await?;
-
-    // Verify job is marked as Failed with error message
-    // let failed_job = client.get_job(&job.id).await?;
-    // assert_eq!(failed_job.status, JobStatus::Failed);
-    // assert!(failed_job.error_message.is_some());
-    // assert_eq!(failed_job.error_message.unwrap(), error_msg);
+    // NOTE: Job failure and error handling testing pending implementation
 
     worker.stop_heartbeat();
     worker.shutdown().await;

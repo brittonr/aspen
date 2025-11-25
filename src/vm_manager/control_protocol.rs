@@ -137,7 +137,7 @@ impl ControlProtocol {
                     jobs_completed: metrics.jobs_completed,
                 }
             }
-            VmControlMessage::ExecuteJob { job } => {
+            VmControlMessage::ExecuteJob { job: _ } => {
                 // In a real implementation, this would queue the job
                 tracing::info!(vm_id = %vm_id, "Executing job");
 
@@ -399,7 +399,7 @@ mod tests {
         let socket_path = tmp_dir.path().join("test.sock");
         let vm_id = Uuid::new_v4();
 
-        let protocol = ControlProtocol::new(vm_id, socket_path.clone());
+        let _protocol = ControlProtocol::new(vm_id, socket_path.clone());
 
         // Start server in background
         let server_protocol = ControlProtocol::new(vm_id, socket_path.clone());

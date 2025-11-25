@@ -225,13 +225,13 @@ async fn main() -> Result<()> {
     println!("TEST 1: Starting Multiple VMs");
     println!("─────────────────────────────\n");
 
-    let vm1 = manager.start_vm("worker-1".to_string()).await?;
+    let _vm1 = manager.start_vm("worker-1".to_string()).await?;
     sleep(Duration::from_secs(1)).await;
 
     let vm2 = manager.start_vm("worker-2".to_string()).await?;
     sleep(Duration::from_secs(1)).await;
 
-    let vm3 = manager.start_vm("worker-3".to_string()).await?;
+    let _vm3 = manager.start_vm("worker-3".to_string()).await?;
     println!();
 
     // Test 2: List running VMs
@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
     println!("TEST 6: Start After Stop");
     println!("───────────────────────\n");
 
-    let vm4 = manager.start_vm("worker-4".to_string()).await?;
+    let _vm4 = manager.start_vm("worker-4".to_string()).await?;
     println!("  ✓ Successfully started VM after freeing slot");
     println!();
 
