@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::Semaphore;
 
 use crate::worker_trait::{WorkerBackend, WorkResult};
 use crate::Job;
@@ -54,6 +56,8 @@ impl Default for FirecrackerConfig {
 /// and destroyed after job completion.
 pub struct FirecrackerWorker {
     config: FirecrackerConfig,
+    /// Semaphore to limit concurrent VMs
+    vm_semaphore: Arc<Semaphore>,
 }
 
 impl FirecrackerWorker {
@@ -77,13 +81,20 @@ impl FirecrackerWorker {
         // Create state directory if it doesn't exist
         std::fs::create_dir_all(&config.state_dir)?;
 
+        // Create semaphore to limit concurrent VMs
+        let vm_semaphore = Arc::new(Semaphore::new(config.max_concurrent_vms));
+
         tracing::info!(
             flake_dir = ?config.flake_dir,
             state_dir = ?config.state_dir,
+            max_concurrent_vms = config.max_concurrent_vms,
             "Firecracker worker initialized"
         );
 
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            vm_semaphore,
+        })
     }
 
     /// Build a VM configuration for a specific job
@@ -104,15 +115,24 @@ impl FirecrackerWorker {
         let memory_mb = self.config.default_memory_mb;
         let vcpus = self.config.default_vcpus;
 
-        // Write job payload to a file that will be mounted in the VM
-        let payload_path = vm_dir.join("job-payload.json");
-        let payload_json = serde_json::to_string_pretty(&job.payload)?;
-        std::fs::write(&payload_path, payload_json)?;
+        // For MVP, pass job payload via environment variable
+        // For larger payloads in production, use network fetch or block device
+        let payload_json = serde_json::to_string(&job.payload)?;
+
+        // Note: Environment variables have size limits (~128KB on Linux)
+        // For MVP this is sufficient for small job definitions
+        if payload_json.len() > 100_000 {
+            tracing::warn!(
+                job_id = %job.id,
+                size = payload_json.len(),
+                "Large payload - may exceed environment variable limits"
+            );
+        }
 
         tracing::debug!(
             job_id = %job.id,
-            payload_path = ?payload_path,
-            "Job payload written"
+            payload_size = payload_json.len(),
+            "Job payload prepared for VM"
         );
 
         // Build the VM using Nix
@@ -122,13 +142,13 @@ impl FirecrackerWorker {
                 "build",
                 "--no-link",
                 "--print-out-paths",
-                &format!("{}#worker-vm", self.config.flake_dir.display()),
+                &format!("{}#worker-vm-wrapped", self.config.flake_dir.display()),
             ])
             .env("VM_ID", &vm_id)
             .env("MEMORY_MB", memory_mb.to_string())
             .env("VCPUS", vcpus.to_string())
             .env("CONTROL_PLANE_TICKET", &self.config.control_plane_ticket)
-            .env("JOB_PAYLOAD_PATH", payload_path.display().to_string())
+            .env("JOB_PAYLOAD", &payload_json)
             .output()
             .await?;
 
@@ -191,14 +211,34 @@ impl FirecrackerWorker {
     async fn wait_for_completion(&self, mut vm_process: VmProcess, vm: &VmInstance) -> Result<WorkResult> {
         tracing::info!(vm_id = %vm.vm_id, "Waiting for VM to complete job");
 
-        // Tail the log file to monitor progress
-        let log_file = tokio::fs::File::open(&vm_process.log_path).await?;
+        // Wait for log file to be created (VM might take a moment to start)
+        let log_file = {
+            let mut retries = 0;
+            loop {
+                match tokio::fs::File::open(&vm_process.log_path).await {
+                    Ok(file) => break file,
+                    Err(_e) if retries < 10 => {
+                        tracing::debug!(vm_id = %vm.vm_id, attempt = retries + 1, "Waiting for log file to be created");
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        retries += 1;
+                    }
+                    Err(e) => {
+                        tracing::warn!(vm_id = %vm.vm_id, error = %e, "Failed to open log file after retries");
+                        return Err(e.into());
+                    }
+                }
+            }
+        };
+
         let reader = BufReader::new(log_file);
         let mut lines = reader.lines();
 
         // Wait for completion marker or process exit
         let timeout = tokio::time::Duration::from_secs(300); // 5 minutes
         let result = tokio::time::timeout(timeout, async {
+            let mut process_exited = false;
+            let mut exit_status: Option<std::process::ExitStatus> = None;
+
             loop {
                 tokio::select! {
                     line = lines.next_line() => {
@@ -211,43 +251,44 @@ impl FirecrackerWorker {
                                     return Ok(WorkResult::success());
                                 } else if line.contains("JOB_COMPLETED_FAILURE") {
                                     let error = line.split("ERROR:").nth(1)
+                                        .or_else(|| line.split(':').nth(1))
                                         .unwrap_or("Job failed")
                                         .trim();
                                     return Ok(WorkResult::failure(error));
                                 }
                             }
                             Ok(None) => {
-                                // Log file ended, wait for process
-                                break;
+                                // Log file ended
+                                if process_exited {
+                                    // Process already exited, return based on exit status
+                                    if let Some(status) = exit_status {
+                                        if status.success() {
+                                            return Ok(WorkResult::success());
+                                        } else {
+                                            return Ok(WorkResult::failure(format!(
+                                                "VM exited with status: {}",
+                                                status
+                                            )));
+                                        }
+                                    }
+                                }
+                                // Wait a bit and continue reading
+                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                             }
                             Err(e) => {
                                 tracing::warn!(vm_id = %vm.vm_id, error = %e, "Error reading log");
+                                // Continue trying to read
+                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                             }
                         }
                     }
-                    status = vm_process.child.wait() => {
-                        let exit_status = status?;
-                        if exit_status.success() {
-                            return Ok(WorkResult::success());
-                        } else {
-                            return Ok(WorkResult::failure(format!(
-                                "VM exited with status: {}",
-                                exit_status
-                            )));
-                        }
+                    status = vm_process.child.wait(), if !process_exited => {
+                        process_exited = true;
+                        exit_status = Some(status?);
+                        // Don't return immediately - let log reading catch completion markers
+                        tracing::info!(vm_id = %vm.vm_id, "VM process exited, checking for completion markers in log");
                     }
                 }
-            }
-
-            // Process exited, check exit code
-            let exit_status = vm_process.child.wait().await?;
-            if exit_status.success() {
-                Ok(WorkResult::success())
-            } else {
-                Ok(WorkResult::failure(format!(
-                    "VM exited with status: {}",
-                    exit_status
-                )))
             }
         })
         .await;
@@ -282,23 +323,46 @@ impl WorkerBackend for FirecrackerWorker {
     async fn execute(&self, job: Job) -> Result<WorkResult> {
         tracing::info!(job_id = %job.id, "Executing job in Firecracker VM");
 
-        // Build the VM
-        let vm = self.build_vm(&job).await?;
+        // Acquire permit from semaphore to limit concurrent VMs
+        let _permit = self.vm_semaphore.acquire().await.map_err(|e| {
+            anyhow!("Failed to acquire VM semaphore permit: {}", e)
+        })?;
 
-        // Start the VM
-        let vm_process = self.start_vm(&vm).await?;
+        tracing::debug!(
+            job_id = %job.id,
+            available_permits = self.vm_semaphore.available_permits(),
+            "Acquired VM permit"
+        );
 
-        // Wait for completion
-        let result = self.wait_for_completion(vm_process, &vm).await;
+        // Execute VM operations with the permit held
+        let result = async {
+            // Build the VM
+            let vm = self.build_vm(&job).await?;
 
-        // Cleanup (best effort)
-        if let Err(e) = self.cleanup_vm(&vm).await {
-            tracing::warn!(
-                vm_id = %vm.vm_id,
-                error = %e,
-                "Failed to cleanup VM"
-            );
-        }
+            // Start the VM
+            let vm_process = self.start_vm(&vm).await?;
+
+            // Wait for completion
+            let result = self.wait_for_completion(vm_process, &vm).await;
+
+            // Cleanup (best effort)
+            if let Err(e) = self.cleanup_vm(&vm).await {
+                tracing::warn!(
+                    vm_id = %vm.vm_id,
+                    error = %e,
+                    "Failed to cleanup VM"
+                );
+            }
+
+            result
+        }.await;
+
+        // Permit is automatically released when _permit goes out of scope
+        tracing::debug!(
+            job_id = %job.id,
+            available_permits = self.vm_semaphore.available_permits(),
+            "Released VM permit"
+        );
 
         result
     }

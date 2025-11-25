@@ -11,3 +11,10 @@
 *.wal
 *.hql
 lock
+
+# Security - Never commit these
+.env
+.env.*
+!.env.example
+hiqlite.toml
+!hiqlite.toml.template

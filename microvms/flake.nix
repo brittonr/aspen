@@ -252,6 +252,103 @@
         # The VM runner executable
         worker-vm = self.nixosConfigurations.worker-vm.config.microvm.declaredRunner;
 
+        # Service VM configuration - long-running, processes multiple jobs
+        service-worker-vm = pkgs.writeShellScriptBin "service-worker-vm" ''
+          set -euo pipefail
+
+          # Parse arguments
+          VM_ID="''${1:-$(${pkgs.util-linux}/bin/uuidgen)}"
+          CONTROL_SOCKET="''${2:-/tmp/vm-$VM_ID.sock}"
+          CONFIG_FILE="''${3:-}"
+
+          echo "Starting service worker VM:"
+          echo "  VM ID: $VM_ID"
+          echo "  Control socket: $CONTROL_SOCKET"
+          echo "  Config: $CONFIG_FILE"
+
+          # Create VM directories
+          VM_DIR="$HOME/mvm-ci-test/vms/$VM_ID"
+          JOB_DIR="$HOME/mvm-ci-test/jobs/$VM_ID"
+          mkdir -p "$VM_DIR" "$JOB_DIR"
+
+          # Create control socket handler script
+          cat > "$VM_DIR/control-handler.sh" << 'HANDLER_EOF'
+          #!/usr/bin/env bash
+          set -e
+
+          SOCKET="$1"
+          JOB_DIR="$2"
+
+          # Create socket if it doesn't exist
+          rm -f "$SOCKET"
+          exec ${pkgs.socat}/bin/socat UNIX-LISTEN:"$SOCKET",fork EXEC:"/bin/bash -c '
+            read -r line
+            echo \"Received: $line\" >&2
+
+            # Parse command
+            CMD=$(echo \"$line\" | ${pkgs.jq}/bin/jq -r .type 2>/dev/null || echo \"invalid\")
+
+            case \"$CMD\" in
+              Ping)
+                echo \"{\\\"type\\\":\\\"Pong\\\",\\\"uptime_secs\\\":100,\\\"jobs_completed\\\":5}\"
+                ;;
+              ExecuteJob)
+                JOB=$(echo \"$line\" | ${pkgs.jq}/bin/jq .job)
+                echo \"$JOB\" > \"$JOB_DIR/next-job.json\"
+                echo \"{\\\"type\\\":\\\"Ack\\\"}\"
+                ;;
+              Shutdown)
+                echo \"{\\\"type\\\":\\\"Ack\\\"}\"
+                sleep 1
+                pkill -f socat
+                ;;
+              *)
+                echo \"{\\\"type\\\":\\\"Error\\\",\\\"message\\\":\\\"Unknown command\\\"}\"
+                ;;
+            esac
+          '"
+          HANDLER_EOF
+
+          chmod +x "$VM_DIR/control-handler.sh"
+
+          # Start control socket handler
+          "$VM_DIR/control-handler.sh" "$CONTROL_SOCKET" "$JOB_DIR" &
+          HANDLER_PID=$!
+
+          echo "Control socket handler started (PID: $HANDLER_PID)"
+
+          # Create job processor script
+          cat > "$JOB_DIR/processor.sh" << 'PROCESSOR_EOF'
+          #!/usr/bin/env bash
+          while true; do
+            if [ -f "next-job.json" ]; then
+              echo "Processing job..."
+              mv next-job.json current-job.json
+              # Simulate job processing with mock worker
+              ${mvm-ci-worker}/bin/worker
+              rm -f current-job.json
+              echo "Job completed"
+            fi
+            sleep 1
+          done
+          PROCESSOR_EOF
+
+          chmod +x "$JOB_DIR/processor.sh"
+
+          # Run job processor
+          cd "$JOB_DIR"
+          "$JOB_DIR/processor.sh" &
+          PROCESSOR_PID=$!
+
+          echo "Service VM ready"
+          echo "  Control handler PID: $HANDLER_PID"
+          echo "  Job processor PID: $PROCESSOR_PID"
+
+          # Wait for shutdown signal
+          trap "kill $HANDLER_PID $PROCESSOR_PID 2>/dev/null; exit" INT TERM
+          wait $HANDLER_PID
+        '';
+
         # Helper script to run worker VMs with job data
         run-worker-vm = pkgs.writeShellScriptBin "run-worker-vm" ''
           set -euo pipefail
@@ -360,6 +457,9 @@
         vm-image = self.nixosConfigurations.worker-vm.config.microvm.runner.microvmConfig;
 
         default = run-worker-vm;
+
+        # Export service VM runner
+        inherit service-worker-vm;
       };
 
       # Development shell

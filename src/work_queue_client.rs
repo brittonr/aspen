@@ -181,12 +181,18 @@ impl WorkQueueClient {
                     endpoint_id: registration.endpoint_id,
                     registered_at: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64,
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or_else(|e| {
+                            tracing::error!("Failed to get timestamp: {}", e);
+                            0 // Use epoch as fallback
+                        }),
                     last_heartbeat: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64,
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or_else(|e| {
+                            tracing::error!("Failed to get timestamp: {}", e);
+                            0 // Use epoch as fallback
+                        }),
                     cpu_cores: registration.cpu_cores,
                     memory_mb: registration.memory_mb,
                     active_jobs: 0,

@@ -24,6 +24,7 @@ use crate::handlers::dashboard::*;
 use crate::handlers::queue::*;
 use crate::handlers::worker::*;
 use crate::iroh_api;
+use crate::middleware;
 use crate::state::AppState;
 
 /// Build the complete Axum router with all routes
@@ -90,8 +91,8 @@ fn queue_api_router() -> Router<AppState> {
         .route("/list", get(queue_list))
         .route("/stats", get(queue_stats))
         .route("/status/{job_id}", post(queue_update_status))
-    // Future: Add API-specific middleware
-    // .layer(/* rate limiting, API versioning, auth, etc. */)
+        // Apply API key authentication to all queue routes
+        .layer(axum::middleware::from_fn(middleware::api_key_auth))
 }
 
 /// Worker Management API routes - Worker lifecycle
@@ -114,8 +115,8 @@ fn worker_api_router() -> Router<AppState> {
         .route("/:worker_id", get(worker_get))
         .route("/:worker_id/drain", post(worker_drain))
         .route("/stats", get(worker_stats))
-    // Future: Add worker-specific middleware
-    // .layer(/* worker authentication, rate limiting, etc. */)
+        // Apply API key authentication to all worker routes
+        .layer(axum::middleware::from_fn(middleware::api_key_auth))
 }
 
 /// Iroh P2P API routes - Blob storage and gossip
@@ -140,8 +141,8 @@ fn iroh_api_router() -> Router<AppState> {
         .route("/gossip/subscribe/{topic_id}", get(iroh_api::subscribe_gossip))
         .route("/connect", post(iroh_api::connect_peer))
         .route("/info", get(iroh_api::endpoint_info))
-    // Future: Add P2P-specific middleware
-    // .layer(/* peer authentication, encryption verification, etc. */)
+        // Apply API key authentication to all iroh routes
+        .layer(axum::middleware::from_fn(middleware::api_key_auth))
 }
 
 /// Health check routes

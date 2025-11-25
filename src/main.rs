@@ -6,6 +6,7 @@ mod hiqlite_persistent_store;
 mod hiqlite_service;
 mod iroh_api;
 mod iroh_service;
+mod middleware;
 mod persistent_store;
 mod repositories;
 mod server;

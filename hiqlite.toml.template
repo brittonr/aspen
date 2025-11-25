@@ -1,0 +1,28 @@
+# Hiqlite Configuration Template
+# Copy this to hiqlite.toml and replace placeholders with actual values
+# Or use envsubst: envsubst < hiqlite.toml.template > hiqlite.toml
+
+[hiqlite]
+node_id = ${HIQLITE_NODE_ID:-1}
+data_dir = "${HIQLITE_DATA_DIR:-./data/hiqlite-node1}"
+
+# SECURITY: These must be set via environment variables
+secret_raft = "${HIQLITE_SECRET_RAFT}"
+secret_api = "${HIQLITE_SECRET_API}"
+enc_keys = ["${HIQLITE_ENC_KEY}"]
+enc_key_active = "${HIQLITE_ENC_KEY_ACTIVE:-${HIQLITE_ENC_KEY:0:16}}"
+
+# Raft cluster members (format: "id addr_raft addr_api")
+# For MVP single-node deployment
+nodes = [
+    "1 127.0.0.1:9000 127.0.0.1:9001",
+]
+
+# For multi-node deployment, uncomment and configure:
+# nodes = [
+#     "1 127.0.0.1:9000 127.0.0.1:9001",
+#     "2 127.0.0.1:9002 127.0.0.1:9003",
+# ]
+
+listen_addr_api = "${HIQLITE_LISTEN_API:-0.0.0.0}"
+listen_addr_raft = "${HIQLITE_LISTEN_RAFT:-0.0.0.0}"

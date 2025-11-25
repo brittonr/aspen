@@ -175,14 +175,26 @@ impl WorkQueue {
                     }).await;
 
                     if claimed {
-                        let claimed_item = self.cache.get(&job.id).await.unwrap();
-                        tracing::info!(
-                            job_id = %claimed_item.id,
-                            node_id = %self.node_id,
-                            worker_id = ?worker_id,
-                            "Work item claimed successfully"
-                        );
-                        return Ok(Some(claimed_item));
+                        // Get the updated item from cache - handle the case where it might not exist
+                        match self.cache.get(&job.id).await {
+                            Some(claimed_item) => {
+                                tracing::info!(
+                                    job_id = %claimed_item.id,
+                                    node_id = %self.node_id,
+                                    worker_id = ?worker_id,
+                                    "Work item claimed successfully"
+                                );
+                                return Ok(Some(claimed_item));
+                            }
+                            None => {
+                                // This shouldn't happen, but handle it gracefully
+                                tracing::error!(
+                                    job_id = %job.id,
+                                    "Cache inconsistency: item was updated but not found"
+                                );
+                                continue; // Try next available item
+                            }
+                        }
                     }
                 } else {
                     // Another node claimed it first

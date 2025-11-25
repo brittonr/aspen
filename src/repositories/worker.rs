@@ -265,12 +265,14 @@ impl WorkerRepository for HiqliteWorkerRepository {
             )
             .await?;
 
-        if rows.is_empty() {
-            return Ok(None);
+        // Get the first row if it exists
+        match rows.into_iter().next() {
+            Some(row) => {
+                let worker = row_to_worker(row)?;
+                Ok(Some(worker))
+            }
+            None => Ok(None),
         }
-
-        let worker = row_to_worker(rows.into_iter().next().unwrap())?;
-        Ok(Some(worker))
     }
 
     async fn list_online_workers(&self) -> Result<Vec<Worker>> {
