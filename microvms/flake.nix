@@ -42,7 +42,189 @@
       '';
     in
     {
-      # Define the worker VM configuration
+      # Service VM configuration - long-running VM that processes multiple jobs
+      nixosConfigurations.service-vm = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          microvm.nixosModules.microvm
+          {
+            microvm = {
+              hypervisor = "cloud-hypervisor";
+              mem = 1024;  # 1GB for service VMs
+              vcpu = 2;
+
+              # Enable balloon device for memory efficiency
+              balloon = true;
+
+              shares = [
+                {
+                  source = "/nix/store";
+                  mountPoint = "/nix/.ro-store";
+                  tag = "store";
+                  proto = "virtiofs";  # Use virtiofs instead of 9p for better performance
+                }
+                {
+                  source = "/home/brittonr/mvm-ci-test/jobs";
+                  mountPoint = "/mnt/jobs";
+                  tag = "jobs";
+                  proto = "virtiofs";
+                }
+              ];
+
+              writableStoreOverlay = "/nix/.rw-store";
+
+              # Virtio-net configuration
+              interfaces = [{
+                type = "tap";
+                id = "vm-net0";
+                mac = "02:00:00:00:00:02";
+              }];
+            };
+
+            boot.loader.grub.enable = false;
+
+            # Kernel optimizations for Cloud Hypervisor and virtio
+            boot.kernelParams = [
+              "console=hvc0"
+              "reboot=k"
+              "panic=1"
+              "pci=off"  # Cloud Hypervisor doesn't use PCI
+              "nomodules"
+              "virtio_mmio.device=4K@0xd0000000:5"
+              "virtio_mmio.device=4K@0xd0001000:6"
+              "virtio_mmio.device=4K@0xd0002000:7"
+            ];
+
+            # Enable virtio modules
+            boot.initrd.kernelModules = [
+              "virtio_balloon"
+              "virtio_blk"
+              "virtio_net"
+              "virtio_pci"
+              "virtio_mmio"
+              "virtiofs"
+            ];
+
+            networking = {
+              hostName = "service-vm";
+              useDHCP = true;
+              firewall.enable = false;
+            };
+
+            environment.systemPackages = with pkgs; [
+              jq
+              socat
+              coreutils
+            ];
+
+            users.users.worker = {
+              isNormalUser = true;
+              group = "worker";
+              home = "/home/worker";
+              createHome = true;
+              password = "worker";  # For debugging
+            };
+            users.groups.worker = {};
+
+            # Set root password for debugging (remove in production)
+            users.users.root.password = "root";
+
+            # Service VM control socket service
+            systemd.services.control-socket = {
+              description = "Service VM Control Socket";
+              after = [ "network.target" ];
+              wantedBy = [ "multi-user.target" ];
+
+              script = ''
+                #!/usr/bin/env bash
+                SOCKET="/run/control.sock"
+                STATE="/var/lib/vm-state.json"
+
+                mkdir -p /var/lib/jobs/{pending,processing,completed}
+                echo '{"status":"ready","jobs_completed":0}' > "$STATE"
+
+                handle_request() {
+                  read -r line
+                  cmd=$(echo "$line" | ${pkgs.jq}/bin/jq -r .type 2>/dev/null)
+
+                  case "$cmd" in
+                    Ping)
+                      jobs=$(${pkgs.jq}/bin/jq -r .jobs_completed "$STATE")
+                      echo "{\"type\":\"Pong\",\"jobs_completed\":$jobs}"
+                      ;;
+                    ExecuteJob)
+                      job=$(echo "$line" | ${pkgs.jq}/bin/jq .job)
+                      job_id=$(echo "$job" | ${pkgs.jq}/bin/jq -r .id)
+                      echo "$job" > "/var/lib/jobs/pending/$job_id.json"
+                      echo '{"type":"Ack"}'
+                      ;;
+                    Shutdown)
+                      echo '{"type":"Ack"}'
+                      systemctl poweroff
+                      ;;
+                    *)
+                      echo '{"type":"Error","message":"Unknown command"}'
+                      ;;
+                  esac
+                }
+
+                export -f handle_request
+                ${pkgs.socat}/bin/socat UNIX-LISTEN:"$SOCKET",fork EXEC:"/bin/bash -c handle_request"
+              '';
+
+              serviceConfig = {
+                Type = "simple";
+                User = "worker";
+                Restart = "always";
+              };
+            };
+
+            # Job processor service
+            systemd.services.job-processor = {
+              description = "Service VM Job Processor";
+              after = [ "network.target" ];
+              wantedBy = [ "multi-user.target" ];
+
+              script = ''
+                #!/usr/bin/env bash
+                STATE="/var/lib/vm-state.json"
+
+                while true; do
+                  for job in /var/lib/jobs/pending/*.json; do
+                    [ -f "$job" ] || continue
+
+                    job_id=$(basename "$job" .json)
+                    mv "$job" "/var/lib/jobs/processing/"
+
+                    # Process job (placeholder)
+                    echo "Processing job $job_id"
+                    sleep 2
+
+                    mv "/var/lib/jobs/processing/$job_id.json" "/var/lib/jobs/completed/"
+
+                    # Update job count
+                    count=$(${pkgs.jq}/bin/jq -r .jobs_completed "$STATE")
+                    new_count=$((count + 1))
+                    ${pkgs.jq}/bin/jq ".jobs_completed = $new_count" "$STATE" > "$STATE.tmp"
+                    mv "$STATE.tmp" "$STATE"
+                  done
+                  sleep 1
+                done
+              '';
+
+              serviceConfig = {
+                Type = "simple";
+                User = "worker";
+                Restart = "always";
+              };
+            };
+
+            system.stateVersion = "24.05";
+          }
+        ];
+      };
+
+      # Define the worker VM configuration (ephemeral - one job then terminate)
       nixosConfigurations.worker-vm = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
@@ -50,22 +232,23 @@
           {
             # MicroVM configuration
             microvm = {
-              # Start with QEMU for easier debugging
-              hypervisor = "qemu";
-              # hypervisor = "firecracker"; # Switch to this for production
+              # Use Cloud Hypervisor for better performance
+              hypervisor = "cloud-hypervisor";
 
               # Default resources (can be overridden at runtime)
               mem = 512;  # Memory in MB
               vcpu = 1;   # Number of vCPUs
 
-              # Share /nix/store from host (huge space saver)
+              # Enable balloon device for memory efficiency
+              balloon = true;
+
+              # Share directories using virtiofs
               shares = [
                 {
                   source = "/nix/store";
                   mountPoint = "/nix/.ro-store";
                   tag = "store";
-                  proto = "9p";
-                  securityModel = "none";
+                  proto = "virtiofs";  # Better performance than 9p
                 }
                 # Job data directory for passing jobs to VMs
                 {
@@ -73,35 +256,50 @@
                   source = "/home/brittonr/mvm-ci-test/jobs";
                   mountPoint = "/mnt/jobs";
                   tag = "jobs";
-                  proto = "9p";
-                  securityModel = "mapped-file";
+                  proto = "virtiofs";
                 }
               ];
 
               # Writable store overlay for runtime package installations
               writableStoreOverlay = "/nix/.rw-store";
 
-              # Network configuration
+              # Virtio-net configuration
               interfaces = [{
-                type = "user"; # User networking for QEMU (no setup needed)
-                id = "net0";
+                type = "tap";
+                id = "vm-net1";
                 mac = "02:00:00:00:00:01"; # Will be overridden per-VM
               }];
 
-              # For Firecracker production use:
-              # interfaces = [{
-              #   type = "tap";
-              #   id = "vm-tap";
-              #   mac = "02:00:00:00:00:01";
-              # }];
-
-              # Control socket for VM management (disabled for QEMU user networking)
+              # Control socket for VM management
               # socket = "/var/lib/mvm-ci/vms/control.sock";
             };
 
             # Boot configuration
             boot.loader.grub.enable = false;
             boot.isContainer = false;
+
+            # Kernel optimizations for Cloud Hypervisor and virtio
+            boot.kernelParams = [
+              "console=hvc0"
+              "reboot=k"
+              "panic=1"
+              "pci=off"
+              "nomodules"
+              "virtio_mmio.device=4K@0xd0000000:5"
+              "virtio_mmio.device=4K@0xd0001000:6"
+              "virtio_mmio.device=4K@0xd0002000:7"
+            ];
+
+            # Enable virtio modules
+            boot.initrd.kernelModules = [
+              "virtio_balloon"
+              "virtio_blk"
+              "virtio_net"
+              "virtio_pci"
+              "virtio_mmio"
+              "virtiofs"
+            ];
+
             boot.kernel.sysctl = {
               "net.ipv4.ip_forward" = 1;
               "net.ipv6.conf.all.forwarding" = 1;
@@ -249,106 +447,36 @@
 
       # Export packages for the host system
       packages.${system} = rec {
-        # The VM runner executable
+        # The ephemeral worker VM runner
         worker-vm = self.nixosConfigurations.worker-vm.config.microvm.declaredRunner;
 
-        # Service VM configuration - long-running, processes multiple jobs
-        service-worker-vm = pkgs.writeShellScriptBin "service-worker-vm" ''
+        # The service VM runner (actual microVM)
+        service-vm = self.nixosConfigurations.service-vm.config.microvm.declaredRunner;
+
+        # Script to run actual service VM
+        run-service-vm = pkgs.writeShellScriptBin "run-service-vm" ''
           #!/usr/bin/env bash
           set -euo pipefail
 
-          # Parse arguments
-          VM_ID="''${1:-$(${pkgs.util-linux}/bin/uuidgen)}"
-          CONTROL_SOCKET="''${2:-/tmp/vm-$VM_ID.sock}"
+          VM_ID="''${1:-service-vm-$(date +%s)}"
+          echo "Starting Service VM: $VM_ID"
 
-          echo "Starting service worker VM:"
-          echo "  VM ID: $VM_ID"
-          echo "  Control socket: $CONTROL_SOCKET"
+          # Create required directories for the VM
+          mkdir -p /var/lib/mvm-ci/jobs/{pending,processing,completed}
 
-          # Create VM directories
-          JOB_DIR="$HOME/mvm-ci-test/jobs/$VM_ID"
-          mkdir -p "$JOB_DIR"
-
-          # Create simple handler script
-          cat > "$JOB_DIR/handler.sh" << 'EOF'
-#!/usr/bin/env bash
-while read -r line; do
-  echo "Received: $line" >&2
-
-  # Parse command type
-  CMD=$(echo "$line" | ${pkgs.jq}/bin/jq -r .type 2>/dev/null || echo "invalid")
-
-  case "$CMD" in
-    Ping)
-      echo '{"type":"Pong","uptime_secs":100,"jobs_completed":5}'
-      ;;
-    ExecuteJob)
-      JOB=$(echo "$line" | ${pkgs.jq}/bin/jq .job 2>/dev/null)
-      if [ -n "$JOB" ] && [ "$JOB" != "null" ]; then
-        echo "$JOB" > "JOB_DIR_PLACEHOLDER/next-job.json"
-        echo '{"type":"Ack"}'
-      else
-        echo '{"type":"Error","message":"Invalid job data"}'
-      fi
-      ;;
-    Shutdown)
-      echo '{"type":"Ack"}'
-      exit 0
-      ;;
-    *)
-      echo '{"type":"Error","message":"Unknown command"}'
-      ;;
-  esac
-done
-EOF
-
-          # Replace placeholder with actual job directory
-          sed -i "s|JOB_DIR_PLACEHOLDER|$JOB_DIR|g" "$JOB_DIR/handler.sh"
-          chmod +x "$JOB_DIR/handler.sh"
-
-          # Create job processor
-          cat > "$JOB_DIR/processor.sh" << 'EOF'
-#!/usr/bin/env bash
-cd "$(dirname "$0")"
-while true; do
-  if [ -f "next-job.json" ]; then
-    echo "[Processor] Processing job..."
-    mv next-job.json current-job.json
-
-    if [ -f "current-job.json" ]; then
-      echo "[Processor] Job content:"
-      cat current-job.json
-      echo "[Processor] Executing job..."
-      sleep 2
-      echo "[Processor] Job completed successfully"
-      rm -f current-job.json
-    fi
-  fi
-  sleep 1
-done
-EOF
-          chmod +x "$JOB_DIR/processor.sh"
-
-          # Start job processor in background
-          "$JOB_DIR/processor.sh" &
-          PROCESSOR_PID=$!
-          echo "Job processor started (PID: $PROCESSOR_PID)"
-
-          # Start control socket handler
-          rm -f "$CONTROL_SOCKET"
-          echo "Starting control socket handler..."
-          ${pkgs.socat}/bin/socat UNIX-LISTEN:"$CONTROL_SOCKET",fork EXEC:"$JOB_DIR/handler.sh" &
-          HANDLER_PID=$!
-
-          echo "Service VM ready"
-          echo "  Control handler PID: $HANDLER_PID"
-          echo "  Job processor PID: $PROCESSOR_PID"
+          # Start the actual microVM
+          echo "Starting actual microVM with QEMU..."
+          echo "This will run a real NixOS VM with systemd services inside."
           echo ""
-          echo "Send commands with: echo '{\"type\":\"Ping\"}' | socat - UNIX-CONNECT:$CONTROL_SOCKET"
+          echo "The VM will have:"
+          echo "  - systemd service 'control-socket' listening on /run/control.sock"
+          echo "  - systemd service 'job-processor' processing jobs from queue"
+          echo ""
 
-          # Wait for handler to exit
-          trap "kill $PROCESSOR_PID $HANDLER_PID 2>/dev/null; exit" INT TERM
-          wait $HANDLER_PID
+          # Run the service VM
+          ${service-vm}/bin/microvm-run
+
+          echo "Service VM terminated"
         '';
 
         # Helper script to run worker VMs with job data
@@ -456,7 +584,7 @@ EOF
         '';
 
         # Build the VM image (for inspection/debugging)
-        vm-image = self.nixosConfigurations.worker-vm.config.microvm.runner.microvmConfig;
+        # vm-image = self.nixosConfigurations.worker-vm.config.microvm.runner.microvmConfig;
 
         default = run-worker-vm;
       };

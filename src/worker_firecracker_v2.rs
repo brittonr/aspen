@@ -44,7 +44,7 @@ pub struct FirecrackerConfig {
     /// Maximum number of concurrent VMs
     pub max_concurrent_vms: usize,
 
-    /// Hypervisor to use (qemu for testing, firecracker for production)
+    /// Hypervisor to use (cloud-hypervisor for production, qemu for testing)
     pub hypervisor: String,
 }
 
@@ -59,7 +59,7 @@ impl Default for FirecrackerConfig {
             default_vcpus: 1,
             control_plane_ticket: "http://localhost:3020".to_string(),
             max_concurrent_vms: 10,
-            hypervisor: "qemu".to_string(),
+            hypervisor: "cloud-hypervisor".to_string(),
         }
     }
 }

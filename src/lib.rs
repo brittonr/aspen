@@ -9,6 +9,7 @@ pub mod worker_trait;
 pub mod worker_flawless;
 pub mod worker_firecracker;
 pub mod worker_firecracker_v2;
+pub mod worker_microvm;
 
 // Re-export domain types (WorkQueue now uses these internally)
 pub use domain::types::{Job, JobStatus, QueueStats, Worker, WorkerStatus, WorkerType, WorkerRegistration, WorkerHeartbeat, WorkerStats};

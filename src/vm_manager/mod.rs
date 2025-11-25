@@ -233,6 +233,74 @@ impl VmManager {
 
         Ok(())
     }
+
+    /// Submit a job to the VM manager (routes to best VM)
+    pub async fn submit_job(&self, job: crate::Job) -> Result<JobResult> {
+        let assignment = self.execute_job(job.clone()).await?;
+
+        // Convert VmAssignment to JobResult
+        Ok(JobResult {
+            vm_id: assignment.vm_id,
+            success: true,  // Would be set based on actual execution
+            output: format!("Job {} assigned to VM {}", job.id, assignment.vm_id),
+            error: None,
+            metadata: Default::default(),
+        })
+    }
+
+    /// Submit a job to a specific VM
+    pub async fn submit_job_to_vm(&self, vm_id: uuid::Uuid, job: crate::Job) -> Result<JobResult> {
+        // Send job to specific VM
+        self.controller.send_job_to_vm(vm_id, &job).await?;
+
+        Ok(JobResult {
+            vm_id,
+            success: true,
+            output: format!("Job {} sent to VM {}", job.id, vm_id),
+            error: None,
+            metadata: Default::default(),
+        })
+    }
+
+    /// Start a new VM with the given configuration
+    pub async fn start_vm(&self, config: VmConfig) -> Result<VmInstance> {
+        self.controller.start_vm(config).await
+    }
+
+    /// Stop a running VM
+    pub async fn stop_vm(&self, vm_id: uuid::Uuid) -> Result<()> {
+        self.controller.stop_vm(vm_id).await
+    }
+
+    /// Start monitoring tasks
+    pub async fn start_monitoring(&self) -> Result<()> {
+        // Start health monitoring
+        let health_checker = self.health_checker.clone();
+        tokio::spawn(async move {
+            if let Err(e) = health_checker.start_monitoring().await {
+                tracing::error!(error = ?e, "Health monitoring failed");
+            }
+        });
+
+        // Start resource monitoring
+        let monitor = self.monitor.clone();
+        tokio::spawn(async move {
+            if let Err(e) = monitor.start_monitoring().await {
+                tracing::error!(error = ?e, "Resource monitoring failed");
+            }
+        });
+
+        Ok(())
+    }
+}
+
+/// Result from job execution
+pub struct JobResult {
+    pub vm_id: uuid::Uuid,
+    pub success: bool,
+    pub output: String,
+    pub error: Option<String>,
+    pub metadata: std::collections::HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

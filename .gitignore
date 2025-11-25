@@ -18,3 +18,4 @@ lock
 !.env.example
 hiqlite.toml
 !hiqlite.toml.template
+microvms/result
