@@ -1,9 +1,9 @@
-// Integration test for VM orchestration through blixard
+// Integration test for VM orchestration through mvm-ci
 //
-// This demonstrates blixard properly orchestrating microVMs through the VM Manager
+// This demonstrates mvm-ci properly orchestrating microVMs through the VM Manager
 
 use anyhow::Result;
-use blixard::{
+use mvm_ci::{
     worker_microvm::{MicroVmWorker, MicroVmWorkerConfig},
     worker_trait::WorkerBackend,
     Job, JobStatus,
@@ -16,14 +16,14 @@ use uuid::Uuid;
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter("info,blixard=debug")
+        .with_env_filter("info,mvm_ci=debug")
         .init();
 
-    println!("=== Blixard VM Orchestration Test ===\n");
+    println!("=== MVM-CI VM Orchestration Test ===\n");
 
     // Configure the orchestrated worker
     let config = MicroVmWorkerConfig {
-        state_dir: PathBuf::from("/tmp/blixard-orchestration-test"),
+        state_dir: PathBuf::from("/tmp/mvm-ci-orchestration-test"),
         flake_dir: PathBuf::from("./microvms"),
         max_vms: 5,
         ephemeral_memory_mb: 512,

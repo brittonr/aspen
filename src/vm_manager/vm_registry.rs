@@ -64,13 +64,19 @@ impl VmRegistry {
             .or_insert_with(HashSet::new)
             .insert(vm_id);
 
-        // Store in cache
+        // Store in cache (clone for logging after move)
+        let ip_address = vm.ip_address.clone();
         self.vms.insert(vm_id, Arc::new(RwLock::new(vm)));
 
         // Log registration event
         self.log_event(vm_id, "registered", None).await?;
 
-        tracing::info!(vm_id = %vm_id, state = state_key, "VM registered");
+        tracing::info!(
+            vm_id = %vm_id,
+            state = state_key,
+            ip_address = ?ip_address,
+            "VM registered"
+        );
 
         Ok(())
     }
@@ -426,7 +432,7 @@ impl VmRegistry {
                     vm.pid.map(|p| p as i64),
                     vm.control_socket.as_ref().map(|p| p.display().to_string()),
                     vm.job_dir.as_ref().map(|p| p.display().to_string()),
-                    None::<String>,  // ip_address - TODO: implement
+                    vm.ip_address.clone(),
                     metrics_json
                 ],
             )

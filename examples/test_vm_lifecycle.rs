@@ -1,6 +1,6 @@
 // Test VM Lifecycle Management
 //
-// This demonstrates that blixard can properly manage VM lifecycles:
+// This demonstrates that mvm-ci can properly manage VM lifecycles:
 // - Start VMs on demand
 // - Track VM state
 // - Monitor health
@@ -8,8 +8,8 @@
 // - Handle concurrent VMs
 
 use anyhow::Result;
-use blixard::vm_manager::{VmManager, VmManagerConfig, VmInstance};
-use blixard::vm_manager::vm_types::{VmConfig, VmMode, VmState, IsolationLevel};
+use mvm_ci::vm_manager::{VmManager, VmManagerConfig, VmInstance};
+use mvm_ci::vm_manager::vm_types::{VmConfig, VmMode, VmState, IsolationLevel};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -19,7 +19,7 @@ use uuid::Uuid;
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter("info,blixard=debug")
+        .with_env_filter("info,mvm_ci=debug")
         .init();
 
     println!("=== VM Lifecycle Management Test ===\n");
@@ -27,9 +27,9 @@ async fn main() -> Result<()> {
     // Configure VM Manager
     let config = VmManagerConfig {
         max_vms: 5,
-        state_dir: PathBuf::from("/tmp/blixard-lifecycle-test"),
+        state_dir: PathBuf::from("/tmp/mvm-ci-lifecycle-test"),
         flake_dir: PathBuf::from("./microvms"),
-        database_path: PathBuf::from("/tmp/blixard-lifecycle-test/vms.db"),
+        database_path: PathBuf::from("/tmp/mvm-ci-lifecycle-test/vms.db"),
         ephemeral_memory_mb: 512,
         ephemeral_vcpus: 1,
         service_memory_mb: 1024,
@@ -186,7 +186,7 @@ async fn main() -> Result<()> {
     println!("  ✓ Can stop specific VMs");
     println!("  ✓ Gracefully shuts down all VMs");
     println!("  ✓ Handles concurrent VM management");
-    println!("\nBlixard successfully manages VM lifecycles!");
+    println!("\nMVM-CI successfully manages VM lifecycles!");
 
     Ok(())
 }

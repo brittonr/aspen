@@ -67,6 +67,21 @@ impl VmController {
         Ok(vm)
     }
 
+    /// Allocate an IP address for the VM
+    /// Simple static allocation: 192.168.100.X where X is based on a hash of the VM ID
+    fn allocate_ip_address(&self, vm_id: Uuid) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        vm_id.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        // Use hash to generate last octet (2-254 to avoid network/broadcast addresses)
+        let last_octet = 2 + (hash % 253) as u8;
+        format!("192.168.100.{}", last_octet)
+    }
+
     /// Start ephemeral VM (one job then terminate)
     async fn start_ephemeral_vm(&self, vm: &mut VmInstance, job_id: &str) -> Result<()> {
         let vm_id = vm.config.id;
@@ -78,6 +93,9 @@ impl VmController {
         tokio::fs::create_dir_all(&job_dir).await?;
 
         vm.job_dir = Some(job_dir.clone());
+
+        // Allocate IP address for the VM
+        vm.ip_address = Some(self.allocate_ip_address(vm_id));
 
         // Get job data (would normally fetch from queue)
         let _job_file = job_dir.join("job.json");
@@ -157,6 +175,9 @@ impl VmController {
         tokio::fs::create_dir_all(&job_dir).await?;
 
         vm.job_dir = Some(job_dir.clone());
+
+        // Allocate IP address for the VM
+        vm.ip_address = Some(self.allocate_ip_address(vm_id));
 
         // Create control socket path
         let control_socket = vm_dir.join("control.sock");
