@@ -7,7 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::domain::types::{Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats, WorkerStatus, WorkerType};
+use crate::domain::types::{Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats, WorkerStatus};
 use crate::hiqlite_service::HiqliteService;
 use crate::params;
 

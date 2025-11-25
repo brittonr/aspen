@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
-use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats, WorkerStatus, WorkerType};
+use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats, WorkerStatus};
 
 /// Mock implementation of StateRepository for testing
 #[derive(Clone)]

@@ -7,7 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 
-use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats, Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats};
+use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
 
 pub mod hiqlite_repository;
 pub mod work_queue_repository;

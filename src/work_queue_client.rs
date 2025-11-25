@@ -161,7 +161,6 @@ impl WorkQueueClient {
         #[derive(serde::Deserialize)]
         struct RegisterResponse {
             worker_id: String,
-            message: String,
         }
 
         let response = self.post("/workers/register", &registration).await?;

@@ -343,7 +343,7 @@ impl HiqliteService {
     /// full database rebuilds on restart.
     pub async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down hiqlite node gracefully");
-        self.client
+        let _ = self.client
             .shutdown()
             .await;
         Ok(())
@@ -565,7 +565,7 @@ impl DatabaseSchema for HiqliteService {
 impl DatabaseLifecycle for HiqliteService {
     async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down hiqlite node gracefully");
-        self.client
+        let _ = self.client
             .shutdown()
             .await;
         Ok(())
