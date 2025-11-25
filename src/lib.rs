@@ -48,5 +48,8 @@ pub mod adapters;
 // API handlers
 pub mod api;
 
+// Storage abstractions
+pub mod storage;
+
 // OpenTofu integration
 pub mod tofu;

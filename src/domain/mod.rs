@@ -11,15 +11,23 @@
 //! - Provides clear API for complex operations
 
 pub mod cluster_status;
+pub mod compatibility;
+pub mod errors;
+pub mod event_handlers;
 pub mod event_publishers;
 pub mod events;
 pub mod health_service;
 pub mod job_commands;
 pub mod job_lifecycle;
 pub mod job_queries;
+pub mod plugins;
 pub mod state_machine;
 pub mod types;
+pub mod validation;
 pub mod worker_management;
+
+#[cfg(test)]
+pub mod property_tests;
 
 // Re-export key types for convenience
 pub use cluster_status::ClusterStatusService;

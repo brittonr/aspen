@@ -8,9 +8,30 @@ name = "mvm_ci"
 path = "src/lib.rs"
 
 [features]
-default = []
-# Enables test utilities (mocks, test factories) for integration tests
-test-utils = []
+default = ["vm-backend", "flawless-backend", "tofu-support"]
+
+# Core features (always enabled implicitly)
+# These are the minimum required for basic operation
+
+# Execution backends
+vm-backend = []          # Enable VM (Cloud Hypervisor) execution backend
+flawless-backend = []     # Enable Flawless WASM runtime backend
+local-backend = []        # Enable local process execution backend
+
+# Optional features
+tofu-support = []         # Enable OpenTofu/Terraform state backend support
+webhook-events = []       # Enable webhook event publishing
+metrics = []              # Enable Prometheus metrics export
+extended-api = []         # Enable additional API endpoints
+
+# Feature bundles for common use cases
+ci-cd = ["vm-backend", "flawless-backend", "tofu-support", "webhook-events"]
+batch-processing = ["local-backend", "metrics"]
+minimal = []              # Minimal build with only core features
+
+# Development features
+test-utils = []           # Enables test utilities (mocks, test factories) for integration tests
+debug-logging = []        # Enable verbose debug logging
 
 [[bin]]
 name = "mvm-ci"
@@ -51,9 +72,13 @@ dashmap = "6.1.0"
 nix = { version = "0.30.1", features = ["process", "signal"] }
 libc = "0.2.177"
 regex = "1.12.2"
+thiserror = "2.0"
 
 [build-dependencies]
 flawless-utils = "1.0.0-beta.3"
+
+[dev-dependencies]
+proptest = "1.5"
 
 [workspace]
 members = ["workflows/module1"]
