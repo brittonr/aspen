@@ -8,6 +8,7 @@ pub mod work_queue_client;
 pub mod worker_trait;
 pub mod worker_flawless;
 pub mod worker_firecracker;
+pub mod worker_firecracker_v2;
 
 // Re-export domain types (WorkQueue now uses these internally)
 pub use domain::types::{Job, JobStatus, QueueStats, Worker, WorkerStatus, WorkerType, WorkerRegistration, WorkerHeartbeat, WorkerStats};
@@ -33,6 +34,7 @@ mod iroh_api;
 mod handlers;
 mod views;
 pub mod domain;
+pub mod middleware;
 
 // Export modules needed for testing
 pub mod hiqlite_service;
