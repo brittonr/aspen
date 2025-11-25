@@ -44,3 +44,9 @@ pub mod vm_manager;
 
 // Execution backend adapters
 pub mod adapters;
+
+// API handlers
+pub mod api;
+
+// OpenTofu integration
+pub mod tofu;

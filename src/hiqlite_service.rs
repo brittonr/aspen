@@ -537,6 +537,79 @@ impl HiqliteService {
             params!(),
         ).await;
 
+        // Create OpenTofu state backend tables
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS tofu_workspaces (
+                name TEXT PRIMARY KEY,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                current_state TEXT,
+                state_version INTEGER NOT NULL DEFAULT 0,
+                state_lineage TEXT,
+                lock_id TEXT,
+                lock_acquired_at INTEGER,
+                lock_holder TEXT,
+                lock_info TEXT
+            )",
+            params!(),
+        ).await?;
+
+        // Create index for lock operations
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tofu_workspaces_lock_id ON tofu_workspaces(lock_id)",
+            params!(),
+        ).await;
+
+        // Create table for OpenTofu plan storage
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS tofu_plans (
+                id TEXT PRIMARY KEY,
+                workspace TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                plan_data BLOB NOT NULL,
+                plan_json TEXT,
+                status TEXT NOT NULL,
+                approved_by TEXT,
+                executed_at INTEGER,
+                FOREIGN KEY (workspace) REFERENCES tofu_workspaces(name)
+            )",
+            params!(),
+        ).await?;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tofu_plans_workspace ON tofu_plans(workspace)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tofu_plans_status ON tofu_plans(status)",
+            params!(),
+        ).await;
+
+        // Create table for OpenTofu state history (for rollback)
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS tofu_state_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace TEXT NOT NULL,
+                state_data TEXT NOT NULL,
+                state_version INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                created_by TEXT,
+                FOREIGN KEY (workspace) REFERENCES tofu_workspaces(name)
+            )",
+            params!(),
+        ).await?;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tofu_state_history_workspace ON tofu_state_history(workspace)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tofu_state_history_created_at ON tofu_state_history(created_at DESC)",
+            params!(),
+        ).await;
+
         tracing::info!("Schema initialization complete");
         Ok(())
     }

@@ -18,8 +18,9 @@
 //! - **Easier maintenance** - Add/remove routes within focused modules
 //! - **Better documentation** - Self-describing route structure
 
-use axum::{routing::{get, post}, Router};
+use axum::{routing::{get, post, delete}, Router};
 
+use crate::api::tofu_handlers;
 use crate::handlers::dashboard::*;
 use crate::handlers::queue::*;
 use crate::handlers::worker::*;
@@ -43,6 +44,7 @@ pub fn build_router(state: &AppState) -> Router {
         .nest("/api/queue", queue_api_router())
         .nest("/api/workers", worker_api_router())
         .nest("/api/iroh", iroh_api_router())
+        .nest("/api/tofu", tofu_api_router())
         .nest("/health", health_router())
         .with_state(state.clone())
 }
@@ -142,6 +144,48 @@ fn iroh_api_router() -> Router<AppState> {
         .route("/connect", post(iroh_api::connect_peer))
         .route("/info", get(iroh_api::endpoint_info))
         // Apply API key authentication to all iroh routes
+        .layer(axum::middleware::from_fn(middleware::api_key_auth))
+}
+
+/// OpenTofu/Terraform State Backend API routes
+///
+/// HTTP backend protocol implementation for OpenTofu/Terraform remote state storage.
+/// Provides distributed state management using Hiqlite for consistency.
+///
+/// State Backend Routes:
+/// - `GET  /api/tofu/state/{workspace}` - Get current state
+/// - `POST /api/tofu/state/{workspace}` - Update state
+/// - `POST /api/tofu/lock/{workspace}` - Lock workspace
+/// - `POST /api/tofu/unlock/{workspace}` - Unlock workspace
+/// - `DELETE /api/tofu/lock/{workspace}` - Force unlock (admin)
+/// - `GET  /api/tofu/workspaces` - List workspaces
+/// - `DELETE /api/tofu/workspaces/{workspace}` - Delete workspace
+/// - `GET  /api/tofu/history/{workspace}` - Get state history
+/// - `POST /api/tofu/rollback/{workspace}/{version}` - Rollback state
+///
+/// Plan Execution Routes:
+/// - `POST /api/tofu/plan` - Create and optionally execute plan
+/// - `POST /api/tofu/apply/{plan_id}` - Apply stored plan
+/// - `GET  /api/tofu/plans/{workspace}` - List plans for workspace
+/// - `POST /api/tofu/destroy` - Destroy infrastructure
+fn tofu_api_router() -> Router<AppState> {
+    use axum::routing::delete;
+
+    Router::new()
+        // State backend protocol endpoints
+        .route("/state/:workspace", get(tofu_handlers::get_state).post(tofu_handlers::update_state))
+        .route("/lock/:workspace", post(tofu_handlers::lock_workspace).delete(tofu_handlers::force_unlock_workspace))
+        .route("/unlock/:workspace", post(tofu_handlers::unlock_workspace))
+        .route("/workspaces", get(tofu_handlers::list_workspaces))
+        .route("/workspaces/:workspace", delete(tofu_handlers::delete_workspace))
+        .route("/history/:workspace", get(tofu_handlers::get_state_history))
+        .route("/rollback/:workspace/:version", post(tofu_handlers::rollback_state))
+        // Plan execution endpoints
+        .route("/plan", post(tofu_handlers::create_plan))
+        .route("/apply/:plan_id", post(tofu_handlers::apply_plan))
+        .route("/plans/:workspace", get(tofu_handlers::list_plans))
+        .route("/destroy", post(tofu_handlers::destroy_infrastructure))
+        // Apply API key authentication to all tofu routes
         .layer(axum::middleware::from_fn(middleware::api_key_auth))
 }
 
