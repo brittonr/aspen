@@ -444,6 +444,59 @@ impl HiqliteService {
             params!(),
         ).await;
 
+        // Create VM registry table for distributed VM lifecycle management
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS vms (
+                id TEXT PRIMARY KEY,
+                config TEXT NOT NULL,
+                state TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                node_id TEXT NOT NULL,
+                pid INTEGER,
+                control_socket TEXT,
+                job_dir TEXT,
+                ip_address TEXT,
+                metrics TEXT
+            )",
+            params!(),
+        ).await?;
+
+        // Create indices for VM queries
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vms_state ON vms(state)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vms_node_id ON vms(node_id)",
+            params!(),
+        ).await;
+
+        // Create VM events table for audit trail
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS vm_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vm_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                event_data TEXT,
+                timestamp INTEGER NOT NULL,
+                node_id TEXT,
+                FOREIGN KEY (vm_id) REFERENCES vms(id)
+            )",
+            params!(),
+        ).await?;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vm_events_vm_id ON vm_events(vm_id)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vm_events_timestamp ON vm_events(timestamp)",
+            params!(),
+        ).await;
+
         tracing::info!("Schema initialization complete");
         Ok(())
     }

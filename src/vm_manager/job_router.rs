@@ -20,6 +20,16 @@ pub enum VmAssignment {
     Service(Uuid),
 }
 
+impl VmAssignment {
+    /// Get the VM ID from the assignment
+    pub fn vm_id(&self) -> Uuid {
+        match self {
+            VmAssignment::Ephemeral(id) => *id,
+            VmAssignment::Service(id) => *id,
+        }
+    }
+}
+
 /// Rules for routing jobs to VMs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutingRules {
@@ -98,7 +108,7 @@ impl JobRouter {
         );
 
         // Route based on isolation level
-        match requirements.isolation_level {
+        match requirements.isolation_level.clone() {
             IsolationLevel::Maximum => {
                 // Always create new ephemeral VM for maximum isolation
                 self.route_to_ephemeral_vm(job, requirements).await
@@ -106,16 +116,18 @@ impl JobRouter {
             IsolationLevel::Standard => {
                 // Try to use service VM, fall back to ephemeral
                 if self.rules.read().await.prefer_service_vms {
-                    self.route_to_service_vm(job, requirements)
-                        .await
-                        .or_else(|e| {
+                    // Clone requirements for fallback case
+                    let req_clone = requirements.clone();
+                    match self.route_to_service_vm(job, requirements).await {
+                        Ok(assignment) => Ok(assignment),
+                        Err(e) => {
                             tracing::debug!(
                                 error = %e,
                                 "Failed to route to service VM, falling back to ephemeral"
                             );
-                            async { self.route_to_ephemeral_vm(job, requirements).await }
-                        })
-                        .await
+                            self.route_to_ephemeral_vm(job, req_clone).await
+                        }
+                    }
                 } else {
                     self.route_to_ephemeral_vm(job, requirements).await
                 }
@@ -165,7 +177,7 @@ impl JobRouter {
         // Try to find existing suitable VM
         if let Some(vm_id) = self
             .registry
-            .get_available_service_vm(&requirements)
+            .get_available_service_vm()
             .await
         {
             tracing::info!(

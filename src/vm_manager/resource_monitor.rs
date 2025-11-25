@@ -6,7 +6,7 @@ use tokio::time::{interval, Duration};
 
 use super::vm_controller::VmController;
 use super::vm_registry::VmRegistry;
-use super::vm_types::{VmConfig, VmMode, VmState};
+use super::vm_types::{VmConfig, VmState};
 
 /// Resource monitor for VM management
 pub struct ResourceMonitor {

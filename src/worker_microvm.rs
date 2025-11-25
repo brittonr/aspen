@@ -71,24 +71,31 @@ pub struct MicroVmWorker {
 impl MicroVmWorker {
     /// Create a new orchestrated MicroVM worker
     pub async fn new(config: MicroVmWorkerConfig) -> Result<Self> {
+        // Create a local Hiqlite instance for standalone operation
+        use crate::hiqlite_service::HiqliteService;
+        let hiqlite = Arc::new(
+            HiqliteService::new(Some(config.state_dir.join("hiqlite")))
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create Hiqlite service: {}", e))?
+        );
+
+        // Initialize VM schema
+        hiqlite.initialize_schema().await
+            .map_err(|e| anyhow::anyhow!("Failed to initialize Hiqlite schema: {}", e))?;
+
         // Create VM Manager configuration
         let vm_config = VmManagerConfig {
             max_vms: config.max_vms,
-            state_dir: config.state_dir.clone(),
+            auto_scaling: true,
+            pre_warm_count: 2,
             flake_dir: config.flake_dir.clone(),
-            database_path: config.state_dir.join("vms.db"),
-            ephemeral_memory_mb: config.ephemeral_memory_mb,
-            ephemeral_vcpus: config.default_vcpus,
-            service_memory_mb: config.service_memory_mb,
-            service_vcpus: config.default_vcpus,
-            health_check_interval_secs: 30,
-            resource_check_interval_secs: 10,
-            max_ephemeral_uptime_secs: 300,
-            max_service_uptime_secs: 3600,
+            state_dir: config.state_dir.clone(),
+            default_memory_mb: config.ephemeral_memory_mb,
+            default_vcpus: config.default_vcpus,
         };
 
-        // Create VM Manager
-        let vm_manager = Arc::new(VmManager::new(vm_config).await?);
+        // Create VM Manager with Hiqlite
+        let vm_manager = Arc::new(VmManager::new(vm_config, hiqlite).await?);
 
         // Start VM manager background tasks
         let manager_clone = vm_manager.clone();
@@ -113,13 +120,11 @@ impl MicroVmWorker {
                         max_jobs: Some(100),
                         max_uptime_secs: Some(3600),
                     },
-                    isolation_level: IsolationLevel::Standard,
                     memory_mb: config.service_memory_mb,
                     vcpus: config.default_vcpus,
-                    kernel_image: None, // Use default from flake
-                    rootfs_image: None, // Use default from flake
-                    network_mode: "user".to_string(),
-                    metadata: Default::default(),
+                    hypervisor: "cloud-hypervisor".to_string(),
+                    capabilities: vec![],
+                    isolation_level: IsolationLevel::Standard,
                 };
 
                 match vm_manager.start_vm(vm_config.clone()).await {
@@ -156,20 +161,20 @@ impl MicroVmWorker {
         })
     }
 
-    /// Determine isolation level based on job metadata
+    /// Determine isolation level based on job payload
     fn determine_isolation_level(&self, job: &Job) -> IsolationLevel {
-        // Check job metadata for isolation requirements
-        if let Some(isolation) = job.metadata.get("isolation_level") {
+        // Check job payload for isolation requirements
+        if let Some(isolation) = job.payload.get("isolation_level") {
             match isolation.as_str() {
-                Some("strict") => return IsolationLevel::Strict,
-                Some("trusted") => return IsolationLevel::Trusted,
+                Some("maximum") => return IsolationLevel::Maximum,
+                Some("minimal") => return IsolationLevel::Minimal,
                 _ => {}
             }
         }
 
         // Check for untrusted sources
-        if job.metadata.get("untrusted").and_then(|v| v.as_bool()).unwrap_or(false) {
-            return IsolationLevel::Strict;
+        if job.payload.get("untrusted").and_then(|v| v.as_bool()).unwrap_or(false) {
+            return IsolationLevel::Maximum;
         }
 
         IsolationLevel::Standard
@@ -182,13 +187,13 @@ impl MicroVmWorker {
             return false;
         }
 
-        // Strict isolation always gets ephemeral VM
-        if self.determine_isolation_level(job) == IsolationLevel::Strict {
+        // Maximum isolation always gets ephemeral VM
+        if self.determine_isolation_level(job) == IsolationLevel::Maximum {
             return false;
         }
 
         // Check if job explicitly requests ephemeral
-        if job.metadata.get("ephemeral").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if job.payload.get("ephemeral").and_then(|v| v.as_bool()).unwrap_or(false) {
             return false;
         }
 
@@ -203,8 +208,8 @@ impl MicroVmWorker {
 
         tracing::debug!(
             total_vms = stats.total_vms,
-            ready_vms = stats.ready_vms,
-            busy_vms = stats.busy_vms,
+            running_vms = stats.running_vms,
+            idle_vms = stats.idle_vms,
             failed_vms = stats.failed_vms,
             "VM Manager health check"
         );
@@ -247,10 +252,10 @@ impl MicroVmWorker {
 
 #[async_trait]
 impl WorkerBackend for MicroVmWorker {
-    async fn execute(&self, job: Job) -> WorkResult {
+    async fn execute(&self, job: Job) -> Result<WorkResult> {
         tracing::info!(
             job_id = %job.id,
-            job_type = %job.job_type,
+            status = ?job.status,
             "Executing job through VM Manager"
         );
 
@@ -269,21 +274,19 @@ impl WorkerBackend for MicroVmWorker {
                         "Job completed via service VM"
                     );
 
-                    WorkResult {
+                    Ok(WorkResult {
                         success: result.success,
-                        output: result.output,
+                        output: Some(serde_json::json!({"message": result.output})),
                         error: result.error,
-                        metadata: result.metadata,
-                    }
+                    })
                 }
                 Err(e) => {
                     tracing::error!(job_id = %job.id, error = ?e, "Service VM execution failed");
-                    WorkResult {
+                    Ok(WorkResult {
                         success: false,
-                        output: String::new(),
+                        output: None,
                         error: Some(format!("Service VM execution failed: {}", e)),
-                        metadata: Default::default(),
-                    }
+                    })
                 }
             }
         } else {
@@ -299,16 +302,11 @@ impl WorkerBackend for MicroVmWorker {
                 mode: VmMode::Ephemeral {
                     job_id: job.id.clone(),
                 },
-                isolation_level,
                 memory_mb: self.config.ephemeral_memory_mb,
                 vcpus: self.config.default_vcpus,
-                kernel_image: None,
-                rootfs_image: None,
-                network_mode: match isolation_level {
-                    IsolationLevel::Strict => "none".to_string(),
-                    _ => "user".to_string(),
-                },
-                metadata: job.metadata.clone(),
+                hypervisor: "cloud-hypervisor".to_string(),
+                capabilities: vec![],
+                isolation_level,
             };
 
             match self.vm_manager.start_vm(vm_config.clone()).await {
@@ -322,12 +320,11 @@ impl WorkerBackend for MicroVmWorker {
                     // Submit job to the ephemeral VM
                     match self.vm_manager.submit_job_to_vm(vm_instance.config.id, job.clone()).await {
                         Ok(result) => {
-                            WorkResult {
+                            Ok(WorkResult {
                                 success: result.success,
-                                output: result.output,
+                                output: Some(serde_json::json!({"message": result.output})),
                                 error: result.error,
-                                metadata: result.metadata,
-                            }
+                            })
                         }
                         Err(e) => {
                             tracing::error!(
@@ -336,12 +333,11 @@ impl WorkerBackend for MicroVmWorker {
                                 error = ?e,
                                 "Failed to execute job in ephemeral VM"
                             );
-                            WorkResult {
+                            Ok(WorkResult {
                                 success: false,
-                                output: String::new(),
+                                output: None,
                                 error: Some(format!("Ephemeral VM execution failed: {}", e)),
-                                metadata: Default::default(),
-                            }
+                            })
                         }
                     }
                 }
@@ -351,12 +347,11 @@ impl WorkerBackend for MicroVmWorker {
                         error = ?e,
                         "Failed to start ephemeral VM"
                     );
-                    WorkResult {
+                    Ok(WorkResult {
                         success: false,
-                        output: String::new(),
+                        output: None,
                         error: Some(format!("Failed to start ephemeral VM: {}", e)),
-                        metadata: Default::default(),
-                    }
+                    })
                 }
             }
         }

@@ -11,6 +11,7 @@ use crate::services::traits::{
     BlobStorage, DatabaseHealth, DatabaseLifecycle, DatabaseSchema,
     EndpointInfo, GossipNetwork, PeerConnection,
 };
+use crate::vm_manager::VmManager;
 use crate::work_queue::WorkQueue;
 
 /// Container for infrastructure services
@@ -20,6 +21,7 @@ use crate::work_queue::WorkQueue;
 /// - Job queue (WorkQueue)
 /// - P2P networking (IrohService - concrete type wrapping all capabilities)
 /// - Flawless module (DeployedModule)
+/// - VM management (VmManager - orchestrates VM lifecycle)
 ///
 /// # Design
 ///
@@ -32,6 +34,7 @@ pub struct InfrastructureState {
     pub(crate) iroh: IrohService,
     pub(crate) hiqlite: HiqliteService,
     pub(crate) work_queue: WorkQueue,
+    pub(crate) vm_manager: Arc<VmManager>,
 }
 
 impl InfrastructureState {
@@ -41,12 +44,14 @@ impl InfrastructureState {
         iroh: IrohService,
         hiqlite: HiqliteService,
         work_queue: WorkQueue,
+        vm_manager: Arc<VmManager>,
     ) -> Self {
         Self {
             module: Arc::new(module),
             iroh,
             hiqlite,
             work_queue,
+            vm_manager,
         }
     }
 
@@ -103,5 +108,10 @@ impl InfrastructureState {
     /// Get the work queue
     pub fn work_queue(&self) -> &WorkQueue {
         &self.work_queue
+    }
+
+    /// Get the VM manager
+    pub fn vm_manager(&self) -> &Arc<VmManager> {
+        &self.vm_manager
     }
 }

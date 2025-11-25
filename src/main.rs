@@ -1,25 +1,7 @@
-// Internal modules
-mod config;
-mod domain;
-mod handlers;
-mod hiqlite_persistent_store;
-mod hiqlite_service;
-mod iroh_api;
-mod iroh_service;
-mod middleware;
-mod persistent_store;
-mod repositories;
-mod server;
-mod services;
-mod state;
-mod views;
-mod work_item_cache;
-mod work_queue;
-mod work_state_machine;
-
-use config::AppConfig;
-use server::ServerConfig;
-use state::{InfrastructureFactory, ProductionInfrastructureFactory};
+// Use modules from library crate
+use mvm_ci::config::AppConfig;
+use mvm_ci::server::ServerConfig;
+use mvm_ci::state::{InfrastructureFactory, ProductionInfrastructureFactory};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Iroh Endpoint ID: {}", endpoint.id());
 
     // Wait for direct addresses and relay connection
-    server::wait_for_online(&endpoint)
+    mvm_ci::server::wait_for_online(&endpoint)
         .await
         .expect("Failed to connect to relay");
 
@@ -61,6 +43,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to build application state");
 
+    // Start VM Manager background tasks
+    println!("Starting VM Manager...");
+    state.infrastructure()
+        .vm_manager()
+        .start()
+        .await
+        .expect("Failed to start VM Manager");
+
     // Display work queue ticket for worker connections
     let work_ticket = state.infrastructure().work_queue().get_ticket();
 
@@ -72,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Application infrastructure initialized");
     println!("✓ Hiqlite Raft cluster ready");
     println!("✓ Iroh P2P endpoint online");
+    println!("✓ VM Manager started");
     println!();
     println!("╭───────────────────────────────────────────────────────────────────────────╮");
     println!("│ Control Plane Ticket (use this to connect workers):                      │");
@@ -114,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state,
     };
 
-    let handle = server::start(server_config)
+    let handle = mvm_ci::server::start(server_config)
         .await
         .expect("Failed to start server");
 

@@ -19,3 +19,4 @@ lock
 hiqlite.toml
 !hiqlite.toml.template
 microvms/result
+microvms/result-service

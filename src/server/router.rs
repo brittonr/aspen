@@ -110,10 +110,10 @@ fn queue_api_router() -> Router<AppState> {
 fn worker_api_router() -> Router<AppState> {
     Router::new()
         .route("/register", post(worker_register))
-        .route("/:worker_id/heartbeat", post(worker_heartbeat))
+        .route("/{worker_id}/heartbeat", post(worker_heartbeat))
         .route("/", get(worker_list))
-        .route("/:worker_id", get(worker_get))
-        .route("/:worker_id/drain", post(worker_drain))
+        .route("/{worker_id}", get(worker_get))
+        .route("/{worker_id}/drain", post(worker_drain))
         .route("/stats", get(worker_stats))
         // Apply API key authentication to all worker routes
         .layer(axum::middleware::from_fn(middleware::api_key_auth))

@@ -1,94 +1,60 @@
-// VM Registry - Tracks all VMs with SQLite persistence
+// VM Registry - Tracks all VMs with Hiqlite distributed persistence
 
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
-use rusqlite::{params, Connection};
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::vm_types::{JobRequirements, VmConfig, VmInstance, VmMode, VmState};
+use super::vm_types::{JobRequirements, VmConfig, VmInstance, VmState};
+use crate::hiqlite_service::HiqliteService;
+use crate::params;
 
-/// Registry for tracking all VM instances
+/// Registry for tracking all VM instances with distributed persistence
 pub struct VmRegistry {
     /// In-memory cache for fast lookups
     vms: DashMap<Uuid, Arc<RwLock<VmInstance>>>,
     /// Index by state for efficient queries
     by_state: DashMap<String, HashSet<Uuid>>,
-    /// SQLite connection for persistence
-    db_path: std::path::PathBuf,
+    /// Hiqlite client for distributed persistence
+    hiqlite: Arc<HiqliteService>,
+    /// State directory for local VM resources
+    state_dir: std::path::PathBuf,
+    /// Node ID for tracking VM ownership
+    node_id: String,
 }
 
 impl VmRegistry {
-    /// Create new registry with SQLite persistence
-    pub async fn new(state_dir: &Path) -> Result<Self> {
-        let db_path = state_dir.join("vm_registry.db");
-
-        // Ensure directory exists
+    /// Create new registry with Hiqlite persistence
+    pub async fn new(hiqlite: Arc<HiqliteService>, state_dir: &Path) -> Result<Self> {
+        // Ensure directory exists for local resources
         std::fs::create_dir_all(state_dir)?;
 
-        // Initialize database schema
-        Self::init_database(&db_path)?;
+        // Get node ID for VM ownership tracking
+        let node_id = std::env::var("HQL_NODE_ID")
+            .unwrap_or_else(|_| format!("node-{}", uuid::Uuid::new_v4()));
 
-        Ok(Self {
+        let registry = Self {
             vms: DashMap::new(),
             by_state: DashMap::new(),
-            db_path,
-        })
-    }
+            hiqlite,
+            state_dir: state_dir.to_path_buf(),
+            node_id,
+        };
 
-    /// Initialize SQLite database schema
-    fn init_database(db_path: &Path) -> Result<()> {
-        let conn = Connection::open(db_path)?;
+        // Recover existing VMs from Hiqlite
+        registry.recover_from_persistence().await?;
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS vms (
-                id TEXT PRIMARY KEY,
-                config TEXT NOT NULL,
-                state TEXT NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL,
-                pid INTEGER,
-                control_socket TEXT,
-                job_dir TEXT,
-                ip_address TEXT,
-                metrics TEXT
-            )",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS vm_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                vm_id TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                event_type TEXT NOT NULL,
-                details TEXT,
-                FOREIGN KEY (vm_id) REFERENCES vms(id)
-            )",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_vms_state ON vms(state)",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_vm_id ON vm_events(vm_id)",
-            [],
-        )?;
-
-        Ok(())
+        Ok(registry)
     }
 
     /// Register a new VM instance
     pub async fn register(&self, vm: VmInstance) -> Result<()> {
         let vm_id = vm.config.id;
 
-        // Persist to database
+        // Persist to Hiqlite (distributed write)
         self.persist_vm(&vm).await?;
 
         // Update state index
@@ -98,149 +64,165 @@ impl VmRegistry {
             .or_insert_with(HashSet::new)
             .insert(vm_id);
 
-        // Store in memory cache
+        // Store in cache
         self.vms.insert(vm_id, Arc::new(RwLock::new(vm)));
 
-        tracing::info!(vm_id = %vm_id, state = %state_key, "VM registered");
+        // Log registration event
+        self.log_event(vm_id, "registered", None).await?;
+
+        tracing::info!(vm_id = %vm_id, state = state_key, "VM registered");
+
+        Ok(())
+    }
+
+    /// Update VM state
+    pub async fn update_state(&self, vm_id: Uuid, new_state: VmState) -> Result<()> {
+        // Get VM from cache
+        let vm_arc = self
+            .vms
+            .get(&vm_id)
+            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?;
+
+        let mut vm = vm_arc.write().await;
+        let old_state = format!("{:?}", vm.state);
+        let new_state_str = format!("{:?}", new_state);
+
+        // Update state index
+        if let Some(mut old_set) = self.by_state.get_mut(&old_state) {
+            old_set.remove(&vm_id);
+        }
+        self.by_state
+            .entry(new_state_str.clone())
+            .or_insert_with(HashSet::new)
+            .insert(vm_id);
+
+        // Update VM state
+        vm.state = new_state.clone();
+
+        // Persist to Hiqlite
+        let now = chrono::Utc::now().timestamp();
+        self.hiqlite
+            .execute(
+                "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
+                params![new_state_str.clone(), now, vm_id.to_string()],
+            )
+            .await?;
+
+        // Log state change
+        self.log_event(
+            vm_id,
+            "state_changed",
+            Some(format!("{} -> {}", old_state, new_state_str)),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Update VM metrics
+    pub async fn update_metrics(&self, vm_id: Uuid, metrics: crate::vm_manager::vm_types::VmMetrics) -> Result<()> {
+        let vm_arc = self
+            .vms
+            .get(&vm_id)
+            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?;
+
+        let mut vm = vm_arc.write().await;
+        vm.metrics = metrics.clone();
+
+        // Persist metrics to Hiqlite
+        let metrics_json = serde_json::to_string(&metrics)?;
+        self.hiqlite
+            .execute(
+                "UPDATE vms SET metrics = ?1, updated_at = ?2 WHERE id = ?3",
+                params![
+                    metrics_json,
+                    chrono::Utc::now().timestamp(),
+                    vm_id.to_string()
+                ],
+            )
+            .await?;
 
         Ok(())
     }
 
     /// Get VM by ID
     pub async fn get(&self, vm_id: Uuid) -> Result<Option<Arc<RwLock<VmInstance>>>> {
-        Ok(self.vms.get(&vm_id).map(|entry| Arc::clone(&entry)))
-    }
-
-    /// Find available service VM matching requirements
-    pub async fn get_available_service_vm(
-        &self,
-        requirements: &JobRequirements,
-    ) -> Option<Uuid> {
-        // Look for idle service VMs
-        for entry in self.vms.iter() {
-            let vm_lock = entry.value();
-            let vm = match vm_lock.try_read() {
-                Ok(vm) => vm,
-                Err(_) => continue, // Skip if locked
-            };
-
-            // Check if VM is service mode and available
-            if !matches!(vm.config.mode, VmMode::Service { .. }) {
-                continue;
-            }
-
-            if !vm.state.is_available() {
-                continue;
-            }
-
-            // Check if VM meets requirements
-            if vm.config.memory_mb < requirements.memory_mb {
-                continue;
-            }
-
-            if vm.config.vcpus < requirements.vcpus {
-                continue;
-            }
-
-            if vm.config.isolation_level != requirements.isolation_level {
-                continue;
-            }
-
-            // Check capabilities
-            let has_all_capabilities = requirements
-                .capabilities
-                .iter()
-                .all(|cap| vm.config.capabilities.contains(cap));
-
-            if !has_all_capabilities {
-                continue;
-            }
-
-            // Check if VM should be recycled
-            if vm.should_recycle() {
-                continue;
-            }
-
-            return Some(vm.config.id);
-        }
-
-        None
-    }
-
-    /// Update VM state
-    pub async fn update_state(&self, vm_id: Uuid, new_state: VmState) -> Result<()> {
-        if let Some(entry) = self.vms.get(&vm_id) {
-            let mut vm = entry.write().await;
-            let old_state_key = format!("{:?}", vm.state);
-            let new_state_key = format!("{:?}", new_state);
-
-            vm.state = new_state.clone();
-
-            // Update state index
-            if let Some(mut old_set) = self.by_state.get_mut(&old_state_key) {
-                old_set.remove(&vm_id);
-            }
-
-            self.by_state
-                .entry(new_state_key.clone())
-                .or_insert_with(HashSet::new)
-                .insert(vm_id);
-
-            // Persist state change
-            self.persist_state_change(&vm_id, &new_state).await?;
-
-            tracing::debug!(
-                vm_id = %vm_id,
-                old_state = %old_state_key,
-                new_state = %new_state_key,
-                "VM state updated"
-            );
-        }
-
-        Ok(())
+        Ok(self.vms.get(&vm_id).map(|entry| Arc::clone(entry.value())))
     }
 
     /// List all VMs
-    pub async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
+    pub async fn list_all(&self) -> Result<Vec<VmInstance>> {
         let mut vms = Vec::new();
-
         for entry in self.vms.iter() {
-            let vm = entry.read().await;
+            let vm = entry.value().read().await;
             vms.push(vm.clone());
         }
-
         Ok(vms)
     }
 
-    /// List VMs in specific state
-    pub async fn list_vms_by_state(&self, state: VmState) -> Result<Vec<VmInstance>> {
-        let state_key = format!("{:?}", state);
+    /// List VMs by state
+    pub async fn list_by_state(&self, state: &str) -> Result<Vec<VmInstance>> {
         let mut vms = Vec::new();
-
-        if let Some(vm_ids) = self.by_state.get(&state_key) {
+        if let Some(vm_ids) = self.by_state.get(state) {
             for vm_id in vm_ids.iter() {
-                if let Some(entry) = self.vms.get(vm_id) {
-                    let vm = entry.read().await;
+                if let Some(vm_arc) = self.vms.get(vm_id) {
+                    let vm = vm_arc.read().await;
                     vms.push(vm.clone());
                 }
             }
         }
-
         Ok(vms)
     }
 
-    /// List running VMs
+    /// List all VMs (for compatibility)
+    pub async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
+        self.list_all().await
+    }
+
+    /// List running VMs (for health checking)
     pub async fn list_running_vms(&self) -> Result<Vec<VmInstance>> {
         let mut vms = Vec::new();
-
         for entry in self.vms.iter() {
-            let vm = entry.read().await;
+            let vm = entry.value().read().await;
             if vm.state.is_running() {
                 vms.push(vm.clone());
             }
         }
-
         Ok(vms)
+    }
+
+    /// Get an available service VM
+    pub async fn get_available_service_vm(&self) -> Option<Uuid> {
+        for entry in self.vms.iter() {
+            let vm = entry.value().read().await;
+            if vm.state.is_available() && matches!(vm.config.mode, super::vm_types::VmMode::Service { .. }) {
+                return Some(vm.config.id);
+            }
+        }
+        None
+    }
+
+    /// List VMs by state pattern (for router)
+    pub async fn list_vms_by_state(&self, state: VmState) -> Result<Vec<VmInstance>> {
+        let state_key = format!("{:?}", state);
+        self.list_by_state(&state_key).await
+    }
+
+    /// Find idle VM for job requirements
+    pub async fn find_idle_vm(&self, requirements: &JobRequirements) -> Option<Uuid> {
+        for entry in self.vms.iter() {
+            let vm = entry.value().read().await;
+
+            if vm.state == VmState::Ready {
+                // Check if VM meets requirements
+                if vm.config.memory_mb >= requirements.memory_mb
+                    && vm.config.vcpus >= requirements.vcpus
+                {
+                    return Some(vm.config.id);
+                }
+            }
+        }
+        None
     }
 
     /// Count all VMs
@@ -257,166 +239,154 @@ impl VmRegistry {
             .unwrap_or(0)
     }
 
-    /// Remove VM from registry
+    /// Remove VM
     pub async fn remove(&self, vm_id: Uuid) -> Result<()> {
-        if let Some((_, vm_arc)) = self.vms.remove(&vm_id) {
-            let vm = vm_arc.read().await;
-            let state_key = format!("{:?}", vm.state);
+        // Get VM for state info
+        let vm_arc = self
+            .vms
+            .remove(&vm_id)
+            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?
+            .1;
 
-            // Remove from state index
-            if let Some(mut set) = self.by_state.get_mut(&state_key) {
-                set.remove(&vm_id);
-            }
+        let vm = vm_arc.read().await;
+        let state_key = format!("{:?}", vm.state);
 
-            // Remove from database
-            self.delete_from_db(&vm_id).await?;
-
-            tracing::info!(vm_id = %vm_id, "VM removed from registry");
+        // Update state index
+        if let Some(mut set) = self.by_state.get_mut(&state_key) {
+            set.remove(&vm_id);
         }
 
-        Ok(())
-    }
+        // Remove from Hiqlite
+        self.hiqlite
+            .execute("DELETE FROM vms WHERE id = ?1", params![vm_id.to_string()])
+            .await?;
 
-    /// Persist VM to database
-    async fn persist_vm(&self, vm: &VmInstance) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-
-        conn.execute(
-            "INSERT OR REPLACE INTO vms (
-                id, config, state, created_at, updated_at, pid,
-                control_socket, job_dir, ip_address, metrics
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                vm.config.id.to_string(),
-                serde_json::to_string(&vm.config)?,
-                serde_json::to_string(&vm.state)?,
-                vm.created_at,
-                chrono::Utc::now().timestamp(),
-                vm.pid.map(|p| p as i64),
-                vm.control_socket.as_ref().and_then(|p| p.to_str()),
-                vm.job_dir.as_ref().and_then(|p| p.to_str()),
-                vm.ip_address.as_ref(),
-                serde_json::to_string(&vm.metrics)?,
-            ],
-        )?;
+        // Log removal
+        self.log_event(vm_id, "removed", None).await?;
 
         Ok(())
     }
 
-    /// Persist state change
-    async fn persist_state_change(&self, vm_id: &Uuid, state: &VmState) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+    /// Log VM event
+    pub async fn log_event(&self, vm_id: Uuid, event_type: &str, details: Option<String>) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
 
-        conn.execute(
-            "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
-            params![
-                serde_json::to_string(state)?,
-                chrono::Utc::now().timestamp(),
-                vm_id.to_string(),
-            ],
-        )?;
-
-        Ok(())
-    }
-
-    /// Delete VM from database
-    async fn delete_from_db(&self, vm_id: &Uuid) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-
-        conn.execute(
-            "DELETE FROM vms WHERE id = ?1",
-            params![vm_id.to_string()],
-        )?;
+        self.hiqlite
+            .execute(
+                "INSERT INTO vm_events (vm_id, event_type, event_data, timestamp, node_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    vm_id.to_string(),
+                    event_type,
+                    details,
+                    now,
+                    self.node_id.clone()
+                ],
+            )
+            .await?;
 
         Ok(())
     }
 
-    /// Recover VMs from persistence (on startup)
+    /// Recover VMs from Hiqlite on startup
     pub async fn recover_from_persistence(&self) -> Result<usize> {
-        let conn = Connection::open(&self.db_path)?;
+        // Query all VMs owned by this node
+        let rows = self.hiqlite
+            .query_as::<VmRow>(
+                "SELECT id, config, state, created_at, updated_at, pid, control_socket,
+                        job_dir, ip_address, metrics, node_id
+                 FROM vms
+                 WHERE node_id = ?1",
+                params![self.node_id.clone()],
+            )
+            .await?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, config, state, created_at, pid, control_socket,
-                    job_dir, ip_address, metrics
-             FROM vms WHERE state NOT IN ('Terminated', 'Failed')",
-        )?;
+        let mut recovered = 0;
+        for row in rows {
+            let vm_id = Uuid::parse_str(&row.id)?;
+            let config: VmConfig = serde_json::from_str(&row.config)?;
+            let state = parse_vm_state(&row.state)?;
+            let metrics = row.metrics
+                .as_ref()
+                .and_then(|m| serde_json::from_str(m).ok())
+                .unwrap_or_default();
 
-        let vm_iter = stmt.query_map([], |row| {
-            let id: String = row.get(0)?;
-            let config: String = row.get(1)?;
-            let state: String = row.get(2)?;
-            let created_at: i64 = row.get(3)?;
-            let pid: Option<i64> = row.get(4)?;
-            let control_socket: Option<String> = row.get(5)?;
-            let job_dir: Option<String> = row.get(6)?;
-            let ip_address: Option<String> = row.get(7)?;
-            let metrics: String = row.get(8)?;
-
-            Ok((
-                id, config, state, created_at, pid, control_socket, job_dir, ip_address, metrics,
-            ))
-        })?;
-
-        let mut count = 0;
-        for vm_result in vm_iter {
-            let (id, config, state, created_at, pid, control_socket, job_dir, ip_address, metrics) =
-                vm_result?;
-
-            let vm_id = Uuid::parse_str(&id)?;
-            let config: VmConfig = serde_json::from_str(&config)?;
-            let state: VmState = serde_json::from_str(&state)?;
-            let metrics = serde_json::from_str(&metrics)?;
-
-            let vm = VmInstance {
-                config: config.clone(),
+            let mut vm = VmInstance {
+                config,
                 state: state.clone(),
-                created_at,
-                pid: pid.map(|p| p as u32),
-                control_socket: control_socket.map(PathBuf::from),
-                job_dir: job_dir.map(PathBuf::from),
-                ip_address,
+                pid: row.pid.map(|p| p as u32),
+                created_at: row.created_at,
+                control_socket: row.control_socket.map(|s| s.into()),
+                job_dir: row.job_dir.map(|s| s.into()),
+                ip_address: row.ip_address,
                 metrics,
             };
 
+            // Check if process is still alive (for running VMs)
+            if let Some(pid) = vm.pid {
+                if !is_process_alive(pid) {
+                    // Mark as failed if process died while we were down
+                    vm.state = VmState::Failed {
+                        error: "Process died while system was down".to_string(),
+                    };
+
+                    // Update in Hiqlite
+                    let _ = self.update_state(vm_id, vm.state.clone()).await;
+                }
+            }
+
             // Update state index
-            let state_key = format!("{:?}", state);
+            let state_key = format!("{:?}", vm.state);
             self.by_state
                 .entry(state_key)
                 .or_insert_with(HashSet::new)
                 .insert(vm_id);
 
-            // Store in memory cache
+            // Store in cache
             self.vms.insert(vm_id, Arc::new(RwLock::new(vm)));
-
-            count += 1;
+            recovered += 1;
         }
 
-        Ok(count)
+        tracing::info!(recovered, node_id = %self.node_id, "VMs recovered from Hiqlite");
+        Ok(recovered)
     }
 
-    /// Clean up stale VMs (processes that no longer exist)
+    /// Cleanup stale VMs (mark as failed if owner node is dead)
     pub async fn cleanup_stale_vms(&self) -> Result<()> {
-        let vms = self.list_running_vms().await?;
+        // Get all VMs from all nodes
+        let rows = self.hiqlite
+            .query_as::<VmRow>(
+                "SELECT id, node_id, state FROM vms WHERE state NOT LIKE '%Terminated%'",
+                params![],
+            )
+            .await?;
 
-        for vm in vms {
-            if let Some(pid) = vm.pid {
-                // Check if process still exists
-                let pid = nix::unistd::Pid::from_raw(pid as i32);
-                if nix::sys::signal::kill(pid, None).is_err() {
-                    // Process doesn't exist, mark as failed
-                    self.update_state(
-                        vm.config.id,
-                        VmState::Failed {
-                            error: "Process no longer exists".to_string(),
-                        },
-                    )
-                    .await?;
+        for row in rows {
+            // Check if owner node is alive (would need heartbeat check)
+            // For now, we only manage our own VMs
+            if row.node_id != self.node_id {
+                continue;
+            }
 
-                    tracing::warn!(
-                        vm_id = %vm.config.id,
-                        pid = %pid,
-                        "Marked stale VM as failed"
-                    );
+            let vm_id = Uuid::parse_str(&row.id)?;
+            let state = parse_vm_state(&row.state)?;
+
+            // If it's supposed to be running but we don't have it in cache, it's stale
+            if matches!(state, VmState::Ready | VmState::Starting | VmState::Busy { .. }) {
+                if !self.vms.contains_key(&vm_id) {
+                    // Mark as failed
+                    self.hiqlite
+                        .execute(
+                            "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
+                            params![
+                                "Failed",
+                                chrono::Utc::now().timestamp(),
+                                vm_id.to_string()
+                            ],
+                        )
+                        .await?;
+
+                    tracing::warn!(vm_id = %vm_id, "Marked stale VM as failed");
                 }
             }
         }
@@ -424,25 +394,112 @@ impl VmRegistry {
         Ok(())
     }
 
-    /// Log VM event for auditing
-    pub async fn log_event(
-        &self,
-        vm_id: Uuid,
-        event_type: &str,
-        details: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+    /// Persist VM to Hiqlite
+    async fn persist_vm(&self, vm: &VmInstance) -> Result<()> {
+        let config_json = serde_json::to_string(&vm.config)?;
+        let state_str = format!("{:?}", vm.state);
+        let metrics_json = serde_json::to_string(&vm.metrics)?;
+        let now = chrono::Utc::now().timestamp();
 
-        conn.execute(
-            "INSERT INTO vm_events (vm_id, timestamp, event_type, details) VALUES (?1, ?2, ?3, ?4)",
-            params![
-                vm_id.to_string(),
-                chrono::Utc::now().timestamp(),
-                event_type,
-                details.map(|d| d.to_string()),
-            ],
-        )?;
+        self.hiqlite
+            .execute(
+                "INSERT INTO vms (
+                    id, config, state, created_at, updated_at, node_id,
+                    pid, control_socket, job_dir, ip_address, metrics
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                 ON CONFLICT(id) DO UPDATE SET
+                    config = excluded.config,
+                    state = excluded.state,
+                    updated_at = excluded.updated_at,
+                    pid = excluded.pid,
+                    control_socket = excluded.control_socket,
+                    job_dir = excluded.job_dir,
+                    ip_address = excluded.ip_address,
+                    metrics = excluded.metrics",
+                params![
+                    vm.config.id.to_string(),
+                    config_json,
+                    state_str,
+                    vm.created_at,
+                    now,
+                    self.node_id.clone(),
+                    vm.pid.map(|p| p as i64),
+                    vm.control_socket.as_ref().map(|p| p.display().to_string()),
+                    vm.job_dir.as_ref().map(|p| p.display().to_string()),
+                    None::<String>,  // ip_address - TODO: implement
+                    metrics_json
+                ],
+            )
+            .await?;
 
         Ok(())
     }
+}
+
+// Helper struct for deserializing VM rows from Hiqlite
+#[derive(Debug, Clone, serde::Deserialize)]
+struct VmRow {
+    id: String,
+    config: String,
+    state: String,
+    created_at: i64,
+    updated_at: i64,
+    node_id: String,
+    pid: Option<i64>,
+    control_socket: Option<String>,
+    job_dir: Option<String>,
+    ip_address: Option<String>,
+    metrics: Option<String>,
+}
+
+impl From<hiqlite::Row<'static>> for VmRow {
+    fn from(mut row: hiqlite::Row<'static>) -> Self {
+        Self {
+            id: row.get("id"),
+            config: row.get("config"),
+            state: row.get("state"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+            node_id: row.get("node_id"),
+            pid: row.get("pid"),
+            control_socket: row.get("control_socket"),
+            job_dir: row.get("job_dir"),
+            ip_address: row.get("ip_address"),
+            metrics: row.get("metrics"),
+        }
+    }
+}
+
+// Parse VM state from string representation
+fn parse_vm_state(state_str: &str) -> Result<VmState> {
+    // Simple parsing - would need proper implementation
+    match state_str {
+        "Starting" => Ok(VmState::Starting),
+        "Ready" => Ok(VmState::Ready),
+        "Idle" => Ok(VmState::Idle {
+            jobs_completed: 0,
+            last_job_at: 0,
+        }),
+        s if s.starts_with("Busy") => Ok(VmState::Busy {
+            job_id: String::new(),
+            started_at: 0,
+        }),
+        s if s.starts_with("Draining") => Ok(VmState::Draining),
+        s if s.starts_with("Terminated") => Ok(VmState::Terminated {
+            reason: String::from("Unknown"),
+            exit_code: 0,
+        }),
+        s if s.starts_with("Failed") => Ok(VmState::Failed {
+            error: String::new(),
+        }),
+        _ => Ok(VmState::Terminated {
+            reason: String::from("Unknown state"),
+            exit_code: 0,
+        }),
+    }
+}
+
+// Check if a process is alive
+fn is_process_alive(pid: u32) -> bool {
+    nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), None).is_ok()
 }

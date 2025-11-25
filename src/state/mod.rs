@@ -44,13 +44,21 @@ impl AppState {
     }
 
     /// Create application state from infrastructure services
-    pub fn from_infrastructure(
+    pub async fn from_infrastructure(
         module: DeployedModule,
         iroh: IrohService,
         hiqlite: HiqliteService,
         work_queue: WorkQueue,
     ) -> Self {
-        let infrastructure = InfrastructureState::new(module, iroh, hiqlite, work_queue);
+        // Create a VM manager with default config
+        let vm_config = crate::vm_manager::VmManagerConfig::default();
+        let vm_manager = std::sync::Arc::new(
+            crate::vm_manager::VmManager::new(vm_config, std::sync::Arc::new(hiqlite.clone()))
+                .await
+                .expect("Failed to create VM manager")
+        );
+
+        let infrastructure = InfrastructureState::new(module, iroh, hiqlite, work_queue, vm_manager);
         let services = DomainServices::new(&infrastructure);
 
         Self::new(infrastructure, services)

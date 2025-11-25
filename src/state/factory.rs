@@ -15,6 +15,7 @@ use crate::hiqlite_service::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::{AppState, DomainServices, InfrastructureState};
+use crate::vm_manager::{VmManager, VmManagerConfig};
 use crate::work_queue::WorkQueue;
 
 /// Factory trait for creating infrastructure components
@@ -42,6 +43,13 @@ pub trait InfrastructureFactory: Send + Sync {
         hiqlite: HiqliteService,
     ) -> Result<WorkQueue>;
 
+    /// Create VM manager for orchestrating microvms
+    async fn create_vm_manager(
+        &self,
+        config: &AppConfig,
+        hiqlite: Arc<HiqliteService>,
+    ) -> Result<Arc<VmManager>>;
+
     /// Create state repository abstraction
     fn create_state_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn StateRepository>;
 
@@ -67,13 +75,26 @@ pub trait InfrastructureFactory: Send + Sync {
         hiqlite.initialize_schema().await?;
 
         let iroh = self.create_iroh(config, endpoint.clone()).await?;
+
+        // Create work queue with hiqlite
         let work_queue = self.create_work_queue(config, endpoint, node_id, hiqlite.clone()).await?;
 
+        // Create shared Hiqlite Arc for services that need it
+        let hiqlite_arc = Arc::new(hiqlite.clone());
+
+        // Create VM manager
+        let vm_manager = self.create_vm_manager(config, hiqlite_arc.clone()).await?;
+
         // Create infrastructure state
-        let infrastructure = InfrastructureState::new(module, iroh, hiqlite.clone(), work_queue.clone());
+        let infrastructure = InfrastructureState::new(
+            module,
+            iroh,
+            hiqlite,
+            work_queue.clone(),
+            vm_manager
+        );
 
         // Create repository abstractions
-        let hiqlite_arc = Arc::new(hiqlite);
         let state_repo = self.create_state_repository(hiqlite_arc.clone());
         let work_repo = self.create_work_repository(work_queue);
         let worker_repo = self.create_worker_repository(hiqlite_arc);
@@ -121,6 +142,26 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
     ) -> Result<WorkQueue> {
         let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite));
         WorkQueue::new(endpoint, node_id, persistent_store).await
+    }
+
+    async fn create_vm_manager(
+        &self,
+        config: &AppConfig,
+        hiqlite: Arc<HiqliteService>,
+    ) -> Result<Arc<VmManager>> {
+        // Configure VM manager from app config
+        let vm_config = VmManagerConfig {
+            max_vms: config.firecracker.max_concurrent_vms,
+            auto_scaling: true,
+            pre_warm_count: 2,
+            flake_dir: config.firecracker.flake_dir.clone(),
+            state_dir: config.storage.vm_state_dir.clone(),
+            default_memory_mb: config.firecracker.default_memory_mb,
+            default_vcpus: config.firecracker.default_vcpus,
+        };
+
+        let vm_manager = VmManager::new(vm_config, hiqlite).await?;
+        Ok(Arc::new(vm_manager))
     }
 
     fn create_state_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn StateRepository> {
@@ -186,6 +227,26 @@ pub mod test_factory {
             // Same as production but with test hiqlite
             let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite));
             WorkQueue::new(endpoint, node_id, persistent_store).await
+        }
+
+        async fn create_vm_manager(
+            &self,
+            _config: &AppConfig,
+            hiqlite: Arc<HiqliteService>,
+        ) -> Result<Arc<VmManager>> {
+            // Test VM configuration with minimal resources
+            let vm_config = VmManagerConfig {
+                max_vms: 3,  // Limited for testing
+                auto_scaling: false,  // Disabled for testing
+                pre_warm_count: 0,  // No pre-warming in tests
+                flake_dir: std::path::PathBuf::from("./microvms"),
+                state_dir: std::env::temp_dir().join("mvm-ci-test-vms"),
+                default_memory_mb: 256,  // Minimal memory for tests
+                default_vcpus: 1,
+            };
+
+            let vm_manager = VmManager::new(vm_config, hiqlite).await?;
+            Ok(Arc::new(vm_manager))
         }
 
         fn create_state_repository(&self, _hiqlite: Arc<HiqliteService>) -> Arc<dyn StateRepository> {

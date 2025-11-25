@@ -82,24 +82,60 @@ impl VmController {
         // Get job data (would normally fetch from queue)
         let job_file = job_dir.join("job.json");
 
-        // Run the VM using microvm.nix
-        let mut cmd = Command::new("nix");
-        cmd.args(&[
-            "run",
-            &format!("{}#run-worker-vm", self.config.flake_dir.display()),
-            "--",
-            job_file.to_str().unwrap(),
-            &vm_id.to_string(),
-            "", // Control plane ticket
-            &vm.config.memory_mb.to_string(),
-            &vm.config.vcpus.to_string(),
-        ]);
+        // Build the microvm runner path
+        let runner_path = self.config.flake_dir.join("result/bin/microvm-run");
 
+        // If result symlink doesn't exist, build it first
+        if !runner_path.exists() {
+            tracing::info!("Building worker VM from flake");
+            let build_output = Command::new("nix")
+                .args(&[
+                    "build",
+                    ".#worker-vm",
+                    "--out-link",
+                    "./result",
+                ])
+                .current_dir(&self.config.flake_dir)
+                .output()
+                .await?;
+
+            if !build_output.status.success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to build worker VM: {}",
+                    String::from_utf8_lossy(&build_output.stderr)
+                ));
+            }
+        }
+
+        // Run the VM directly using cloud-hypervisor via microvm-run
+        let mut cmd = Command::new(&runner_path);
+
+        // Set environment variables for the VM
         cmd.env("VM_TYPE", "ephemeral");
         cmd.env("VM_ID", vm_id.to_string());
+        cmd.env("VM_MEM_MB", vm.config.memory_mb.to_string());
+        cmd.env("VM_VCPUS", vm.config.vcpus.to_string());
+        cmd.env("JOB_DIR", job_dir.to_str().unwrap());
+
+        // Set working directory to VM directory
+        cmd.current_dir(&vm_dir);
+
+        // Redirect stdout/stderr to files for debugging
+        let stdout_file = tokio::fs::File::create(vm_dir.join("stdout.log")).await?;
+        let stderr_file = tokio::fs::File::create(vm_dir.join("stderr.log")).await?;
+        cmd.stdout(stdout_file.into_std().await);
+        cmd.stderr(stderr_file.into_std().await);
+
+        tracing::info!(
+            vm_id = %vm_id,
+            runner = %runner_path.display(),
+            mem_mb = vm.config.memory_mb,
+            vcpus = vm.config.vcpus,
+            "Starting ephemeral cloud-hypervisor VM"
+        );
 
         let child = cmd.spawn()?;
-        vm.pid = Some(child.id());
+        vm.pid = Some(child.id().expect("Failed to get child PID"));
 
         // Update state
         vm.state = VmState::Busy {
@@ -138,23 +174,63 @@ impl VmController {
         let config_file = vm_dir.join("config.json");
         tokio::fs::write(&config_file, vm_config.to_string()).await?;
 
-        // Start VM with service mode
-        let mut cmd = Command::new("nix");
-        cmd.args(&[
-            "run",
-            &format!("{}#service-worker-vm", self.config.flake_dir.display()),
-            "--",
-            &vm_id.to_string(),
-            control_socket.to_str().unwrap(),
-            config_file.to_str().unwrap(),
-        ]);
+        // Build the microvm runner path for service VMs
+        let runner_path = self.config.flake_dir.join("result-service/bin/microvm-run");
 
+        // If result symlink doesn't exist, build it first
+        if !runner_path.exists() {
+            tracing::info!("Building service VM from flake");
+            let build_output = Command::new("nix")
+                .args(&[
+                    "build",
+                    ".#service-vm",
+                    "--out-link",
+                    "./result-service",
+                ])
+                .current_dir(&self.config.flake_dir)
+                .output()
+                .await?;
+
+            if !build_output.status.success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to build service VM: {}",
+                    String::from_utf8_lossy(&build_output.stderr)
+                ));
+            }
+        }
+
+        // Run the VM directly using cloud-hypervisor via microvm-run
+        let mut cmd = Command::new(&runner_path);
+
+        // Set environment variables for the VM
         cmd.env("VM_TYPE", "service");
         cmd.env("VM_ID", vm_id.to_string());
+        cmd.env("VM_MEM_MB", vm.config.memory_mb.to_string());
+        cmd.env("VM_VCPUS", vm.config.vcpus.to_string());
         cmd.env("CONTROL_SOCKET", control_socket.to_str().unwrap());
+        cmd.env("JOB_DIR", job_dir.to_str().unwrap());
+
+        // Set working directory to VM directory
+        cmd.current_dir(&vm_dir);
+
+        // Redirect stdout/stderr to files for debugging
+        let stdout_file = tokio::fs::File::create(vm_dir.join("stdout.log")).await?;
+        let stderr_file = tokio::fs::File::create(vm_dir.join("stderr.log")).await?;
+        cmd.stdout(stdout_file.into_std().await);
+        cmd.stderr(stderr_file.into_std().await);
+
+        tracing::info!(
+            vm_id = %vm_id,
+            runner = %runner_path.display(),
+            mem_mb = vm.config.memory_mb,
+            vcpus = vm.config.vcpus,
+            queue = queue_name,
+            "Starting service cloud-hypervisor VM"
+        );
 
         let child = cmd.spawn()?;
-        vm.pid = Some(child.id());
+        let pid = child.id().expect("Failed to get child PID");
+        vm.pid = Some(pid);
 
         // Wait for VM to be ready
         self.wait_for_vm_ready(&control_socket).await?;
@@ -164,7 +240,7 @@ impl VmController {
 
         tracing::info!(
             vm_id = %vm_id,
-            pid = child.id(),
+            pid = pid,
             "Service VM started and ready"
         );
 
@@ -370,5 +446,10 @@ impl VmController {
     pub fn is_process_running(&self, pid: u32) -> bool {
         let pid = nix::unistd::Pid::from_raw(pid as i32);
         nix::sys::signal::kill(pid, None).is_ok()
+    }
+
+    /// Stop a VM (public method)
+    pub async fn stop_vm(&self, vm_id: Uuid) -> Result<()> {
+        self.shutdown_vm(vm_id, true).await
     }
 }

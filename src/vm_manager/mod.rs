@@ -14,7 +14,8 @@ mod tests;
 
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+
+use crate::hiqlite_service::HiqliteService;
 
 pub use vm_types::{VmConfig, VmInstance, VmMode, VmState, IsolationLevel};
 pub use vm_registry::VmRegistry;
@@ -67,9 +68,9 @@ impl Default for VmManagerConfig {
 
 impl VmManager {
     /// Create a new VM manager
-    pub async fn new(config: VmManagerConfig) -> Result<Self> {
-        // Initialize registry with persistence
-        let registry = Arc::new(VmRegistry::new(&config.state_dir).await?);
+    pub async fn new(config: VmManagerConfig, hiqlite: Arc<HiqliteService>) -> Result<Self> {
+        // Initialize registry with Hiqlite persistence
+        let registry = Arc::new(VmRegistry::new(hiqlite, &config.state_dir).await?);
 
         // Create controller for VM lifecycle operations
         let controller = Arc::new(VmController::new(
@@ -89,10 +90,11 @@ impl VmManager {
             Arc::clone(&controller),
         ));
 
-        // Initialize health checker
+        // Initialize health checker with default config
+        let health_config = crate::vm_manager::health_checker::HealthCheckConfig::default();
         let health_checker = Arc::new(HealthChecker::new(
             Arc::clone(&registry),
-            Arc::clone(&controller),
+            health_config,
         ));
 
         Ok(Self {
@@ -240,11 +242,10 @@ impl VmManager {
 
         // Convert VmAssignment to JobResult
         Ok(JobResult {
-            vm_id: assignment.vm_id,
+            vm_id: assignment.vm_id(),
             success: true,  // Would be set based on actual execution
-            output: format!("Job {} assigned to VM {}", job.id, assignment.vm_id),
+            output: format!("Job {} assigned to VM {}", job.id, assignment.vm_id()),
             error: None,
-            metadata: Default::default(),
         })
     }
 
@@ -258,7 +259,6 @@ impl VmManager {
             success: true,
             output: format!("Job {} sent to VM {}", job.id, vm_id),
             error: None,
-            metadata: Default::default(),
         })
     }
 
@@ -277,17 +277,13 @@ impl VmManager {
         // Start health monitoring
         let health_checker = self.health_checker.clone();
         tokio::spawn(async move {
-            if let Err(e) = health_checker.start_monitoring().await {
-                tracing::error!(error = ?e, "Health monitoring failed");
-            }
+            health_checker.start_monitoring().await;
         });
 
         // Start resource monitoring
         let monitor = self.monitor.clone();
         tokio::spawn(async move {
-            if let Err(e) = monitor.start_monitoring().await {
-                tracing::error!(error = ?e, "Resource monitoring failed");
-            }
+            monitor.monitoring_loop().await;
         });
 
         Ok(())
@@ -300,7 +296,6 @@ pub struct JobResult {
     pub success: bool,
     pub output: String,
     pub error: Option<String>,
-    pub metadata: std::collections::HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

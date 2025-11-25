@@ -55,6 +55,8 @@ pub struct StorageConfig {
     pub iroh_blobs_path: PathBuf,
     /// Path to hiqlite data directory
     pub hiqlite_data_dir: PathBuf,
+    /// Path to VM state directory (for VM lifecycle management)
+    pub vm_state_dir: PathBuf,
 }
 
 impl StorageConfig {
@@ -68,9 +70,14 @@ impl StorageConfig {
             .unwrap_or_else(|_| "./data/hiqlite".to_string())
             .into();
 
+        let vm_state_dir = std::env::var("VM_STATE_DIR")
+            .unwrap_or_else(|_| "./data/vm-state".to_string())
+            .into();
+
         Ok(Self {
             iroh_blobs_path,
             hiqlite_data_dir,
+            vm_state_dir,
         })
     }
 
@@ -79,6 +86,7 @@ impl StorageConfig {
         Self {
             iroh_blobs_path: "./data/iroh-blobs".into(),
             hiqlite_data_dir: "./data/hiqlite".into(),
+            vm_state_dir: "./data/vm-state".into(),
         }
     }
 }

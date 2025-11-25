@@ -86,6 +86,11 @@ impl HealthChecker {
     }
 
     /// Start health checking loop
+    pub async fn health_check_loop(&self) {
+        self.start_monitoring().await
+    }
+
+    /// Start health monitoring (public for compatibility)
     pub async fn start_monitoring(&self) {
         let mut interval = interval(Duration::from_secs(self.config.check_interval_secs));
 
@@ -217,7 +222,7 @@ impl HealthChecker {
                         } else {
                             *current = HealthStatus::Degraded {
                                 last_check: chrono::Utc::now().timestamp(),
-                                failures: failures - 1,
+                                failures: failures.saturating_sub(1),
                                 last_error: String::new(),
                             };
                         }
@@ -260,7 +265,7 @@ impl HealthChecker {
                     }
                     HealthStatus::Degraded { failures, .. } => {
                         // Additional failure
-                        let new_failures = failures + 1;
+                        let new_failures = *failures + 1;
                         if new_failures >= self.config.failure_threshold {
                             // Mark as unhealthy
                             *current = HealthStatus::Unhealthy {
@@ -297,7 +302,7 @@ impl HealthChecker {
                         // Still unhealthy
                         *current = HealthStatus::Unhealthy {
                             since: chrono::Utc::now().timestamp(),
-                            failures: failures + 1,
+                            failures: *failures + 1,
                             last_error: error_msg,
                         };
                     }
