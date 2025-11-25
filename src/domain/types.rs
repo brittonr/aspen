@@ -69,6 +69,31 @@ pub struct Job {
     pub compatible_worker_types: Vec<WorkerType>,
 }
 
+impl Default for Job {
+    fn default() -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            status: JobStatus::Pending,
+            claimed_by: None,
+            assigned_worker_id: None,
+            completed_by: None,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+            updated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+            started_at: None,
+            error_message: None,
+            retry_count: 0,
+            payload: serde_json::json!({}),
+            compatible_worker_types: Vec::new(),
+        }
+    }
+}
+
 impl Job {
     /// Get the URL from the job payload (convenience method)
     pub fn url(&self) -> Option<&str> {

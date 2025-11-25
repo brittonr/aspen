@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::Job;
 
 /// Result of job execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkResult {
     /// Whether the job completed successfully
     pub success: bool,

@@ -497,6 +497,46 @@ impl HiqliteService {
             params!(),
         ).await;
 
+        // Create execution_instances table for adapter-based execution tracking
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS execution_instances (
+                id TEXT PRIMARY KEY,
+                backend_type TEXT NOT NULL,
+                execution_handle TEXT NOT NULL,
+                job_id TEXT,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                started_at INTEGER,
+                completed_at INTEGER,
+                node_id TEXT,
+                metadata TEXT,
+                FOREIGN KEY (job_id) REFERENCES workflows(id)
+            )",
+            params!(),
+        ).await?;
+
+        // Create indices for execution_instances queries
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_instances_backend_type ON execution_instances(backend_type)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_instances_job_id ON execution_instances(job_id)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_instances_status ON execution_instances(status)",
+            params!(),
+        ).await;
+
+        let _ = self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_instances_created_at ON execution_instances(created_at)",
+            params!(),
+        ).await;
+
         tracing::info!("Schema initialization complete");
         Ok(())
     }

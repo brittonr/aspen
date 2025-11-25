@@ -41,3 +41,6 @@ pub mod repositories;
 pub mod state;
 pub mod server;
 pub mod vm_manager;
+
+// Execution backend adapters
+pub mod adapters;

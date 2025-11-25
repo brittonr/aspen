@@ -1,10 +1,11 @@
 //! Infrastructure state container
 //!
-//! Holds all infrastructure service dependencies (database, queue, networking, flawless).
+//! Holds all infrastructure service dependencies (database, queue, networking, execution backends).
 
 use std::sync::Arc;
 use flawless_utils::DeployedModule;
 
+use crate::adapters::ExecutionRegistry;
 use crate::hiqlite_service::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::services::traits::{
@@ -21,24 +22,47 @@ use crate::work_queue::WorkQueue;
 /// - Job queue (WorkQueue)
 /// - P2P networking (IrohService - concrete type wrapping all capabilities)
 /// - Flawless module (DeployedModule)
-/// - VM management (VmManager - orchestrates VM lifecycle)
+/// - Execution backends (ExecutionRegistry - manages multiple execution adapters)
 ///
 /// # Design
 ///
 /// Services implement traits for consistency and documentation, but are stored
 /// as concrete types to avoid object-safety issues with generic methods.
 /// Methods return trait object references where appropriate for flexibility.
+///
+/// The ExecutionRegistry provides a decoupled way to manage different execution
+/// backends (VMs, Flawless, local processes, etc.) without tight coupling.
 #[derive(Clone)]
 pub struct InfrastructureState {
     pub(crate) module: Arc<DeployedModule>,
     pub(crate) iroh: IrohService,
     pub(crate) hiqlite: HiqliteService,
     pub(crate) work_queue: WorkQueue,
-    pub(crate) vm_manager: Arc<VmManager>,
+    pub(crate) execution_registry: Arc<ExecutionRegistry>,
+    // Keep vm_manager for backwards compatibility during migration
+    pub(crate) vm_manager: Option<Arc<VmManager>>,
 }
 
 impl InfrastructureState {
-    /// Create a new infrastructure state container
+    /// Create a new infrastructure state container with execution registry
+    pub fn new_with_registry(
+        module: DeployedModule,
+        iroh: IrohService,
+        hiqlite: HiqliteService,
+        work_queue: WorkQueue,
+        execution_registry: Arc<ExecutionRegistry>,
+    ) -> Self {
+        Self {
+            module: Arc::new(module),
+            iroh,
+            hiqlite,
+            work_queue,
+            execution_registry,
+            vm_manager: None,
+        }
+    }
+
+    /// Create a new infrastructure state container (legacy, for backwards compatibility)
     pub fn new(
         module: DeployedModule,
         iroh: IrohService,
@@ -46,12 +70,17 @@ impl InfrastructureState {
         work_queue: WorkQueue,
         vm_manager: Arc<VmManager>,
     ) -> Self {
+        // Create a default execution registry
+        let registry_config = crate::adapters::RegistryConfig::default();
+        let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
+
         Self {
             module: Arc::new(module),
             iroh,
             hiqlite,
             work_queue,
-            vm_manager,
+            execution_registry,
+            vm_manager: Some(vm_manager),
         }
     }
 
@@ -110,8 +139,20 @@ impl InfrastructureState {
         &self.work_queue
     }
 
-    /// Get the VM manager
+    /// Get the execution registry
+    pub fn execution_registry(&self) -> &Arc<ExecutionRegistry> {
+        &self.execution_registry
+    }
+
+    /// Get the VM manager (legacy, for backwards compatibility)
     pub fn vm_manager(&self) -> &Arc<VmManager> {
-        &self.vm_manager
+        self.vm_manager
+            .as_ref()
+            .expect("VM manager not available when using execution registry")
+    }
+
+    /// Check if using legacy VM manager
+    pub fn has_vm_manager(&self) -> bool {
+        self.vm_manager.is_some()
     }
 }
