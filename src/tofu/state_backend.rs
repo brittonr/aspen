@@ -137,46 +137,54 @@ impl TofuStateBackend {
 
     /// Lock a workspace for exclusive access
     pub async fn lock_workspace(&self, workspace: &str, lock_info: LockRequest) -> Result<()> {
-        let now = self.current_timestamp();
+        // Retry once if the workspace doesn't exist
+        for attempt in 0..2 {
+            let now = self.current_timestamp();
 
-        // Check for stale locks and clean them up
-        self.cleanup_stale_locks().await?;
+            // Check for stale locks and clean them up
+            self.cleanup_stale_locks().await?;
 
-        // Try to acquire lock
-        let lock_json = serde_json::to_string(&WorkspaceLock {
-            id: lock_info.id.clone(),
-            operation: lock_info.operation,
-            info: lock_info.info,
-            who: lock_info.who,
-            version: lock_info.version,
-            created: now,
-            path: lock_info.path,
-        })?;
+            // Try to acquire lock
+            let lock_json = serde_json::to_string(&WorkspaceLock {
+                id: lock_info.id.clone(),
+                operation: lock_info.operation.clone(),
+                info: lock_info.info.clone(),
+                who: lock_info.who.clone(),
+                version: lock_info.version.clone(),
+                created: now,
+                path: lock_info.path.clone(),
+            })?;
 
-        let rows_affected = self.hiqlite.execute(
-            "UPDATE tofu_workspaces
-             SET lock_id = $1, lock_acquired_at = $2, lock_holder = $3, lock_info = $4
-             WHERE name = $5 AND lock_id IS NULL",
-            params!(
-                lock_info.id,
-                now,
-                lock_info.who,
-                lock_json,
-                workspace
-            ),
-        ).await?;
+            let rows_affected = self.hiqlite.execute(
+                "UPDATE tofu_workspaces
+                 SET lock_id = $1, lock_acquired_at = $2, lock_holder = $3, lock_info = $4
+                 WHERE name = $5 AND lock_id IS NULL",
+                params!(
+                    lock_info.id.clone(),
+                    now,
+                    lock_info.who.clone(),
+                    lock_json,
+                    workspace
+                ),
+            ).await?;
 
-        if rows_affected == 0 {
+            if rows_affected > 0 {
+                return Ok(());
+            }
+
             // Check if workspace exists and is already locked
             let workspace_data = self.get_or_create_workspace(workspace).await?;
             if workspace_data.lock.is_some() {
                 return Err(TofuError::WorkspaceLocked.into());
             }
-            // Retry if workspace was just created
-            return self.lock_workspace(workspace, lock_info).await;
+
+            // If this is the first attempt and workspace was just created, retry
+            if attempt == 0 {
+                continue;
+            }
         }
 
-        Ok(())
+        Err(anyhow::anyhow!("Failed to acquire workspace lock after retries"))
     }
 
     /// Unlock a workspace
@@ -281,26 +289,28 @@ impl TofuStateBackend {
         workspace: &str,
         limit: Option<i64>,
     ) -> Result<Vec<(i64, TofuState, i64)>> {
-        let query = if let Some(limit) = limit {
-            format!(
+        // Build dynamic query since we need LIMIT
+        let rows: Vec<StateHistoryRow> = if let Some(limit) = limit {
+            // For limited queries, we need to build the query string dynamically
+            // Hiqlite doesn't support parameterized LIMIT, so we format it directly
+            let query_str = format!(
                 "SELECT state_data, state_version, created_at
                  FROM tofu_state_history
                  WHERE workspace = $1
                  ORDER BY created_at DESC
                  LIMIT {}",
                 limit
-            )
+            );
+            self.hiqlite.query_as(query_str, params!(workspace)).await?
         } else {
-            "SELECT state_data, state_version, created_at
-             FROM tofu_state_history
-             WHERE workspace = $1
-             ORDER BY created_at DESC".to_string()
+            self.hiqlite.query_as(
+                "SELECT state_data, state_version, created_at
+                 FROM tofu_state_history
+                 WHERE workspace = $1
+                 ORDER BY created_at DESC",
+                params!(workspace),
+            ).await?
         };
-
-        let rows: Vec<StateHistoryRow> = self.hiqlite.query_as(
-            &query,
-            params!(workspace),
-        ).await?;
 
         let mut history = Vec::new();
         for row in rows {
@@ -478,18 +488,18 @@ struct WorkspaceRow {
 }
 
 impl From<hiqlite::Row<'static>> for WorkspaceRow {
-    fn from(row: hiqlite::Row<'static>) -> Self {
+    fn from(mut row: hiqlite::Row<'static>) -> Self {
         Self {
-            name: row.get::<String>("name").unwrap(),
-            created_at: row.get::<i64>("created_at").unwrap(),
-            updated_at: row.get::<i64>("updated_at").unwrap(),
-            current_state: row.get::<Option<String>>("current_state").unwrap(),
-            state_version: row.get::<i64>("state_version").unwrap(),
-            state_lineage: row.get::<Option<String>>("state_lineage").unwrap(),
-            lock_id: row.get::<Option<String>>("lock_id").unwrap(),
-            lock_acquired_at: row.get::<Option<i64>>("lock_acquired_at").unwrap(),
-            lock_holder: row.get::<Option<String>>("lock_holder").unwrap(),
-            lock_info: row.get::<Option<String>>("lock_info").unwrap(),
+            name: row.get::<String>("name"),
+            created_at: row.get::<i64>("created_at"),
+            updated_at: row.get::<i64>("updated_at"),
+            current_state: row.get::<Option<String>>("current_state"),
+            state_version: row.get::<i64>("state_version"),
+            state_lineage: row.get::<Option<String>>("state_lineage"),
+            lock_id: row.get::<Option<String>>("lock_id"),
+            lock_acquired_at: row.get::<Option<i64>>("lock_acquired_at"),
+            lock_holder: row.get::<Option<String>>("lock_holder"),
+            lock_info: row.get::<Option<String>>("lock_info"),
         }
     }
 }
@@ -500,9 +510,9 @@ struct WorkspaceNameRow {
 }
 
 impl From<hiqlite::Row<'static>> for WorkspaceNameRow {
-    fn from(row: hiqlite::Row<'static>) -> Self {
+    fn from(mut row: hiqlite::Row<'static>) -> Self {
         Self {
-            name: row.get::<String>("name").unwrap(),
+            name: row.get::<String>("name"),
         }
     }
 }
@@ -515,11 +525,11 @@ struct StateHistoryRow {
 }
 
 impl From<hiqlite::Row<'static>> for StateHistoryRow {
-    fn from(row: hiqlite::Row<'static>) -> Self {
+    fn from(mut row: hiqlite::Row<'static>) -> Self {
         Self {
-            state_data: row.get::<String>("state_data").unwrap(),
-            state_version: row.get::<i64>("state_version").unwrap(),
-            created_at: row.get::<i64>("created_at").unwrap(),
+            state_data: row.get::<String>("state_data"),
+            state_version: row.get::<i64>("state_version"),
+            created_at: row.get::<i64>("created_at"),
         }
     }
 }
@@ -537,16 +547,16 @@ struct PlanRow {
 }
 
 impl From<hiqlite::Row<'static>> for PlanRow {
-    fn from(row: hiqlite::Row<'static>) -> Self {
+    fn from(mut row: hiqlite::Row<'static>) -> Self {
         Self {
-            id: row.get::<String>("id").unwrap(),
-            workspace: row.get::<String>("workspace").unwrap(),
-            created_at: row.get::<i64>("created_at").unwrap(),
-            plan_data: row.get::<Vec<u8>>("plan_data").unwrap(),
-            plan_json: row.get::<Option<String>>("plan_json").unwrap(),
-            status: row.get::<String>("status").unwrap(),
-            approved_by: row.get::<Option<String>>("approved_by").unwrap(),
-            executed_at: row.get::<Option<i64>>("executed_at").unwrap(),
+            id: row.get::<String>("id"),
+            workspace: row.get::<String>("workspace"),
+            created_at: row.get::<i64>("created_at"),
+            plan_data: row.get::<Vec<u8>>("plan_data"),
+            plan_json: row.get::<Option<String>>("plan_json"),
+            status: row.get::<String>("status"),
+            approved_by: row.get::<Option<String>>("approved_by"),
+            executed_at: row.get::<Option<i64>>("executed_at"),
         }
     }
 }

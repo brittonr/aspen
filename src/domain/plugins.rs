@@ -392,7 +392,7 @@ impl PluginRegistry {
     /// Initialize all plugins
     pub async fn initialize_all(&mut self, configs: HashMap<String, serde_json::Value>) -> DomainResult<()> {
         for (id, _plugin) in &mut self.plugins {
-            let config = configs
+            let _config = configs
                 .get(id)
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({}));

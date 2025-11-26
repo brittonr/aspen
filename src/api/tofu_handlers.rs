@@ -32,7 +32,7 @@ pub struct StateQuery {
 /// GET /api/tofu/state/{workspace}
 pub async fn get_state(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -58,7 +58,7 @@ pub async fn get_state(
 pub async fn update_state(
     Path(workspace): Path<String>,
     Query(query): Query<StateQuery>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     Json(tofu_state): Json<TofuState>,
 ) -> Result<Response, StatusCode> {
@@ -107,7 +107,7 @@ pub async fn update_state(
 /// LOCK /api/tofu/lock/{workspace}
 pub async fn lock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
@@ -136,7 +136,7 @@ pub async fn lock_workspace(
 /// UNLOCK /api/tofu/unlock/{workspace}
 pub async fn unlock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
@@ -159,7 +159,7 @@ pub async fn unlock_workspace(
 /// DELETE /api/tofu/lock/{workspace}
 pub async fn force_unlock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -176,7 +176,7 @@ pub async fn force_unlock_workspace(
 ///
 /// GET /api/tofu/workspaces
 pub async fn list_workspaces(
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -194,7 +194,7 @@ pub async fn list_workspaces(
 /// DELETE /api/tofu/workspaces/{workspace}
 pub async fn delete_workspace(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -212,7 +212,7 @@ pub async fn delete_workspace(
 /// GET /api/tofu/history/{workspace}
 pub async fn get_state_history(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<StateHistoryEntry>>, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -235,7 +235,7 @@ pub async fn get_state_history(
 }
 
 #[derive(Serialize)]
-struct StateHistoryEntry {
+pub struct StateHistoryEntry {
     version: i64,
     created_at: i64,
 }
@@ -245,7 +245,7 @@ struct StateHistoryEntry {
 /// POST /api/tofu/rollback/{workspace}/{version}
 pub async fn rollback_state(
     Path((workspace, version)): Path<(String, i64)>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -271,7 +271,7 @@ pub struct CreatePlanRequest {
 }
 
 pub async fn create_plan(
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Json(request): Json<CreatePlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
     let executor = TofuPlanExecutor::new(
@@ -303,7 +303,7 @@ pub struct ApplyPlanRequest {
 
 pub async fn apply_plan(
     Path(plan_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Json(request): Json<ApplyPlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
     let executor = TofuPlanExecutor::new(
@@ -326,7 +326,7 @@ pub async fn apply_plan(
 /// GET /api/tofu/plans/{workspace}
 pub async fn list_plans(
     Path(workspace): Path<String>,
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<PlanSummary>>, StatusCode> {
     let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
 
@@ -353,7 +353,7 @@ pub async fn list_plans(
 }
 
 #[derive(Serialize)]
-struct PlanSummary {
+pub struct PlanSummary {
     id: String,
     workspace: String,
     created_at: i64,
@@ -373,7 +373,7 @@ pub struct DestroyRequest {
 }
 
 pub async fn destroy_infrastructure(
-    State(state): State<Arc<AppState>>,
+    State(state): State<AppState>,
     Json(request): Json<DestroyRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
     let executor = TofuPlanExecutor::new(

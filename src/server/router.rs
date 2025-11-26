@@ -20,7 +20,7 @@
 
 use axum::{routing::{get, post, delete}, Router};
 
-use crate::api::tofu_handlers;
+use crate::api::tofu_handlers::*;
 use crate::handlers::dashboard::*;
 use crate::handlers::queue::*;
 use crate::handlers::worker::*;
@@ -173,18 +173,18 @@ fn tofu_api_router() -> Router<AppState> {
 
     Router::new()
         // State backend protocol endpoints
-        .route("/state/:workspace", get(tofu_handlers::get_state).post(tofu_handlers::update_state))
-        .route("/lock/:workspace", post(tofu_handlers::lock_workspace).delete(tofu_handlers::force_unlock_workspace))
-        .route("/unlock/:workspace", post(tofu_handlers::unlock_workspace))
-        .route("/workspaces", get(tofu_handlers::list_workspaces))
-        .route("/workspaces/:workspace", delete(tofu_handlers::delete_workspace))
-        .route("/history/:workspace", get(tofu_handlers::get_state_history))
-        .route("/rollback/:workspace/:version", post(tofu_handlers::rollback_state))
+        .route("/state/:workspace", get(get_state).post(update_state))
+        .route("/lock/:workspace", post(lock_workspace).delete(force_unlock_workspace))
+        .route("/unlock/:workspace", post(unlock_workspace))
+        .route("/workspaces", get(list_workspaces))
+        .route("/workspaces/:workspace", delete(delete_workspace))
+        .route("/history/:workspace", get(get_state_history))
+        .route("/rollback/:workspace/:version", post(rollback_state))
         // Plan execution endpoints
-        .route("/plan", post(tofu_handlers::create_plan))
-        .route("/apply/:plan_id", post(tofu_handlers::apply_plan))
-        .route("/plans/:workspace", get(tofu_handlers::list_plans))
-        .route("/destroy", post(tofu_handlers::destroy_infrastructure))
+        .route("/plan", post(create_plan))
+        .route("/apply/:plan_id", post(apply_plan))
+        .route("/plans/:workspace", get(list_plans))
+        .route("/destroy", post(destroy_infrastructure))
         // Apply API key authentication to all tofu routes
         .layer(axum::middleware::from_fn(middleware::api_key_auth))
 }

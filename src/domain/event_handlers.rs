@@ -20,7 +20,7 @@ pub trait EventHandler: Send + Sync {
     fn name(&self) -> &str;
 
     /// Check if this handler can handle a specific event type
-    fn handles(&self, event: &DomainEvent) -> bool {
+    fn handles(&self, _event: &DomainEvent) -> bool {
         true // By default, handle all events
     }
 
@@ -280,7 +280,7 @@ impl EventHandler for WebhookEventHandler {
         "WebhookEventHandler"
     }
 
-    fn handles(&self, event: &DomainEvent) -> bool {
+    fn handles(&self, _event: &DomainEvent) -> bool {
         // Only handle significant events for webhooks
         matches!(
             event,
