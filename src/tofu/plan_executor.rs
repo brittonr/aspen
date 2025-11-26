@@ -162,56 +162,89 @@ impl TofuPlanExecutor {
         config_dir: &Path,
         auto_approve: bool,
     ) -> Result<PlanExecutionResult> {
-        // Validate workspace name to prevent command injection
-        Self::validate_workspace_name(workspace)
-            .context("Invalid workspace name")?;
-
-        // Ensure workspace exists
+        Self::validate_workspace_name(workspace)?;
         self.state_backend.get_or_create_workspace(workspace).await?;
 
-        // Create a unique execution ID
+        let work_dir = self.prepare_work_directory().await?;
+        self.copy_config_to_work_dir(config_dir, &work_dir).await?;
+
+        let plan_output = self.create_plan(&work_dir, workspace).await?;
+        let plan_id = self.store_plan_from_output(workspace, &work_dir, &plan_output).await?;
+
+        if auto_approve {
+            self.apply_and_update_plan(workspace, &work_dir, &plan_id).await
+        } else {
+            self.create_pending_plan_result(&plan_id, &plan_output)
+        }
+    }
+
+    /// Prepare a unique work directory for execution
+    async fn prepare_work_directory(&self) -> Result<PathBuf> {
         let execution_id = Uuid::new_v4().to_string();
         let work_dir = self.work_dir.join(&execution_id);
         tokio::fs::create_dir_all(&work_dir).await?;
+        Ok(work_dir)
+    }
 
-        // Copy configuration to work directory
-        self.copy_config_to_work_dir(config_dir, &work_dir).await?;
-
-        // Create the plan
-        let plan_output = self.create_plan(&work_dir, workspace).await?;
-
-        // Parse plan output to determine changes
+    /// Store a plan from the tofu plan output
+    async fn store_plan_from_output(
+        &self,
+        workspace: &str,
+        work_dir: &Path,
+        plan_output: &str,
+    ) -> Result<String> {
         let (resources_created, resources_updated, resources_destroyed) =
-            self.parse_plan_summary(&plan_output);
+            self.parse_plan_summary(plan_output);
 
-        // Store the plan
         let plan_id = Uuid::new_v4().to_string();
-        let plan_data = self.read_plan_file(&work_dir).await?;
+        let plan_data = self.read_plan_file(work_dir).await?;
 
         self.state_backend.store_plan(StoredPlan {
             id: plan_id.clone(),
             workspace: workspace.to_string(),
-            created_at: 0, // Will be set by store_plan
+            created_at: 0,
             plan_data,
-            plan_json: Some(plan_output.clone()),
+            plan_json: Some(plan_output.to_string()),
             status: PlanStatus::Pending,
             approved_by: None,
             executed_at: None,
         }).await?;
 
-        // Execute the plan if auto-approved
-        if auto_approve {
-            let apply_result = self.apply_plan(&work_dir, workspace, &plan_id).await?;
+        Ok(plan_id)
+    }
 
-            // Update plan status
-            self.state_backend.update_plan_status(
-                &plan_id,
-                if apply_result.success { PlanStatus::Applied } else { PlanStatus::Failed },
-                Some("auto-approve".to_string()),
-            ).await?;
+    /// Apply a plan and update its status
+    async fn apply_and_update_plan(
+        &self,
+        workspace: &str,
+        work_dir: &Path,
+        plan_id: &str,
+    ) -> Result<PlanExecutionResult> {
+        let apply_result = self.apply_plan(work_dir, workspace, plan_id).await?;
 
-            return Ok(apply_result);
-        }
+        let status = if apply_result.success {
+            PlanStatus::Applied
+        } else {
+            PlanStatus::Failed
+        };
+
+        self.state_backend.update_plan_status(
+            plan_id,
+            status,
+            Some("auto-approve".to_string()),
+        ).await?;
+
+        Ok(apply_result)
+    }
+
+    /// Create a pending plan result
+    fn create_pending_plan_result(
+        &self,
+        plan_id: &str,
+        plan_output: &str,
+    ) -> Result<PlanExecutionResult> {
+        let (resources_created, resources_updated, resources_destroyed) =
+            self.parse_plan_summary(plan_output);
 
         Ok(PlanExecutionResult {
             success: true,
@@ -276,47 +309,41 @@ impl TofuPlanExecutor {
 
     /// Create a plan using OpenTofu CLI
     async fn create_plan(&self, work_dir: &Path, workspace: &str) -> Result<String> {
-        // Validate workspace name before using in commands (defense in depth)
-        Self::validate_workspace_name(workspace)
-            .context("Invalid workspace name in create_plan")?;
+        Self::validate_workspace_name(workspace)?;
+        let validated_work_dir = self.validate_path_in_work_dir(work_dir).await?;
 
-        // Validate work directory to prevent path traversal
-        let validated_work_dir = self.validate_path_in_work_dir(work_dir).await
-            .context("Invalid work directory in create_plan")?;
+        tracing::info!(workspace = workspace, work_dir = ?validated_work_dir, "Creating OpenTofu plan");
 
-        tracing::info!(
-            workspace = workspace,
-            work_dir = ?validated_work_dir,
-            "Creating OpenTofu plan"
-        );
+        self.run_tofu_init(&validated_work_dir, workspace).await?;
+        self.ensure_workspace_selected(&validated_work_dir, workspace).await?;
+        self.run_tofu_plan(&validated_work_dir, workspace).await
+    }
 
-        // Initialize if needed
+    /// Initialize OpenTofu in the work directory
+    async fn run_tofu_init(&self, work_dir: &Path, workspace: &str) -> Result<()> {
         let init_output = Command::new("tofu")
             .args(&["init", "-backend=false"])
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
         if !init_output.status.success() {
             let error_msg = String::from_utf8_lossy(&init_output.stderr);
-            tracing::error!(
-                workspace = workspace,
-                error = %error_msg,
-                "OpenTofu init failed"
-            );
-            return Err(anyhow::anyhow!(
-                "OpenTofu init failed: {}",
-                error_msg
-            ));
+            tracing::error!(workspace = workspace, error = %error_msg, "OpenTofu init failed");
+            bail!("OpenTofu init failed: {}", error_msg);
         }
 
-        // Select workspace - workspace name is validated, safe to use
-        // Try to create workspace (it's ok if it fails - workspace may already exist)
+        Ok(())
+    }
+
+    /// Ensure workspace is selected, creating it if necessary
+    async fn ensure_workspace_selected(&self, work_dir: &Path, workspace: &str) -> Result<()> {
+        // Try to create workspace (ok if it fails - workspace may already exist)
         if let Err(e) = Command::new("tofu")
             .arg("workspace")
             .arg("new")
             .arg(workspace)
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await
         {
@@ -327,7 +354,7 @@ impl TofuPlanExecutor {
             .arg("workspace")
             .arg("select")
             .arg(workspace)
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
@@ -339,31 +366,24 @@ impl TofuPlanExecutor {
             );
         }
 
-        // Create plan
+        Ok(())
+    }
+
+    /// Run tofu plan command
+    async fn run_tofu_plan(&self, work_dir: &Path, workspace: &str) -> Result<String> {
         let plan_output = Command::new("tofu")
             .args(&["plan", "-out=tfplan", "-no-color"])
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
         if !plan_output.status.success() {
             let error_msg = String::from_utf8_lossy(&plan_output.stderr);
-            tracing::error!(
-                workspace = workspace,
-                error = %error_msg,
-                "OpenTofu plan failed"
-            );
-            return Err(anyhow::anyhow!(
-                "OpenTofu plan failed: {}",
-                error_msg
-            ));
+            tracing::error!(workspace = workspace, error = %error_msg, "OpenTofu plan failed");
+            bail!("OpenTofu plan failed: {}", error_msg);
         }
 
-        tracing::info!(
-            workspace = workspace,
-            "OpenTofu plan created successfully"
-        );
-
+        tracing::info!(workspace = workspace, "OpenTofu plan created successfully");
         Ok(String::from_utf8_lossy(&plan_output.stdout).to_string())
     }
 
@@ -374,27 +394,25 @@ impl TofuPlanExecutor {
         workspace: &str,
         plan_id: &str,
     ) -> Result<PlanExecutionResult> {
-        // Validate workspace name before using in commands (defense in depth)
-        Self::validate_workspace_name(workspace)
-            .context("Invalid workspace name in apply_plan")?;
+        Self::validate_workspace_name(workspace)?;
+        let validated_work_dir = self.validate_path_in_work_dir(work_dir).await?;
 
-        // Validate work directory to prevent path traversal
-        let validated_work_dir = self.validate_path_in_work_dir(work_dir).await
-            .context("Invalid work directory in apply_plan")?;
+        tracing::info!(workspace = workspace, plan_id = plan_id, work_dir = ?validated_work_dir, "Applying OpenTofu plan");
 
-        tracing::info!(
-            workspace = workspace,
-            plan_id = plan_id,
-            work_dir = ?validated_work_dir,
-            "Applying OpenTofu plan"
-        );
+        self.select_workspace(&validated_work_dir, workspace).await?;
+        let apply_output = self.run_tofu_apply(&validated_work_dir).await?;
 
-        // Select workspace - workspace name is validated, safe to use
+        self.log_apply_result(&apply_output, workspace, plan_id);
+        self.create_apply_result(apply_output)
+    }
+
+    /// Select workspace for tofu operation
+    async fn select_workspace(&self, work_dir: &Path, workspace: &str) -> Result<()> {
         let select_output = Command::new("tofu")
             .arg("workspace")
             .arg("select")
             .arg(workspace)
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
@@ -402,47 +420,45 @@ impl TofuPlanExecutor {
             tracing::warn!(
                 workspace = workspace,
                 error = %String::from_utf8_lossy(&select_output.stderr),
-                "Workspace selection failed during apply"
+                "Workspace selection failed"
             );
         }
 
-        // Apply the plan
-        let apply_output = Command::new("tofu")
-            .args(&["apply", "-auto-approve", "-no-color", "tfplan"])
-            .current_dir(&validated_work_dir)
-            .output()
-            .await?;
+        Ok(())
+    }
 
+    /// Run tofu apply command
+    async fn run_tofu_apply(&self, work_dir: &Path) -> Result<std::process::Output> {
+        Command::new("tofu")
+            .args(&["apply", "-auto-approve", "-no-color", "tfplan"])
+            .current_dir(work_dir)
+            .output()
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Log the result of tofu apply
+    fn log_apply_result(&self, output: &std::process::Output, workspace: &str, plan_id: &str) {
+        if output.status.success() {
+            tracing::info!(workspace = workspace, plan_id = plan_id, "OpenTofu plan applied successfully");
+        } else {
+            let error_str = String::from_utf8_lossy(&output.stderr);
+            tracing::error!(workspace = workspace, plan_id = plan_id, error = %error_str, "OpenTofu plan application failed");
+        }
+    }
+
+    /// Create PlanExecutionResult from apply output
+    fn create_apply_result(&self, apply_output: std::process::Output) -> Result<PlanExecutionResult> {
         let output_str = String::from_utf8_lossy(&apply_output.stdout).to_string();
         let error_str = String::from_utf8_lossy(&apply_output.stderr).to_string();
 
-        if apply_output.status.success() {
-            tracing::info!(
-                workspace = workspace,
-                plan_id = plan_id,
-                "OpenTofu plan applied successfully"
-            );
-        } else {
-            tracing::error!(
-                workspace = workspace,
-                plan_id = plan_id,
-                error = %error_str,
-                "OpenTofu plan application failed"
-            );
-        }
-
-        // Parse the output for resource counts
         let (resources_created, resources_updated, resources_destroyed) =
             self.parse_apply_summary(&output_str);
 
         Ok(PlanExecutionResult {
             success: apply_output.status.success(),
             output: output_str,
-            errors: if apply_output.status.success() {
-                vec![]
-            } else {
-                vec![error_str]
-            },
+            errors: if apply_output.status.success() { vec![] } else { vec![error_str] },
             resources_created,
             resources_updated,
             resources_destroyed,
@@ -592,69 +608,49 @@ impl TofuPlanExecutor {
         config_dir: &Path,
         auto_approve: bool,
     ) -> Result<PlanExecutionResult> {
-        // Validate workspace name to prevent command injection
-        Self::validate_workspace_name(workspace)
-            .context("Invalid workspace name")?;
+        Self::validate_workspace_name(workspace)?;
 
-        // Create work directory
-        let execution_id = Uuid::new_v4().to_string();
-        let work_dir = self.work_dir.join(&execution_id);
-        tokio::fs::create_dir_all(&work_dir).await?;
-
-        // Copy configuration
+        let work_dir = self.prepare_work_directory().await?;
         self.copy_config_to_work_dir(config_dir, &work_dir).await?;
+        let validated_work_dir = self.validate_path_in_work_dir(&work_dir).await?;
 
-        // Validate work directory to prevent path traversal
-        let validated_work_dir = self.validate_path_in_work_dir(&work_dir).await
-            .context("Invalid work directory in destroy")?;
+        tracing::info!(workspace = workspace, work_dir = ?validated_work_dir, auto_approve = auto_approve, "Destroying OpenTofu infrastructure");
 
-        tracing::info!(
-            workspace = workspace,
-            work_dir = ?validated_work_dir,
-            auto_approve = auto_approve,
-            "Destroying OpenTofu infrastructure"
-        );
+        self.run_tofu_init(&validated_work_dir, workspace).await?;
+        self.select_workspace_strict(&validated_work_dir, workspace).await?;
 
-        // Initialize
-        let init_output = Command::new("tofu")
-            .args(&["init", "-backend=false"])
-            .current_dir(&validated_work_dir)
-            .output()
-            .await?;
+        let result = self.run_tofu_destroy(&validated_work_dir, workspace, auto_approve).await?;
+        self.cleanup_work_directory(&work_dir).await;
 
-        if !init_output.status.success() {
-            let error_msg = String::from_utf8_lossy(&init_output.stderr);
-            tracing::error!(
-                workspace = workspace,
-                error = %error_msg,
-                "OpenTofu init failed during destroy"
-            );
-            return Err(anyhow::anyhow!(
-                "OpenTofu init failed: {}",
-                error_msg
-            ));
-        }
+        Ok(result)
+    }
 
-        // Select workspace - workspace name is validated, safe to use
+    /// Select workspace strictly (fail if workspace doesn't exist)
+    async fn select_workspace_strict(&self, work_dir: &Path, workspace: &str) -> Result<()> {
         let select_output = Command::new("tofu")
             .arg("workspace")
             .arg("select")
             .arg(workspace)
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
         if !select_output.status.success() {
             let error_msg = String::from_utf8_lossy(&select_output.stderr);
-            tracing::error!(
-                error = %error_msg,
-                workspace = workspace,
-                "Failed to select workspace during destroy"
-            );
-            return Err(anyhow::anyhow!("Failed to select workspace: {}", error_msg));
+            tracing::error!(error = %error_msg, workspace = workspace, "Failed to select workspace");
+            bail!("Failed to select workspace: {}", error_msg);
         }
 
-        // Destroy
+        Ok(())
+    }
+
+    /// Run tofu destroy command
+    async fn run_tofu_destroy(
+        &self,
+        work_dir: &Path,
+        workspace: &str,
+        auto_approve: bool,
+    ) -> Result<PlanExecutionResult> {
         let mut args = vec!["destroy", "-no-color"];
         if auto_approve {
             args.push("-auto-approve");
@@ -662,27 +658,29 @@ impl TofuPlanExecutor {
 
         let destroy_output = Command::new("tofu")
             .args(&args)
-            .current_dir(&validated_work_dir)
+            .current_dir(work_dir)
             .output()
             .await?;
 
+        self.log_destroy_result(&destroy_output, workspace);
+        self.create_destroy_result(destroy_output)
+    }
+
+    /// Log the result of tofu destroy
+    fn log_destroy_result(&self, output: &std::process::Output, workspace: &str) {
+        if output.status.success() {
+            tracing::info!(workspace = workspace, "Infrastructure destroyed successfully");
+        } else {
+            let error_str = String::from_utf8_lossy(&output.stderr);
+            tracing::error!(workspace = workspace, error = %error_str, "Infrastructure destruction failed");
+        }
+    }
+
+    /// Create PlanExecutionResult from destroy output
+    fn create_destroy_result(&self, destroy_output: std::process::Output) -> Result<PlanExecutionResult> {
         let output_str = String::from_utf8_lossy(&destroy_output.stdout).to_string();
         let error_str = String::from_utf8_lossy(&destroy_output.stderr).to_string();
 
-        if destroy_output.status.success() {
-            tracing::info!(
-                workspace = workspace,
-                "Infrastructure destroyed successfully"
-            );
-        } else {
-            tracing::error!(
-                workspace = workspace,
-                error = %error_str,
-                "Infrastructure destruction failed"
-            );
-        }
-
-        // Parse for destroyed resources
         let destroyed_count = output_str.lines()
             .filter(|line| line.contains("Destroy complete!"))
             .find_map(|line| {
@@ -691,22 +689,20 @@ impl TofuPlanExecutor {
             })
             .unwrap_or(0);
 
-        // Clean up
-        if let Err(e) = tokio::fs::remove_dir_all(&work_dir).await {
-            tracing::warn!(error = %e, work_dir = %work_dir.display(), "Failed to clean up work directory");
-        }
-
         Ok(PlanExecutionResult {
             success: destroy_output.status.success(),
             output: output_str,
-            errors: if destroy_output.status.success() {
-                vec![]
-            } else {
-                vec![error_str]
-            },
+            errors: if destroy_output.status.success() { vec![] } else { vec![error_str] },
             resources_created: 0,
             resources_updated: 0,
             resources_destroyed: destroyed_count,
         })
+    }
+
+    /// Clean up work directory
+    async fn cleanup_work_directory(&self, work_dir: &Path) {
+        if let Err(e) = tokio::fs::remove_dir_all(work_dir).await {
+            tracing::warn!(error = %e, work_dir = %work_dir.display(), "Failed to clean up work directory");
+        }
     }
 }

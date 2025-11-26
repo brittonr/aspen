@@ -14,7 +14,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::vm_manager::{VmManager, VmConfig, VmInstance, VmState, VmRegistry, JobResult, VmStats, VmAssignment};
+use crate::vm_manager::{VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats, VmAssignment};
 use crate::vm_manager::vm_types::JobRequirements;
 
 /// Error returned when VM operations are attempted without an available VM manager
@@ -23,23 +23,23 @@ const VM_UNAVAILABLE_ERROR: &str = "VM manager is not available (SKIP_VM_MANAGER
 /// Service abstraction for VM management
 ///
 /// This domain service provides a clean API for VM operations, isolating
-/// handlers and other services from direct VmManager access. It coordinates
-/// between VmManager and VmRegistry to provide comprehensive VM lifecycle
-/// and health management.
+/// handlers and other services from direct VmManager access. It depends on
+/// the VmManagement trait rather than concrete implementations, enabling
+/// better testability and decoupling.
 ///
 /// The VM manager may be unavailable if the application was started with
 /// SKIP_VM_MANAGER=true or if the vm-backend feature is disabled. In such
 /// cases, all operations will return an error indicating VMs are unavailable.
 pub struct VmService {
-    vm_manager: Option<Arc<VmManager>>,
+    vm_manager: Option<Arc<dyn VmManagement>>,
 }
 
 impl VmService {
     /// Create a new VM service with an available VM manager
     ///
     /// # Arguments
-    /// * `vm_manager` - The underlying VM manager instance
-    pub fn new(vm_manager: Arc<VmManager>) -> Self {
+    /// * `vm_manager` - The underlying VM manager instance (must implement VmManagement)
+    pub fn new<T: VmManagement + 'static>(vm_manager: Arc<T>) -> Self {
         Self { vm_manager: Some(vm_manager) }
     }
 
@@ -59,7 +59,7 @@ impl VmService {
     /// Get the underlying VM manager (for internal use by execution adapters)
     ///
     /// Returns an error if VM manager is not available.
-    pub fn vm_manager(&self) -> Result<Arc<VmManager>> {
+    pub fn vm_manager(&self) -> Result<Arc<dyn VmManagement>> {
         self.vm_manager
             .clone()
             .ok_or_else(|| anyhow::anyhow!(VM_UNAVAILABLE_ERROR))

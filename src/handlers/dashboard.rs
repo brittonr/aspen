@@ -10,9 +10,9 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 use serde::Deserialize;
+use std::sync::Arc;
 
-use crate::state::AppState;
-use crate::domain::{JobSortOrder, JobSubmission};
+use crate::domain::{JobSortOrder, JobSubmission, ClusterStatusService, JobLifecycleService};
 use crate::views::{ClusterHealthView, QueueStatsView, JobListView, ControlPlaneNodesView, WorkersView, ErrorView};
 
 /// Main dashboard template
@@ -36,8 +36,9 @@ pub async fn dashboard() -> impl IntoResponse {
 }
 
 /// Dashboard cluster health endpoint (HTMX partial)
-pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.cluster_status();
+pub async fn dashboard_cluster_health(
+    State(cluster_service): State<Arc<ClusterStatusService>>,
+) -> impl IntoResponse {
 
     match cluster_service.get_cluster_health().await {
         Ok(health) => {
@@ -73,8 +74,9 @@ pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl Int
 }
 
 /// Dashboard queue statistics endpoint (HTMX partial)
-pub async fn dashboard_queue_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
+pub async fn dashboard_queue_stats(
+    State(job_service): State<Arc<JobLifecycleService>>,
+) -> impl IntoResponse {
     let stats = job_service.get_queue_stats().await;
     let view = QueueStatsView::from(stats);
     match view.render() {
@@ -98,10 +100,9 @@ pub struct SortQuery {
 
 /// Dashboard recent jobs table endpoint (HTMX partial)
 pub async fn dashboard_recent_jobs(
-    State(state): State<AppState>,
+    State(job_service): State<Arc<JobLifecycleService>>,
     Query(query): Query<SortQuery>,
 ) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
 
     // Parse sort order from query
     let sort_by = query.sort.as_deref().unwrap_or("time");
@@ -141,8 +142,9 @@ pub async fn dashboard_recent_jobs(
 }
 
 /// Dashboard control plane nodes endpoint (HTMX partial)
-pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.cluster_status();
+pub async fn dashboard_control_plane_nodes(
+    State(cluster_service): State<Arc<ClusterStatusService>>,
+) -> impl IntoResponse {
 
     match cluster_service.get_control_plane_nodes().await {
         Ok(nodes) => {
@@ -178,8 +180,9 @@ pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> imp
 }
 
 /// Dashboard workers endpoint (HTMX partial)
-pub async fn dashboard_workers(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.cluster_status();
+pub async fn dashboard_workers(
+    State(cluster_service): State<Arc<ClusterStatusService>>,
+) -> impl IntoResponse {
 
     match cluster_service.get_worker_stats().await {
         Ok(workers) => {
@@ -222,12 +225,9 @@ pub struct NewJob {
 
 /// Dashboard job submission endpoint
 pub async fn dashboard_submit_job(
-    State(state): State<AppState>,
+    State(job_service): State<Arc<JobLifecycleService>>,
     Form(job): Form<NewJob>,
 ) -> Response {
-    // Use pre-built domain service
-    let job_service = state.job_lifecycle();
-
     let submission = JobSubmission {
         payload: serde_json::json!({ "url": job.url })
     };
@@ -236,7 +236,7 @@ pub async fn dashboard_submit_job(
         Ok(job_id) => {
             tracing::info!(job_id = %job_id, "Job submitted from dashboard");
             // Return the updated jobs list sorted by time (most recent first)
-            dashboard_recent_jobs(State(state), Query(SortQuery { sort: Some("time".to_string()) }))
+            dashboard_recent_jobs(State(job_service), Query(SortQuery { sort: Some("time".to_string()) }))
                 .await
                 .into_response()
         }

@@ -15,6 +15,7 @@ pub mod health_checker;
 pub mod control_protocol;
 pub mod messages;
 pub mod coordinator;
+pub mod vm_management_trait;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -27,6 +28,7 @@ pub use vm_controller::VmController;
 pub use job_router::JobRouter;
 pub use resource_monitor::ResourceMonitor;
 pub use health_checker::HealthChecker;
+pub use vm_management_trait::VmManagement;
 
 // Re-export VmAssignment from job_router for backward compatibility
 pub use job_router::VmAssignment;
@@ -298,6 +300,103 @@ impl VmManager {
     /// Update VM state
     pub async fn update_state(&self, vm_id: uuid::Uuid, new_state: VmState) -> Result<()> {
         self.registry.update_state(vm_id, new_state).await
+    }
+}
+
+// Implement VmManagement trait for VmManager
+#[async_trait::async_trait]
+impl VmManagement for VmManager {
+    async fn start(&self) -> Result<()> {
+        self.start().await
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        self.shutdown().await
+    }
+
+    async fn start_vm(&self, config: VmConfig) -> Result<VmInstance> {
+        self.start_vm(config).await
+    }
+
+    async fn stop_vm(&self, vm_id: uuid::Uuid) -> Result<()> {
+        self.stop_vm(vm_id).await
+    }
+
+    async fn execute_job(&self, job: crate::Job) -> Result<VmAssignment> {
+        self.execute_job(job).await
+    }
+
+    async fn submit_job(&self, job: crate::Job) -> Result<JobResult> {
+        self.submit_job(job).await
+    }
+
+    async fn submit_job_to_vm(&self, vm_id: uuid::Uuid, job: crate::Job) -> Result<JobResult> {
+        self.submit_job_to_vm(vm_id, job).await
+    }
+
+    async fn get_vm(&self, vm_id: uuid::Uuid) -> Result<Option<Arc<tokio::sync::RwLock<VmInstance>>>> {
+        self.get_vm(vm_id).await
+    }
+
+    async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
+        self.list_all_vms().await
+    }
+
+    async fn list_by_state(&self, state: &str) -> Result<Vec<VmInstance>> {
+        self.list_by_state(state).await
+    }
+
+    async fn list_running_vms(&self) -> Result<Vec<VmInstance>> {
+        self.list_running_vms().await
+    }
+
+    async fn get_available_service_vm(&self) -> Option<uuid::Uuid> {
+        self.get_available_service_vm().await
+    }
+
+    async fn find_idle_vm(&self, requirements: &vm_types::JobRequirements) -> Option<uuid::Uuid> {
+        self.find_idle_vm(requirements).await
+    }
+
+    async fn get_stats(&self) -> Result<VmStats> {
+        self.get_stats().await
+    }
+
+    async fn count_all(&self) -> usize {
+        self.count_all().await
+    }
+
+    async fn count_by_state(&self, state: VmState) -> usize {
+        self.count_by_state(state).await
+    }
+
+    async fn get_vm_status(&self, vm_id: uuid::Uuid) -> Result<Option<VmState>> {
+        self.get_vm_status(vm_id).await
+    }
+
+    async fn get_health_status(&self, vm_id: uuid::Uuid) -> Result<health_checker::HealthStatus> {
+        self.get_health_status(vm_id).await
+    }
+
+    async fn recover_from_persistence(&self) -> Result<usize> {
+        self.recover_from_persistence().await
+    }
+
+    async fn log_event(
+        &self,
+        vm_id: uuid::Uuid,
+        event_type: &str,
+        details: Option<String>,
+    ) -> Result<()> {
+        self.log_event(vm_id, event_type, details).await
+    }
+
+    async fn update_state(&self, vm_id: uuid::Uuid, new_state: VmState) -> Result<()> {
+        self.update_state(vm_id, new_state).await
+    }
+
+    async fn start_monitoring(&self) -> Result<()> {
+        self.start_monitoring().await
     }
 }
 

@@ -9,9 +9,9 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
-use crate::state::AppState;
-use crate::domain::types::{WorkerRegistration, WorkerHeartbeat, WorkerType};
+use crate::domain::{WorkerManagementService, types::{WorkerRegistration, WorkerHeartbeat, WorkerType}};
 
 /// Worker registration request
 #[derive(Debug, Deserialize)]
@@ -35,10 +35,9 @@ pub struct RegisterWorkerResponse {
 /// Called by worker binaries on startup to register with the control plane.
 /// Generates a unique worker ID and records worker capabilities.
 pub async fn worker_register(
-    State(state): State<AppState>,
+    State(worker_service): State<Arc<WorkerManagementService>>,
     Json(req): Json<RegisterWorkerRequest>,
 ) -> impl IntoResponse {
-    let worker_service = state.worker_management();
 
     let registration = WorkerRegistration {
         worker_type: req.worker_type,
@@ -76,11 +75,10 @@ pub struct HeartbeatRequest {
 ///
 /// Called periodically by workers to indicate they're alive and update their status.
 pub async fn worker_heartbeat(
-    State(state): State<AppState>,
+    State(worker_service): State<Arc<WorkerManagementService>>,
     Path(worker_id): Path<String>,
     Json(req): Json<HeartbeatRequest>,
 ) -> impl IntoResponse {
-    let worker_service = state.worker_management();
 
     let heartbeat = WorkerHeartbeat {
         worker_id: worker_id.clone(),
@@ -102,8 +100,9 @@ pub async fn worker_heartbeat(
 /// List all workers
 ///
 /// Returns all workers regardless of status.
-pub async fn worker_list(State(state): State<AppState>) -> impl IntoResponse {
-    let worker_service = state.worker_management();
+pub async fn worker_list(
+    State(worker_service): State<Arc<WorkerManagementService>>,
+) -> impl IntoResponse {
 
     match worker_service.list_all_workers().await {
         Ok(workers) => Json(workers).into_response(),
@@ -119,10 +118,9 @@ pub async fn worker_list(State(state): State<AppState>) -> impl IntoResponse {
 ///
 /// Returns information about a specific worker.
 pub async fn worker_get(
-    State(state): State<AppState>,
+    State(worker_service): State<Arc<WorkerManagementService>>,
     Path(worker_id): Path<String>,
 ) -> impl IntoResponse {
-    let worker_service = state.worker_management();
 
     match worker_service.get_worker(&worker_id).await {
         Ok(Some(worker)) => Json(worker).into_response(),
@@ -140,10 +138,9 @@ pub async fn worker_get(
 /// Sets worker status to Draining, preventing new job assignments
 /// while allowing current jobs to complete.
 pub async fn worker_drain(
-    State(state): State<AppState>,
+    State(worker_service): State<Arc<WorkerManagementService>>,
     Path(worker_id): Path<String>,
 ) -> impl IntoResponse {
-    let worker_service = state.worker_management();
 
     match worker_service.mark_worker_draining(&worker_id).await {
         Ok(_) => (
@@ -162,8 +159,9 @@ pub async fn worker_drain(
 /// Get worker pool statistics
 ///
 /// Returns aggregate statistics for the entire worker pool.
-pub async fn worker_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let worker_service = state.worker_management();
+pub async fn worker_stats(
+    State(worker_service): State<Arc<WorkerManagementService>>,
+) -> impl IntoResponse {
 
     match worker_service.get_worker_stats().await {
         Ok(stats) => Json(stats).into_response(),

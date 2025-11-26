@@ -9,16 +9,17 @@ use axum::{
     response::IntoResponse,
 };
 use serde::Deserialize;
+use std::sync::Arc;
 
-use crate::state::AppState;
-use crate::domain::{JobSubmission, JobStatus};
+use crate::domain::{JobSubmission, JobStatus, HealthService, JobLifecycleService};
 
 /// Hiqlite health check endpoint
 ///
 /// This endpoint now goes through the domain layer (HealthService) instead of
 /// accessing infrastructure directly, maintaining proper architectural boundaries.
-pub async fn hiqlite_health(State(state): State<AppState>) -> impl IntoResponse {
-    let health_service = state.health();
+pub async fn hiqlite_health(
+    State(health_service): State<Arc<HealthService>>,
+) -> impl IntoResponse {
 
     match health_service.check_database_health().await {
         Ok(health) => Json(health).into_response(),
@@ -39,10 +40,9 @@ pub struct PublishWorkRequest {
 
 /// Publish a new work item to the queue
 pub async fn queue_publish(
-    State(state): State<AppState>,
+    State(job_service): State<Arc<JobLifecycleService>>,
     Json(req): Json<PublishWorkRequest>,
 ) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
 
     let submission = JobSubmission { payload: req.payload };
 
@@ -74,10 +74,9 @@ pub struct ClaimWorkQuery {
 /// - worker_id: Worker ID to assign the job to
 /// - worker_type: Worker type for filtering (wasm, firecracker)
 pub async fn queue_claim(
-    State(state): State<AppState>,
+    State(job_service): State<Arc<JobLifecycleService>>,
     axum::extract::Query(query): axum::extract::Query<ClaimWorkQuery>,
 ) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
 
     // Parse worker_type if provided
     let worker_type = match query.worker_type.as_deref() {
@@ -107,8 +106,9 @@ pub async fn queue_claim(
 }
 
 /// List all work items in the queue
-pub async fn queue_list(State(state): State<AppState>) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
+pub async fn queue_list(
+    State(job_service): State<Arc<JobLifecycleService>>,
+) -> impl IntoResponse {
 
     match job_service.list_all_work().await {
         Ok(work_items) => Json(work_items).into_response(),
@@ -121,8 +121,9 @@ pub async fn queue_list(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 /// Get queue statistics
-pub async fn queue_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
+pub async fn queue_stats(
+    State(job_service): State<Arc<JobLifecycleService>>,
+) -> impl IntoResponse {
     let stats = job_service.get_queue_stats().await;
     Json(stats).into_response()
 }
@@ -136,11 +137,10 @@ pub struct UpdateStatusRequest {
 
 /// Update the status of a specific work item
 pub async fn queue_update_status(
-    State(state): State<AppState>,
+    State(job_service): State<Arc<JobLifecycleService>>,
     Path(job_id): Path<String>,
     Json(req): Json<UpdateStatusRequest>,
 ) -> impl IntoResponse {
-    let job_service = state.job_lifecycle();
 
     match job_service.update_work_status(&job_id, req.status, req.error_message).await {
         Ok(()) => (StatusCode::OK, "Status updated").into_response(),
