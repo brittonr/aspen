@@ -11,13 +11,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load centralized configuration
     let config = AppConfig::load().expect("Failed to load configuration");
 
-    // Each node can have its own flawless server
+    // Each node can have its own flawless server (optional)
     let flawless_url = config.flawless.flawless_url.clone();
 
-    tracing::info!("Connecting to flawless server at {}", flawless_url);
-    let flawless = flawless_utils::Server::new(&flawless_url, None);
-    let flawless_module = flawless_utils::load_module_from_build!("module1");
-    let module = flawless.deploy(flawless_module).await.unwrap();
+    let module = if std::env::var("SKIP_FLAWLESS").is_ok() {
+        tracing::info!("Skipping Flawless deployment (SKIP_FLAWLESS set)");
+        None
+    } else {
+        tracing::info!("Connecting to flawless server at {}", flawless_url);
+        match async {
+            let flawless = flawless_utils::Server::new(&flawless_url, None);
+            let flawless_module = flawless_utils::load_module_from_build!("module1");
+            flawless.deploy(flawless_module).await
+        }.await {
+            Ok(m) => Some(m),
+            Err(e) => {
+                tracing::warn!("Failed to deploy Flawless module: {}. Continuing without Flawless support.", e);
+                None
+            }
+        }
+    };
 
     // Initialize iroh endpoint with HTTP/3 ALPN
     let endpoint = iroh::Endpoint::builder()
@@ -43,13 +56,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to build application state");
 
-    // Start VM Manager background tasks
-    println!("Starting VM Manager...");
-    state.infrastructure()
-        .vm_manager()
-        .start()
-        .await
-        .expect("Failed to start VM Manager");
+    // Start VM Manager background tasks (if available)
+    if let Some(vm_manager) = state.infrastructure().vm_manager() {
+        println!("Starting VM Manager...");
+        if let Err(e) = vm_manager.start().await {
+            println!("WARNING: VM Manager failed to start: {}. Continuing without VM support.", e);
+        }
+    } else {
+        println!("VM Manager not available (skipped or failed to initialize)");
+    }
 
     // Display work queue ticket for worker connections
     let work_ticket = state.infrastructure().work_queue().get_ticket();

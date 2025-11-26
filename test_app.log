@@ -1,0 +1,224 @@
+warning: Git tree '/home/brittonr/git/blixard' is dirty
+Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+warning: unused import: `delete`
+  --> src/server/router.rs:21:33
+   |
+21 | use axum::{routing::{get, post, delete}, Router};
+   |                                 ^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ExecutionHandle`
+  --> src/tofu/plan_executor.rs:16:9
+   |
+16 |         ExecutionHandle,
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused variable: `plan_id`
+   --> src/tofu/plan_executor.rs:298:9
+    |
+298 |         plan_id: &str,
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_plan_id`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ExecutionBackend`
+  --> src/tofu/plan_executor.rs:14:9
+   |
+14 |         ExecutionBackend,
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `handle`
+  --> src/hiqlite_service.rs:69:16
+   |
+69 |             Ok(handle) => {
+   |                ^^^^^^ help: if this is intentional, prefix it with an underscore: `_handle`
+
+warning: unused variable: `tofu_service`
+  --> src/state/services.rs:57:13
+   |
+57 |         let tofu_service = {
+   |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tofu_service`
+
+warning: unused variable: `vm_service`
+  --> src/state/services.rs:66:13
+   |
+66 |         let vm_service = {
+   |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vm_service`
+
+warning: unused variable: `stub_vm_manager`
+   --> src/state/services.rs:187:17
+    |
+187 |             let stub_vm_manager = Arc::new({
+    |                 ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_stub_vm_manager`
+
+warning: associated functions `validate_transition` and `valid_transitions` are never used
+  --> src/work_state_machine.rs:25:12
+   |
+17 | impl WorkStateMachine {
+   | --------------------- associated functions in this implementation
+...
+25 |     pub fn validate_transition(from: &JobStatus, to: &JobStatus) -> Result<()> {
+   |            ^^^^^^^^^^^^^^^^^^^
+...
+69 |     pub fn valid_transitions(from: &JobStatus) -> Vec<JobStatus> {
+   |            ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: trait `DatabaseQueries` is never used
+   --> src/services/traits.rs:187:11
+    |
+187 | pub trait DatabaseQueries: Send + Sync {
+    |           ^^^^^^^^^^^^^^^
+
+warning: field `hiqlite` is never read
+   --> src/domain/event_handlers.rs:296:5
+    |
+295 | pub struct AuditEventHandler {
+    |            ----------------- field in this struct
+296 |     hiqlite: Arc<crate::hiqlite_service::HiqliteService>,
+    |     ^^^^^^^
+
+warning: field `api_key` is never read
+  --> src/middleware/auth.rs:17:5
+   |
+16 | pub struct ApiKeyConfig {
+   |            ------------ field in this struct
+17 |     api_key: Arc<String>,
+   |     ^^^^^^^
+   |
+   = note: `ApiKeyConfig` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `endpoint_id` is never used
+  --> src/server/iroh.rs:47:12
+   |
+22 | impl Listener {
+   | ------------- method in this implementation
+...
+47 |     pub fn endpoint_id(&self) -> iroh::EndpointId {
+   |            ^^^^^^^^^^^
+
+warning: field `addr` is never read
+  --> src/server/localhost.rs:22:9
+   |
+16 | pub struct LocalhostHandle {
+   |            --------------- field in this struct
+...
+22 |     pub addr: String,
+   |         ^^^^
+
+warning: field `state_dir` is never read
+  --> src/vm_manager/vm_registry.rs:24:5
+   |
+16 | pub struct VmRegistry {
+   |            ---------- field in this struct
+...
+24 |     state_dir: std::path::PathBuf,
+   |     ^^^^^^^^^
+
+warning: field `updated_at` is never read
+   --> src/vm_manager/vm_registry.rs:452:5
+    |
+447 | struct VmRow {
+    |        ----- field in this struct
+...
+452 |     updated_at: i64,
+    |     ^^^^^^^^^^
+    |
+    = note: `VmRow` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `job`, `output`, and `errors` are never read
+  --> src/adapters/local_adapter.rs:50:5
+   |
+48 | struct LocalProcessState {
+   |        ----------------- fields in this struct
+49 |     handle: ExecutionHandle,
+50 |     job: Job,
+   |     ^^^
+...
+55 |     output: Vec<String>,
+   |     ^^^^^^
+56 |     errors: Vec<String>,
+   |     ^^^^^^
+   |
+   = note: `LocalProcessState` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `job` is never read
+  --> src/adapters/mock_adapter.rs:53:5
+   |
+51 | struct MockExecution {
+   |        ------------- field in this struct
+52 |     handle: ExecutionHandle,
+53 |     job: Job,
+   |     ^^^
+   |
+   = note: `MockExecution` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated function `job_result_to_work_result` is never used
+  --> src/adapters/vm_adapter.rs:47:8
+   |
+30 | impl VmAdapter {
+   | -------------- associated function in this implementation
+...
+47 |     fn job_result_to_work_result(result: &JobResult) -> WorkResult {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `lock_id`, `lock_acquired_at`, and `lock_holder` are never read
+   --> src/tofu/state_backend.rs:484:5
+    |
+477 | struct WorkspaceRow {
+    |        ------------ fields in this struct
+...
+484 |     lock_id: Option<String>,
+    |     ^^^^^^^
+485 |     lock_acquired_at: Option<i64>,
+    |     ^^^^^^^^^^^^^^^^
+486 |     lock_holder: Option<String>,
+    |     ^^^^^^^^^^^
+    |
+    = note: `WorkspaceRow` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `hiqlite` is never read
+  --> src/tofu/plan_executor.rs:32:5
+   |
+29 | pub struct TofuPlanExecutor {
+   |            ---------------- field in this struct
+...
+32 |     hiqlite: Arc<HiqliteService>,
+   |     ^^^^^^^
+   |
+   = note: `TofuPlanExecutor` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: use of `async fn` in public traits is discouraged as auto trait bounds cannot be specified
+   --> src/adapters/mod.rs:205:5
+    |
+205 |     async fn create(&self, config: HashMap<String, String>) -> Result<Arc<dyn ExecutionBackend>>;
+    |     ^^^^^
+    |
+    = note: you can suppress this lint if you plan to use the trait only in your own code, or do not care about auto traits like `Send` on the `Future`
+    = note: `#[warn(async_fn_in_trait)]` on by default
+help: you can alternatively desugar to a normal `fn` that returns `impl Future` and add any desired bounds such as `Send`, but these cannot be relaxed without a breaking API change
+    |
+205 -     async fn create(&self, config: HashMap<String, String>) -> Result<Arc<dyn ExecutionBackend>>;
+205 +     fn create(&self, config: HashMap<String, String>) -> impl std::future::Future<Output = Result<Arc<dyn ExecutionBackend>>> + Send;
+    |
+
+warning: `mvm-ci` (lib) generated 22 warnings (run `cargo fix --lib -p mvm-ci` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/mvm-ci`
+Iroh Endpoint ID: 2ffdb1ec56a6a67128e885d8415b5bef92fd159af16fc4eeabdc3e41e8a84387
+Waiting for endpoint to be online...
+Initializing application infrastructure...
+
+thread 'tokio-runtime-worker' (557831) panicked at /home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hiqlite-wal-0.11.0/src/log_store.rs:47:21:
+LockFile /tmp/blixard_test_557677/hiqlite/logs is locked and in use by another process
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread '<unnamed>' (557830) panicked at src/hiqlite_service.rs:82:34:
+Failed to create placeholder HiqliteService: Failed to start hiqlite node: WAL: Generic: task 152 panicked with message "LockFile /tmp/blixard_test_557677/hiqlite/logs is locked and in use by another process"
+
+thread 'main' (557683) panicked at src/hiqlite_service.rs:86:40:
+Thread panic in placeholder creation: Any { .. }

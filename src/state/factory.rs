@@ -66,7 +66,7 @@ pub trait InfrastructureFactory: Send + Sync {
     async fn build_app_state(
         &self,
         config: &AppConfig,
-        module: DeployedModule,
+        module: Option<DeployedModule>,
         endpoint: Endpoint,
         node_id: String,
     ) -> Result<AppState> {
@@ -82,25 +82,45 @@ pub trait InfrastructureFactory: Send + Sync {
         // Create shared Hiqlite Arc for services that need it
         let hiqlite_arc = Arc::new(hiqlite.clone());
 
-        // Create VM manager
-        let vm_manager = self.create_vm_manager(config, hiqlite_arc.clone()).await?;
+        // Create VM manager (skip if SKIP_VM_MANAGER is set)
+        let vm_manager = if std::env::var("SKIP_VM_MANAGER").is_ok() {
+            tracing::info!("Skipping VM manager creation (SKIP_VM_MANAGER set)");
+            None
+        } else {
+            match self.create_vm_manager(config, hiqlite_arc.clone()).await {
+                Ok(manager) => Some(manager),
+                Err(e) => {
+                    tracing::warn!("Failed to create VM manager: {}. Continuing without VM support.", e);
+                    None
+                }
+            }
+        };
 
         // Create infrastructure state
-        let infrastructure = InfrastructureState::new(
-            module,
-            iroh,
-            hiqlite,
-            work_queue.clone(),
-            vm_manager
-        );
+        let infrastructure = if let Some(vm_manager) = vm_manager {
+            InfrastructureState::new(
+                module,
+                iroh,
+                hiqlite,
+                work_queue.clone(),
+                vm_manager
+            )
+        } else {
+            // Create default execution registry when VM manager is not available
+            let registry_config = crate::adapters::RegistryConfig::default();
+            let execution_registry = Arc::new(crate::adapters::ExecutionRegistry::new(registry_config));
 
-        // Create repository abstractions
-        let state_repo = self.create_state_repository(hiqlite_arc.clone());
-        let work_repo = self.create_work_repository(work_queue);
-        let worker_repo = self.create_worker_repository(hiqlite_arc);
+            InfrastructureState::new_with_registry(
+                module,
+                iroh,
+                hiqlite,
+                work_queue.clone(),
+                execution_registry
+            )
+        };
 
-        // Create domain services with injected repositories
-        let services = DomainServices::from_repositories(state_repo, work_repo, worker_repo);
+        // Create domain services using the infrastructure
+        let services = DomainServices::new(&infrastructure);
 
         Ok(AppState::new(infrastructure, services))
     }

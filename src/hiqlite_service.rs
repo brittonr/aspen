@@ -45,10 +45,64 @@ impl std::fmt::Debug for HiqliteService {
 
 impl HiqliteService {
     /// Create a placeholder service (for when hiqlite is disabled)
+    ///
+    /// Creates a minimal HiqliteService for testing scenarios. This method can be called
+    /// from any context (sync or async) and avoids the "cannot create runtime within runtime"
+    /// error by spawning the initialization in a separate thread when necessary.
+    ///
+    /// # Implementation Details
+    ///
+    /// When called from within a tokio runtime context, this spawns a new thread and creates
+    /// a fresh runtime in that thread to perform the async initialization. When called from
+    /// outside a runtime, it creates a runtime in the current thread. This ensures that we
+    /// never attempt to create a nested runtime, which would panic.
+    ///
+    /// # Panics
+    /// Panics if HiqliteService::new fails to initialize.
+    ///
+    /// # Note
+    /// This is primarily used in test contexts where TofuService requires a HiqliteService
+    /// dependency but tests won't actually invoke operations on it.
     pub fn placeholder() -> Self {
-        // This is a temporary workaround - creates a non-functional client
-        // TODO: Remove once hiqlite configuration is fixed
-        unimplemented!("Hiqlite placeholder - real implementation needed")
+        // Check if we're in a tokio runtime
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                // We're in a runtime, but we need to use spawn_blocking to avoid
+                // issues with block_on being called from an async context
+                std::thread::scope(|s| {
+                    let join_handle = s.spawn(|| {
+                        // Create a new runtime in this thread for the async initialization
+                        let rt = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .expect("Failed to create runtime for placeholder");
+
+                        rt.block_on(async {
+                            // Use unique directory for placeholder to avoid conflicts
+                            let temp_dir = format!("/tmp/hiqlite-placeholder-{}", std::process::id());
+                            Self::new(Some(std::path::PathBuf::from(temp_dir))).await
+                                .expect("Failed to create placeholder HiqliteService")
+                        })
+                    });
+
+                    join_handle.join().expect("Thread panic in placeholder creation")
+                })
+            }
+            Err(_) => {
+                // Not in a runtime, create one
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create runtime for placeholder");
+
+                rt.block_on(async {
+                    // Use unique directory for placeholder to avoid conflicts
+                    let temp_dir = format!("/tmp/hiqlite-placeholder-{}", std::process::id());
+                    Self::new(Some(std::path::PathBuf::from(temp_dir))).await
+                        .expect("Failed to create placeholder HiqliteService")
+                })
+            }
+        }
     }
 
     /// Initialize a new hiqlite node from environment variables or configuration file
@@ -356,7 +410,7 @@ impl HiqliteService {
     pub async fn initialize_schema(&self) -> Result<()> {
         tracing::info!("Initializing hiqlite schema");
 
-        // Create workflows table
+        // Create workflows table with all columns
         self.execute(
             "CREATE TABLE IF NOT EXISTS workflows (
                 id TEXT PRIMARY KEY,
@@ -368,37 +422,12 @@ impl HiqliteService {
                 started_at INTEGER,
                 error_message TEXT,
                 retry_count INTEGER NOT NULL DEFAULT 0,
+                compatible_worker_types TEXT,
+                assigned_worker_id TEXT,
                 data TEXT
             )",
             params!(),
         ).await?;
-
-        // Add new columns to existing workflows table (migrations for existing databases)
-        // These will fail silently if columns already exist
-        let _ = self.execute(
-            "ALTER TABLE workflows ADD COLUMN started_at INTEGER",
-            params!(),
-        ).await;
-
-        let _ = self.execute(
-            "ALTER TABLE workflows ADD COLUMN error_message TEXT",
-            params!(),
-        ).await;
-
-        let _ = self.execute(
-            "ALTER TABLE workflows ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0",
-            params!(),
-        ).await;
-
-        let _ = self.execute(
-            "ALTER TABLE workflows ADD COLUMN compatible_worker_types TEXT",
-            params!(),
-        ).await;
-
-        let _ = self.execute(
-            "ALTER TABLE workflows ADD COLUMN assigned_worker_id TEXT",
-            params!(),
-        ).await;
 
         // Create heartbeats table for node health tracking
         self.execute(

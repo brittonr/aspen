@@ -58,7 +58,7 @@ impl AppState {
                 .expect("Failed to create VM manager")
         );
 
-        let infrastructure = InfrastructureState::new(module, iroh, hiqlite, work_queue, vm_manager);
+        let infrastructure = InfrastructureState::new(Some(module), iroh, hiqlite, work_queue, vm_manager);
         let services = DomainServices::new(&infrastructure);
 
         Self::new(infrastructure, services)

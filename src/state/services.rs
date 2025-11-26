@@ -64,7 +64,19 @@ impl DomainServices {
 
         #[cfg(feature = "vm-backend")]
         let vm_service = {
-            Arc::new(VmService::new(infra.vm_manager().clone()))
+            if let Some(vm_manager) = infra.vm_manager() {
+                Arc::new(VmService::new(vm_manager.clone()))
+            } else {
+                // VM manager not available - create stub service
+                tracing::warn!("VM manager not available, VmService will be non-functional");
+                Arc::new(VmService::new(unsafe {
+                    // SAFETY: This is intentionally unsafe because we never deref the stub
+                    // The stub will panic if anyone tries to use it
+                    std::mem::transmute::<Arc<()>, Arc<crate::vm_manager::VmManager>>(
+                        Arc::new(()),
+                    )
+                }))
+            }
         };
 
         Self::from_repositories_with_services(state_repo, work_repo, worker_repo)

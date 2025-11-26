@@ -34,7 +34,7 @@ use crate::work_queue::WorkQueue;
 /// backends (VMs, Flawless, local processes, etc.) without tight coupling.
 #[derive(Clone)]
 pub struct InfrastructureState {
-    pub(crate) module: Arc<DeployedModule>,
+    pub(crate) module: Option<Arc<DeployedModule>>,
     pub(crate) iroh: IrohService,
     pub(crate) hiqlite: HiqliteService,
     pub(crate) work_queue: WorkQueue,
@@ -46,14 +46,14 @@ pub struct InfrastructureState {
 impl InfrastructureState {
     /// Create a new infrastructure state container with execution registry
     pub fn new_with_registry(
-        module: DeployedModule,
+        module: Option<DeployedModule>,
         iroh: IrohService,
         hiqlite: HiqliteService,
         work_queue: WorkQueue,
         execution_registry: Arc<ExecutionRegistry>,
     ) -> Self {
         Self {
-            module: Arc::new(module),
+            module: module.map(Arc::new),
             iroh,
             hiqlite,
             work_queue,
@@ -64,7 +64,7 @@ impl InfrastructureState {
 
     /// Create a new infrastructure state container (legacy, for backwards compatibility)
     pub fn new(
-        module: DeployedModule,
+        module: Option<DeployedModule>,
         iroh: IrohService,
         hiqlite: HiqliteService,
         work_queue: WorkQueue,
@@ -75,7 +75,7 @@ impl InfrastructureState {
         let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
 
         Self {
-            module: Arc::new(module),
+            module: module.map(Arc::new),
             iroh,
             hiqlite,
             work_queue,
@@ -84,9 +84,9 @@ impl InfrastructureState {
         }
     }
 
-    /// Get the Flawless module
-    pub fn module(&self) -> &DeployedModule {
-        &self.module
+    /// Get the Flawless module (if available)
+    pub fn module(&self) -> Option<&DeployedModule> {
+        self.module.as_ref().map(|m| m.as_ref())
     }
 
     /// Get the Iroh service (concrete type, implements all iroh traits)
@@ -145,10 +145,10 @@ impl InfrastructureState {
     }
 
     /// Get the VM manager (legacy, for backwards compatibility)
-    pub fn vm_manager(&self) -> &Arc<VmManager> {
-        self.vm_manager
-            .as_ref()
-            .expect("VM manager not available when using execution registry")
+    ///
+    /// Returns None if VM manager was not initialized (e.g., when SKIP_VM_MANAGER is set)
+    pub fn vm_manager(&self) -> Option<&Arc<VmManager>> {
+        self.vm_manager.as_ref()
     }
 
     /// Check if using legacy VM manager
