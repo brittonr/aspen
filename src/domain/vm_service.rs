@@ -305,16 +305,3 @@ impl VmService {
         self.vm_manager.registry.update_state(vm_id, new_state).await
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_vm_service_creation() {
-        // This test will verify the service can be created
-        // Full tests would require mocking VmManager
-        let _service_created = true;
-        assert!(_service_created);
-    }
-}

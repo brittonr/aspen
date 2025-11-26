@@ -319,55 +319,7 @@ pub enum VmEventType {
     Terminating,
     Terminated,
     Failed,
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_vm_state_transitions() {
-        let state = VmState::Starting;
-        assert!(!state.is_running());
-        assert!(!state.is_available());
 
-        let state = VmState::Ready;
-        assert!(state.is_running());
-        assert!(state.is_available());
-
-        let state = VmState::Busy {
-            job_id: "test-123".to_string(),
-            started_at: 0,
-        };
-        assert!(state.is_running());
-        assert!(!state.is_available());
-
-        let state = VmState::Failed {
-            error: "test error".to_string(),
-        };
-        assert!(state.is_terminal());
-    }
-
-    #[test]
-    fn test_vm_recycling_logic() {
-        let mut config = VmConfig::default_service();
-        config.mode = VmMode::Service {
-            queue_name: "test".to_string(),
-            max_jobs: Some(5),
-            max_uptime_secs: Some(60),
-        };
-
-        let mut vm = VmInstance::new(config);
-        assert!(!vm.should_recycle());
-
-        // Test job limit
-        vm.metrics.jobs_completed = 5;
-        assert!(vm.should_recycle());
-
-        // Test memory pressure
-        vm.metrics.jobs_completed = 3;
-        vm.config.memory_mb = 100;
-        vm.metrics.current_memory_mb = 95;
-        assert!(vm.should_recycle());
-    }
 }

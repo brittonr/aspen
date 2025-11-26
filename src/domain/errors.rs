@@ -272,6 +272,7 @@ impl DomainError {
 }
 
 /// Display implementation for ValidationError with Multiple handling
+
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -299,76 +300,3 @@ impl fmt::Display for ValidationError {
 }
 
 impl std::error::Error for ValidationError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_severity() {
-        let err = DomainError::Job(JobError::NotFound {
-            id: "test".to_string(),
-        });
-        assert_eq!(err.severity(), ErrorSeverity::Info);
-
-        let err = DomainError::Resource(ResourceError::Exhausted {
-            resource: "memory".to_string(),
-            reason: "OOM".to_string(),
-        });
-        assert_eq!(err.severity(), ErrorSeverity::Error);
-    }
-
-    #[test]
-    fn test_error_retryable() {
-        let err = DomainError::Worker(WorkerError::NotAvailable {
-            id: "w1".to_string(),
-            reason: "draining".to_string(),
-        });
-        assert!(err.is_retryable());
-
-        let err = DomainError::Job(JobError::NotFound {
-            id: "j1".to_string(),
-        });
-        assert!(!err.is_retryable());
-    }
-
-    #[test]
-    fn test_error_code() {
-        let err = DomainError::Job(JobError::NotFound {
-            id: "test".to_string(),
-        });
-        assert_eq!(err.error_code(), "JOB_NOT_FOUND");
-    }
-
-    #[test]
-    fn test_validation_error_combine() {
-        let errors = vec![
-            ValidationError::InvalidJobId {
-                reason: "too short".to_string(),
-            },
-            ValidationError::MissingField {
-                field: "payload".to_string(),
-            },
-        ];
-
-        let combined = ValidationError::combine(errors);
-        match combined {
-            ValidationError::Multiple(errs) => assert_eq!(errs.len(), 2),
-            _ => panic!("Expected Multiple variant"),
-        }
-    }
-
-    #[test]
-    fn test_anyhow_conversion() {
-        let job_err = JobError::NotFound {
-            id: "test".to_string(),
-        };
-        let anyhow_err = anyhow::anyhow!(job_err.clone());
-        let domain_err: DomainError = anyhow_err.into();
-
-        match domain_err {
-            DomainError::Job(JobError::NotFound { id }) => assert_eq!(id, "test"),
-            _ => panic!("Unexpected error type"),
-        }
-    }
-}

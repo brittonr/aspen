@@ -43,14 +43,6 @@ impl ApiKeyConfig {
             api_key: Arc::new(api_key),
         })
     }
-
-    /// Create a test configuration with a fixed key
-    #[cfg(test)]
-    pub fn for_testing() -> Self {
-        Self {
-            api_key: Arc::new("test-key-for-unit-tests-only-not-for-production".to_string()),
-        }
-    }
 }
 
 /// Middleware function to check API key

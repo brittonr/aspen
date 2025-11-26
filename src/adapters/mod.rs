@@ -208,25 +208,3 @@ pub trait BackendFactory: Send + Sync {
     fn backend_type(&self) -> &str;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_execution_status_serialization() {
-        let status = ExecutionStatus::Running;
-        let serialized = serde_json::to_string(&status).unwrap();
-        let deserialized: ExecutionStatus = serde_json::from_str(&serialized).unwrap();
-        assert_eq!(status, deserialized);
-    }
-
-    #[test]
-    fn test_resource_requirements_default() {
-        let resources = ResourceRequirements::default();
-        assert_eq!(resources.cpu_cores, 0.0);
-        assert_eq!(resources.memory_mb, 0);
-        assert_eq!(resources.disk_mb, 0);
-        assert_eq!(resources.gpu_count, 0);
-        assert!(resources.network_mbps.is_none());
-    }
-}

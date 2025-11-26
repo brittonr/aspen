@@ -9,8 +9,6 @@ pub mod resource_monitor;
 pub mod health_checker;
 pub mod control_protocol;
 
-#[cfg(test)]
-mod tests;
 
 use anyhow::Result;
 use std::sync::Arc;

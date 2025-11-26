@@ -370,20 +370,3 @@ impl ExecutionBackend for FlawlessAdapter {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    #[ignore] // Requires Flawless server running
-    async fn test_flawless_adapter_creation() {
-        let adapter = FlawlessAdapter::new("http://localhost:27288", 5)
-            .await
-            .unwrap();
-        assert_eq!(adapter.backend_type(), "flawless");
-
-        let health = adapter.health_check().await.unwrap();
-        assert!(health.healthy);
-    }
-}

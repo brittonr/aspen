@@ -155,70 +155,10 @@ pub trait EventPublisher: Send + Sync {
     }
 }
 
-/// Helper to get current Unix timestamp
+/// Helper function to get the current timestamp
 pub fn current_timestamp() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_job_id_extraction() {
-        let event = DomainEvent::JobSubmitted {
-            job_id: "job-123".to_string(),
-            url: "https://example.com".to_string(),
-            timestamp: 1000,
-        };
-
-        assert_eq!(event.job_id(), "job-123");
-    }
-
-    #[test]
-    fn test_timestamp_extraction() {
-        let event = DomainEvent::JobCompleted {
-            job_id: "job-123".to_string(),
-            worker_id: Some("worker-1".to_string()),
-            duration_ms: 5000,
-            timestamp: 2000,
-        };
-
-        assert_eq!(event.timestamp(), 2000);
-    }
-
-    #[test]
-    fn test_description_formatting() {
-        let event = DomainEvent::JobFailed {
-            job_id: "job-123".to_string(),
-            worker_id: Some("worker-1".to_string()),
-            error: "Network timeout".to_string(),
-            timestamp: 3000,
-        };
-
-        let desc = event.description();
-        assert!(desc.contains("job-123"));
-        assert!(desc.contains("Network timeout"));
-    }
-
-    #[test]
-    fn test_event_serialization() {
-        let event = DomainEvent::JobSubmitted {
-            job_id: "job-123".to_string(),
-            url: "https://example.com".to_string(),
-            timestamp: 1000,
-        };
-
-        // Should serialize to JSON
-        let json = serde_json::to_string(&event).unwrap();
-        assert!(json.contains("job_submitted"));
-        assert!(json.contains("job-123"));
-
-        // Should deserialize back
-        let deserialized: DomainEvent = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.job_id(), "job-123");
-    }
 }

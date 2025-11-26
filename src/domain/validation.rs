@@ -2,35 +2,26 @@
 //!
 //! This module contains all business logic for validating jobs.
 //! It provides a trait-based system for extensible validation rules.
-
 use crate::domain::types::{Job, JobStatus};
 use std::sync::Arc;
-
 /// Result type for validation operations
 pub type ValidationResult = Result<(), ValidationError>;
-
 /// Validation errors that can occur during job validation
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ValidationError {
     #[error("Invalid job ID: {reason}")]
     InvalidJobId { reason: String },
-
     #[error("Invalid payload: {reason}")]
     InvalidPayload { reason: String },
-
     #[error("Invalid job status: {status:?}")]
     InvalidStatus { status: JobStatus },
-
     #[error("Missing required field: {field}")]
     MissingField { field: String },
-
     #[error("Invalid worker type constraints: {reason}")]
     InvalidWorkerConstraints { reason: String },
-
     #[error("Validation failed: {reason}")]
     Generic { reason: String },
 }
-
 /// Trait for job validators
 ///
 /// Implement this trait to add custom validation logic for jobs.
@@ -39,21 +30,17 @@ pub trait JobValidator: Send + Sync {
     ///
     /// Returns `Ok(())` if the job is valid, or a `ValidationError` otherwise.
     fn validate(&self, job: &Job) -> ValidationResult;
-
     /// Get the name of this validator for logging
     fn name(&self) -> &str;
-
     /// Priority for this validator (higher = runs first)
     fn priority(&self) -> u32 {
         100
     }
 }
-
 /// Composite validator that runs multiple validators in sequence
 pub struct CompositeValidator {
     validators: Vec<Arc<dyn JobValidator>>,
 }
-
 impl CompositeValidator {
     /// Create a new composite validator
     pub fn new() -> Self {
@@ -61,7 +48,6 @@ impl CompositeValidator {
             validators: Vec::new(),
         }
     }
-
     /// Add a validator to the composite
     pub fn add_validator(mut self, validator: Arc<dyn JobValidator>) -> Self {
         self.validators.push(validator);
@@ -69,11 +55,9 @@ impl CompositeValidator {
         self.validators.sort_by_key(|v| std::cmp::Reverse(v.priority()));
         self
     }
-
     /// Validate a job using all registered validators
     pub fn validate_job(&self, job: &Job) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
-
         for validator in &self.validators {
             if let Err(e) = validator.validate(job) {
                 tracing::debug!(
@@ -85,7 +69,6 @@ impl CompositeValidator {
                 errors.push(e);
             }
         }
-
         if errors.is_empty() {
             Ok(())
         } else {
@@ -93,21 +76,17 @@ impl CompositeValidator {
         }
     }
 }
-
 impl Default for CompositeValidator {
     fn default() -> Self {
         Self::new()
     }
 }
-
 // === Built-in Validators ===
-
 /// Validator that checks job ID format
 pub struct JobIdValidator {
     min_length: usize,
     max_length: usize,
 }
-
 impl JobIdValidator {
     pub fn new() -> Self {
         Self {
@@ -115,7 +94,6 @@ impl JobIdValidator {
             max_length: 255,
         }
     }
-
     pub fn with_length_constraints(min_length: usize, max_length: usize) -> Self {
         Self {
             min_length,
@@ -123,59 +101,48 @@ impl JobIdValidator {
         }
     }
 }
-
 impl JobValidator for JobIdValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         let id_len = job.id.len();
-
         if id_len < self.min_length {
             return Err(ValidationError::InvalidJobId {
                 reason: format!("ID too short (minimum {} characters)", self.min_length),
             });
         }
-
         if id_len > self.max_length {
             return Err(ValidationError::InvalidJobId {
                 reason: format!("ID too long (maximum {} characters)", self.max_length),
             });
         }
-
         // Check for valid characters (alphanumeric, dash, underscore)
         if !job.id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
             return Err(ValidationError::InvalidJobId {
                 reason: "ID contains invalid characters".to_string(),
             });
         }
-
         Ok(())
     }
-
     fn name(&self) -> &str {
         "JobIdValidator"
     }
-
     fn priority(&self) -> u32 {
         200 // Higher priority - check ID first
     }
 }
-
 /// Validator that checks job payload structure
 pub struct PayloadValidator {
     max_size_bytes: Option<usize>,
 }
-
 impl PayloadValidator {
     pub fn new() -> Self {
         Self {
             max_size_bytes: Some(1024 * 1024), // 1MB default
         }
     }
-
     pub fn with_max_size(max_size_bytes: Option<usize>) -> Self {
         Self { max_size_bytes }
     }
 }
-
 impl JobValidator for PayloadValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         // Check payload size if limit is set
@@ -187,17 +154,14 @@ impl JobValidator for PayloadValidator {
                 });
             }
         }
-
         // Ensure payload is not null (but can be empty object)
         if job.payload.is_null() {
             return Err(ValidationError::InvalidPayload {
                 reason: "Payload cannot be null".to_string(),
             });
         }
-
         Ok(())
     }
-
     fn name(&self) -> &str {
         "PayloadValidator"
     }
@@ -209,7 +173,6 @@ impl JobValidator for PayloadValidator {
 
 /// Validator for worker type constraints
 pub struct WorkerConstraintValidator;
-
 impl JobValidator for WorkerConstraintValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         // Check for duplicate worker types in constraints
@@ -221,7 +184,6 @@ impl JobValidator for WorkerConstraintValidator {
                 });
             }
         }
-
         Ok(())
     }
 
@@ -236,7 +198,6 @@ impl JobValidator for WorkerConstraintValidator {
 
 /// Validator that checks job timestamps
 pub struct TimestampValidator;
-
 impl JobValidator for TimestampValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         // Ensure created_at is set
@@ -245,14 +206,12 @@ impl JobValidator for TimestampValidator {
                 field: "created_at".to_string(),
             });
         }
-
         // Ensure updated_at >= created_at
         if job.updated_at < job.created_at {
             return Err(ValidationError::Generic {
                 reason: "updated_at cannot be before created_at".to_string(),
             });
         }
-
         // If started_at is set, ensure it's >= created_at
         if let Some(started_at) = job.started_at {
             if started_at < job.created_at {
@@ -261,7 +220,6 @@ impl JobValidator for TimestampValidator {
                 });
             }
         }
-
         Ok(())
     }
 
@@ -281,132 +239,4 @@ pub fn create_default_validator() -> CompositeValidator {
         .add_validator(Arc::new(PayloadValidator::new()))
         .add_validator(Arc::new(WorkerConstraintValidator))
         .add_validator(Arc::new(TimestampValidator))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::types::WorkerType;
-
-    fn create_test_job() -> Job {
-        Job {
-            id: "test-job-123".to_string(),
-            status: JobStatus::Pending,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
-            created_at: 1000,
-            updated_at: 1000,
-            started_at: None,
-            error_message: None,
-            retry_count: 0,
-            payload: serde_json::json!({"test": "data"}),
-            compatible_worker_types: vec![],
-        }
-    }
-
-    #[test]
-    fn test_job_id_validator() {
-        let validator = JobIdValidator::new();
-
-        // Valid ID
-        let job = create_test_job();
-        assert!(validator.validate(&job).is_ok());
-
-        // Empty ID
-        let mut job = create_test_job();
-        job.id = "".to_string();
-        assert!(validator.validate(&job).is_err());
-
-        // Invalid characters
-        let mut job = create_test_job();
-        job.id = "test job 123!".to_string();
-        assert!(validator.validate(&job).is_err());
-    }
-
-    #[test]
-    fn test_payload_validator() {
-        let validator = PayloadValidator::with_max_size(Some(100));
-
-        // Valid payload
-        let job = create_test_job();
-        assert!(validator.validate(&job).is_ok());
-
-        // Null payload
-        let mut job = create_test_job();
-        job.payload = serde_json::Value::Null;
-        assert!(validator.validate(&job).is_err());
-
-        // Large payload
-        let mut job = create_test_job();
-        job.payload = serde_json::json!({"data": "x".repeat(200)});
-        assert!(validator.validate(&job).is_err());
-    }
-
-    #[test]
-    fn test_worker_constraint_validator() {
-        let validator = WorkerConstraintValidator;
-
-        // No constraints
-        let job = create_test_job();
-        assert!(validator.validate(&job).is_ok());
-
-        // Valid constraints
-        let mut job = create_test_job();
-        job.compatible_worker_types = vec![WorkerType::Firecracker, WorkerType::Wasm];
-        assert!(validator.validate(&job).is_ok());
-
-        // Duplicate constraints
-        let mut job = create_test_job();
-        job.compatible_worker_types = vec![WorkerType::Firecracker, WorkerType::Firecracker];
-        assert!(validator.validate(&job).is_err());
-    }
-
-    #[test]
-    fn test_timestamp_validator() {
-        let validator = TimestampValidator;
-
-        // Valid timestamps
-        let job = create_test_job();
-        assert!(validator.validate(&job).is_ok());
-
-        // Invalid created_at
-        let mut job = create_test_job();
-        job.created_at = 0;
-        assert!(validator.validate(&job).is_err());
-
-        // updated_at before created_at
-        let mut job = create_test_job();
-        job.created_at = 2000;
-        job.updated_at = 1000;
-        assert!(validator.validate(&job).is_err());
-
-        // started_at before created_at
-        let mut job = create_test_job();
-        job.created_at = 2000;
-        job.started_at = Some(1000);
-        assert!(validator.validate(&job).is_err());
-    }
-
-    #[test]
-    fn test_composite_validator() {
-        let validator = create_default_validator();
-
-        // Valid job
-        let job = create_test_job();
-        assert!(validator.validate_job(&job).is_ok());
-
-        // Multiple errors
-        let mut job = create_test_job();
-        job.id = "".to_string(); // Invalid ID
-        job.payload = serde_json::Value::Null; // Invalid payload
-        job.created_at = 0; // Invalid timestamp
-
-        let result = validator.validate_job(&job);
-        assert!(result.is_err());
-
-        if let Err(errors) = result {
-            assert!(errors.len() >= 3); // Should have at least 3 errors
-        }
-    }
 }

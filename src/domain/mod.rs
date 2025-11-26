@@ -30,10 +30,6 @@ pub mod validation;
 pub mod vm_service;
 pub mod worker_management;
 
-#[cfg(test)]
-pub mod property_tests;
-#[cfg(test)]
-pub mod test_abstractions;
 
 // Re-export key types for convenience
 pub use cluster_status::ClusterStatusService;

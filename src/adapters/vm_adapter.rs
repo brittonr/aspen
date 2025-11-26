@@ -1,28 +1,23 @@
 //! VM execution backend adapter wrapping the existing VmManager
-
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::info;
-
 use crate::domain::types::Job;
 use crate::vm_manager::{JobResult, VmAssignment, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
-
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
-
 /// Adapter that wraps the existing VmManager to implement ExecutionBackend
 pub struct VmAdapter {
     vm_manager: Arc<VmManager>,
     // Track execution handles to VM IDs
     executions: Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
 }
-
 #[derive(Debug, Clone)]
 struct VmExecutionState {
     handle: ExecutionHandle,
@@ -32,7 +27,6 @@ struct VmExecutionState {
     started_at: u64,
     completed_at: Option<u64>,
 }
-
 impl VmAdapter {
     /// Create a new VM adapter wrapping an existing VmManager
     pub fn new(vm_manager: Arc<VmManager>) -> Self {
@@ -41,7 +35,6 @@ impl VmAdapter {
             executions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
-
     /// Create a VM adapter with a new VmManager
     pub async fn create(
         config: VmManagerConfig,
@@ -50,7 +43,6 @@ impl VmAdapter {
         let vm_manager = Arc::new(VmManager::new(config, hiqlite).await?);
         Ok(Self::new(vm_manager))
     }
-
     /// Convert JobResult to WorkResult
     fn job_result_to_work_result(result: &JobResult) -> WorkResult {
         WorkResult {
@@ -59,13 +51,11 @@ impl VmAdapter {
             error: result.error.clone(),
         }
     }
-
     /// Monitor VM job execution
     async fn monitor_execution(&self, handle: ExecutionHandle, vm_id: uuid::Uuid) {
         // In a real implementation, we would monitor the VM for job completion
         // For now, we'll just wait a bit and mark as completed
         tokio::time::sleep(Duration::from_secs(5)).await;
-
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
             state.status = ExecutionStatus::Completed(WorkResult {
@@ -85,23 +75,18 @@ impl VmAdapter {
         }
     }
 }
-
 #[async_trait]
 impl ExecutionBackend for VmAdapter {
     fn backend_type(&self) -> &str {
         "vm"
     }
-
     async fn submit_job(&self, job: Job, _config: ExecutionConfig) -> Result<ExecutionHandle> {
         info!("VM adapter: submitting job {}", job.id);
-
         // Route job through VmManager
         let assignment = self.vm_manager.execute_job(job.clone()).await?;
         let vm_id = assignment.vm_id();
-
         // Create execution handle
         let handle = ExecutionHandle::vm(vm_id.to_string(), job.id.clone());
-
         // Store execution state
         let state = VmExecutionState {
             handle: handle.clone(),
@@ -114,11 +99,9 @@ impl ExecutionBackend for VmAdapter {
                 .as_secs(),
             completed_at: None,
         };
-
         let mut executions = self.executions.write().await;
         executions.insert(handle.id.clone(), state);
         drop(executions);
-
         // Start monitoring task
         let self_clone = Arc::new(Self {
             vm_manager: self.vm_manager.clone(),
@@ -128,11 +111,9 @@ impl ExecutionBackend for VmAdapter {
         tokio::spawn(async move {
             self_clone.monitor_execution(handle_clone, vm_id).await;
         });
-
         info!("VM adapter: job {} assigned to VM {}", job.id, vm_id);
         Ok(handle)
     }
-
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
         let executions = self.executions.read().await;
         executions
@@ -140,7 +121,6 @@ impl ExecutionBackend for VmAdapter {
             .map(|state| state.status.clone())
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))
     }
-
     async fn cancel_execution(&self, handle: &ExecutionHandle) -> Result<()> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
@@ -154,7 +134,6 @@ impl ExecutionBackend for VmAdapter {
                         .unwrap()
                         .as_secs(),
                 );
-
                 info!("VM adapter: cancelled execution {}", handle.id);
                 Ok(())
             } else {
@@ -164,13 +143,11 @@ impl ExecutionBackend for VmAdapter {
             Err(anyhow::anyhow!("Execution not found: {}", handle.id))
         }
     }
-
     async fn get_metadata(&self, handle: &ExecutionHandle) -> Result<ExecutionMetadata> {
         let executions = self.executions.read().await;
         let state = executions
             .get(&handle.id)
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
-
         let mut custom = HashMap::new();
         custom.insert(
             "vm_id".to_string(),
@@ -183,7 +160,6 @@ impl ExecutionBackend for VmAdapter {
                 VmAssignment::Service(_) => "service",
             }),
         );
-
         Ok(ExecutionMetadata {
             execution_id: handle.id.clone(),
             backend_type: "vm".to_string(),
@@ -193,7 +169,6 @@ impl ExecutionBackend for VmAdapter {
             custom,
         })
     }
-
     async fn wait_for_completion(
         &self,
         handle: &ExecutionHandle,
@@ -201,7 +176,6 @@ impl ExecutionBackend for VmAdapter {
     ) -> Result<ExecutionStatus> {
         let start = std::time::Instant::now();
         let timeout = timeout.unwrap_or(Duration::from_secs(300)); // 5 min default
-
         loop {
             let status = self.get_status(handle).await?;
             match status {
@@ -219,11 +193,9 @@ impl ExecutionBackend for VmAdapter {
             }
         }
     }
-
     async fn health_check(&self) -> Result<BackendHealth> {
         // Get VM statistics
         let stats = self.vm_manager.get_stats().await?;
-
         Ok(BackendHealth {
             healthy: true,
             status_message: format!(
@@ -246,7 +218,6 @@ impl ExecutionBackend for VmAdapter {
             ]),
         })
     }
-
     async fn get_resource_info(&self) -> Result<ResourceInfo> {
         let stats = self.vm_manager.get_stats().await?;
         let executions = self.executions.read().await;
@@ -254,7 +225,6 @@ impl ExecutionBackend for VmAdapter {
             .values()
             .filter(|state| matches!(state.status, ExecutionStatus::Running))
             .count();
-
         // These are placeholder values - in a real implementation,
         // we would query the actual resource usage from the VMs
         Ok(ResourceInfo {
@@ -268,16 +238,13 @@ impl ExecutionBackend for VmAdapter {
             max_executions: 20, // From VmManagerConfig default
         })
     }
-
     async fn can_handle(&self, _job: &Job, _config: &ExecutionConfig) -> Result<bool> {
         // Check if we have capacity for another VM
         let stats = self.vm_manager.get_stats().await?;
-
         // Simple check: can we start another VM?
         // In a real implementation, we would check resource requirements
         Ok(stats.total_vms < 20) // Max VMs from default config
     }
-
     async fn list_executions(&self) -> Result<Vec<ExecutionHandle>> {
         let executions = self.executions.read().await;
         Ok(executions
@@ -285,17 +252,14 @@ impl ExecutionBackend for VmAdapter {
             .map(|state| state.handle.clone())
             .collect())
     }
-
     async fn cleanup_executions(&self, older_than: Duration) -> Result<usize> {
         let mut executions = self.executions.write().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-
         let cutoff = now - older_than.as_secs();
         let mut cleaned = 0;
-
         executions.retain(|_, state| {
             if let Some(completed_at) = state.completed_at {
                 if completed_at < cutoff {
@@ -305,31 +269,17 @@ impl ExecutionBackend for VmAdapter {
             }
             true
         });
-
         info!("VM adapter: cleaned up {} old executions", cleaned);
         Ok(cleaned)
     }
-
     async fn initialize(&self) -> Result<()> {
         info!("Initializing VM adapter");
         self.vm_manager.start().await?;
         Ok(())
     }
-
     async fn shutdown(&self) -> Result<()> {
         info!("Shutting down VM adapter");
         self.vm_manager.shutdown().await?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_vm_adapter_creation() {
-        // This test would require a full VmManager setup
-        // For unit testing, we would need to mock VmManager
     }
 }

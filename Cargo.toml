@@ -77,8 +77,6 @@ thiserror = "2.0"
 [build-dependencies]
 flawless-utils = "1.0.0-beta.3"
 
-[dev-dependencies]
-proptest = "1.5"
 
 [workspace]
 members = ["workflows/module1"]

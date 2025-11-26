@@ -363,12 +363,3 @@ impl WorkerRepository for HiqliteWorkerRepository {
         Ok(WorkerStats::from_workers(&workers))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    // Tests would go here - similar pattern to work_queue_repository tests
-    // For now we'll rely on integration tests
-}

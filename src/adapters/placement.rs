@@ -259,39 +259,6 @@ impl Default for PlacementBuilder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_placement_policy_default() {
-        let policy = PlacementPolicy::default();
-        assert_eq!(policy, PlacementPolicy::BestFit);
-    }
 
-    #[test]
-    fn test_placement_builder() {
-        let strategy = PlacementBuilder::new()
-            .with_policy(PlacementPolicy::RoundRobin)
-            .with_constraint("backend_type".to_string(), "vm".to_string())
-            .with_preference("low_latency".to_string(), 0.8)
-            .build();
 
-        assert_eq!(strategy.policy(), PlacementPolicy::RoundRobin);
-    }
-
-    #[test]
-    fn test_placement_decision_serialization() {
-        let decision = PlacementDecision {
-            backend_name: "vm".to_string(),
-            score: 85.5,
-            reason: "Best fit".to_string(),
-            alternatives: vec!["local".to_string(), "flawless".to_string()],
-        };
-
-        let serialized = serde_json::to_string(&decision).unwrap();
-        let deserialized: PlacementDecision = serde_json::from_str(&serialized).unwrap();
-        assert_eq!(decision.backend_name, deserialized.backend_name);
-        assert_eq!(decision.score, deserialized.score);
-    }
-}

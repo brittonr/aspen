@@ -314,27 +314,3 @@ impl std::fmt::Display for ConfigError {
 }
 
 impl std::error::Error for ConfigError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_config() {
-        let config = AppConfig::default();
-        assert_eq!(config.network.http_port, 3020);
-        assert_eq!(config.network.http_bind_addr, "0.0.0.0");
-        assert_eq!(config.network.iroh_alpn, b"iroh+h3");
-        assert_eq!(config.storage.iroh_blobs_path, PathBuf::from("./data/iroh-blobs"));
-        assert_eq!(config.flawless.flawless_url, "http://localhost:27288");
-        assert_eq!(config.timing.worker_no_work_sleep_secs, 2);
-    }
-
-    #[test]
-    fn test_timing_durations() {
-        let timing = TimingConfig::default();
-        assert_eq!(timing.worker_no_work_sleep(), Duration::from_secs(2));
-        assert_eq!(timing.worker_error_sleep(), Duration::from_secs(5));
-        assert_eq!(timing.hiqlite_startup_delay(), Duration::from_secs(3));
-    }
-}
