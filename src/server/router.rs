@@ -179,17 +179,17 @@ fn tofu_api_router() -> Router<AppState> {
 
     Router::new()
         // State backend protocol endpoints
-        .route("/state/:workspace", get(get_state).post(update_state))
-        .route("/lock/:workspace", post(lock_workspace).delete(force_unlock_workspace))
-        .route("/unlock/:workspace", post(unlock_workspace))
+        .route("/state/{workspace}", get(get_state).post(update_state))
+        .route("/lock/{workspace}", post(lock_workspace).delete(force_unlock_workspace))
+        .route("/unlock/{workspace}", post(unlock_workspace))
         .route("/workspaces", get(list_workspaces))
-        .route("/workspaces/:workspace", delete(delete_workspace))
-        .route("/history/:workspace", get(get_state_history))
-        .route("/rollback/:workspace/:version", post(rollback_state))
+        .route("/workspaces/{workspace}", delete(delete_workspace))
+        .route("/history/{workspace}", get(get_state_history))
+        .route("/rollback/{workspace}/{version}", post(rollback_state))
         // Plan execution endpoints
         .route("/plan", post(create_plan))
-        .route("/apply/:plan_id", post(apply_plan))
-        .route("/plans/:workspace", get(list_plans))
+        .route("/apply/{plan_id}", post(apply_plan))
+        .route("/plans/{workspace}", get(list_plans))
         .route("/destroy", post(destroy_infrastructure))
         // Apply API key authentication to all tofu routes
         .layer(axum::middleware::from_fn(middleware::api_key_auth))

@@ -60,6 +60,7 @@ pub async fn spawn(bind_addr: String, port: u16, router: Router) -> Result<Local
 
     let bound_addr = listener.local_addr()?.to_string();
     tracing::info!("Localhost HTTP listener bound to {}", bound_addr);
+    println!("🚀 HTTP server listening on http://{}", bound_addr);
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 

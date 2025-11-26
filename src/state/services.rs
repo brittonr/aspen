@@ -79,7 +79,44 @@ impl DomainServices {
             }
         };
 
-        Self::from_repositories_with_services(state_repo, work_repo, worker_repo)
+        // Create the rest of the services directly, keeping the tofu and vm services
+        let event_publisher = Arc::new(LoggingEventPublisher::new());
+
+        // Create command and query services (CQRS pattern)
+        let commands = Arc::new(JobCommandService::with_events(
+            work_repo.clone(),
+            event_publisher.clone(),
+        ));
+        let queries = Arc::new(JobQueryService::new(work_repo.clone()));
+
+        // Create domain services with injected repositories
+        let cluster_status = Arc::new(ClusterStatusService::new(
+            state_repo.clone(),
+            work_repo.clone(),
+        ));
+
+        let health = Arc::new(HealthService::new(state_repo.clone()));
+
+        // JobLifecycleService wraps command and query services
+        let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
+
+        // WorkerManagementService with worker and work repositories
+        let worker_management = Arc::new(WorkerManagementService::new(
+            worker_repo.clone(),
+            work_repo.clone(),
+            Some(60), // Default heartbeat timeout: 60 seconds
+        ));
+
+        Self {
+            cluster_status,
+            health,
+            job_lifecycle,
+            worker_management,
+            #[cfg(feature = "tofu-support")]
+            tofu_service,
+            #[cfg(feature = "vm-backend")]
+            vm_service,
+        }
     }
 
     /// Create domain services with injected repository abstractions
@@ -168,13 +205,30 @@ impl DomainServices {
 
         #[cfg(feature = "tofu-support")]
         let tofu_service = {
-            // Create a placeholder TofuService for testing
+            // For test scenarios, tofu service uses a stub Hiqlite that should not be called
             // Tests using from_repositories should not call tofu operations
+
+            struct StubHiqlite;
+            impl std::ops::Deref for StubHiqlite {
+                type Target = crate::hiqlite_service::HiqliteService;
+                fn deref(&self) -> &Self::Target {
+                    panic!(
+                        "TofuService tried to access Hiqlite in test context. \
+                         Use DomainServices::new(infrastructure) for integration tests."
+                    );
+                }
+            }
+
             Arc::new(TofuService::new(
                 Arc::new(crate::adapters::ExecutionRegistry::new(
                     crate::adapters::RegistryConfig::default(),
                 )),
-                Arc::new(crate::hiqlite_service::HiqliteService::placeholder()),
+                unsafe {
+                    // SAFETY: This stub will panic if dereferenced, which is intentional
+                    std::mem::transmute::<Arc<()>, Arc<crate::hiqlite_service::HiqliteService>>(
+                        Arc::new(()),
+                    )
+                },
                 PathBuf::from("/tmp/tofu-work-test"),
             ))
         };

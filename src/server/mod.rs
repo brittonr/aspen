@@ -78,13 +78,17 @@ pub struct ServerConfig {
 /// # }
 /// ```
 pub async fn start(config: ServerConfig) -> Result<ServerHandle> {
+    println!("Starting server...");
+
     // Print connection information for operators
     self::iroh::print_connection_info(&config.endpoint);
 
     // Build router with all application routes
+    println!("Building router...");
     let router = router::build_router(&config.state);
 
     // Spawn localhost listener in background
+    println!("Starting localhost HTTP listener on port {}...", config.app_config.network.http_port);
     let localhost_handle = localhost::spawn(
         config.app_config.network.http_bind_addr.clone(),
         config.app_config.network.http_port,
