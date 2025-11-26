@@ -15,7 +15,7 @@ use crate::domain::types::{Job, QueueStats};
 pub struct EnrichedJob {
     pub job_id: String,
     pub status: crate::domain::types::JobStatus,
-    pub url: String,
+    pub payload_summary: String,
     pub duration_seconds: i64,
     pub time_ago_seconds: i64,
     pub claimed_by: Option<String>,
@@ -224,7 +224,16 @@ impl JobQueryService {
 
     /// Enrich a job with computed metadata
     fn enrich_job(&self, job: Job, now: i64) -> EnrichedJob {
-        let url = job.url().unwrap_or("-").to_string();
+        // Generate a summary of the payload for display
+        let payload_summary = if let Some(url) = job.payload.get("url").and_then(|v| v.as_str()) {
+            url.to_string()
+        } else if let Some(job_type) = job.payload.get("type").and_then(|v| v.as_str()) {
+            format!("Type: {}", job_type)
+        } else if let Some(name) = job.payload.get("name").and_then(|v| v.as_str()) {
+            format!("Name: {}", name)
+        } else {
+            format!("Payload with {} fields", job.payload.as_object().map(|o| o.len()).unwrap_or(0))
+        };
 
         let duration_seconds = job.duration_seconds();
         let time_ago_seconds = now - job.updated_at;
@@ -232,7 +241,7 @@ impl JobQueryService {
         EnrichedJob {
             job_id: job.id,
             status: job.status,
-            url,
+            payload_summary,
             duration_seconds,
             time_ago_seconds,
             claimed_by: job.claimed_by,

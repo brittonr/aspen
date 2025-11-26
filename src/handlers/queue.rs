@@ -33,7 +33,8 @@ pub async fn hiqlite_health(State(state): State<AppState>) -> impl IntoResponse 
 /// Work item publication request
 #[derive(Debug, Deserialize)]
 pub struct PublishWorkRequest {
-    pub url: String,
+    #[serde(flatten)]
+    pub payload: serde_json::Value,
 }
 
 /// Publish a new work item to the queue
@@ -43,13 +44,13 @@ pub async fn queue_publish(
 ) -> impl IntoResponse {
     let job_service = state.services().job_lifecycle();
 
-    let submission = JobSubmission { url: req.url };
+    let submission = JobSubmission { payload: req.payload };
 
     match job_service.submit_job(submission).await {
         Ok(job_id) => (StatusCode::OK, format!("Job {} published", job_id)).into_response(),
         Err(e) => {
             // Return 400 BAD_REQUEST for validation errors
-            if e.to_string().contains("cannot be empty") {
+            if e.to_string().contains("cannot be") {
                 (StatusCode::BAD_REQUEST, format!("Validation error: {}", e)).into_response()
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to publish work: {}", e)).into_response()

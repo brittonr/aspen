@@ -3,7 +3,7 @@
         <tr>
             <th>Job ID</th>
             <th>Status</th>
-            <th>URL</th>
+            <th>Payload</th>
             <th>Duration</th>
             <th>Updated</th>
             <th>Claimed By</th>
@@ -17,7 +17,7 @@
         <tr>
             <td>{{ job.job_id }}</td>
             <td><span class="status-badge {{ job.status_class }}">{{ job.status_text }}</span></td>
-            <td><div class="job-url" title="{{ job.url }}">{{ job.url }}</div></td>
+            <td><div class="job-url" title="{{ job.payload_summary }}">{{ job.payload_summary }}</div></td>
             <td><span class="duration {{ job.duration_class }}">{{ job.duration_text }}</span></td>
             <td><span class="time-ago">{{ job.time_ago }}</span></td>
             <td>{{ job.node_id|safe }}</td>

@@ -127,7 +127,9 @@ pub async fn dashboard_submit_job(
     // Use pre-built domain service
     let job_service = state.services().job_lifecycle();
 
-    let submission = JobSubmission { url: job.url };
+    let submission = JobSubmission {
+        payload: serde_json::json!({ "url": job.url })
+    };
 
     match job_service.submit_job(submission).await {
         Ok(job_id) => {

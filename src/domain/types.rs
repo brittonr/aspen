@@ -89,10 +89,6 @@ impl Default for Job {
     }
 }
 impl Job {
-    /// Get the URL from the job payload (convenience method)
-    pub fn url(&self) -> Option<&str> {
-        self.payload.get("url")?.as_str()
-    }
     /// Calculate duration of job execution in seconds
     ///
     /// Returns the time from when the job started executing (InProgress)

@@ -17,7 +17,7 @@ use crate::domain::state_machine::JobStateMachine;
 /// Job submission parameters
 #[derive(Debug, Clone)]
 pub struct JobSubmission {
-    pub url: String,
+    pub payload: serde_json::Value,
 }
 
 /// Command service for job mutations
@@ -67,7 +67,7 @@ impl JobCommandService {
     /// For querying job details, use JobQueryService.
     ///
     /// # Arguments
-    /// * `submission` - Job submission parameters (URL, etc.)
+    /// * `submission` - Job submission parameters with generic payload
     ///
     /// # Returns
     /// The unique job ID for the created job
@@ -75,30 +75,31 @@ impl JobCommandService {
     /// # Errors
     /// Returns error if validation fails or the repository operation fails
     pub async fn submit_job(&self, submission: JobSubmission) -> Result<String> {
-        // Validate URL (basic validation)
-        if submission.url.is_empty() {
-            anyhow::bail!("URL cannot be empty");
+        // Validate payload (basic validation)
+        if submission.payload.is_null() {
+            anyhow::bail!("Payload cannot be null");
         }
 
         // Generate unique job ID
         let id = self.job_counter.fetch_add(1, Ordering::SeqCst);
         let job_id = format!("job-{}", id);
 
-        // Create job payload
-        let payload = serde_json::json!({
-            "id": id,
-            "url": submission.url.clone(),
-        });
+        // Add job metadata to payload
+        let mut payload = submission.payload.clone();
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("job_id".to_string(), serde_json::json!(job_id.clone()));
+            obj.insert("submission_timestamp".to_string(), serde_json::json!(current_timestamp()));
+        }
 
         // Publish to distributed queue
-        self.work_repo.publish_work(job_id.clone(), payload).await?;
+        self.work_repo.publish_work(job_id.clone(), payload.clone()).await?;
 
-        tracing::info!(job_id = %job_id, url = %submission.url, "Job submitted");
+        tracing::info!(job_id = %job_id, "Job submitted with payload");
 
         // Publish domain event
         self.event_publisher.publish(DomainEvent::JobSubmitted {
             job_id: job_id.clone(),
-            url: submission.url,
+            payload: payload,
             timestamp: current_timestamp(),
         }).await?;
 

@@ -24,7 +24,7 @@ pub enum DomainEvent {
     /// A new job was submitted to the queue
     JobSubmitted {
         job_id: String,
-        url: String,
+        payload: serde_json::Value,
         timestamp: i64,
     },
 
@@ -104,8 +104,13 @@ impl DomainEvent {
     /// Get a human-readable description of this event
     pub fn description(&self) -> String {
         match self {
-            DomainEvent::JobSubmitted { job_id, url, .. } => {
-                format!("Job {} submitted for URL {}", job_id, url)
+            DomainEvent::JobSubmitted { job_id, payload, .. } => {
+                let summary = if let Some(url) = payload.get("url").and_then(|v| v.as_str()) {
+                    format!(" for URL {}", url)
+                } else {
+                    String::new()
+                };
+                format!("Job {} submitted{}", job_id, summary)
             }
             DomainEvent::JobClaimed { job_id, worker_id, .. } => {
                 format!("Job {} claimed by worker {}", job_id, worker_id)
