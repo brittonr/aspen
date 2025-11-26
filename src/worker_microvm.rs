@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::vm_manager::{VmManager, VmManagerConfig};
-use crate::vm_manager::vm_types::{IsolationLevel, VmConfig, VmMode};
+use crate::infrastructure::vm::{VmManager, VmManagerConfig};
+use crate::infrastructure::vm::vm_types::{IsolationLevel, VmConfig, VmMode};
 use crate::worker_trait::{WorkerBackend, WorkResult};
 use crate::Job;
 

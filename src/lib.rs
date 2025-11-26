@@ -40,13 +40,16 @@ pub mod hiqlite_service;
 pub mod repositories;
 pub mod state;
 pub mod server;
-pub mod vm_manager;
 
 // Execution backend adapters
 pub mod adapters;
 
 // Infrastructure layer
 pub mod infrastructure;
+
+// Deprecated: vm_manager moved to infrastructure::vm
+#[deprecated(since = "0.2.0", note = "Use infrastructure::vm instead")]
+pub use infrastructure::vm as vm_manager;
 
 // API handlers
 pub mod api;

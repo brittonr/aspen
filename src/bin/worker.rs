@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     let vm_manager = if worker_type == WorkerType::Firecracker {
         // Create standalone VM manager for Firecracker worker
         use mvm_ci::hiqlite_service::HiqliteService;
-        use mvm_ci::vm_manager::{VmManager, VmManagerConfig};
+        use mvm_ci::infrastructure::vm::{VmManager, VmManagerConfig};
 
         let worker_state_dir = config.storage.vm_state_dir.join("worker");
 

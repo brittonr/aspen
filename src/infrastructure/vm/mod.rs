@@ -15,6 +15,9 @@ pub mod health_checker;
 pub mod control_protocol;
 pub mod messages;
 pub mod coordinator;
+
+// Deprecated: trait moved to domain::vm_management
+#[deprecated(since = "0.2.0", note = "Use domain::vm_management::VmManagement instead")]
 pub mod vm_management_trait;
 
 use anyhow::Result;
@@ -23,10 +26,13 @@ use std::sync::Arc;
 use crate::hiqlite_service::HiqliteService;
 
 pub use vm_types::{VmConfig, VmInstance, VmMode, VmState, IsolationLevel};
-pub use vm_management_trait::VmManagement;
 
 // Re-export VmAssignment from job_router for backward compatibility
 pub use job_router::VmAssignment;
+
+// Trait now lives in domain layer
+#[cfg(feature = "vm-backend")]
+pub use crate::domain::vm_management::VmManagement;
 
 // Internal component types (not exposed publicly)
 use vm_registry::VmRegistry;

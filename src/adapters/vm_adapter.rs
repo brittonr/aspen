@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::info;
 use crate::domain::types::Job;
-use crate::vm_manager::{VmAssignment, VmManager, VmManagerConfig};
+use crate::infrastructure::vm::{VmAssignment, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,

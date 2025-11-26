@@ -14,8 +14,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::vm_manager::{VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats, VmAssignment};
-use crate::vm_manager::vm_types::JobRequirements;
+use crate::infrastructure::vm::{VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats, VmAssignment};
+use crate::infrastructure::vm::vm_types::JobRequirements;
 
 /// Error returned when VM operations are attempted without an available VM manager
 const VM_UNAVAILABLE_ERROR: &str = "VM manager is not available (SKIP_VM_MANAGER may be set)";

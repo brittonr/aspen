@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::vm_registry::VmRegistry;
 use super::vm_types::{VmConfig, VmControlMessage, VmInstance, VmMode, VmState};
-use crate::vm_manager::VmManagerConfig;
+use crate::infrastructure::vm::VmManagerConfig;
 
 /// Controller for VM lifecycle operations
 pub struct VmController {

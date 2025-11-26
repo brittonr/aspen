@@ -123,7 +123,7 @@ impl VmRegistry {
     }
 
     /// Update VM metrics
-    pub async fn update_metrics(&self, vm_id: Uuid, metrics: crate::vm_manager::vm_types::VmMetrics) -> Result<()> {
+    pub async fn update_metrics(&self, vm_id: Uuid, metrics: crate::infrastructure::vm::vm_types::VmMetrics) -> Result<()> {
         let vm_arc = self
             .vms
             .get(&vm_id)

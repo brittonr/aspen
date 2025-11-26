@@ -5,5 +5,6 @@
 //! job assignment, worker tracking, and resource management.
 
 pub mod job_assignment;
+pub mod vm;
 
 pub use job_assignment::{AssignmentStrategy, JobAssignment};

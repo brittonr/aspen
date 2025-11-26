@@ -24,7 +24,7 @@ use crate::hiqlite_service::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::AppState;
-use crate::vm_manager::{VmManager, VmManagerConfig};
+use crate::infrastructure::vm::{VmManager, VmManagerConfig};
 use crate::work_queue::WorkQueue;
 use crate::{WorkerBackend, WorkerType};
 
