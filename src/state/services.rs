@@ -187,20 +187,19 @@ impl DomainServices {
 
         #[cfg(feature = "tofu-support")]
         let tofu_service = {
-            // For test scenarios, tofu service uses a stub Hiqlite that should not be called
-            // Tests using from_repositories should not call tofu operations
-            Arc::new(TofuService::new(
-                Arc::new(crate::adapters::ExecutionRegistry::new(
-                    crate::adapters::RegistryConfig::default(),
-                )),
-                unsafe {
-                    // SAFETY: This stub will panic if dereferenced, which is intentional
-                    std::mem::transmute::<Arc<()>, Arc<crate::hiqlite_service::HiqliteService>>(
-                        Arc::new(()),
-                    )
-                },
+            // For test scenarios, create TofuService components that return proper errors
+            // rather than using unsafe transmute. This approach is safer and more maintainable.
+            use crate::tofu::{TofuStateBackend, TofuPlanExecutor};
+
+            // Create stub backends that will return errors if called in tests
+            let stub_hiqlite = Arc::new(crate::hiqlite_service::HiqliteService::placeholder());
+            let state_backend = Arc::new(TofuStateBackend::new(stub_hiqlite.clone()));
+            let plan_executor = Arc::new(TofuPlanExecutor::new(
+                stub_hiqlite,
                 PathBuf::from("/tmp/tofu-work-test"),
-            ))
+            ));
+
+            Arc::new(TofuService::from_components(state_backend, plan_executor))
         };
 
         #[cfg(feature = "vm-backend")]
