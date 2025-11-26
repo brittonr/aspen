@@ -23,15 +23,17 @@ use std::sync::Arc;
 use crate::hiqlite_service::HiqliteService;
 
 pub use vm_types::{VmConfig, VmInstance, VmMode, VmState, IsolationLevel};
-pub use vm_registry::VmRegistry;
-pub use vm_controller::VmController;
-pub use job_router::JobRouter;
-pub use resource_monitor::ResourceMonitor;
-pub use health_checker::HealthChecker;
 pub use vm_management_trait::VmManagement;
 
 // Re-export VmAssignment from job_router for backward compatibility
 pub use job_router::VmAssignment;
+
+// Internal component types (not exposed publicly)
+use vm_registry::VmRegistry;
+use vm_controller::VmController;
+use job_router::JobRouter;
+use resource_monitor::ResourceMonitor;
+use health_checker::HealthChecker;
 
 use coordinator::VmCoordinator;
 

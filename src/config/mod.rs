@@ -10,9 +10,13 @@ pub mod network;
 pub mod storage;
 pub mod flawless;
 pub mod vm;
-pub mod timing;
+pub mod operational;
 pub mod adapter;
 pub mod validation;
+
+// Deprecated - use operational module instead
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
+pub mod timing;
 
 use serde::{Deserialize, Serialize};
 
@@ -21,9 +25,14 @@ pub use network::NetworkConfig;
 pub use storage::StorageConfig;
 pub use flawless::FlawlessConfig;
 pub use vm::VmConfig;
-pub use timing::{TimingConfig, TimeoutConfig, HealthCheckConfig, ResourceMonitorConfig, VmCheckConfig};
+pub use operational::OperationalConfig;
 pub use adapter::{AdapterConfig, JobRouterConfig};
 pub use validation::ValidationConfig;
+
+// Deprecated - use OperationalConfig instead
+#[allow(deprecated)]
+#[deprecated(since = "0.2.0", note = "Use OperationalConfig instead")]
+pub use timing::{TimingConfig, TimeoutConfig, HealthCheckConfig, ResourceMonitorConfig, VmCheckConfig};
 
 /// Top-level application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,21 +46,30 @@ pub struct AppConfig {
     #[serde(default)]
     pub vm: VmConfig,
     #[serde(default)]
-    pub timing: TimingConfig,
-    #[serde(default)]
-    pub timeouts: TimeoutConfig,
-    #[serde(default)]
-    pub health_check: HealthCheckConfig,
-    #[serde(default)]
-    pub resource_monitor: ResourceMonitorConfig,
+    pub operational: OperationalConfig,
     #[serde(default)]
     pub adapter: AdapterConfig,
     #[serde(default)]
     pub job_router: JobRouterConfig,
     #[serde(default)]
     pub validation: ValidationConfig,
-    #[serde(default)]
-    pub vm_check: VmCheckConfig,
+
+    // Deprecated fields - maintained for backward compatibility
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.2.0", note = "Use operational instead")]
+    pub timing: Option<TimingConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.2.0", note = "Use operational instead")]
+    pub timeouts: Option<TimeoutConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.2.0", note = "Use operational instead")]
+    pub health_check: Option<HealthCheckConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.2.0", note = "Use operational instead")]
+    pub resource_monitor: Option<ResourceMonitorConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[deprecated(since = "0.2.0", note = "Use operational instead")]
+    pub vm_check: Option<VmCheckConfig>,
 }
 
 impl AppConfig {
@@ -65,14 +83,15 @@ impl AppConfig {
             storage: StorageConfig::load()?,
             flawless: FlawlessConfig::load()?,
             vm: VmConfig::load()?,
-            timing: TimingConfig::load()?,
-            timeouts: TimeoutConfig::load()?,
-            health_check: HealthCheckConfig::load()?,
-            resource_monitor: ResourceMonitorConfig::load()?,
+            operational: OperationalConfig::load()?,
             adapter: AdapterConfig::load()?,
             job_router: JobRouterConfig::load()?,
             validation: ValidationConfig::load()?,
-            vm_check: VmCheckConfig::load()?,
+            timing: None,
+            timeouts: None,
+            health_check: None,
+            resource_monitor: None,
+            vm_check: None,
         })
     }
 
@@ -154,14 +173,10 @@ impl AppConfig {
         self.storage.apply_env_overrides()?;
         self.flawless.apply_env_overrides()?;
         self.vm.apply_env_overrides()?;
-        self.timing.apply_env_overrides()?;
-        self.timeouts.apply_env_overrides()?;
-        self.health_check.apply_env_overrides()?;
-        self.resource_monitor.apply_env_overrides()?;
+        self.operational.apply_env_overrides()?;
         self.adapter.apply_env_overrides()?;
         self.job_router.apply_env_overrides()?;
         self.validation.apply_env_overrides()?;
-        self.vm_check.apply_env_overrides()?;
 
         Ok(())
     }
@@ -205,14 +220,15 @@ impl Default for AppConfig {
             storage: StorageConfig::default(),
             flawless: FlawlessConfig::default(),
             vm: VmConfig::default(),
-            timing: TimingConfig::default(),
-            timeouts: TimeoutConfig::default(),
-            health_check: HealthCheckConfig::default(),
-            resource_monitor: ResourceMonitorConfig::default(),
+            operational: OperationalConfig::default(),
             adapter: AdapterConfig::default(),
             job_router: JobRouterConfig::default(),
             validation: ValidationConfig::default(),
-            vm_check: VmCheckConfig::default(),
+            timing: None,
+            timeouts: None,
+            health_check: None,
+            resource_monitor: None,
+            vm_check: None,
         }
     }
 }

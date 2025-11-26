@@ -17,12 +17,14 @@ pub mod event_handlers;
 pub mod event_publishers;
 pub mod events;
 pub mod health_service;
+pub mod job;
 pub mod job_commands;
 pub mod job_lifecycle;
 pub mod job_metadata;
 pub mod job_queries;
 pub mod job_requirements;
 pub mod plugins;
+pub mod queue;
 pub mod state_machine;
 #[cfg(feature = "tofu-support")]
 pub mod tofu_service;
@@ -30,6 +32,7 @@ pub mod types;
 pub mod validation;
 #[cfg(feature = "vm-backend")]
 pub mod vm_service;
+pub mod worker;
 pub mod worker_management;
 
 
@@ -38,14 +41,16 @@ pub use cluster_status::ClusterStatusService;
 pub use event_publishers::LoggingEventPublisher;
 pub use events::EventPublisher;
 pub use health_service::HealthService;
+pub use job::{Job, JobStatus};
 pub use job_commands::{JobCommandService, JobSubmission};
 pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
 pub use job_metadata::JobMetadata;
 pub use job_queries::{JobQueryService, JobSortOrder};
 pub use job_requirements::{IsolationLevel, JobRequirements};
+pub use queue::{HealthStatus, QueueStats};
 #[cfg(feature = "tofu-support")]
 pub use tofu_service::TofuService;
-pub use types::{JobStatus, QueueStats};
 #[cfg(feature = "vm-backend")]
 pub use vm_service::VmService;
+pub use worker::{Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats, WorkerStatus, WorkerType};
 pub use worker_management::WorkerManagementService;

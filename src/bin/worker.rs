@@ -225,14 +225,14 @@ async fn main() -> Result<()> {
             }
             Ok(None) => {
                 // No work available, wait before polling again
-                let sleep_duration = config.timing.worker_no_work_sleep();
+                let sleep_duration = config.operational.worker_no_work_sleep();
                 tracing::info!("No work available - sleeping for {:?}", sleep_duration);
                 tokio::time::sleep(sleep_duration).await;
                 tracing::info!("Sleep completed - looping again");
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to claim work from control plane");
-                let sleep_duration = config.timing.worker_error_sleep();
+                let sleep_duration = config.operational.worker_error_sleep();
                 tracing::info!("Error occurred - sleeping for {:?}", sleep_duration);
                 tokio::time::sleep(sleep_duration).await;
                 tracing::info!("Error sleep completed - looping again");
