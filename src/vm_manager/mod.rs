@@ -33,21 +33,19 @@ pub use job_router::VmAssignment;
 
 use coordinator::VmCoordinator;
 
-/// Main VM Manager - Backward-compatible facade over VmCoordinator
+/// Main VM Manager - Pure facade over VmCoordinator
 ///
-/// This struct provides the same public API as before, but now uses
-/// the VmCoordinator internally for message-based component orchestration.
-/// All public fields are maintained for backward compatibility.
+/// This struct provides a clean public API while keeping all internal
+/// components private. The VmCoordinator handles all message-based
+/// component orchestration internally.
 pub struct VmManager {
-    // Coordinator handles all message passing (private)
+    // All components are now private - use facade methods instead
     coordinator: Arc<VmCoordinator>,
-
-    // Public fields for backward compatibility
-    pub registry: Arc<VmRegistry>,
-    pub controller: Arc<VmController>,
-    pub router: Arc<JobRouter>,
-    pub monitor: Arc<ResourceMonitor>,
-    pub health_checker: Arc<HealthChecker>,
+    registry: Arc<VmRegistry>,
+    controller: Arc<VmController>,
+    router: Arc<JobRouter>,
+    monitor: Arc<ResourceMonitor>,
+    health_checker: Arc<HealthChecker>,
     pub config: VmManagerConfig,
 }
 
@@ -237,6 +235,69 @@ impl VmManager {
     /// Get VM state
     pub async fn get_vm_status(&self, vm_id: uuid::Uuid) -> Result<Option<vm_types::VmState>> {
         self.controller.get_vm_status(vm_id).await
+    }
+
+    // === Registry facade methods ===
+    // These methods delegate to the internal registry component
+
+    /// Get a VM instance by ID
+    pub async fn get_vm(&self, vm_id: uuid::Uuid) -> Result<Option<Arc<tokio::sync::RwLock<VmInstance>>>> {
+        self.registry.get(vm_id).await
+    }
+
+    /// List all VMs
+    pub async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
+        self.registry.list_all_vms().await
+    }
+
+    /// List VMs by state
+    pub async fn list_by_state(&self, state: &str) -> Result<Vec<VmInstance>> {
+        self.registry.list_by_state(state).await
+    }
+
+    /// List running VMs
+    pub async fn list_running_vms(&self) -> Result<Vec<VmInstance>> {
+        self.registry.list_running_vms().await
+    }
+
+    /// Get an available service VM
+    pub async fn get_available_service_vm(&self) -> Option<uuid::Uuid> {
+        self.registry.get_available_service_vm().await
+    }
+
+    /// Find an idle VM matching requirements
+    pub async fn find_idle_vm(&self, requirements: &vm_types::JobRequirements) -> Option<uuid::Uuid> {
+        self.registry.find_idle_vm(requirements).await
+    }
+
+    /// Count all VMs
+    pub async fn count_all(&self) -> usize {
+        self.registry.count_all().await
+    }
+
+    /// Count VMs by state
+    pub async fn count_by_state(&self, state: VmState) -> usize {
+        self.registry.count_by_state(state).await
+    }
+
+    /// Recover VMs from persistence
+    pub async fn recover_from_persistence(&self) -> Result<usize> {
+        self.registry.recover_from_persistence().await
+    }
+
+    /// Log a VM event
+    pub async fn log_event(
+        &self,
+        vm_id: uuid::Uuid,
+        event_type: &str,
+        details: Option<String>,
+    ) -> Result<()> {
+        self.registry.log_event(vm_id, event_type, details).await
+    }
+
+    /// Update VM state
+    pub async fn update_state(&self, vm_id: uuid::Uuid, new_state: VmState) -> Result<()> {
+        self.registry.update_state(vm_id, new_state).await
     }
 }
 
