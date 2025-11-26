@@ -67,15 +67,9 @@ impl DomainServices {
             if let Some(vm_manager) = infra.vm_manager() {
                 Arc::new(VmService::new(vm_manager.clone()))
             } else {
-                // VM manager not available - create stub service
-                tracing::warn!("VM manager not available, VmService will be non-functional");
-                Arc::new(VmService::new(unsafe {
-                    // SAFETY: This is intentionally unsafe because we never deref the stub
-                    // The stub will panic if anyone tries to use it
-                    std::mem::transmute::<Arc<()>, Arc<crate::vm_manager::VmManager>>(
-                        Arc::new(()),
-                    )
-                }))
+                // VM manager not available - create stub service that returns errors
+                tracing::warn!("VM manager not available, VmService will return errors for all operations");
+                Arc::new(VmService::unavailable())
             }
         };
 
@@ -211,18 +205,11 @@ impl DomainServices {
 
         #[cfg(feature = "vm-backend")]
         let vm_service = {
-            // For VmService in the unit test path, we create a stub that will error if used.
+            // For VmService in the unit test path, we create an unavailable service.
             // This is acceptable because from_repositories is for testing pure domain logic
             // without infrastructure dependencies. Real integration tests should use new().
-            // This will panic if actually dereferenced, which is what we want
-            // to catch tests that accidentally try to use VM operations
-            Arc::new(VmService::new(unsafe {
-                // SAFETY: This is intentionally unsafe because we never deref the stub
-                // The stub will panic if anyone tries to use it
-                std::mem::transmute::<Arc<()>, Arc<crate::vm_manager::VmManager>>(
-                    Arc::new(()),
-                )
-            }))
+            // Operations will return proper errors rather than causing undefined behavior.
+            Arc::new(VmService::unavailable())
         };
 
         Self {

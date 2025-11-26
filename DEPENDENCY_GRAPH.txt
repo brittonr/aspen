@@ -1,0 +1,325 @@
+BLIXARD DEPENDENCY GRAPH - VISUAL REPRESENTATION
+
+================================================================================
+LAYER ARCHITECTURE
+================================================================================
+
+LAYER 1: HTTP/Network Interface
+┌─────────────────────────────────────────────────────────────────────┐
+│  axum router                                                        │
+│  ├─ /jobs endpoints (queue handlers)                               │
+│  ├─ /workers endpoints (worker handlers)                           │
+│  ├─ /dashboard endpoints (dashboard handlers)                      │
+│  └─ /api/tofu endpoints (tofu handlers)                            │
+└─────────────────────────────────────────────────────────────────────┘
+                          ↓ (all depend on)
+LAYER 2: Application State (GOD OBJECT)
+┌─────────────────────────────────────────────────────────────────────┐
+│  AppState                                                           │
+│  ├─→ InfrastructureState      ├─→ DomainServices                  │
+│  │   ├─ HiqliteService      │  ├─ JobLifecycleService           │
+│  │   ├─ IrohService         │  ├─ ClusterStatusService          │
+│  │   ├─ WorkQueue           │  ├─ HealthService                 │
+│  │   ├─ VmManager ⚠️         │  ├─ WorkerManagementService       │
+│  │   └─ ExecutionRegistry   │  ├─ VmService ⚠️                  │
+│  │                          │  └─ TofuService (optional)        │
+│  │                          │                                     │
+│  └─────────────────────────┴─→ All wrapped in Arc<>              │
+└─────────────────────────────────────────────────────────────────────┘
+                          ↓
+LAYER 3: Domain Services (Business Logic)
+┌─────────────────────────────────────────────────────────────────────┐
+│  CQRS Pattern Implementation                                        │
+│                                                                     │
+│  JobLifecycleService (orchestrator)                                │
+│  ├─ JobCommandService (writes)                                    │
+│  │  ├─ WorkRepository (trait) ✓                                  │
+│  │  ├─ EventPublisher (trait) ✓                                 │
+│  │  └─ JobStateMachine                                          │
+│  │                                                              │
+│  └─ JobQueryService (reads)                                     │
+│     └─ WorkRepository (trait) ✓                                │
+│                                                                 │
+│  ClusterStatusService                                           │
+│  ├─ StateRepository (trait) ✓                                  │
+│  └─ WorkRepository (trait) ✓                                  │
+│                                                                 │
+│  VmService ⚠️ (problematic)                                     │
+│  └─ VmManager (concrete) ← breaks abstraction boundary         │
+│                                                                 │
+│  WorkerManagementService                                        │
+│  ├─ WorkerRepository (trait) ✓                                │
+│  └─ WorkRepository (trait) ✓                                  │
+└─────────────────────────────────────────────────────────────────────┘
+                          ↓
+LAYER 4: Repositories (Data Access Abstraction)
+┌─────────────────────────────────────────────────────────────────────┐
+│  Traits (good abstraction)                   Implementations       │
+│  ├─ StateRepository ✓           ─→ HiqliteStateRepository       │
+│  ├─ WorkRepository ✓            ─→ WorkQueueWorkRepository      │
+│  └─ WorkerRepository ✓          ─→ HiqliteWorkerRepository      │
+│                                                                   │
+│  All return domain types (Job, JobStatus, etc.)                 │
+└─────────────────────────────────────────────────────────────────────┘
+                          ↓
+LAYER 5: Infrastructure Services (Concrete)
+┌─────────────────────────────────────────────────────────────────────┐
+│  ┌─ HiqliteService (CONCRETE) ⚠️   Persistent Storage (Raft)     │
+│  │  └─ openraft (consensus)                                      │
+│  │  └─ rusqlite (SQL backend)                                    │
+│  │                                                               │
+│  ├─ IrohService (CONCRETE)        P2P Networking                │
+│  │  ├─ iroh endpoint                                           │
+│  │  └─ iroh relay                                              │
+│  │                                                               │
+│  ├─ WorkQueue (CONCRETE)          Work Distribution             │
+│  │  └─ work_item_cache                                        │
+│  │                                                               │
+│  ├─ VmManager (CONCRETE) ⚠️        VM Execution Backend         │
+│  │  ├─ VmRegistry (persistence via HiqliteService)           │
+│  │  ├─ VmController (lifecycle)                              │
+│  │  ├─ JobRouter (scheduling)                                │
+│  │  └─ ResourceMonitor (tracking)                            │
+│  │                                                               │
+│  └─ ExecutionRegistry (TRAIT-based) ✓  Multi-backend Support  │
+│     ├─ VmAdapter (uses VmManager) ⚠️                           │
+│     ├─ FlawlessAdapter (WASM)                                 │
+│     ├─ LocalAdapter (processes)                               │
+│     ├─ MockAdapter (testing)                                  │
+│     └─ Placement strategies                                   │
+└─────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+PROBLEMATIC COUPLING PATTERNS
+================================================================================
+
+PATTERN 1: Domain Leakage to Infrastructure
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  domain/vm_service.rs                                              │
+│  └─→ vm_manager/mod.rs (CONCRETE - should be trait)               │
+│      └─→ vm_manager/vm_registry.rs                                │
+│          └─→ hiqlite_service.rs (CONCRETE - leaks to domain)      │
+│                                                                     │
+│  Result: Domain logic couples to infrastructure implementation     │
+│  Impact: Cannot test VmService without real hiqlite database      │
+└──────────────────────────────────────────────────────────────────────┘
+
+PATTERN 2: VmManager Used in Multiple Adapters
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  adapters/registry.rs (good - trait-based)                        │
+│  ├─→ adapters/vm_adapter.rs                                       │
+│  │   └─→ vm_manager/mod.rs (CONCRETE)                             │
+│  │       ├─→ vm_manager/vm_registry.rs                            │
+│  │       ├─→ vm_manager/vm_controller.rs                          │
+│  │       └─→ hiqlite_service.rs                                   │
+│  │                                                                 │
+│  └─→ adapters/{flawless,local,mock}_adapter.rs (only use Job)    │
+│                                                                     │
+│  Result: Adapter implementations have inconsistent abstraction     │
+│  Impact: VmAdapter tightly coupled, others loosely coupled        │
+└──────────────────────────────────────────────────────────────────────┘
+
+PATTERN 3: AppState God Object
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  All HTTP Handlers                                                 │
+│  ├─ queue_handlers.rs ──┐                                          │
+│  ├─ worker_handlers.rs  ├─→ AppState (depends on EVERYTHING)     │
+│  ├─ dashboard_handlers ─┤                                          │
+│  └─ tofu_handlers.rs ───┘                                          │
+│                                                                     │
+│  Handler Test Problem:                                             │
+│  Cannot test handler without:                                      │
+│  ├─ Full HiqliteService setup                                     │
+│  ├─ Full IrohService setup                                        │
+│  ├─ WorkQueue initialization                                       │
+│  ├─ VmManager startup                                             │
+│  └─ All domain services construction                              │
+│                                                                     │
+│  Solution: Split into handler-specific state types               │
+└──────────────────────────────────────────────────────────────────────┘
+
+PATTERN 4: Hidden Event System Coupling
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  JobCommandService                                                 │
+│  └─ publishes → DomainEvent                                        │
+│                 ├─ EventHandler (if exists)                       │
+│                 └─ [May access] → Repository                      │
+│                                   └─ May trigger more events      │
+│                                                                     │
+│  No compile-time circle, but runtime dependency on:                │
+│  ├─ Event ordering guarantees                                      │
+│  ├─ Handler execution side effects                                 │
+│  └─ Transitive repository mutations                               │
+│                                                                     │
+│  Risk: Implicit test dependencies on event handler behavior        │
+└──────────────────────────────────────────────────────────────────────┘
+
+PATTERN 5: Feature-Gated Coupling
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  Core domain (always enabled)                                      │
+│  ├─ job_commands.rs                                               │
+│  ├─ job_queries.rs                                                │
+│  └─ job_lifecycle.rs                                              │
+│                                                                     │
+│  Optional domain                                                   │
+│  ├─ #[cfg(feature = "vm-backend")] vm_service.rs                │
+│  │  └─→ vm_manager (concrete)                                    │
+│  │                                                                 │
+│  └─ #[cfg(feature = "tofu-support")] tofu_service.rs            │
+│     └─→ execution_registry                                       │
+│                                                                     │
+│  Problem: Inconsistent code paths for optional features            │
+│  Different test coverage paths depending on feature flags         │
+└──────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+CROSS-CUTTING CONCERNS
+================================================================================
+
+Shared Mutable State:
+├─ AppState Arc<> - READ-ONLY (SAFE)
+├─ WorkQueue Arc<RwLock<>> + DashMap - MOSTLY SAFE
+├─ VmManager Arc<> - POTENTIALLY UNSAFE ⚠️
+│  └─ VmRegistry - holds lifecycle state
+│  └─ VmController - mutates VM state
+│  └─ ResourceMonitor - tracks resource mutations
+└─ ExecutionRegistry Arc<RwLock<>> - SAFE
+
+Event Publishing:
+├─ No guaranteed ordering
+├─ Async handlers may race
+└─ Test assertions may be flaky
+
+Database Access:
+├─ Multiple paths to HiqliteService
+│  ├─ Infrastructure → Repositories
+│  ├─ VmManager → VmRegistry → HiqliteService
+│  └─ Potential race conditions on VM state writes
+└─ No transaction support for multi-step operations
+
+================================================================================
+IMPORT COUPLING MAP (Internal Dependencies)
+================================================================================
+
+IMPORT ENTRY POINTS (what files import what):
+
+handlers/queue.rs
+├─ uses crate::state::AppState
+├─ uses crate::domain::JobSubmission
+└─ uses crate::domain::JobStatus
+
+handlers/worker.rs
+├─ uses crate::state::AppState
+├─ uses crate::domain::types::{WorkerRegistration, WorkerHeartbeat, ...}
+└─ uses crate::domain::types::WorkerType
+
+handlers/dashboard.rs
+├─ uses crate::state::AppState
+├─ uses crate::domain::JobSubmission
+├─ uses crate::domain::JobSortOrder
+└─ uses crate::views::*
+
+adapters/vm_adapter.rs
+├─ uses crate::domain::types::Job
+├─ uses crate::vm_manager::{VmAssignment, VmManager, VmManagerConfig} ⚠️
+└─ uses crate::worker_trait::WorkResult
+
+adapters/flawless_adapter.rs
+├─ uses crate::domain::types::Job
+├─ uses crate::worker_flawless::FlawlessWorker
+└─ uses crate::worker_trait::WorkerBackend
+
+domain/vm_service.rs
+├─ uses crate::vm_manager::{VmManager, VmConfig, VmInstance, ...} ⚠️
+├─ uses crate::vm_manager::vm_types::JobRequirements
+└─ imports entire vm_manager module
+
+domain/job_commands.rs
+├─ uses crate::repositories::WorkRepository ✓
+├─ uses crate::domain::types::JobStatus ✓
+├─ uses crate::domain::events::{DomainEvent, EventPublisher, ...} ✓
+└─ uses crate::domain::state_machine::JobStateMachine ✓
+
+domain/cluster_status.rs
+├─ uses crate::repositories::{StateRepository, WorkRepository} ✓
+└─ uses crate::domain::types::Job ✓
+
+================================================================================
+DEPENDENCY CHANGE IMPACT ANALYSIS
+================================================================================
+
+If HiqliteService changes:
+├─ Direct impact: VmRegistry, repositories
+├─ Indirect impact: VmManager, VmService, entire infrastructure
+└─ Test impact: Cannot be mocked
+
+If Job type changes:
+├─ Direct impact: All 5 adapters (vm, flawless, local, mock, placement)
+├─ Direct impact: All domain services
+├─ Direct impact: All repositories
+└─ Test impact: All adapter tests must be updated
+
+If AppState structure changes:
+├─ Direct impact: All HTTP handlers
+├─ Indirect impact: All handler tests
+├─ Indirect impact: State initialization pipeline
+└─ Test impact: All integration tests break
+
+If VmManager API changes:
+├─ Direct impact: domain/vm_service.rs
+├─ Direct impact: adapters/vm_adapter.rs
+├─ Indirect impact: handlers that use VmService
+└─ Test impact: VmService tests, handler tests
+
+If EventPublisher changes:
+├─ Direct impact: JobCommandService
+├─ Indirect impact: Any event handler implementations
+├─ Indirect impact: Test assertions on event sequencing
+└─ Test impact: All tests that verify domain events
+
+================================================================================
+STATIC ANALYSIS RESULTS
+================================================================================
+
+✓ NO CIRCULAR IMPORTS (compile-time)
+  All module dependencies form a DAG (directed acyclic graph)
+
+⚠ HIDDEN CIRCULAR PATTERNS (runtime)
+  Event → Repository → Event mutations possible
+
+⚠ CONCRETE TYPE COUPLING (3 major)
+  1. HiqliteService not trait-abstracted
+  2. VmManager not trait-abstracted
+  3. IrohService not trait-abstracted (but less critical)
+
+⚠ GOD OBJECTS (2)
+  1. AppState (contains all infrastructure + services)
+  2. InfrastructureState (contains all concrete services)
+
+⚠ LOW COHESION MODULES (5)
+  1. job_lifecycle.rs (commands + queries wrapper)
+  2. infrastructure.rs (5 different service types)
+  3. vm_manager/mod.rs (5 different managers)
+  4. domain/cluster_status.rs (3 different aggregations)
+  5. state/services.rs (constructing 6+ services)
+
+✓ GOOD ABSTRACTIONS (6)
+  1. StateRepository trait
+  2. WorkRepository trait
+  3. WorkerRepository trait
+  4. ExecutionBackend trait (registry)
+  5. PlacementStrategy trait
+  6. EventPublisher trait
+
+OVERALL ASSESSMENT:
+├─ Circular dependencies: PASS (0 found)
+├─ Testability: MEDIUM (AppState coupling reduces isolation)
+├─ Maintainability: MEDIUM (Concrete types and god objects)
+├─ Scalability: MEDIUM (Adding new services requires AppState changes)
+└─ Feature isolation: LOW (Features couple through domain layer)
+

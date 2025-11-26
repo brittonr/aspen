@@ -154,10 +154,7 @@ impl JobCommandService {
         error_message: Option<String>,
     ) -> Result<()> {
         // Get current job to validate transition
-        let jobs = self.work_repo.list_work().await?;
-        let current_job = jobs
-            .iter()
-            .find(|j| j.id == job_id)
+        let current_job = self.work_repo.find_by_id(job_id).await?
             .ok_or_else(|| anyhow::anyhow!("Job not found: {}", job_id))?;
 
         let old_status = current_job.status;
@@ -225,10 +222,7 @@ impl JobCommandService {
     #[allow(dead_code)] // Future API feature
     pub async fn cancel_job(&self, job_id: &str) -> Result<()> {
         // Get current job to validate cancellation
-        let jobs = self.work_repo.list_work().await?;
-        let current_job = jobs
-            .iter()
-            .find(|j| j.id == job_id)
+        let current_job = self.work_repo.find_by_id(job_id).await?
             .ok_or_else(|| anyhow::anyhow!("Job not found: {}", job_id))?;
 
         // Validate state transition (Pending/Claimed -> Failed)
@@ -262,10 +256,7 @@ impl JobCommandService {
     #[allow(dead_code)] // Future API feature
     pub async fn retry_job(&self, job_id: &str) -> Result<()> {
         // Get current job to validate retry
-        let jobs = self.work_repo.list_work().await?;
-        let current_job = jobs
-            .iter()
-            .find(|j| j.id == job_id)
+        let current_job = self.work_repo.find_by_id(job_id).await?
             .ok_or_else(|| anyhow::anyhow!("Job not found: {}", job_id))?;
 
         // Validate state transition (Failed -> Pending)

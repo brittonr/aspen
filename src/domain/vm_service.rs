@@ -17,28 +17,52 @@ use uuid::Uuid;
 use crate::vm_manager::{VmManager, VmConfig, VmInstance, VmState, VmRegistry, JobResult, VmStats, VmAssignment};
 use crate::vm_manager::vm_types::JobRequirements;
 
+/// Error returned when VM operations are attempted without an available VM manager
+const VM_UNAVAILABLE_ERROR: &str = "VM manager is not available (SKIP_VM_MANAGER may be set)";
+
 /// Service abstraction for VM management
 ///
 /// This domain service provides a clean API for VM operations, isolating
 /// handlers and other services from direct VmManager access. It coordinates
 /// between VmManager and VmRegistry to provide comprehensive VM lifecycle
 /// and health management.
+///
+/// The VM manager may be unavailable if the application was started with
+/// SKIP_VM_MANAGER=true or if the vm-backend feature is disabled. In such
+/// cases, all operations will return an error indicating VMs are unavailable.
 pub struct VmService {
-    vm_manager: Arc<VmManager>,
+    vm_manager: Option<Arc<VmManager>>,
 }
 
 impl VmService {
-    /// Create a new VM service
+    /// Create a new VM service with an available VM manager
     ///
     /// # Arguments
     /// * `vm_manager` - The underlying VM manager instance
     pub fn new(vm_manager: Arc<VmManager>) -> Self {
-        Self { vm_manager }
+        Self { vm_manager: Some(vm_manager) }
+    }
+
+    /// Create a stub VM service when VM manager is not available
+    ///
+    /// All operations on this service will return errors indicating
+    /// that the VM manager is unavailable.
+    pub fn unavailable() -> Self {
+        Self { vm_manager: None }
+    }
+
+    /// Check if VM manager is available
+    pub fn is_available(&self) -> bool {
+        self.vm_manager.is_some()
     }
 
     /// Get the underlying VM manager (for internal use by execution adapters)
-    pub fn vm_manager(&self) -> Arc<VmManager> {
-        Arc::clone(&self.vm_manager)
+    ///
+    /// Returns an error if VM manager is not available.
+    pub fn vm_manager(&self) -> Result<Arc<VmManager>> {
+        self.vm_manager
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!(VM_UNAVAILABLE_ERROR))
     }
 
     // === VM Lifecycle Operations ===
@@ -50,9 +74,13 @@ impl VmService {
     ///
     /// # Returns
     /// The newly created VM instance
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn create_and_start_vm(&self, config: VmConfig) -> Result<VmInstance> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!(vm_id = %config.id, "Creating and starting new VM");
-        self.vm_manager.start_vm(config).await
+        vm_manager.start_vm(config).await
     }
 
     /// Start a pre-configured VM
@@ -66,9 +94,13 @@ impl VmService {
     ///
     /// # Arguments
     /// * `vm_id` - The ID of the VM to stop
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn stop_vm(&self, vm_id: Uuid) -> Result<()> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!(vm_id = %vm_id, "Stopping VM");
-        self.vm_manager.stop_vm(vm_id).await
+        vm_manager.stop_vm(vm_id).await
     }
 
     /// Destroy/terminate a VM
@@ -89,16 +121,24 @@ impl VmService {
     ///
     /// # Returns
     /// The VM instance if found, None if not found
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn get_vm(&self, vm_id: Uuid) -> Result<Option<Arc<tokio::sync::RwLock<VmInstance>>>> {
-        Ok(self.vm_manager.registry.get(vm_id).await?)
+        let vm_manager = self.vm_manager()?;
+        Ok(vm_manager.registry.get(vm_id).await?)
     }
 
     /// List all VMs
     ///
     /// # Returns
     /// Vector of all VM instances
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
-        self.vm_manager.registry.list_all_vms().await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.registry.list_all_vms().await
     }
 
     /// List VMs by state
@@ -108,16 +148,24 @@ impl VmService {
     ///
     /// # Returns
     /// Vector of VMs in the specified state
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn list_vms_by_state(&self, state: &str) -> Result<Vec<VmInstance>> {
-        self.vm_manager.registry.list_by_state(state).await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.registry.list_by_state(state).await
     }
 
     /// Get all running VMs
     ///
     /// # Returns
     /// Vector of VMs currently in a running state
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn list_running_vms(&self) -> Result<Vec<VmInstance>> {
-        self.vm_manager.registry.list_running_vms().await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.registry.list_running_vms().await
     }
 
     /// Get an available service VM for job assignment
@@ -125,9 +173,11 @@ impl VmService {
     /// Returns a service VM that is ready to accept jobs.
     ///
     /// # Returns
-    /// Option containing a service VM ID if one is available
+    /// Option containing a service VM ID if one is available, None if no VMs available
+    /// or if VM manager is not available
     pub async fn get_available_service_vm(&self) -> Option<Uuid> {
-        self.vm_manager.registry.get_available_service_vm().await
+        let vm_manager = self.vm_manager.as_ref()?;
+        vm_manager.registry.get_available_service_vm().await
     }
 
     /// Find an idle VM matching job requirements
@@ -136,12 +186,14 @@ impl VmService {
     /// * `requirements` - Job requirements for VM selection
     ///
     /// # Returns
-    /// Option containing a VM ID if one matches the requirements
+    /// Option containing a VM ID if one matches the requirements, None if no match
+    /// or if VM manager is not available
     pub async fn find_idle_vm(
         &self,
         requirements: &JobRequirements,
     ) -> Option<Uuid> {
-        self.vm_manager.registry.find_idle_vm(requirements).await
+        let vm_manager = self.vm_manager.as_ref()?;
+        vm_manager.registry.find_idle_vm(requirements).await
     }
 
     // === VM Status and Health ===
@@ -150,8 +202,12 @@ impl VmService {
     ///
     /// # Returns
     /// Statistics including total, running, idle, and failed VM counts
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn get_stats(&self) -> Result<VmStats> {
-        self.vm_manager.get_stats().await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.get_stats().await
     }
 
     /// Check if a specific VM is healthy
@@ -161,6 +217,9 @@ impl VmService {
     ///
     /// # Returns
     /// True if the VM is running and responsive
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn is_vm_healthy(&self, vm_id: Uuid) -> Result<bool> {
         if let Some(vm_arc) = self.get_vm(vm_id).await? {
             let vm = vm_arc.read().await;
@@ -177,6 +236,9 @@ impl VmService {
     ///
     /// # Returns
     /// The current VmState if the VM exists
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn get_vm_state(&self, vm_id: Uuid) -> Result<Option<VmState>> {
         if let Some(vm_arc) = self.get_vm(vm_id).await? {
             let vm = vm_arc.read().await;
@@ -198,9 +260,13 @@ impl VmService {
     ///
     /// # Returns
     /// VM assignment information (either Ephemeral or Service)
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn execute_job(&self, job: crate::Job) -> Result<VmAssignment> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!(job_id = %job.id, "Executing job via VM service");
-        self.vm_manager.execute_job(job).await
+        vm_manager.execute_job(job).await
     }
 
     /// Execute a job on a specific VM
@@ -211,9 +277,13 @@ impl VmService {
     ///
     /// # Returns
     /// Result of job submission
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn execute_job_on_vm(&self, vm_id: Uuid, job: crate::Job) -> Result<JobResult> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!(vm_id = %vm_id, job_id = %job.id, "Executing job on specific VM");
-        self.vm_manager.submit_job_to_vm(vm_id, job).await
+        vm_manager.submit_job_to_vm(vm_id, job).await
     }
 
     /// Submit a job to the VM manager (routes to best VM)
@@ -223,9 +293,13 @@ impl VmService {
     ///
     /// # Returns
     /// Job result with VM assignment and execution status
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn submit_job(&self, job: crate::Job) -> Result<JobResult> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!(job_id = %job.id, "Submitting job via VM service");
-        self.vm_manager.submit_job(job).await
+        vm_manager.submit_job(job).await
     }
 
     // === Lifecycle Management ===
@@ -236,38 +310,59 @@ impl VmService {
     /// - Health checking loops
     /// - Resource monitoring
     /// - Pre-warming of idle VMs
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn start(&self) -> Result<()> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!("Starting VM service");
-        self.vm_manager.start().await
+        vm_manager.start().await
     }
 
     /// Gracefully shutdown all VMs
     ///
     /// This should be called during application shutdown to ensure
     /// all VMs are properly terminated.
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn shutdown(&self) -> Result<()> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!("Shutting down VM service");
-        self.vm_manager.shutdown().await
+        vm_manager.shutdown().await
     }
 
     // === VM Registry Access ===
 
     /// Get the underlying VM registry (for health service integration)
-    pub fn registry(&self) -> Arc<VmRegistry> {
-        Arc::clone(&self.vm_manager.registry)
+    ///
+    /// # Errors
+    /// Returns None if VM manager is not available
+    pub fn registry(&self) -> Option<Arc<VmRegistry>> {
+        self.vm_manager.as_ref().map(|vm| Arc::clone(&vm.registry))
     }
 
     /// Count all VMs
+    ///
+    /// Returns 0 if VM manager is not available.
     pub async fn count_all(&self) -> usize {
-        self.vm_manager.registry.count_all().await
+        match &self.vm_manager {
+            Some(vm_manager) => vm_manager.registry.count_all().await,
+            None => 0,
+        }
     }
 
     /// Count VMs in a specific state
     ///
     /// # Arguments
     /// * `state` - The VmState to count
+    ///
+    /// Returns 0 if VM manager is not available.
     pub async fn count_by_state(&self, state: VmState) -> usize {
-        self.vm_manager.registry.count_by_state(state).await
+        match &self.vm_manager {
+            Some(vm_manager) => vm_manager.registry.count_by_state(state).await,
+            None => 0,
+        }
     }
 
     /// Recover VMs from persistence (on startup)
@@ -276,9 +371,13 @@ impl VmService {
     ///
     /// # Returns
     /// Number of VMs recovered
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn recover_vms(&self) -> Result<usize> {
+        let vm_manager = self.vm_manager()?;
         tracing::info!("Recovering VMs from persistence");
-        self.vm_manager.registry.recover_from_persistence().await
+        vm_manager.registry.recover_from_persistence().await
     }
 
     /// Log a VM event for auditing
@@ -287,13 +386,17 @@ impl VmService {
     /// * `vm_id` - The ID of the VM
     /// * `event_type` - Type of event (e.g., "started", "failed")
     /// * `details` - Optional detailed information about the event
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn log_vm_event(
         &self,
         vm_id: Uuid,
         event_type: &str,
         details: Option<String>,
     ) -> Result<()> {
-        self.vm_manager.registry.log_event(vm_id, event_type, details).await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.registry.log_event(vm_id, event_type, details).await
     }
 
     /// Update VM state in registry
@@ -301,7 +404,11 @@ impl VmService {
     /// # Arguments
     /// * `vm_id` - The ID of the VM
     /// * `new_state` - The new state to set
+    ///
+    /// # Errors
+    /// Returns an error if VM manager is not available
     pub async fn update_vm_state(&self, vm_id: Uuid, new_state: VmState) -> Result<()> {
-        self.vm_manager.registry.update_state(vm_id, new_state).await
+        let vm_manager = self.vm_manager()?;
+        vm_manager.registry.update_state(vm_id, new_state).await
     }
 }
