@@ -286,6 +286,16 @@ impl VmManager {
 
         Ok(())
     }
+
+    /// Get health status of a specific VM
+    pub async fn get_health_status(&self, vm_id: uuid::Uuid) -> Result<health_checker::HealthStatus> {
+        Ok(self.health_checker.get_health_status(vm_id).await)
+    }
+
+    /// Get VM state
+    pub async fn get_vm_status(&self, vm_id: uuid::Uuid) -> Result<Option<vm_types::VmState>> {
+        self.controller.get_vm_status(vm_id).await
+    }
 }
 
 /// Result from job execution

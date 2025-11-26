@@ -36,6 +36,13 @@ pub enum HealthStatus {
     Unknown,
 }
 
+impl HealthStatus {
+    /// Check if the VM is healthy or degraded (but still operational)
+    pub fn is_healthy(&self) -> bool {
+        matches!(self, HealthStatus::Healthy { .. } | HealthStatus::Degraded { .. })
+    }
+}
+
 /// Configuration for health checking
 #[derive(Debug, Clone)]
 pub struct HealthCheckConfig {

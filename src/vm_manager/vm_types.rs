@@ -122,6 +122,16 @@ impl VmState {
     pub fn is_terminal(&self) -> bool {
         matches!(self, VmState::Terminated { .. } | VmState::Failed { .. })
     }
+
+    /// Check if VM is stopped (terminated or draining)
+    pub fn is_stopped(&self) -> bool {
+        matches!(self, VmState::Terminated { .. } | VmState::Draining)
+    }
+
+    /// Check if VM has failed
+    pub fn is_failed(&self) -> bool {
+        matches!(self, VmState::Failed { .. })
+    }
 }
 
 /// VM instance runtime information

@@ -53,26 +53,132 @@ impl VmAdapter {
     }
     /// Monitor VM job execution
     async fn monitor_execution(&self, handle: ExecutionHandle, vm_id: uuid::Uuid) {
-        // In a real implementation, we would monitor the VM for job completion
-        // For now, we'll just wait a bit and mark as completed
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        let mut executions = self.executions.write().await;
-        if let Some(state) = executions.get_mut(&handle.id) {
-            state.status = ExecutionStatus::Completed(WorkResult {
-                success: true,
-                output: Some(serde_json::Value::String(format!(
-                    "Job completed on VM {}",
-                    vm_id
-                ))),
-                error: None,
-            });
-            state.completed_at = Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            );
+        use tracing::{debug, warn, error};
+
+        debug!("Starting job monitoring for handle {} on VM {}", handle.id, vm_id);
+
+        // Monitor with exponential backoff
+        let mut check_interval = Duration::from_secs(1);
+        let max_interval = Duration::from_secs(10);
+        let timeout = Duration::from_secs(300); // 5 minute timeout
+        let start = std::time::Instant::now();
+
+        loop {
+            if start.elapsed() > timeout {
+                warn!("Job {} timed out on VM {}", handle.id, vm_id);
+                let mut executions = self.executions.write().await;
+                if let Some(state) = executions.get_mut(&handle.id) {
+                    state.status = ExecutionStatus::Failed(
+                        format!("Job execution timed out after {:?}", timeout)
+                    );
+                    state.completed_at = Some(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0),
+                    );
+                }
+                break;
+            }
+
+            // Check VM health
+            match self.vm_manager.get_health_status(vm_id).await {
+                Ok(health) if health.is_healthy() => {
+                    debug!("VM {} is healthy, job still running", vm_id);
+                }
+                Ok(health) if !health.is_healthy() => {
+                    warn!("VM {} is unhealthy: {:?}", vm_id, health);
+                    let mut executions = self.executions.write().await;
+                    if let Some(state) = executions.get_mut(&handle.id) {
+                        state.status = ExecutionStatus::Failed(
+                            format!("VM became unhealthy: {:?}", health)
+                        );
+                        state.completed_at = Some(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                        );
+                    }
+                    break;
+                }
+                _ => {
+                    // VM health unknown, continue monitoring
+                }
+            }
+
+            // Check VM status
+            match self.vm_manager.get_vm_status(vm_id).await {
+                Ok(Some(vm_state)) if vm_state.is_running() => {
+                    // VM is still running, continue monitoring
+                    debug!("VM {} is running, continuing to monitor", vm_id);
+                }
+                Ok(Some(vm_state)) if vm_state.is_stopped() => {
+                    // VM has stopped, assume job completed
+                    info!("VM {} has stopped, marking job as completed", vm_id);
+                    let mut executions = self.executions.write().await;
+                    if let Some(state) = executions.get_mut(&handle.id) {
+                        state.status = ExecutionStatus::Completed(WorkResult {
+                            success: true,
+                            output: Some(serde_json::Value::String(format!(
+                                "Job completed on VM {} (VM stopped)",
+                                vm_id
+                            ))),
+                            error: None,
+                        });
+                        state.completed_at = Some(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                        );
+                    }
+                    break;
+                }
+                Ok(Some(vm_state)) if vm_state.is_failed() => {
+                    error!("VM {} failed", vm_id);
+                    let mut executions = self.executions.write().await;
+                    if let Some(state) = executions.get_mut(&handle.id) {
+                        state.status = ExecutionStatus::Failed(
+                            format!("VM {} failed", vm_id)
+                        );
+                        state.completed_at = Some(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                        );
+                    }
+                    break;
+                }
+                Ok(None) => {
+                    warn!("VM {} not found, marking job as failed", vm_id);
+                    let mut executions = self.executions.write().await;
+                    if let Some(state) = executions.get_mut(&handle.id) {
+                        state.status = ExecutionStatus::Failed(
+                            format!("VM {} not found", vm_id)
+                        );
+                        state.completed_at = Some(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                        );
+                    }
+                    break;
+                }
+                Err(e) => {
+                    warn!("Error checking VM {} status: {}", vm_id, e);
+                }
+                _ => {}
+            }
+
+            // Wait before next check with exponential backoff
+            tokio::time::sleep(check_interval).await;
+            check_interval = (check_interval * 2).min(max_interval);
         }
+
+        debug!("Finished monitoring job {} on VM {}", handle.id, vm_id);
     }
 }
 #[async_trait]
@@ -95,8 +201,8 @@ impl ExecutionBackend for VmAdapter {
             status: ExecutionStatus::Running,
             started_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
             completed_at: None,
         };
         let mut executions = self.executions.write().await;
@@ -131,8 +237,8 @@ impl ExecutionBackend for VmAdapter {
                 state.completed_at = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0),
                 );
                 info!("VM adapter: cancelled execution {}", handle.id);
                 Ok(())
@@ -206,8 +312,8 @@ impl ExecutionBackend for VmAdapter {
             last_check: Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
             ),
             details: HashMap::from([
                 ("type".to_string(), "vm".to_string()),
@@ -256,8 +362,8 @@ impl ExecutionBackend for VmAdapter {
         let mut executions = self.executions.write().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let cutoff = now - older_than.as_secs();
         let mut cleaned = 0;
         executions.retain(|_, state| {
