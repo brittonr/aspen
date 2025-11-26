@@ -5,7 +5,11 @@
 // Cache bust: 1732360124
 
 use anyhow::{anyhow, Result};
-use mvm_ci::{AppConfig, WorkQueueClient, JobStatus, WorkerBackend, worker_flawless::FlawlessWorker, worker_microvm::{MicroVmWorker, MicroVmWorkerConfig}, WorkerRegistration, WorkerType, WorkerHeartbeat};
+use mvm_ci::{
+    AppConfig, WorkQueueClient, JobStatus, WorkerRegistration,
+    WorkerType, WorkerHeartbeat,
+    state::factory::{InfrastructureFactory, ProductionInfrastructureFactory},
+};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::time::Duration;
@@ -42,30 +46,64 @@ async fn main() -> Result<()> {
     let client = WorkQueueClient::connect(&control_plane_ticket).await?;
     tracing::info!(node_id = %client.node_id(), "Connected to control plane");
 
-    // Initialize worker backend based on type
-    let worker: Box<dyn WorkerBackend> = match worker_type {
-        WorkerType::Wasm => {
-            tracing::info!("Initializing Flawless WASM worker backend");
-            let flawless_url = config.flawless.flawless_url.clone();
-            let worker = FlawlessWorker::new(&flawless_url).await?;
-            Box::new(worker)
-        }
-        WorkerType::Firecracker => {
-            tracing::info!("Initializing MicroVM worker backend");
-            let microvm_config = MicroVmWorkerConfig {
-                flake_dir: config.vm.flake_dir.clone(),
-                state_dir: config.vm.state_dir.clone(),
-                max_vms: config.vm.max_concurrent_vms,
-                ephemeral_memory_mb: config.vm.default_memory_mb,
-                service_memory_mb: config.vm.default_memory_mb,
-                default_vcpus: config.vm.default_vcpus,
-                enable_service_vms: false,
-                service_vm_queues: vec![],
-            };
-            let worker = MicroVmWorker::new(microvm_config).await?;
-            Box::new(worker)
-        }
+    // Create infrastructure factory for worker creation
+    let factory = ProductionInfrastructureFactory::new();
+
+    // For Firecracker workers, we need a VM manager instance
+    // Workers can operate in two modes:
+    // 1. Standalone mode: Create their own VM manager (current behavior)
+    // 2. Shared mode: Use a shared VM manager from infrastructure
+    // For now, we'll maintain standalone mode for backward compatibility
+    let vm_manager = if worker_type == WorkerType::Firecracker {
+        // Create standalone VM manager for Firecracker worker
+        use mvm_ci::hiqlite_service::HiqliteService;
+        use mvm_ci::vm_manager::{VmManager, VmManagerConfig};
+
+        let worker_state_dir = config.storage.vm_state_dir.join("worker");
+
+        // Create worker-specific Hiqlite instance
+        let hiqlite = Arc::new(
+            HiqliteService::new(Some(worker_state_dir.join("hiqlite")))
+                .await
+                .map_err(|e| anyhow!("Failed to create Hiqlite service: {}", e))?
+        );
+
+        // Initialize schema
+        hiqlite.initialize_schema().await
+            .map_err(|e| anyhow!("Failed to initialize Hiqlite schema: {}", e))?;
+
+        // Create VM Manager configuration
+        let vm_config = VmManagerConfig {
+            max_vms: config.vm.max_concurrent_vms,
+            auto_scaling: true,
+            pre_warm_count: 2,
+            flake_dir: config.vm.flake_dir.clone(),
+            state_dir: worker_state_dir.clone(),
+            default_memory_mb: config.vm.default_memory_mb,
+            default_vcpus: config.vm.default_vcpus,
+        };
+
+        // Create VM Manager
+        let vm_manager = Arc::new(VmManager::new(vm_config, hiqlite).await?);
+
+        // Start VM manager background tasks
+        let manager_clone = vm_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = manager_clone.start_monitoring().await {
+                tracing::error!(error = ?e, "VM monitoring failed");
+            }
+        });
+
+        Some(vm_manager)
+    } else {
+        None
     };
+
+    // Create worker using factory pattern
+    tracing::info!("Creating {} worker using factory pattern",
+        if worker_type == WorkerType::Wasm { "WASM" } else { "Firecracker" });
+
+    let worker = factory.create_worker(&config, worker_type, vm_manager).await?;
 
     worker.initialize().await?;
 

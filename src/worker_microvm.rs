@@ -69,7 +69,49 @@ pub struct MicroVmWorker {
 }
 
 impl MicroVmWorker {
-    /// Create a new orchestrated MicroVM worker
+    /// Create a new MicroVM worker with injected dependencies
+    ///
+    /// This is the preferred constructor for dependency injection and testing.
+    /// It accepts a pre-configured VM manager, enabling the use of mock implementations
+    /// and shared infrastructure.
+    ///
+    /// # Arguments
+    /// * `config` - Worker configuration
+    /// * `vm_manager` - Pre-configured VM manager instance
+    pub async fn with_vm_manager(
+        config: MicroVmWorkerConfig,
+        vm_manager: Arc<VmManager>,
+    ) -> Result<Self> {
+        let service_vms = Arc::new(RwLock::new(Vec::new()));
+
+        // Start service VMs if enabled
+        if config.enable_service_vms {
+            Self::start_service_vms(&config, &vm_manager, &service_vms).await;
+        }
+
+        tracing::info!(
+            state_dir = ?config.state_dir,
+            max_vms = config.max_vms,
+            service_vms = config.enable_service_vms,
+            "MicroVM worker initialized with injected VM Manager"
+        );
+
+        Ok(Self {
+            config,
+            vm_manager,
+            service_vms,
+        })
+    }
+
+    /// Create a new orchestrated MicroVM worker (standalone mode)
+    ///
+    /// This constructor creates its own HiqliteService and VmManager instances.
+    /// Use this for standalone workers that don't need to share infrastructure.
+    ///
+    /// For production use with shared infrastructure, prefer `with_vm_manager()` instead.
+    ///
+    /// # Arguments
+    /// * `config` - Worker configuration
     pub async fn new(config: MicroVmWorkerConfig) -> Result<Self> {
         // Create a local Hiqlite instance for standalone operation
         use crate::hiqlite_service::HiqliteService;
@@ -105,60 +147,52 @@ impl MicroVmWorker {
             }
         });
 
-        let service_vms = Arc::new(RwLock::new(Vec::new()));
+        // Use the dependency injection constructor
+        Self::with_vm_manager(config, vm_manager).await
+    }
 
-        // Start service VMs if enabled
-        if config.enable_service_vms {
-            let mut vms = service_vms.write().await;
-            for queue_name in &config.service_vm_queues {
-                tracing::info!(queue = %queue_name, "Starting service VM for queue");
+    /// Start service VMs for configured queues
+    async fn start_service_vms(
+        config: &MicroVmWorkerConfig,
+        vm_manager: &Arc<VmManager>,
+        service_vms: &Arc<RwLock<Vec<Uuid>>>,
+    ) {
+        let mut vms = service_vms.write().await;
+        for queue_name in &config.service_vm_queues {
+            tracing::info!(queue = %queue_name, "Starting service VM for queue");
 
-                let vm_config = VmConfig {
-                    id: Uuid::new_v4(),
-                    mode: VmMode::Service {
-                        queue_name: queue_name.clone(),
-                        max_jobs: Some(100),
-                        max_uptime_secs: Some(3600),
-                    },
-                    memory_mb: config.service_memory_mb,
-                    vcpus: config.default_vcpus,
-                    hypervisor: "cloud-hypervisor".to_string(),
-                    capabilities: vec![],
-                    isolation_level: IsolationLevel::Standard,
-                };
+            let vm_config = VmConfig {
+                id: Uuid::new_v4(),
+                mode: VmMode::Service {
+                    queue_name: queue_name.clone(),
+                    max_jobs: Some(100),
+                    max_uptime_secs: Some(3600),
+                },
+                memory_mb: config.service_memory_mb,
+                vcpus: config.default_vcpus,
+                hypervisor: "cloud-hypervisor".to_string(),
+                capabilities: vec![],
+                isolation_level: IsolationLevel::Standard,
+            };
 
-                match vm_manager.start_vm(vm_config.clone()).await {
-                    Ok(vm_instance) => {
-                        tracing::info!(
-                            vm_id = %vm_instance.config.id,
-                            queue = %queue_name,
-                            "Service VM started successfully"
-                        );
-                        vms.push(vm_instance.config.id);
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            queue = %queue_name,
-                            error = ?e,
-                            "Failed to start service VM"
-                        );
-                    }
+            match vm_manager.start_vm(vm_config.clone()).await {
+                Ok(vm_instance) => {
+                    tracing::info!(
+                        vm_id = %vm_instance.config.id,
+                        queue = %queue_name,
+                        "Service VM started successfully"
+                    );
+                    vms.push(vm_instance.config.id);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        queue = %queue_name,
+                        error = ?e,
+                        "Failed to start service VM"
+                    );
                 }
             }
         }
-
-        tracing::info!(
-            state_dir = ?config.state_dir,
-            max_vms = config.max_vms,
-            service_vms = config.enable_service_vms,
-            "MicroVM worker initialized with VM Manager orchestration"
-        );
-
-        Ok(Self {
-            config,
-            vm_manager,
-            service_vms,
-        })
     }
 
     /// Determine isolation level based on job payload

@@ -17,6 +17,7 @@ use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::{AppState, DomainServices, InfrastructureState};
 use crate::vm_manager::{VmManager, VmManagerConfig};
 use crate::work_queue::WorkQueue;
+use crate::{WorkerBackend, WorkerType};
 
 /// Factory trait for creating infrastructure components
 ///
@@ -58,6 +59,22 @@ pub trait InfrastructureFactory: Send + Sync {
 
     /// Create worker repository abstraction
     fn create_worker_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository>;
+
+    /// Create a worker backend based on type
+    ///
+    /// This method creates worker instances with proper dependency injection,
+    /// enabling the use of shared infrastructure and test doubles.
+    ///
+    /// # Arguments
+    /// * `config` - Application configuration
+    /// * `worker_type` - Type of worker to create (Wasm or Firecracker)
+    /// * `vm_manager` - Optional VM manager for Firecracker workers
+    async fn create_worker(
+        &self,
+        config: &AppConfig,
+        worker_type: WorkerType,
+        vm_manager: Option<Arc<VmManager>>,
+    ) -> Result<Box<dyn WorkerBackend>>;
 
     /// Build complete application state (orchestrator method)
     ///
@@ -198,6 +215,45 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
         use crate::repositories::HiqliteWorkerRepository;
         Arc::new(HiqliteWorkerRepository::new(hiqlite))
     }
+
+    async fn create_worker(
+        &self,
+        config: &AppConfig,
+        worker_type: WorkerType,
+        vm_manager: Option<Arc<VmManager>>,
+    ) -> Result<Box<dyn WorkerBackend>> {
+        match worker_type {
+            WorkerType::Wasm => {
+                use crate::worker_flawless::FlawlessWorker;
+                tracing::info!("Creating Flawless WASM worker via factory");
+                let worker = FlawlessWorker::new(&config.flawless.flawless_url).await?;
+                Ok(Box::new(worker))
+            }
+            WorkerType::Firecracker => {
+                use crate::worker_microvm::{MicroVmWorker, MicroVmWorkerConfig};
+
+                let vm_manager = vm_manager.ok_or_else(||
+                    anyhow::anyhow!("VM Manager required for Firecracker worker")
+                )?;
+
+                tracing::info!("Creating MicroVM worker via factory with shared VM Manager");
+
+                let microvm_config = MicroVmWorkerConfig {
+                    flake_dir: config.vm.flake_dir.clone(),
+                    state_dir: config.vm.state_dir.clone(),
+                    max_vms: config.vm.max_concurrent_vms,
+                    ephemeral_memory_mb: config.vm.default_memory_mb,
+                    service_memory_mb: config.vm.default_memory_mb,
+                    default_vcpus: config.vm.default_vcpus,
+                    enable_service_vms: false,  // Workers typically don't need service VMs
+                    service_vm_queues: vec![],
+                };
+
+                let worker = MicroVmWorker::with_vm_manager(microvm_config, vm_manager).await?;
+                Ok(Box::new(worker))
+            }
+        }
+    }
 }
 
 // =============================================================================
@@ -282,6 +338,52 @@ pub mod test_factory {
         fn create_worker_repository(&self, _hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository> {
             // Return mock repository for testing
             Arc::new(MockWorkerRepository::new())
+        }
+
+        async fn create_worker(
+            &self,
+            config: &AppConfig,
+            worker_type: WorkerType,
+            vm_manager: Option<Arc<VmManager>>,
+        ) -> Result<Box<dyn WorkerBackend>> {
+            match worker_type {
+                WorkerType::Wasm => {
+                    // For tests, create a mock Flawless worker or real one with test URL
+                    use crate::worker_flawless::FlawlessWorker;
+                    tracing::info!("Creating test Flawless WASM worker via factory");
+                    let test_url = if config.flawless.flawless_url.is_empty() {
+                        "http://localhost:9999".to_string()
+                    } else {
+                        config.flawless.flawless_url.clone()
+                    };
+                    let worker = FlawlessWorker::new(&test_url).await?;
+                    Ok(Box::new(worker))
+                }
+                WorkerType::Firecracker => {
+                    use crate::worker_microvm::{MicroVmWorker, MicroVmWorkerConfig};
+
+                    let vm_manager = vm_manager.ok_or_else(||
+                        anyhow::anyhow!("VM Manager required for Firecracker worker")
+                    )?;
+
+                    tracing::info!("Creating test MicroVM worker via factory");
+
+                    // Test configuration with minimal resources
+                    let microvm_config = MicroVmWorkerConfig {
+                        flake_dir: config.vm.flake_dir.clone(),
+                        state_dir: std::env::temp_dir().join("mvm-ci-test-workers"),
+                        max_vms: 2,  // Minimal for testing
+                        ephemeral_memory_mb: 256,  // Minimal memory
+                        service_memory_mb: 256,
+                        default_vcpus: 1,
+                        enable_service_vms: false,  // Disabled for tests
+                        service_vm_queues: vec![],
+                    };
+
+                    let worker = MicroVmWorker::with_vm_manager(microvm_config, vm_manager).await?;
+                    Ok(Box::new(worker))
+                }
+            }
         }
     }
 }
