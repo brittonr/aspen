@@ -47,7 +47,6 @@ pub async fn store_blob(
     body: Bytes,
 ) -> Result<Json<BlobResponse>, AppError> {
     let hash = state
-        .infrastructure()
         .iroh()
         .store_blob(body)
         .await
@@ -63,7 +62,6 @@ pub async fn retrieve_blob(
     Path(hash_str): Path<String>,
 ) -> Result<Response, AppError> {
     let data = state
-        .infrastructure()
         .iroh()
         .retrieve_blob(hash_str)
         .await
@@ -83,7 +81,6 @@ pub async fn join_gossip_topic(
     Json(req): Json<JoinTopicRequest>,
 ) -> Result<StatusCode, AppError> {
     state
-        .infrastructure()
         .iroh()
         .join_topic(req.topic_id)
         .await
@@ -101,7 +98,6 @@ pub async fn broadcast_gossip(
     let message = Bytes::from(req.message.into_bytes());
 
     state
-        .infrastructure()
         .iroh()
         .broadcast_message(req.topic_id, message)
         .await
@@ -128,7 +124,6 @@ pub async fn connect_peer(
     Json(req): Json<ConnectPeerRequest>,
 ) -> Result<StatusCode, AppError> {
     state
-        .infrastructure()
         .iroh()
         .connect_peer(req.endpoint_addr)
         .await
@@ -140,8 +135,8 @@ pub async fn connect_peer(
 /// GET /iroh/info
 /// Get endpoint information (ID and addresses)
 pub async fn endpoint_info(State(state): State<AppState>) -> Result<Json<EndpointInfo>, AppError> {
-    let endpoint_id = state.infrastructure().iroh().endpoint_id();
-    let addresses = state.infrastructure().iroh().local_endpoints();
+    let endpoint_id = state.iroh().endpoint_id();
+    let addresses = state.iroh().local_endpoints();
 
     Ok(Json(EndpointInfo {
         endpoint_id: endpoint_id.to_string(),

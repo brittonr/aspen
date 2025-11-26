@@ -37,7 +37,7 @@ pub async fn dashboard() -> impl IntoResponse {
 
 /// Dashboard cluster health endpoint (HTMX partial)
 pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.services().cluster_status();
+    let cluster_service = state.cluster_status();
 
     match cluster_service.get_cluster_health().await {
         Ok(health) => {
@@ -74,7 +74,7 @@ pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl Int
 
 /// Dashboard queue statistics endpoint (HTMX partial)
 pub async fn dashboard_queue_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let job_service = state.services().job_lifecycle();
+    let job_service = state.job_lifecycle();
     let stats = job_service.get_queue_stats().await;
     let view = QueueStatsView::from(stats);
     match view.render() {
@@ -101,7 +101,7 @@ pub async fn dashboard_recent_jobs(
     State(state): State<AppState>,
     Query(query): Query<SortQuery>,
 ) -> impl IntoResponse {
-    let job_service = state.services().job_lifecycle();
+    let job_service = state.job_lifecycle();
 
     // Parse sort order from query
     let sort_by = query.sort.as_deref().unwrap_or("time");
@@ -142,7 +142,7 @@ pub async fn dashboard_recent_jobs(
 
 /// Dashboard control plane nodes endpoint (HTMX partial)
 pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.services().cluster_status();
+    let cluster_service = state.cluster_status();
 
     match cluster_service.get_control_plane_nodes().await {
         Ok(nodes) => {
@@ -179,7 +179,7 @@ pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> imp
 
 /// Dashboard workers endpoint (HTMX partial)
 pub async fn dashboard_workers(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_service = state.services().cluster_status();
+    let cluster_service = state.cluster_status();
 
     match cluster_service.get_worker_stats().await {
         Ok(workers) => {
@@ -226,7 +226,7 @@ pub async fn dashboard_submit_job(
     Form(job): Form<NewJob>,
 ) -> Response {
     // Use pre-built domain service
-    let job_service = state.services().job_lifecycle();
+    let job_service = state.job_lifecycle();
 
     let submission = JobSubmission {
         payload: serde_json::json!({ "url": job.url })

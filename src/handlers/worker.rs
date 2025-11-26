@@ -38,7 +38,7 @@ pub async fn worker_register(
     State(state): State<AppState>,
     Json(req): Json<RegisterWorkerRequest>,
 ) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     let registration = WorkerRegistration {
         worker_type: req.worker_type,
@@ -80,7 +80,7 @@ pub async fn worker_heartbeat(
     Path(worker_id): Path<String>,
     Json(req): Json<HeartbeatRequest>,
 ) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     let heartbeat = WorkerHeartbeat {
         worker_id: worker_id.clone(),
@@ -103,7 +103,7 @@ pub async fn worker_heartbeat(
 ///
 /// Returns all workers regardless of status.
 pub async fn worker_list(State(state): State<AppState>) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     match worker_service.list_all_workers().await {
         Ok(workers) => Json(workers).into_response(),
@@ -122,7 +122,7 @@ pub async fn worker_get(
     State(state): State<AppState>,
     Path(worker_id): Path<String>,
 ) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     match worker_service.get_worker(&worker_id).await {
         Ok(Some(worker)) => Json(worker).into_response(),
@@ -143,7 +143,7 @@ pub async fn worker_drain(
     State(state): State<AppState>,
     Path(worker_id): Path<String>,
 ) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     match worker_service.mark_worker_draining(&worker_id).await {
         Ok(_) => (
@@ -163,7 +163,7 @@ pub async fn worker_drain(
 ///
 /// Returns aggregate statistics for the entire worker pool.
 pub async fn worker_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let worker_service = state.services().worker_management();
+    let worker_service = state.worker_management();
 
     match worker_service.get_worker_stats().await {
         Ok(stats) => Json(stats).into_response(),

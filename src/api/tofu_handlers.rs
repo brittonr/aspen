@@ -29,7 +29,7 @@ pub async fn get_state(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.get_state(&workspace).await {
         Ok(Some(tofu_state)) => {
@@ -57,7 +57,7 @@ pub async fn update_state(
     headers: HeaderMap,
     Json(tofu_state): Json<TofuState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     // Check if workspace is locked and verify lock ID if provided
     if let Some(lock_id) = query.lock_id {
@@ -105,7 +105,7 @@ pub async fn lock_workspace(
     State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.lock_workspace(&workspace, lock_request).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -134,7 +134,7 @@ pub async fn unlock_workspace(
     State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.unlock_workspace(&workspace, &lock_request.id).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -156,7 +156,7 @@ pub async fn force_unlock_workspace(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.force_unlock_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -173,7 +173,7 @@ pub async fn force_unlock_workspace(
 pub async fn list_workspaces(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.list_workspaces().await {
         Ok(workspaces) => Ok(Json(workspaces)),
@@ -191,7 +191,7 @@ pub async fn delete_workspace(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.delete_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::NO_CONTENT, "").into_response()),
@@ -209,7 +209,7 @@ pub async fn get_state_history(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<StateHistoryEntry>>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.get_state_history(&workspace, Some(50)).await {
         Ok(history) => {
@@ -242,7 +242,7 @@ pub async fn rollback_state(
     Path((workspace, version)): Path<(String, i64)>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.rollback_state(&workspace, version).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -269,7 +269,7 @@ pub async fn create_plan(
     State(state): State<AppState>,
     Json(request): Json<CreatePlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.execute_plan(
         &request.workspace,
@@ -297,7 +297,7 @@ pub async fn apply_plan(
     State(state): State<AppState>,
     Json(request): Json<ApplyPlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.apply_stored_plan(&plan_id, &request.approver).await {
         Ok(result) => Ok(Json(result)),
@@ -315,7 +315,7 @@ pub async fn list_plans(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<PlanSummary>>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.list_plans(&workspace).await {
         Ok(plans) => {
@@ -363,7 +363,7 @@ pub async fn destroy_infrastructure(
     State(state): State<AppState>,
     Json(request): Json<DestroyRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.domain_services().tofu_service();
+    let tofu_service = state.tofu_service();
 
     match tofu_service.destroy(
         &request.workspace,

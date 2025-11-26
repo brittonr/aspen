@@ -9,12 +9,21 @@ use flawless_utils::DeployedModule;
 use iroh::Endpoint;
 use std::sync::Arc;
 
+use crate::adapters::{ExecutionRegistry, RegistryConfig};
 use crate::config::AppConfig;
+use crate::domain::{
+    ClusterStatusService, HealthService, JobLifecycleService, JobCommandService, JobQueryService,
+    WorkerManagementService, LoggingEventPublisher,
+};
+#[cfg(feature = "vm-backend")]
+use crate::domain::VmService;
+#[cfg(feature = "tofu-support")]
+use crate::domain::TofuService;
 use crate::hiqlite_persistent_store::HiqlitePersistentStore;
 use crate::hiqlite_service::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
-use crate::state::{AppState, DomainServices, InfrastructureState};
+use crate::state::AppState;
 use crate::vm_manager::{VmManager, VmManagerConfig};
 use crate::work_queue::WorkQueue;
 use crate::{WorkerBackend, WorkerType};
@@ -99,6 +108,10 @@ pub trait InfrastructureFactory: Send + Sync {
         // Create shared Hiqlite Arc for services that need it
         let hiqlite_arc = Arc::new(hiqlite.clone());
 
+        // Create execution registry
+        let registry_config = RegistryConfig::default();
+        let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
+
         // Create VM manager (skip if SKIP_VM_MANAGER is set)
         let vm_manager = if std::env::var("SKIP_VM_MANAGER").is_ok() {
             tracing::info!("Skipping VM manager creation (SKIP_VM_MANAGER set)");
@@ -113,33 +126,75 @@ pub trait InfrastructureFactory: Send + Sync {
             }
         };
 
-        // Create infrastructure state
-        let infrastructure = if let Some(vm_manager) = vm_manager {
-            InfrastructureState::new(
-                module,
-                iroh,
-                hiqlite,
-                work_queue.clone(),
-                vm_manager
-            )
-        } else {
-            // Create default execution registry when VM manager is not available
-            let registry_config = crate::adapters::RegistryConfig::default();
-            let execution_registry = Arc::new(crate::adapters::ExecutionRegistry::new(registry_config));
+        // Create repositories
+        let state_repo = self.create_state_repository(hiqlite_arc.clone());
+        let work_repo = self.create_work_repository(work_queue.clone());
+        let worker_repo = self.create_worker_repository(hiqlite_arc.clone());
 
-            InfrastructureState::new_with_registry(
-                module,
-                iroh,
-                hiqlite,
-                work_queue.clone(),
-                execution_registry
-            )
+        // Create event publisher
+        let event_publisher = Arc::new(LoggingEventPublisher::new());
+
+        // Create command and query services (CQRS pattern)
+        let commands = Arc::new(JobCommandService::with_events(
+            work_repo.clone(),
+            event_publisher.clone(),
+        ));
+        let queries = Arc::new(JobQueryService::new(work_repo.clone()));
+
+        // Create domain services with injected repositories
+        let cluster_status = Arc::new(ClusterStatusService::new(
+            state_repo.clone(),
+            work_repo.clone(),
+        ));
+
+        let health = Arc::new(HealthService::new(state_repo.clone()));
+
+        // JobLifecycleService wraps command and query services
+        let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
+
+        // WorkerManagementService with worker and work repositories
+        let worker_management = Arc::new(WorkerManagementService::new(
+            worker_repo.clone(),
+            work_repo.clone(),
+            Some(60), // Default heartbeat timeout: 60 seconds
+        ));
+
+        // Create VM service if VM manager is available
+        #[cfg(feature = "vm-backend")]
+        let vm_service = {
+            if let Some(vm_manager) = vm_manager {
+                Arc::new(VmService::new(vm_manager))
+            } else {
+                tracing::warn!("VM manager not available, VmService will return errors for all operations");
+                Arc::new(VmService::unavailable())
+            }
         };
 
-        // Create domain services using the infrastructure
-        let services = DomainServices::new(&infrastructure);
+        // Create Tofu service
+        #[cfg(feature = "tofu-support")]
+        let tofu_service = {
+            Arc::new(TofuService::new(
+                execution_registry.clone(),
+                hiqlite_arc.clone(),
+                config.storage.work_dir.clone(),
+            ))
+        };
 
-        Ok(AppState::new(infrastructure, services))
+        Ok(AppState::new(
+            module,
+            iroh,
+            hiqlite,
+            work_queue,
+            execution_registry,
+            cluster_status,
+            health,
+            job_lifecycle,
+            worker_management,
+            #[cfg(feature = "vm-backend")]
+            vm_service,
+            #[cfg(feature = "tofu-support")]
+            tofu_service,
+        ))
     }
 }
 

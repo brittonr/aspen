@@ -57,18 +57,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to build application state");
 
-    // Start VM Manager background tasks (if available)
-    if let Some(vm_manager) = state.infrastructure().vm_manager() {
-        println!("Starting VM Manager...");
-        if let Err(e) = vm_manager.start().await {
-            println!("WARNING: VM Manager failed to start: {}. Continuing without VM support.", e);
+    // Start VM service if available
+    #[cfg(feature = "vm-backend")]
+    {
+        println!("Starting VM Service...");
+        if let Err(e) = state.vm_service().start().await {
+            println!("WARNING: VM Service failed to start: {}. Continuing without VM support.", e);
         }
-    } else {
-        println!("VM Manager not available (skipped or failed to initialize)");
+    }
+    #[cfg(not(feature = "vm-backend"))]
+    {
+        println!("VM backend not available (feature disabled)");
     }
 
     // Display work queue ticket for worker connections
-    let work_ticket = state.infrastructure().work_queue().get_ticket();
+    let work_ticket = state.work_queue().get_ticket();
 
     println!();
     println!("╔═══════════════════════════════════════════════════════════════════════════╗");
