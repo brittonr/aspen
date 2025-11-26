@@ -141,8 +141,8 @@ impl ClusterStatusService {
                 }
 
                 // Track most recent activity
-                if job.updated_at > entry.2 {
-                    entry.2 = job.updated_at;
+                if job.updated_at() > entry.2 {
+                    entry.2 = job.updated_at();
                 }
             }
         }

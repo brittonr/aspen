@@ -4,6 +4,8 @@
 //! They represent the business concepts without coupling to storage or transport.
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use super::job_metadata::JobMetadata;
+use super::job_requirements::JobRequirements;
 /// Job status in the workflow lifecycle
 ///
 /// This is the domain representation of job status, independent of how
@@ -35,95 +37,107 @@ impl std::fmt::Display for JobStatus {
 /// Job representing work in the distributed queue
 ///
 /// This is the domain representation of a job, containing only business-relevant
-/// information. Infrastructure concerns (like gossip topics, network addresses)
-/// are kept in the infrastructure layer.
+/// information. Infrastructure concerns (like worker assignment, node tracking)
+/// are kept in the infrastructure layer or accessed via compatibility fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     /// Unique job identifier
     pub id: String,
     /// Current status of the job
     pub status: JobStatus,
-    /// Worker node that claimed this job (if any)
-    pub claimed_by: Option<String>,
-    /// Worker ID assigned to execute this job (from worker registry)
-    pub assigned_worker_id: Option<String>,
-    /// Worker node that completed this job (if any)
-    pub completed_by: Option<String>,
-    /// Timestamp when job was created (Unix epoch seconds)
-    pub created_at: i64,
-    /// Timestamp when job was last updated (Unix epoch seconds)
-    pub updated_at: i64,
-    /// Timestamp when job execution started (Unix epoch seconds)
-    pub started_at: Option<i64>,
-    /// Error message if job failed
-    pub error_message: Option<String>,
-    /// Number of times this job has been retried
-    pub retry_count: u32,
     /// Job payload (application-specific data)
     pub payload: JsonValue,
-    /// Worker types that can execute this job (empty = any worker type)
-    pub compatible_worker_types: Vec<WorkerType>,
+    /// Job requirements and constraints
+    pub requirements: JobRequirements,
+    /// Timing and audit metadata
+    pub metadata: JobMetadata,
+    /// Error message if job failed
+    pub error_message: Option<String>,
+
+    // === Backward compatibility fields (infrastructure concerns) ===
+    // These will eventually be moved to JobAssignment in infrastructure layer
+    /// Worker node that claimed this job (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claimed_by: Option<String>,
+    /// Worker ID assigned to execute this job (from worker registry)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assigned_worker_id: Option<String>,
+    /// Worker node that completed this job (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_by: Option<String>,
 }
 impl Default for Job {
     fn default() -> Self {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
-
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             status: JobStatus::Pending,
+            payload: serde_json::json!({}),
+            requirements: JobRequirements::default(),
+            metadata: JobMetadata::default(),
+            error_message: None,
             claimed_by: None,
             assigned_worker_id: None,
             completed_by: None,
-            created_at: now,
-            updated_at: now,
-            started_at: None,
-            error_message: None,
-            retry_count: 0,
-            payload: serde_json::json!({}),
-            compatible_worker_types: Vec::new(),
         }
     }
 }
 impl Job {
-    /// Calculate duration of job execution in seconds
-    ///
-    /// Returns the time from when the job started executing (InProgress)
-    /// to when it was last updated. Returns 0 if job hasn't started yet.
+    /// Calculate duration of job execution in seconds (delegates to metadata)
     pub fn duration_seconds(&self) -> i64 {
-        match self.started_at {
-            Some(start) => self.updated_at - start,
-            None => 0,
-        }
+        self.metadata.duration_seconds()
     }
-    /// Calculate duration of job execution in milliseconds
-    ///
-    /// Returns the time from when the job started executing (InProgress)
-    /// to when it was last updated. Returns 0 if job hasn't started yet.
+
+    /// Calculate duration of job execution in milliseconds (delegates to metadata)
     pub fn duration_ms(&self) -> i64 {
-        self.duration_seconds() * 1000
+        self.metadata.duration_ms()
     }
-    /// Calculate time since last update in seconds
+
+    /// Calculate time since last update in seconds (delegates to metadata)
     pub fn time_since_update_seconds(&self) -> i64 {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
-        now - self.updated_at
+        self.metadata.time_since_update_seconds()
     }
+
     /// Check if job is in a terminal state (completed or failed)
     pub fn is_terminal(&self) -> bool {
         matches!(self.status, JobStatus::Completed | JobStatus::Failed)
     }
+
     /// Check if job is claimable (pending status)
     pub fn is_claimable(&self) -> bool {
         matches!(self.status, JobStatus::Pending)
     }
+
     /// Check if job is actively running
     pub fn is_running(&self) -> bool {
         matches!(self.status, JobStatus::InProgress)
+    }
+
+    // === Backward compatibility accessors ===
+    // These provide access to fields that used to be at the top level
+
+    /// Get created_at timestamp (backward compatibility)
+    pub fn created_at(&self) -> i64 {
+        self.metadata.created_at
+    }
+
+    /// Get updated_at timestamp (backward compatibility)
+    pub fn updated_at(&self) -> i64 {
+        self.metadata.updated_at
+    }
+
+    /// Get started_at timestamp (backward compatibility)
+    pub fn started_at(&self) -> Option<i64> {
+        self.metadata.started_at
+    }
+
+    /// Get retry_count (backward compatibility)
+    pub fn retry_count(&self) -> u32 {
+        self.metadata.retry_count
+    }
+
+    /// Get compatible_worker_types (backward compatibility)
+    pub fn compatible_worker_types(&self) -> &[WorkerType] {
+        &self.requirements.compatible_worker_types
     }
 }
 /// Aggregate statistics for the job queue

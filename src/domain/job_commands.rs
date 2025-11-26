@@ -264,7 +264,7 @@ impl JobCommandService {
             .map_err(|e| anyhow::anyhow!("Cannot retry job: {}", e))?;
 
         // Increment retry count
-        let new_retry_count = current_job.retry_count + 1;
+        let new_retry_count = current_job.retry_count() + 1;
 
         // Update status and retry count
         self.work_repo.update_status(job_id, JobStatus::Pending).await?;

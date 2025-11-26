@@ -66,13 +66,7 @@ pub struct WorkerTypeCompatibilityChecker;
 
 impl CompatibilityChecker for WorkerTypeCompatibilityChecker {
     fn is_compatible(&self, job: &Job, worker: &Worker) -> bool {
-        // If job has no worker type constraints, it's compatible with all workers
-        if job.compatible_worker_types.is_empty() {
-            return true;
-        }
-
-        // Check if worker type is in the list
-        job.compatible_worker_types.contains(&worker.worker_type)
+        job.requirements.is_compatible_with(worker.worker_type)
     }
 
     fn name(&self) -> &str {
@@ -184,15 +178,7 @@ pub fn is_compatible_with_worker_type(
     worker_type: Option<WorkerType>,
 ) -> bool {
     match worker_type {
-        Some(wt) => {
-            // If job has no worker type constraints, it's compatible with all workers
-            if job.compatible_worker_types.is_empty() {
-                true
-            } else {
-                // Check if worker type is in the list
-                job.compatible_worker_types.contains(&wt)
-            }
-        }
+        Some(wt) => job.requirements.is_compatible_with(wt),
         // If no worker type specified, allow claiming any job
         None => true,
     }

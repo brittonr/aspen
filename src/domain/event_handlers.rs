@@ -236,7 +236,8 @@ impl EventHandler for MetricsEventHandler {
 #[cfg(feature = "webhook-events")]
 pub struct WebhookEventHandler {
     webhook_urls: Vec<String>,
-    client: reqwest::Client,
+    // TODO: Add reqwest to dependencies when implementing webhooks
+    // client: reqwest::Client,
 }
 
 #[cfg(feature = "webhook-events")]
@@ -244,7 +245,8 @@ impl WebhookEventHandler {
     pub fn new(webhook_urls: Vec<String>) -> Self {
         Self {
             webhook_urls,
-            client: reqwest::Client::new(),
+            // TODO: Add reqwest to dependencies when implementing webhooks
+            // client: reqwest::Client::new(),
         }
     }
 }
@@ -253,26 +255,28 @@ impl WebhookEventHandler {
 #[async_trait]
 impl EventHandler for WebhookEventHandler {
     async fn handle(&self, event: &DomainEvent) -> DomainResult<()> {
-        let event_json = serde_json::to_value(event)
+        let _event_json = serde_json::to_value(event)
             .map_err(|e| crate::domain::errors::DomainError::Generic(e.to_string()))?;
 
-        for url in &self.webhook_urls {
-            // Fire and forget - don't wait for response
-            let client = self.client.clone();
-            let url = url.clone();
-            let payload = event_json.clone();
+        // TODO: Implement webhook calls when reqwest is added to dependencies
+        // for url in &self.webhook_urls {
+        //     // Fire and forget - don't wait for response
+        //     let client = self.client.clone();
+        //     let url = url.clone();
+        //     let payload = event_json.clone();
+        //
+        //     tokio::spawn(async move {
+        //         if let Err(e) = client.post(&url).json(&payload).send().await {
+        //             tracing::warn!(
+        //                 error = %e,
+        //                 url = %url,
+        //                 "Failed to send webhook notification"
+        //             );
+        //         }
+        //     });
+        // }
 
-            tokio::spawn(async move {
-                if let Err(e) = client.post(&url).json(&payload).send().await {
-                    tracing::warn!(
-                        error = %e,
-                        url = %url,
-                        "Failed to send webhook notification"
-                    );
-                }
-            });
-        }
-
+        tracing::warn!("Webhook support not implemented yet - webhooks configured but not sent");
         Ok(())
     }
 
@@ -280,7 +284,7 @@ impl EventHandler for WebhookEventHandler {
         "WebhookEventHandler"
     }
 
-    fn handles(&self, _event: &DomainEvent) -> bool {
+    fn handles(&self, event: &DomainEvent) -> bool {
         // Only handle significant events for webhooks
         matches!(
             event,

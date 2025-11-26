@@ -8,8 +8,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for logs
     tracing_subscriber::fmt::init();
 
-    // Load centralized configuration
-    let config = AppConfig::load().expect("Failed to load configuration");
+    // Load centralized configuration with layered approach
+    // Priority: Environment variables > CONFIG_FILE > ./config.toml > ./config/default.toml > defaults
+    let config = AppConfig::load_with_layers().expect("Failed to load configuration");
 
     // Each node can have its own flawless server (optional)
     let flawless_url = config.flawless.flawless_url.clone();

@@ -9,6 +9,8 @@ use async_trait::async_trait;
 use crate::hiqlite_service::HiqliteService;
 use crate::persistent_store::PersistentStore;
 use crate::domain::types::{Job, JobStatus};
+use crate::domain::job_metadata::JobMetadata;
+use crate::domain::job_requirements::JobRequirements;
 use crate::params;
 
 /// Hiqlite-backed implementation of PersistentStore
@@ -93,19 +95,31 @@ impl PersistentStore for HiqlitePersistentStore {
                 .and_then(|types_str| serde_json::from_str(&types_str).ok())
                 .unwrap_or_else(Vec::new);
 
-            Job {
-                id: row.id,
-                status,
-                claimed_by: row.claimed_by,
-                assigned_worker_id: row.assigned_worker_id,
-                completed_by: row.completed_by,
+            let requirements = JobRequirements {
+                compatible_worker_types,
+                isolation_level: None,
+                memory_mb: None,
+                vcpus: None,
+            };
+
+            let metadata = JobMetadata {
                 created_at: row.created_at,
                 updated_at: row.updated_at,
                 started_at: row.started_at,
-                error_message: row.error_message,
+                completed_at: None, // Not yet tracked in DB
                 retry_count: row.retry_count as u32,
+            };
+
+            Job {
+                id: row.id,
+                status,
                 payload,
-                compatible_worker_types,
+                requirements,
+                metadata,
+                error_message: row.error_message,
+                claimed_by: row.claimed_by,
+                assigned_worker_id: row.assigned_worker_id,
+                completed_by: row.completed_by,
             }
         }).collect();
 
@@ -115,10 +129,10 @@ impl PersistentStore for HiqlitePersistentStore {
     async fn upsert_workflow(&self, job: &Job) -> Result<()> {
         let status_str = status_to_string(&job.status);
         let payload_str = serde_json::to_string(&job.payload)?;
-        let compatible_worker_types_str = if job.compatible_worker_types.is_empty() {
+        let compatible_worker_types_str = if job.requirements.compatible_worker_types.is_empty() {
             None
         } else {
-            Some(serde_json::to_string(&job.compatible_worker_types)?)
+            Some(serde_json::to_string(&job.requirements.compatible_worker_types)?)
         };
 
         self.hiqlite
@@ -130,11 +144,11 @@ impl PersistentStore for HiqlitePersistentStore {
                     job.claimed_by.clone(),
                     job.assigned_worker_id.clone(),
                     job.completed_by.clone(),
-                    job.created_at,
-                    job.updated_at,
-                    job.started_at,
+                    job.metadata.created_at,
+                    job.metadata.updated_at,
+                    job.metadata.started_at,
                     job.error_message.clone(),
-                    job.retry_count as i64,
+                    job.metadata.retry_count as i64,
                     payload_str,
                     compatible_worker_types_str
                 ),

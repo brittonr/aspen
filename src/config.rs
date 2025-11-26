@@ -896,7 +896,268 @@ impl AppConfig {
             })
     }
 
+    /// Load configuration with layered approach:
+    /// 1. Start with defaults
+    /// 2. Load from TOML file if it exists
+    /// 3. Override with environment variables
+    ///
+    /// Configuration precedence (highest to lowest):
+    /// - Environment variables (always win)
+    /// - Config file specified by CONFIG_FILE env var
+    /// - ./config.toml
+    /// - ./config/default.toml
+    /// - Hardcoded defaults
+    pub fn load_with_layers() -> Result<Self, ConfigError> {
+        // Start with TOML configuration if available
+        let mut config = Self::load_toml_with_fallbacks()?;
+
+        // Apply environment variable overrides
+        config.apply_env_overrides()?;
+
+        Ok(config)
+    }
+
+    /// Load TOML configuration from default locations
+    /// Tries in order: CONFIG_FILE env var -> ./config.toml -> ./config/default.toml -> defaults
+    fn load_toml_with_fallbacks() -> Result<Self, ConfigError> {
+        // Check for explicit config file path
+        if let Ok(config_path) = std::env::var("CONFIG_FILE") {
+            let path = std::path::Path::new(&config_path);
+            if path.exists() {
+                tracing::info!("Loading configuration from CONFIG_FILE: {}", config_path);
+                return Self::from_toml_file(path);
+            } else {
+                tracing::warn!("CONFIG_FILE specified but not found: {}", config_path);
+            }
+        }
+
+        // Try ./config.toml
+        let local_config = std::path::Path::new("./config.toml");
+        if local_config.exists() {
+            tracing::info!("Loading configuration from: ./config.toml");
+            return Self::from_toml_file(local_config);
+        }
+
+        // Try ./config/default.toml
+        let default_config = std::path::Path::new("./config/default.toml");
+        if default_config.exists() {
+            tracing::info!("Loading configuration from: ./config/default.toml");
+            return Self::from_toml_file(default_config);
+        }
+
+        // No TOML file found, use hardcoded defaults
+        tracing::info!("No configuration file found, using hardcoded defaults");
+        Ok(Self::default())
+    }
+
+    /// Apply environment variable overrides to existing configuration
+    /// This allows env vars to override TOML values
+    fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
+        // Network overrides
+        if let Ok(val) = std::env::var("HTTP_PORT") {
+            self.network.http_port = val.parse().map_err(|e| ConfigError::InvalidValue {
+                key: "HTTP_PORT".to_string(),
+                value: val.clone(),
+                reason: format!("must be a valid port number: {}", e),
+            })?;
+        }
+        if let Ok(val) = std::env::var("HTTP_BIND_ADDR") {
+            self.network.http_bind_addr = val;
+        }
+        if let Ok(val) = std::env::var("IROH_ALPN") {
+            self.network.iroh_alpn = val;
+        }
+
+        // Storage overrides
+        if let Ok(val) = std::env::var("IROH_BLOBS_PATH") {
+            self.storage.iroh_blobs_path = val.into();
+        }
+        if let Ok(val) = std::env::var("HQL_DATA_DIR") {
+            self.storage.hiqlite_data_dir = val.into();
+        }
+        if let Ok(val) = std::env::var("VM_STATE_DIR") {
+            self.storage.vm_state_dir = val.into();
+        }
+        if let Ok(val) = std::env::var("WORK_DIR") {
+            self.storage.work_dir = val.into();
+        }
+
+        // Flawless overrides
+        if let Ok(val) = std::env::var("FLAWLESS_URL") {
+            if !val.starts_with("http://") && !val.starts_with("https://") {
+                return Err(ConfigError::InvalidValue {
+                    key: "FLAWLESS_URL".to_string(),
+                    value: val,
+                    reason: "must start with http:// or https://".to_string(),
+                });
+            }
+            self.flawless.flawless_url = val;
+        }
+
+        // VM overrides
+        if let Ok(val) = std::env::var("FIRECRACKER_FLAKE_DIR") {
+            self.vm.flake_dir = val.into();
+        }
+        if let Ok(val) = std::env::var("FIRECRACKER_STATE_DIR") {
+            self.vm.state_dir = val.into();
+        }
+        if let Ok(val) = std::env::var("FIRECRACKER_DEFAULT_MEMORY_MB") {
+            self.vm.default_memory_mb = val.parse().ok().unwrap_or(self.vm.default_memory_mb);
+        }
+        if let Ok(val) = std::env::var("FIRECRACKER_DEFAULT_VCPUS") {
+            self.vm.default_vcpus = val.parse().ok().unwrap_or(self.vm.default_vcpus);
+        }
+        if let Ok(val) = std::env::var("FIRECRACKER_MAX_CONCURRENT_VMS") {
+            self.vm.max_concurrent_vms = val.parse().ok().unwrap_or(self.vm.max_concurrent_vms);
+        }
+        if let Ok(val) = std::env::var("VM_AUTO_SCALING") {
+            self.vm.auto_scaling = val.parse().ok().unwrap_or(self.vm.auto_scaling);
+        }
+        if let Ok(val) = std::env::var("VM_PRE_WARM_COUNT") {
+            self.vm.pre_warm_count = val.parse().ok().unwrap_or(self.vm.pre_warm_count);
+        }
+
+        // Timing overrides
+        if let Ok(val) = std::env::var("WORKER_NO_WORK_SLEEP_SECS") {
+            self.timing.worker_no_work_sleep_secs = val.parse().ok().unwrap_or(self.timing.worker_no_work_sleep_secs);
+        }
+        if let Ok(val) = std::env::var("WORKER_ERROR_SLEEP_SECS") {
+            self.timing.worker_error_sleep_secs = val.parse().ok().unwrap_or(self.timing.worker_error_sleep_secs);
+        }
+        if let Ok(val) = std::env::var("WORKER_HEARTBEAT_INTERVAL_SECS") {
+            self.timing.worker_heartbeat_interval_secs = val.parse().ok().unwrap_or(self.timing.worker_heartbeat_interval_secs);
+        }
+        if let Ok(val) = std::env::var("HIQLITE_STARTUP_DELAY_SECS") {
+            self.timing.hiqlite_startup_delay_secs = val.parse().ok().unwrap_or(self.timing.hiqlite_startup_delay_secs);
+        }
+        if let Ok(val) = std::env::var("HIQLITE_CHECK_TIMEOUT_SECS") {
+            self.timing.hiqlite_check_timeout_secs = val.parse().ok().unwrap_or(self.timing.hiqlite_check_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("HIQLITE_LOG_THROTTLE_SECS") {
+            self.timing.hiqlite_log_throttle_secs = val.parse().ok().unwrap_or(self.timing.hiqlite_log_throttle_secs);
+        }
+        if let Ok(val) = std::env::var("HIQLITE_RETRY_DELAY_SECS") {
+            self.timing.hiqlite_retry_delay_secs = val.parse().ok().unwrap_or(self.timing.hiqlite_retry_delay_secs);
+        }
+
+        // Timeout overrides
+        if let Ok(val) = std::env::var("VM_STARTUP_TIMEOUT_SECS") {
+            self.timeouts.vm_startup_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.vm_startup_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("VM_SHUTDOWN_TIMEOUT_SECS") {
+            self.timeouts.vm_shutdown_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.vm_shutdown_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("VM_SHUTDOWN_RETRY_DELAY_MILLIS") {
+            self.timeouts.vm_shutdown_retry_delay_millis = val.parse().ok().unwrap_or(self.timeouts.vm_shutdown_retry_delay_millis);
+        }
+        if let Ok(val) = std::env::var("VM_HEALTH_CHECK_TIMEOUT_SECS") {
+            self.timeouts.vm_health_check_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.vm_health_check_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("CONTROL_PROTOCOL_READ_TIMEOUT_SECS") {
+            self.timeouts.control_protocol_read_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.control_protocol_read_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("CONTROL_PROTOCOL_SHUTDOWN_TIMEOUT_SECS") {
+            self.timeouts.control_protocol_shutdown_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.control_protocol_shutdown_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("CONTROL_PROTOCOL_CONNECT_TIMEOUT_SECS") {
+            self.timeouts.control_protocol_connect_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.control_protocol_connect_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("IROH_ONLINE_TIMEOUT_SECS") {
+            self.timeouts.iroh_online_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.iroh_online_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_DEFAULT_TIMEOUT_SECS") {
+            self.timeouts.adapter_default_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.adapter_default_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_WAIT_TIMEOUT_SECS") {
+            self.timeouts.adapter_wait_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.adapter_wait_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_POLL_INTERVAL_MILLIS") {
+            self.timeouts.adapter_poll_interval_millis = val.parse().ok().unwrap_or(self.timeouts.adapter_poll_interval_millis);
+        }
+        if let Ok(val) = std::env::var("TOFU_PLAN_TIMEOUT_SECS") {
+            self.timeouts.tofu_plan_timeout_secs = val.parse().ok().unwrap_or(self.timeouts.tofu_plan_timeout_secs);
+        }
+
+        // Health check overrides
+        if let Ok(val) = std::env::var("HEALTH_CHECK_INTERVAL_SECS") {
+            self.health_check.check_interval_secs = val.parse().ok().unwrap_or(self.health_check.check_interval_secs);
+        }
+        if let Ok(val) = std::env::var("HEALTH_CHECK_TIMEOUT_SECS") {
+            self.health_check.check_timeout_secs = val.parse().ok().unwrap_or(self.health_check.check_timeout_secs);
+        }
+        if let Ok(val) = std::env::var("HEALTH_FAILURE_THRESHOLD") {
+            self.health_check.failure_threshold = val.parse().ok().unwrap_or(self.health_check.failure_threshold);
+        }
+        if let Ok(val) = std::env::var("HEALTH_RECOVERY_THRESHOLD") {
+            self.health_check.recovery_threshold = val.parse().ok().unwrap_or(self.health_check.recovery_threshold);
+        }
+        if let Ok(val) = std::env::var("HEALTH_CIRCUIT_BREAKER_ENABLED") {
+            self.health_check.enable_circuit_breaker = val.parse().ok().unwrap_or(self.health_check.enable_circuit_breaker);
+        }
+        if let Ok(val) = std::env::var("HEALTH_CIRCUIT_BREAK_DURATION_SECS") {
+            self.health_check.circuit_break_duration_secs = val.parse().ok().unwrap_or(self.health_check.circuit_break_duration_secs);
+        }
+
+        // Resource monitor overrides
+        if let Ok(val) = std::env::var("RESOURCE_MONITOR_INTERVAL_SECS") {
+            self.resource_monitor.monitor_interval_secs = val.parse().ok().unwrap_or(self.resource_monitor.monitor_interval_secs);
+        }
+
+        // Adapter overrides
+        if let Ok(val) = std::env::var("ADAPTER_MAX_CONCURRENT") {
+            self.adapter.max_concurrent = val.parse().ok().unwrap_or(self.adapter.max_concurrent);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_MAX_EXECUTIONS") {
+            self.adapter.max_executions = val.parse().ok().unwrap_or(self.adapter.max_executions);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_EXECUTION_DELAY_MS") {
+            self.adapter.execution_delay_ms = val.parse().ok().unwrap_or(self.adapter.execution_delay_ms);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_MAX_SUBMISSION_RETRIES") {
+            self.adapter.max_submission_retries = val.parse().ok().unwrap_or(self.adapter.max_submission_retries);
+        }
+        if let Ok(val) = std::env::var("ADAPTER_HEALTH_CHECK_INTERVAL_SECS") {
+            self.adapter.health_check_interval_secs = val.parse().ok().unwrap_or(self.adapter.health_check_interval_secs);
+        }
+
+        // Job router overrides
+        if let Ok(val) = std::env::var("JOB_ROUTER_MAX_JOBS_PER_VM") {
+            self.job_router.max_jobs_per_vm = val.parse().ok().unwrap_or(self.job_router.max_jobs_per_vm);
+        }
+        if let Ok(val) = std::env::var("JOB_ROUTER_AUTO_CREATE_VMS") {
+            self.job_router.auto_create_vms = val.parse().ok().unwrap_or(self.job_router.auto_create_vms);
+        }
+        if let Ok(val) = std::env::var("JOB_ROUTER_PREFER_SERVICE_VMS") {
+            self.job_router.prefer_service_vms = val.parse().ok().unwrap_or(self.job_router.prefer_service_vms);
+        }
+
+        // Validation overrides
+        if let Ok(val) = std::env::var("VALIDATION_JOB_ID_MIN_LENGTH") {
+            self.validation.job_id_min_length = val.parse().ok().unwrap_or(self.validation.job_id_min_length);
+        }
+        if let Ok(val) = std::env::var("VALIDATION_JOB_ID_MAX_LENGTH") {
+            self.validation.job_id_max_length = val.parse().ok().unwrap_or(self.validation.job_id_max_length);
+        }
+        if let Ok(val) = std::env::var("VALIDATION_PAYLOAD_MAX_SIZE_BYTES") {
+            self.validation.payload_max_size_bytes = val.parse().ok().unwrap_or(self.validation.payload_max_size_bytes);
+        }
+
+        // VM check overrides
+        if let Ok(val) = std::env::var("VM_CHECK_INITIAL_INTERVAL_SECS") {
+            self.vm_check.initial_interval_secs = val.parse().ok().unwrap_or(self.vm_check.initial_interval_secs);
+        }
+        if let Ok(val) = std::env::var("VM_CHECK_MAX_INTERVAL_SECS") {
+            self.vm_check.max_interval_secs = val.parse().ok().unwrap_or(self.vm_check.max_interval_secs);
+        }
+        if let Ok(val) = std::env::var("VM_CHECK_TIMEOUT_SECS") {
+            self.vm_check.timeout_secs = val.parse().ok().unwrap_or(self.vm_check.timeout_secs);
+        }
+
+        Ok(())
+    }
+
     /// Load configuration from TOML file if it exists, otherwise use environment variables
+    #[deprecated(since = "0.1.0", note = "Use load_with_layers() instead for proper precedence")]
     pub fn load_with_optional_file(path: Option<impl AsRef<std::path::Path>>) -> Result<Self, ConfigError> {
         if let Some(path) = path {
             if path.as_ref().exists() {

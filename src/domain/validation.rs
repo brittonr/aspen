@@ -177,7 +177,7 @@ impl JobValidator for WorkerConstraintValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         // Check for duplicate worker types in constraints
         let mut seen = std::collections::HashSet::new();
-        for worker_type in &job.compatible_worker_types {
+        for worker_type in &job.requirements.compatible_worker_types {
             if !seen.insert(worker_type) {
                 return Err(ValidationError::InvalidWorkerConstraints {
                     reason: format!("Duplicate worker type: {:?}", worker_type),
@@ -201,20 +201,20 @@ pub struct TimestampValidator;
 impl JobValidator for TimestampValidator {
     fn validate(&self, job: &Job) -> ValidationResult {
         // Ensure created_at is set
-        if job.created_at <= 0 {
+        if job.metadata.created_at <= 0 {
             return Err(ValidationError::MissingField {
                 field: "created_at".to_string(),
             });
         }
         // Ensure updated_at >= created_at
-        if job.updated_at < job.created_at {
+        if job.metadata.updated_at < job.metadata.created_at {
             return Err(ValidationError::Generic {
                 reason: "updated_at cannot be before created_at".to_string(),
             });
         }
         // If started_at is set, ensure it's >= created_at
-        if let Some(started_at) = job.started_at {
-            if started_at < job.created_at {
+        if let Some(started_at) = job.metadata.started_at {
+            if started_at < job.metadata.created_at {
                 return Err(ValidationError::Generic {
                     reason: "started_at cannot be before created_at".to_string(),
                 });

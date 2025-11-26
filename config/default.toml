@@ -1,0 +1,268 @@
+# Blixard Configuration File
+#
+# This file provides an example configuration with sensible defaults.
+# Environment variables will override these values if set.
+#
+# Configuration precedence (highest to lowest):
+# 1. Environment variables
+# 2. Custom config file (via CONFIG_FILE env var)
+# 3. ./config.toml
+# 4. Values in this file
+# 5. Hardcoded defaults in the application
+
+# ============================================================================
+# Network Configuration
+# ============================================================================
+[network]
+# HTTP server port for local workflows and Web UI
+http_port = 3020
+
+# HTTP server bind address (use "0.0.0.0" for all interfaces)
+http_bind_addr = "0.0.0.0"
+
+# Iroh ALPN protocol identifier for HTTP/3 over QUIC
+# This identifies the application protocol used over the QUIC transport
+iroh_alpn = "iroh+h3"
+
+# ============================================================================
+# Storage Configuration
+# ============================================================================
+[storage]
+# Path to iroh blob storage directory
+# Iroh uses content-addressed storage for efficient data distribution
+iroh_blobs_path = "./data/iroh-blobs"
+
+# Path to hiqlite data directory
+# Hiqlite is the distributed SQLite database used for state management
+hiqlite_data_dir = "./data/hiqlite"
+
+# Path to VM state directory (for VM lifecycle management)
+# Stores VM metadata, logs, and state information
+vm_state_dir = "./data/vm-state"
+
+# Working directory for temporary files
+# Used for job execution, builds, and other temporary operations
+work_dir = "/tmp/tofu-work"
+
+# ============================================================================
+# Flawless WASM Runtime Configuration
+# ============================================================================
+[flawless]
+# URL of the Flawless WASM runtime server
+# Flawless provides WASM-based job execution
+flawless_url = "http://localhost:27288"
+
+# ============================================================================
+# Virtual Machine Configuration (Cloud Hypervisor)
+# ============================================================================
+[vm]
+# Path to microvm flake directory
+# Contains Nix flakes for building VM images
+flake_dir = "./microvms"
+
+# Path to store VM state and logs
+state_dir = "./data/firecracker-vms"
+
+# Default memory allocation for VMs (MB)
+# Adjust based on workload requirements
+default_memory_mb = 512
+
+# Default vCPU count for VMs
+# Adjust based on workload parallelism needs
+default_vcpus = 1
+
+# Maximum number of concurrent VMs
+# Limits resource consumption on the host
+max_concurrent_vms = 10
+
+# Enable auto-scaling
+# Automatically create/destroy VMs based on workload
+auto_scaling = true
+
+# Pre-warm this many idle VMs
+# Keeps VMs ready for immediate job execution
+pre_warm_count = 2
+
+# ============================================================================
+# Timing Configuration
+# ============================================================================
+[timing]
+# Worker sleep duration when no work is available (seconds)
+worker_no_work_sleep_secs = 2
+
+# Worker sleep duration after claim_work() error (seconds)
+worker_error_sleep_secs = 5
+
+# Worker heartbeat interval (seconds)
+# Workers send heartbeats to prove they are alive
+worker_heartbeat_interval_secs = 30
+
+# Initial delay after starting hiqlite node (seconds)
+# Allows the Raft cluster to stabilize
+hiqlite_startup_delay_secs = 3
+
+# Timeout for hiqlite health checks (seconds)
+hiqlite_check_timeout_secs = 60
+
+# Throttle duration for hiqlite log messages (seconds)
+# Prevents log spam during transient issues
+hiqlite_log_throttle_secs = 5
+
+# Delay between hiqlite retry attempts (seconds)
+hiqlite_retry_delay_secs = 1
+
+# ============================================================================
+# Timeout Configuration
+# ============================================================================
+[timeouts]
+# VM startup timeout (seconds)
+# Time allowed for a VM to boot and become ready
+vm_startup_timeout_secs = 30
+
+# VM shutdown timeout (seconds)
+# Time allowed for a VM to gracefully shut down
+vm_shutdown_timeout_secs = 30
+
+# VM shutdown retry delay (milliseconds)
+# Delay between shutdown attempts
+vm_shutdown_retry_delay_millis = 500
+
+# VM health check timeout (seconds)
+# Time allowed for a VM to respond to health checks
+vm_health_check_timeout_secs = 5
+
+# Control protocol read timeout (seconds)
+# Timeout for reading from the VM control socket
+control_protocol_read_timeout_secs = 5
+
+# Control protocol shutdown timeout (seconds)
+# Time allowed for control protocol shutdown
+control_protocol_shutdown_timeout_secs = 10
+
+# Control protocol connect timeout (seconds)
+# Time allowed to establish control connection
+control_protocol_connect_timeout_secs = 5
+
+# Iroh online timeout (seconds)
+# Time to wait for Iroh endpoint to come online
+iroh_online_timeout_secs = 10
+
+# Default timeout for adapter operations (seconds)
+# Generic timeout for adapter-level operations
+adapter_default_timeout_secs = 300
+
+# Timeout for waiting on adapter operations (seconds)
+# Timeout for adapter wait operations
+adapter_wait_timeout_secs = 30
+
+# Poll interval for adapter status checks (milliseconds)
+# How often to check adapter operation status
+adapter_poll_interval_millis = 500
+
+# Timeout for tofu plan operations (seconds)
+# Time allowed for OpenTofu/Terraform plan generation
+tofu_plan_timeout_secs = 600
+
+# ============================================================================
+# Health Check Configuration
+# ============================================================================
+[health_check]
+# Interval between health checks (seconds)
+check_interval_secs = 30
+
+# Timeout for health check response (seconds)
+check_timeout_secs = 5
+
+# Number of failures before marking unhealthy
+# Prevents false positives from transient issues
+failure_threshold = 3
+
+# Number of successes to recover from unhealthy
+# Requires sustained health before marking as recovered
+recovery_threshold = 2
+
+# Enable circuit breaker behavior
+# Stops sending requests to unhealthy resources
+enable_circuit_breaker = true
+
+# Time to wait before retrying unhealthy VM (seconds)
+# Circuit breaker cooldown period
+circuit_break_duration_secs = 60
+
+# ============================================================================
+# Resource Monitor Configuration
+# ============================================================================
+[resource_monitor]
+# Interval between resource monitoring checks (seconds)
+# Monitors CPU, memory, and other system resources
+monitor_interval_secs = 10
+
+# ============================================================================
+# Adapter Configuration
+# ============================================================================
+[adapter]
+# Maximum concurrent executions
+# Limits parallel job execution
+max_concurrent = 10
+
+# Maximum total executions
+# Total number of jobs before adapter rotation/cleanup
+max_executions = 20
+
+# Simulated execution delay in milliseconds (for mock adapter)
+# Used in testing/development mode
+execution_delay_ms = 100
+
+# Maximum submission retries
+# Number of times to retry failed job submissions
+max_submission_retries = 3
+
+# Health check interval (seconds)
+# How often to check adapter health
+health_check_interval_secs = 30
+
+# ============================================================================
+# Job Router Configuration
+# ============================================================================
+[job_router]
+# Maximum jobs per service VM
+# Limits job concentration on individual VMs
+max_jobs_per_vm = 50
+
+# Enable automatic VM creation
+# Creates VMs on-demand when needed
+auto_create_vms = true
+
+# Prefer service VMs over ephemeral when possible
+# Service VMs are long-lived and reusable
+prefer_service_vms = true
+
+# ============================================================================
+# Validation Configuration
+# ============================================================================
+[validation]
+# Minimum length for job IDs
+job_id_min_length = 1
+
+# Maximum length for job IDs
+job_id_max_length = 255
+
+# Maximum size for job payloads in bytes
+# 1MB default, adjust based on your needs
+payload_max_size_bytes = 1048576
+
+# ============================================================================
+# VM Check Configuration
+# ============================================================================
+[vm_check]
+# Initial interval for VM checks (seconds)
+# Starts with fast checks for quick feedback
+initial_interval_secs = 1
+
+# Maximum interval for VM checks (seconds)
+# Backs off to slower checks once stable
+max_interval_secs = 10
+
+# Timeout for VM checks (seconds)
+# Overall timeout for VM readiness checks
+timeout_secs = 300

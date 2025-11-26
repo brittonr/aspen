@@ -21,8 +21,9 @@ async fn main() -> Result<()> {
 
     tracing::info!("Starting mvm-ci worker");
 
-    // Load centralized configuration
-    let config = AppConfig::load().expect("Failed to load configuration");
+    // Load centralized configuration with layered approach
+    // Priority: Environment variables > CONFIG_FILE > ./config.toml > ./config/default.toml > defaults
+    let config = AppConfig::load_with_layers().expect("Failed to load configuration");
 
     // Get control plane ticket from environment (worker-specific, not in config)
     let control_plane_ticket = std::env::var("CONTROL_PLANE_TICKET")

@@ -207,7 +207,7 @@ impl JobQueryService {
             JobSortOrder::Status => {
                 jobs.sort_by(|a, b| {
                     match format!("{:?}", a.status).cmp(&format!("{:?}", b.status)) {
-                        std::cmp::Ordering::Equal => b.updated_at.cmp(&a.updated_at),
+                        std::cmp::Ordering::Equal => b.updated_at().cmp(&a.updated_at()),
                         other => other,
                     }
                 });
@@ -217,7 +217,7 @@ impl JobQueryService {
             }
             JobSortOrder::Time => {
                 // Most recent first
-                jobs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+                jobs.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
             }
         }
     }
@@ -236,7 +236,7 @@ impl JobQueryService {
         };
 
         let duration_seconds = job.duration_seconds();
-        let time_ago_seconds = now - job.updated_at;
+        let time_ago_seconds = now - job.updated_at();
 
         EnrichedJob {
             job_id: job.id,

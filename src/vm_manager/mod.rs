@@ -1,5 +1,10 @@
 // VM Lifecycle Management System
 // Supports both ephemeral (one-job) and service (long-running) VMs
+//
+// Architecture:
+// - VmCoordinator: Message-based orchestrator (internal)
+// - VmManager: Backward-compatible facade (public API)
+// - Components communicate via channels for loose coupling
 
 pub mod vm_types;
 pub mod vm_registry;
@@ -8,7 +13,8 @@ pub mod job_router;
 pub mod resource_monitor;
 pub mod health_checker;
 pub mod control_protocol;
-
+pub mod messages;
+pub mod coordinator;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -18,12 +24,25 @@ use crate::hiqlite_service::HiqliteService;
 pub use vm_types::{VmConfig, VmInstance, VmMode, VmState, IsolationLevel};
 pub use vm_registry::VmRegistry;
 pub use vm_controller::VmController;
-pub use job_router::{JobRouter, VmAssignment};
+pub use job_router::JobRouter;
 pub use resource_monitor::ResourceMonitor;
 pub use health_checker::HealthChecker;
 
-/// Main VM Manager coordinating all components
+// Re-export VmAssignment from job_router for backward compatibility
+pub use job_router::VmAssignment;
+
+use coordinator::VmCoordinator;
+
+/// Main VM Manager - Backward-compatible facade over VmCoordinator
+///
+/// This struct provides the same public API as before, but now uses
+/// the VmCoordinator internally for message-based component orchestration.
+/// All public fields are maintained for backward compatibility.
 pub struct VmManager {
+    // Coordinator handles all message passing (private)
+    coordinator: Arc<VmCoordinator>,
+
+    // Public fields for backward compatibility
     pub registry: Arc<VmRegistry>,
     pub controller: Arc<VmController>,
     pub router: Arc<JobRouter>,
@@ -66,36 +85,22 @@ impl Default for VmManagerConfig {
 
 impl VmManager {
     /// Create a new VM manager
+    ///
+    /// This now creates a VmCoordinator internally and exposes component
+    /// references for backward compatibility.
     pub async fn new(config: VmManagerConfig, hiqlite: Arc<HiqliteService>) -> Result<Self> {
-        // Initialize registry with Hiqlite persistence
-        let registry = Arc::new(VmRegistry::new(hiqlite, &config.state_dir).await?);
+        // Create the coordinator with all components
+        let coordinator = Arc::new(VmCoordinator::new(config.clone(), hiqlite).await?);
 
-        // Create controller for VM lifecycle operations
-        let controller = Arc::new(VmController::new(
-            config.clone(),
-            Arc::clone(&registry),
-        )?);
-
-        // Initialize job router
-        let router = Arc::new(JobRouter::new(
-            Arc::clone(&registry),
-            Arc::clone(&controller),
-        ));
-
-        // Set up resource monitor
-        let monitor = Arc::new(ResourceMonitor::new(
-            Arc::clone(&registry),
-            Arc::clone(&controller),
-        ));
-
-        // Initialize health checker with default config
-        let health_config = crate::vm_manager::health_checker::HealthCheckConfig::default();
-        let health_checker = Arc::new(HealthChecker::new(
-            Arc::clone(&registry),
-            health_config,
-        ));
+        // Get references to components for backward compatibility
+        let registry = coordinator.registry();
+        let controller = coordinator.controller();
+        let router = coordinator.router();
+        let monitor = coordinator.monitor();
+        let health_checker = coordinator.health_checker();
 
         Ok(Self {
+            coordinator,
             registry,
             controller,
             router,
@@ -106,28 +111,13 @@ impl VmManager {
     }
 
     /// Start the VM manager background tasks
+    ///
+    /// This now delegates to the coordinator's background task management.
     pub async fn start(&self) -> Result<()> {
         tracing::info!("Starting VM Manager");
 
-        // Start health checking loop
-        let health_checker = Arc::clone(&self.health_checker);
-        tokio::spawn(async move {
-            health_checker.health_check_loop().await;
-        });
-
-        // Start resource monitoring
-        let monitor = Arc::clone(&self.monitor);
-        tokio::spawn(async move {
-            monitor.monitoring_loop().await;
-        });
-
-        // Pre-warm VMs if configured
-        if self.config.auto_scaling && self.config.pre_warm_count > 0 {
-            self.pre_warm_vms().await?;
-        }
-
-        // Recover any VMs from previous run
-        self.recover_existing_vms().await?;
+        // Start coordinator background tasks (handles all component coordination)
+        self.coordinator.start_background_tasks().await?;
 
         Ok(())
     }
@@ -154,47 +144,6 @@ impl VmManager {
         Ok(assignment)
     }
 
-    /// Pre-warm idle VMs for faster job execution
-    async fn pre_warm_vms(&self) -> Result<()> {
-        tracing::info!(count = self.config.pre_warm_count, "Pre-warming service VMs");
-
-        for i in 0..self.config.pre_warm_count {
-            let config = VmConfig::default_service();
-
-            match self.controller.start_vm(config).await {
-                Ok(vm) => {
-                    tracing::info!(
-                        vm_id = %vm.config.id,
-                        index = i + 1,
-                        "Pre-warmed service VM started"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error = %e,
-                        index = i + 1,
-                        "Failed to pre-warm service VM"
-                    );
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Recover VMs from previous run (on restart)
-    async fn recover_existing_vms(&self) -> Result<()> {
-        let recovered = self.registry.recover_from_persistence().await?;
-
-        if recovered > 0 {
-            tracing::info!(count = recovered, "Recovered VMs from previous run");
-
-            // Mark stale VMs as terminated
-            self.registry.cleanup_stale_vms().await?;
-        }
-
-        Ok(())
-    }
 
     /// Get current VM statistics
     pub async fn get_stats(&self) -> Result<VmStats> {
@@ -216,20 +165,13 @@ impl VmManager {
     }
 
     /// Gracefully shutdown all VMs
+    ///
+    /// This now delegates to the coordinator for proper shutdown sequence.
     pub async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down VM Manager");
 
-        // Stop accepting new jobs
-        self.router.stop_routing().await;
-
-        // Gracefully shutdown all VMs
-        let all_vms = self.registry.list_all_vms().await?;
-
-        for vm in all_vms {
-            if !matches!(vm.state, VmState::Terminated { .. }) {
-                self.controller.shutdown_vm(vm.config.id, true).await?;
-            }
-        }
+        // Delegate to coordinator for proper shutdown
+        self.coordinator.shutdown().await?;
 
         Ok(())
     }

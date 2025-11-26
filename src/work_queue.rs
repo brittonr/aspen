@@ -69,21 +69,19 @@ impl WorkQueue {
 
     /// Publish a new work item to the queue
     pub async fn publish_work(&self, job_id: String, payload: serde_json::Value) -> Result<()> {
-        let now = chrono::Utc::now().timestamp();
+        use crate::domain::job_metadata::JobMetadata;
+        use crate::domain::job_requirements::JobRequirements;
 
         let job = Job {
             id: job_id.clone(),
             status: JobStatus::Pending,
+            payload: payload.clone(),
+            requirements: JobRequirements::default(), // Empty = any worker type can claim
+            metadata: JobMetadata::new(),
+            error_message: None,
             claimed_by: None,
             assigned_worker_id: None,
             completed_by: None,
-            created_at: now,
-            updated_at: now,
-            started_at: None,
-            error_message: None,
-            retry_count: 0,
-            payload: payload.clone(),
-            compatible_worker_types: Vec::new(), // Empty = any worker type can claim
         };
 
         // Persist to store first (strong consistency via underlying implementation)
@@ -124,15 +122,7 @@ impl WorkQueue {
             if job.status == JobStatus::Pending {
                 // Check if job is compatible with worker type
                 let is_compatible = match worker_type {
-                    Some(wt) => {
-                        // If job has no worker type constraints, it's compatible with all workers
-                        if job.compatible_worker_types.is_empty() {
-                            true
-                        } else {
-                            // Otherwise, check if worker type is in the list
-                            job.compatible_worker_types.contains(&wt)
-                        }
-                    }
+                    Some(wt) => job.requirements.is_compatible_with(wt),
                     // If no worker type specified, allow claiming any job
                     None => true,
                 };
@@ -141,7 +131,7 @@ impl WorkQueue {
                     tracing::debug!(
                         job_id = %job.id,
                         worker_type = ?worker_type,
-                        compatible_types = ?job.compatible_worker_types,
+                        compatible_types = ?job.requirements.compatible_worker_types,
                         "Skipping job - incompatible worker type"
                     );
                     continue;
@@ -171,7 +161,7 @@ impl WorkQueue {
                         item.status = JobStatus::Claimed;
                         item.claimed_by = Some(self.node_id.clone());
                         item.assigned_worker_id = worker_id.map(|s| s.to_string());
-                        item.updated_at = now;
+                        item.metadata.updated_at = now;
                     }).await;
 
                     if claimed {
@@ -239,11 +229,11 @@ impl WorkQueue {
         // Update local cache
         self.cache.update(job_id, |job| {
             job.status = status;
-            job.updated_at = now;
+            job.metadata.updated_at = now;
 
             // Set started_at timestamp when transitioning to InProgress
-            if status == JobStatus::InProgress && job.started_at.is_none() {
-                job.started_at = Some(now);
+            if status == JobStatus::InProgress && job.metadata.started_at.is_none() {
+                job.metadata.started_at = Some(now);
             }
 
             if let Some(completed_by_node) = completed_by {
@@ -328,7 +318,7 @@ impl WorkQueue {
 
         // Get all items and sort by updated_at (most recent first)
         let mut all_items = self.cache.get_all().await;
-        all_items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        all_items.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
 
         // Apply pagination
         Ok(all_items

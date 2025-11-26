@@ -8,6 +8,8 @@ use tokio::sync::Mutex;
 
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats, WorkerStatus};
+use crate::domain::job_metadata::JobMetadata;
+use crate::domain::job_requirements::JobRequirements;
 
 /// Mock implementation of StateRepository for testing
 #[derive(Clone)]
@@ -86,20 +88,16 @@ impl MockWorkRepository {
 #[async_trait]
 impl WorkRepository for MockWorkRepository {
     async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()> {
-        let now = Self::current_timestamp();
         let job = Job {
             id: job_id,
             status: JobStatus::Pending,
+            payload,
+            requirements: JobRequirements::default(),
+            metadata: JobMetadata::new(),
+            error_message: None,
             claimed_by: None,
             assigned_worker_id: None,
             completed_by: None,
-            created_at: now,
-            updated_at: now,
-            started_at: None,
-            error_message: None,
-            retry_count: 0,
-            payload,
-            compatible_worker_types: Vec::new(),
         };
         self.jobs.lock().await.push(job);
         Ok(())
@@ -118,15 +116,7 @@ impl WorkRepository for MockWorkRepository {
 
                 // Check worker type compatibility
                 match worker_type {
-                    Some(wt) => {
-                        // If job has no worker type constraints, it's compatible with all workers
-                        if job.compatible_worker_types.is_empty() {
-                            true
-                        } else {
-                            // Otherwise, check if worker type is in the list
-                            job.compatible_worker_types.contains(&wt)
-                        }
-                    }
+                    Some(wt) => job.requirements.is_compatible_with(wt),
                     // If no worker type specified, allow claiming any job
                     None => true,
                 }
@@ -134,7 +124,7 @@ impl WorkRepository for MockWorkRepository {
             .map(|job| {
                 job.status = JobStatus::Claimed;
                 job.assigned_worker_id = worker_id.map(|s| s.to_string());
-                job.updated_at = now;
+                job.metadata.updated_at = now;
                 job.clone()
             });
 
@@ -146,7 +136,7 @@ impl WorkRepository for MockWorkRepository {
         let now = Self::current_timestamp();
         if let Some(job) = jobs.iter_mut().find(|job| job.id == job_id) {
             job.status = status;
-            job.updated_at = now;
+            job.metadata.updated_at = now;
         }
         Ok(())
     }
@@ -183,7 +173,7 @@ impl WorkRepository for MockWorkRepository {
         let mut jobs = self.jobs.lock().await.clone();
 
         // Sort by updated_at (most recent first)
-        jobs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        jobs.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
 
         // Apply pagination
         Ok(jobs

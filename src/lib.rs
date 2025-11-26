@@ -45,6 +45,9 @@ pub mod vm_manager;
 // Execution backend adapters
 pub mod adapters;
 
+// Infrastructure layer
+pub mod infrastructure;
+
 // API handlers
 pub mod api;
 
