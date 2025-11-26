@@ -26,12 +26,12 @@ pub use health_checker::HealthChecker;
 
 /// Main VM Manager coordinating all components
 pub struct VmManager {
-    registry: Arc<VmRegistry>,
-    controller: Arc<VmController>,
-    router: Arc<JobRouter>,
-    monitor: Arc<ResourceMonitor>,
-    health_checker: Arc<HealthChecker>,
-    config: VmManagerConfig,
+    pub registry: Arc<VmRegistry>,
+    pub controller: Arc<VmController>,
+    pub router: Arc<JobRouter>,
+    pub monitor: Arc<ResourceMonitor>,
+    pub health_checker: Arc<HealthChecker>,
+    pub config: VmManagerConfig,
 }
 
 #[derive(Debug, Clone)]

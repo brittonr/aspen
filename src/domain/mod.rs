@@ -22,12 +22,18 @@ pub mod job_lifecycle;
 pub mod job_queries;
 pub mod plugins;
 pub mod state_machine;
+#[cfg(feature = "tofu-support")]
+pub mod tofu_service;
 pub mod types;
 pub mod validation;
+#[cfg(feature = "vm-backend")]
+pub mod vm_service;
 pub mod worker_management;
 
 #[cfg(test)]
 pub mod property_tests;
+#[cfg(test)]
+pub mod test_abstractions;
 
 // Re-export key types for convenience
 pub use cluster_status::ClusterStatusService;
@@ -37,5 +43,9 @@ pub use health_service::HealthService;
 pub use job_commands::{JobCommandService, JobSubmission};
 pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
 pub use job_queries::{JobQueryService, JobSortOrder};
+#[cfg(feature = "tofu-support")]
+pub use tofu_service::TofuService;
 pub use types::{JobStatus, QueueStats};
+#[cfg(feature = "vm-backend")]
+pub use vm_service::VmService;
 pub use worker_management::WorkerManagementService;

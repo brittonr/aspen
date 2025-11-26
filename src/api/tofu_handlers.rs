@@ -9,15 +9,10 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 use crate::{
     state::AppState,
-    tofu::{
-        state_backend::TofuStateBackend,
-        plan_executor::TofuPlanExecutor,
-        types::*,
-    },
+    tofu::types::*,
 };
 
 /// Query parameters for state operations
@@ -34,9 +29,9 @@ pub async fn get_state(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.get_state(&workspace).await {
+    match tofu_service.get_state(&workspace).await {
         Ok(Some(tofu_state)) => {
             // Return the state as JSON
             Ok(Json(tofu_state).into_response())
@@ -62,11 +57,11 @@ pub async fn update_state(
     headers: HeaderMap,
     Json(tofu_state): Json<TofuState>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
     // Check if workspace is locked and verify lock ID if provided
     if let Some(lock_id) = query.lock_id {
-        match backend.get_lock_info(&workspace).await {
+        match tofu_service.get_lock_info(&workspace).await {
             Ok(Some(lock)) if lock.id != lock_id => {
                 return Err(StatusCode::LOCKED);
             }
@@ -89,7 +84,7 @@ pub async fn update_state(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<i64>().ok());
 
-    match backend.put_state(&workspace, tofu_state, expected_version).await {
+    match tofu_service.put_state(&workspace, tofu_state, expected_version).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
         Err(e) => {
             if e.to_string().contains("StateVersionMismatch") {
@@ -110,14 +105,14 @@ pub async fn lock_workspace(
     State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.lock_workspace(&workspace, lock_request).await {
+    match tofu_service.lock_workspace(&workspace, lock_request).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
         Err(e) => {
             if e.to_string().contains("WorkspaceLocked") {
                 // Return the current lock info
-                match backend.get_lock_info(&workspace).await {
+                match tofu_service.get_lock_info(&workspace).await {
                     Ok(Some(lock)) => {
                         Ok((StatusCode::LOCKED, Json(lock)).into_response())
                     }
@@ -139,9 +134,9 @@ pub async fn unlock_workspace(
     State(state): State<AppState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.unlock_workspace(&workspace, &lock_request.id).await {
+    match tofu_service.unlock_workspace(&workspace, &lock_request.id).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
         Err(e) => {
             if e.to_string().contains("LockNotFound") {
@@ -161,9 +156,9 @@ pub async fn force_unlock_workspace(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.force_unlock_workspace(&workspace).await {
+    match tofu_service.force_unlock_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
         Err(e) => {
             tracing::error!("Failed to force unlock workspace {}: {}", workspace, e);
@@ -178,9 +173,9 @@ pub async fn force_unlock_workspace(
 pub async fn list_workspaces(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.list_workspaces().await {
+    match tofu_service.list_workspaces().await {
         Ok(workspaces) => Ok(Json(workspaces)),
         Err(e) => {
             tracing::error!("Failed to list workspaces: {}", e);
@@ -196,9 +191,9 @@ pub async fn delete_workspace(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.delete_workspace(&workspace).await {
+    match tofu_service.delete_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::NO_CONTENT, "").into_response()),
         Err(e) => {
             tracing::error!("Failed to delete workspace {}: {}", workspace, e);
@@ -214,9 +209,9 @@ pub async fn get_state_history(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<StateHistoryEntry>>, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.get_state_history(&workspace, Some(50)).await {
+    match tofu_service.get_state_history(&workspace, Some(50)).await {
         Ok(history) => {
             let entries: Vec<StateHistoryEntry> = history
                 .into_iter()
@@ -247,9 +242,9 @@ pub async fn rollback_state(
     Path((workspace, version)): Path<(String, i64)>,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.rollback_state(&workspace, version).await {
+    match tofu_service.rollback_state(&workspace, version).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
         Err(e) => {
             tracing::error!("Failed to rollback workspace {} to version {}: {}", workspace, version, e);
@@ -274,13 +269,9 @@ pub async fn create_plan(
     State(state): State<AppState>,
     Json(request): Json<CreatePlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let executor = TofuPlanExecutor::new(
-        state.infrastructure().execution_registry().clone(),
-        Arc::new(state.infrastructure().hiqlite().clone()),
-        std::path::PathBuf::from("/tmp/tofu-work"),
-    );
+    let tofu_service = state.domain_services().tofu_service();
 
-    match executor.execute_plan(
+    match tofu_service.execute_plan(
         &request.workspace,
         std::path::Path::new(&request.config_dir),
         request.auto_approve,
@@ -306,13 +297,9 @@ pub async fn apply_plan(
     State(state): State<AppState>,
     Json(request): Json<ApplyPlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let executor = TofuPlanExecutor::new(
-        state.infrastructure().execution_registry().clone(),
-        Arc::new(state.infrastructure().hiqlite().clone()),
-        std::path::PathBuf::from("/tmp/tofu-work"),
-    );
+    let tofu_service = state.domain_services().tofu_service();
 
-    match executor.apply_stored_plan(&plan_id, &request.approver).await {
+    match tofu_service.apply_stored_plan(&plan_id, &request.approver).await {
         Ok(result) => Ok(Json(result)),
         Err(e) => {
             tracing::error!("Failed to apply plan {}: {}", plan_id, e);
@@ -328,9 +315,9 @@ pub async fn list_plans(
     Path(workspace): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<PlanSummary>>, StatusCode> {
-    let backend = TofuStateBackend::new(Arc::new(state.infrastructure().hiqlite().clone()));
+    let tofu_service = state.domain_services().tofu_service();
 
-    match backend.list_plans(&workspace).await {
+    match tofu_service.list_plans(&workspace).await {
         Ok(plans) => {
             let summaries: Vec<PlanSummary> = plans
                 .into_iter()
@@ -376,13 +363,9 @@ pub async fn destroy_infrastructure(
     State(state): State<AppState>,
     Json(request): Json<DestroyRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let executor = TofuPlanExecutor::new(
-        state.infrastructure().execution_registry().clone(),
-        Arc::new(state.infrastructure().hiqlite().clone()),
-        std::path::PathBuf::from("/tmp/tofu-work"),
-    );
+    let tofu_service = state.domain_services().tofu_service();
 
-    match executor.destroy(
+    match tofu_service.destroy(
         &request.workspace,
         std::path::Path::new(&request.config_dir),
         request.auto_approve,

@@ -52,4 +52,5 @@ pub mod api;
 pub mod storage;
 
 // OpenTofu integration
+#[cfg(feature = "tofu-support")]
 pub mod tofu;

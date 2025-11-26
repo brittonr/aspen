@@ -20,6 +20,7 @@
 
 use axum::{routing::{get, post, delete}, Router};
 
+#[cfg(feature = "tofu-support")]
 use crate::api::tofu_handlers::*;
 use crate::handlers::dashboard::*;
 use crate::handlers::queue::*;
@@ -39,12 +40,16 @@ use crate::state::AppState;
 /// - Iroh P2P API (blob storage, gossip)
 /// - Health checks
 pub fn build_router(state: &AppState) -> Router {
-    Router::new()
+    let router = Router::new()
         .nest("/dashboard", dashboard_router())
         .nest("/api/queue", queue_api_router())
         .nest("/api/workers", worker_api_router())
-        .nest("/api/iroh", iroh_api_router())
-        .nest("/api/tofu", tofu_api_router())
+        .nest("/api/iroh", iroh_api_router());
+
+    #[cfg(feature = "tofu-support")]
+    let router = router.nest("/api/tofu", tofu_api_router());
+
+    router
         .nest("/health", health_router())
         .with_state(state.clone())
 }
@@ -168,6 +173,7 @@ fn iroh_api_router() -> Router<AppState> {
 /// - `POST /api/tofu/apply/{plan_id}` - Apply stored plan
 /// - `GET  /api/tofu/plans/{workspace}` - List plans for workspace
 /// - `POST /api/tofu/destroy` - Destroy infrastructure
+#[cfg(feature = "tofu-support")]
 fn tofu_api_router() -> Router<AppState> {
     use axum::routing::delete;
 

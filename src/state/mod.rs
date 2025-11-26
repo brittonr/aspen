@@ -75,4 +75,9 @@ impl AppState {
     pub fn services(&self) -> &DomainServices {
         &self.services
     }
+
+    /// Get domain services (alias for ergonomic access)
+    pub fn domain_services(&self) -> &DomainServices {
+        &self.services
+    }
 }
