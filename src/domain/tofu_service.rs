@@ -49,18 +49,17 @@ impl TofuService {
     /// at startup and the instance shared across all handlers via Arc.
     ///
     /// # Arguments
-    /// * `execution_registry` - Registry for execution backends
+    /// * `_execution_registry` - Registry for execution backends (reserved for future use)
     /// * `hiqlite` - Hiqlite database service
     /// * `work_dir` - Working directory for plan execution
     pub fn new(
-        execution_registry: Arc<ExecutionRegistry>,
+        _execution_registry: Arc<ExecutionRegistry>,
         hiqlite: Arc<HiqliteService>,
         work_dir: PathBuf,
     ) -> Self {
         let state_backend = Arc::new(TofuStateBackend::new(hiqlite.clone()));
         let plan_executor = Arc::new(TofuPlanExecutor::new(
-            execution_registry,
-            hiqlite,
+            hiqlite.clone(),
             work_dir,
         ));
 

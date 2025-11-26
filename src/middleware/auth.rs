@@ -9,13 +9,10 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use std::sync::Arc;
 
 /// Configuration for API key authentication
 #[derive(Clone)]
-pub struct ApiKeyConfig {
-    api_key: Arc<String>,
-}
+pub struct ApiKeyConfig;
 
 impl ApiKeyConfig {
     /// Create a new API key configuration from environment variable
@@ -39,9 +36,7 @@ impl ApiKeyConfig {
             ));
         }
 
-        Ok(Self {
-            api_key: Arc::new(api_key),
-        })
+        Ok(Self)
     }
 }
 

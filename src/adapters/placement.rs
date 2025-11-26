@@ -170,7 +170,18 @@ impl PlacementStrategy for JobPlacement {
         let selected = match self.policy {
             PlacementPolicy::BestFit | PlacementPolicy::WorstFit | PlacementPolicy::Explicit => {
                 // Sort by score and pick the highest
-                scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                // Handle NaN values by treating them as less than any valid number
+                scores.sort_by(|a, b| {
+                    if a.1.is_nan() && b.1.is_nan() {
+                        std::cmp::Ordering::Equal
+                    } else if a.1.is_nan() {
+                        std::cmp::Ordering::Less
+                    } else if b.1.is_nan() {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        b.1.partial_cmp(&a.1).expect("Failed to compare placement scores")
+                    }
+                });
                 &scores[0]
             }
             PlacementPolicy::FirstFit => {
@@ -186,7 +197,18 @@ impl PlacementStrategy for JobPlacement {
             }
             PlacementPolicy::Custom(_) => {
                 // Default to best score for custom policies
-                scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                // Handle NaN values by treating them as less than any valid number
+                scores.sort_by(|a, b| {
+                    if a.1.is_nan() && b.1.is_nan() {
+                        std::cmp::Ordering::Equal
+                    } else if a.1.is_nan() {
+                        std::cmp::Ordering::Less
+                    } else if b.1.is_nan() {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        b.1.partial_cmp(&a.1).expect("Failed to compare placement scores")
+                    }
+                });
                 &scores[0]
             }
         };

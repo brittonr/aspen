@@ -233,7 +233,7 @@ impl ExecutionRegistry {
                             last_check: Some(
                                 std::time::SystemTime::now()
                                     .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
+                                    .expect("System time is before UNIX epoch")
                                     .as_secs(),
                             ),
                             details: HashMap::new(),

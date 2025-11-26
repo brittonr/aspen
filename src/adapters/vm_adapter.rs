@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::info;
 use crate::domain::types::Job;
-use crate::vm_manager::{JobResult, VmAssignment, VmManager, VmManagerConfig};
+use crate::vm_manager::{VmAssignment, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
@@ -42,14 +42,6 @@ impl VmAdapter {
     ) -> Result<Self> {
         let vm_manager = Arc::new(VmManager::new(config, hiqlite).await?);
         Ok(Self::new(vm_manager))
-    }
-    /// Convert JobResult to WorkResult
-    fn job_result_to_work_result(result: &JobResult) -> WorkResult {
-        WorkResult {
-            success: result.success,
-            output: Some(serde_json::Value::String(result.output.clone())),
-            error: result.error.clone(),
-        }
     }
     /// Monitor VM job execution
     async fn monitor_execution(&self, handle: ExecutionHandle, vm_id: uuid::Uuid) {

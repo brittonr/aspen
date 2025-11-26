@@ -144,18 +144,6 @@ impl DomainServices {
         Self::from_repositories_with_events(state_repo, work_repo, worker_repo, event_publisher)
     }
 
-    /// Create domain services with injected repositories and services
-    ///
-    /// This constructor is used internally by `new()` to inject the pre-built TofuService and VmService.
-    fn from_repositories_with_services(
-        state_repo: Arc<dyn StateRepository>,
-        work_repo: Arc<dyn WorkRepository>,
-        worker_repo: Arc<dyn WorkerRepository>,
-    ) -> Self {
-        // Use LoggingEventPublisher for production observability
-        let event_publisher = Arc::new(LoggingEventPublisher::new());
-        Self::from_repositories_with_events(state_repo, work_repo, worker_repo, event_publisher)
-    }
 
     /// Create domain services with custom event publisher (for testing)
     ///
@@ -207,18 +195,6 @@ impl DomainServices {
         let tofu_service = {
             // For test scenarios, tofu service uses a stub Hiqlite that should not be called
             // Tests using from_repositories should not call tofu operations
-
-            struct StubHiqlite;
-            impl std::ops::Deref for StubHiqlite {
-                type Target = crate::hiqlite_service::HiqliteService;
-                fn deref(&self) -> &Self::Target {
-                    panic!(
-                        "TofuService tried to access Hiqlite in test context. \
-                         Use DomainServices::new(infrastructure) for integration tests."
-                    );
-                }
-            }
-
             Arc::new(TofuService::new(
                 Arc::new(crate::adapters::ExecutionRegistry::new(
                     crate::adapters::RegistryConfig::default(),
@@ -238,26 +214,12 @@ impl DomainServices {
             // For VmService in the unit test path, we create a stub that will error if used.
             // This is acceptable because from_repositories is for testing pure domain logic
             // without infrastructure dependencies. Real integration tests should use new().
-            let stub_vm_manager = Arc::new({
-                // Create a stub that panics if actually used
-                struct StubVmManager;
-                impl std::ops::Deref for StubVmManager {
-                    type Target = crate::vm_manager::VmManager;
-                    fn deref(&self) -> &Self::Target {
-                        panic!(
-                            "VmService called in unit test context. \
-                             Use DomainServices::new(infrastructure) for integration tests."
-                        );
-                    }
-                }
-                StubVmManager
-            });
             // This will panic if actually dereferenced, which is what we want
             // to catch tests that accidentally try to use VM operations
             Arc::new(VmService::new(unsafe {
                 // SAFETY: This is intentionally unsafe because we never deref the stub
                 // The stub will panic if anyone tries to use it
-                std::mem::transmute::<Arc<_>, Arc<crate::vm_manager::VmManager>>(
+                std::mem::transmute::<Arc<()>, Arc<crate::vm_manager::VmManager>>(
                     Arc::new(()),
                 )
             }))

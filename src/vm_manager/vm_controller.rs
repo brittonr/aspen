@@ -133,7 +133,8 @@ impl VmController {
         cmd.env("VM_ID", vm_id.to_string());
         cmd.env("VM_MEM_MB", vm.config.memory_mb.to_string());
         cmd.env("VM_VCPUS", vm.config.vcpus.to_string());
-        cmd.env("JOB_DIR", job_dir.to_str().unwrap());
+        cmd.env("JOB_DIR", job_dir.to_str()
+            .ok_or_else(|| anyhow!("Job directory path contains invalid UTF-8"))?);
 
         // Set working directory to flake directory (where virtiofs sockets are created)
         cmd.current_dir(&self.config.flake_dir);
@@ -227,8 +228,16 @@ impl VmController {
         // Clean up any existing sockets (they'll be created in the flake directory)
         let store_sock = self.config.flake_dir.join("service-vm-virtiofs-store.sock");
         let jobs_sock = self.config.flake_dir.join("service-vm-virtiofs-jobs.sock");
-        let _ = tokio::fs::remove_file(&store_sock).await;
-        let _ = tokio::fs::remove_file(&jobs_sock).await;
+        if let Err(e) = tokio::fs::remove_file(&store_sock).await {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(vm_id = %vm_id, path = %store_sock.display(), error = %e, "Failed to remove old virtiofs socket");
+            }
+        }
+        if let Err(e) = tokio::fs::remove_file(&jobs_sock).await {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(vm_id = %vm_id, path = %jobs_sock.display(), error = %e, "Failed to remove old virtiofs socket");
+            }
+        }
 
         // Start virtiofsd-run in the project/flake directory (where relative paths resolve correctly)
         let mut virtiofsd_cmd = Command::new(&virtiofsd_path);
@@ -270,8 +279,10 @@ impl VmController {
         cmd.env("VM_ID", vm_id.to_string());
         cmd.env("VM_MEM_MB", vm.config.memory_mb.to_string());
         cmd.env("VM_VCPUS", vm.config.vcpus.to_string());
-        cmd.env("CONTROL_SOCKET", control_socket.to_str().unwrap());
-        cmd.env("JOB_DIR", job_dir.to_str().unwrap());
+        cmd.env("CONTROL_SOCKET", control_socket.to_str()
+            .ok_or_else(|| anyhow!("Control socket path contains invalid UTF-8"))?);
+        cmd.env("JOB_DIR", job_dir.to_str()
+            .ok_or_else(|| anyhow!("Job directory path contains invalid UTF-8"))?);
 
         // Set working directory to flake directory (where virtiofs sockets are created)
         cmd.current_dir(&self.config.flake_dir);
@@ -414,14 +425,29 @@ impl VmController {
             if graceful {
                 // Try graceful shutdown via control socket
                 if let Some(control_socket) = &vm.control_socket {
-                    if let Ok(mut stream) = UnixStream::connect(control_socket).await {
-                        let message = VmControlMessage::Shutdown { timeout_secs: 30 };
-                        let msg = serde_json::to_string(&message)?;
-                        let _ = stream.write_all(msg.as_bytes()).await;
-                        let _ = stream.write_all(b"\n").await;
+                    match UnixStream::connect(control_socket).await {
+                        Ok(mut stream) => {
+                            let message = VmControlMessage::Shutdown { timeout_secs: 30 };
+                            match serde_json::to_string(&message) {
+                                Ok(msg) => {
+                                    if let Err(e) = stream.write_all(msg.as_bytes()).await {
+                                        tracing::warn!(vm_id = %vm_id, error = %e, "Failed to send shutdown message to VM");
+                                    }
+                                    if let Err(e) = stream.write_all(b"\n").await {
+                                        tracing::warn!(vm_id = %vm_id, error = %e, "Failed to send newline to VM control socket");
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!(vm_id = %vm_id, error = %e, "Failed to serialize shutdown message");
+                                }
+                            }
 
-                        // Wait for VM to terminate
-                        tokio::time::sleep(Duration::from_secs(5)).await;
+                            // Wait for VM to terminate
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                        }
+                        Err(e) => {
+                            tracing::warn!(vm_id = %vm_id, error = %e, "Failed to connect to VM control socket for graceful shutdown");
+                        }
                     }
                 }
             }
@@ -429,22 +455,49 @@ impl VmController {
             // Force kill if still running
             if let Some(pid) = vm.pid {
                 let pid = nix::unistd::Pid::from_raw(pid as i32);
-                let _ = nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGTERM);
+                match nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGTERM) {
+                    Ok(_) => tracing::debug!(vm_id = %vm_id, pid = %pid, "Sent SIGTERM to VM process"),
+                    Err(e) => tracing::warn!(vm_id = %vm_id, pid = %pid, error = %e, "Failed to send SIGTERM to VM process"),
+                }
 
                 // Give it a moment to terminate
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
                 // Force kill if still running
-                let _ = nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL);
+                match nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL) {
+                    Ok(_) => tracing::debug!(vm_id = %vm_id, pid = %pid, "Sent SIGKILL to VM process"),
+                    Err(e) => {
+                        // ESRCH means process doesn't exist, which is fine
+                        if e != nix::errno::Errno::ESRCH {
+                            tracing::warn!(vm_id = %vm_id, pid = %pid, error = %e, "Failed to send SIGKILL to VM process");
+                        }
+                    }
+                }
             }
 
             // Clean up directories
             if let Some(job_dir) = &vm.job_dir {
-                let _ = tokio::fs::remove_dir_all(job_dir).await;
+                match tokio::fs::remove_dir_all(job_dir).await {
+                    Ok(_) => tracing::debug!(vm_id = %vm_id, path = %job_dir.display(), "Removed VM job directory"),
+                    Err(e) => {
+                        // NotFound is expected if directory was already cleaned up
+                        if e.kind() != std::io::ErrorKind::NotFound {
+                            tracing::error!(vm_id = %vm_id, path = %job_dir.display(), error = %e, "Failed to remove VM job directory - resource leak detected");
+                        }
+                    }
+                }
             }
 
             let vm_dir = self.config.state_dir.join(format!("vms/{}", vm_id));
-            let _ = tokio::fs::remove_dir_all(vm_dir).await;
+            match tokio::fs::remove_dir_all(&vm_dir).await {
+                Ok(_) => tracing::debug!(vm_id = %vm_id, path = %vm_dir.display(), "Removed VM state directory"),
+                Err(e) => {
+                    // NotFound is expected if directory was already cleaned up
+                    if e.kind() != std::io::ErrorKind::NotFound {
+                        tracing::error!(vm_id = %vm_id, path = %vm_dir.display(), error = %e, "Failed to remove VM state directory - resource leak detected");
+                    }
+                }
+            }
 
             // Update state
             drop(vm); // Release read lock

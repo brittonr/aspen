@@ -50,7 +50,6 @@ impl Default for MockConfig {
 #[derive(Debug, Clone)]
 struct MockExecution {
     handle: ExecutionHandle,
-    job: Job,
     config: ExecutionConfig,
     status: ExecutionStatus,
     started_at: u64,
@@ -111,7 +110,7 @@ impl MockAdapter {
             // Use execution time as a pseudo-random source
             let now_ms = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_millis();
             ((now_ms % 100) as f32 / 100.0) < self.config.failure_rate
         } else {
@@ -122,7 +121,7 @@ impl MockAdapter {
         if let Some(exec) = executions.get_mut(&handle.id) {
             let completed_at = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_secs();
 
             if should_fail {
@@ -187,12 +186,11 @@ impl ExecutionBackend for MockAdapter {
         // Create execution record
         let execution = MockExecution {
             handle: handle.clone(),
-            job: job.clone(),
             config: config.clone(),
             status: ExecutionStatus::Running,
             started_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_secs(),
             completed_at: None,
         };
@@ -238,7 +236,7 @@ impl ExecutionBackend for MockAdapter {
                 exec.completed_at = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .expect("System time is before UNIX epoch")
                         .as_secs(),
                 );
 
@@ -315,7 +313,7 @@ impl ExecutionBackend for MockAdapter {
             last_check: Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX epoch")
                     .as_secs(),
             ),
             details: HashMap::from([
@@ -382,7 +380,7 @@ impl ExecutionBackend for MockAdapter {
         let mut executions = self.executions.write().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs();
 
         let cutoff = now - older_than.as_secs();

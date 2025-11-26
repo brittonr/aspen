@@ -43,11 +43,6 @@ impl Listener {
         format!("iroh+h3://{}/", self.ticket())
     }
 
-    /// Get endpoint ID (node identity)
-    pub fn endpoint_id(&self) -> iroh::EndpointId {
-        self.endpoint.id()
-    }
-
     /// Run the P2P listener (blocking until shutdown or error)
     ///
     /// This is the main server loop for P2P communication.

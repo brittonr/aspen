@@ -66,20 +66,19 @@ pub struct Job {
 }
 impl Default for Job {
     fn default() -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX epoch")
+            .as_secs() as i64;
+
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             status: JobStatus::Pending,
             claimed_by: None,
             assigned_worker_id: None,
             completed_by: None,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
-            updated_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64,
+            created_at: now,
+            updated_at: now,
             started_at: None,
             error_message: None,
             retry_count: 0,
@@ -110,7 +109,7 @@ impl Job {
     pub fn time_since_update_seconds(&self) -> i64 {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
         now - self.updated_at
     }
@@ -285,7 +284,7 @@ impl Worker {
     pub fn is_healthy(&self, heartbeat_timeout_secs: i64) -> bool {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
         let age = now - self.last_heartbeat;
         age < heartbeat_timeout_secs
@@ -295,7 +294,7 @@ impl Worker {
     pub fn heartbeat_age_seconds(&self) -> i64 {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
         now - self.last_heartbeat
     }

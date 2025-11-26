@@ -130,7 +130,7 @@ impl ValidationError {
     pub fn combine(errors: Vec<ValidationError>) -> Self {
         match errors.len() {
             0 => panic!("Cannot combine empty error list"),
-            1 => errors.into_iter().next().unwrap(),
+            1 => errors.into_iter().next().expect("Vector has exactly one element"),
             _ => ValidationError::Multiple(errors),
         }
     }

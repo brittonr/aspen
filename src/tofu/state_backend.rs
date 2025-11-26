@@ -448,7 +448,7 @@ impl TofuStateBackend {
     fn current_timestamp(&self) -> i64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64
     }
 
@@ -481,9 +481,6 @@ struct WorkspaceRow {
     current_state: Option<String>,
     state_version: i64,
     state_lineage: Option<String>,
-    lock_id: Option<String>,
-    lock_acquired_at: Option<i64>,
-    lock_holder: Option<String>,
     lock_info: Option<String>,
 }
 
@@ -496,9 +493,6 @@ impl From<hiqlite::Row<'static>> for WorkspaceRow {
             current_state: row.get::<Option<String>>("current_state"),
             state_version: row.get::<i64>("state_version"),
             state_lineage: row.get::<Option<String>>("state_lineage"),
-            lock_id: row.get::<Option<String>>("lock_id"),
-            lock_acquired_at: row.get::<Option<i64>>("lock_acquired_at"),
-            lock_holder: row.get::<Option<String>>("lock_holder"),
             lock_info: row.get::<Option<String>>("lock_info"),
         }
     }

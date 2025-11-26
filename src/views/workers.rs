@@ -20,7 +20,7 @@ impl From<WorkerStats> for WorkerRow {
     fn from(worker: WorkerStats) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
 
         let time_ago = format_time_ago(now - worker.last_seen_timestamp);

@@ -73,7 +73,7 @@ pub async fn retrieve_blob(
         .status(StatusCode::OK)
         .header("Content-Type", "application/octet-stream")
         .body(axum::body::Body::from(data))
-        .unwrap())
+        .map_err(|e| AppError::NotImplemented(format!("Failed to build response: {}", e)))?)
 }
 
 /// POST /iroh/gossip/join

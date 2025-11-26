@@ -18,7 +18,7 @@
 //! - **Easier maintenance** - Add/remove routes within focused modules
 //! - **Better documentation** - Self-describing route structure
 
-use axum::{routing::{get, post, delete}, Router};
+use axum::{routing::{get, post}, Router};
 
 #[cfg(feature = "tofu-support")]
 use crate::api::tofu_handlers::*;

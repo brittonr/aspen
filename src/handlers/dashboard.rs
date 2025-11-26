@@ -6,6 +6,7 @@ use askama::Template;
 use axum::{
     Form,
     extract::{Query, State},
+    http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 use serde::Deserialize;
@@ -21,7 +22,17 @@ struct DashboardTemplate;
 
 /// Dashboard main page
 pub async fn dashboard() -> impl IntoResponse {
-    Html(DashboardTemplate.render().expect("dashboard renders"))
+    match DashboardTemplate.render() {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to render dashboard template: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to render dashboard",
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Dashboard cluster health endpoint (HTMX partial)
@@ -31,12 +42,32 @@ pub async fn dashboard_cluster_health(State(state): State<AppState>) -> impl Int
     match cluster_service.get_cluster_health().await {
         Ok(health) => {
             let view = ClusterHealthView::from(health);
-            Html(view.render().expect("cluster_health renders"))
+            match view.render() {
+                Ok(html) => Html(html).into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to render cluster health view: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to render cluster health",
+                    )
+                        .into_response()
+                }
+            }
         }
         Err(e) => {
             tracing::error!("Failed to get cluster health: {}", e);
             let error = ErrorView::new("Error loading health status");
-            Html(format!("<h2>Cluster Health</h2>{}", error.render().expect("error renders")))
+            match error.render() {
+                Ok(error_html) => Html(format!("<h2>Cluster Health</h2>{}", error_html)).into_response(),
+                Err(render_err) => {
+                    tracing::error!("Failed to render error view: {}", render_err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to load cluster health",
+                    )
+                        .into_response()
+                }
+            }
         }
     }
 }
@@ -46,7 +77,17 @@ pub async fn dashboard_queue_stats(State(state): State<AppState>) -> impl IntoRe
     let job_service = state.services().job_lifecycle();
     let stats = job_service.get_queue_stats().await;
     let view = QueueStatsView::from(stats);
-    Html(view.render().expect("queue_stats renders"))
+    match view.render() {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to render queue stats view: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to render queue statistics",
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Query parameters for job sorting
@@ -69,12 +110,32 @@ pub async fn dashboard_recent_jobs(
     match job_service.list_jobs(sort_order, 20).await {
         Ok(jobs) => {
             let view = JobListView::new(jobs);
-            Html(view.render().expect("job_list renders"))
+            match view.render() {
+                Ok(html) => Html(html).into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to render job list view: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to render job list",
+                    )
+                        .into_response()
+                }
+            }
         }
         Err(e) => {
             tracing::error!("Failed to list jobs: {}", e);
             let error = ErrorView::new("Error loading jobs");
-            Html(error.render().expect("error renders"))
+            match error.render() {
+                Ok(error_html) => Html(error_html).into_response(),
+                Err(render_err) => {
+                    tracing::error!("Failed to render error view: {}", render_err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to load jobs",
+                    )
+                        .into_response()
+                }
+            }
         }
     }
 }
@@ -86,12 +147,32 @@ pub async fn dashboard_control_plane_nodes(State(state): State<AppState>) -> imp
     match cluster_service.get_control_plane_nodes().await {
         Ok(nodes) => {
             let view = ControlPlaneNodesView::new(nodes);
-            Html(view.render().expect("control_plane_nodes renders"))
+            match view.render() {
+                Ok(html) => Html(html).into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to render control plane nodes view: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to render control plane nodes",
+                    )
+                        .into_response()
+                }
+            }
         }
         Err(e) => {
             tracing::error!("Failed to get control plane nodes: {}", e);
             let error = ErrorView::new("Error loading control plane nodes");
-            Html(error.render().expect("error renders"))
+            match error.render() {
+                Ok(error_html) => Html(error_html).into_response(),
+                Err(render_err) => {
+                    tracing::error!("Failed to render error view: {}", render_err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to load control plane nodes",
+                    )
+                        .into_response()
+                }
+            }
         }
     }
 }
@@ -103,12 +184,32 @@ pub async fn dashboard_workers(State(state): State<AppState>) -> impl IntoRespon
     match cluster_service.get_worker_stats().await {
         Ok(workers) => {
             let view = WorkersView::new(workers);
-            Html(view.render().expect("workers renders"))
+            match view.render() {
+                Ok(html) => Html(html).into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to render workers view: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to render worker statistics",
+                    )
+                        .into_response()
+                }
+            }
         }
         Err(e) => {
             tracing::error!("Failed to get worker stats: {}", e);
             let error = ErrorView::new("Error loading worker statistics");
-            Html(error.render().expect("error renders"))
+            match error.render() {
+                Ok(error_html) => Html(error_html).into_response(),
+                Err(render_err) => {
+                    tracing::error!("Failed to render error view: {}", render_err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to load worker statistics",
+                    )
+                        .into_response()
+                }
+            }
         }
     }
 }
@@ -142,7 +243,17 @@ pub async fn dashboard_submit_job(
         Err(e) => {
             tracing::error!("Failed to submit job: {}", e);
             let error = ErrorView::new(format!("Error: {}", e));
-            Html(error.render().expect("error renders")).into_response()
+            match error.render() {
+                Ok(error_html) => Html(error_html).into_response(),
+                Err(render_err) => {
+                    tracing::error!("Failed to render error view: {}", render_err);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to submit job: {}", e),
+                    )
+                        .into_response()
+                }
+            }
         }
     }
 }

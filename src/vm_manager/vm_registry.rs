@@ -20,8 +20,6 @@ pub struct VmRegistry {
     by_state: DashMap<String, HashSet<Uuid>>,
     /// Hiqlite client for distributed persistence
     hiqlite: Arc<HiqliteService>,
-    /// State directory for local VM resources
-    state_dir: std::path::PathBuf,
     /// Node ID for tracking VM ownership
     node_id: String,
 }
@@ -40,7 +38,6 @@ impl VmRegistry {
             vms: DashMap::new(),
             by_state: DashMap::new(),
             hiqlite,
-            state_dir: state_dir.to_path_buf(),
             node_id,
         };
 
@@ -337,7 +334,9 @@ impl VmRegistry {
                     };
 
                     // Update in Hiqlite
-                    let _ = self.update_state(vm_id, vm.state.clone()).await;
+                    if let Err(e) = self.update_state(vm_id, vm.state.clone()).await {
+                        tracing::error!(vm_id = %vm_id, error = %e, "Failed to update VM state after detecting dead process");
+                    }
                 }
             }
 

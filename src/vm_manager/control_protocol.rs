@@ -285,22 +285,30 @@ impl ControlProtocol {
             match command {
                 VmCommand::ExecuteJob { job, response_tx } => {
                     let result = self.execute_job(job).await;
-                    let _ = response_tx.send(result).await;
+                    if let Err(e) = response_tx.send(result).await {
+                        tracing::warn!("Failed to send ExecuteJob response: {:?}", e);
+                    }
                 }
                 VmCommand::Ping { response_tx } => {
                     let result = self.ping().await;
-                    let _ = response_tx.send(result).await;
+                    if let Err(e) = response_tx.send(result).await {
+                        tracing::warn!("Failed to send Ping response: {:?}", e);
+                    }
                 }
                 VmCommand::GetStatus { response_tx } => {
                     let result = self.get_status().await;
-                    let _ = response_tx.send(result).await;
+                    if let Err(e) = response_tx.send(result).await {
+                        tracing::warn!("Failed to send GetStatus response: {:?}", e);
+                    }
                 }
                 VmCommand::Shutdown {
                     timeout_secs,
                     response_tx,
                 } => {
                     let result = self.shutdown(timeout_secs).await;
-                    let _ = response_tx.send(result).await;
+                    if let Err(e) = response_tx.send(result).await {
+                        tracing::warn!("Failed to send Shutdown response: {:?}", e);
+                    }
                 }
             }
         }

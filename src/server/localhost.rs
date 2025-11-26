@@ -18,8 +18,6 @@ pub struct LocalhostHandle {
     task: JoinHandle<Result<()>>,
     /// Shutdown signal sender
     shutdown_tx: Option<oneshot::Sender<()>>,
-    /// Bound address (for tests and logging)
-    pub addr: String,
 }
 
 impl LocalhostHandle {
@@ -28,7 +26,9 @@ impl LocalhostHandle {
     /// Sends shutdown signal and waits for the server to exit cleanly.
     pub async fn shutdown(mut self) -> Result<()> {
         if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(());
+            if let Err(_) = tx.send(()) {
+                tracing::warn!("Failed to send shutdown signal - receiver may have already been dropped");
+            }
         }
         self.task.await??;
         Ok(())
@@ -92,6 +92,5 @@ pub async fn spawn(bind_addr: String, port: u16, router: Router) -> Result<Local
     Ok(LocalhostHandle {
         task,
         shutdown_tx: Some(shutdown_tx),
-        addr: bound_addr,
     })
 }

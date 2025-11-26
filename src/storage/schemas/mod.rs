@@ -49,12 +49,17 @@ pub trait SchemaModule: Send + Sync {
 
         // Create indices
         for index_def in self.index_definitions() {
-            let _ = db.execute(index_def, Params::default()).await; // Indices may already exist
+            // Indices may already exist, so we only warn on errors
+            if let Err(e) = db.execute(index_def, Params::default()).await {
+                tracing::warn!(module = self.name(), error = %e, "Failed to create index (may already exist)");
+            }
         }
 
         // Apply migrations (these may fail if already applied)
         for migration in self.migrations() {
-            let _ = db.execute(migration, Params::default()).await;
+            if let Err(e) = db.execute(migration, Params::default()).await {
+                tracing::warn!(module = self.name(), error = %e, "Failed to apply migration (may already be applied)");
+            }
         }
 
         tracing::info!(module = self.name(), "Schema module applied successfully");

@@ -47,13 +47,10 @@ impl Default for LocalProcessConfig {
 #[derive(Debug, Clone)]
 struct LocalProcessState {
     handle: ExecutionHandle,
-    job: Job,
     pid: u32,
     status: ExecutionStatus,
     started_at: u64,
     completed_at: Option<u64>,
-    output: Vec<String>,
-    errors: Vec<String>,
 }
 
 /// Local process execution backend
@@ -116,7 +113,7 @@ impl LocalProcessAdapter {
         }
 
         // Spawn the process
-        let child = match cmd.spawn() {
+        let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
                 self.mark_failed(&handle, format!("Failed to spawn process: {}", e))
@@ -127,22 +124,12 @@ impl LocalProcessAdapter {
 
         let pid = child.id().unwrap_or(0);
 
-        // Store the child process
-        let mut processes = self.processes.write().await;
-        processes.insert(pid, child);
-        drop(processes);
-
         // Update execution state with PID
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
             state.pid = pid;
         }
         drop(executions);
-
-        // Get the child back
-        let mut processes = self.processes.write().await;
-        let mut child = processes.remove(&pid).unwrap();
-        drop(processes);
 
         // Capture output if configured
         let output_lines = Arc::new(RwLock::new(Vec::new()));
@@ -268,7 +255,7 @@ impl LocalProcessAdapter {
             state.completed_at = Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX epoch")
                     .as_secs(),
             );
         }
@@ -282,7 +269,7 @@ impl LocalProcessAdapter {
             state.completed_at = Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX epoch")
                     .as_secs(),
             );
         }
@@ -316,16 +303,13 @@ impl ExecutionBackend for LocalProcessAdapter {
         // Create execution state
         let state = LocalProcessState {
             handle: handle.clone(),
-            job: job.clone(),
             pid: 0, // Will be updated when process starts
             status: ExecutionStatus::Running,
             started_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_secs(),
             completed_at: None,
-            output: Vec::new(),
-            errors: Vec::new(),
         };
 
         // Store execution state
@@ -373,7 +357,7 @@ impl ExecutionBackend for LocalProcessAdapter {
                 state.completed_at = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .expect("System time is before UNIX epoch")
                         .as_secs(),
                 );
 
@@ -456,7 +440,7 @@ impl ExecutionBackend for LocalProcessAdapter {
             last_check: Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX epoch")
                     .as_secs(),
             ),
             details: HashMap::from([
@@ -513,7 +497,7 @@ impl ExecutionBackend for LocalProcessAdapter {
         let mut executions = self.executions.write().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs();
 
         let cutoff = now - older_than.as_secs();

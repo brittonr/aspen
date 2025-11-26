@@ -167,7 +167,7 @@ impl WorkerRepository for HiqliteWorkerRepository {
     async fn register(&self, registration: WorkerRegistration) -> Result<Worker> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
 
         // Generate unique worker ID
@@ -226,7 +226,7 @@ impl WorkerRepository for HiqliteWorkerRepository {
     async fn heartbeat(&self, heartbeat: WorkerHeartbeat) -> Result<()> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs() as i64;
 
         self.hiqlite

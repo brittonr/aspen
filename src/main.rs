@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize iroh endpoint with HTTP/3 ALPN
     let endpoint = iroh::Endpoint::builder()
-        .alpns(vec![config.network.iroh_alpn.clone()])
+        .alpns(vec![config.network.iroh_alpn_bytes()])
         .bind()
         .await
         .expect("Failed to create iroh endpoint");

@@ -66,7 +66,7 @@ impl HiqliteService {
     pub fn placeholder() -> Self {
         // Check if we're in a tokio runtime
         match tokio::runtime::Handle::try_current() {
-            Ok(handle) => {
+            Ok(_) => {
                 // We're in a runtime, but we need to use spawn_blocking to avoid
                 // issues with block_on being called from an async context
                 std::thread::scope(|s| {
@@ -397,9 +397,9 @@ impl HiqliteService {
     /// full database rebuilds on restart.
     pub async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down hiqlite node gracefully");
-        let _ = self.client
-            .shutdown()
-            .await;
+        if let Err(e) = self.client.shutdown().await {
+            tracing::warn!("Error during hiqlite shutdown: {}", e);
+        }
         Ok(())
     }
 
@@ -458,20 +458,26 @@ impl HiqliteService {
         ).await?;
 
         // Create indices for efficient worker queries
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_workers_status ON workers(status)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_workers_status: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_workers_type ON workers(worker_type)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_workers_type: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_workers_heartbeat ON workers(last_heartbeat)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_workers_heartbeat: {}", e);
+        }
 
         // Create VM registry table for distributed VM lifecycle management
         self.execute(
@@ -492,15 +498,19 @@ impl HiqliteService {
         ).await?;
 
         // Create indices for VM queries
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_vms_state ON vms(state)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_vms_state: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_vms_node_id ON vms(node_id)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_vms_node_id: {}", e);
+        }
 
         // Create VM events table for audit trail
         self.execute(
@@ -516,15 +526,19 @@ impl HiqliteService {
             params!(),
         ).await?;
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_vm_events_vm_id ON vm_events(vm_id)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_vm_events_vm_id: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_vm_events_timestamp ON vm_events(timestamp)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_vm_events_timestamp: {}", e);
+        }
 
         // Create execution_instances table for adapter-based execution tracking
         self.execute(
@@ -546,25 +560,33 @@ impl HiqliteService {
         ).await?;
 
         // Create indices for execution_instances queries
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_execution_instances_backend_type ON execution_instances(backend_type)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_execution_instances_backend_type: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_execution_instances_job_id ON execution_instances(job_id)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_execution_instances_job_id: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_execution_instances_status ON execution_instances(status)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_execution_instances_status: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_execution_instances_created_at ON execution_instances(created_at)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_execution_instances_created_at: {}", e);
+        }
 
         // Create OpenTofu state backend tables
         self.execute(
@@ -584,10 +606,12 @@ impl HiqliteService {
         ).await?;
 
         // Create index for lock operations
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tofu_workspaces_lock_id ON tofu_workspaces(lock_id)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_tofu_workspaces_lock_id: {}", e);
+        }
 
         // Create table for OpenTofu plan storage
         self.execute(
@@ -605,15 +629,19 @@ impl HiqliteService {
             params!(),
         ).await?;
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tofu_plans_workspace ON tofu_plans(workspace)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_tofu_plans_workspace: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tofu_plans_status ON tofu_plans(status)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_tofu_plans_status: {}", e);
+        }
 
         // Create table for OpenTofu state history (for rollback)
         self.execute(
@@ -629,15 +657,19 @@ impl HiqliteService {
             params!(),
         ).await?;
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tofu_state_history_workspace ON tofu_state_history(workspace)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_tofu_state_history_workspace: {}", e);
+        }
 
-        let _ = self.execute(
+        if let Err(e) = self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tofu_state_history_created_at ON tofu_state_history(created_at DESC)",
             params!(),
-        ).await;
+        ).await {
+            tracing::warn!("Failed to create index idx_tofu_state_history_created_at: {}", e);
+        }
 
         tracing::info!("Schema initialization complete");
         Ok(())
@@ -760,9 +792,9 @@ impl DatabaseSchema for HiqliteService {
 impl DatabaseLifecycle for HiqliteService {
     async fn shutdown(&self) -> Result<()> {
         tracing::info!("Shutting down hiqlite node gracefully");
-        let _ = self.client
-            .shutdown()
-            .await;
+        if let Err(e) = self.client.shutdown().await {
+            tracing::warn!("Error during hiqlite shutdown: {}", e);
+        }
         Ok(())
     }
 }

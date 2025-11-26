@@ -69,7 +69,7 @@ impl FlawlessAdapter {
         if let Some(state) = executions.get_mut(&handle.id) {
             let completed_at = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_secs();
 
             match result {
@@ -123,7 +123,7 @@ impl ExecutionBackend for FlawlessAdapter {
             status: ExecutionStatus::Running,
             started_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("System time is before UNIX epoch")
                 .as_secs(),
             completed_at: None,
         };
@@ -169,7 +169,7 @@ impl ExecutionBackend for FlawlessAdapter {
                 state.completed_at = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .expect("System time is before UNIX epoch")
                         .as_secs(),
                 );
 
@@ -251,7 +251,7 @@ impl ExecutionBackend for FlawlessAdapter {
             last_check: Some(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX epoch")
                     .as_secs(),
             ),
             details: HashMap::from([
@@ -314,7 +314,7 @@ impl ExecutionBackend for FlawlessAdapter {
         let mut executions = self.executions.write().await;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX epoch")
             .as_secs();
 
         let cutoff = now - older_than.as_secs();
