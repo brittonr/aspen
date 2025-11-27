@@ -19,6 +19,7 @@ use crate::{
     tofu::{
         TofuStateBackend,
         TofuPlanExecutor,
+        CliTofuExecutor,
         types::*,
     },
 };
@@ -58,8 +59,10 @@ impl TofuService {
         work_dir: PathBuf,
     ) -> Self {
         let state_backend = Arc::new(TofuStateBackend::new(hiqlite.clone()));
+        let executor = Arc::new(CliTofuExecutor::new());
         let plan_executor = Arc::new(TofuPlanExecutor::new(
             hiqlite.clone(),
+            executor,
             work_dir,
         ));
 

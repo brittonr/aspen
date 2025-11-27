@@ -6,34 +6,36 @@
 use anyhow::{Result, Context, bail};
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::{
     hiqlite::HiqliteService,
     tofu::{
         state_backend::TofuStateBackend,
+        executor::TofuExecutor,
         types::*,
     },
 };
 
 /// Executes OpenTofu/Terraform plans using the execution backend system
-#[derive(Clone)]
 pub struct TofuPlanExecutor {
     state_backend: Arc<TofuStateBackend>,
+    executor: Arc<dyn TofuExecutor>,
     work_dir: PathBuf,
 }
 
 impl TofuPlanExecutor {
-    /// Create a new plan executor
+    /// Create a new plan executor with a custom executor
     pub fn new(
         hiqlite: Arc<HiqliteService>,
+        executor: Arc<dyn TofuExecutor>,
         work_dir: PathBuf,
     ) -> Self {
         let state_backend = Arc::new(TofuStateBackend::new(hiqlite.clone()));
 
         Self {
             state_backend,
+            executor,
             work_dir,
         }
     }
@@ -321,16 +323,11 @@ impl TofuPlanExecutor {
 
     /// Initialize OpenTofu in the work directory
     async fn run_tofu_init(&self, work_dir: &Path, workspace: &str) -> Result<()> {
-        let init_output = Command::new("tofu")
-            .args(&["init", "-backend=false"])
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let init_output = self.executor.init(work_dir).await?;
 
-        if !init_output.status.success() {
-            let error_msg = String::from_utf8_lossy(&init_output.stderr);
-            tracing::error!(workspace = workspace, error = %error_msg, "OpenTofu init failed");
-            bail!("OpenTofu init failed: {}", error_msg);
+        if !init_output.success {
+            tracing::error!(workspace = workspace, error = %init_output.stderr, "OpenTofu init failed");
+            bail!("OpenTofu init failed: {}", init_output.stderr);
         }
 
         Ok(())
@@ -339,29 +336,16 @@ impl TofuPlanExecutor {
     /// Ensure workspace is selected, creating it if necessary
     async fn ensure_workspace_selected(&self, work_dir: &Path, workspace: &str) -> Result<()> {
         // Try to create workspace (ok if it fails - workspace may already exist)
-        if let Err(e) = Command::new("tofu")
-            .arg("workspace")
-            .arg("new")
-            .arg(workspace)
-            .current_dir(work_dir)
-            .output()
-            .await
-        {
+        if let Err(e) = self.executor.workspace_new(work_dir, workspace).await {
             tracing::warn!(error = %e, workspace = workspace, "Failed to create workspace (may already exist)");
         }
 
-        let select_output = Command::new("tofu")
-            .arg("workspace")
-            .arg("select")
-            .arg(workspace)
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let select_output = self.executor.workspace_select(work_dir, workspace).await?;
 
-        if !select_output.status.success() {
+        if !select_output.success {
             tracing::warn!(
                 workspace = workspace,
-                error = %String::from_utf8_lossy(&select_output.stderr),
+                error = %select_output.stderr,
                 "Workspace selection failed (may be expected if workspace doesn't exist)"
             );
         }
@@ -371,20 +355,15 @@ impl TofuPlanExecutor {
 
     /// Run tofu plan command
     async fn run_tofu_plan(&self, work_dir: &Path, workspace: &str) -> Result<String> {
-        let plan_output = Command::new("tofu")
-            .args(&["plan", "-out=tfplan", "-no-color"])
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let plan_output = self.executor.plan(work_dir).await?;
 
-        if !plan_output.status.success() {
-            let error_msg = String::from_utf8_lossy(&plan_output.stderr);
-            tracing::error!(workspace = workspace, error = %error_msg, "OpenTofu plan failed");
-            bail!("OpenTofu plan failed: {}", error_msg);
+        if !plan_output.success {
+            tracing::error!(workspace = workspace, error = %plan_output.stderr, "OpenTofu plan failed");
+            bail!("OpenTofu plan failed: {}", plan_output.stderr);
         }
 
         tracing::info!(workspace = workspace, "OpenTofu plan created successfully");
-        Ok(String::from_utf8_lossy(&plan_output.stdout).to_string())
+        Ok(plan_output.stdout)
     }
 
     /// Apply a plan using OpenTofu CLI
@@ -408,18 +387,12 @@ impl TofuPlanExecutor {
 
     /// Select workspace for tofu operation
     async fn select_workspace(&self, work_dir: &Path, workspace: &str) -> Result<()> {
-        let select_output = Command::new("tofu")
-            .arg("workspace")
-            .arg("select")
-            .arg(workspace)
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let select_output = self.executor.workspace_select(work_dir, workspace).await?;
 
-        if !select_output.status.success() {
+        if !select_output.success {
             tracing::warn!(
                 workspace = workspace,
-                error = %String::from_utf8_lossy(&select_output.stderr),
+                error = %select_output.stderr,
                 "Workspace selection failed"
             );
         }
@@ -428,37 +401,28 @@ impl TofuPlanExecutor {
     }
 
     /// Run tofu apply command
-    async fn run_tofu_apply(&self, work_dir: &Path) -> Result<std::process::Output> {
-        Command::new("tofu")
-            .args(&["apply", "-auto-approve", "-no-color", "tfplan"])
-            .current_dir(work_dir)
-            .output()
-            .await
-            .map_err(Into::into)
+    async fn run_tofu_apply(&self, work_dir: &Path) -> Result<crate::tofu::executor::TofuOutput> {
+        self.executor.apply(work_dir).await
     }
 
     /// Log the result of tofu apply
-    fn log_apply_result(&self, output: &std::process::Output, workspace: &str, plan_id: &str) {
-        if output.status.success() {
+    fn log_apply_result(&self, output: &crate::tofu::executor::TofuOutput, workspace: &str, plan_id: &str) {
+        if output.success {
             tracing::info!(workspace = workspace, plan_id = plan_id, "OpenTofu plan applied successfully");
         } else {
-            let error_str = String::from_utf8_lossy(&output.stderr);
-            tracing::error!(workspace = workspace, plan_id = plan_id, error = %error_str, "OpenTofu plan application failed");
+            tracing::error!(workspace = workspace, plan_id = plan_id, error = %output.stderr, "OpenTofu plan application failed");
         }
     }
 
     /// Create PlanExecutionResult from apply output
-    fn create_apply_result(&self, apply_output: std::process::Output) -> Result<PlanExecutionResult> {
-        let output_str = String::from_utf8_lossy(&apply_output.stdout).to_string();
-        let error_str = String::from_utf8_lossy(&apply_output.stderr).to_string();
-
+    fn create_apply_result(&self, apply_output: crate::tofu::executor::TofuOutput) -> Result<PlanExecutionResult> {
         let (resources_created, resources_updated, resources_destroyed) =
-            self.parse_apply_summary(&output_str);
+            self.parse_apply_summary(&apply_output.stdout);
 
         Ok(PlanExecutionResult {
-            success: apply_output.status.success(),
-            output: output_str,
-            errors: if apply_output.status.success() { vec![] } else { vec![error_str] },
+            success: apply_output.success,
+            output: apply_output.stdout.clone(),
+            errors: if apply_output.success { vec![] } else { vec![apply_output.stderr] },
             resources_created,
             resources_updated,
             resources_destroyed,
@@ -627,18 +591,11 @@ impl TofuPlanExecutor {
 
     /// Select workspace strictly (fail if workspace doesn't exist)
     async fn select_workspace_strict(&self, work_dir: &Path, workspace: &str) -> Result<()> {
-        let select_output = Command::new("tofu")
-            .arg("workspace")
-            .arg("select")
-            .arg(workspace)
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let select_output = self.executor.workspace_select(work_dir, workspace).await?;
 
-        if !select_output.status.success() {
-            let error_msg = String::from_utf8_lossy(&select_output.stderr);
-            tracing::error!(error = %error_msg, workspace = workspace, "Failed to select workspace");
-            bail!("Failed to select workspace: {}", error_msg);
+        if !select_output.success {
+            tracing::error!(error = %select_output.stderr, workspace = workspace, "Failed to select workspace");
+            bail!("Failed to select workspace: {}", select_output.stderr);
         }
 
         Ok(())
@@ -651,37 +608,24 @@ impl TofuPlanExecutor {
         workspace: &str,
         auto_approve: bool,
     ) -> Result<PlanExecutionResult> {
-        let mut args = vec!["destroy", "-no-color"];
-        if auto_approve {
-            args.push("-auto-approve");
-        }
-
-        let destroy_output = Command::new("tofu")
-            .args(&args)
-            .current_dir(work_dir)
-            .output()
-            .await?;
+        let destroy_output = self.executor.destroy(work_dir, auto_approve).await?;
 
         self.log_destroy_result(&destroy_output, workspace);
         self.create_destroy_result(destroy_output)
     }
 
     /// Log the result of tofu destroy
-    fn log_destroy_result(&self, output: &std::process::Output, workspace: &str) {
-        if output.status.success() {
+    fn log_destroy_result(&self, output: &crate::tofu::executor::TofuOutput, workspace: &str) {
+        if output.success {
             tracing::info!(workspace = workspace, "Infrastructure destroyed successfully");
         } else {
-            let error_str = String::from_utf8_lossy(&output.stderr);
-            tracing::error!(workspace = workspace, error = %error_str, "Infrastructure destruction failed");
+            tracing::error!(workspace = workspace, error = %output.stderr, "Infrastructure destruction failed");
         }
     }
 
     /// Create PlanExecutionResult from destroy output
-    fn create_destroy_result(&self, destroy_output: std::process::Output) -> Result<PlanExecutionResult> {
-        let output_str = String::from_utf8_lossy(&destroy_output.stdout).to_string();
-        let error_str = String::from_utf8_lossy(&destroy_output.stderr).to_string();
-
-        let destroyed_count = output_str.lines()
+    fn create_destroy_result(&self, destroy_output: crate::tofu::executor::TofuOutput) -> Result<PlanExecutionResult> {
+        let destroyed_count = destroy_output.stdout.lines()
             .filter(|line| line.contains("Destroy complete!"))
             .find_map(|line| {
                 line.split_whitespace()
@@ -690,9 +634,9 @@ impl TofuPlanExecutor {
             .unwrap_or(0);
 
         Ok(PlanExecutionResult {
-            success: destroy_output.status.success(),
-            output: output_str,
-            errors: if destroy_output.status.success() { vec![] } else { vec![error_str] },
+            success: destroy_output.success,
+            output: destroy_output.stdout.clone(),
+            errors: if destroy_output.success { vec![] } else { vec![destroy_output.stderr] },
             resources_created: 0,
             resources_updated: 0,
             resources_destroyed: destroyed_count,
