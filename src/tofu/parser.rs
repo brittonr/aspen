@@ -78,3 +78,46 @@ pub fn parse_apply_summary(output: &str) -> (i32, i32, i32) {
 
     (created, updated, destroyed)
 }
+
+/// Parse destroy output for resource count
+///
+/// Returns count of destroyed resources
+pub fn parse_destroy_summary(output: &str) -> i32 {
+    output.lines()
+        .filter(|line| line.contains("Destroy complete!"))
+        .find_map(|line| {
+            line.split_whitespace()
+                .find_map(|word| word.parse::<i32>().ok())
+        })
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_plan_summary() {
+        let output = "Plan: 3 to add, 2 to change, 1 to destroy.";
+        let (created, updated, destroyed) = parse_plan_summary(output);
+        assert_eq!(created, 3);
+        assert_eq!(updated, 2);
+        assert_eq!(destroyed, 1);
+    }
+
+    #[test]
+    fn test_parse_apply_summary() {
+        let output = "Apply complete! Resources: 3 added, 2 changed, 1 destroyed.";
+        let (created, updated, destroyed) = parse_apply_summary(output);
+        assert_eq!(created, 3);
+        assert_eq!(updated, 2);
+        assert_eq!(destroyed, 1);
+    }
+
+    #[test]
+    fn test_parse_destroy_summary() {
+        let output = "Destroy complete! Resources: 5 destroyed.";
+        let count = parse_destroy_summary(output);
+        assert_eq!(count, 5);
+    }
+}

@@ -11,6 +11,8 @@ pub mod executor;
 // Utility modules for plan execution
 pub mod validation;
 pub mod parser;
+pub mod workspace_manager;
+pub mod file_operations;
 
 pub use state_backend::TofuStateBackend;
 pub use plan_executor::TofuPlanExecutor;
