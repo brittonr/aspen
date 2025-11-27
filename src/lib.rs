@@ -23,10 +23,14 @@ pub use config::AppConfig;
 
 // Internal modules (used by main binary)
 mod work_queue;
+mod work_queue_improved;
 mod work_state_machine;
 mod work_item_cache;
 mod persistent_store;
 mod hiqlite_persistent_store;
+mod work_queue_tests;
+mod work_queue_proptest;
+mod work_queue_distributed_tests;
 mod services;
 mod iroh_service;
 mod iroh_api;
