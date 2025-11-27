@@ -28,7 +28,7 @@ use crate::handlers::queue::*;
 use crate::handlers::worker::*;
 use crate::iroh_api;
 use crate::middleware;
-use crate::state::AppState;
+use crate::state::{DomainState, InfraState, ConfigState, FeaturesState};
 use crate::domain::{ClusterStatusService, JobLifecycleService, HealthService, WorkerManagementService};
 
 /// Build the complete Axum router with all routes
@@ -36,28 +36,34 @@ use crate::domain::{ClusterStatusService, JobLifecycleService, HealthService, Wo
 /// This creates a router serving both HTTP/1.1 (localhost) and HTTP/3 (iroh+h3 P2P).
 /// All routes are registered here for consistency across transports.
 ///
-/// Routes are organized into logical sub-routers with specific service dependencies:
-/// - Dashboard UI (ClusterStatusService, JobLifecycleService)
-/// - Work Queue API (JobLifecycleService, HealthService)
-/// - Worker API (WorkerManagementService)
-/// - Iroh P2P API (AppState for now)
-/// - Health checks (HealthService)
-pub fn build_router(state: &AppState) -> Router {
-    // Extract specific services and configuration from AppState
-    let auth_config = state.auth_config();
-    let cluster_service = state.cluster_status();
-    let job_service = state.job_lifecycle();
-    let health_service = state.health();
-    let worker_service = state.worker_management();
+/// Routes are organized into logical sub-routers with focused state containers:
+/// - Dashboard UI - uses DomainState (ClusterStatusService, JobLifecycleService)
+/// - Work Queue API - uses DomainState (JobLifecycleService, HealthService)
+/// - Worker API - uses DomainState (WorkerManagementService)
+/// - Iroh P2P API - uses InfraState (IrohService)
+/// - Tofu State API - uses FeaturesState (TofuService)
+/// - Health checks - uses DomainState (HealthService)
+pub fn build_router(
+    domain: DomainState,
+    infra: InfraState,
+    config: ConfigState,
+    features: FeaturesState,
+) -> Router {
+    // Extract specific services from DomainState
+    let cluster_service = domain.cluster_status();
+    let job_service = domain.job_lifecycle();
+    let health_service = domain.health();
+    let worker_service = domain.worker_management();
+    let auth_config = config.auth();
 
     let router = Router::new()
         .nest("/dashboard", dashboard_router(cluster_service.clone(), job_service.clone()))
         .nest("/api/queue", queue_api_router(job_service.clone(), health_service.clone(), auth_config.clone()))
         .nest("/api/workers", worker_api_router(worker_service.clone(), auth_config.clone()))
-        .nest("/api/iroh", iroh_api_router(auth_config.clone()).with_state(state.clone()));
+        .nest("/api/iroh", iroh_api_router(auth_config.clone()).with_state(infra));
 
     #[cfg(feature = "tofu-support")]
-    let router = router.nest("/api/tofu", tofu_api_router(auth_config.clone()).with_state(state.clone()));
+    let router = router.nest("/api/tofu", tofu_api_router(auth_config.clone()).with_state(features));
 
     router
         .nest("/health", health_router(health_service.clone()))
@@ -164,7 +170,7 @@ fn worker_api_router(
 /// - `GET  /api/iroh/gossip/subscribe/{topic_id}` - Subscribe to topic (SSE)
 /// - `POST /api/iroh/connect` - Connect to peer
 /// - `GET  /api/iroh/info` - Get endpoint information
-fn iroh_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<AppState> {
+fn iroh_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<InfraState> {
     Router::new()
         .route("/blob/store", post(iroh_api::store_blob))
         .route("/blob/{hash}", get(iroh_api::retrieve_blob))
@@ -199,7 +205,7 @@ fn iroh_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<AppSta
 /// - `GET  /api/tofu/plans/{workspace}` - List plans for workspace
 /// - `POST /api/tofu/destroy` - Destroy infrastructure
 #[cfg(feature = "tofu-support")]
-fn tofu_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<AppState> {
+fn tofu_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<FeaturesState> {
     use axum::routing::delete;
 
     Router::new()

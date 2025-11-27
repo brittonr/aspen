@@ -52,17 +52,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create application state using factory pattern (enables dependency injection)
     println!("Initializing application infrastructure...");
     let factory = ProductionInfrastructureFactory::new();
-    let state = factory
-        .build_app_state(&config, module, endpoint.clone(), node_id)
+    let state_builder = factory
+        .build_state(&config, module, endpoint.clone(), node_id)
         .await
         .expect("Failed to build application state");
+
+    // Build focused state containers
+    let (domain, infra, config_state, features) = state_builder.build();
 
     // Start VM service if available
     #[cfg(feature = "vm-backend")]
     {
         println!("Starting VM Service...");
-        if let Err(e) = state.vm_service().start().await {
-            println!("WARNING: VM Service failed to start: {}. Continuing without VM support.", e);
+        if let Some(vm_service) = features.vm_service() {
+            if let Err(e) = vm_service.start().await {
+                println!("WARNING: VM Service failed to start: {}. Continuing without VM support.", e);
+            }
+        } else {
+            println!("VM backend not available (not initialized)");
         }
     }
     #[cfg(not(feature = "vm-backend"))]
@@ -71,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Display work queue ticket for worker connections
-    let work_ticket = state.get_work_queue_ticket();
+    let work_ticket = infra.work_queue_ticket();
 
     println!();
     println!("╔═══════════════════════════════════════════════════════════════════════════╗");
@@ -121,7 +128,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_config = ServerConfig {
         app_config: config,
         endpoint,
-        state,
+        domain,
+        infra,
+        config: config_state,
+        features,
     };
 
     let handle = mvm_ci::server::start(server_config)

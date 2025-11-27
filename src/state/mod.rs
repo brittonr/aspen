@@ -1,6 +1,18 @@
 //! Application state management
 //!
-//! Flattened state architecture with minimal indirection.
+//! Refactored to use focused state containers instead of a monolithic AppState.
+//!
+//! # State Containers
+//!
+//! - `DomainState` - Core business logic services (most handlers use this)
+//! - `InfraState` - Low-level infrastructure (Iroh, Hiqlite, WorkQueue)
+//! - `ConfigState` - Static configuration (AuthConfig, DeployedModule)
+//! - `FeaturesState` - Optional feature-gated services (VM, Tofu)
+//!
+//! # Migration Status
+//!
+//! AppState is deprecated but kept temporarily for backward compatibility.
+//! New code should use focused state containers.
 
 use std::sync::Arc;
 use flawless_utils::DeployedModule;
@@ -18,10 +30,22 @@ use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::work_queue::WorkQueue;
 
+// === New focused state containers ===
+pub mod config;
+pub mod domain;
+pub mod features;
+pub mod infra;
+
+// Re-export new state containers for convenience
+pub use self::config::ConfigState;
+pub use self::domain::DomainState;
+pub use self::features::FeaturesState;
+pub use self::infra::InfraState;
+
 pub mod factory;
 
 // Re-export factory types for convenience
-pub use factory::{InfrastructureFactory, ProductionInfrastructureFactory};
+pub use factory::{InfrastructureFactory, ProductionInfrastructureFactory, StateBuilder};
 
 /// Application state with flattened structure
 ///

@@ -11,7 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    state::AppState,
+    state::FeaturesState,
     tofu::types::*,
 };
 
@@ -27,9 +27,9 @@ pub struct StateQuery {
 /// GET /api/tofu/state/{workspace}
 pub async fn get_state(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.get_state(&workspace).await {
         Ok(Some(tofu_state)) => {
@@ -53,11 +53,11 @@ pub async fn get_state(
 pub async fn update_state(
     Path(workspace): Path<String>,
     Query(query): Query<StateQuery>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     headers: HeaderMap,
     Json(tofu_state): Json<TofuState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     // Check if workspace is locked and verify lock ID if provided
     if let Some(lock_id) = query.lock_id {
@@ -102,10 +102,10 @@ pub async fn update_state(
 /// LOCK /api/tofu/lock/{workspace}
 pub async fn lock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.lock_workspace(&workspace, lock_request).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -131,10 +131,10 @@ pub async fn lock_workspace(
 /// UNLOCK /api/tofu/unlock/{workspace}
 pub async fn unlock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     Json(lock_request): Json<LockRequest>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.unlock_workspace(&workspace, &lock_request.id).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -154,9 +154,9 @@ pub async fn unlock_workspace(
 /// DELETE /api/tofu/lock/{workspace}
 pub async fn force_unlock_workspace(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.force_unlock_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -171,9 +171,9 @@ pub async fn force_unlock_workspace(
 ///
 /// GET /api/tofu/workspaces
 pub async fn list_workspaces(
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Json<Vec<String>>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.list_workspaces().await {
         Ok(workspaces) => Ok(Json(workspaces)),
@@ -189,9 +189,9 @@ pub async fn list_workspaces(
 /// DELETE /api/tofu/workspaces/{workspace}
 pub async fn delete_workspace(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.delete_workspace(&workspace).await {
         Ok(_) => Ok((StatusCode::NO_CONTENT, "").into_response()),
@@ -207,9 +207,9 @@ pub async fn delete_workspace(
 /// GET /api/tofu/history/{workspace}
 pub async fn get_state_history(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Json<Vec<StateHistoryEntry>>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.get_state_history(&workspace, Some(50)).await {
         Ok(history) => {
@@ -240,9 +240,9 @@ pub struct StateHistoryEntry {
 /// POST /api/tofu/rollback/{workspace}/{version}
 pub async fn rollback_state(
     Path((workspace, version)): Path<(String, i64)>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Response, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.rollback_state(&workspace, version).await {
         Ok(_) => Ok((StatusCode::OK, "").into_response()),
@@ -266,10 +266,10 @@ pub struct CreatePlanRequest {
 }
 
 pub async fn create_plan(
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     Json(request): Json<CreatePlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.execute_plan(
         &request.workspace,
@@ -294,10 +294,10 @@ pub struct ApplyPlanRequest {
 
 pub async fn apply_plan(
     Path(plan_id): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     Json(request): Json<ApplyPlanRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.apply_stored_plan(&plan_id, &request.approver).await {
         Ok(result) => Ok(Json(result)),
@@ -313,9 +313,9 @@ pub async fn apply_plan(
 /// GET /api/tofu/plans/{workspace}
 pub async fn list_plans(
     Path(workspace): Path<String>,
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
 ) -> Result<Json<Vec<PlanSummary>>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.list_plans(&workspace).await {
         Ok(plans) => {
@@ -360,10 +360,10 @@ pub struct DestroyRequest {
 }
 
 pub async fn destroy_infrastructure(
-    State(state): State<AppState>,
+    State(features): State<FeaturesState>,
     Json(request): Json<DestroyRequest>,
 ) -> Result<Json<PlanExecutionResult>, StatusCode> {
-    let tofu_service = state.tofu_service();
+    let tofu_service = features.tofu_service().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
 
     match tofu_service.destroy(
         &request.workspace,

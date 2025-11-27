@@ -23,10 +23,114 @@ use crate::hiqlite_persistent_store::HiqlitePersistentStore;
 use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
-use crate::state::AppState;
+use crate::state::{AppState, ConfigState, DomainState, FeaturesState, InfraState};
 use crate::infrastructure::vm::{VmManager, VmManagerConfig};
 use crate::work_queue::WorkQueue;
 use crate::{WorkerBackend, WorkerType};
+
+/// Builder for constructing focused state containers
+///
+/// This builder contains all infrastructure and domain services needed
+/// to construct the four focused state containers (DomainState, InfraState,
+/// ConfigState, FeaturesState).
+pub struct StateBuilder {
+    // Infrastructure components
+    iroh: IrohService,
+    hiqlite: HiqliteService,
+    work_queue: WorkQueue,
+    execution_registry: Arc<ExecutionRegistry>,
+
+    // Configuration
+    auth_config: Arc<crate::config::AuthConfig>,
+    module: Option<DeployedModule>,
+
+    // Domain services
+    cluster_status: Arc<ClusterStatusService>,
+    health: Arc<HealthService>,
+    job_lifecycle: Arc<JobLifecycleService>,
+    worker_management: Arc<WorkerManagementService>,
+
+    // Optional features
+    #[cfg(feature = "vm-backend")]
+    vm_service: Option<Arc<VmService>>,
+
+    #[cfg(feature = "tofu-support")]
+    tofu_service: Option<Arc<TofuService>>,
+}
+
+impl StateBuilder {
+    /// Build all state containers
+    ///
+    /// Returns a tuple of (DomainState, InfraState, ConfigState, FeaturesState)
+    pub fn build(self) -> (DomainState, InfraState, ConfigState, FeaturesState) {
+        let domain = DomainState::new(
+            self.cluster_status,
+            self.health,
+            self.job_lifecycle,
+            self.worker_management,
+        );
+
+        let infra = InfraState::new(
+            self.iroh,
+            self.hiqlite,
+            self.work_queue,
+            self.execution_registry,
+        );
+
+        let config = ConfigState::new(self.auth_config, self.module);
+
+        let features = FeaturesState::new(
+            #[cfg(feature = "vm-backend")]
+            self.vm_service,
+            #[cfg(feature = "tofu-support")]
+            self.tofu_service,
+        );
+
+        (domain, infra, config, features)
+    }
+
+    /// Build only domain state (useful for testing)
+    pub fn build_domain(self) -> DomainState {
+        DomainState::new(
+            self.cluster_status,
+            self.health,
+            self.job_lifecycle,
+            self.worker_management,
+        )
+    }
+
+    /// Build legacy AppState for backward compatibility
+    ///
+    /// This method is deprecated and will be removed once migration is complete
+    #[deprecated(note = "Use build() to get focused state containers instead")]
+    pub fn build_app_state(self) -> AppState {
+        #[cfg(feature = "tofu-support")]
+        let tofu_service = self.tofu_service.unwrap_or_else(|| {
+            Arc::new(TofuService::new(
+                self.execution_registry.clone(),
+                Arc::new(self.hiqlite.clone()),
+                std::path::PathBuf::from("/tmp"),
+            ))
+        });
+
+        AppState::new(
+            self.auth_config,
+            self.module,
+            self.iroh,
+            self.hiqlite,
+            self.work_queue,
+            self.execution_registry,
+            self.cluster_status,
+            self.health,
+            self.job_lifecycle,
+            self.worker_management,
+            #[cfg(feature = "vm-backend")]
+            self.vm_service.unwrap_or_else(|| Arc::new(VmService::unavailable())),
+            #[cfg(feature = "tofu-support")]
+            tofu_service,
+        )
+    }
+}
 
 /// Factory trait for creating infrastructure components
 ///
@@ -85,10 +189,122 @@ pub trait InfrastructureFactory: Send + Sync {
         vm_manager: Option<Arc<VmManager>>,
     ) -> Result<Box<dyn WorkerBackend>>;
 
+    /// Build state containers using focused architecture (RECOMMENDED)
+    ///
+    /// This method coordinates the creation of all infrastructure components
+    /// and returns a StateBuilder that can construct focused state containers.
+    ///
+    /// Prefer this over build_app_state() for new code.
+    async fn build_state(
+        &self,
+        config: &AppConfig,
+        module: Option<DeployedModule>,
+        endpoint: Endpoint,
+        node_id: String,
+    ) -> Result<StateBuilder> {
+        // Create infrastructure services
+        let hiqlite = self.create_hiqlite(config).await?;
+        hiqlite.initialize_schema().await?;
+
+        let iroh = self.create_iroh(config, endpoint.clone()).await?;
+
+        // Create work queue with hiqlite
+        let work_queue = self.create_work_queue(config, endpoint, node_id, hiqlite.clone()).await?;
+
+        // Create shared Hiqlite Arc for services that need it
+        let hiqlite_arc = Arc::new(hiqlite.clone());
+
+        // Create execution registry
+        let registry_config = RegistryConfig::default();
+        let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
+
+        // Create VM manager (skip if disabled in config)
+        let vm_manager = if !config.features.is_vm_manager_enabled() {
+            tracing::info!("Skipping VM manager creation (feature disabled in config)");
+            None
+        } else {
+            match self.create_vm_manager(config, hiqlite_arc.clone()).await {
+                Ok(manager) => Some(manager),
+                Err(e) => {
+                    tracing::warn!("Failed to create VM manager: {}. Continuing without VM support.", e);
+                    None
+                }
+            }
+        };
+
+        // Create repositories
+        let state_repo = self.create_state_repository(hiqlite_arc.clone());
+        let work_repo = self.create_work_repository(work_queue.clone());
+        let worker_repo = self.create_worker_repository(hiqlite_arc.clone());
+
+        // Create event publisher
+        let event_publisher = Arc::new(LoggingEventPublisher::new());
+
+        // Create command and query services (CQRS pattern)
+        let commands = Arc::new(JobCommandService::with_events(
+            work_repo.clone(),
+            event_publisher.clone(),
+        ));
+        let queries = Arc::new(JobQueryService::new(work_repo.clone()));
+
+        // Create domain services with injected repositories
+        let cluster_status = Arc::new(ClusterStatusService::new(
+            state_repo.clone(),
+            work_repo.clone(),
+        ));
+
+        let health = Arc::new(HealthService::new(state_repo.clone()));
+
+        // JobLifecycleService wraps command and query services
+        let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
+
+        // WorkerManagementService with worker and work repositories
+        let worker_management = Arc::new(WorkerManagementService::new(
+            worker_repo.clone(),
+            work_repo.clone(),
+            Some(60), // Default heartbeat timeout: 60 seconds
+        ));
+
+        // Create VM service if VM manager is available
+        #[cfg(feature = "vm-backend")]
+        let vm_service = vm_manager.map(|vm_manager| Arc::new(VmService::new(vm_manager)));
+
+        // Create Tofu service
+        #[cfg(feature = "tofu-support")]
+        let tofu_service = Some(Arc::new(TofuService::new(
+            execution_registry.clone(),
+            hiqlite_arc.clone(),
+            config.storage.work_dir.clone(),
+        )));
+
+        // Extract auth config
+        let auth_config = Arc::new(config.auth.clone());
+
+        Ok(StateBuilder {
+            iroh,
+            hiqlite,
+            work_queue,
+            execution_registry,
+            auth_config,
+            module,
+            cluster_status,
+            health,
+            job_lifecycle,
+            worker_management,
+            #[cfg(feature = "vm-backend")]
+            vm_service,
+            #[cfg(feature = "tofu-support")]
+            tofu_service,
+        })
+    }
+
     /// Build complete application state (orchestrator method)
+    ///
+    /// DEPRECATED: Use build_state() instead for focused state containers.
     ///
     /// This method coordinates the creation of all infrastructure components
     /// and constructs the AppState with proper dependency injection.
+    #[deprecated(note = "Use build_state() for focused state containers")]
     async fn build_app_state(
         &self,
         config: &AppConfig,

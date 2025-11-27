@@ -39,7 +39,10 @@ mod router;
 
 pub use lifecycle::ServerHandle;
 
-use crate::{config::AppConfig, state::AppState};
+use crate::{
+    config::AppConfig,
+    state::{DomainState, InfraState, ConfigState, FeaturesState},
+};
 
 /// Server configuration bundle
 ///
@@ -49,8 +52,14 @@ pub struct ServerConfig {
     pub app_config: AppConfig,
     /// Iroh endpoint (pre-initialized and online)
     pub endpoint: ::iroh::Endpoint,
-    /// Application state (repositories and services)
-    pub state: AppState,
+    /// Domain services state
+    pub domain: DomainState,
+    /// Infrastructure services state
+    pub infra: InfraState,
+    /// Configuration state
+    pub config: ConfigState,
+    /// Optional features state
+    pub features: FeaturesState,
 }
 
 /// Start both server listeners (localhost + P2P)
@@ -85,7 +94,12 @@ pub async fn start(config: ServerConfig) -> Result<ServerHandle> {
 
     // Build router with all application routes
     println!("Building router...");
-    let router = router::build_router(&config.state);
+    let router = router::build_router(
+        config.domain.clone(),
+        config.infra.clone(),
+        config.config.clone(),
+        config.features.clone(),
+    );
 
     // Spawn localhost listener in background
     println!("Starting localhost HTTP listener on port {}...", config.app_config.network.http_port);

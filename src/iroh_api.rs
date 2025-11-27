@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::state::AppState;
+use crate::state::InfraState;
 
 // ===== Data Types =====
 
@@ -43,10 +43,10 @@ pub struct EndpointInfo {
 /// POST /iroh/blob/store
 /// Store a blob and return its hash
 pub async fn store_blob(
-    State(state): State<AppState>,
+    State(infra): State<InfraState>,
     body: Bytes,
 ) -> Result<Json<BlobResponse>, AppError> {
-    let hash = state
+    let hash = infra
         .iroh()
         .store_blob(body)
         .await
@@ -58,10 +58,10 @@ pub async fn store_blob(
 /// GET /iroh/blob/{hash}
 /// Retrieve a blob by its hash
 pub async fn retrieve_blob(
-    State(state): State<AppState>,
+    State(infra): State<InfraState>,
     Path(hash_str): Path<String>,
 ) -> Result<Response, AppError> {
-    let data = state
+    let data = infra
         .iroh()
         .retrieve_blob(hash_str)
         .await
@@ -77,10 +77,10 @@ pub async fn retrieve_blob(
 /// POST /iroh/gossip/join
 /// Join a gossip topic
 pub async fn join_gossip_topic(
-    State(state): State<AppState>,
+    State(infra): State<InfraState>,
     Json(req): Json<JoinTopicRequest>,
 ) -> Result<StatusCode, AppError> {
-    state
+    infra
         .iroh()
         .join_topic(req.topic_id)
         .await
@@ -92,12 +92,12 @@ pub async fn join_gossip_topic(
 /// POST /iroh/gossip/broadcast
 /// Broadcast a message to a gossip topic
 pub async fn broadcast_gossip(
-    State(state): State<AppState>,
+    State(infra): State<InfraState>,
     Json(req): Json<BroadcastRequest>,
 ) -> Result<StatusCode, AppError> {
     let message = Bytes::from(req.message.into_bytes());
 
-    state
+    infra
         .iroh()
         .broadcast_message(req.topic_id, message)
         .await
@@ -109,7 +109,7 @@ pub async fn broadcast_gossip(
 /// GET /iroh/gossip/subscribe/{topic_id}
 /// Subscribe to a gossip topic (Server-Sent Events stream)
 pub async fn subscribe_gossip(
-    State(_state): State<AppState>,
+    State(_infra): State<InfraState>,
     Path(_topic_id_str): Path<String>,
 ) -> Result<StatusCode, AppError> {
     Err(AppError::NotImplemented(
@@ -120,10 +120,10 @@ pub async fn subscribe_gossip(
 /// POST /iroh/connect
 /// Connect to a peer by endpoint address
 pub async fn connect_peer(
-    State(state): State<AppState>,
+    State(infra): State<InfraState>,
     Json(req): Json<ConnectPeerRequest>,
 ) -> Result<StatusCode, AppError> {
-    state
+    infra
         .iroh()
         .connect_peer(req.endpoint_addr)
         .await
@@ -134,9 +134,9 @@ pub async fn connect_peer(
 
 /// GET /iroh/info
 /// Get endpoint information (ID and addresses)
-pub async fn endpoint_info(State(state): State<AppState>) -> Result<Json<EndpointInfo>, AppError> {
-    let endpoint_id = state.iroh().endpoint_id();
-    let addresses = state.iroh().local_endpoints();
+pub async fn endpoint_info(State(infra): State<InfraState>) -> Result<Json<EndpointInfo>, AppError> {
+    let endpoint_id = infra.iroh().endpoint_id();
+    let addresses = infra.iroh().local_endpoints();
 
     Ok(Json(EndpointInfo {
         endpoint_id: endpoint_id.to_string(),
