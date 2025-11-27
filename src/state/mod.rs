@@ -97,29 +97,53 @@ impl AppState {
     }
 
     // === Infrastructure accessors ===
+    //
+    // NOTE: Infrastructure services should NOT be accessed by regular HTTP handlers.
+    // Handlers should use domain services instead. Infrastructure accessors are
+    // marked pub(crate) to enforce this boundary.
+    //
+    // Exception: iroh() is pub for infrastructure-level P2P API handlers in iroh_api.rs
 
     /// Get the Flawless module (if available)
-    pub fn module(&self) -> Option<&DeployedModule> {
+    ///
+    /// Internal use only - for startup/display purposes
+    pub(crate) fn module(&self) -> Option<&DeployedModule> {
         self.module.as_ref().map(|m| m.as_ref())
     }
 
     /// Get the Iroh service
+    ///
+    /// NOTE: This is public for infrastructure-level P2P API handlers (iroh_api.rs).
+    /// Regular handlers should use domain services, not infrastructure directly.
     pub fn iroh(&self) -> &IrohService {
         &self.iroh
     }
 
     /// Get the Hiqlite service
-    pub fn hiqlite(&self) -> &HiqliteService {
+    ///
+    /// Internal use only - handlers should use domain services
+    pub(crate) fn hiqlite(&self) -> &HiqliteService {
         &self.hiqlite
     }
 
     /// Get the work queue
-    pub fn work_queue(&self) -> &WorkQueue {
+    ///
+    /// Internal use only - for startup/display purposes
+    pub(crate) fn work_queue(&self) -> &WorkQueue {
         &self.work_queue
     }
 
+    /// Get the work queue connection ticket for worker registration
+    ///
+    /// This is exposed for startup/display purposes without exposing the full WorkQueue
+    pub fn get_work_queue_ticket(&self) -> String {
+        self.work_queue.get_ticket()
+    }
+
     /// Get the execution registry
-    pub fn execution_registry(&self) -> &Arc<ExecutionRegistry> {
+    ///
+    /// Internal use only - handlers should use domain services
+    pub(crate) fn execution_registry(&self) -> &Arc<ExecutionRegistry> {
         &self.execution_registry
     }
 

@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Display work queue ticket for worker connections
-    let work_ticket = state.work_queue().get_ticket();
+    let work_ticket = state.get_work_queue_ticket();
 
     println!();
     println!("╔═══════════════════════════════════════════════════════════════════════════╗");
