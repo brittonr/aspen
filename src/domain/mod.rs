@@ -23,7 +23,6 @@ pub mod job_lifecycle;
 pub mod job_metadata;
 pub mod job_queries;
 pub mod job_requirements;
-pub mod plugins;
 pub mod queue;
 pub mod state_machine;
 #[cfg(feature = "tofu-support")]
