@@ -17,6 +17,13 @@ pub mod messages;
 pub mod coordinator;
 pub mod vm_management;
 
+// VM controller components
+pub mod network_manager;
+pub mod process_manager;
+pub mod virtiofs_daemon;
+pub mod filesystem;
+pub mod control_socket;
+
 use anyhow::Result;
 use std::sync::Arc;
 
