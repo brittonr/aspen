@@ -63,43 +63,41 @@ impl HiqliteService {
     /// # Note
     /// This is primarily used in test contexts where TofuService requires a HiqliteService
     /// dependency but tests won't actually invoke operations on it.
-    pub fn placeholder() -> Self {
+    /// Create a placeholder HiqliteService for testing
+    ///
+    /// Returns a Result to avoid panicking in production code.
+    /// This method is primarily intended for test contexts.
+    pub fn placeholder() -> anyhow::Result<Self> {
         // Check if we're in a tokio runtime
         match tokio::runtime::Handle::try_current() {
             Ok(_) => {
-                // We're in a runtime, but we need to use spawn_blocking to avoid
-                // issues with block_on being called from an async context
+                // We're in a runtime, spawn a thread to avoid blocking issues
                 std::thread::scope(|s| {
-                    let join_handle = s.spawn(|| {
-                        // Create a new runtime in this thread for the async initialization
+                    let join_handle = s.spawn(|| -> anyhow::Result<Self> {
+                        // Create a new runtime in this thread
                         let rt = tokio::runtime::Builder::new_current_thread()
                             .enable_all()
-                            .build()
-                            .expect("Failed to create runtime for placeholder");
+                            .build()?;
 
                         rt.block_on(async {
-                            // Use unique directory for placeholder to avoid conflicts
                             let temp_dir = format!("/tmp/hiqlite-placeholder-{}", std::process::id());
                             Self::new(Some(std::path::PathBuf::from(temp_dir))).await
-                                .expect("Failed to create placeholder HiqliteService")
                         })
                     });
 
-                    join_handle.join().expect("Thread panic in placeholder creation")
+                    join_handle.join()
+                        .map_err(|_| anyhow::anyhow!("Thread panicked during placeholder creation"))?
                 })
             }
             Err(_) => {
                 // Not in a runtime, create one
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
-                    .build()
-                    .expect("Failed to create runtime for placeholder");
+                    .build()?;
 
                 rt.block_on(async {
-                    // Use unique directory for placeholder to avoid conflicts
                     let temp_dir = format!("/tmp/hiqlite-placeholder-{}", std::process::id());
                     Self::new(Some(std::path::PathBuf::from(temp_dir))).await
-                        .expect("Failed to create placeholder HiqliteService")
                 })
             }
         }

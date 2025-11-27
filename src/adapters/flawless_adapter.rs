@@ -100,19 +100,7 @@ impl ExecutionBackend for FlawlessAdapter {
     async fn submit_job(&self, job: Job, _config: ExecutionConfig) -> Result<ExecutionHandle> {
         info!("Flawless adapter: submitting job {}", job.id);
 
-        // Check concurrent execution limit
-        let executions = self.executions.read().await;
-        let running_count = executions
-            .values()
-            .filter(|state| matches!(state.status, ExecutionStatus::Running))
-            .count();
-
-        if running_count >= self.max_concurrent {
-            return Err(anyhow::anyhow!("Maximum concurrent executions reached"));
-        }
-        drop(executions);
-
-        // Generate execution handle
+        // Generate execution handle before acquiring lock
         let exec_id = self.generate_id().await;
         let handle = ExecutionHandle::flawless(exec_id.clone(), job.id.clone());
 
@@ -128,8 +116,24 @@ impl ExecutionBackend for FlawlessAdapter {
             completed_at: None,
         };
 
-        // Store execution state
+        // ATOMIC: Check limit and insert in single critical section (fixes TOCTOU race)
         let mut executions = self.executions.write().await;
+
+        // Count running executions while holding write lock
+        let running_count = executions
+            .values()
+            .filter(|s| matches!(s.status, ExecutionStatus::Running))
+            .count();
+
+        if running_count >= self.max_concurrent {
+            return Err(anyhow::anyhow!(
+                "Maximum concurrent executions reached ({}/{})",
+                running_count,
+                self.max_concurrent
+            ));
+        }
+
+        // Insert immediately while still holding lock
         executions.insert(handle.id.clone(), state);
         drop(executions);
 

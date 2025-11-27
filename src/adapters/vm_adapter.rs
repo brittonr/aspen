@@ -17,6 +17,8 @@ pub struct VmAdapter {
     vm_manager: Arc<VmManager>,
     // Track execution handles to VM IDs
     executions: Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
+    // Limit concurrent monitoring tasks to prevent resource exhaustion
+    monitor_semaphore: Arc<tokio::sync::Semaphore>,
 }
 #[derive(Debug, Clone)]
 struct VmExecutionState {
@@ -30,9 +32,13 @@ struct VmExecutionState {
 impl VmAdapter {
     /// Create a new VM adapter wrapping an existing VmManager
     pub fn new(vm_manager: Arc<VmManager>) -> Self {
+        // Limit to 1000 concurrent monitoring tasks (prevent unbounded spawning)
+        const MAX_CONCURRENT_MONITORS: usize = 1000;
+
         Self {
             vm_manager,
             executions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            monitor_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_MONITORS)),
         }
     }
     /// Create a VM adapter with a new VmManager
@@ -200,15 +206,23 @@ impl ExecutionBackend for VmAdapter {
         let mut executions = self.executions.write().await;
         executions.insert(handle.id.clone(), state);
         drop(executions);
-        // Start monitoring task
+
+        // Start monitoring task (with semaphore to limit concurrency)
         let self_clone = Arc::new(Self {
             vm_manager: self.vm_manager.clone(),
             executions: self.executions.clone(),
+            monitor_semaphore: self.monitor_semaphore.clone(),
         });
         let handle_clone = handle.clone();
+        let semaphore = self.monitor_semaphore.clone();
+
         tokio::spawn(async move {
+            // Acquire permit (blocks if limit reached)
+            let _permit = semaphore.acquire().await.expect("Semaphore closed");
             self_clone.monitor_execution(handle_clone, vm_id).await;
+            // Permit automatically released when dropped
         });
+
         info!("VM adapter: job {} assigned to VM {}", job.id, vm_id);
         Ok(handle)
     }

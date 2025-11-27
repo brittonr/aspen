@@ -200,6 +200,31 @@ impl ExecutionRegistry {
         let backend = self.get_backend_for_handle(handle).await?;
         backend.cancel_execution(handle).await
     }
+
+    /// Clean up orphaned execution handles
+    ///
+    /// Removes handles for backends that no longer exist.
+    /// For proper status-based cleanup, backends should implement their own
+    /// execution tracking with TTL or completion callbacks.
+    pub async fn cleanup_orphaned_handles(&self) -> Result<usize> {
+        let mut handle_map = self.handle_to_backend.write().await;
+        let backends = self.backends.read().await;
+
+        let mut removed_count = 0;
+        handle_map.retain(|_handle_id, backend_name| {
+            let exists = backends.contains_key(backend_name);
+            if !exists {
+                removed_count += 1;
+            }
+            exists
+        });
+
+        if removed_count > 0 {
+            info!("Cleaned up {} orphaned handles from deregistered backends", removed_count);
+        }
+        Ok(removed_count)
+    }
+
     /// Wait for an execution to complete
     pub async fn wait_for_completion(
         &self,
