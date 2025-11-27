@@ -304,10 +304,11 @@ adapters/vm_adapter.rs
 
 ```rust
 // In main.rs
-let state = factory.build_app_state(...).await;
+let state_builder = factory.build_state(...).await;
+let (domain, infra, config, features) = state_builder.build();
 
 // In handlers - shared read-only via Arc
-pub async fn handle_queue(State(state): State<AppState>) { }
+pub async fn handle_queue(State(domain): State<DomainState>) { }
 ```
 
 **Assessment**: SAFE
