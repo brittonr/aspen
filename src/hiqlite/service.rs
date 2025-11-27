@@ -126,6 +126,18 @@ impl HiqliteService {
     /// let service = HiqliteService::new(Some("./data/custom".into())).await?;
     /// ```
     pub async fn new(data_dir: impl Into<Option<std::path::PathBuf>>) -> Result<Self> {
+        Self::new_with_operational_config(data_dir, None).await
+    }
+
+    /// Initialize a new hiqlite node with custom operational configuration
+    ///
+    /// # Parameters
+    /// - `data_dir`: Optional data directory override
+    /// - `operational_config`: Optional operational config for timing values (uses defaults if None)
+    pub async fn new_with_operational_config(
+        data_dir: impl Into<Option<std::path::PathBuf>>,
+        operational_config: Option<&crate::config::OperationalConfig>,
+    ) -> Result<Self> {
         let config = Self::build_config(data_dir.into()).await?;
         let node_id = config.node_id;
         let expected_nodes = config.nodes.len();
@@ -141,90 +153,21 @@ impl HiqliteService {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to start hiqlite node: {}", e))?;
 
-        // Give hiqlite time to start up (use hardcoded value here as timing config not available)
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        // Use operational config for startup delay, or default to 3 seconds
+        let startup_delay = operational_config
+            .map(|c| std::time::Duration::from_secs(c.hiqlite_startup_delay_secs))
+            .unwrap_or(std::time::Duration::from_secs(3));
+
+        tokio::time::sleep(startup_delay).await;
 
         // Wait for cluster to form (only if we have multiple nodes configured)
         if expected_nodes > 1 {
-            tracing::info!(
-                node_id = ?node_id,
-                expected_nodes = expected_nodes,
-                "Waiting for Raft cluster to form..."
-            );
+            let cluster_config = operational_config
+                .map(crate::hiqlite::ClusterFormationConfig::from_operational)
+                .unwrap_or_default();
 
-            let start_time = std::time::Instant::now();
-            let mut last_log_time = std::time::Instant::now();
-
-            loop {
-                let elapsed = start_time.elapsed();
-
-                // Warn if cluster formation is taking too long
-                if elapsed > std::time::Duration::from_secs(60) {
-                    tracing::warn!(
-                        node_id = ?node_id,
-                        elapsed_secs = elapsed.as_secs(),
-                        "Cluster formation is taking longer than expected - check network connectivity and hiqlite configuration"
-                    );
-                }
-
-                // Check if cluster is healthy
-                match client.is_healthy_db().await {
-                    Ok(_) => {
-                        // Now check if all nodes are members
-                        if let Ok(metrics) = client.metrics_db().await {
-                            let membership = metrics.membership_config.membership();
-                            let online_nodes = membership.nodes().count();
-                            let voter_nodes = membership.voter_ids().count();
-                            let learner_nodes = membership.learner_ids().count();
-
-                            // Log member node IDs for debugging
-                            let member_ids: Vec<_> = membership.nodes().map(|(id, _)| *id).collect();
-                            let voter_ids: Vec<_> = membership.voter_ids().collect();
-
-                            if online_nodes == expected_nodes && voter_nodes == expected_nodes {
-                                tracing::info!(
-                                    node_id = ?node_id,
-                                    online_nodes = online_nodes,
-                                    voter_nodes = voter_nodes,
-                                    member_ids = ?member_ids,
-                                    elapsed_secs = elapsed.as_secs(),
-                                    "Raft cluster fully formed - all nodes are voting members"
-                                );
-                                break;
-                            } else {
-                                // Log progress every 5 seconds to avoid spam
-                                if last_log_time.elapsed() > std::time::Duration::from_secs(5) {
-                                    tracing::info!(
-                                        node_id = ?node_id,
-                                        online_nodes = online_nodes,
-                                        voter_nodes = voter_nodes,
-                                        learner_nodes = learner_nodes,
-                                        expected_nodes = expected_nodes,
-                                        member_ids = ?member_ids,
-                                        voter_ids = ?voter_ids,
-                                        "Waiting for all nodes to join cluster..."
-                                    );
-                                    last_log_time = std::time::Instant::now();
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // Log at INFO level during cluster formation instead of DEBUG
-                        if last_log_time.elapsed() > std::time::Duration::from_secs(5) {
-                            tracing::info!(
-                                node_id = ?node_id,
-                                error = %e,
-                                elapsed_secs = elapsed.as_secs(),
-                                "Cluster not yet healthy, waiting..."
-                            );
-                            last_log_time = std::time::Instant::now();
-                        }
-                    }
-                }
-
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            }
+            let coordinator = crate::hiqlite::ClusterFormationCoordinator::new(cluster_config);
+            coordinator.wait_for_cluster_formation(&client, node_id, expected_nodes).await?;
         }
 
         tracing::info!(node_id = ?node_id, "Hiqlite node initialized successfully");

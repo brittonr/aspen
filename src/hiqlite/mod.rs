@@ -5,6 +5,8 @@
 
 mod service;
 mod schema;
+mod cluster_formation;
 
 // Re-export the main service
 pub use service::HiqliteService;
+pub use cluster_formation::{ClusterFormationCoordinator, ClusterFormationConfig};
