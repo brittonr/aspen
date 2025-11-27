@@ -23,6 +23,11 @@ pub mod handle;
 pub mod placement;
 pub mod registry;
 
+// Local adapter components
+pub mod output_capture;
+pub mod process_executor;
+pub mod execution_tracker;
+
 // Concrete adapter implementations
 pub mod flawless_adapter;
 pub mod local_adapter;

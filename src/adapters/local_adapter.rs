@@ -3,13 +3,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use std::time::Duration;
+use tracing::{debug, info};
 
 use crate::domain::types::Job;
 use crate::worker_trait::WorkResult;
@@ -18,6 +14,9 @@ use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
+use super::output_capture::{OutputCapture, CapturedOutput};
+use super::process_executor::{ProcessExecutor, ProcessConfig};
+use super::execution_tracker::ExecutionTracker;
 
 /// Configuration for local process adapter
 #[derive(Debug, Clone)]
@@ -43,21 +42,11 @@ impl Default for LocalProcessConfig {
     }
 }
 
-/// State of a local process execution
-#[derive(Debug, Clone)]
-struct LocalProcessState {
-    handle: ExecutionHandle,
-    pid: u32,
-    status: ExecutionStatus,
-    started_at: u64,
-    completed_at: Option<u64>,
-}
-
 /// Local process execution backend
 pub struct LocalProcessAdapter {
     config: LocalProcessConfig,
-    executions: Arc<RwLock<HashMap<String, LocalProcessState>>>,
-    processes: Arc<RwLock<HashMap<u32, Child>>>,
+    tracker: ExecutionTracker,
+    executor: ProcessExecutor,
 }
 
 impl LocalProcessAdapter {
@@ -65,8 +54,8 @@ impl LocalProcessAdapter {
     pub fn new(config: LocalProcessConfig) -> Self {
         Self {
             config,
-            executions: Arc::new(RwLock::new(HashMap::new())),
-            processes: Arc::new(RwLock::new(HashMap::new())),
+            tracker: ExecutionTracker::new(),
+            executor: ProcessExecutor::new(),
         }
     }
 
@@ -76,7 +65,7 @@ impl LocalProcessAdapter {
     }
 
     /// Execute a job as a local process
-    async fn execute_process(&self, handle: ExecutionHandle, job: Job, config: ExecutionConfig) {
+    async fn execute_process(&self, handle: ExecutionHandle, job: Job, exec_config: ExecutionConfig) {
         let start_time = std::time::Instant::now();
 
         // Extract command from job payload
@@ -87,145 +76,56 @@ impl LocalProcessAdapter {
             command, args
         );
 
-        // Create command
-        let mut cmd = Command::new(&command);
-        cmd.args(&args);
+        // Create output capture
+        let output_capture = OutputCapture::new();
 
-        // Set working directory
-        if !self.config.work_dir.exists() {
-            if let Err(e) = tokio::fs::create_dir_all(&self.config.work_dir).await {
-                self.mark_failed(&handle, format!("Failed to create work directory: {}", e))
-                    .await;
-                return;
-            }
-        }
-        cmd.current_dir(&self.config.work_dir);
-
-        // Set environment variables from config
-        for (key, value) in &config.environment {
-            cmd.env(key, value);
-        }
-
-        // Configure output capture
-        if self.config.capture_output {
-            cmd.stdout(Stdio::piped());
-            cmd.stderr(Stdio::piped());
-        }
+        // Create process config
+        let process_config = ProcessConfig {
+            work_dir: self.config.work_dir.clone(),
+            capture_output: self.config.capture_output,
+            environment: exec_config.environment.clone(),
+        };
 
         // Spawn the process
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
+        let pid = match self.executor.spawn_process(&command, &args, &process_config, &output_capture).await {
+            Ok(pid) => pid,
             Err(e) => {
-                self.mark_failed(&handle, format!("Failed to spawn process: {}", e))
-                    .await;
+                self.tracker.mark_failed(&handle.id, format!("Failed to spawn process: {}", e)).await;
                 return;
             }
         };
 
-        let pid = child.id().unwrap_or(0);
-
         // Update execution state with PID
-        let mut executions = self.executions.write().await;
-        if let Some(state) = executions.get_mut(&handle.id) {
-            state.pid = pid;
-        }
-        drop(executions);
-
-        // Capture output if configured
-        let output_lines = Arc::new(RwLock::new(Vec::new()));
-        let error_lines = Arc::new(RwLock::new(Vec::new()));
-
-        if self.config.capture_output {
-            // Spawn tasks to capture stdout and stderr
-            if let Some(stdout) = child.stdout.take() {
-                let output_clone = output_lines.clone();
-                tokio::spawn(async move {
-                    let reader = BufReader::new(stdout);
-                    let mut lines = reader.lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        let mut output = output_clone.write().await;
-                        output.push(line);
-                    }
-                });
-            }
-
-            if let Some(stderr) = child.stderr.take() {
-                let error_clone = error_lines.clone();
-                tokio::spawn(async move {
-                    let reader = BufReader::new(stderr);
-                    let mut lines = reader.lines();
-                    while let Ok(Some(line)) = lines.next_line().await {
-                        let mut errors = error_clone.write().await;
-                        errors.push(line);
-                    }
-                });
-            }
-        }
+        self.tracker.update_pid(&handle.id, pid).await;
 
         // Wait for process with timeout
-        let timeout = config.timeout.unwrap_or(self.config.default_timeout);
-        let result = tokio::time::timeout(timeout, child.wait()).await;
+        let timeout = exec_config.timeout.unwrap_or(self.config.default_timeout);
+        let result = self.executor.wait_with_timeout(pid, timeout).await;
 
         let execution_time = start_time.elapsed();
+        let output = output_capture.get_output().await;
 
         // Process the result
         match result {
-            Ok(Ok(exit_status)) => {
-                let output = output_lines.read().await.clone();
-                let errors = error_lines.read().await.clone();
-
-                if exit_status.success() {
-                    let output_json = if !output.is_empty() {
-                        serde_json::json!({
-                            "stdout": output,
-                            "stderr": errors,
-                            "exit_code": 0,
-                            "execution_time_ms": execution_time.as_millis()
-                        })
-                    } else {
-                        serde_json::json!({
-                            "exit_code": 0,
-                            "execution_time_ms": execution_time.as_millis()
-                        })
-                    };
-
-                    self.mark_completed(
-                        &handle,
-                        WorkResult {
-                            success: true,
-                            output: Some(output_json),
-                            error: None,
-                        },
-                    )
-                    .await;
+            Ok(process_result) if process_result.timed_out => {
+                self.tracker.mark_failed(&handle.id, format!("Process timed out after {:?}", timeout)).await;
+            }
+            Ok(process_result) if process_result.success => {
+                let work_result = self.create_success_result(&output, execution_time);
+                self.tracker.mark_completed(&handle.id, work_result).await;
+            }
+            Ok(process_result) => {
+                let error_msg = if output.has_stderr() {
+                    output.stderr_string()
                 } else {
-                    let exit_code = exit_status.code().unwrap_or(-1);
-                    let error_msg = if !errors.is_empty() {
-                        errors.join("\n")
-                    } else {
-                        format!("Process exited with code {}", exit_code)
-                    };
-
-                    self.mark_failed(&handle, error_msg).await;
-                }
+                    format!("Process exited with code {}", process_result.exit_code)
+                };
+                self.tracker.mark_failed(&handle.id, error_msg).await;
             }
-            Ok(Err(e)) => {
-                self.mark_failed(&handle, format!("Process failed: {}", e))
-                    .await;
-            }
-            Err(_) => {
-                // Timeout - try to kill the process
-                if let Err(e) = child.kill().await {
-                    warn!("Failed to kill timed-out process: {}", e);
-                }
-                self.mark_failed(&handle, format!("Process timed out after {:?}", timeout))
-                    .await;
+            Err(e) => {
+                self.tracker.mark_failed(&handle.id, format!("Process failed: {}", e)).await;
             }
         }
-
-        // Clean up process handle
-        let mut processes = self.processes.write().await;
-        processes.remove(&pid);
     }
 
     /// Extract command and arguments from job payload
@@ -247,31 +147,26 @@ impl LocalProcessAdapter {
         ("echo".to_string(), vec![format!("Processing job {}", job.id)])
     }
 
-    /// Mark an execution as completed
-    async fn mark_completed(&self, handle: &ExecutionHandle, result: WorkResult) {
-        let mut executions = self.executions.write().await;
-        if let Some(state) = executions.get_mut(&handle.id) {
-            state.status = ExecutionStatus::Completed(result);
-            state.completed_at = Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX epoch")
-                    .as_secs(),
-            );
-        }
-    }
+    /// Create success work result from captured output
+    fn create_success_result(&self, output: &CapturedOutput, execution_time: Duration) -> WorkResult {
+        let output_json = if output.has_stdout() {
+            serde_json::json!({
+                "stdout": output.stdout,
+                "stderr": output.stderr,
+                "exit_code": 0,
+                "execution_time_ms": execution_time.as_millis()
+            })
+        } else {
+            serde_json::json!({
+                "exit_code": 0,
+                "execution_time_ms": execution_time.as_millis()
+            })
+        };
 
-    /// Mark an execution as failed
-    async fn mark_failed(&self, handle: &ExecutionHandle, error: String) {
-        let mut executions = self.executions.write().await;
-        if let Some(state) = executions.get_mut(&handle.id) {
-            state.status = ExecutionStatus::Failed(error);
-            state.completed_at = Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX epoch")
-                    .as_secs(),
-            );
+        WorkResult {
+            success: true,
+            output: Some(output_json),
+            error: None,
         }
     }
 }
@@ -286,42 +181,22 @@ impl ExecutionBackend for LocalProcessAdapter {
         info!("Local adapter: submitting job {}", job.id);
 
         // Check concurrent limit
-        let executions = self.executions.read().await;
-        let running_count = executions
-            .values()
-            .filter(|state| matches!(state.status, ExecutionStatus::Running))
-            .count();
-
+        let running_count = self.tracker.count_running().await;
         if running_count >= self.config.max_concurrent {
             return Err(anyhow::anyhow!("Maximum concurrent processes reached"));
         }
-        drop(executions);
 
         // Create execution handle
-        let handle = ExecutionHandle::local_process(0, job.id.clone()); // PID will be updated
+        let handle = ExecutionHandle::local_process(0, job.id.clone());
 
         // Create execution state
-        let state = LocalProcessState {
-            handle: handle.clone(),
-            pid: 0, // Will be updated when process starts
-            status: ExecutionStatus::Running,
-            started_at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs(),
-            completed_at: None,
-        };
-
-        // Store execution state
-        let mut executions = self.executions.write().await;
-        executions.insert(handle.id.clone(), state);
-        drop(executions);
+        self.tracker.create_execution(handle.clone()).await;
 
         // Spawn background task to execute the process
         let self_clone = Arc::new(Self {
             config: self.config.clone(),
-            executions: self.executions.clone(),
-            processes: self.processes.clone(),
+            tracker: ExecutionTracker::new(),
+            executor: ProcessExecutor::new(),
         });
         let handle_clone = handle.clone();
         tokio::spawn(async move {
@@ -333,55 +208,37 @@ impl ExecutionBackend for LocalProcessAdapter {
     }
 
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
-        let executions = self.executions.read().await;
-        executions
-            .get(&handle.id)
-            .map(|state| state.status.clone())
+        self.tracker
+            .get_status(&handle.id)
+            .await
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))
     }
 
     async fn cancel_execution(&self, handle: &ExecutionHandle) -> Result<()> {
-        let mut executions = self.executions.write().await;
-        if let Some(state) = executions.get_mut(&handle.id) {
-            if matches!(state.status, ExecutionStatus::Running) {
-                // Kill the process
-                let mut processes = self.processes.write().await;
-                if let Some(mut child) = processes.remove(&state.pid) {
-                    if let Err(e) = child.kill().await {
-                        warn!("Failed to kill process {}: {}", state.pid, e);
-                    }
-                }
-                drop(processes);
+        let state = self.tracker
+            .get_state(&handle.id)
+            .await
+            .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
 
-                state.status = ExecutionStatus::Cancelled;
-                state.completed_at = Some(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("System time is before UNIX epoch")
-                        .as_secs(),
-                );
-
-                info!("Local adapter: cancelled execution {}", handle.id);
-                Ok(())
-            } else {
-                Err(anyhow::anyhow!("Execution is not running"))
-            }
+        if matches!(state.status, ExecutionStatus::Running) {
+            // Kill the process
+            self.executor.kill_process(state.pid).await?;
+            self.tracker.mark_cancelled(&handle.id).await;
+            info!("Local adapter: cancelled execution {}", handle.id);
+            Ok(())
         } else {
-            Err(anyhow::anyhow!("Execution not found: {}", handle.id))
+            Err(anyhow::anyhow!("Execution is not running"))
         }
     }
 
     async fn get_metadata(&self, handle: &ExecutionHandle) -> Result<ExecutionMetadata> {
-        let executions = self.executions.read().await;
-        let state = executions
-            .get(&handle.id)
+        let state = self.tracker
+            .get_state(&handle.id)
+            .await
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
 
         let mut custom = HashMap::new();
-        custom.insert(
-            "pid".to_string(),
-            serde_json::json!(state.pid),
-        );
+        custom.insert("pid".to_string(), serde_json::json!(state.pid));
         custom.insert(
             "work_dir".to_string(),
             serde_json::json!(self.config.work_dir.to_string_lossy()),
@@ -424,11 +281,7 @@ impl ExecutionBackend for LocalProcessAdapter {
     }
 
     async fn health_check(&self) -> Result<BackendHealth> {
-        let executions = self.executions.read().await;
-        let running_count = executions
-            .values()
-            .filter(|state| matches!(state.status, ExecutionStatus::Running))
-            .count();
+        let running_count = self.tracker.count_running().await;
 
         Ok(BackendHealth {
             healthy: true,
@@ -437,12 +290,10 @@ impl ExecutionBackend for LocalProcessAdapter {
                 running_count
             ),
             resource_info: Some(self.get_resource_info().await?),
-            last_check: Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX epoch")
-                    .as_secs(),
-            ),
+            last_check: Some(std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("System time is before UNIX epoch")
+                .as_secs()),
             details: HashMap::from([
                 ("type".to_string(), "local".to_string()),
                 ("work_dir".to_string(), self.config.work_dir.to_string_lossy().to_string()),
@@ -452,67 +303,34 @@ impl ExecutionBackend for LocalProcessAdapter {
     }
 
     async fn get_resource_info(&self) -> Result<ResourceInfo> {
-        let executions = self.executions.read().await;
-        let running_count = executions
-            .values()
-            .filter(|state| matches!(state.status, ExecutionStatus::Running))
-            .count();
+        let running_count = self.tracker.count_running().await;
 
-        // Get system info (simplified)
         let total_cpus = num_cpus::get() as f32;
-        let total_memory = 16384; // Default 16GB, could use sys-info crate for real value
+        let total_memory = 16384; // Default 16GB
 
         Ok(ResourceInfo {
             total_cpu_cores: total_cpus,
-            available_cpu_cores: total_cpus - (running_count as f32 * 0.1), // Assume 0.1 core per process
+            available_cpu_cores: total_cpus - (running_count as f32 * 0.1),
             total_memory_mb: total_memory,
-            available_memory_mb: total_memory - (running_count as u32 * 50), // Assume 50MB per process
-            total_disk_mb: 100000, // 100GB
-            available_disk_mb: 80000, // 80GB available
+            available_memory_mb: total_memory - (running_count as u32 * 50),
+            total_disk_mb: 100000,
+            available_disk_mb: 80000,
             running_executions: running_count,
             max_executions: self.config.max_concurrent,
         })
     }
 
     async fn can_handle(&self, _job: &Job, _config: &ExecutionConfig) -> Result<bool> {
-        // Check concurrent limit
-        let executions = self.executions.read().await;
-        let running_count = executions
-            .values()
-            .filter(|state| matches!(state.status, ExecutionStatus::Running))
-            .count();
-
+        let running_count = self.tracker.count_running().await;
         Ok(running_count < self.config.max_concurrent)
     }
 
     async fn list_executions(&self) -> Result<Vec<ExecutionHandle>> {
-        let executions = self.executions.read().await;
-        Ok(executions
-            .values()
-            .map(|state| state.handle.clone())
-            .collect())
+        Ok(self.tracker.list_handles().await)
     }
 
     async fn cleanup_executions(&self, older_than: Duration) -> Result<usize> {
-        let mut executions = self.executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
-
-        let cutoff = now - older_than.as_secs();
-        let mut cleaned = 0;
-
-        executions.retain(|_, state| {
-            if let Some(completed_at) = state.completed_at {
-                if completed_at < cutoff {
-                    cleaned += 1;
-                    return false;
-                }
-            }
-            true
-        });
-
+        let cleaned = self.tracker.cleanup_old(older_than).await;
         info!("Local adapter: cleaned up {} old executions", cleaned);
         Ok(cleaned)
     }
@@ -532,13 +350,8 @@ impl ExecutionBackend for LocalProcessAdapter {
         info!("Shutting down local process adapter");
 
         // Kill all running processes
-        let mut processes = self.processes.write().await;
-        for (pid, mut child) in processes.drain() {
-            info!("Killing process {}", pid);
-            if let Err(e) = child.kill().await {
-                error!("Failed to kill process {}: {}", pid, e);
-            }
-        }
+        let count = self.executor.kill_all().await;
+        info!("Killed {} running processes", count);
 
         Ok(())
     }
