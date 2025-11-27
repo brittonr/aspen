@@ -12,21 +12,32 @@ use crate::{
     hiqlite::HiqliteService,
     params,
     tofu::types::*,
+    tofu::lock_manager::TofuLockManager,
+    tofu::plan_manager::TofuPlanManager,
 };
 
 /// OpenTofu state backend using Hiqlite for distributed state management
+///
+/// This backend delegates to specialized managers for:
+/// - Lock management (TofuLockManager)
+/// - Plan storage (TofuPlanManager)
 #[derive(Clone)]
 pub struct TofuStateBackend {
     hiqlite: Arc<HiqliteService>,
-    lock_timeout_secs: i64,
+    lock_manager: TofuLockManager,
+    plan_manager: TofuPlanManager,
 }
 
 impl TofuStateBackend {
     /// Create a new TofuStateBackend
     pub fn new(hiqlite: Arc<HiqliteService>) -> Self {
+        let lock_manager = TofuLockManager::new(Arc::clone(&hiqlite));
+        let plan_manager = TofuPlanManager::new(Arc::clone(&hiqlite));
+
         Self {
             hiqlite,
-            lock_timeout_secs: 300, // 5 minutes default
+            lock_manager,
+            plan_manager,
         }
     }
 
@@ -141,46 +152,14 @@ impl TofuStateBackend {
         for attempt in 0..2 {
             let now = self.current_timestamp();
 
-            // Check for stale locks and clean them up
-            self.cleanup_stale_locks().await?;
+            // Ensure workspace exists
+            self.get_or_create_workspace(workspace).await?;
 
-            // Try to acquire lock
-            let lock_json = serde_json::to_string(&WorkspaceLock {
-                id: lock_info.id.clone(),
-                operation: lock_info.operation.clone(),
-                info: lock_info.info.clone(),
-                who: lock_info.who.clone(),
-                version: lock_info.version.clone(),
-                created: now,
-                path: lock_info.path.clone(),
-            })?;
-
-            let rows_affected = self.hiqlite.execute(
-                "UPDATE tofu_workspaces
-                 SET lock_id = $1, lock_acquired_at = $2, lock_holder = $3, lock_info = $4
-                 WHERE name = $5 AND lock_id IS NULL",
-                params!(
-                    lock_info.id.clone(),
-                    now,
-                    lock_info.who.clone(),
-                    lock_json,
-                    workspace
-                ),
-            ).await?;
-
-            if rows_affected > 0 {
-                return Ok(());
-            }
-
-            // Check if workspace exists and is already locked
-            let workspace_data = self.get_or_create_workspace(workspace).await?;
-            if workspace_data.lock.is_some() {
-                return Err(TofuError::WorkspaceLocked.into());
-            }
-
-            // If this is the first attempt and workspace was just created, retry
-            if attempt == 0 {
-                continue;
+            // Delegate to lock manager
+            match self.lock_manager.lock_workspace(workspace, lock_info.clone(), now).await {
+                Ok(_) => return Ok(()),
+                Err(e) if attempt == 0 => continue, // Retry once
+                Err(e) => return Err(e),
             }
         }
 
@@ -189,65 +168,22 @@ impl TofuStateBackend {
 
     /// Unlock a workspace
     pub async fn unlock_workspace(&self, workspace: &str, lock_id: &str) -> Result<()> {
-        let rows_affected = self.hiqlite.execute(
-            "UPDATE tofu_workspaces
-             SET lock_id = NULL, lock_acquired_at = NULL, lock_holder = NULL, lock_info = NULL
-             WHERE name = $1 AND lock_id = $2",
-            params!(workspace, lock_id),
-        ).await?;
-
-        if rows_affected == 0 {
-            // Check if the lock exists with a different ID
-            let workspace_data = self.get_or_create_workspace(workspace).await?;
-            if let Some(lock) = workspace_data.lock {
-                if lock.id != lock_id {
-                    return Err(TofuError::LockNotFound(lock_id.to_string()).into());
-                }
-            }
-        }
-
-        Ok(())
+        self.lock_manager.unlock_workspace(workspace, lock_id).await
     }
 
     /// Force unlock a workspace (admin operation)
     pub async fn force_unlock_workspace(&self, workspace: &str) -> Result<()> {
-        self.hiqlite.execute(
-            "UPDATE tofu_workspaces
-             SET lock_id = NULL, lock_acquired_at = NULL, lock_holder = NULL, lock_info = NULL
-             WHERE name = $1",
-            params!(workspace),
-        ).await?;
-        Ok(())
+        self.lock_manager.force_unlock_workspace(workspace).await
     }
 
     /// Check if a workspace is locked
     pub async fn is_locked(&self, workspace: &str) -> Result<bool> {
-        let workspace_data = self.get_or_create_workspace(workspace).await?;
-        Ok(workspace_data.lock.is_some())
+        self.lock_manager.is_locked(workspace).await
     }
 
     /// Get lock information for a workspace
     pub async fn get_lock_info(&self, workspace: &str) -> Result<Option<WorkspaceLock>> {
-        let workspace_data = self.get_or_create_workspace(workspace).await?;
-        Ok(workspace_data.lock)
-    }
-
-    /// Clean up stale locks (locks older than timeout)
-    async fn cleanup_stale_locks(&self) -> Result<()> {
-        let cutoff_time = self.current_timestamp() - self.lock_timeout_secs;
-
-        let rows_affected = self.hiqlite.execute(
-            "UPDATE tofu_workspaces
-             SET lock_id = NULL, lock_acquired_at = NULL, lock_holder = NULL, lock_info = NULL
-             WHERE lock_acquired_at < $1 AND lock_id IS NOT NULL",
-            params!(cutoff_time),
-        ).await?;
-
-        if rows_affected > 0 {
-            tracing::info!("Cleaned up {} stale workspace locks", rows_affected);
-        }
-
-        Ok(())
+        self.lock_manager.get_lock_info(workspace).await
     }
 
     /// Delete a workspace and all its history
@@ -258,11 +194,8 @@ impl TofuStateBackend {
             params!(workspace),
         ).await?;
 
-        // Delete plans
-        self.hiqlite.execute(
-            "DELETE FROM tofu_plans WHERE workspace = $1",
-            params!(workspace),
-        ).await?;
+        // Delete plans using plan manager
+        self.plan_manager.delete_workspace_plans(workspace).await?;
 
         // Delete workspace
         self.hiqlite.execute(
@@ -289,10 +222,18 @@ impl TofuStateBackend {
         workspace: &str,
         limit: Option<i64>,
     ) -> Result<Vec<(i64, TofuState, i64)>> {
-        // Build dynamic query since we need LIMIT
+        // Validate limit to prevent SQL injection (hiqlite doesn't support parameterized LIMIT)
+        if let Some(limit_val) = limit {
+            if limit_val < 0 || limit_val > 1000 {
+                return Err(anyhow::anyhow!(
+                    "Invalid limit value: {}. Must be between 0 and 1000",
+                    limit_val
+                ));
+            }
+        }
+
         let rows: Vec<StateHistoryRow> = if let Some(limit) = limit {
-            // For limited queries, we need to build the query string dynamically
-            // Hiqlite doesn't support parameterized LIMIT, so we format it directly
+            // Safe to format limit since we've validated it's a positive integer <= 1000
             let query_str = format!(
                 "SELECT state_data, state_version, created_at
                  FROM tofu_state_history
@@ -347,48 +288,12 @@ impl TofuStateBackend {
     /// Store a plan for later execution
     pub async fn store_plan(&self, plan: StoredPlan) -> Result<()> {
         let now = self.current_timestamp();
-        let plan_json = plan.plan_json.clone().unwrap_or_default();
-        let status = serde_json::to_string(&plan.status)?;
-
-        self.hiqlite.execute(
-            "INSERT INTO tofu_plans (id, workspace, created_at, plan_data, plan_json, status)
-             VALUES ($1, $2, $3, $4, $5, $6)",
-            params!(
-                plan.id,
-                plan.workspace,
-                now,
-                plan.plan_data,
-                plan_json,
-                status
-            ),
-        ).await?;
-
-        Ok(())
+        self.plan_manager.store_plan(plan, now).await
     }
 
     /// Get a stored plan
     pub async fn get_plan(&self, plan_id: &str) -> Result<StoredPlan> {
-        let rows: Vec<PlanRow> = self.hiqlite.query_as(
-            "SELECT id, workspace, created_at, plan_data, plan_json, status, approved_by, executed_at
-             FROM tofu_plans WHERE id = $1",
-            params!(plan_id),
-        ).await?;
-
-        if rows.is_empty() {
-            return Err(TofuError::PlanNotFound(plan_id.to_string()).into());
-        }
-
-        let row = &rows[0];
-        Ok(StoredPlan {
-            id: row.id.clone(),
-            workspace: row.workspace.clone(),
-            created_at: row.created_at,
-            plan_data: row.plan_data.clone(),
-            plan_json: row.plan_json.clone(),
-            status: serde_json::from_str(&row.status)?,
-            approved_by: row.approved_by.clone(),
-            executed_at: row.executed_at,
-        })
+        self.plan_manager.get_plan(plan_id).await
     }
 
     /// Update plan status
@@ -398,50 +303,13 @@ impl TofuStateBackend {
         status: PlanStatus,
         approved_by: Option<String>,
     ) -> Result<()> {
-        let status_str = serde_json::to_string(&status)?;
-        let now = if status == PlanStatus::Applied {
-            Some(self.current_timestamp())
-        } else {
-            None
-        };
-
-        self.hiqlite.execute(
-            "UPDATE tofu_plans
-             SET status = $1, approved_by = $2, executed_at = $3
-             WHERE id = $4",
-            params!(status_str, approved_by, now, plan_id),
-        ).await?;
-
-        Ok(())
+        let now = self.current_timestamp();
+        self.plan_manager.update_plan_status(plan_id, status, approved_by, now).await
     }
 
     /// List plans for a workspace
     pub async fn list_plans(&self, workspace: &str) -> Result<Vec<StoredPlan>> {
-        let rows: Vec<PlanRow> = self.hiqlite.query_as(
-            "SELECT id, workspace, created_at, plan_data, plan_json, status, approved_by, executed_at
-             FROM tofu_plans
-             WHERE workspace = $1
-             ORDER BY created_at DESC",
-            params!(workspace),
-        ).await?;
-
-        let mut plans = Vec::new();
-        for row in rows {
-            if let Ok(status) = serde_json::from_str(&row.status) {
-                plans.push(StoredPlan {
-                    id: row.id,
-                    workspace: row.workspace,
-                    created_at: row.created_at,
-                    plan_data: row.plan_data,
-                    plan_json: row.plan_json,
-                    status,
-                    approved_by: row.approved_by,
-                    executed_at: row.executed_at,
-                });
-            }
-        }
-
-        Ok(plans)
+        self.plan_manager.list_plans(workspace).await
     }
 
     /// Helper to get current timestamp
@@ -528,29 +396,3 @@ impl From<hiqlite::Row<'static>> for StateHistoryRow {
     }
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-struct PlanRow {
-    id: String,
-    workspace: String,
-    created_at: i64,
-    plan_data: Vec<u8>,
-    plan_json: Option<String>,
-    status: String,
-    approved_by: Option<String>,
-    executed_at: Option<i64>,
-}
-
-impl From<hiqlite::Row<'static>> for PlanRow {
-    fn from(mut row: hiqlite::Row<'static>) -> Self {
-        Self {
-            id: row.get::<String>("id"),
-            workspace: row.get::<String>("workspace"),
-            created_at: row.get::<i64>("created_at"),
-            plan_data: row.get::<Vec<u8>>("plan_data"),
-            plan_json: row.get::<Option<String>>("plan_json"),
-            status: row.get::<String>("status"),
-            approved_by: row.get::<Option<String>>("approved_by"),
-            executed_at: row.get::<Option<i64>>("executed_at"),
-        }
-    }
-}
