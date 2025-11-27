@@ -6,6 +6,7 @@
 #![allow(dead_code)] // Config methods for future configuration patterns
 
 pub mod error;
+pub mod loader;
 pub mod network;
 pub mod storage;
 pub mod flawless;

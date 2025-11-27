@@ -2,10 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use super::error::ConfigError;
 
 /// Timing configuration for periodic operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
 pub struct TimingConfig {
     /// Worker sleep duration when no work is available (seconds)
     pub worker_no_work_sleep_secs: u64,
@@ -23,67 +23,21 @@ pub struct TimingConfig {
     pub hiqlite_retry_delay_secs: u64,
 }
 
+impl Default for TimingConfig {
+    fn default() -> Self {
+        Self {
+            worker_no_work_sleep_secs: 2,
+            worker_error_sleep_secs: 5,
+            worker_heartbeat_interval_secs: 30,
+            hiqlite_startup_delay_secs: 3,
+            hiqlite_check_timeout_secs: 60,
+            hiqlite_log_throttle_secs: 5,
+            hiqlite_retry_delay_secs: 1,
+        }
+    }
+}
+
 impl TimingConfig {
-    /// Load timing configuration from environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        Ok(Self {
-            worker_no_work_sleep_secs: Self::parse_env("WORKER_NO_WORK_SLEEP_SECS")
-                .unwrap_or_else(Self::default_worker_no_work_sleep_secs),
-            worker_error_sleep_secs: Self::parse_env("WORKER_ERROR_SLEEP_SECS")
-                .unwrap_or_else(Self::default_worker_error_sleep_secs),
-            worker_heartbeat_interval_secs: Self::parse_env("WORKER_HEARTBEAT_INTERVAL_SECS")
-                .unwrap_or_else(Self::default_worker_heartbeat_interval_secs),
-            hiqlite_startup_delay_secs: Self::parse_env("HIQLITE_STARTUP_DELAY_SECS")
-                .unwrap_or_else(Self::default_hiqlite_startup_delay_secs),
-            hiqlite_check_timeout_secs: Self::parse_env("HIQLITE_CHECK_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_hiqlite_check_timeout_secs),
-            hiqlite_log_throttle_secs: Self::parse_env("HIQLITE_LOG_THROTTLE_SECS")
-                .unwrap_or_else(Self::default_hiqlite_log_throttle_secs),
-            hiqlite_retry_delay_secs: Self::parse_env("HIQLITE_RETRY_DELAY_SECS")
-                .unwrap_or_else(Self::default_hiqlite_retry_delay_secs),
-        })
-    }
-
-    /// Apply environment variable overrides to existing configuration
-    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
-        if let Some(val) = Self::parse_env("WORKER_NO_WORK_SLEEP_SECS") {
-            self.worker_no_work_sleep_secs = val;
-        }
-        if let Some(val) = Self::parse_env("WORKER_ERROR_SLEEP_SECS") {
-            self.worker_error_sleep_secs = val;
-        }
-        if let Some(val) = Self::parse_env("WORKER_HEARTBEAT_INTERVAL_SECS") {
-            self.worker_heartbeat_interval_secs = val;
-        }
-        if let Some(val) = Self::parse_env("HIQLITE_STARTUP_DELAY_SECS") {
-            self.hiqlite_startup_delay_secs = val;
-        }
-        if let Some(val) = Self::parse_env("HIQLITE_CHECK_TIMEOUT_SECS") {
-            self.hiqlite_check_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("HIQLITE_LOG_THROTTLE_SECS") {
-            self.hiqlite_log_throttle_secs = val;
-        }
-        if let Some(val) = Self::parse_env("HIQLITE_RETRY_DELAY_SECS") {
-            self.hiqlite_retry_delay_secs = val;
-        }
-        Ok(())
-    }
-
-    // Helper to parse env vars
-    fn parse_env(key: &str) -> Option<u64> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-
-    // Default value functions
-    fn default_worker_no_work_sleep_secs() -> u64 { 2 }
-    fn default_worker_error_sleep_secs() -> u64 { 5 }
-    fn default_worker_heartbeat_interval_secs() -> u64 { 30 }
-    fn default_hiqlite_startup_delay_secs() -> u64 { 3 }
-    fn default_hiqlite_check_timeout_secs() -> u64 { 60 }
-    fn default_hiqlite_log_throttle_secs() -> u64 { 5 }
-    fn default_hiqlite_retry_delay_secs() -> u64 { 1 }
-
     // Duration getters
     pub fn worker_no_work_sleep(&self) -> Duration {
         Duration::from_secs(self.worker_no_work_sleep_secs)
@@ -114,22 +68,21 @@ impl TimingConfig {
     }
 }
 
-impl Default for TimingConfig {
-    fn default() -> Self {
-        Self {
-            worker_no_work_sleep_secs: Self::default_worker_no_work_sleep_secs(),
-            worker_error_sleep_secs: Self::default_worker_error_sleep_secs(),
-            worker_heartbeat_interval_secs: Self::default_worker_heartbeat_interval_secs(),
-            hiqlite_startup_delay_secs: Self::default_hiqlite_startup_delay_secs(),
-            hiqlite_check_timeout_secs: Self::default_hiqlite_check_timeout_secs(),
-            hiqlite_log_throttle_secs: Self::default_hiqlite_log_throttle_secs(),
-            hiqlite_retry_delay_secs: Self::default_hiqlite_retry_delay_secs(),
-        }
+crate::impl_config_loader! {
+    TimingConfig {
+        worker_no_work_sleep_secs: "WORKER_NO_WORK_SLEEP_SECS",
+        worker_error_sleep_secs: "WORKER_ERROR_SLEEP_SECS",
+        worker_heartbeat_interval_secs: "WORKER_HEARTBEAT_INTERVAL_SECS",
+        hiqlite_startup_delay_secs: "HIQLITE_STARTUP_DELAY_SECS",
+        hiqlite_check_timeout_secs: "HIQLITE_CHECK_TIMEOUT_SECS",
+        hiqlite_log_throttle_secs: "HIQLITE_LOG_THROTTLE_SECS",
+        hiqlite_retry_delay_secs: "HIQLITE_RETRY_DELAY_SECS",
     }
 }
 
 /// Timeout configuration for various operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
 pub struct TimeoutConfig {
     /// VM startup timeout (seconds)
     pub vm_startup_timeout_secs: u64,
@@ -157,97 +110,26 @@ pub struct TimeoutConfig {
     pub tofu_plan_timeout_secs: u64,
 }
 
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            vm_startup_timeout_secs: 30,
+            vm_shutdown_timeout_secs: 30,
+            vm_shutdown_retry_delay_millis: 500,
+            vm_health_check_timeout_secs: 5,
+            control_protocol_read_timeout_secs: 5,
+            control_protocol_shutdown_timeout_secs: 10,
+            control_protocol_connect_timeout_secs: 5,
+            iroh_online_timeout_secs: 10,
+            adapter_default_timeout_secs: 300,
+            adapter_wait_timeout_secs: 30,
+            adapter_poll_interval_millis: 500,
+            tofu_plan_timeout_secs: 600,
+        }
+    }
+}
+
 impl TimeoutConfig {
-    /// Load timeout configuration from environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        Ok(Self {
-            vm_startup_timeout_secs: Self::parse_env("VM_STARTUP_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_vm_startup_timeout_secs),
-            vm_shutdown_timeout_secs: Self::parse_env("VM_SHUTDOWN_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_vm_shutdown_timeout_secs),
-            vm_shutdown_retry_delay_millis: Self::parse_env("VM_SHUTDOWN_RETRY_DELAY_MILLIS")
-                .unwrap_or_else(Self::default_vm_shutdown_retry_delay_millis),
-            vm_health_check_timeout_secs: Self::parse_env("VM_HEALTH_CHECK_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_vm_health_check_timeout_secs),
-            control_protocol_read_timeout_secs: Self::parse_env("CONTROL_PROTOCOL_READ_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_control_protocol_read_timeout_secs),
-            control_protocol_shutdown_timeout_secs: Self::parse_env("CONTROL_PROTOCOL_SHUTDOWN_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_control_protocol_shutdown_timeout_secs),
-            control_protocol_connect_timeout_secs: Self::parse_env("CONTROL_PROTOCOL_CONNECT_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_control_protocol_connect_timeout_secs),
-            iroh_online_timeout_secs: Self::parse_env("IROH_ONLINE_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_iroh_online_timeout_secs),
-            adapter_default_timeout_secs: Self::parse_env("ADAPTER_DEFAULT_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_adapter_default_timeout_secs),
-            adapter_wait_timeout_secs: Self::parse_env("ADAPTER_WAIT_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_adapter_wait_timeout_secs),
-            adapter_poll_interval_millis: Self::parse_env("ADAPTER_POLL_INTERVAL_MILLIS")
-                .unwrap_or_else(Self::default_adapter_poll_interval_millis),
-            tofu_plan_timeout_secs: Self::parse_env("TOFU_PLAN_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_tofu_plan_timeout_secs),
-        })
-    }
-
-    /// Apply environment variable overrides to existing configuration
-    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
-        if let Some(val) = Self::parse_env("VM_STARTUP_TIMEOUT_SECS") {
-            self.vm_startup_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("VM_SHUTDOWN_TIMEOUT_SECS") {
-            self.vm_shutdown_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("VM_SHUTDOWN_RETRY_DELAY_MILLIS") {
-            self.vm_shutdown_retry_delay_millis = val;
-        }
-        if let Some(val) = Self::parse_env("VM_HEALTH_CHECK_TIMEOUT_SECS") {
-            self.vm_health_check_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("CONTROL_PROTOCOL_READ_TIMEOUT_SECS") {
-            self.control_protocol_read_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("CONTROL_PROTOCOL_SHUTDOWN_TIMEOUT_SECS") {
-            self.control_protocol_shutdown_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("CONTROL_PROTOCOL_CONNECT_TIMEOUT_SECS") {
-            self.control_protocol_connect_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("IROH_ONLINE_TIMEOUT_SECS") {
-            self.iroh_online_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("ADAPTER_DEFAULT_TIMEOUT_SECS") {
-            self.adapter_default_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("ADAPTER_WAIT_TIMEOUT_SECS") {
-            self.adapter_wait_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env("ADAPTER_POLL_INTERVAL_MILLIS") {
-            self.adapter_poll_interval_millis = val;
-        }
-        if let Some(val) = Self::parse_env("TOFU_PLAN_TIMEOUT_SECS") {
-            self.tofu_plan_timeout_secs = val;
-        }
-        Ok(())
-    }
-
-    // Helper to parse env vars
-    fn parse_env(key: &str) -> Option<u64> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-
-    // Default value functions
-    fn default_vm_startup_timeout_secs() -> u64 { 30 }
-    fn default_vm_shutdown_timeout_secs() -> u64 { 30 }
-    fn default_vm_shutdown_retry_delay_millis() -> u64 { 500 }
-    fn default_vm_health_check_timeout_secs() -> u64 { 5 }
-    fn default_control_protocol_read_timeout_secs() -> u64 { 5 }
-    fn default_control_protocol_shutdown_timeout_secs() -> u64 { 10 }
-    fn default_control_protocol_connect_timeout_secs() -> u64 { 5 }
-    fn default_iroh_online_timeout_secs() -> u64 { 10 }
-    fn default_adapter_default_timeout_secs() -> u64 { 300 }
-    fn default_adapter_wait_timeout_secs() -> u64 { 30 }
-    fn default_adapter_poll_interval_millis() -> u64 { 500 }
-    fn default_tofu_plan_timeout_secs() -> u64 { 600 }
-
     // Duration getters
     pub fn vm_startup_timeout(&self) -> Duration { Duration::from_secs(self.vm_startup_timeout_secs) }
     pub fn vm_shutdown_timeout(&self) -> Duration { Duration::from_secs(self.vm_shutdown_timeout_secs) }
@@ -263,27 +145,26 @@ impl TimeoutConfig {
     pub fn tofu_plan_timeout(&self) -> Duration { Duration::from_secs(self.tofu_plan_timeout_secs) }
 }
 
-impl Default for TimeoutConfig {
-    fn default() -> Self {
-        Self {
-            vm_startup_timeout_secs: Self::default_vm_startup_timeout_secs(),
-            vm_shutdown_timeout_secs: Self::default_vm_shutdown_timeout_secs(),
-            vm_shutdown_retry_delay_millis: Self::default_vm_shutdown_retry_delay_millis(),
-            vm_health_check_timeout_secs: Self::default_vm_health_check_timeout_secs(),
-            control_protocol_read_timeout_secs: Self::default_control_protocol_read_timeout_secs(),
-            control_protocol_shutdown_timeout_secs: Self::default_control_protocol_shutdown_timeout_secs(),
-            control_protocol_connect_timeout_secs: Self::default_control_protocol_connect_timeout_secs(),
-            iroh_online_timeout_secs: Self::default_iroh_online_timeout_secs(),
-            adapter_default_timeout_secs: Self::default_adapter_default_timeout_secs(),
-            adapter_wait_timeout_secs: Self::default_adapter_wait_timeout_secs(),
-            adapter_poll_interval_millis: Self::default_adapter_poll_interval_millis(),
-            tofu_plan_timeout_secs: Self::default_tofu_plan_timeout_secs(),
-        }
+crate::impl_config_loader! {
+    TimeoutConfig {
+        vm_startup_timeout_secs: "VM_STARTUP_TIMEOUT_SECS",
+        vm_shutdown_timeout_secs: "VM_SHUTDOWN_TIMEOUT_SECS",
+        vm_shutdown_retry_delay_millis: "VM_SHUTDOWN_RETRY_DELAY_MILLIS",
+        vm_health_check_timeout_secs: "VM_HEALTH_CHECK_TIMEOUT_SECS",
+        control_protocol_read_timeout_secs: "CONTROL_PROTOCOL_READ_TIMEOUT_SECS",
+        control_protocol_shutdown_timeout_secs: "CONTROL_PROTOCOL_SHUTDOWN_TIMEOUT_SECS",
+        control_protocol_connect_timeout_secs: "CONTROL_PROTOCOL_CONNECT_TIMEOUT_SECS",
+        iroh_online_timeout_secs: "IROH_ONLINE_TIMEOUT_SECS",
+        adapter_default_timeout_secs: "ADAPTER_DEFAULT_TIMEOUT_SECS",
+        adapter_wait_timeout_secs: "ADAPTER_WAIT_TIMEOUT_SECS",
+        adapter_poll_interval_millis: "ADAPTER_POLL_INTERVAL_MILLIS",
+        tofu_plan_timeout_secs: "TOFU_PLAN_TIMEOUT_SECS",
     }
 }
 
 /// Health check configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
 pub struct HealthCheckConfig {
     /// Interval between health checks (seconds)
     pub check_interval_secs: u64,
@@ -299,126 +180,62 @@ pub struct HealthCheckConfig {
     pub circuit_break_duration_secs: u64,
 }
 
-impl HealthCheckConfig {
-    /// Load health check configuration from environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        Ok(Self {
-            check_interval_secs: Self::parse_env_u64("HEALTH_CHECK_INTERVAL_SECS")
-                .unwrap_or_else(Self::default_check_interval_secs),
-            check_timeout_secs: Self::parse_env_u64("HEALTH_CHECK_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_check_timeout_secs),
-            failure_threshold: Self::parse_env_u32("HEALTH_FAILURE_THRESHOLD")
-                .unwrap_or_else(Self::default_failure_threshold),
-            recovery_threshold: Self::parse_env_u32("HEALTH_RECOVERY_THRESHOLD")
-                .unwrap_or_else(Self::default_recovery_threshold),
-            enable_circuit_breaker: Self::parse_env_bool("HEALTH_CIRCUIT_BREAKER_ENABLED")
-                .unwrap_or_else(Self::default_enable_circuit_breaker),
-            circuit_break_duration_secs: Self::parse_env_u64("HEALTH_CIRCUIT_BREAK_DURATION_SECS")
-                .unwrap_or_else(Self::default_circuit_break_duration_secs),
-        })
-    }
-
-    /// Apply environment variable overrides to existing configuration
-    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
-        if let Some(val) = Self::parse_env_u64("HEALTH_CHECK_INTERVAL_SECS") {
-            self.check_interval_secs = val;
-        }
-        if let Some(val) = Self::parse_env_u64("HEALTH_CHECK_TIMEOUT_SECS") {
-            self.check_timeout_secs = val;
-        }
-        if let Some(val) = Self::parse_env_u32("HEALTH_FAILURE_THRESHOLD") {
-            self.failure_threshold = val;
-        }
-        if let Some(val) = Self::parse_env_u32("HEALTH_RECOVERY_THRESHOLD") {
-            self.recovery_threshold = val;
-        }
-        if let Some(val) = Self::parse_env_bool("HEALTH_CIRCUIT_BREAKER_ENABLED") {
-            self.enable_circuit_breaker = val;
-        }
-        if let Some(val) = Self::parse_env_u64("HEALTH_CIRCUIT_BREAK_DURATION_SECS") {
-            self.circuit_break_duration_secs = val;
-        }
-        Ok(())
-    }
-
-    // Helper to parse env vars
-    fn parse_env_u64(key: &str) -> Option<u64> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-    fn parse_env_u32(key: &str) -> Option<u32> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-    fn parse_env_bool(key: &str) -> Option<bool> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-
-    // Default value functions
-    fn default_check_interval_secs() -> u64 { 30 }
-    fn default_check_timeout_secs() -> u64 { 5 }
-    fn default_failure_threshold() -> u32 { 3 }
-    fn default_recovery_threshold() -> u32 { 2 }
-    fn default_enable_circuit_breaker() -> bool { true }
-    fn default_circuit_break_duration_secs() -> u64 { 60 }
-}
-
 impl Default for HealthCheckConfig {
     fn default() -> Self {
         Self {
-            check_interval_secs: Self::default_check_interval_secs(),
-            check_timeout_secs: Self::default_check_timeout_secs(),
-            failure_threshold: Self::default_failure_threshold(),
-            recovery_threshold: Self::default_recovery_threshold(),
-            enable_circuit_breaker: Self::default_enable_circuit_breaker(),
-            circuit_break_duration_secs: Self::default_circuit_break_duration_secs(),
+            check_interval_secs: 30,
+            check_timeout_secs: 5,
+            failure_threshold: 3,
+            recovery_threshold: 2,
+            enable_circuit_breaker: true,
+            circuit_break_duration_secs: 60,
         }
+    }
+}
+
+crate::impl_config_loader! {
+    HealthCheckConfig {
+        check_interval_secs: "HEALTH_CHECK_INTERVAL_SECS",
+        check_timeout_secs: "HEALTH_CHECK_TIMEOUT_SECS",
+        failure_threshold: "HEALTH_FAILURE_THRESHOLD",
+        recovery_threshold: "HEALTH_RECOVERY_THRESHOLD",
+        enable_circuit_breaker: "HEALTH_CIRCUIT_BREAKER_ENABLED",
+        circuit_break_duration_secs: "HEALTH_CIRCUIT_BREAK_DURATION_SECS",
     }
 }
 
 /// Resource monitoring configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
 pub struct ResourceMonitorConfig {
     /// Interval between resource monitoring checks (seconds)
     pub monitor_interval_secs: u64,
 }
 
-impl ResourceMonitorConfig {
-    /// Load resource monitor configuration from environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        Ok(Self {
-            monitor_interval_secs: std::env::var("RESOURCE_MONITOR_INTERVAL_SECS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or_else(Self::default_monitor_interval_secs),
-        })
-    }
-
-    /// Apply environment variable overrides to existing configuration
-    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
-        if let Ok(val) = std::env::var("RESOURCE_MONITOR_INTERVAL_SECS") {
-            self.monitor_interval_secs = val.parse().ok().unwrap_or(self.monitor_interval_secs);
+impl Default for ResourceMonitorConfig {
+    fn default() -> Self {
+        Self {
+            monitor_interval_secs: 10,
         }
-        Ok(())
     }
+}
 
-    // Default value function
-    fn default_monitor_interval_secs() -> u64 { 10 }
-
+impl ResourceMonitorConfig {
     /// Get monitor interval duration
     pub fn monitor_interval(&self) -> Duration {
         Duration::from_secs(self.monitor_interval_secs)
     }
 }
 
-impl Default for ResourceMonitorConfig {
-    fn default() -> Self {
-        Self {
-            monitor_interval_secs: Self::default_monitor_interval_secs(),
-        }
+crate::impl_config_loader! {
+    ResourceMonitorConfig {
+        monitor_interval_secs: "RESOURCE_MONITOR_INTERVAL_SECS",
     }
 }
 
 /// VM check configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(since = "0.2.0", note = "Use operational module instead")]
 pub struct VmCheckConfig {
     /// Initial interval for VM checks (seconds)
     pub initial_interval_secs: u64,
@@ -428,55 +245,27 @@ pub struct VmCheckConfig {
     pub timeout_secs: u64,
 }
 
+impl Default for VmCheckConfig {
+    fn default() -> Self {
+        Self {
+            initial_interval_secs: 1,
+            max_interval_secs: 10,
+            timeout_secs: 300,
+        }
+    }
+}
+
 impl VmCheckConfig {
-    /// Load VM check configuration from environment variables
-    pub fn load() -> Result<Self, ConfigError> {
-        Ok(Self {
-            initial_interval_secs: Self::parse_env("VM_CHECK_INITIAL_INTERVAL_SECS")
-                .unwrap_or_else(Self::default_initial_interval_secs),
-            max_interval_secs: Self::parse_env("VM_CHECK_MAX_INTERVAL_SECS")
-                .unwrap_or_else(Self::default_max_interval_secs),
-            timeout_secs: Self::parse_env("VM_CHECK_TIMEOUT_SECS")
-                .unwrap_or_else(Self::default_timeout_secs),
-        })
-    }
-
-    /// Apply environment variable overrides to existing configuration
-    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
-        if let Some(val) = Self::parse_env("VM_CHECK_INITIAL_INTERVAL_SECS") {
-            self.initial_interval_secs = val;
-        }
-        if let Some(val) = Self::parse_env("VM_CHECK_MAX_INTERVAL_SECS") {
-            self.max_interval_secs = val;
-        }
-        if let Some(val) = Self::parse_env("VM_CHECK_TIMEOUT_SECS") {
-            self.timeout_secs = val;
-        }
-        Ok(())
-    }
-
-    // Helper to parse env vars
-    fn parse_env(key: &str) -> Option<u64> {
-        std::env::var(key).ok().and_then(|v| v.parse().ok())
-    }
-
-    // Default value functions
-    fn default_initial_interval_secs() -> u64 { 1 }
-    fn default_max_interval_secs() -> u64 { 10 }
-    fn default_timeout_secs() -> u64 { 300 }
-
     // Duration getters
     pub fn initial_interval(&self) -> Duration { Duration::from_secs(self.initial_interval_secs) }
     pub fn max_interval(&self) -> Duration { Duration::from_secs(self.max_interval_secs) }
     pub fn timeout(&self) -> Duration { Duration::from_secs(self.timeout_secs) }
 }
 
-impl Default for VmCheckConfig {
-    fn default() -> Self {
-        Self {
-            initial_interval_secs: Self::default_initial_interval_secs(),
-            max_interval_secs: Self::default_max_interval_secs(),
-            timeout_secs: Self::default_timeout_secs(),
-        }
+crate::impl_config_loader! {
+    VmCheckConfig {
+        initial_interval_secs: "VM_CHECK_INITIAL_INTERVAL_SECS",
+        max_interval_secs: "VM_CHECK_MAX_INTERVAL_SECS",
+        timeout_secs: "VM_CHECK_TIMEOUT_SECS",
     }
 }
