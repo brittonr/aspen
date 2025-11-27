@@ -1,54 +1,34 @@
-// VmCoordinator - Message-based orchestrator for VM management components
+// VmCoordinator - Orchestrator for VM management components
 //
 // The coordinator is responsible for:
-// - Receiving commands from the VmManager facade
-// - Routing commands to the appropriate component
-// - Handling events from components
+// - Creating and owning VM management components
 // - Managing component lifecycle (startup/shutdown)
+// - Coordinating background tasks (health checks, monitoring)
+// - Providing controlled access to components via the VmManager facade
 //
-// All components communicate via channels to maintain loose coupling.
+// Architecture: Components are accessed directly (not via message passing).
+// The coordinator owns components and provides Arc references to them.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::health_checker::{HealthChecker, HealthCheckConfig};
 use super::job_router::JobRouter;
-use super::messages::{
-    HealthCommand, HealthEvent, MonitorCommand, MonitoringEvent, RegistryEvent, RouterRequest,
-    VmCommand, VmEvent,
-};
 use super::resource_monitor::ResourceMonitor;
 use super::vm_controller::VmController;
 use super::vm_registry::VmRegistry;
 use super::VmManagerConfig;
 use crate::hiqlite::HiqliteService;
 
-/// Channel buffer sizes for message passing
-const COMMAND_BUFFER_SIZE: usize = 100;
-const EVENT_BUFFER_SIZE: usize = 1000;
-
-/// VmCoordinator orchestrates all VM management components via message passing
+/// VmCoordinator orchestrates all VM management components
 pub struct VmCoordinator {
-    // Component instances (private - not exposed externally)
+    // Component instances (owned by coordinator)
     registry: Arc<VmRegistry>,
     controller: Arc<VmController>,
     router: Arc<JobRouter>,
     monitor: Arc<ResourceMonitor>,
     health_checker: Arc<HealthChecker>,
-
-    // Command channels (for sending commands to components)
-    vm_cmd_tx: mpsc::Sender<VmCommand>,
-    router_cmd_tx: mpsc::Sender<RouterRequest>,
-    monitor_cmd_tx: mpsc::Sender<MonitorCommand>,
-    health_cmd_tx: mpsc::Sender<HealthCommand>,
-
-    // Event channels (for receiving events from components)
-    vm_event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<VmEvent>>>,
-    registry_event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RegistryEvent>>>,
-    monitoring_event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<MonitoringEvent>>>,
-    health_event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<HealthEvent>>>,
 
     // Background task handles for graceful shutdown
     task_handles: Arc<tokio::sync::Mutex<Vec<JoinHandle<()>>>>,
@@ -81,36 +61,12 @@ impl VmCoordinator {
         let health_config = HealthCheckConfig::default();
         let health_checker = Arc::new(HealthChecker::new(Arc::clone(&registry), health_config));
 
-        // Create command channels
-        // Note: Command receivers are unused for now - they will be used when
-        // components are fully migrated to message-based communication
-        let (vm_cmd_tx, _vm_cmd_rx) = mpsc::channel(COMMAND_BUFFER_SIZE);
-        let (router_cmd_tx, _router_cmd_rx) = mpsc::channel(COMMAND_BUFFER_SIZE);
-        let (monitor_cmd_tx, _monitor_cmd_rx) = mpsc::channel(COMMAND_BUFFER_SIZE);
-        let (health_cmd_tx, _health_cmd_rx) = mpsc::channel(COMMAND_BUFFER_SIZE);
-
-        // Create event channels
-        // Note: Event senders are unused for now - they will be used when
-        // components are fully migrated to emit events
-        let (_vm_event_tx, vm_event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
-        let (_registry_event_tx, registry_event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
-        let (_monitoring_event_tx, monitoring_event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
-        let (_health_event_tx, health_event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
-
         Ok(Self {
             registry,
             controller,
             router,
             monitor,
             health_checker,
-            vm_cmd_tx,
-            router_cmd_tx,
-            monitor_cmd_tx,
-            health_cmd_tx,
-            vm_event_rx: Arc::new(tokio::sync::Mutex::new(vm_event_rx)),
-            registry_event_rx: Arc::new(tokio::sync::Mutex::new(registry_event_rx)),
-            monitoring_event_rx: Arc::new(tokio::sync::Mutex::new(monitoring_event_rx)),
-            health_event_rx: Arc::new(tokio::sync::Mutex::new(health_event_rx)),
             task_handles: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             config,
         })
@@ -121,36 +77,6 @@ impl VmCoordinator {
         tracing::info!("Starting VmCoordinator background tasks");
 
         let mut handles = self.task_handles.lock().await;
-
-        // Start VM event processor
-        let vm_event_rx = Arc::clone(&self.vm_event_rx);
-        let handle = tokio::spawn(async move {
-            Self::process_vm_events(vm_event_rx).await;
-        });
-        handles.push(handle);
-
-        // Start registry event processor
-        let registry_event_rx = Arc::clone(&self.registry_event_rx);
-        let handle = tokio::spawn(async move {
-            Self::process_registry_events(registry_event_rx).await;
-        });
-        handles.push(handle);
-
-        // Start monitoring event processor
-        let monitoring_event_rx = Arc::clone(&self.monitoring_event_rx);
-        let controller = Arc::clone(&self.controller);
-        let handle = tokio::spawn(async move {
-            Self::process_monitoring_events(monitoring_event_rx, controller).await;
-        });
-        handles.push(handle);
-
-        // Start health event processor
-        let health_event_rx = Arc::clone(&self.health_event_rx);
-        let registry = Arc::clone(&self.registry);
-        let handle = tokio::spawn(async move {
-            Self::process_health_events(health_event_rx, registry).await;
-        });
-        handles.push(handle);
 
         // Start health checking loop
         let health_checker = Arc::clone(&self.health_checker);
@@ -176,264 +102,6 @@ impl VmCoordinator {
 
         tracing::info!("VmCoordinator background tasks started");
         Ok(())
-    }
-
-    /// Send a VM command and wait for response
-    pub async fn send_vm_command(&self, cmd: VmCommand) -> Result<()> {
-        self.vm_cmd_tx
-            .send(cmd)
-            .await
-            .map_err(|e| anyhow!("Failed to send VM command: {}", e))
-    }
-
-    /// Send a router request and wait for response
-    pub async fn send_router_request(&self, req: RouterRequest) -> Result<()> {
-        self.router_cmd_tx
-            .send(req)
-            .await
-            .map_err(|e| anyhow!("Failed to send router request: {}", e))
-    }
-
-    /// Send a monitor command
-    pub async fn send_monitor_command(&self, cmd: MonitorCommand) -> Result<()> {
-        self.monitor_cmd_tx
-            .send(cmd)
-            .await
-            .map_err(|e| anyhow!("Failed to send monitor command: {}", e))
-    }
-
-    /// Send a health command
-    pub async fn send_health_command(&self, cmd: HealthCommand) -> Result<()> {
-        self.health_cmd_tx
-            .send(cmd)
-            .await
-            .map_err(|e| anyhow!("Failed to send health command: {}", e))
-    }
-
-    /// Process VM lifecycle events
-    async fn process_vm_events(
-        event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<VmEvent>>>,
-    ) {
-        let mut rx = event_rx.lock().await;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                VmEvent::Started { vm_id, config } => {
-                    tracing::info!(
-                        vm_id = %vm_id,
-                        mode = ?config.mode,
-                        "VM started event received"
-                    );
-                }
-                VmEvent::Stopped { vm_id, reason } => {
-                    tracing::info!(vm_id = %vm_id, reason = %reason, "VM stopped event received");
-                }
-                VmEvent::Failed { vm_id, error } => {
-                    tracing::error!(vm_id = %vm_id, error = %error, "VM failed event received");
-                }
-                VmEvent::JobAssigned { vm_id, job_id } => {
-                    tracing::debug!(
-                        vm_id = %vm_id,
-                        job_id = %job_id,
-                        "Job assigned event received"
-                    );
-                }
-                VmEvent::JobCompleted {
-                    vm_id,
-                    job_id,
-                    success,
-                } => {
-                    tracing::info!(
-                        vm_id = %vm_id,
-                        job_id = %job_id,
-                        success = success,
-                        "Job completed event received"
-                    );
-                }
-                VmEvent::StateChanged {
-                    vm_id,
-                    old_state,
-                    new_state,
-                } => {
-                    tracing::debug!(
-                        vm_id = %vm_id,
-                        old_state = ?old_state,
-                        new_state = ?new_state,
-                        "VM state changed event received"
-                    );
-                }
-            }
-        }
-    }
-
-    /// Process registry events
-    async fn process_registry_events(
-        event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<RegistryEvent>>>,
-    ) {
-        let mut rx = event_rx.lock().await;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                RegistryEvent::VmRegistered { vm_id, config } => {
-                    tracing::debug!(
-                        vm_id = %vm_id,
-                        mode = ?config.mode,
-                        "VM registered in registry"
-                    );
-                }
-                RegistryEvent::VmStateUpdated {
-                    vm_id,
-                    old_state,
-                    new_state,
-                } => {
-                    tracing::debug!(
-                        vm_id = %vm_id,
-                        old_state = ?old_state,
-                        new_state = ?new_state,
-                        "VM state updated in registry"
-                    );
-                }
-                RegistryEvent::VmMetricsUpdated { vm_id, .. } => {
-                    tracing::trace!(vm_id = %vm_id, "VM metrics updated in registry");
-                }
-                RegistryEvent::VmRemoved { vm_id } => {
-                    tracing::debug!(vm_id = %vm_id, "VM removed from registry");
-                }
-            }
-        }
-    }
-
-    /// Process monitoring events and take action
-    async fn process_monitoring_events(
-        event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<MonitoringEvent>>>,
-        controller: Arc<VmController>,
-    ) {
-        let mut rx = event_rx.lock().await;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                MonitoringEvent::ResourceThreshold {
-                    vm_id,
-                    resource,
-                    current,
-                    threshold,
-                } => {
-                    tracing::warn!(
-                        vm_id = %vm_id,
-                        resource = ?resource,
-                        current = current,
-                        threshold = threshold,
-                        "Resource threshold exceeded"
-                    );
-                }
-                MonitoringEvent::VmShouldRecycle { vm_id, reason } => {
-                    tracing::info!(vm_id = %vm_id, reason = ?reason, "VM should be recycled");
-
-                    // Shutdown the VM
-                    if let Err(e) = controller.shutdown_vm(vm_id, true).await {
-                        tracing::error!(
-                            vm_id = %vm_id,
-                            error = %e,
-                            "Failed to shutdown VM for recycling"
-                        );
-                    }
-                }
-                MonitoringEvent::IdleVmDetected {
-                    vm_id,
-                    idle_duration_secs,
-                } => {
-                    tracing::info!(
-                        vm_id = %vm_id,
-                        idle_secs = idle_duration_secs,
-                        "Idle VM detected"
-                    );
-                }
-                MonitoringEvent::AutoScalingTriggered { action, count } => {
-                    tracing::info!(
-                        action = ?action,
-                        count = count,
-                        "Auto-scaling triggered"
-                    );
-                }
-            }
-        }
-    }
-
-    /// Process health events and take action
-    async fn process_health_events(
-        event_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<HealthEvent>>>,
-        registry: Arc<VmRegistry>,
-    ) {
-        let mut rx = event_rx.lock().await;
-
-        while let Some(event) = rx.recv().await {
-            match event {
-                HealthEvent::HealthCheckPassed {
-                    vm_id,
-                    response_time_ms,
-                } => {
-                    tracing::trace!(
-                        vm_id = %vm_id,
-                        response_ms = response_time_ms,
-                        "Health check passed"
-                    );
-                }
-                HealthEvent::HealthCheckFailed {
-                    vm_id,
-                    error,
-                    failures,
-                } => {
-                    tracing::warn!(
-                        vm_id = %vm_id,
-                        error = %error,
-                        failures = failures,
-                        "Health check failed"
-                    );
-                }
-                HealthEvent::VmUnhealthy {
-                    vm_id,
-                    failures,
-                    error,
-                } => {
-                    tracing::error!(
-                        vm_id = %vm_id,
-                        failures = failures,
-                        error = %error,
-                        "VM marked as unhealthy"
-                    );
-
-                    // Update VM state in registry
-                    if let Err(e) = registry
-                        .update_state(
-                            vm_id,
-                            super::vm_types::VmState::Failed {
-                                error: format!("Health check failures: {}", error),
-                            },
-                        )
-                        .await
-                    {
-                        tracing::error!(
-                            vm_id = %vm_id,
-                            error = %e,
-                            "Failed to update VM state to failed"
-                        );
-                    }
-                }
-                HealthEvent::VmRecovered { vm_id } => {
-                    tracing::info!(vm_id = %vm_id, "VM recovered to healthy state");
-                }
-                HealthEvent::CircuitBreakerOpened {
-                    vm_id,
-                    duration_secs,
-                } => {
-                    tracing::warn!(
-                        vm_id = %vm_id,
-                        duration_secs = duration_secs,
-                        "Circuit breaker opened for VM"
-                    );
-                }
-            }
-        }
     }
 
     /// Pre-warm idle VMs for faster job execution
@@ -506,27 +174,27 @@ impl VmCoordinator {
         Ok(())
     }
 
-    /// Get direct access to registry (for facade compatibility)
+    /// Get reference to VM registry
     pub fn registry(&self) -> Arc<VmRegistry> {
         Arc::clone(&self.registry)
     }
 
-    /// Get direct access to controller (for facade compatibility)
+    /// Get reference to VM controller
     pub fn controller(&self) -> Arc<VmController> {
         Arc::clone(&self.controller)
     }
 
-    /// Get direct access to router (for facade compatibility)
+    /// Get reference to job router
     pub fn router(&self) -> Arc<JobRouter> {
         Arc::clone(&self.router)
     }
 
-    /// Get direct access to monitor (for facade compatibility)
+    /// Get reference to resource monitor
     pub fn monitor(&self) -> Arc<ResourceMonitor> {
         Arc::clone(&self.monitor)
     }
 
-    /// Get direct access to health checker (for facade compatibility)
+    /// Get reference to health checker
     pub fn health_checker(&self) -> Arc<HealthChecker> {
         Arc::clone(&self.health_checker)
     }
