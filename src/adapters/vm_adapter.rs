@@ -52,7 +52,7 @@ impl VmAdapter {
         // Monitor with exponential backoff
         let mut check_interval = Duration::from_secs(1);
         let max_interval = Duration::from_secs(10);
-        let timeout = Duration::from_secs(300); // 5 minute timeout
+        let timeout = super::DEFAULT_EXECUTION_TIMEOUT;
         let start = std::time::Instant::now();
 
         loop {
@@ -273,7 +273,7 @@ impl ExecutionBackend for VmAdapter {
         timeout: Option<Duration>,
     ) -> Result<ExecutionStatus> {
         let start = std::time::Instant::now();
-        let timeout = timeout.unwrap_or(Duration::from_secs(300)); // 5 min default
+        let timeout = timeout.unwrap_or(super::DEFAULT_EXECUTION_TIMEOUT);
         loop {
             let status = self.get_status(handle).await?;
             match status {

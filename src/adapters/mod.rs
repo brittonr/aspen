@@ -11,6 +11,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Default timeout for execution operations (5 minutes)
+///
+/// Used across all adapters for:
+/// - Default job execution timeout
+/// - Wait for completion timeout (when not specified)
+/// - Status polling timeout
+pub const DEFAULT_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
+
 pub mod handle;
 pub mod placement;
 pub mod registry;

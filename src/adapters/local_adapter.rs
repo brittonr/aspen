@@ -36,7 +36,7 @@ impl Default for LocalProcessConfig {
     fn default() -> Self {
         Self {
             max_concurrent: 10,
-            default_timeout: Duration::from_secs(300),
+            default_timeout: super::DEFAULT_EXECUTION_TIMEOUT,
             work_dir: std::env::temp_dir().join("blixard-local"),
             capture_output: true,
         }
