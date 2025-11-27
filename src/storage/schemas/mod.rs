@@ -34,7 +34,7 @@ pub trait SchemaModule: Send + Sync {
     }
 
     /// Apply the schema to the database
-    async fn apply(&self, db: &crate::hiqlite_service::HiqliteService) -> Result<()> {
+    async fn apply(&self, db: &crate::hiqlite::HiqliteService) -> Result<()> {
         if !self.is_enabled() {
             tracing::info!(module = self.name(), "Schema module disabled, skipping");
             return Ok(());
@@ -103,7 +103,7 @@ impl SchemaRegistry {
     }
 
     /// Apply all enabled schema modules to the database
-    pub async fn apply_all(&self, db: &crate::hiqlite_service::HiqliteService) -> Result<()> {
+    pub async fn apply_all(&self, db: &crate::hiqlite::HiqliteService) -> Result<()> {
         tracing::info!("Applying {} schema modules", self.modules.len());
 
         for module in &self.modules {

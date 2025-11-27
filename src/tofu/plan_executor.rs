@@ -10,7 +10,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::{
-    hiqlite_service::HiqliteService,
+    hiqlite::HiqliteService,
     tofu::{
         state_backend::TofuStateBackend,
         types::*,

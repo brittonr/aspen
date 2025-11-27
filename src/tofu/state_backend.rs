@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    hiqlite_service::HiqliteService,
+    hiqlite::HiqliteService,
     params,
     tofu::types::*,
 };

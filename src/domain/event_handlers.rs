@@ -299,7 +299,7 @@ impl EventHandler for WebhookEventHandler {
 pub struct AuditEventHandler;
 
 impl AuditEventHandler {
-    pub fn new(_hiqlite: Arc<crate::hiqlite_service::HiqliteService>) -> Self {
+    pub fn new(_hiqlite: Arc<crate::hiqlite::HiqliteService>) -> Self {
         Self
     }
 }

@@ -23,7 +23,7 @@ use super::resource_monitor::ResourceMonitor;
 use super::vm_controller::VmController;
 use super::vm_registry::VmRegistry;
 use super::VmManagerConfig;
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 
 /// Channel buffer sizes for message passing
 const COMMAND_BUFFER_SIZE: usize = 100;

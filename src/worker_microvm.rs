@@ -114,7 +114,7 @@ impl MicroVmWorker {
     /// * `config` - Worker configuration
     pub async fn new(config: MicroVmWorkerConfig) -> Result<Self> {
         // Create a local Hiqlite instance for standalone operation
-        use crate::hiqlite_service::HiqliteService;
+        use crate::hiqlite::HiqliteService;
         let hiqlite = Arc::new(
             HiqliteService::new(Some(config.state_dir.join("hiqlite")))
                 .await

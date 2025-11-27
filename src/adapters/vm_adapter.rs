@@ -38,7 +38,7 @@ impl VmAdapter {
     /// Create a VM adapter with a new VmManager
     pub async fn create(
         config: VmManagerConfig,
-        hiqlite: Arc<crate::hiqlite_service::HiqliteService>,
+        hiqlite: Arc<crate::hiqlite::HiqliteService>,
     ) -> Result<Self> {
         let vm_manager = Arc::new(VmManager::new(config, hiqlite).await?);
         Ok(Self::new(vm_manager))

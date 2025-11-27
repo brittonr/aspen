@@ -13,7 +13,7 @@ use crate::domain::{
 use crate::domain::VmService;
 #[cfg(feature = "tofu-support")]
 use crate::domain::TofuService;
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::work_queue::WorkQueue;
 

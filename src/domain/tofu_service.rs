@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     adapters::ExecutionRegistry,
-    hiqlite_service::HiqliteService,
+    hiqlite::HiqliteService,
     tofu::{
         TofuStateBackend,
         TofuPlanExecutor,

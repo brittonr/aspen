@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 use super::vm_types::{VmConfig, VmInstance, VmMode, VmState};
 
 /// Registry for tracking all VM instances using Hiqlite

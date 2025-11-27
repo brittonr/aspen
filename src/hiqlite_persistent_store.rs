@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 use crate::persistent_store::PersistentStore;
 use crate::domain::types::{Job, JobStatus};
 use crate::domain::job_metadata::JobMetadata;

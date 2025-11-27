@@ -36,7 +36,7 @@ pub mod domain;
 pub mod middleware;
 
 // Export modules needed for testing
-pub mod hiqlite_service;
+pub mod hiqlite;
 pub mod repositories;
 pub mod state;
 pub mod server;

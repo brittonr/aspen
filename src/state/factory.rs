@@ -20,7 +20,7 @@ use crate::domain::VmService;
 #[cfg(feature = "tofu-support")]
 use crate::domain::TofuService;
 use crate::hiqlite_persistent_store::HiqlitePersistentStore;
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::AppState;

@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::vm_types::{JobRequirements, VmConfig, VmInstance, VmState};
-use crate::hiqlite_service::HiqliteService;
+use crate::hiqlite::HiqliteService;
 use crate::params;
 
 /// Registry for tracking all VM instances with distributed persistence
