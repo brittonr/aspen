@@ -15,8 +15,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Each node can have its own flawless server (optional)
     let flawless_url = config.flawless.flawless_url.clone();
 
-    let module = if std::env::var("SKIP_FLAWLESS").is_ok() {
-        tracing::info!("Skipping Flawless deployment (SKIP_FLAWLESS set)");
+    let module = if !config.features.is_flawless_enabled() {
+        tracing::info!("Skipping Flawless deployment (feature disabled in config)");
         None
     } else {
         tracing::info!("Connecting to flawless server at {}", flawless_url);

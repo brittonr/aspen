@@ -112,9 +112,9 @@ pub trait InfrastructureFactory: Send + Sync {
         let registry_config = RegistryConfig::default();
         let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
 
-        // Create VM manager (skip if SKIP_VM_MANAGER is set)
-        let vm_manager = if std::env::var("SKIP_VM_MANAGER").is_ok() {
-            tracing::info!("Skipping VM manager creation (SKIP_VM_MANAGER set)");
+        // Create VM manager (skip if disabled in config)
+        let vm_manager = if !config.features.is_vm_manager_enabled() {
+            tracing::info!("Skipping VM manager creation (feature disabled in config)");
             None
         } else {
             match self.create_vm_manager(config, hiqlite_arc.clone()).await {
@@ -180,7 +180,11 @@ pub trait InfrastructureFactory: Send + Sync {
             ))
         };
 
+        // Extract auth config
+        let auth_config = Arc::new(config.auth.clone());
+
         Ok(AppState::new(
+            auth_config,
             module,
             iroh,
             hiqlite,

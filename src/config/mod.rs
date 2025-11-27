@@ -13,6 +13,8 @@ pub mod vm;
 pub mod operational;
 pub mod adapter;
 pub mod validation;
+pub mod auth;
+pub mod features;
 
 // Deprecated - use operational module instead
 #[deprecated(since = "0.2.0", note = "Use operational module instead")]
@@ -28,6 +30,8 @@ pub use vm::VmConfig;
 pub use operational::OperationalConfig;
 pub use adapter::{AdapterConfig, JobRouterConfig};
 pub use validation::ValidationConfig;
+pub use auth::AuthConfig;
+pub use features::FeaturesConfig;
 
 // Deprecated - use OperationalConfig instead
 #[allow(deprecated)]
@@ -53,6 +57,10 @@ pub struct AppConfig {
     pub job_router: JobRouterConfig,
     #[serde(default)]
     pub validation: ValidationConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
+    #[serde(default)]
+    pub features: FeaturesConfig,
 
     // Deprecated fields - maintained for backward compatibility
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,6 +95,8 @@ impl AppConfig {
             adapter: AdapterConfig::load()?,
             job_router: JobRouterConfig::load()?,
             validation: ValidationConfig::load()?,
+            auth: AuthConfig::load()?,
+            features: FeaturesConfig::load()?,
             timing: None,
             timeouts: None,
             health_check: None,
@@ -224,6 +234,8 @@ impl Default for AppConfig {
             adapter: AdapterConfig::default(),
             job_router: JobRouterConfig::default(),
             validation: ValidationConfig::default(),
+            auth: AuthConfig::default(),
+            features: FeaturesConfig::default(),
             timing: None,
             timeouts: None,
             health_check: None,

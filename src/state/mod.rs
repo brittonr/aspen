@@ -6,6 +6,7 @@ use std::sync::Arc;
 use flawless_utils::DeployedModule;
 
 use crate::adapters::ExecutionRegistry;
+use crate::config::AuthConfig;
 use crate::domain::{
     ClusterStatusService, HealthService, JobLifecycleService, WorkerManagementService,
 };
@@ -28,6 +29,9 @@ pub use factory::{InfrastructureFactory, ProductionInfrastructureFactory};
 /// Services are wrapped in Arc for cheap cloning across request handlers.
 #[derive(Clone)]
 pub struct AppState {
+    // === Configuration ===
+    auth_config: Arc<AuthConfig>,
+
     // === Infrastructure services ===
     module: Option<Arc<DeployedModule>>,
     iroh: IrohService,
@@ -52,6 +56,7 @@ impl AppState {
     /// Create new application state from infrastructure and domain services
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        auth_config: Arc<AuthConfig>,
         module: Option<DeployedModule>,
         iroh: IrohService,
         hiqlite: HiqliteService,
@@ -67,6 +72,7 @@ impl AppState {
         tofu_service: Arc<TofuService>,
     ) -> Self {
         Self {
+            auth_config,
             module: module.map(Arc::new),
             iroh,
             hiqlite,
@@ -81,6 +87,13 @@ impl AppState {
             #[cfg(feature = "tofu-support")]
             tofu_service,
         }
+    }
+
+    // === Configuration accessors ===
+
+    /// Get the authentication configuration
+    pub fn auth_config(&self) -> Arc<AuthConfig> {
+        self.auth_config.clone()
     }
 
     // === Infrastructure accessors ===

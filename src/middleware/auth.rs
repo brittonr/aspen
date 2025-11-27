@@ -4,11 +4,13 @@
 //! For production, replace with JWT/OAuth2.
 
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::sync::Arc;
+use crate::config::AuthConfig;
 
 /// Configuration for API key authentication
 #[derive(Clone)]
@@ -41,24 +43,16 @@ impl ApiKeyConfig {
 }
 
 /// Middleware function to check API key
+///
+/// This middleware validates the X-API-Key header against the configured API key.
+/// The API key is injected via State instead of reading environment variables on each request.
 pub async fn api_key_auth(
+    State(auth_config): State<Arc<AuthConfig>>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    // Get API key from environment on each request for MVP simplicity
-    // In production, this should be passed via State
-    let expected_key = match std::env::var("BLIXARD_API_KEY") {
-        Ok(key) if key.len() >= 32 => key,
-        Ok(_) => {
-            tracing::error!("API key is too short (< 32 characters)");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-        Err(_) => {
-            tracing::error!("BLIXARD_API_KEY not set");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let expected_key = auth_config.api_key();
 
     // Check X-API-Key header
     let provided_key = headers

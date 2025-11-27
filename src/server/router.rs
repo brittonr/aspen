@@ -43,7 +43,8 @@ use crate::domain::{ClusterStatusService, JobLifecycleService, HealthService, Wo
 /// - Iroh P2P API (AppState for now)
 /// - Health checks (HealthService)
 pub fn build_router(state: &AppState) -> Router {
-    // Extract specific services from AppState
+    // Extract specific services and configuration from AppState
+    let auth_config = state.auth_config();
     let cluster_service = state.cluster_status();
     let job_service = state.job_lifecycle();
     let health_service = state.health();
@@ -51,12 +52,12 @@ pub fn build_router(state: &AppState) -> Router {
 
     let router = Router::new()
         .nest("/dashboard", dashboard_router(cluster_service.clone(), job_service.clone()))
-        .nest("/api/queue", queue_api_router(job_service.clone(), health_service.clone()))
-        .nest("/api/workers", worker_api_router(worker_service.clone()))
-        .nest("/api/iroh", iroh_api_router().with_state(state.clone()));
+        .nest("/api/queue", queue_api_router(job_service.clone(), health_service.clone(), auth_config.clone()))
+        .nest("/api/workers", worker_api_router(worker_service.clone(), auth_config.clone()))
+        .nest("/api/iroh", iroh_api_router(auth_config.clone()).with_state(state.clone()));
 
     #[cfg(feature = "tofu-support")]
-    let router = router.nest("/api/tofu", tofu_api_router().with_state(state.clone()));
+    let router = router.nest("/api/tofu", tofu_api_router(auth_config.clone()).with_state(state.clone()));
 
     router
         .nest("/health", health_router(health_service.clone()))
@@ -109,6 +110,7 @@ fn dashboard_router(
 fn queue_api_router(
     job_service: Arc<JobLifecycleService>,
     health_service: Arc<HealthService>,
+    auth_config: Arc<crate::config::AuthConfig>,
 ) -> Router {
     Router::new()
         .route("/publish", post(queue_publish).with_state(job_service.clone()))
@@ -117,7 +119,7 @@ fn queue_api_router(
         .route("/stats", get(queue_stats).with_state(job_service.clone()))
         .route("/status/{job_id}", post(queue_update_status).with_state(job_service))
         // Apply API key authentication to all queue routes
-        .layer(axum::middleware::from_fn(middleware::api_key_auth))
+        .layer(axum::middleware::from_fn_with_state(auth_config, middleware::api_key_auth))
 }
 
 /// Worker Management API routes - Worker lifecycle
@@ -134,7 +136,10 @@ fn queue_api_router(
 /// - `GET  /api/workers/{worker_id}` - Get worker details
 /// - `POST /api/workers/{worker_id}/drain` - Mark worker as draining
 /// - `GET  /api/workers/stats` - Get worker pool statistics
-fn worker_api_router(worker_service: Arc<WorkerManagementService>) -> Router {
+fn worker_api_router(
+    worker_service: Arc<WorkerManagementService>,
+    auth_config: Arc<crate::config::AuthConfig>,
+) -> Router {
     Router::new()
         .route("/register", post(worker_register).with_state(worker_service.clone()))
         .route("/{worker_id}/heartbeat", post(worker_heartbeat).with_state(worker_service.clone()))
@@ -143,7 +148,7 @@ fn worker_api_router(worker_service: Arc<WorkerManagementService>) -> Router {
         .route("/{worker_id}/drain", post(worker_drain).with_state(worker_service.clone()))
         .route("/stats", get(worker_stats).with_state(worker_service))
         // Apply API key authentication to all worker routes
-        .layer(axum::middleware::from_fn(middleware::api_key_auth))
+        .layer(axum::middleware::from_fn_with_state(auth_config, middleware::api_key_auth))
 }
 
 /// Iroh P2P API routes - Blob storage and gossip
@@ -159,7 +164,7 @@ fn worker_api_router(worker_service: Arc<WorkerManagementService>) -> Router {
 /// - `GET  /api/iroh/gossip/subscribe/{topic_id}` - Subscribe to topic (SSE)
 /// - `POST /api/iroh/connect` - Connect to peer
 /// - `GET  /api/iroh/info` - Get endpoint information
-fn iroh_api_router() -> Router<AppState> {
+fn iroh_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<AppState> {
     Router::new()
         .route("/blob/store", post(iroh_api::store_blob))
         .route("/blob/{hash}", get(iroh_api::retrieve_blob))
@@ -169,7 +174,7 @@ fn iroh_api_router() -> Router<AppState> {
         .route("/connect", post(iroh_api::connect_peer))
         .route("/info", get(iroh_api::endpoint_info))
         // Apply API key authentication to all iroh routes
-        .layer(axum::middleware::from_fn(middleware::api_key_auth))
+        .layer(axum::middleware::from_fn_with_state(auth_config, middleware::api_key_auth))
 }
 
 /// OpenTofu/Terraform State Backend API routes
@@ -194,7 +199,7 @@ fn iroh_api_router() -> Router<AppState> {
 /// - `GET  /api/tofu/plans/{workspace}` - List plans for workspace
 /// - `POST /api/tofu/destroy` - Destroy infrastructure
 #[cfg(feature = "tofu-support")]
-fn tofu_api_router() -> Router<AppState> {
+fn tofu_api_router(auth_config: Arc<crate::config::AuthConfig>) -> Router<AppState> {
     use axum::routing::delete;
 
     Router::new()
@@ -212,7 +217,7 @@ fn tofu_api_router() -> Router<AppState> {
         .route("/plans/{workspace}", get(list_plans))
         .route("/destroy", post(destroy_infrastructure))
         // Apply API key authentication to all tofu routes
-        .layer(axum::middleware::from_fn(middleware::api_key_auth))
+        .layer(axum::middleware::from_fn_with_state(auth_config, middleware::api_key_auth))
 }
 
 /// Health check routes
