@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// VM execution mode
@@ -137,7 +138,7 @@ impl VmState {
 /// VM instance runtime information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VmInstance {
-    pub config: VmConfig,
+    pub config: Arc<VmConfig>,
     pub state: VmState,
     pub created_at: i64,
     pub pid: Option<u32>,
@@ -151,7 +152,7 @@ impl VmInstance {
     /// Create new VM instance
     pub fn new(config: VmConfig) -> Self {
         Self {
-            config,
+            config: Arc::new(config),
             state: VmState::Starting,
             created_at: chrono::Utc::now().timestamp(),
             pid: None,

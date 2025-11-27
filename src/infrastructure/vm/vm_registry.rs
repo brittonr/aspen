@@ -315,7 +315,7 @@ impl VmRegistry {
                 .unwrap_or_default();
 
             let mut vm = VmInstance {
-                config,
+                config: Arc::new(config),
                 state: state.clone(),
                 pid: row.pid.map(|p| p as u32),
                 created_at: row.created_at,

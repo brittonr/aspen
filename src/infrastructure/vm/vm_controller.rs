@@ -531,7 +531,7 @@ impl VmController {
         // Get VM configuration
         let config = if let Some(vm_lock) = self.registry.get(vm_id).await? {
             let vm = vm_lock.read().await;
-            vm.config.clone()
+            vm.config.as_ref().clone()
         } else {
             return Err(anyhow!("VM not found: {}", vm_id));
         };
