@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::adapters::{ExecutionRegistry, RegistryConfig};
 use crate::config::AppConfig;
 use crate::domain::{
-    ClusterStatusService, HealthService, JobLifecycleService, JobCommandService, JobQueryService,
+    ClusterStatusService, HealthService, JobCommandService, JobQueryService,
     WorkerManagementService, LoggingEventPublisher,
 };
 #[cfg(feature = "vm-backend")]
@@ -32,7 +32,8 @@ use crate::{WorkerBackend, WorkerType};
 struct DomainServices {
     cluster_status: Arc<ClusterStatusService>,
     health: Arc<HealthService>,
-    job_lifecycle: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
     worker_management: Arc<WorkerManagementService>,
 }
 
@@ -63,7 +64,8 @@ pub struct StateBuilder {
     // Domain services
     cluster_status: Arc<ClusterStatusService>,
     health: Arc<HealthService>,
-    job_lifecycle: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
     worker_management: Arc<WorkerManagementService>,
 
     // Optional features
@@ -82,7 +84,8 @@ impl StateBuilder {
         let domain = DomainState::new(
             self.cluster_status,
             self.health,
-            self.job_lifecycle,
+            self.job_commands,
+            self.job_queries,
             self.worker_management,
         );
 
@@ -110,7 +113,8 @@ impl StateBuilder {
         DomainState::new(
             self.cluster_status,
             self.health,
-            self.job_lifecycle,
+            self.job_commands,
+            self.job_queries,
             self.worker_management,
         )
     }
@@ -334,11 +338,6 @@ pub trait InfrastructureFactory: Send + Sync {
 
         let health = Arc::new(HealthService::new(state_repo));
 
-        let job_lifecycle = Arc::new(JobLifecycleService::from_services(
-            commands,
-            queries
-        ));
-
         let worker_management = Arc::new(WorkerManagementService::new(
             worker_repo,
             work_repo,
@@ -348,7 +347,8 @@ pub trait InfrastructureFactory: Send + Sync {
         DomainServices {
             cluster_status,
             health,
-            job_lifecycle,
+            job_commands: commands,
+            job_queries: queries,
             worker_management,
         }
     }
@@ -405,7 +405,8 @@ pub trait InfrastructureFactory: Send + Sync {
             module,
             cluster_status: services.cluster_status,
             health: services.health,
-            job_lifecycle: services.job_lifecycle,
+            job_commands: services.job_commands,
+            job_queries: services.job_queries,
             worker_management: services.worker_management,
             #[cfg(feature = "vm-backend")]
             vm_service: optional.vm_service,

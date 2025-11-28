@@ -11,7 +11,7 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::domain::{JobSubmission, JobStatus, HealthService, JobLifecycleService};
+use crate::domain::{JobSubmission, JobStatus, HealthService, JobCommandService, JobQueryService};
 
 /// Hiqlite health check endpoint
 ///
@@ -40,13 +40,13 @@ pub struct PublishWorkRequest {
 
 /// Publish a new work item to the queue
 pub async fn queue_publish(
-    State(job_service): State<Arc<JobLifecycleService>>,
+    State(job_commands): State<Arc<JobCommandService>>,
     Json(req): Json<PublishWorkRequest>,
 ) -> impl IntoResponse {
 
     let submission = JobSubmission { payload: req.payload };
 
-    match job_service.submit_job(submission).await {
+    match job_commands.submit_job(submission).await {
         Ok(job_id) => (StatusCode::OK, format!("Job {} published", job_id)).into_response(),
         Err(e) => {
             // Return 400 BAD_REQUEST for validation errors
@@ -74,7 +74,7 @@ pub struct ClaimWorkQuery {
 /// - worker_id: Worker ID to assign the job to
 /// - worker_type: Worker type for filtering (wasm, firecracker)
 pub async fn queue_claim(
-    State(job_service): State<Arc<JobLifecycleService>>,
+    State((job_commands, job_queries)): State<(Arc<JobCommandService>, Arc<JobQueryService>)>,
     axum::extract::Query(query): axum::extract::Query<ClaimWorkQuery>,
 ) -> impl IntoResponse {
 
@@ -94,8 +94,15 @@ pub async fn queue_claim(
         None => None,
     };
 
-    match job_service.claim_work(query.worker_id.as_deref(), worker_type).await {
-        Ok(Some(work_item)) => Json(work_item).into_response(),
+    match job_commands.claim_job(query.worker_id.as_deref(), worker_type).await {
+        Ok(Some(job_id)) => {
+            // Need to fetch the full job for backward compatibility
+            match job_queries.get_job(&job_id).await {
+                Ok(Some(job)) => Json(job).into_response(),
+                Ok(None) => (StatusCode::NOT_FOUND, "Job not found after claiming").into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get job: {}", e)).into_response(),
+            }
+        },
         Ok(None) => (StatusCode::NO_CONTENT, "No work available").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -107,10 +114,10 @@ pub async fn queue_claim(
 
 /// List all work items in the queue
 pub async fn queue_list(
-    State(job_service): State<Arc<JobLifecycleService>>,
+    State(job_queries): State<Arc<JobQueryService>>,
 ) -> impl IntoResponse {
 
-    match job_service.list_all_work().await {
+    match job_queries.list_all_jobs().await {
         Ok(work_items) => Json(work_items).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -122,9 +129,9 @@ pub async fn queue_list(
 
 /// Get queue statistics
 pub async fn queue_stats(
-    State(job_service): State<Arc<JobLifecycleService>>,
+    State(job_queries): State<Arc<JobQueryService>>,
 ) -> impl IntoResponse {
-    let stats = job_service.get_queue_stats().await;
+    let stats = job_queries.get_queue_stats().await;
     Json(stats).into_response()
 }
 
@@ -137,12 +144,12 @@ pub struct UpdateStatusRequest {
 
 /// Update the status of a specific work item
 pub async fn queue_update_status(
-    State(job_service): State<Arc<JobLifecycleService>>,
+    State(job_commands): State<Arc<JobCommandService>>,
     Path(job_id): Path<String>,
     Json(req): Json<UpdateStatusRequest>,
 ) -> impl IntoResponse {
 
-    match job_service.update_work_status(&job_id, req.status, req.error_message).await {
+    match job_commands.update_job_status(&job_id, req.status, req.error_message).await {
         Ok(()) => (StatusCode::OK, "Status updated").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

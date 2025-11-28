@@ -2,7 +2,7 @@
 #![allow(dead_code)] // View models used in handlers
 
 use askama::Template;
-use crate::domain::job_lifecycle::EnrichedJob;
+use crate::domain::job_queries::EnrichedJob;
 use crate::domain::{format_duration, format_time_ago, JobStatus};
 
 /// Individual job row for display

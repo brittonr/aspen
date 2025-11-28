@@ -29,7 +29,7 @@ use crate::handlers::worker::*;
 use crate::iroh_api;
 use crate::middleware;
 use crate::state::{DomainState, InfraState, ConfigState, FeaturesState};
-use crate::domain::{ClusterStatusService, JobLifecycleService, HealthService, WorkerManagementService};
+use crate::domain::{ClusterStatusService, JobCommandService, JobQueryService, HealthService, WorkerManagementService};
 
 /// Build the complete Axum router with all routes
 ///
@@ -37,8 +37,8 @@ use crate::domain::{ClusterStatusService, JobLifecycleService, HealthService, Wo
 /// All routes are registered here for consistency across transports.
 ///
 /// Routes are organized into logical sub-routers with focused state containers:
-/// - Dashboard UI - uses DomainState (ClusterStatusService, JobLifecycleService)
-/// - Work Queue API - uses DomainState (JobLifecycleService, HealthService)
+/// - Dashboard UI - uses DomainState (ClusterStatusService, JobQueryService)
+/// - Work Queue API - uses DomainState (JobCommandService, JobQueryService, HealthService)
 /// - Worker API - uses DomainState (WorkerManagementService)
 /// - Iroh P2P API - uses InfraState (IrohService)
 /// - Tofu State API - uses FeaturesState (TofuService)
@@ -51,14 +51,15 @@ pub fn build_router(
 ) -> Router {
     // Extract specific services from DomainState
     let cluster_service = domain.cluster_status();
-    let job_service = domain.job_lifecycle();
+    let job_commands = domain.job_commands();
+    let job_queries = domain.job_queries();
     let health_service = domain.health();
     let worker_service = domain.worker_management();
     let auth_config = config.auth();
 
     let router = Router::new()
-        .nest("/dashboard", dashboard_router(cluster_service.clone(), job_service.clone()))
-        .nest("/api/queue", queue_api_router(job_service.clone(), health_service.clone(), auth_config.clone()))
+        .nest("/dashboard", dashboard_router(cluster_service.clone(), job_commands.clone(), job_queries.clone()))
+        .nest("/api/queue", queue_api_router(job_commands.clone(), job_queries.clone(), health_service.clone(), auth_config.clone()))
         .nest("/api/workers", worker_api_router(worker_service.clone(), auth_config.clone()))
         .nest("/api/iroh", iroh_api_router(auth_config.clone()).with_state(infra));
 
@@ -83,19 +84,20 @@ pub fn build_router(
 /// - `GET  /dashboard/recent-jobs` - Recent jobs list HTMX fragment (uses JobLifecycleService)
 /// - `GET  /dashboard/control-plane-nodes` - Control plane nodes HTMX fragment (uses ClusterStatusService)
 /// - `GET  /dashboard/workers` - Worker nodes HTMX fragment (uses ClusterStatusService)
-/// - `POST /dashboard/submit-job` - Submit new job via web UI (uses JobLifecycleService)
+/// - `POST /dashboard/submit-job` - Submit new job via web UI (uses JobQueryService)
 fn dashboard_router(
     cluster_service: Arc<ClusterStatusService>,
-    job_service: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
 ) -> Router {
     Router::new()
         .route("/", get(dashboard))
         .route("/cluster-health", get(dashboard_cluster_health).with_state(cluster_service.clone()))
-        .route("/queue-stats", get(dashboard_queue_stats).with_state(job_service.clone()))
-        .route("/recent-jobs", get(dashboard_recent_jobs).with_state(job_service.clone()))
+        .route("/queue-stats", get(dashboard_queue_stats).with_state(job_queries.clone()))
+        .route("/recent-jobs", get(dashboard_recent_jobs).with_state(job_queries.clone()))
         .route("/control-plane-nodes", get(dashboard_control_plane_nodes).with_state(cluster_service.clone()))
         .route("/workers", get(dashboard_workers).with_state(cluster_service))
-        .route("/submit-job", post(dashboard_submit_job).with_state(job_service))
+        .route("/submit-job", post(dashboard_submit_job).with_state((job_commands, job_queries)))
     // Future: Add dashboard-specific middleware
     // .layer(/* HTMX headers, caching policy, etc. */)
 }
@@ -105,7 +107,7 @@ fn dashboard_router(
 /// REST API for distributed workers to claim and process jobs.
 /// Used by worker binaries and CLI tools.
 ///
-/// Uses JobLifecycleService for queue operations.
+/// Uses JobCommandService and JobQueryService for queue operations.
 ///
 /// Routes:
 /// - `POST /api/queue/publish` - Submit new job to queue
@@ -114,16 +116,17 @@ fn dashboard_router(
 /// - `GET  /api/queue/stats` - Get queue statistics
 /// - `POST /api/queue/status/{job_id}` - Update job status
 fn queue_api_router(
-    job_service: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
     health_service: Arc<HealthService>,
     auth_config: Arc<crate::config::AuthConfig>,
 ) -> Router {
     Router::new()
-        .route("/publish", post(queue_publish).with_state(job_service.clone()))
-        .route("/claim", post(queue_claim).with_state(job_service.clone()))
-        .route("/list", get(queue_list).with_state(job_service.clone()))
-        .route("/stats", get(queue_stats).with_state(job_service.clone()))
-        .route("/status/{job_id}", post(queue_update_status).with_state(job_service))
+        .route("/publish", post(queue_publish).with_state(job_commands.clone()))
+        .route("/claim", post(queue_claim).with_state((job_commands.clone(), job_queries.clone())))
+        .route("/list", get(queue_list).with_state(job_queries.clone()))
+        .route("/stats", get(queue_stats).with_state(job_queries.clone()))
+        .route("/status/{job_id}", post(queue_update_status).with_state(job_commands))
         // Apply API key authentication to all queue routes
         .layer(axum::middleware::from_fn_with_state(auth_config, middleware::api_key_auth))
 }

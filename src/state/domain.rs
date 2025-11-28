@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    ClusterStatusService, HealthService, JobLifecycleService, WorkerManagementService,
+    ClusterStatusService, HealthService, JobCommandService, JobQueryService, WorkerManagementService,
 };
 
 /// Domain services state container
@@ -15,7 +15,7 @@ use crate::domain::{
 /// pub async fn my_handler(
 ///     State(domain): State<DomainState>,
 /// ) -> impl IntoResponse {
-///     let jobs = domain.job_lifecycle().list_jobs(...).await?;
+///     let jobs = domain.job_queries().list_jobs(...).await?;
 ///     // ...
 /// }
 /// ```
@@ -23,7 +23,8 @@ use crate::domain::{
 pub struct DomainState {
     cluster_status: Arc<ClusterStatusService>,
     health: Arc<HealthService>,
-    job_lifecycle: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
     worker_management: Arc<WorkerManagementService>,
 }
 
@@ -32,13 +33,15 @@ impl DomainState {
     pub fn new(
         cluster_status: Arc<ClusterStatusService>,
         health: Arc<HealthService>,
-        job_lifecycle: Arc<JobLifecycleService>,
+        job_commands: Arc<JobCommandService>,
+        job_queries: Arc<JobQueryService>,
         worker_management: Arc<WorkerManagementService>,
     ) -> Self {
         Self {
             cluster_status,
             health,
-            job_lifecycle,
+            job_commands,
+            job_queries,
             worker_management,
         }
     }
@@ -53,9 +56,14 @@ impl DomainState {
         self.health.clone()
     }
 
-    /// Get job lifecycle service
-    pub fn job_lifecycle(&self) -> Arc<JobLifecycleService> {
-        self.job_lifecycle.clone()
+    /// Get job command service
+    pub fn job_commands(&self) -> Arc<JobCommandService> {
+        self.job_commands.clone()
+    }
+
+    /// Get job query service
+    pub fn job_queries(&self) -> Arc<JobQueryService> {
+        self.job_queries.clone()
     }
 
     /// Get worker management service

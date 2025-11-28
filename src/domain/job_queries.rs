@@ -253,3 +253,33 @@ impl JobQueryService {
         crate::common::current_timestamp_or_zero()
     }
 }
+
+/// Format duration for display
+pub fn format_duration(seconds: i64) -> (String, &'static str) {
+    if seconds == 0 {
+        ("-".to_string(), "")
+    } else if seconds < 1 {
+        (format!("{}ms", seconds * 1000), "fast")
+    } else if seconds < 5 {
+        (format!("{}s", seconds), "fast")
+    } else if seconds < 30 {
+        (format!("{}s", seconds), "medium")
+    } else {
+        (format!("{}s", seconds), "slow")
+    }
+}
+
+/// Format time ago for display
+pub fn format_time_ago(seconds: i64) -> String {
+    if seconds < 5 {
+        "just now".to_string()
+    } else if seconds < 60 {
+        format!("{}s ago", seconds)
+    } else if seconds < 3600 {
+        format!("{}m ago", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{}h ago", seconds / 3600)
+    } else {
+        format!("{}d ago", seconds / 86400)
+    }
+}

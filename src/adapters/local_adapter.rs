@@ -130,22 +130,67 @@ impl LocalProcessAdapter {
     }
 
     /// Extract command and arguments from job payload
+    ///
+    /// Expects job payload to contain either:
+    /// - A "command" string with just the executable name
+    /// - A "command" object with "program" and "args" fields
+    /// - Legacy: A "command" string that will be parsed (deprecated)
     fn extract_command(&self, job: &Job) -> (String, Vec<String>) {
-        // Try to get command from payload
+        // Try structured command format first (recommended)
         if let Some(cmd_value) = job.payload.get("command") {
+            // Check for structured command object
+            if let Some(cmd_obj) = cmd_value.as_object() {
+                if let (Some(program), args) = (
+                    cmd_obj.get("program").and_then(|p| p.as_str()),
+                    cmd_obj.get("args")
+                ) {
+                    let args_vec = if let Some(args_array) = args.as_array() {
+                        args_array.iter()
+                            .filter_map(|a| a.as_str().map(String::from))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+                    return (program.to_string(), args_vec);
+                }
+            }
+
+            // Check for simple command string (executable only, no args)
             if let Some(cmd_str) = cmd_value.as_str() {
-                // Split command into program and args
-                let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-                if !parts.is_empty() {
-                    let command = parts[0].to_string();
-                    let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
-                    return (command, args);
+                // Validate that the command doesn't contain shell metacharacters
+                // This prevents injection attacks
+                if Self::is_safe_command(cmd_str) {
+                    // For backward compatibility, still support simple whitespace splitting
+                    // but only if the command passes safety validation
+                    let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+                    if !parts.is_empty() {
+                        let command = parts[0].to_string();
+                        let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+                        return (command, args);
+                    }
                 }
             }
         }
 
-        // Default: echo the job ID
+        // Default: echo the job ID (safe fallback)
         ("echo".to_string(), vec![format!("Processing job {}", job.id)])
+    }
+
+    /// Validate that a command string doesn't contain dangerous shell metacharacters
+    fn is_safe_command(cmd: &str) -> bool {
+        // Reject commands with shell metacharacters that could enable injection
+        const DANGEROUS_CHARS: &[char] = &[
+            ';', '&', '|', '>', '<', '`', '$', '(', ')', '{', '}',
+            '[', ']', '!', '\\', '\n', '\r', '*', '?', '~'
+        ];
+
+        // Also reject if command starts with . or / (path traversal)
+        if cmd.starts_with('.') || cmd.starts_with('/') {
+            return false;
+        }
+
+        // Check for dangerous characters
+        !cmd.chars().any(|c| DANGEROUS_CHARS.contains(&c))
     }
 
     /// Create success work result from captured output

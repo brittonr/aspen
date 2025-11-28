@@ -20,7 +20,7 @@ use flawless_utils::DeployedModule;
 use crate::adapters::ExecutionRegistry;
 use crate::config::AuthConfig;
 use crate::domain::{
-    ClusterStatusService, HealthService, JobLifecycleService, WorkerManagementService,
+    ClusterStatusService, HealthService, JobCommandService, JobQueryService, WorkerManagementService,
 };
 #[cfg(feature = "vm-backend")]
 use crate::domain::VmService;
@@ -66,7 +66,8 @@ pub struct AppState {
     // === Domain services ===
     cluster_status: Arc<ClusterStatusService>,
     health: Arc<HealthService>,
-    job_lifecycle: Arc<JobLifecycleService>,
+    job_commands: Arc<JobCommandService>,
+    job_queries: Arc<JobQueryService>,
     worker_management: Arc<WorkerManagementService>,
 
     #[cfg(feature = "vm-backend")]
@@ -88,7 +89,8 @@ impl AppState {
         execution_registry: Arc<ExecutionRegistry>,
         cluster_status: Arc<ClusterStatusService>,
         health: Arc<HealthService>,
-        job_lifecycle: Arc<JobLifecycleService>,
+        job_commands: Arc<JobCommandService>,
+        job_queries: Arc<JobQueryService>,
         worker_management: Arc<WorkerManagementService>,
         #[cfg(feature = "vm-backend")]
         vm_service: Arc<VmService>,
@@ -104,7 +106,8 @@ impl AppState {
             execution_registry,
             cluster_status,
             health,
-            job_lifecycle,
+            job_commands,
+            job_queries,
             worker_management,
             #[cfg(feature = "vm-backend")]
             vm_service,
@@ -183,9 +186,14 @@ impl AppState {
         self.health.clone()
     }
 
-    /// Get the job lifecycle service
-    pub fn job_lifecycle(&self) -> Arc<JobLifecycleService> {
-        self.job_lifecycle.clone()
+    /// Get the job command service
+    pub fn job_commands(&self) -> Arc<JobCommandService> {
+        self.job_commands.clone()
+    }
+
+    /// Get the job query service
+    pub fn job_queries(&self) -> Arc<JobQueryService> {
+        self.job_queries.clone()
     }
 
     /// Get the worker management service

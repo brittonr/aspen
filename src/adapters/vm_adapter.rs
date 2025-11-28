@@ -7,7 +7,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use crate::common::get_unix_timestamp_or_zero;
 use crate::domain::types::Job;
-use crate::infrastructure::vm::{VmAssignment, VmManager, VmManagerConfig};
+use crate::infrastructure::vm::{VmAssignment, VmManagement, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
@@ -15,9 +15,9 @@ use super::{
 };
 use super::cleanup::{CleanupConfig, CleanupMetrics, CleanableExecution, cleanup_executions};
 
-/// Adapter that wraps the existing VmManager to implement ExecutionBackend
+/// Adapter that wraps the VM management trait to implement ExecutionBackend
 pub struct VmAdapter {
-    vm_manager: Arc<VmManager>,
+    vm_manager: Arc<dyn VmManagement>,
     // Track execution handles to VM IDs
     executions: Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
     // Limit concurrent monitoring tasks to prevent resource exhaustion
@@ -55,13 +55,13 @@ impl CleanableExecution for VmExecutionState {
     }
 }
 impl VmAdapter {
-    /// Create a new VM adapter wrapping an existing VmManager
-    pub fn new(vm_manager: Arc<VmManager>) -> Self {
+    /// Create a new VM adapter wrapping a VM management implementation
+    pub fn new(vm_manager: Arc<dyn VmManagement>) -> Self {
         Self::with_cleanup_config(vm_manager, CleanupConfig::default())
     }
 
     /// Create a new VM adapter with custom cleanup configuration
-    pub fn with_cleanup_config(vm_manager: Arc<VmManager>, cleanup_config: CleanupConfig) -> Self {
+    pub fn with_cleanup_config(vm_manager: Arc<dyn VmManagement>, cleanup_config: CleanupConfig) -> Self {
         // Limit to 1000 concurrent monitoring tasks (prevent unbounded spawning)
         const MAX_CONCURRENT_MONITORS: usize = 1000;
 
@@ -87,7 +87,7 @@ impl VmAdapter {
         config: VmManagerConfig,
         hiqlite: Arc<crate::hiqlite::HiqliteService>,
     ) -> Result<Self> {
-        let vm_manager = Arc::new(VmManager::new(config, hiqlite).await?);
+        let vm_manager: Arc<dyn VmManagement> = Arc::new(VmManager::new(config, hiqlite).await?);
         Ok(Self::new(vm_manager))
     }
 

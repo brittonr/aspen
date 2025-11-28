@@ -20,7 +20,6 @@ pub mod health_service;
 pub mod job;
 pub mod job_claiming;
 pub mod job_commands;
-pub mod job_lifecycle;
 pub mod job_metadata;
 pub mod job_queries;
 pub mod job_requirements;
@@ -44,9 +43,8 @@ pub use health_service::HealthService;
 pub use job::{Job, JobStatus};
 pub use job_claiming::JobClaimingService;
 pub use job_commands::{JobCommandService, JobSubmission};
-pub use job_lifecycle::{JobLifecycleService, format_duration, format_time_ago};
 pub use job_metadata::JobMetadata;
-pub use job_queries::{JobQueryService, JobSortOrder};
+pub use job_queries::{JobQueryService, JobSortOrder, format_duration, format_time_ago};
 pub use job_requirements::{IsolationLevel, JobRequirements};
 pub use queue::{HealthStatus, QueueStats};
 #[cfg(feature = "tofu-support")]

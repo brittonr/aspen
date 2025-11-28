@@ -178,38 +178,27 @@ impl WorkQueue {
             "Attempting to claim job"
         );
 
-        // WRITE-THROUGH WITH ROLLBACK: Prepare the updated job first
+        // TRUE WRITE-THROUGH: Prepare the updated job first
         let mut claimed_job = job.clone();
         claimed_job.status = JobStatus::Claimed;
         claimed_job.claimed_by = Some(self.node_id.clone());
         claimed_job.assigned_worker_id = worker_id.map(|s| s.to_string());
         claimed_job.metadata.updated_at = now;
 
-        // Step 1: Optimistically update cache (can rollback)
-        let old_job = job.clone();
-        self.cache.upsert(claimed_job.clone()).await;
-
-        // Step 2: Persist to store (authoritative)
-        let rows_affected = match self.store
+        // Step 1: Update store first (authoritative source of truth)
+        let rows_affected = self.store
             .claim_workflow(&job.id, &self.node_id, worker_id, now)
-            .await
-        {
-            Ok(rows) => rows,
-            Err(e) => {
-                // Rollback cache on store failure
-                self.cache.upsert(old_job).await;
-                return Err(e);
-            }
-        };
+            .await?;
 
         if rows_affected == 0 {
-            // Another node claimed it first - rollback cache
-            self.cache.upsert(old_job).await;
+            // Another node claimed it first - nothing to update in cache
             debug!(job_id = %job.id, "Claim race lost - job already claimed");
             return Ok(None);
         }
 
-        // Success! Cache and store are consistent
+        // Step 2: Update cache after successful store update
+        // This ensures cache is always consistent with the store
+        self.cache.upsert(claimed_job.clone()).await;
         self.cache_version.increment();
 
         info!(
@@ -286,62 +275,43 @@ impl WorkQueue {
             None
         };
 
-        // WRITE-THROUGH WITH ROLLBACK: Get current job state for potential rollback
-        let old_job = match self.cache.get(job_id).await {
-            Some(job) => job,
-            None => {
-                // Job not in cache - try to complete anyway (store is authoritative)
-                let rows = self.store
-                    .update_workflow_status(job_id, &status, completed_by, now)
-                    .await?;
-                if rows > 0 {
-                    // Force cache refresh to get updated state
-                    self.refresh_cache().await?;
-                    self.cache_version.increment();
-                }
-                return Ok(());
-            }
-        };
+        // TRUE WRITE-THROUGH: Get current job state for update
+        let old_job = self.cache.get(job_id).await;
 
-        // Prepare updated job
-        let mut updated_job = old_job.clone();
-        updated_job.status = status;
-        updated_job.metadata.updated_at = now;
-
-        // Set started_at timestamp when transitioning to InProgress
-        if status == JobStatus::InProgress && updated_job.metadata.started_at.is_none() {
-            updated_job.metadata.started_at = Some(now);
-        }
-
-        if let Some(completed_by_node) = completed_by {
-            updated_job.completed_by = Some(completed_by_node.to_string());
-        }
-
-        // Step 1: Optimistically update cache
-        self.cache.upsert(updated_job).await;
-
-        // Step 2: Persist to store
-        let rows_affected = match self.store
+        // Step 1: Update store first (authoritative source of truth)
+        let rows_affected = self.store
             .update_workflow_status(job_id, &status, completed_by, now)
-            .await
-        {
-            Ok(rows) => rows,
-            Err(e) => {
-                // Rollback cache on store failure
-                self.cache.upsert(old_job).await;
-                return Err(e);
-            }
-        };
+            .await?;
 
         if rows_affected == 0 {
-            // Status update rejected - rollback cache
-            self.cache.upsert(old_job).await;
             debug!(
                 job_id = %job_id,
                 new_status = ?status,
-                "Status update rejected by state machine guards"
+                "Status update rejected by state machine guards or job not found"
             );
             return Ok(());
+        }
+
+        // Step 2: Update cache after successful store update
+        // Only update cache if we have the job in cache
+        if let Some(mut updated_job) = old_job {
+            updated_job.status = status;
+            updated_job.metadata.updated_at = now;
+
+            // Set started_at timestamp when transitioning to InProgress
+            if status == JobStatus::InProgress && updated_job.metadata.started_at.is_none() {
+                updated_job.metadata.started_at = Some(now);
+            }
+
+            if let Some(completed_by_node) = completed_by {
+                updated_job.completed_by = Some(completed_by_node.to_string());
+            }
+
+            self.cache.upsert(updated_job).await;
+        } else {
+            // Job wasn't in cache - refresh to get the updated state
+            // This is less efficient but ensures consistency
+            self.refresh_cache().await?;
         }
 
         // Success! Cache and store are consistent

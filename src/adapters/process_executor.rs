@@ -73,7 +73,8 @@ impl ProcessExecutor {
 
         // Spawn the process
         let mut child = cmd.spawn()?;
-        let pid = child.id().unwrap_or(0);
+        let pid = child.id()
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve child process PID"))?;
 
         // Capture output if configured
         if config.capture_output {
