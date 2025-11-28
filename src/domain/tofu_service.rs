@@ -11,17 +11,12 @@
 
 use anyhow::Result;
 use std::sync::Arc;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::{
-    adapters::ExecutionRegistry,
-    hiqlite::HiqliteService,
-    tofu::{
-        TofuStateBackend,
-        TofuPlanExecutor,
-        CliTofuExecutor,
-        types::*,
-    },
+use crate::tofu::{
+    TofuStateBackend,
+    TofuPlanExecutor,
+    types::*,
 };
 
 /// Unified service for all OpenTofu/Terraform operations
@@ -44,28 +39,24 @@ pub struct TofuService {
 }
 
 impl TofuService {
-    /// Create a new TofuService
+    /// Create a new TofuService from infrastructure components
     ///
     /// Creates a new domain service for OpenTofu operations. This should be called once
     /// at startup and the instance shared across all handlers via Arc.
     ///
     /// # Arguments
-    /// * `_execution_registry` - Registry for execution backends (reserved for future use)
-    /// * `hiqlite` - Hiqlite database service
-    /// * `work_dir` - Working directory for plan execution
+    /// * `state_backend` - Pre-configured TofuStateBackend (from infrastructure)
+    /// * `plan_executor` - Pre-configured TofuPlanExecutor (from infrastructure)
+    ///
+    /// # Note
+    /// This constructor takes pre-built infrastructure components rather than raw
+    /// dependencies (like HiqliteService), maintaining proper layer separation.
+    /// The domain layer doesn't need to know about Hiqlite - it just uses the
+    /// tofu infrastructure components that handle that internally.
     pub fn new(
-        _execution_registry: Arc<ExecutionRegistry>,
-        hiqlite: Arc<HiqliteService>,
-        work_dir: PathBuf,
+        state_backend: Arc<TofuStateBackend>,
+        plan_executor: Arc<TofuPlanExecutor>,
     ) -> Self {
-        let state_backend = Arc::new(TofuStateBackend::new(hiqlite.clone()));
-        let executor = Arc::new(CliTofuExecutor::new());
-        let plan_executor = Arc::new(TofuPlanExecutor::new(
-            hiqlite.clone(),
-            executor,
-            work_dir,
-        ));
-
         Self {
             state_backend,
             plan_executor,
@@ -74,7 +65,7 @@ impl TofuService {
 
     /// Create a new TofuService from pre-built backend components
     ///
-    /// This is an alternative constructor for testing or advanced use cases.
+    /// This is an alias for the main constructor, maintained for API compatibility.
     ///
     /// # Arguments
     /// * `state_backend` - Pre-configured TofuStateBackend

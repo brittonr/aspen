@@ -48,11 +48,19 @@ impl<'a> FeatureBuilder<'a> {
             .map(|vm_manager| Arc::new(VmService::new(vm_manager)));
 
         #[cfg(feature = "tofu-support")]
-        let tofu_service = Some(Arc::new(TofuService::new(
-            self.execution_registry,
-            self.hiqlite,
-            self.config.storage.work_dir.clone(),
-        )));
+        let tofu_service = {
+            use crate::tofu::{TofuStateBackend, TofuPlanExecutor, CliTofuExecutor};
+
+            let state_backend = Arc::new(TofuStateBackend::new(self.hiqlite.clone()));
+            let executor = Arc::new(CliTofuExecutor::new());
+            let plan_executor = Arc::new(TofuPlanExecutor::new(
+                self.hiqlite.clone(),
+                executor,
+                self.config.storage.work_dir.clone(),
+            ));
+
+            Some(Arc::new(TofuService::new(state_backend, plan_executor)))
+        };
 
         FeatureComponents {
             #[cfg(feature = "vm-backend")]

@@ -30,6 +30,8 @@ pub mod tofu_service;
 pub mod types;
 pub mod validation;
 #[cfg(feature = "vm-backend")]
+pub mod vm;
+#[cfg(feature = "vm-backend")]
 pub mod vm_service;
 pub mod worker;
 pub mod worker_management;
@@ -49,6 +51,8 @@ pub use job_requirements::{IsolationLevel, JobRequirements};
 pub use queue::{HealthStatus, QueueStats};
 #[cfg(feature = "tofu-support")]
 pub use tofu_service::TofuService;
+#[cfg(feature = "vm-backend")]
+pub use vm::{VmManagement, VmConfig, VmInstance, VmState, VmAssignment, JobResult, VmStats};
 #[cfg(feature = "vm-backend")]
 pub use vm_service::VmService;
 pub use worker::{Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats, WorkerStatus, WorkerType};

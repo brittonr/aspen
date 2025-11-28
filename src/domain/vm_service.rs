@@ -14,9 +14,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::infrastructure::vm::{
-    VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats, VmAssignment,
-    vm_types::JobRequirements
+use super::vm::{
+    VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats, VmAssignment, JobRequirements,
 };
 
 /// Error returned when VM operations are attempted without an available VM manager

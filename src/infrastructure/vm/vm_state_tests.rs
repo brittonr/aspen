@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::vm_types::{VmState, VmConfig, VmMode, VmInstance};
-    use super::super::vm_registry::VmRegistry;
+    use super::super::registry::DefaultVmRepository as VmRegistry;
     use crate::hiqlite::HiqliteService;
     use std::sync::Arc;
     use uuid::Uuid;
