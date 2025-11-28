@@ -11,7 +11,8 @@ pub mod registry; // New modular registry
 pub mod vm_controller;
 pub mod job_router;
 pub mod resource_monitor;
-pub mod health_checker;
+pub mod health_checker; // New modular health checker
+mod health_checker_old; // Temporary old implementation (will be removed in Phase 6)
 pub mod control_protocol;
 pub mod messages;
 pub mod coordinator;
