@@ -10,6 +10,7 @@ use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats, WorkerStatus};
 use crate::domain::job_metadata::JobMetadata;
 use crate::domain::job_requirements::JobRequirements;
+use crate::common::timestamp::current_timestamp_or_zero;
 
 /// Mock implementation of StateRepository for testing
 #[derive(Clone)]
@@ -75,14 +76,6 @@ impl MockWorkRepository {
     pub async fn set_stats(&self, stats: QueueStats) {
         *self.stats.lock().await = stats;
     }
-
-    /// Get current timestamp for testing
-    fn current_timestamp() -> i64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64
-    }
 }
 
 #[async_trait]
@@ -105,7 +98,7 @@ impl WorkRepository for MockWorkRepository {
 
     async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
         let mut jobs = self.jobs.lock().await;
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero();
 
         // Find first pending job that matches worker type (if specified)
         let claimed_job = jobs.iter_mut()
@@ -133,7 +126,7 @@ impl WorkRepository for MockWorkRepository {
 
     async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
         let mut jobs = self.jobs.lock().await;
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero();
         if let Some(job) = jobs.iter_mut().find(|job| job.id == job_id) {
             job.status = status;
             job.metadata.updated_at = now;
@@ -227,20 +220,12 @@ impl MockWorkerRepository {
         let mut worker_list = self.workers.lock().await;
         worker_list.extend(workers);
     }
-
-    /// Get current timestamp for testing
-    fn current_timestamp() -> i64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64
-    }
 }
 
 #[async_trait]
 impl WorkerRepository for MockWorkerRepository {
     async fn register(&self, registration: WorkerRegistration) -> Result<Worker> {
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero();
         let worker_id = format!("worker-{}-{}", registration.worker_type, uuid::Uuid::new_v4());
 
         let worker = Worker {
@@ -263,7 +248,7 @@ impl WorkerRepository for MockWorkerRepository {
 
     async fn heartbeat(&self, heartbeat: WorkerHeartbeat) -> Result<()> {
         let mut workers = self.workers.lock().await;
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero();
 
         if let Some(worker) = workers.iter_mut().find(|w| w.id == heartbeat.worker_id) {
             worker.last_heartbeat = now;

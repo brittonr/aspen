@@ -3,8 +3,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tracing::{debug, info, warn};
+use crate::common::get_unix_timestamp_or_zero;
 use crate::domain::types::Job;
 use crate::infrastructure::vm::{VmAssignment, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
@@ -12,7 +13,7 @@ use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
-use super::cleanup::{CleanupConfig, CleanupMetrics};
+use super::cleanup::{CleanupConfig, CleanupMetrics, CleanableExecution, cleanup_executions};
 
 /// Adapter that wraps the existing VmManager to implement ExecutionBackend
 pub struct VmAdapter {
@@ -38,6 +39,20 @@ struct VmExecutionState {
     started_at: u64,
     completed_at: Option<u64>,
     last_accessed: u64,
+}
+
+impl CleanableExecution for VmExecutionState {
+    fn completed_at(&self) -> Option<u64> {
+        self.completed_at
+    }
+
+    fn last_accessed(&self) -> u64 {
+        self.last_accessed
+    }
+
+    fn status(&self) -> &ExecutionStatus {
+        &self.status
+    }
 }
 impl VmAdapter {
     /// Create a new VM adapter wrapping an existing VmManager
@@ -116,56 +131,15 @@ impl VmAdapter {
         });
     }
 
-    /// Internal cleanup implementation
+    /// Internal cleanup implementation using shared cleanup logic
     async fn cleanup_internal(
         executions: &Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
         config: &CleanupConfig,
     ) -> (usize, usize) {
         let mut exec_map = executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let mut ttl_cleaned = 0;
+        let now = get_unix_timestamp_or_zero();
 
-        // First pass: Remove entries that exceed TTL based on status
-        exec_map.retain(|_, state| {
-            if let Some(completed_at) = state.completed_at {
-                let age = now.saturating_sub(completed_at);
-                let should_remove = match &state.status {
-                    ExecutionStatus::Completed(_) => age > config.completed_ttl.as_secs(),
-                    ExecutionStatus::Failed(_) => age > config.failed_ttl.as_secs(),
-                    ExecutionStatus::Cancelled => age > config.cancelled_ttl.as_secs(),
-                    _ => false,
-                };
-
-                if should_remove {
-                    ttl_cleaned += 1;
-                    return false;
-                }
-            }
-            true
-        });
-
-        // Second pass: If still over size limit, evict oldest by last_accessed (LRU)
-        let mut lru_cleaned = 0;
-        if exec_map.len() > config.max_entries {
-            let mut entries: Vec<_> = exec_map
-                .iter()
-                .map(|(k, v)| (k.clone(), v.last_accessed))
-                .collect();
-
-            entries.sort_by_key(|(_, last_accessed)| *last_accessed);
-
-            let to_remove = exec_map.len() - config.max_entries;
-
-            for (key, _) in entries.iter().take(to_remove) {
-                exec_map.remove(key);
-                lru_cleaned += 1;
-            }
-        }
-
-        (ttl_cleaned, lru_cleaned)
+        cleanup_executions(&mut *exec_map, config, now)
     }
 
     /// Get cleanup metrics
@@ -173,6 +147,16 @@ impl VmAdapter {
         let metrics = self.cleanup_metrics.read().await;
         metrics.clone()
     }
+
+    /// Helper method to finalize execution state with proper timestamp handling
+    async fn finalize_execution(&self, handle_id: &str, status: ExecutionStatus) {
+        let mut executions = self.executions.write().await;
+        if let Some(state) = executions.get_mut(handle_id) {
+            state.status = status;
+            state.completed_at = Some(get_unix_timestamp_or_zero());
+        }
+    }
+
     /// Monitor VM job execution
     async fn monitor_execution(&self, handle: ExecutionHandle, vm_id: uuid::Uuid) {
         use tracing::{debug, warn, error};
@@ -188,18 +172,10 @@ impl VmAdapter {
         loop {
             if start.elapsed() > timeout {
                 warn!("Job {} timed out on VM {}", handle.id, vm_id);
-                let mut executions = self.executions.write().await;
-                if let Some(state) = executions.get_mut(&handle.id) {
-                    state.status = ExecutionStatus::Failed(
-                        format!("Job execution timed out after {:?}", timeout)
-                    );
-                    state.completed_at = Some(
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0),
-                    );
-                }
+                self.finalize_execution(
+                    &handle.id,
+                    ExecutionStatus::Failed(format!("Job execution timed out after {:?}", timeout))
+                ).await;
                 break;
             }
 
@@ -210,18 +186,10 @@ impl VmAdapter {
                 }
                 Ok(health) if !health.is_healthy() => {
                     warn!("VM {} is unhealthy: {:?}", vm_id, health);
-                    let mut executions = self.executions.write().await;
-                    if let Some(state) = executions.get_mut(&handle.id) {
-                        state.status = ExecutionStatus::Failed(
-                            format!("VM became unhealthy: {:?}", health)
-                        );
-                        state.completed_at = Some(
-                            SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                        );
-                    }
+                    self.finalize_execution(
+                        &handle.id,
+                        ExecutionStatus::Failed(format!("VM became unhealthy: {:?}", health))
+                    ).await;
                     break;
                 }
                 _ => {
@@ -238,55 +206,33 @@ impl VmAdapter {
                 Ok(Some(vm_state)) if vm_state.is_stopped() => {
                     // VM has stopped, assume job completed
                     info!("VM {} has stopped, marking job as completed", vm_id);
-                    let mut executions = self.executions.write().await;
-                    if let Some(state) = executions.get_mut(&handle.id) {
-                        state.status = ExecutionStatus::Completed(WorkResult {
+                    self.finalize_execution(
+                        &handle.id,
+                        ExecutionStatus::Completed(WorkResult {
                             success: true,
                             output: Some(serde_json::Value::String(format!(
                                 "Job completed on VM {} (VM stopped)",
                                 vm_id
                             ))),
                             error: None,
-                        });
-                        state.completed_at = Some(
-                            SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                        );
-                    }
+                        })
+                    ).await;
                     break;
                 }
                 Ok(Some(vm_state)) if vm_state.is_failed() => {
                     error!("VM {} failed", vm_id);
-                    let mut executions = self.executions.write().await;
-                    if let Some(state) = executions.get_mut(&handle.id) {
-                        state.status = ExecutionStatus::Failed(
-                            format!("VM {} failed", vm_id)
-                        );
-                        state.completed_at = Some(
-                            SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                        );
-                    }
+                    self.finalize_execution(
+                        &handle.id,
+                        ExecutionStatus::Failed(format!("VM {} failed", vm_id))
+                    ).await;
                     break;
                 }
                 Ok(None) => {
                     warn!("VM {} not found, marking job as failed", vm_id);
-                    let mut executions = self.executions.write().await;
-                    if let Some(state) = executions.get_mut(&handle.id) {
-                        state.status = ExecutionStatus::Failed(
-                            format!("VM {} not found", vm_id)
-                        );
-                        state.completed_at = Some(
-                            SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .map(|d| d.as_secs())
-                                .unwrap_or(0),
-                        );
-                    }
+                    self.finalize_execution(
+                        &handle.id,
+                        ExecutionStatus::Failed(format!("VM {} not found", vm_id))
+                    ).await;
                     break;
                 }
                 Err(e) => {
@@ -316,10 +262,7 @@ impl ExecutionBackend for VmAdapter {
         // Create execution handle
         let handle = ExecutionHandle::vm(vm_id.to_string(), job.id.clone());
         // Store execution state
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = get_unix_timestamp_or_zero();
         let state = VmExecutionState {
             handle: handle.clone(),
             vm_id,
@@ -358,10 +301,7 @@ impl ExecutionBackend for VmAdapter {
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
-            state.last_accessed = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            state.last_accessed = get_unix_timestamp_or_zero();
             Ok(state.status.clone())
         } else {
             Err(anyhow::anyhow!("Execution not found: {}", handle.id))
@@ -374,12 +314,7 @@ impl ExecutionBackend for VmAdapter {
                 // In a real implementation, we would send a cancellation signal to the VM
                 // For now, just mark as cancelled
                 state.status = ExecutionStatus::Cancelled;
-                state.completed_at = Some(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0),
-                );
+                state.completed_at = Some(get_unix_timestamp_or_zero());
                 info!("VM adapter: cancelled execution {}", handle.id);
                 Ok(())
             } else {
@@ -395,10 +330,7 @@ impl ExecutionBackend for VmAdapter {
             .get_mut(&handle.id)
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
 
-        state.last_accessed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        state.last_accessed = get_unix_timestamp_or_zero();
         let mut custom = HashMap::new();
         custom.insert(
             "vm_id".to_string(),
@@ -454,12 +386,7 @@ impl ExecutionBackend for VmAdapter {
                 stats.running_vms, stats.idle_vms
             ),
             resource_info: Some(self.get_resource_info().await?),
-            last_check: Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0),
-            ),
+            last_check: Some(get_unix_timestamp_or_zero()),
             details: HashMap::from([
                 ("type".to_string(), "vm".to_string()),
                 ("total_vms".to_string(), stats.total_vms.to_string()),
@@ -505,10 +432,7 @@ impl ExecutionBackend for VmAdapter {
     }
     async fn cleanup_executions(&self, older_than: Duration) -> Result<usize> {
         let mut executions = self.executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = get_unix_timestamp_or_zero();
         let cutoff = now - older_than.as_secs();
         let mut cleaned = 0;
         executions.retain(|_, state| {

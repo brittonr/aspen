@@ -9,6 +9,7 @@ use tracing::{debug, info};
 
 use crate::domain::types::Job;
 use crate::worker_trait::WorkResult;
+use crate::common::timestamp::current_timestamp_or_zero;
 
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
@@ -290,10 +291,7 @@ impl ExecutionBackend for LocalProcessAdapter {
                 running_count
             ),
             resource_info: Some(self.get_resource_info().await?),
-            last_check: Some(std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs()),
+            last_check: Some(current_timestamp_or_zero() as u64),
             details: HashMap::from([
                 ("type".to_string(), "local".to_string()),
                 ("work_dir".to_string(), self.config.work_dir.to_string_lossy().to_string()),

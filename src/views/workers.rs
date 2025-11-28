@@ -4,6 +4,7 @@
 use askama::Template;
 use crate::domain::cluster_status::WorkerStats;
 use crate::domain::format_time_ago;
+use crate::common::timestamp::current_timestamp_or_zero;
 
 /// Individual worker for display
 #[derive(Debug, Clone)]
@@ -18,10 +19,7 @@ pub struct WorkerRow {
 
 impl From<WorkerStats> for WorkerRow {
     fn from(worker: WorkerStats) -> Self {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
+        let now = current_timestamp_or_zero();
 
         let time_ago = format_time_ago(now - worker.last_seen_timestamp);
 

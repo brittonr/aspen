@@ -6,7 +6,7 @@
 use anyhow::Result;
 use serde_json;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::common::timestamp::current_timestamp_or_zero;
 
 use crate::{
     hiqlite::HiqliteService,
@@ -314,10 +314,7 @@ impl TofuStateBackend {
 
     /// Helper to get current timestamp
     fn current_timestamp(&self) -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64
+        current_timestamp_or_zero()
     }
 
     /// Convert database row to workspace

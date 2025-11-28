@@ -4,11 +4,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::worker_trait::WorkResult;
+use crate::common::timestamp::current_timestamp_or_zero;
 use super::{ExecutionHandle, ExecutionStatus};
 use super::cleanup::{CleanupConfig, CleanupMetrics};
 
@@ -100,7 +101,7 @@ impl ExecutionTracker {
 
     /// Create a new execution
     pub async fn create_execution(&self, handle: ExecutionHandle) {
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero() as u64;
         let state = LocalProcessState {
             handle: handle.clone(),
             pid: 0, // Will be updated when process starts
@@ -125,13 +126,13 @@ impl ExecutionTracker {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
             state.pid = pid;
-            state.last_accessed = Self::current_timestamp();
+            state.last_accessed = current_timestamp_or_zero() as u64;
         }
     }
 
     /// Mark an execution as completed
     pub async fn mark_completed(&self, handle_id: &str, result: WorkResult) {
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero() as u64;
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
             state.status = ExecutionStatus::Completed(result);
@@ -142,7 +143,7 @@ impl ExecutionTracker {
 
     /// Mark an execution as failed
     pub async fn mark_failed(&self, handle_id: &str, error: String) {
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero() as u64;
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
             state.status = ExecutionStatus::Failed(error);
@@ -153,7 +154,7 @@ impl ExecutionTracker {
 
     /// Mark an execution as cancelled
     pub async fn mark_cancelled(&self, handle_id: &str) {
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero() as u64;
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
             state.status = ExecutionStatus::Cancelled;
@@ -166,7 +167,7 @@ impl ExecutionTracker {
     pub async fn get_status(&self, handle_id: &str) -> Option<ExecutionStatus> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
-            state.last_accessed = Self::current_timestamp();
+            state.last_accessed = current_timestamp_or_zero() as u64;
             Some(state.status.clone())
         } else {
             None
@@ -177,7 +178,7 @@ impl ExecutionTracker {
     pub async fn get_state(&self, handle_id: &str) -> Option<LocalProcessState> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
-            state.last_accessed = Self::current_timestamp();
+            state.last_accessed = current_timestamp_or_zero() as u64;
             Some(state.clone())
         } else {
             None
@@ -188,7 +189,7 @@ impl ExecutionTracker {
     pub async fn get_pid(&self, handle_id: &str) -> Option<u32> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(handle_id) {
-            state.last_accessed = Self::current_timestamp();
+            state.last_accessed = current_timestamp_or_zero() as u64;
             Some(state.pid)
         } else {
             None
@@ -216,7 +217,7 @@ impl ExecutionTracker {
     /// Clean up old executions (legacy interface)
     pub async fn cleanup_old(&self, older_than: Duration) -> usize {
         let mut executions = self.executions.write().await;
-        let cutoff = Self::current_timestamp() - older_than.as_secs();
+        let cutoff = (current_timestamp_or_zero() as u64).saturating_sub(older_than.as_secs());
         let mut cleaned = 0;
 
         executions.retain(|_, state| {
@@ -243,7 +244,7 @@ impl ExecutionTracker {
         config: &CleanupConfig,
     ) -> (usize, usize) {
         let mut exec_map = executions.write().await;
-        let now = Self::current_timestamp();
+        let now = current_timestamp_or_zero() as u64;
         let mut ttl_cleaned = 0;
 
         // First pass: Remove entries that exceed TTL based on status
@@ -319,13 +320,6 @@ impl ExecutionTracker {
         }
     }
 
-    /// Get current Unix timestamp
-    fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs()
-    }
 }
 
 impl Default for ExecutionTracker {

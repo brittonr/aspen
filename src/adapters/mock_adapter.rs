@@ -4,12 +4,13 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use crate::domain::types::Job;
 use crate::worker_trait::WorkResult;
+use crate::common::timestamp::current_timestamp_or_zero;
 
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
@@ -108,10 +109,7 @@ impl MockAdapter {
         // Use a simple deterministic approach for now (can be improved with rand later)
         let should_fail = if self.config.failure_rate > 0.0 {
             // Use execution time as a pseudo-random source
-            let now_ms = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_millis();
+            let now_ms = (current_timestamp_or_zero() as u128) * 1000;
             ((now_ms % 100) as f32 / 100.0) < self.config.failure_rate
         } else {
             false
@@ -119,10 +117,7 @@ impl MockAdapter {
 
         let mut executions = self.executions.write().await;
         if let Some(exec) = executions.get_mut(&handle.id) {
-            let completed_at = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs();
+            let completed_at = current_timestamp_or_zero() as u64;
 
             if should_fail {
                 exec.status = ExecutionStatus::Failed("Simulated failure".to_string());
@@ -188,10 +183,7 @@ impl ExecutionBackend for MockAdapter {
             handle: handle.clone(),
             config: config.clone(),
             status: ExecutionStatus::Running,
-            started_at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs(),
+            started_at: current_timestamp_or_zero() as u64,
             completed_at: None,
         };
 
@@ -233,12 +225,7 @@ impl ExecutionBackend for MockAdapter {
         if let Some(exec) = executions.get_mut(&handle.id) {
             if matches!(exec.status, ExecutionStatus::Running) {
                 exec.status = ExecutionStatus::Cancelled;
-                exec.completed_at = Some(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("System time is before UNIX epoch")
-                        .as_secs(),
-                );
+                exec.completed_at = Some(current_timestamp_or_zero() as u64);
 
                 // Release resources if simulating
                 if self.config.simulate_resources {
@@ -310,12 +297,7 @@ impl ExecutionBackend for MockAdapter {
             healthy: true,
             status_message: format!("Mock adapter healthy, {} executions running", running_count),
             resource_info: Some(resource_info),
-            last_check: Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX epoch")
-                    .as_secs(),
-            ),
+            last_check: Some(current_timestamp_or_zero() as u64),
             details: HashMap::from([
                 ("type".to_string(), "mock".to_string()),
                 ("failure_rate".to_string(), self.config.failure_rate.to_string()),
@@ -378,12 +360,9 @@ impl ExecutionBackend for MockAdapter {
 
     async fn cleanup_executions(&self, older_than: Duration) -> Result<usize> {
         let mut executions = self.executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
+        let now = current_timestamp_or_zero() as u64;
 
-        let cutoff = now - older_than.as_secs();
+        let cutoff = now.saturating_sub(older_than.as_secs());
         let mut cleaned = 0;
 
         executions.retain(|_, exec| {

@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -16,7 +16,7 @@ use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
-use super::cleanup::{CleanupConfig, CleanupMetrics};
+use super::cleanup::{CleanupConfig, CleanupMetrics, CleanableExecution, cleanup_executions};
 
 /// Adapter that wraps the existing FlawlessWorker to implement ExecutionBackend
 pub struct FlawlessAdapter {
@@ -37,6 +37,20 @@ struct FlawlessExecutionState {
     started_at: u64,
     completed_at: Option<u64>,
     last_accessed: u64,
+}
+
+impl CleanableExecution for FlawlessExecutionState {
+    fn completed_at(&self) -> Option<u64> {
+        self.completed_at
+    }
+
+    fn last_accessed(&self) -> u64 {
+        self.last_accessed
+    }
+
+    fn status(&self) -> &ExecutionStatus {
+        &self.status
+    }
 }
 
 impl FlawlessAdapter {
@@ -116,56 +130,15 @@ impl FlawlessAdapter {
         });
     }
 
-    /// Internal cleanup implementation
+    /// Internal cleanup implementation using shared cleanup logic
     async fn cleanup_internal(
         executions: &Arc<RwLock<HashMap<String, FlawlessExecutionState>>>,
         config: &CleanupConfig,
     ) -> (usize, usize) {
         let mut exec_map = executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
-        let mut ttl_cleaned = 0;
+        let now = crate::common::get_unix_timestamp_or_zero();
 
-        // First pass: Remove entries that exceed TTL based on status
-        exec_map.retain(|_, state| {
-            if let Some(completed_at) = state.completed_at {
-                let age = now.saturating_sub(completed_at);
-                let should_remove = match &state.status {
-                    ExecutionStatus::Completed(_) => age > config.completed_ttl.as_secs(),
-                    ExecutionStatus::Failed(_) => age > config.failed_ttl.as_secs(),
-                    ExecutionStatus::Cancelled => age > config.cancelled_ttl.as_secs(),
-                    _ => false,
-                };
-
-                if should_remove {
-                    ttl_cleaned += 1;
-                    return false;
-                }
-            }
-            true
-        });
-
-        // Second pass: If still over size limit, evict oldest by last_accessed (LRU)
-        let mut lru_cleaned = 0;
-        if exec_map.len() > config.max_entries {
-            let mut entries: Vec<_> = exec_map
-                .iter()
-                .map(|(k, v)| (k.clone(), v.last_accessed))
-                .collect();
-
-            entries.sort_by_key(|(_, last_accessed)| *last_accessed);
-
-            let to_remove = exec_map.len() - config.max_entries;
-
-            for (key, _) in entries.iter().take(to_remove) {
-                exec_map.remove(key);
-                lru_cleaned += 1;
-            }
-        }
-
-        (ttl_cleaned, lru_cleaned)
+        cleanup_executions(&mut *exec_map, config, now)
     }
 
     /// Get cleanup metrics
@@ -189,10 +162,7 @@ impl FlawlessAdapter {
         // Update execution state based on result
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
-            let completed_at = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs();
+            let now = crate::common::get_unix_timestamp_or_zero();
 
             match result {
                 Ok(work_result) => {
@@ -208,7 +178,8 @@ impl FlawlessAdapter {
                     state.status = ExecutionStatus::Failed(e.to_string());
                 }
             }
-            state.completed_at = Some(completed_at);
+            state.completed_at = Some(now);
+            state.last_accessed = now;
         }
     }
 }
@@ -227,10 +198,7 @@ impl ExecutionBackend for FlawlessAdapter {
         let handle = ExecutionHandle::flawless(exec_id.clone(), job.id.clone());
 
         // Create execution record
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
+        let now = crate::common::get_unix_timestamp_or_zero();
         let state = FlawlessExecutionState {
             handle: handle.clone(),
             job: job.clone(),
@@ -284,10 +252,7 @@ impl ExecutionBackend for FlawlessAdapter {
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
         let mut executions = self.executions.write().await;
         if let Some(state) = executions.get_mut(&handle.id) {
-            state.last_accessed = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs();
+            state.last_accessed = crate::common::get_unix_timestamp_or_zero();
             Ok(state.status.clone())
         } else {
             Err(anyhow::anyhow!("Execution not found: {}", handle.id))
@@ -301,13 +266,10 @@ impl ExecutionBackend for FlawlessAdapter {
                 // Note: FlawlessWorker doesn't provide cancellation support
                 // We can only mark it as cancelled in our state
                 warn!("Flawless adapter: cancellation requested but Flawless doesn't support cancellation");
+                let now = crate::common::get_unix_timestamp_or_zero();
                 state.status = ExecutionStatus::Cancelled;
-                state.completed_at = Some(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("System time is before UNIX epoch")
-                        .as_secs(),
-                );
+                state.completed_at = Some(now);
+                state.last_accessed = now;
 
                 info!("Flawless adapter: marked execution {} as cancelled", handle.id);
                 Ok(())
@@ -325,10 +287,7 @@ impl ExecutionBackend for FlawlessAdapter {
             .get_mut(&handle.id)
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
 
-        state.last_accessed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
+        state.last_accessed = crate::common::get_unix_timestamp_or_zero();
 
         let mut custom = HashMap::new();
         if let Some(url) = state.job.payload.get("url") {
@@ -390,10 +349,7 @@ impl ExecutionBackend for FlawlessAdapter {
             ),
             resource_info: Some(self.get_resource_info().await?),
             last_check: Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX epoch")
-                    .as_secs(),
+                crate::common::get_unix_timestamp_or_zero(),
             ),
             details: HashMap::from([
                 ("type".to_string(), "flawless".to_string()),
@@ -453,10 +409,7 @@ impl ExecutionBackend for FlawlessAdapter {
 
     async fn cleanup_executions(&self, older_than: Duration) -> Result<usize> {
         let mut executions = self.executions.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs();
+        let now = crate::common::get_unix_timestamp_or_zero();
 
         let cutoff = now - older_than.as_secs();
         let mut cleaned = 0;

@@ -59,7 +59,13 @@ impl VmRegistry {
     /// between updates and lookups. Uses JSON serialization to preserve
     /// exact state representation including variant data.
     fn state_index_key(state: &VmState) -> String {
-        serde_json::to_string(state).unwrap_or_else(|_| format!("{:?}", state))
+        // Always use JSON serialization for new data
+        // This preserves all variant fields (job_id, timestamps, etc)
+        serde_json::to_string(state).unwrap_or_else(|e| {
+            tracing::error!("Failed to serialize VM state: {}", e);
+            // Emergency fallback - should never happen with derived Serialize
+            format!("{{\"error\":\"serialization_failed\"}}")
+        })
     }
 
     /// Deserialize VM state from stored string
@@ -72,7 +78,28 @@ impl VmRegistry {
         }
 
         // Fall back to legacy Debug format parsing
+        // NOTE: This loses data! Only for backward compatibility
+        tracing::warn!(
+            "Using legacy Debug format parser for state: '{}' - data loss may occur!",
+            state_str
+        );
         parse_vm_state(state_str)
+    }
+
+    /// Migrate a VM's state from Debug to JSON format in database
+    /// Called during recovery to fix legacy data
+    async fn migrate_vm_state_format(&self, vm_id: &Uuid, vm: &VmInstance) -> Result<()> {
+        let state_json = Self::state_index_key(&vm.state);
+        let now = chrono::Utc::now().timestamp();
+
+        self.hiqlite
+            .execute(
+                "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
+                params![state_json, now, vm_id.to_string()],
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| anyhow!("Failed to migrate VM state format: {}", e))
     }
 
     /// Register a new VM instance
@@ -468,18 +495,24 @@ impl VmRegistry {
             let config: VmConfig = serde_json::from_str(&row.config)?;
 
             // Deserialize state with fallback handling
-            let state = Self::deserialize_vm_state(&row.state)
-                .unwrap_or_else(|e| {
+            let (state, needs_migration) = match Self::deserialize_vm_state(&row.state) {
+                Ok(state) => {
+                    // Check if this was parsed from legacy format
+                    let is_legacy = !row.state.starts_with("{") && !row.state.starts_with("[");
+                    (state, is_legacy)
+                },
+                Err(e) => {
                     tracing::warn!(
                         vm_id = %vm_id,
                         error = %e,
                         state_str = %row.state,
                         "Failed to deserialize VM state, using Failed state"
                     );
-                    VmState::Failed {
+                    (VmState::Failed {
                         error: format!("State deserialization failed: {}", e),
-                    }
-                });
+                    }, true)
+                }
+            };
 
             let metrics = row.metrics
                 .as_ref()
@@ -532,6 +565,21 @@ impl VmRegistry {
                     } else {
                         healed += 1;
                     }
+                }
+            }
+
+            // Migrate legacy state format to JSON if needed
+            if needs_migration {
+                tracing::info!(
+                    vm_id = %vm_id,
+                    "Migrating VM state from legacy Debug format to JSON"
+                );
+                if let Err(e) = self.migrate_vm_state_format(&vm_id, &vm).await {
+                    tracing::error!(
+                        vm_id = %vm_id,
+                        error = %e,
+                        "Failed to migrate VM state format"
+                    );
                 }
             }
 

@@ -10,7 +10,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load centralized configuration with layered approach
     // Priority: Environment variables > CONFIG_FILE > ./config.toml > ./config/default.toml > defaults
-    let config = AppConfig::load_with_layers().expect("Failed to load configuration");
+    let config = match AppConfig::load_with_layers() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("FATAL: Failed to load configuration: {}", e);
+            eprintln!("Please check your config file and environment variables");
+            std::process::exit(1);
+        }
+    };
 
     // Each node can have its own flawless server (optional)
     let flawless_url = config.flawless.flawless_url.clone();
@@ -34,28 +41,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Initialize iroh endpoint with HTTP/3 ALPN
-    let endpoint = iroh::Endpoint::builder()
+    let endpoint = match iroh::Endpoint::builder()
         .alpns(vec![config.network.iroh_alpn_bytes()])
         .bind()
         .await
-        .expect("Failed to create iroh endpoint");
+    {
+        Ok(ep) => ep,
+        Err(e) => {
+            eprintln!("FATAL: Failed to create iroh endpoint: {}", e);
+            eprintln!("This may be due to port conflicts or network issues");
+            std::process::exit(1);
+        }
+    };
 
     println!("Iroh Endpoint ID: {}", endpoint.id());
 
     // Wait for direct addresses and relay connection
-    mvm_ci::server::wait_for_online(&endpoint)
-        .await
-        .expect("Failed to connect to relay");
+    if let Err(e) = mvm_ci::server::wait_for_online(&endpoint).await {
+        eprintln!("WARNING: Failed to connect to relay: {}", e);
+        eprintln!("Continuing with local connectivity only");
+    }
 
     let node_id = endpoint.id().to_string();
 
     // Create application state using factory pattern (enables dependency injection)
     println!("Initializing application infrastructure...");
     let factory = ProductionInfrastructureFactory::new();
-    let state_builder = factory
+    let state_builder = match factory
         .build_state(&config, module, endpoint.clone(), node_id)
         .await
-        .expect("Failed to build application state");
+    {
+        Ok(builder) => builder,
+        Err(e) => {
+            eprintln!("FATAL: Failed to build application state: {}", e);
+            eprintln!("This may indicate database connection issues or configuration problems");
+            std::process::exit(1);
+        }
+    };
 
     // Build focused state containers
     let (domain, infra, config_state, features) = state_builder.build();
@@ -134,9 +156,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         features,
     };
 
-    let handle = mvm_ci::server::start(server_config)
-        .await
-        .expect("Failed to start server");
+    let handle = match mvm_ci::server::start(server_config).await {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("FATAL: Failed to start server: {}", e);
+            eprintln!("This may be due to port conflicts (check port 3020) or initialization issues");
+            std::process::exit(1);
+        }
+    };
 
     // Run server (blocks until shutdown or error)
     handle.run().await.map_err(|e| e.into())

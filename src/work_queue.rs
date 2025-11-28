@@ -178,55 +178,47 @@ impl WorkQueue {
             "Attempting to claim job"
         );
 
-        // WRITE-THROUGH PATTERN: Atomic claim in persistent store first
-        let rows_affected = self.store
+        // WRITE-THROUGH WITH ROLLBACK: Prepare the updated job first
+        let mut claimed_job = job.clone();
+        claimed_job.status = JobStatus::Claimed;
+        claimed_job.claimed_by = Some(self.node_id.clone());
+        claimed_job.assigned_worker_id = worker_id.map(|s| s.to_string());
+        claimed_job.metadata.updated_at = now;
+
+        // Step 1: Optimistically update cache (can rollback)
+        let old_job = job.clone();
+        self.cache.upsert(claimed_job.clone()).await;
+
+        // Step 2: Persist to store (authoritative)
+        let rows_affected = match self.store
             .claim_workflow(&job.id, &self.node_id, worker_id, now)
-            .await?;
+            .await
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                // Rollback cache on store failure
+                self.cache.upsert(old_job).await;
+                return Err(e);
+            }
+        };
 
         if rows_affected == 0 {
-            // Another node claimed it first
+            // Another node claimed it first - rollback cache
+            self.cache.upsert(old_job).await;
             debug!(job_id = %job.id, "Claim race lost - job already claimed");
             return Ok(None);
         }
 
-        // Store update succeeded! Now update cache to reflect the claim
-        let cache_updated = self.cache.update(&job.id, |item| {
-            item.status = JobStatus::Claimed;
-            item.claimed_by = Some(self.node_id.clone());
-            item.assigned_worker_id = worker_id.map(|s| s.to_string());
-            item.metadata.updated_at = now;
-        }).await;
-
-        if !cache_updated {
-            // Cache inconsistency detected - should not happen with write-through
-            error!(
-                job_id = %job.id,
-                "Cache inconsistency detected after successful claim"
-            );
-            // Refresh cache to recover from inconsistent state
-            self.refresh_cache().await?;
-        }
-
+        // Success! Cache and store are consistent
         self.cache_version.increment();
 
-        // Return the updated job from cache
-        match self.cache.get(&job.id).await {
-            Some(claimed_job) => {
-                info!(
-                    job_id = %claimed_job.id,
-                    node_id = %self.node_id,
-                    worker_id = ?worker_id,
-                    "Job claimed successfully"
-                );
-                Ok(Some(claimed_job))
-            }
-            None => {
-                error!(job_id = %job.id, "Job missing from cache after claim");
-                // Force refresh and try to recover
-                self.refresh_cache().await?;
-                Ok(self.cache.get(&job.id).await)
-            }
-        }
+        info!(
+            job_id = %claimed_job.id,
+            node_id = %self.node_id,
+            worker_id = ?worker_id,
+            "Job claimed successfully with cache coherency"
+        );
+        Ok(Some(claimed_job))
     }
 
     /// Claim available work from the queue (improved with reduced nesting)
@@ -294,13 +286,56 @@ impl WorkQueue {
             None
         };
 
-        // WRITE-THROUGH PATTERN: Update store first
-        let rows_affected = self.store
+        // WRITE-THROUGH WITH ROLLBACK: Get current job state for potential rollback
+        let old_job = match self.cache.get(job_id).await {
+            Some(job) => job,
+            None => {
+                // Job not in cache - try to complete anyway (store is authoritative)
+                let rows = self.store
+                    .update_workflow_status(job_id, &status, completed_by, now)
+                    .await?;
+                if rows > 0 {
+                    // Force cache refresh to get updated state
+                    self.refresh_cache().await?;
+                    self.cache_version.increment();
+                }
+                return Ok(());
+            }
+        };
+
+        // Prepare updated job
+        let mut updated_job = old_job.clone();
+        updated_job.status = status;
+        updated_job.metadata.updated_at = now;
+
+        // Set started_at timestamp when transitioning to InProgress
+        if status == JobStatus::InProgress && updated_job.metadata.started_at.is_none() {
+            updated_job.metadata.started_at = Some(now);
+        }
+
+        if let Some(completed_by_node) = completed_by {
+            updated_job.completed_by = Some(completed_by_node.to_string());
+        }
+
+        // Step 1: Optimistically update cache
+        self.cache.upsert(updated_job).await;
+
+        // Step 2: Persist to store
+        let rows_affected = match self.store
             .update_workflow_status(job_id, &status, completed_by, now)
-            .await?;
+            .await
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                // Rollback cache on store failure
+                self.cache.upsert(old_job).await;
+                return Err(e);
+            }
+        };
 
         if rows_affected == 0 {
-            // Status update rejected by state machine guards
+            // Status update rejected - rollback cache
+            self.cache.upsert(old_job).await;
             debug!(
                 job_id = %job_id,
                 new_status = ?status,
@@ -309,30 +344,7 @@ impl WorkQueue {
             return Ok(());
         }
 
-        // Store update succeeded! Update cache to match
-        let cache_updated = self.cache.update(job_id, |job| {
-            job.status = status;
-            job.metadata.updated_at = now;
-
-            // Set started_at timestamp when transitioning to InProgress
-            if status == JobStatus::InProgress && job.metadata.started_at.is_none() {
-                job.metadata.started_at = Some(now);
-            }
-
-            if let Some(completed_by_node) = completed_by {
-                job.completed_by = Some(completed_by_node.to_string());
-            }
-        }).await;
-
-        if !cache_updated {
-            warn!(
-                job_id = %job_id,
-                "Cache update failed - job not found in cache"
-            );
-            // Refresh cache to ensure consistency
-            self.refresh_cache().await?;
-        }
-
+        // Success! Cache and store are consistent
         self.cache_version.increment();
 
         info!(

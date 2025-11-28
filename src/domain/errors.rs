@@ -127,10 +127,20 @@ pub enum ValidationError {
 
 impl ValidationError {
     /// Combine multiple validation errors into one
-    pub fn combine(errors: Vec<ValidationError>) -> Self {
+    /// Returns None for empty list, single error for one item, Multiple for many
+    pub fn combine(errors: Vec<ValidationError>) -> Option<Self> {
         match errors.len() {
-            0 => panic!("Cannot combine empty error list"),
-            1 => errors.into_iter().next().expect("Vector has exactly one element"),
+            0 => None,
+            1 => errors.into_iter().next(),
+            _ => Some(ValidationError::Multiple(errors)),
+        }
+    }
+
+    /// Combine multiple validation errors, returning a default if empty
+    pub fn combine_or_default(errors: Vec<ValidationError>, default: &str) -> Self {
+        match errors.len() {
+            0 => ValidationError::InvalidJobId { reason: default.to_string() },
+            1 => errors.into_iter().next().unwrap(),
             _ => ValidationError::Multiple(errors),
         }
     }

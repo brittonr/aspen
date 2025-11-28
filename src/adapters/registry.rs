@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 use crate::domain::types::Job;
+use crate::common::timestamp::current_timestamp_or_zero;
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionStatus,
     JobPlacement, PlacementPolicy, PlacementStrategy,
@@ -116,10 +117,7 @@ impl ExecutionRegistry {
                 drop(backend_list);
 
                 // Clean up old handles based on age (using configured TTL)
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
+                let now = current_timestamp_or_zero() as u64;
                 let cutoff = now.saturating_sub(config.completed_ttl.as_secs());
 
                 let mut ttl_cleaned = 0;
@@ -233,100 +231,138 @@ impl ExecutionRegistry {
     pub async fn submit_job(&self, job: Job, config: ExecutionConfig) -> Result<ExecutionHandle> {
         let mut retries = 0;
         let max_retries = self.config.max_submission_retries;
+
         loop {
-            // Get healthy backends
             let healthy_backends = self.get_healthy_backends().await?;
             if healthy_backends.is_empty() {
                 return Err(anyhow::anyhow!("No healthy execution backends available"));
             }
-            // Place the job
+
             let decision = self
                 .placement_strategy
                 .place_job(&job, &config, &healthy_backends)
                 .await?;
+
             info!(
                 "Placing job {} on backend {} (score: {:.2})",
                 job.id, decision.backend_name, decision.score
             );
-            // Get the selected backend
-            let backend = healthy_backends
-                .get(&decision.backend_name)
-                .ok_or_else(|| anyhow::anyhow!("Selected backend not found"))?;
-            // Try to submit the job
-            match backend.submit_job(job.clone(), config.clone()).await {
-                Ok(handle) => {
-                    // Record the mapping with metadata
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    let mapping = HandleMapping {
-                        backend_name: decision.backend_name.clone(),
-                        created_at: now,
-                        last_accessed: now,
-                    };
-                    let mut handle_map = self.handle_to_backend.write().await;
-                    handle_map.insert(handle.id.clone(), mapping);
-                    info!(
-                        "Successfully submitted job {} to backend {}",
-                        job.id, decision.backend_name
-                    );
-                    return Ok(handle);
-                }
+
+            match self.try_submit_with_backend(
+                &job,
+                &config,
+                &decision.backend_name,
+                &healthy_backends
+            ).await {
+                Ok(handle) => return Ok(handle),
                 Err(e) => {
                     warn!(
                         "Failed to submit job {} to backend {}: {}",
                         job.id, decision.backend_name, e
                     );
+
                     retries += 1;
                     if retries >= max_retries {
-                        // Try failover if enabled
-                        if self.config.enable_failover && !decision.alternatives.is_empty() {
-                            info!(
-                                "Attempting failover for job {} to alternative backends",
-                                job.id
-                            );
-                            for alt in &decision.alternatives {
-                                if let Some(alt_backend) = healthy_backends.get(alt) {
-                                    match alt_backend.submit_job(job.clone(), config.clone()).await
-                                    {
-                                        Ok(handle) => {
-                                            let now = std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .map(|d| d.as_secs())
-                                                .unwrap_or(0);
-                                            let mapping = HandleMapping {
-                                                backend_name: alt.clone(),
-                                                created_at: now,
-                                                last_accessed: now,
-                                            };
-                                            let mut handle_map =
-                                                self.handle_to_backend.write().await;
-                                            handle_map.insert(handle.id.clone(), mapping);
-                                            info!(
-                                                "Failover successful: job {} submitted to {}",
-                                                job.id, alt
-                                            );
-                                            return Ok(handle);
-                                        }
-                                        Err(e) => {
-                                            warn!("Failover to {} failed: {}", alt, e);
-                                        }
-                                    }
-                                }
-                            }
+                        // Try failover to alternative backends
+                        if let Ok(handle) = self.attempt_failover(
+                            &job,
+                            &config,
+                            &decision.alternatives,
+                            &healthy_backends
+                        ).await {
+                            return Ok(handle);
                         }
+
                         return Err(anyhow::anyhow!(
                             "Failed to submit job after {} retries: {}",
                             max_retries,
                             e
                         ));
                     }
+
                     // Wait before retrying
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 }
             }
         }
+    }
+
+    /// Try to submit a job to a specific backend
+    async fn try_submit_with_backend(
+        &self,
+        job: &Job,
+        config: &ExecutionConfig,
+        backend_name: &str,
+        healthy_backends: &HashMap<String, Arc<dyn ExecutionBackend>>,
+    ) -> Result<ExecutionHandle> {
+        let backend = healthy_backends
+            .get(backend_name)
+            .ok_or_else(|| anyhow::anyhow!("Backend {} not found", backend_name))?;
+
+        let handle = backend.submit_job(job.clone(), config.clone()).await?;
+
+        // Record the handle mapping
+        self.record_handle_mapping(handle.id.clone(), backend_name.to_string()).await;
+
+        info!(
+            "Successfully submitted job {} to backend {}",
+            job.id, backend_name
+        );
+
+        Ok(handle)
+    }
+
+    /// Attempt failover to alternative backends
+    async fn attempt_failover(
+        &self,
+        job: &Job,
+        config: &ExecutionConfig,
+        alternatives: &[String],
+        healthy_backends: &HashMap<String, Arc<dyn ExecutionBackend>>,
+    ) -> Result<ExecutionHandle> {
+        if !self.config.enable_failover || alternatives.is_empty() {
+            return Err(anyhow::anyhow!("Failover not available"));
+        }
+
+        info!(
+            "Attempting failover for job {} to alternative backends",
+            job.id
+        );
+
+        for alt_backend_name in alternatives {
+            match self.try_submit_with_backend(
+                job,
+                config,
+                alt_backend_name,
+                healthy_backends
+            ).await {
+                Ok(handle) => {
+                    info!(
+                        "Failover successful: job {} submitted to {}",
+                        job.id, alt_backend_name
+                    );
+                    return Ok(handle);
+                }
+                Err(e) => {
+                    warn!("Failover to {} failed: {}", alt_backend_name, e);
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("All failover attempts failed"))
+    }
+
+    /// Record a handle mapping in the tracking map
+    async fn record_handle_mapping(&self, handle_id: String, backend_name: String) {
+        let now = current_timestamp_or_zero() as u64;
+        let mapping = HandleMapping {
+            backend_name,
+            created_at: now,
+            last_accessed: now,
+        };
+
+        let mut handle_map = self.handle_to_backend.write().await;
+        handle_map.insert(handle_id, mapping);
     }
     /// Get the status of an execution
     pub async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
@@ -393,12 +429,7 @@ impl ExecutionRegistry {
                             healthy: false,
                             status_message: format!("Health check failed: {}", e),
                             resource_info: None,
-                            last_check: Some(
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .expect("System time is before UNIX epoch")
-                                    .as_secs(),
-                            ),
+                            last_check: Some(current_timestamp_or_zero() as u64),
                             details: HashMap::new(),
                         },
                     );
@@ -439,10 +470,7 @@ impl ExecutionRegistry {
         let mut handle_map = self.handle_to_backend.write().await;
         if let Some(mapping) = handle_map.get_mut(&handle.id) {
             // Update last_accessed for LRU
-            mapping.last_accessed = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            mapping.last_accessed = current_timestamp_or_zero() as u64;
             let backend_name = mapping.backend_name.clone();
             drop(handle_map);
 
