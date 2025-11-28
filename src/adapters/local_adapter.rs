@@ -136,43 +136,72 @@ impl LocalProcessAdapter {
     /// - A "command" object with "program" and "args" fields
     /// - Legacy: A "command" string that will be parsed (deprecated)
     fn extract_command(&self, job: &Job) -> (String, Vec<String>) {
-        // Try structured command format first (recommended)
-        if let Some(cmd_value) = job.payload.get("command") {
-            // Check for structured command object
-            if let Some(cmd_obj) = cmd_value.as_object() {
-                if let (Some(program), args) = (
-                    cmd_obj.get("program").and_then(|p| p.as_str()),
-                    cmd_obj.get("args")
-                ) {
-                    let args_vec = if let Some(args_array) = args.and_then(|a| a.as_array()) {
-                        args_array.iter()
-                            .filter_map(|a| a.as_str().map(String::from))
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
-                    return (program.to_string(), args_vec);
-                }
-            }
+        let cmd_value = match job.payload.get("command") {
+            Some(value) => value,
+            None => return self.default_command(job),
+        };
 
-            // Check for simple command string (executable only, no args)
-            if let Some(cmd_str) = cmd_value.as_str() {
-                // Validate that the command doesn't contain shell metacharacters
-                // This prevents injection attacks
-                if Self::is_safe_command(cmd_str) {
-                    // For backward compatibility, still support simple whitespace splitting
-                    // but only if the command passes safety validation
-                    let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-                    if !parts.is_empty() {
-                        let command = parts[0].to_string();
-                        let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
-                        return (command, args);
-                    }
-                }
-            }
+        // Try structured command format first (recommended)
+        if let Some(result) = self.try_extract_structured_command(cmd_value) {
+            return result;
+        }
+
+        // Fall back to simple command string format
+        if let Some(result) = self.try_extract_string_command(cmd_value) {
+            return result;
         }
 
         // Default: echo the job ID (safe fallback)
+        self.default_command(job)
+    }
+
+    /// Try to extract structured command (object with "program" and "args" fields)
+    fn try_extract_structured_command(&self, cmd_value: &serde_json::Value) -> Option<(String, Vec<String>)> {
+        let cmd_obj = cmd_value.as_object()?;
+        let program = cmd_obj.get("program")?.as_str()?;
+
+        let args = match cmd_obj.get("args") {
+            Some(args_value) => self.extract_args(args_value),
+            None => Vec::new(),
+        };
+
+        Some((program.to_string(), args))
+    }
+
+    /// Extract arguments array from JSON value
+    fn extract_args(&self, args_value: &serde_json::Value) -> Vec<String> {
+        args_value
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|a| a.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Try to extract command from simple string format
+    fn try_extract_string_command(&self, cmd_value: &serde_json::Value) -> Option<(String, Vec<String>)> {
+        let cmd_str = cmd_value.as_str()?;
+
+        // Validate that the command doesn't contain shell metacharacters
+        if !Self::is_safe_command(cmd_str) {
+            return None;
+        }
+
+        // For backward compatibility, support simple whitespace splitting
+        let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+        if parts.is_empty() {
+            return None;
+        }
+
+        let command = parts[0].to_string();
+        let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
+        Some((command, args))
+    }
+
+    /// Return default safe command
+    fn default_command(&self, job: &Job) -> (String, Vec<String>) {
         ("echo".to_string(), vec![format!("Processing job {}", job.id)])
     }
 

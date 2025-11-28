@@ -121,6 +121,9 @@ impl CleanupMetrics {
 }
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 use crate::adapters::ExecutionStatus;
 
 /// Trait for execution states that can be cleaned up
@@ -231,4 +234,97 @@ where
     }
 
     (ttl_cleaned, lru_cleaned)
+}
+
+/// Reusable background cleanup task that can be used by any adapter
+///
+/// This eliminates code duplication by providing a shared cleanup task
+/// that works with any HashMap of cleanable execution states.
+pub struct CleanupTask<T>
+where
+    T: CleanableExecution + Send + Sync + 'static,
+{
+    /// Handle to the background cleanup task
+    task_handle: Option<JoinHandle<()>>,
+    /// Cleanup metrics
+    metrics: Arc<RwLock<CleanupMetrics>>,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> CleanupTask<T>
+where
+    T: CleanableExecution + Send + Sync + 'static,
+{
+    /// Start a new background cleanup task
+    ///
+    /// # Arguments
+    /// * `executions` - Shared HashMap of execution states to clean
+    /// * `config` - Cleanup configuration
+    /// * `adapter_name` - Name of the adapter (for logging)
+    pub fn start(
+        executions: Arc<RwLock<HashMap<String, T>>>,
+        config: CleanupConfig,
+        adapter_name: String,
+    ) -> Self {
+        let metrics = Arc::new(RwLock::new(CleanupMetrics::new()));
+        let metrics_clone = metrics.clone();
+
+        let task_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(config.cleanup_interval);
+            loop {
+                interval.tick().await;
+
+                debug!("Running background cleanup for {}", adapter_name);
+                let start = std::time::Instant::now();
+
+                // Perform cleanup
+                let (ttl_count, lru_count) = {
+                    let mut exec_map = executions.write().await;
+                    let now = crate::common::get_unix_timestamp_or_zero();
+                    cleanup_executions(&mut exec_map, &config, now)
+                };
+
+                let duration = start.elapsed();
+
+                if ttl_count > 0 || lru_count > 0 {
+                    tracing::info!(
+                        "{} cleanup: {} TTL expired, {} LRU evicted in {:?}",
+                        adapter_name, ttl_count, lru_count, duration
+                    );
+                }
+
+                // Update metrics
+                let mut m = metrics_clone.write().await;
+                m.record_cleanup(ttl_count, lru_count, duration);
+            }
+        });
+
+        Self {
+            task_handle: Some(task_handle),
+            metrics,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Get cleanup metrics
+    pub async fn get_metrics(&self) -> CleanupMetrics {
+        let metrics = self.metrics.read().await;
+        metrics.clone()
+    }
+
+    /// Stop the background cleanup task
+    pub fn stop(&mut self) {
+        if let Some(handle) = self.task_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl<T> Drop for CleanupTask<T>
+where
+    T: CleanableExecution + Send + Sync + 'static,
+{
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
