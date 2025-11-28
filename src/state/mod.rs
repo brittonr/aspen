@@ -41,10 +41,10 @@ pub use self::domain::DomainState;
 pub use self::features::FeaturesState;
 pub use self::infra::InfraState;
 
-pub mod factory;
+pub mod builders;
 
-// Re-export factory types for convenience
-pub use factory::{InfrastructureFactory, ProductionInfrastructureFactory, StateBuilder};
+// Re-export builder types for convenience
+pub use builders::{ApplicationBuilder, WorkerFactory};
 
 /// Application state with flattened structure
 ///

@@ -1,0 +1,460 @@
+# StateFactory Refactoring Design
+# Generated: 2025-11-27
+# Status: Implementation Phase
+
+[metadata]
+created = "2025-11-27"
+task = "Split StateFactory God Object into focused builders"
+estimated_effort = "3-5 days"
+actual_start = "2025-11-27"
+backwards_compatibility = false
+
+# =============================================================================
+# ANALYSIS SUMMARY (from parallel agent exploration)
+# =============================================================================
+
+[analysis.current_state]
+god_object_file = "src/state/factory.rs"
+lines_of_code = 643
+responsibilities = [
+    "Infrastructure creation (Hiqlite, Iroh)",
+    "VM manager initialization",
+    "Repository layer setup (3 repositories)",
+    "Domain service wiring (5 services + events)",
+    "Optional feature initialization (VM, Tofu)",
+    "State container assembly (4 containers)"
+]
+coupling_score = "CRITICAL - 12+ module dependencies"
+
+[analysis.usage_patterns]
+primary_entry_point = "build_state() - used by main.rs:71"
+secondary_entry_point = "create_worker() - used by worker.rs:107"
+individual_methods = "NEVER called directly - only internal use"
+test_factory = "Defined but unused in tests"
+
+[analysis.dependencies]
+no_circular_deps_in_domain = true
+repositories_independent = true
+services_independent = true
+initialization_order_flexible = true
+
+# =============================================================================
+# NEW ARCHITECTURE DESIGN
+# =============================================================================
+
+[design.principles]
+single_responsibility = "Each builder has ONE clear purpose"
+dependency_inversion = "Builders depend on abstractions, not concretions"
+testability = "Each component can be tested in isolation"
+no_backwards_compatibility = "Clean break, no legacy support needed"
+
+[design.builder_hierarchy]
+description = """
+Split into 4 focused builders + 1 assembler:
+
+1. InfrastructureBuilder - Core platform services (Hiqlite, Iroh)
+2. RepositoryBuilder - Data layer (3 repositories)
+3. DomainServiceBuilder - Business logic (5 services)
+4. FeatureBuilder - Optional features (VM, Tofu)
+5. StateAssembler - Final composition (glue code)
+
+Each builder is focused, testable, and has minimal dependencies.
+"""
+
+# =============================================================================
+# BUILDER 1: InfrastructureBuilder
+# =============================================================================
+
+[builders.infrastructure]
+name = "InfrastructureBuilder"
+responsibility = "Create core platform infrastructure (Hiqlite, Iroh, VM Manager)"
+file = "src/state/builders/infrastructure.rs"
+lines_estimate = 150
+
+[builders.infrastructure.inputs]
+config = "AppConfig"
+endpoint = "iroh::Endpoint"
+node_id = "String"
+
+[builders.infrastructure.outputs]
+hiqlite = "HiqliteService"
+iroh = "IrohService"
+vm_manager = "Option<Arc<VmManager>>"
+execution_registry = "Arc<ExecutionRegistry>"
+
+[builders.infrastructure.methods]
+new = "Creates builder with configuration"
+build_hiqlite = "Initialize Hiqlite database with schema"
+build_iroh = "Initialize Iroh P2P networking"
+build_vm_manager = "Create VM manager (optional, can fail gracefully)"
+build_execution_registry = "Create execution backend registry"
+build = "Build all infrastructure components, return InfrastructureComponents struct"
+
+[builders.infrastructure.dependencies]
+hiqlite = "crate::hiqlite::HiqliteService"
+iroh = "crate::iroh_service::IrohService"
+vm = "crate::infrastructure::vm::VmManager"
+adapters = "crate::adapters::ExecutionRegistry"
+
+[builders.infrastructure.example]
+code = """
+let infra = InfrastructureBuilder::new(config, endpoint, node_id)
+    .build()
+    .await?;
+
+// Returns: InfrastructureComponents {
+//     hiqlite: HiqliteService,
+//     iroh: IrohService,
+//     vm_manager: Option<Arc<VmManager>>,
+//     execution_registry: Arc<ExecutionRegistry>,
+// }
+"""
+
+# =============================================================================
+# BUILDER 2: RepositoryBuilder
+# =============================================================================
+
+[builders.repository]
+name = "RepositoryBuilder"
+responsibility = "Create data access layer (repositories)"
+file = "src/state/builders/repository.rs"
+lines_estimate = 100
+
+[builders.repository.inputs]
+hiqlite = "Arc<HiqliteService>"
+
+[builders.repository.outputs]
+state_repo = "Arc<dyn StateRepository>"
+work_repo = "Arc<dyn WorkRepository>"
+worker_repo = "Arc<dyn WorkerRepository>"
+
+[builders.repository.methods]
+new = "Creates builder with HiqliteService"
+build_state_repo = "Create state repository"
+build_work_repo = "Create work repository with PersistentStore"
+build_worker_repo = "Create worker repository"
+build = "Build all repositories, return RepositoryComponents struct"
+
+[builders.repository.dependencies]
+repositories = "crate::repositories::{StateRepository, WorkRepository, WorkerRepository}"
+implementations = "crate::repositories::{HiqliteStateRepository, HiqliteWorkerRepository}"
+work = "crate::work::WorkRepositoryImpl"
+store = "crate::hiqlite_persistent_store::HiqlitePersistentStore"
+
+[builders.repository.notes]
+parallel_creation = "All 3 repos can be built in parallel - no interdependencies"
+abstraction_levels = "Each repo uses different abstraction (DatabaseHealth vs PersistentStore vs HiqliteService direct)"
+
+[builders.repository.example]
+code = """
+let repos = RepositoryBuilder::new(hiqlite_arc)
+    .build()
+    .await?;
+
+// Returns: RepositoryComponents {
+//     state: Arc<dyn StateRepository>,
+//     work: Arc<dyn WorkRepository>,
+//     worker: Arc<dyn WorkerRepository>,
+// }
+"""
+
+# =============================================================================
+# BUILDER 3: DomainServiceBuilder
+# =============================================================================
+
+[builders.domain]
+name = "DomainServiceBuilder"
+responsibility = "Create domain services (business logic layer)"
+file = "src/state/builders/domain.rs"
+lines_estimate = 120
+
+[builders.domain.inputs]
+state_repo = "Arc<dyn StateRepository>"
+work_repo = "Arc<dyn WorkRepository>"
+worker_repo = "Arc<dyn WorkerRepository>"
+event_publisher = "Option<Arc<dyn EventPublisher>>"
+heartbeat_timeout = "Option<i64>"
+
+[builders.domain.outputs]
+cluster_status = "Arc<ClusterStatusService>"
+health = "Arc<HealthService>"
+job_commands = "Arc<JobCommandService>"
+job_queries = "Arc<JobQueryService>"
+worker_management = "Arc<WorkerManagementService>"
+
+[builders.domain.methods]
+new = "Creates builder with repositories"
+with_event_publisher = "Configure event publisher (default: LoggingEventPublisher)"
+with_heartbeat_timeout = "Configure worker heartbeat timeout (default: 60s)"
+build = "Build all domain services, return DomainServiceComponents struct"
+
+[builders.domain.dependencies]
+services = "crate::domain::{ClusterStatusService, HealthService, JobCommandService, JobQueryService, WorkerManagementService}"
+events = "crate::domain::LoggingEventPublisher"
+
+[builders.domain.notes]
+no_service_dependencies = "Services don't depend on each other, only on repositories"
+parallel_creation = "All 5 services can be built in parallel"
+event_publisher = "JobCommandService uses events, others don't"
+
+[builders.domain.example]
+code = """
+let services = DomainServiceBuilder::new(state_repo, work_repo, worker_repo)
+    .with_event_publisher(event_pub)
+    .with_heartbeat_timeout(60)
+    .build();
+
+// Returns: DomainServiceComponents {
+//     cluster_status: Arc<ClusterStatusService>,
+//     health: Arc<HealthService>,
+//     job_commands: Arc<JobCommandService>,
+//     job_queries: Arc<JobQueryService>,
+//     worker_management: Arc<WorkerManagementService>,
+// }
+"""
+
+# =============================================================================
+# BUILDER 4: FeatureBuilder
+# =============================================================================
+
+[builders.feature]
+name = "FeatureBuilder"
+responsibility = "Create optional/feature-gated services"
+file = "src/state/builders/feature.rs"
+lines_estimate = 80
+
+[builders.feature.inputs]
+config = "AppConfig"
+vm_manager = "Option<Arc<dyn VmManagement>>"
+execution_registry = "Arc<ExecutionRegistry>"
+hiqlite = "Arc<HiqliteService>"
+
+[builders.feature.outputs]
+vm_service = "Option<Arc<VmService>>"
+tofu_service = "Option<Arc<TofuService>>"
+
+[builders.feature.methods]
+new = "Creates builder with components"
+build = "Build feature-gated services, return FeatureComponents struct"
+
+[builders.feature.dependencies]
+vm = "crate::domain::VmService"
+tofu = "crate::domain::TofuService"
+
+[builders.feature.notes]
+feature_flags = "Uses #[cfg(feature = \"vm-backend\")] and #[cfg(feature = \"tofu-support\")]"
+conditional = "Both services are optional, can return None"
+
+[builders.feature.example]
+code = """
+let features = FeatureBuilder::new(config, vm_manager, execution_registry, hiqlite)
+    .build();
+
+// Returns: FeatureComponents {
+//     #[cfg(feature = \"vm-backend\")]
+//     vm_service: Option<Arc<VmService>>,
+//     #[cfg(feature = \"tofu-support\")]
+//     tofu_service: Option<Arc<TofuService>>,
+// }
+"""
+
+# =============================================================================
+# ASSEMBLER: StateAssembler
+# =============================================================================
+
+[assembler]
+name = "StateAssembler"
+responsibility = "Assemble final state containers from components"
+file = "src/state/builders/assembler.rs"
+lines_estimate = 100
+
+[assembler.inputs]
+infra = "InfrastructureComponents"
+repos = "RepositoryComponents"
+services = "DomainServiceComponents"
+features = "FeatureComponents"
+config = "AppConfig"
+module = "Option<DeployedModule>"
+
+[assembler.outputs]
+domain = "DomainState"
+infra = "InfraState"
+config_state = "ConfigState"
+features_state = "FeaturesState"
+
+[assembler.methods]
+new = "Creates assembler with all components"
+build = "Assemble and return all 4 state containers"
+
+[assembler.dependencies]
+state = "crate::state::{DomainState, InfraState, ConfigState, FeaturesState}"
+
+[assembler.example]
+code = """
+let (domain, infra, config, features) = StateAssembler::new(
+    infra_components,
+    repo_components,
+    service_components,
+    feature_components,
+    app_config,
+    module,
+).build();
+"""
+
+# =============================================================================
+# ORCHESTRATION: ApplicationBuilder (replaces build_state)
+# =============================================================================
+
+[orchestration]
+name = "ApplicationBuilder"
+responsibility = "High-level orchestration of all builders (replaces InfrastructureFactory::build_state)"
+file = "src/state/builders/mod.rs"
+lines_estimate = 150
+
+[orchestration.pattern]
+description = """
+ApplicationBuilder orchestrates all 4 builders in sequence:
+1. InfrastructureBuilder
+2. RepositoryBuilder (needs hiqlite from step 1)
+3. DomainServiceBuilder (needs repos from step 2)
+4. FeatureBuilder (needs infra from step 1)
+5. StateAssembler (needs all components)
+
+This replaces the old InfrastructureFactory::build_state() method.
+"""
+
+[orchestration.example]
+code = """
+// Old pattern (StateFactory God Object):
+let factory = ProductionInfrastructureFactory::new();
+let state_builder = factory.build_state(config, module, endpoint, node_id).await?;
+let (domain, infra, config, features) = state_builder.build();
+
+// New pattern (Focused Builders):
+let (domain, infra, config, features) = ApplicationBuilder::new()
+    .with_config(config)
+    .with_module(module)
+    .with_endpoint(endpoint)
+    .with_node_id(node_id)
+    .build()
+    .await?;
+
+// Or step-by-step for testing:
+let infra = InfrastructureBuilder::new(config, endpoint, node_id).build().await?;
+let repos = RepositoryBuilder::new(hiqlite_arc).build().await?;
+let services = DomainServiceBuilder::new(repos.state, repos.work, repos.worker).build();
+let features = FeatureBuilder::new(config, infra.vm_manager, infra.execution_registry, hiqlite).build();
+let (d, i, c, f) = StateAssembler::new(infra, repos, services, features, config, module).build();
+"""
+
+# =============================================================================
+# WORKER CREATION (separate concern)
+# =============================================================================
+
+[worker_creation]
+name = "WorkerFactory"
+responsibility = "Create worker instances (separate from application state)"
+file = "src/state/builders/worker_factory.rs"
+lines_estimate = 100
+
+[worker_creation.rationale]
+description = """
+Worker creation is a separate concern from application state building.
+The old InfrastructureFactory mixed both concerns.
+
+New approach: WorkerFactory as a standalone utility.
+"""
+
+[worker_creation.example]
+code = """
+// Old pattern:
+let worker = factory.create_worker(config, worker_type, vm_manager).await?;
+
+// New pattern:
+let worker = WorkerFactory::create(config, worker_type, vm_manager).await?;
+"""
+
+# =============================================================================
+# FILE STRUCTURE
+# =============================================================================
+
+[file_structure]
+root = "src/state/builders/"
+
+[file_structure.files]
+"mod.rs" = "Public API, re-exports, ApplicationBuilder orchestration"
+"infrastructure.rs" = "InfrastructureBuilder implementation"
+"repository.rs" = "RepositoryBuilder implementation"
+"domain.rs" = "DomainServiceBuilder implementation"
+"feature.rs" = "FeatureBuilder implementation"
+"assembler.rs" = "StateAssembler implementation"
+"worker_factory.rs" = "WorkerFactory for creating worker instances"
+"components.rs" = "Component structs returned by each builder"
+
+[file_structure.cleanup]
+remove = ["src/state/factory.rs (entire file)"]
+update = [
+    "src/state/mod.rs - change re-exports",
+    "src/main.rs - use new ApplicationBuilder",
+    "src/bin/worker.rs - use new WorkerFactory"
+]
+
+# =============================================================================
+# MIGRATION STRATEGY
+# =============================================================================
+
+[migration]
+approach = "Clean break - no backwards compatibility"
+steps = [
+    "1. Create new builders/ directory structure",
+    "2. Implement all 4 builders + assembler",
+    "3. Implement ApplicationBuilder orchestration",
+    "4. Update main.rs to use ApplicationBuilder",
+    "5. Update worker.rs to use WorkerFactory",
+    "6. Delete old factory.rs entirely",
+    "7. Update state/mod.rs exports",
+    "8. Compile and test"
+]
+
+[migration.testing]
+strategy = "Compilation is the test - if it compiles, it works"
+integration_test = "Run server and worker binaries manually"
+unit_tests = "Add focused tests for each builder if needed"
+
+# =============================================================================
+# BENEFITS
+# =============================================================================
+
+[benefits]
+single_responsibility = "Each builder has one clear purpose"
+testability = "Can test InfrastructureBuilder without domain services"
+clarity = "Explicit dependencies between layers"
+flexibility = "Can compose components differently for tests"
+reduced_coupling = "From 12+ dependencies to 2-4 per builder"
+
+[benefits.metrics]
+before_god_object_lines = 643
+after_total_lines = "~700 (distributed across 8 files)"
+before_methods = "12 methods in one trait"
+after_focused_builders = "4 builders with 3-5 methods each"
+complexity_reduction = "70% - from one 643-line file to 8 focused files averaging 87 lines"
+
+# =============================================================================
+# IMPLEMENTATION CHECKLIST
+# =============================================================================
+
+[checklist]
+design = "✓ Complete"
+components_struct = "○ Define component structs"
+infrastructure_builder = "○ Implement"
+repository_builder = "○ Implement"
+domain_builder = "○ Implement"
+feature_builder = "○ Implement"
+assembler = "○ Implement"
+application_builder = "○ Implement orchestration"
+worker_factory = "○ Implement"
+update_main = "○ Update usage"
+update_worker = "○ Update usage"
+delete_factory = "○ Remove old code"
+compile = "○ Test compilation"
+commit = "○ Create commit"

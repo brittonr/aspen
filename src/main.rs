@@ -1,7 +1,7 @@
 // Use modules from library crate
 use mvm_ci::config::AppConfig;
 use mvm_ci::server::ServerConfig;
-use mvm_ci::state::{InfrastructureFactory, ProductionInfrastructureFactory};
+use mvm_ci::state::builders::ApplicationBuilder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,23 +64,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let node_id = endpoint.id().to_string();
 
-    // Create application state using factory pattern (enables dependency injection)
+    // Create application state using focused builders
     println!("Initializing application infrastructure...");
-    let factory = ProductionInfrastructureFactory::new();
-    let state_builder = match factory
-        .build_state(&config, module, endpoint.clone(), node_id)
+    let (domain, infra, config_state, features) = match ApplicationBuilder::new(&config, module, endpoint.clone(), node_id)
+        .build()
         .await
     {
-        Ok(builder) => builder,
+        Ok(state) => state,
         Err(e) => {
             eprintln!("FATAL: Failed to build application state: {}", e);
             eprintln!("This may indicate database connection issues or configuration problems");
             std::process::exit(1);
         }
     };
-
-    // Build focused state containers
-    let (domain, infra, config_state, features) = state_builder.build();
 
     // Start VM service if available
     #[cfg(feature = "vm-backend")]

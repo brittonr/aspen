@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use mvm_ci::{
     AppConfig, WorkQueueClient, JobStatus, WorkerRegistration,
     WorkerType, WorkerHeartbeat,
-    state::factory::{InfrastructureFactory, ProductionInfrastructureFactory},
+    state::builders::WorkerFactory,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -46,9 +46,6 @@ async fn main() -> Result<()> {
     tracing::info!("Connecting to control plane via iroh+h3");
     let client = WorkQueueClient::connect(&control_plane_ticket).await?;
     tracing::info!(node_id = %client.node_id(), "Connected to control plane");
-
-    // Create infrastructure factory for worker creation
-    let factory = ProductionInfrastructureFactory::new();
 
     // For Firecracker workers, we need a VM manager instance
     // Workers can operate in two modes:
@@ -100,11 +97,11 @@ async fn main() -> Result<()> {
         None
     };
 
-    // Create worker using factory pattern
-    tracing::info!("Creating {} worker using factory pattern",
+    // Create worker using WorkerFactory
+    tracing::info!("Creating {} worker",
         if worker_type == WorkerType::Wasm { "WASM" } else { "Firecracker" });
 
-    let worker = factory.create_worker(&config, worker_type, vm_manager).await?;
+    let worker = WorkerFactory::create(&config, worker_type, vm_manager).await?;
 
     worker.initialize().await?;
 
