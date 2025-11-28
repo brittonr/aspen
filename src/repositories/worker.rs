@@ -165,10 +165,7 @@ impl HiqliteWorkerRepository {
 #[async_trait]
 impl WorkerRepository for HiqliteWorkerRepository {
     async fn register(&self, registration: WorkerRegistration) -> Result<Worker> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
+        let now = crate::common::current_timestamp_or_zero();
 
         // Generate unique worker ID
         let worker_id = format!("worker-{}-{}", registration.worker_type, uuid::Uuid::new_v4());
@@ -224,10 +221,7 @@ impl WorkerRepository for HiqliteWorkerRepository {
     }
 
     async fn heartbeat(&self, heartbeat: WorkerHeartbeat) -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
+        let now = crate::common::current_timestamp_or_zero();
 
         self.hiqlite
             .execute(

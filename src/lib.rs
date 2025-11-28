@@ -21,6 +21,9 @@ pub use worker_trait::{WorkerBackend, WorkResult};
 // Re-export config for convenience
 pub use config::AppConfig;
 
+// Common utilities
+pub mod common;
+
 // Internal modules (used by main binary)
 mod work_queue;
 mod work_state_machine;

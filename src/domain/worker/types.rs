@@ -100,20 +100,14 @@ pub struct Worker {
 impl Worker {
     /// Check if worker is healthy (heartbeat within threshold)
     pub fn is_healthy(&self, heartbeat_timeout_secs: i64) -> bool {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
+        let now = crate::common::current_timestamp_or_zero();
         let age = now - self.last_heartbeat;
         age < heartbeat_timeout_secs
     }
 
     /// Get time since last heartbeat in seconds
     pub fn heartbeat_age_seconds(&self) -> i64 {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX epoch")
-            .as_secs() as i64;
+        let now = crate::common::current_timestamp_or_zero();
         now - self.last_heartbeat
     }
 

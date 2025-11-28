@@ -24,9 +24,25 @@ use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::{ConfigState, DomainState, FeaturesState, InfraState};
-use crate::infrastructure::vm::{VmManager, VmManagerConfig};
+use crate::infrastructure::vm::{VmManager, VmManagerConfig, VmManagement};
 use crate::work_queue::WorkQueue;
 use crate::{WorkerBackend, WorkerType};
+
+/// Helper struct to group domain services
+struct DomainServices {
+    cluster_status: Arc<ClusterStatusService>,
+    health: Arc<HealthService>,
+    job_lifecycle: Arc<JobLifecycleService>,
+    worker_management: Arc<WorkerManagementService>,
+}
+
+/// Helper struct to group optional features
+struct OptionalFeatures {
+    #[cfg(feature = "vm-backend")]
+    vm_service: Option<Arc<VmService>>,
+    #[cfg(feature = "tofu-support")]
+    tofu_service: Option<Arc<TofuService>>,
+}
 
 /// Builder for constructing focused state containers
 ///
@@ -171,82 +187,213 @@ pub trait InfrastructureFactory: Send + Sync {
         endpoint: Endpoint,
         node_id: String,
     ) -> Result<StateBuilder> {
-        // Create infrastructure services
+        // Phase 1: Initialize core infrastructure
+        let (hiqlite, iroh, work_queue) = self.init_infrastructure(
+            config,
+            endpoint.clone(),
+            node_id
+        ).await?;
+
+        let hiqlite_arc = Arc::new(hiqlite.clone());
+
+        // Phase 2: Create execution infrastructure
+        let (execution_registry, vm_manager) = self.init_execution_infrastructure(
+            config,
+            hiqlite_arc.clone()
+        ).await?;
+
+        // Phase 3: Create repositories
+        let (state_repo, work_repo, worker_repo) = self.init_repositories(
+            hiqlite_arc.clone(),
+            work_queue.clone()
+        );
+
+        // Phase 4: Initialize domain services
+        let services = self.init_domain_services(
+            state_repo,
+            work_repo.clone(),
+            worker_repo
+        );
+
+        // Phase 5: Create optional features
+        let optional_features = self.init_optional_features(
+            config,
+            #[cfg(feature = "vm-backend")]
+            vm_manager,
+            execution_registry.clone(),
+            hiqlite_arc.clone()
+        );
+
+        // Phase 6: Final assembly
+        self.assemble_state_builder(
+            config,
+            module,
+            hiqlite,
+            iroh,
+            work_queue,
+            execution_registry,
+            services,
+            optional_features
+        )
+    }
+
+    /// Phase 1: Initialize core infrastructure services
+    async fn init_infrastructure(
+        &self,
+        config: &AppConfig,
+        endpoint: Endpoint,
+        node_id: String,
+    ) -> Result<(HiqliteService, IrohService, WorkQueue)> {
+        // Create and initialize Hiqlite database
         let hiqlite = self.create_hiqlite(config).await?;
         hiqlite.initialize_schema().await?;
 
+        // Create P2P networking service
         let iroh = self.create_iroh(config, endpoint.clone()).await?;
 
-        // Create work queue with hiqlite
-        let work_queue = self.create_work_queue(config, endpoint, node_id, hiqlite.clone()).await?;
+        // Create distributed work queue
+        let work_queue = self.create_work_queue(
+            config,
+            endpoint,
+            node_id,
+            hiqlite.clone()
+        ).await?;
 
-        // Create shared Hiqlite Arc for services that need it
-        let hiqlite_arc = Arc::new(hiqlite.clone());
+        Ok((hiqlite, iroh, work_queue))
+    }
 
+    /// Phase 2: Create execution infrastructure (registry and VM manager)
+    async fn init_execution_infrastructure(
+        &self,
+        config: &AppConfig,
+        hiqlite_arc: Arc<HiqliteService>,
+    ) -> Result<(Arc<ExecutionRegistry>, Option<Arc<dyn VmManagement>>)> {
         // Create execution registry
         let registry_config = RegistryConfig::default();
         let execution_registry = Arc::new(ExecutionRegistry::new(registry_config));
 
-        // Create VM manager (skip if disabled in config)
+        // Create VM manager if enabled
         let vm_manager = if !config.features.is_vm_manager_enabled() {
             tracing::info!("Skipping VM manager creation (feature disabled in config)");
             None
         } else {
-            match self.create_vm_manager(config, hiqlite_arc.clone()).await {
-                Ok(manager) => Some(manager),
+            match self.create_vm_manager(config, hiqlite_arc).await {
+                Ok(manager) => Some(manager as Arc<dyn VmManagement>),
                 Err(e) => {
-                    tracing::warn!("Failed to create VM manager: {}. Continuing without VM support.", e);
+                    tracing::warn!(
+                        "Failed to create VM manager: {}. Continuing without VM support.",
+                        e
+                    );
                     None
                 }
             }
         };
 
-        // Create repositories
-        let state_repo = self.create_state_repository(hiqlite_arc.clone());
-        let work_repo = self.create_work_repository(work_queue.clone());
-        let worker_repo = self.create_worker_repository(hiqlite_arc.clone());
+        Ok((execution_registry, vm_manager))
+    }
 
+    /// Phase 3: Create repository layer
+    fn init_repositories(
+        &self,
+        hiqlite_arc: Arc<HiqliteService>,
+        work_queue: WorkQueue,
+    ) -> (
+        Arc<dyn StateRepository>,
+        Arc<dyn WorkRepository>,
+        Arc<dyn WorkerRepository>
+    ) {
+        let state_repo = self.create_state_repository(hiqlite_arc.clone());
+        let work_repo = self.create_work_repository(work_queue);
+        let worker_repo = self.create_worker_repository(hiqlite_arc);
+
+        (state_repo, work_repo, worker_repo)
+    }
+
+    /// Phase 4: Initialize domain services with CQRS pattern
+    fn init_domain_services(
+        &self,
+        state_repo: Arc<dyn StateRepository>,
+        work_repo: Arc<dyn WorkRepository>,
+        worker_repo: Arc<dyn WorkerRepository>,
+    ) -> DomainServices {
         // Create event publisher
         let event_publisher = Arc::new(LoggingEventPublisher::new());
 
-        // Create command and query services (CQRS pattern)
+        // Create CQRS services
         let commands = Arc::new(JobCommandService::with_events(
             work_repo.clone(),
             event_publisher.clone(),
         ));
         let queries = Arc::new(JobQueryService::new(work_repo.clone()));
 
-        // Create domain services with injected repositories
+        // Create domain services
         let cluster_status = Arc::new(ClusterStatusService::new(
             state_repo.clone(),
             work_repo.clone(),
         ));
 
-        let health = Arc::new(HealthService::new(state_repo.clone()));
+        let health = Arc::new(HealthService::new(state_repo));
 
-        // JobLifecycleService wraps command and query services
-        let job_lifecycle = Arc::new(JobLifecycleService::from_services(commands, queries));
+        let job_lifecycle = Arc::new(JobLifecycleService::from_services(
+            commands,
+            queries
+        ));
 
-        // WorkerManagementService with worker and work repositories
         let worker_management = Arc::new(WorkerManagementService::new(
-            worker_repo.clone(),
-            work_repo.clone(),
+            worker_repo,
+            work_repo,
             Some(60), // Default heartbeat timeout: 60 seconds
         ));
 
-        // Create VM service if VM manager is available
-        #[cfg(feature = "vm-backend")]
-        let vm_service = vm_manager.map(|vm_manager| Arc::new(VmService::new(vm_manager)));
+        DomainServices {
+            cluster_status,
+            health,
+            job_lifecycle,
+            worker_management,
+        }
+    }
 
-        // Create Tofu service
+    /// Phase 5: Initialize optional/feature-gated services
+    fn init_optional_features(
+        &self,
+        config: &AppConfig,
+        #[cfg(feature = "vm-backend")]
+        vm_manager: Option<Arc<dyn VmManagement>>,
+        execution_registry: Arc<ExecutionRegistry>,
+        hiqlite_arc: Arc<HiqliteService>,
+    ) -> OptionalFeatures {
+        #[cfg(feature = "vm-backend")]
+        let vm_service = vm_manager.map(|vm_manager| {
+            Arc::new(VmService::new(vm_manager))
+        });
+
         #[cfg(feature = "tofu-support")]
         let tofu_service = Some(Arc::new(TofuService::new(
-            execution_registry.clone(),
-            hiqlite_arc.clone(),
+            execution_registry,
+            hiqlite_arc,
             config.storage.work_dir.clone(),
         )));
 
-        // Extract auth config
+        OptionalFeatures {
+            #[cfg(feature = "vm-backend")]
+            vm_service,
+            #[cfg(feature = "tofu-support")]
+            tofu_service,
+        }
+    }
+
+    /// Phase 6: Assemble final StateBuilder
+    fn assemble_state_builder(
+        &self,
+        config: &AppConfig,
+        module: Option<DeployedModule>,
+        hiqlite: HiqliteService,
+        iroh: IrohService,
+        work_queue: WorkQueue,
+        execution_registry: Arc<ExecutionRegistry>,
+        services: DomainServices,
+        optional: OptionalFeatures,
+    ) -> Result<StateBuilder> {
         let auth_config = Arc::new(config.auth.clone());
 
         Ok(StateBuilder {
@@ -256,14 +403,14 @@ pub trait InfrastructureFactory: Send + Sync {
             execution_registry,
             auth_config,
             module,
-            cluster_status,
-            health,
-            job_lifecycle,
-            worker_management,
+            cluster_status: services.cluster_status,
+            health: services.health,
+            job_lifecycle: services.job_lifecycle,
+            worker_management: services.worker_management,
             #[cfg(feature = "vm-backend")]
-            vm_service,
+            vm_service: optional.vm_service,
             #[cfg(feature = "tofu-support")]
-            tofu_service,
+            tofu_service: optional.tofu_service,
         })
     }
 

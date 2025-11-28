@@ -6,6 +6,7 @@
 // - VmManager: Backward-compatible facade (public API)
 // - Components communicate via channels for loose coupling
 
+pub mod traits;
 pub mod vm_types;
 pub mod vm_registry;
 pub mod vm_controller;
@@ -43,6 +44,9 @@ pub use job_router::VmAssignment;
 // Re-export VmManagement trait
 #[cfg(feature = "vm-backend")]
 pub use vm_management::VmManagement;
+
+// Re-export traits for dependency inversion
+pub use traits::{VmCommandExecutor, VmQueryService};
 
 // Internal component types (not exposed publicly)
 use vm_registry::VmRegistry;

@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
 
 /// Configuration for execution state cleanup to prevent unbounded memory growth
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,4 +118,117 @@ impl CleanupMetrics {
         );
         self.last_cleanup_duration_ms = Some(duration.as_millis() as u64);
     }
+}
+
+use std::collections::HashMap;
+use crate::adapters::ExecutionStatus;
+
+/// Trait for execution states that can be cleaned up
+///
+/// Implement this trait for your execution state types to enable
+/// the shared cleanup logic.
+pub trait CleanableExecution {
+    /// Get the completion timestamp if the execution is complete
+    fn completed_at(&self) -> Option<u64>;
+
+    /// Get the last accessed timestamp
+    fn last_accessed(&self) -> u64;
+
+    /// Get the execution status
+    fn status(&self) -> &ExecutionStatus;
+}
+
+/// Performs cleanup on a collection of execution states
+///
+/// This function implements two cleanup strategies:
+/// 1. TTL-based cleanup: Remove entries that exceed their TTL based on status
+/// 2. LRU eviction: If still over size limit, evict oldest by last_accessed
+///
+/// Entries are removed when:
+/// - Completed executions older than `completed_ttl` (default: 24 hours)
+/// - Failed executions older than `failed_ttl` (default: 24 hours)
+/// - Cancelled executions older than `cancelled_ttl` (default: 1 hour)
+/// - If still over size limit, oldest accessed entries are evicted (LRU)
+///
+/// # Arguments
+/// * `executions` - Mutable HashMap of execution states to clean
+/// * `config` - Cleanup configuration with TTL and size limits
+/// * `current_timestamp` - Current Unix timestamp in seconds
+///
+/// # Returns
+/// A tuple of (ttl_cleaned_count, lru_cleaned_count)
+pub fn cleanup_executions<T>(
+    executions: &mut HashMap<String, T>,
+    config: &CleanupConfig,
+    current_timestamp: u64,
+) -> (usize, usize)
+where
+    T: CleanableExecution,
+{
+    let mut ttl_cleaned = 0;
+    let initial_count = executions.len();
+
+    // First pass: Remove entries that exceed TTL based on status
+    executions.retain(|key, state| {
+        if let Some(completed_at) = state.completed_at() {
+            let age = current_timestamp.saturating_sub(completed_at);
+            let ttl_secs = match state.status() {
+                ExecutionStatus::Completed(_) => Some(config.completed_ttl.as_secs()),
+                ExecutionStatus::Failed(_) => Some(config.failed_ttl.as_secs()),
+                ExecutionStatus::Cancelled => Some(config.cancelled_ttl.as_secs()),
+                _ => None,
+            };
+
+            if let Some(ttl) = ttl_secs {
+                if age > ttl {
+                    debug!(
+                        "Removing execution {} (age: {}s, ttl: {}s, status: {:?})",
+                        key, age, ttl, state.status()
+                    );
+                    ttl_cleaned += 1;
+                    return false;
+                }
+            }
+        }
+        true
+    });
+
+    // Second pass: If still over size limit, evict oldest by last_accessed (LRU)
+    let mut lru_cleaned = 0;
+    if executions.len() > config.max_entries {
+        let overflow = executions.len() - config.max_entries;
+        let mut entries: Vec<_> = executions
+            .iter()
+            .map(|(k, v)| (k.clone(), v.last_accessed()))
+            .collect();
+
+        entries.sort_by_key(|(_, last_accessed)| *last_accessed);
+
+        for (key, last_accessed) in entries.iter().take(overflow) {
+            if let Some(state) = executions.get(key) {
+                debug!(
+                    "Evicting execution {} via LRU (last_accessed: {}, status: {:?})",
+                    key, last_accessed, state.status()
+                );
+            }
+            executions.remove(key);
+            lru_cleaned += 1;
+        }
+
+        if lru_cleaned > 0 {
+            warn!(
+                "Execution HashMap exceeded max_entries ({}), evicted {} oldest entries via LRU",
+                config.max_entries, lru_cleaned
+            );
+        }
+    }
+
+    if ttl_cleaned > 0 || lru_cleaned > 0 {
+        debug!(
+            "Cleanup completed: {}/{} entries removed (TTL: {}, LRU: {})",
+            ttl_cleaned + lru_cleaned, initial_count, ttl_cleaned, lru_cleaned
+        );
+    }
+
+    (ttl_cleaned, lru_cleaned)
 }
