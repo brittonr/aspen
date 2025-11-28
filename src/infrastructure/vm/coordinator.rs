@@ -22,7 +22,7 @@ use super::supervisor::{
     SupervisionStrategy, TaskSupervisor,
 };
 use super::vm_controller::VmController;
-use super::vm_registry::VmRegistry;
+use super::registry::DefaultVmRepository as VmRegistry;
 use super::vm_types::{VmState, VmMode, VmConfig};
 use super::VmManagerConfig;
 use crate::domain::types::Job;
@@ -51,7 +51,9 @@ impl VmCoordinator {
     /// Create a new VmCoordinator with all components
     pub async fn new(config: VmManagerConfig, hiqlite: Arc<HiqliteService>) -> Result<Self> {
         // Initialize registry with Hiqlite persistence
-        let registry = Arc::new(VmRegistry::new(hiqlite, &config.state_dir).await?);
+        let node_id = std::env::var("HQL_NODE_ID")
+            .unwrap_or_else(|_| format!("node-{}", uuid::Uuid::new_v4()));
+        let registry = Arc::new(VmRegistry::create(hiqlite, node_id).await?);
 
         // Create controller for VM lifecycle operations
         let controller = Arc::new(VmController::new(config.clone(), Arc::clone(&registry))?);

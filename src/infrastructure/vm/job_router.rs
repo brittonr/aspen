@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::vm_controller::VmController;
-use super::vm_registry::VmRegistry;
+use super::registry::DefaultVmRepository as VmRegistry;
 use super::vm_types::{IsolationLevel, JobRequirements, VmConfig, VmMode, VmState};
 use crate::Job;
 
@@ -189,7 +189,7 @@ impl JobRouter {
             // Update VM state to busy
             self.registry
                 .update_state(
-                    vm_id,
+                    &vm_id,
                     VmState::Busy {
                         job_id: job.id.clone(),
                         started_at: chrono::Utc::now().timestamp(),
@@ -226,7 +226,7 @@ impl JobRouter {
         // Mark as busy with this job
         self.registry
             .update_state(
-                vm.config.id,
+                &vm.config.id,
                 VmState::Busy {
                     job_id: job.id.clone(),
                     started_at: chrono::Utc::now().timestamp(),
@@ -355,7 +355,7 @@ impl JobRouter {
 
     /// Get routing statistics
     pub async fn get_stats(&self) -> RouteStats {
-        let total_vms = self.registry.count_all().await;
+        let total_vms = self.registry.count_all();
         let service_vms = self.registry
             .list_all_vms()
             .await

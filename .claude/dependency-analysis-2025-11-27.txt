@@ -1,0 +1,422 @@
+================================================================================
+BLIXARD DEPENDENCY ANALYSIS - 2025-11-27
+================================================================================
+
+This analysis examines the dependency structure of the Blixard codebase to
+identify problematic patterns including circular dependencies, inappropriate
+coupling, deep dependency chains, and god objects.
+
+================================================================================
+1. CIRCULAR DEPENDENCIES
+================================================================================
+
+CRITICAL: Multiple circular dependencies detected at the module level:
+
+PRIMARY CIRCULAR DEPENDENCY PATTERN:
+  domain -> repositories -> hiqlite -> services -> domain
+
+BREAKDOWN OF CYCLES:
+  1. domain <-> repositories (direct 2-way cycle)
+  2. domain <-> infrastructure (direct 2-way cycle)
+  3. domain -> repositories -> services -> domain (3-way cycle)
+  4. domain -> repositories -> hiqlite -> services -> domain (4-way cycle)
+  5. domain -> infrastructure -> hiqlite -> services -> domain (4-way cycle)
+
+ROOT CAUSE ANALYSIS:
+  - services/traits.rs imports domain::types::HealthStatus
+  - repositories/hiqlite_repository.rs imports services::traits::DatabaseHealth
+  - domain layer imports from repositories
+  - This creates a tight coupling loop that violates clean architecture
+
+IMPACT:
+  - Prevents independent module compilation
+  - Makes testing difficult (circular mock dependencies)
+  - Violates dependency inversion principle
+  - Creates hidden coupling through shared types
+
+================================================================================
+2. MODULES IMPORTING TOO MANY OTHER MODULES
+================================================================================
+
+HIGH FAN-OUT MODULES (importing many modules):
+
+1. state (8 imports):
+   -> adapters, config, domain, hiqlite, hiqlite_persistent_store,
+      infrastructure, iroh_service, repositories
+   
+   ISSUE: State module acts as a hub, knowing about too many subsystems.
+   This indicates it may be doing too much or violating encapsulation.
+
+2. root/lib.rs (7 imports):
+   -> domain, hiqlite, infrastructure, persistent_store, services, state,
+      worker_trait
+   
+   ISSUE: Root module exposes too many internals publicly. Should be more
+   selective about what gets re-exported.
+
+3. adapters (5 imports):
+   -> common, domain, infrastructure, worker_flawless, worker_trait
+   
+   CONCERN: Adapters should primarily depend on traits/interfaces, but they
+   import concrete implementations (worker_flawless, infrastructure).
+
+4. work (5 imports):
+   -> domain, persistent_store, repositories, work_item_cache,
+      work_state_machine
+   
+   STATUS: This is acceptable for the work module as it orchestrates the
+   work queue clean architecture.
+
+5. server (4 imports):
+   -> api, domain, handlers, state
+   
+   STATUS: Acceptable as server is the composition root for HTTP layer.
+
+6. repositories (4 imports):
+   -> common, domain, hiqlite, services
+   
+   ISSUE: Repositories shouldn't import from services. This creates the
+   repositories <-> services circular dependency.
+
+================================================================================
+3. MOST DEPENDED-UPON MODULES (High Fan-In)
+================================================================================
+
+HIGHLY COUPLED MODULES:
+
+1. domain (10 modules depend on it)
+   Dependents: adapters, handlers, hiqlite, infrastructure, repositories,
+              root, server, state, views, work
+
+   ANALYSIS: Domain should be highly depended upon (that's correct in clean
+   architecture). HOWEVER, the fact that hiqlite, infrastructure, and
+   repositories depend on domain creates circular dependencies.
+
+2. infrastructure (4 dependents):
+   -> adapters, domain, root, state
+   
+   ISSUE: Domain depends on infrastructure, which is backwards. Domain
+   should define interfaces that infrastructure implements.
+
+3. common (4 dependents):
+   -> adapters, repositories, tofu, views
+   
+   STATUS: OK - utility modules can be widely depended upon.
+
+4. hiqlite (4 dependents):
+   -> infrastructure, repositories, root, state
+   
+   ISSUE: hiqlite depends on services which depends on domain, creating
+   circular dependencies.
+
+5. services (3 dependents):
+   -> hiqlite, repositories, root
+   
+   ISSUE: Services imports domain::types::HealthStatus, creating circular
+   dependency with repositories.
+
+================================================================================
+4. INAPPROPRIATE DEPENDENCIES (Violating Clean Architecture)
+================================================================================
+
+DOMAIN DEPENDING ON INFRASTRUCTURE (Architecture Violation):
+
+File: src/domain/vm_service.rs
+  Lines 17-20:
+    use crate::infrastructure::vm::{
+        VmManagement, VmConfig, VmInstance, VmState, JobResult, VmStats,
+        VmAssignment, vm_types::JobRequirements
+    };
+
+  VIOLATION: Domain layer should NOT import from infrastructure layer.
+  Domain should define interfaces (traits) that infrastructure implements.
+  
+  FIX: Move VmManagement trait and related types to domain layer.
+
+File: src/adapters/vm_adapter.rs
+  use crate::infrastructure::vm::{VmAssignment, VmManagement, VmManager,
+      VmManagerConfig};
+  
+  ANALYSIS: Adapters importing concrete VmManager is problematic. Should
+  depend only on the VmManagement trait.
+
+SERVICES IMPORTING DOMAIN TYPES (Circular Reference):
+
+File: src/services/traits.rs
+  Line 38: use crate::domain::types::HealthStatus;
+  
+  VIOLATION: Service traits (infrastructure abstraction) should not import
+  from domain. This creates circular dependency:
+    services -> domain -> repositories -> services
+  
+  FIX: Move HealthStatus to a shared types module or define it in services.
+
+REPOSITORIES IMPORTING SERVICES (Circular Reference):
+
+File: src/repositories/hiqlite_repository.rs
+  Line 9: use crate::services::traits::DatabaseHealth;
+  
+  VIOLATION: Creates repositories -> services -> domain -> repositories cycle.
+  
+  FIX: Repositories should implement service traits without importing them
+  via dependency injection, or service traits should be in a separate layer.
+
+================================================================================
+5. DEEP DEPENDENCY CHAINS
+================================================================================
+
+LONGEST DEPENDENCY PATHS:
+
+1. handlers -> domain -> repositories -> hiqlite -> services -> domain
+   (6 levels with circular dependency)
+
+2. adapters -> infrastructure -> hiqlite -> services -> domain -> repositories
+   (6 levels with circular dependency)
+
+3. server -> handlers -> domain -> infrastructure -> domain
+   (5 levels with circular dependency)
+
+ANALYSIS:
+  Most deep chains involve the circular dependencies identified above.
+  Breaking the cycles will naturally reduce chain depth.
+
+================================================================================
+6. HIDDEN DEPENDENCIES THROUGH GLOBAL STATE
+================================================================================
+
+POTENTIAL GLOBAL STATE ISSUES:
+
+File: src/state/factory.rs (643 lines)
+  - Large factory with many responsibilities
+  - Creates and wires together all infrastructure components
+  - Could hide implicit dependencies through factory methods
+
+File: src/state/mod.rs
+  - StateBuilder pattern creates focused state containers
+  - Multiple state structures (DomainState, InfraState, ConfigState,
+    FeaturesState)
+  - State is passed through axum extractors, creating hidden dependencies
+    on what state contains
+
+ANALYSIS:
+  The state module itself doesn't use global mutable state (good!), but
+  the state structures are passed widely through the application, which
+  can hide dependencies on specific services.
+
+RECOMMENDATION:
+  Instead of passing large state objects, consider:
+  - Passing only the specific services needed
+  - Using smaller, focused state objects per handler module
+  - Making dependencies more explicit in function signatures
+
+================================================================================
+7. DEPENDENCY INJECTION VIOLATIONS
+================================================================================
+
+CONCRETE CLASS DEPENDENCIES:
+
+File: src/adapters/flawless_adapter.rs
+  use crate::worker_flawless::FlawlessWorker;
+  
+  ISSUE: Adapter directly imports concrete FlawlessWorker implementation
+  instead of depending only on WorkerBackend trait.
+
+File: src/adapters/vm_adapter.rs
+  use crate::infrastructure::vm::{VmManager, VmManagerConfig};
+  
+  ISSUE: Adapter imports concrete VmManager. Should use VmManagement trait.
+
+File: src/work/command_service.rs
+  use crate::work_state_machine::WorkStateMachine;
+  use crate::persistent_store::PersistentStore;
+  
+  ANALYSIS: Depends on PersistentStore trait (good), but also directly uses
+  WorkStateMachine (may need trait extraction if we want to mock it).
+
+================================================================================
+8. GOD OBJECTS / MODULES WITH TOO MANY RESPONSIBILITIES
+================================================================================
+
+LARGE FILES (Potential God Objects):
+
+1. src/state/factory.rs (643 lines)
+   RESPONSIBILITIES:
+   - Infrastructure creation (hiqlite, iroh, vm_manager)
+   - Repository creation
+   - Domain service initialization
+   - Optional feature initialization
+   - State assembly
+   
+   ISSUE: Factory is doing too much. Consider splitting into:
+   - InfrastructureFactory (hiqlite, iroh)
+   - RepositoryFactory
+   - DomainServiceFactory
+   - StateAssembler
+
+2. src/adapters/registry.rs (533 lines)
+   RESPONSIBILITIES:
+   - Backend registration and management
+   - Job placement strategies
+   - Resource tracking
+   - Health monitoring
+   - Background cleanup
+   
+   ISSUE: ExecutionRegistry has too many responsibilities.
+   Consider splitting into:
+   - BackendRegistry (registration, lookup)
+   - PlacementEngine (job placement logic)
+   - ResourceTracker (resource monitoring)
+   - CleanupService (background cleanup)
+
+3. src/adapters/flawless_adapter.rs (474 lines)
+4. src/hiqlite/service.rs (471 lines)
+5. src/adapters/vm_adapter.rs (469 lines)
+
+   ANALYSIS: These are large but potentially justified given their roles.
+   Should be reviewed for single responsibility violations.
+
+================================================================================
+9. MODULE ORGANIZATION ANTI-PATTERNS
+================================================================================
+
+TIGHTLY COUPLED MODULES (Bidirectional Dependencies):
+
+1. domain <-> repositories
+   - domain imports repositories::WorkRepository
+   - repositories imports domain::types
+   
+   FIX: Use dependency inversion. Domain defines repository interfaces,
+   repositories module implements them.
+
+2. domain <-> infrastructure
+   - domain::vm_service imports infrastructure::vm types
+   - infrastructure::vm imports domain::types::Job
+   
+   FIX: Define VmManagement trait and types in domain, implement in
+   infrastructure.
+
+3. repositories <-> services
+   - repositories imports services::traits
+   - services imports domain (which repositories also imports)
+   
+   FIX: Extract shared types to separate module or reverse dependency.
+
+================================================================================
+10. PRIORITIZED RECOMMENDATIONS
+================================================================================
+
+CRITICAL (Fix Immediately):
+
+1. Break domain -> infrastructure dependency
+   - Move VmManagement trait from infrastructure to domain
+   - Move VM-related types to domain layer
+   - Have infrastructure implement domain interfaces
+
+2. Break services -> domain -> repositories -> services cycle
+   - Move HealthStatus from domain to services (or new shared_types module)
+   - Or make services depend on domain (accept unidirectional dependency)
+
+3. Break repositories -> services circular dependency
+   - Have repositories implement service traits without importing them
+   - Use dependency injection to pass trait implementations
+
+HIGH PRIORITY:
+
+4. Reduce state module fan-out
+   - Split StateFactory into focused factories
+   - Consider builder pattern for complex state construction
+
+5. Fix adapters importing concrete implementations
+   - Adapters should depend only on traits
+   - Use factory pattern for concrete instantiation
+
+6. Split ExecutionRegistry god object
+   - Extract PlacementStrategy
+   - Extract ResourceMonitor
+   - Extract CleanupService
+
+MEDIUM PRIORITY:
+
+7. Reduce domain fan-in from infrastructure modules
+   - Infrastructure should implement domain interfaces
+   - Domain shouldn't know about infrastructure existence
+
+8. Create explicit dependency diagrams
+   - Document intended architecture layers
+   - Establish dependency rules (e.g., "domain never imports infrastructure")
+   - Add architecture tests to enforce rules
+
+LOW PRIORITY:
+
+9. Consider extracting common types module
+   - Shared types that multiple layers need
+   - Timestamp utilities
+   - Result types
+
+10. Review large files for SRP violations
+    - Break up files >400 lines
+    - Ensure each module has single, well-defined purpose
+
+================================================================================
+11. DEPENDENCY RULES (Recommended Architecture)
+================================================================================
+
+LAYER DEPENDENCIES (Top to Bottom):
+
+  ┌─────────────────────────────────┐
+  │   Presentation (handlers, api)  │
+  └─────────────────────────────────┘
+                  ↓
+  ┌─────────────────────────────────┐
+  │   Application (domain services) │
+  └─────────────────────────────────┘
+                  ↓
+  ┌─────────────────────────────────┐
+  │   Domain (types, traits)        │
+  └─────────────────────────────────┘
+                  ↑
+  ┌─────────────────────────────────┐
+  │   Infrastructure (repos, svcs)  │
+  └─────────────────────────────────┘
+
+RULES:
+1. Presentation may depend on: Application, Domain
+2. Application may depend on: Domain only
+3. Domain may depend on: Nothing (pure business logic)
+4. Infrastructure may depend on: Domain (implements interfaces)
+
+VIOLATIONS FOUND:
+✗ Domain -> Infrastructure (vm_service.rs)
+✗ Domain -> Repositories (job_commands.rs, job_queries.rs)
+✗ Services -> Domain (traits.rs)
+✗ Repositories -> Services (hiqlite_repository.rs)
+
+================================================================================
+12. ARCHITECTURE DEBT SUMMARY
+================================================================================
+
+Total Circular Dependencies Found: 15 unique cycles
+Most Problematic Module: domain (involved in 11 cycles)
+Largest File: state/factory.rs (643 lines)
+Highest Fan-Out: state (8 module imports)
+Highest Fan-In: domain (10 modules depend on it)
+
+TECHNICAL DEBT SCORE: HIGH
+  - Multiple architectural violations
+  - Circular dependencies prevent modular compilation
+  - Testing is difficult due to coupled dependencies
+  - Changes ripple through many modules
+
+ESTIMATED REFACTORING EFFORT:
+  Critical fixes: 2-3 weeks
+  Full cleanup: 1-2 months
+
+RECOMMENDED APPROACH:
+1. Week 1-2: Break circular dependencies (items 1-3 above)
+2. Week 3-4: Fix domain/infrastructure boundary violations
+3. Week 5-6: Split god objects and reduce coupling
+4. Week 7-8: Add architecture tests and documentation
+
+================================================================================
+END OF ANALYSIS
+================================================================================

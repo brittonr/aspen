@@ -1,0 +1,656 @@
+# VmRegistry Refactoring Design
+# Generated: 2025-11-27
+# Status: Design Phase
+# Target: God Object #2 (859 lines)
+
+[metadata]
+created = "2025-11-27"
+task = "Split VmRegistry God Object into focused components"
+estimated_effort = "5-7 days (or 4-6 hours in ULTRA mode)"
+current_lines = 859
+target_reduction = "50-60% per component"
+
+# =============================================================================
+# ANALYSIS SUMMARY
+# =============================================================================
+
+[analysis.current_state]
+file = "src/infrastructure/vm/vm_registry.rs"
+lines_of_code = 859
+public_methods = 19
+responsibilities = 7
+dependencies = "Hiqlite, DashMap, VmTypes"
+coupling_score = "CRITICAL - Single component with 7 distinct concerns"
+
+[analysis.god_object_evidence]
+mixed_concerns = [
+    "Persistence (SQL operations)",
+    "State machine (atomic transitions)",
+    "Caching (in-memory DashMap)",
+    "Recovery (self-healing)",
+    "Consistency (verification)",
+    "Querying (9 query methods)",
+    "Event logging (auditing)"
+]
+largest_methods = [
+    "update_state (143 lines)",
+    "recover_from_persistence (129 lines)",
+    "verify_consistency (93 lines)"
+]
+
+[analysis.usage_patterns]
+direct_consumers = 5
+primary_consumers = [
+    "VmCoordinator (owns registry)",
+    "VmController (lifecycle operations)",
+    "JobRouter (job placement)",
+    "ResourceMonitor (resource tracking)",
+    "HealthChecker (health monitoring)"
+]
+no_trait_abstraction = true
+tightly_coupled_to_hiqlite = true  # Intentional per project design
+
+# =============================================================================
+# DESIGN DECISION: FACADE PATTERN
+# =============================================================================
+
+[design_decision]
+pattern = "Facade Pattern with Internal Component Decomposition"
+rationale = """
+Unlike StateFactory where we could completely restructure the API,
+VmRegistry has 5 direct consumers with ~50+ method call sites.
+
+PROBLEM: We can't change the public API without breaking all consumers.
+
+SOLUTION: Keep VmRegistry as a facade that delegates to focused components.
+
+BENEFITS:
+- Zero breaking changes to consumers
+- Internal refactoring only
+- Gradual migration path (can extract components one by one)
+- Preserves existing tests
+- Components can be tested independently
+
+TRADEOFF: VmRegistry still exists but becomes thin coordination layer
+instead of God Object doing everything itself.
+"""
+
+backwards_compatible = true
+migration_required = false
+
+# =============================================================================
+# NEW ARCHITECTURE
+# =============================================================================
+
+[architecture.overview]
+description = """
+VmRegistry becomes a FACADE that coordinates 5 focused components:
+
+1. VmPersistenceLayer - Database operations (SQL, serialization)
+2. VmCacheLayer - In-memory cache management
+3. VmIndexLayer - State indices for efficient queries
+4. VmRecoveryService - Startup recovery and self-healing
+5. VmConsistencyChecker - Periodic verification
+
+VmRegistry remains the public API and coordinates these components.
+Each component is independently testable and has single responsibility.
+"""
+
+[architecture.component_hierarchy]
+description = """
+     VmRegistry (Facade - 200 lines)
+         │
+         ├── VmPersistenceLayer (150 lines)
+         │   └── Hiqlite operations + serialization
+         │
+         ├── VmCacheLayer (100 lines)
+         │   └── DashMap<Uuid, Arc<RwLock<VmInstance>>>
+         │
+         ├── VmIndexLayer (120 lines)
+         │   └── DashMap<String, HashSet<Uuid>> (by_state)
+         │
+         ├── VmRecoveryService (180 lines)
+         │   └── Recovery + self-healing + migration
+         │
+         └── VmConsistencyChecker (150 lines)
+             └── Verification + auto-repair
+"""
+
+# =============================================================================
+# COMPONENT 1: VmPersistenceLayer
+# =============================================================================
+
+[components.persistence]
+name = "VmPersistenceLayer"
+file = "src/infrastructure/vm/registry/persistence.rs"
+lines_estimate = 150
+responsibility = "All database operations and serialization"
+
+[components.persistence.methods]
+persist_vm = "INSERT/UPDATE VM to Hiqlite"
+delete_vm = "DELETE VM from Hiqlite"
+query_all_vms = "SELECT all VMs for node"
+query_vm = "SELECT single VM by ID"
+query_vms_by_state = "SELECT VMs in specific state"
+log_event = "INSERT into vm_events table"
+update_vm_state = "UPDATE just the state field"
+update_vm_metrics = "UPDATE just the metrics field"
+
+[components.persistence.state]
+hiqlite = "Arc<HiqliteService>"
+node_id = "String"
+
+[components.persistence.design_notes]
+pure_io = "All methods are I/O operations, no business logic"
+serialization = "Handles JSON serialization/deserialization"
+upsert_pattern = "Uses ON CONFLICT for idempotent writes"
+error_handling = "Returns anyhow::Result for all operations"
+
+[components.persistence.example]
+code = """
+pub struct VmPersistenceLayer {
+    hiqlite: Arc<HiqliteService>,
+    node_id: String,
+}
+
+impl VmPersistenceLayer {
+    pub async fn persist_vm(&self, vm: &VmInstance) -> Result<()> {
+        let config_json = serde_json::to_string(&vm.config)?;
+        let state_json = serde_json::to_string(&vm.state)?;
+        let metrics_json = serde_json::to_string(&vm.metrics)?;
+
+        self.hiqlite.execute(
+            \"INSERT INTO vms (...) VALUES (...) ON CONFLICT(id) DO UPDATE SET ...\",
+            params![...],
+        ).await?;
+
+        Ok(())
+    }
+}
+"""
+
+# =============================================================================
+# COMPONENT 2: VmCacheLayer
+# =============================================================================
+
+[components.cache]
+name = "VmCacheLayer"
+file = "src/infrastructure/vm/registry/cache.rs"
+lines_estimate = 100
+responsibility = "In-memory cache of VM instances"
+
+[components.cache.methods]
+insert = "Add VM to cache"
+remove = "Remove VM from cache"
+get = "Get VM by ID"
+get_all = "Get all cached VMs"
+update_vm_state = "Update state in cached instance"
+update_vm_metrics = "Update metrics in cached instance"
+count = "Count cached VMs"
+
+[components.cache.state]
+vms = "DashMap<Uuid, Arc<RwLock<VmInstance>>>"
+
+[components.cache.design_notes]
+thread_safe = "DashMap provides concurrent access"
+rwlock_per_vm = "Each VM has RwLock for concurrent reads"
+no_persistence = "Pure in-memory, rebuilt from persistence on startup"
+simple_operations = "All operations are O(1) lookups or inserts"
+
+[components.cache.example]
+code = """
+pub struct VmCacheLayer {
+    vms: DashMap<Uuid, Arc<RwLock<VmInstance>>>,
+}
+
+impl VmCacheLayer {
+    pub fn insert(&self, vm: VmInstance) -> Arc<RwLock<VmInstance>> {
+        let vm_id = vm.config.id;
+        let vm_arc = Arc::new(RwLock::new(vm));
+        self.vms.insert(vm_id, vm_arc.clone());
+        vm_arc
+    }
+
+    pub fn get(&self, vm_id: &Uuid) -> Option<Arc<RwLock<VmInstance>>> {
+        self.vms.get(vm_id).map(|entry| entry.value().clone())
+    }
+}
+"""
+
+# =============================================================================
+# COMPONENT 3: VmIndexLayer
+# =============================================================================
+
+[components.index]
+name = "VmIndexLayer"
+file = "src/infrastructure/vm/registry/index.rs"
+lines_estimate = 120
+responsibility = "State indices for efficient queries"
+
+[components.index.methods]
+add_to_state_index = "Add VM ID to state index"
+remove_from_state_index = "Remove VM ID from state index"
+update_state_index = "Move VM from old state to new state"
+get_vms_by_state = "Query VMs in specific state"
+count_by_state = "Count VMs in specific state"
+rebuild_from_cache = "Rebuild indices from cache"
+
+[components.index.state]
+by_state = "DashMap<String, HashSet<Uuid>>"
+
+[components.index.design_notes]
+state_key_json = "Uses JSON serialization for state keys (preserves all data)"
+atomic_updates = "State transitions update index atomically"
+panic_safe = "Uses catch_unwind to detect failures"
+cache_derivative = "Indices are derived from cache, can be rebuilt"
+
+[components.index.example]
+code = """
+pub struct VmIndexLayer {
+    by_state: DashMap<String, HashSet<Uuid>>,
+}
+
+impl VmIndexLayer {
+    pub fn update_state_index(
+        &self,
+        vm_id: Uuid,
+        old_state: &VmState,
+        new_state: &VmState,
+    ) -> Result<()> {
+        let old_key = state_key(old_state);
+        let new_key = state_key(new_state);
+
+        // Remove from old state
+        if let Some(mut set) = self.by_state.get_mut(&old_key) {
+            set.remove(&vm_id);
+        }
+
+        // Add to new state
+        self.by_state.entry(new_key).or_insert_with(HashSet::new).insert(vm_id);
+
+        Ok(())
+    }
+}
+
+fn state_key(state: &VmState) -> String {
+    serde_json::to_string(state).unwrap_or_else(|_| String::from("error"))
+}
+"""
+
+# =============================================================================
+# COMPONENT 4: VmRecoveryService
+# =============================================================================
+
+[components.recovery]
+name = "VmRecoveryService"
+file = "src/infrastructure/vm/registry/recovery.rs"
+lines_estimate = 180
+responsibility = "Startup recovery, self-healing, migration"
+
+[components.recovery.methods]
+recover = "Full recovery from persistence"
+detect_dead_processes = "Check if VM processes still alive"
+migrate_legacy_formats = "Convert Debug format to JSON"
+rebuild_indices = "Rebuild all indices from recovered VMs"
+
+[components.recovery.state]
+persistence = "Arc<VmPersistenceLayer>"
+cache = "Arc<VmCacheLayer>"
+index = "Arc<VmIndexLayer>"
+
+[components.recovery.design_notes]
+runs_at_startup = "Called once during VmRegistry initialization"
+self_healing = "Detects dead processes and marks as Failed"
+format_migration = "Gradual migration from legacy Debug format"
+idempotent = "Can be run multiple times safely"
+
+[components.recovery.example]
+code = """
+pub struct VmRecoveryService {
+    persistence: Arc<VmPersistenceLayer>,
+    cache: Arc<VmCacheLayer>,
+    index: Arc<VmIndexLayer>,
+}
+
+impl VmRecoveryService {
+    pub async fn recover(&self) -> Result<usize> {
+        let vms = self.persistence.query_all_vms().await?;
+        let mut recovered = 0;
+
+        for vm_data in vms {
+            // Deserialize with fallback
+            let state = self.deserialize_state(&vm_data.state)?;
+
+            // Self-healing: detect dead processes
+            let state = if self.process_is_dead(&vm_data)? {
+                VmState::Failed { error: \"Process died\".into() }
+            } else {
+                state
+            };
+
+            // Reconstruct VM instance
+            let vm = VmInstance { state, ... };
+
+            // Add to cache and indices
+            let vm_arc = self.cache.insert(vm);
+            self.index.add_to_state_index(vm_data.id, &state)?;
+
+            recovered += 1;
+        }
+
+        Ok(recovered)
+    }
+}
+"""
+
+# =============================================================================
+# COMPONENT 5: VmConsistencyChecker
+# =============================================================================
+
+[components.consistency]
+name = "VmConsistencyChecker"
+file = "src/infrastructure/vm/registry/consistency.rs"
+lines_estimate = 150
+responsibility = "Periodic verification and auto-repair"
+
+[components.consistency.methods]
+verify_consistency = "Compare DB vs cache/indices"
+fix_cache_mismatch = "Update cache to match DB"
+fix_index_mismatch = "Rebuild index from DB"
+report_inconsistencies = "Return diagnostics tuple"
+
+[components.consistency.state]
+persistence = "Arc<VmPersistenceLayer>"
+cache = "Arc<VmCacheLayer>"
+index = "Arc<VmIndexLayer>"
+
+[components.consistency.design_notes]
+db_is_source_of_truth = "Database always wins in conflicts"
+auto_repair = "Automatically fixes inconsistencies"
+non_destructive = "Never deletes data, only updates"
+periodic_task = "Run via Supervisor on schedule"
+
+[components.consistency.example]
+code = """
+pub struct VmConsistencyChecker {
+    persistence: Arc<VmPersistenceLayer>,
+    cache: Arc<VmCacheLayer>,
+    index: Arc<VmIndexLayer>,
+}
+
+impl VmConsistencyChecker {
+    pub async fn verify_consistency(&self) -> Result<(usize, usize, usize)> {
+        let db_vms = self.persistence.query_all_vms().await?;
+        let mut checked = 0;
+        let mut found = 0;
+        let mut fixed = 0;
+
+        for db_vm in db_vms {
+            checked += 1;
+
+            if let Some(cached) = self.cache.get(&db_vm.id) {
+                // Check if states match
+                let cached_state = &cached.read().await.state;
+                if cached_state != &db_vm.state {
+                    // Fix: Update cache to match DB
+                    self.cache.update_vm_state(&db_vm.id, db_vm.state.clone()).await?;
+                    fixed += 1;
+                }
+                found += 1;
+            } else {
+                // VM in DB but not cache - rebuild
+                // (Handled by recovery service)
+            }
+        }
+
+        Ok((checked, found, fixed))
+    }
+}
+"""
+
+# =============================================================================
+# COMPONENT 6: VmRegistry (Facade)
+# =============================================================================
+
+[components.facade]
+name = "VmRegistry"
+file = "src/infrastructure/vm/vm_registry.rs"
+lines_estimate = 200
+responsibility = "Public API facade coordinating all components"
+
+[components.facade.state]
+persistence = "Arc<VmPersistenceLayer>"
+cache = "Arc<VmCacheLayer>"
+index = "Arc<VmIndexLayer>"
+recovery = "Arc<VmRecoveryService>"
+consistency = "Arc<VmConsistencyChecker>"
+node_id = "String"
+
+[components.facade.design]
+delegates_all_work = "All methods delegate to appropriate component"
+coordinates_transactions = "Implements 3-phase commit for updates"
+maintains_api_compatibility = "Keeps all 19 public methods unchanged"
+thin_layer = "200 lines vs 859 lines before"
+
+[components.facade.example]
+code = """
+pub struct VmRegistry {
+    persistence: Arc<VmPersistenceLayer>,
+    cache: Arc<VmCacheLayer>,
+    index: Arc<VmIndexLayer>,
+    recovery: Arc<VmRecoveryService>,
+    consistency: Arc<VmConsistencyChecker>,
+    node_id: String,
+}
+
+impl VmRegistry {
+    pub async fn new(hiqlite: Arc<HiqliteService>, state_dir: &Path) -> Result<Self> {
+        let node_id = std::env::var(\"HQL_NODE_ID\")
+            .unwrap_or_else(|_| format!(\"node-{}\", uuid::Uuid::new_v4()));
+
+        // Create components
+        let persistence = Arc::new(VmPersistenceLayer::new(hiqlite, node_id.clone()));
+        let cache = Arc::new(VmCacheLayer::new());
+        let index = Arc::new(VmIndexLayer::new());
+
+        let recovery = Arc::new(VmRecoveryService::new(
+            persistence.clone(),
+            cache.clone(),
+            index.clone(),
+        ));
+
+        let consistency = Arc::new(VmConsistencyChecker::new(
+            persistence.clone(),
+            cache.clone(),
+            index.clone(),
+        ));
+
+        // Recover from persistence
+        recovery.recover().await?;
+
+        Ok(Self {
+            persistence,
+            cache,
+            index,
+            recovery,
+            consistency,
+            node_id,
+        })
+    }
+
+    pub async fn update_state(&self, vm_id: Uuid, new_state: VmState) -> Result<()> {
+        // Get VM and acquire lock
+        let vm_arc = self.cache.get(&vm_id)
+            .ok_or_else(|| anyhow!(\"VM not found\"))?;
+        let mut vm = vm_arc.write().await;
+
+        let old_state = vm.state.clone();
+        if old_state == new_state {
+            return Ok(()); // No-op optimization
+        }
+
+        // PHASE 1: Persist to database (source of truth)
+        self.persistence.update_vm_state(&vm_id, &new_state).await?;
+
+        // PHASE 2: Update indices (with panic guard)
+        let index = self.index.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            index.update_state_index(vm_id, &old_state, &new_state)
+        }));
+
+        match result {
+            Ok(Ok(())) => {
+                // Success - update VM instance
+                vm.state = new_state.clone();
+            }
+            _ => {
+                // Panic or error - attempt rollback
+                self.persistence.update_vm_state(&vm_id, &old_state).await?;
+                return Err(anyhow!(\"Index update failed, rolled back\"));
+            }
+        }
+
+        // PHASE 3: Log event (best-effort)
+        let _ = self.persistence.log_event(vm_id, \"state_changed\", None).await;
+
+        Ok(())
+    }
+
+    pub async fn get(&self, vm_id: &Uuid) -> Result<Option<Arc<RwLock<VmInstance>>>> {
+        Ok(self.cache.get(vm_id))
+    }
+
+    pub async fn list_by_state(&self, state: &str) -> Result<Vec<VmInstance>> {
+        let vm_ids = self.index.get_vms_by_state(state);
+        let mut vms = Vec::new();
+
+        for vm_id in vm_ids {
+            if let Some(vm_arc) = self.cache.get(&vm_id) {
+                let vm = vm_arc.read().await;
+                vms.push(vm.clone());
+            }
+        }
+
+        Ok(vms)
+    }
+
+    // ... all other methods delegate similarly
+}
+"""
+
+# =============================================================================
+# FILE STRUCTURE
+# =============================================================================
+
+[file_structure]
+root = "src/infrastructure/vm/registry/"
+
+[file_structure.files]
+"mod.rs" = "Module definition, re-exports"
+"persistence.rs" = "VmPersistenceLayer implementation (150 lines)"
+"cache.rs" = "VmCacheLayer implementation (100 lines)"
+"index.rs" = "VmIndexLayer implementation (120 lines)"
+"recovery.rs" = "VmRecoveryService implementation (180 lines)"
+"consistency.rs" = "VmConsistencyChecker implementation (150 lines)"
+
+[file_structure.main_file]
+"src/infrastructure/vm/vm_registry.rs" = "VmRegistry facade (200 lines, down from 859)"
+
+# =============================================================================
+# MIGRATION STRATEGY
+# =============================================================================
+
+[migration]
+approach = "Internal refactoring only - Zero breaking changes"
+backwards_compatible = true
+
+[migration.steps]
+1 = "Create src/infrastructure/vm/registry/ directory"
+2 = "Extract VmPersistenceLayer (move persist_vm, log_event, SQL queries)"
+3 = "Extract VmCacheLayer (move DashMap operations)"
+4 = "Extract VmIndexLayer (move by_state index operations)"
+5 = "Extract VmRecoveryService (move recover_from_persistence, self-healing)"
+6 = "Extract VmConsistencyChecker (move verify_consistency)"
+7 = "Update VmRegistry to use components (delegation pattern)"
+8 = "Run tests - no public API changes needed"
+9 = "Compile and verify"
+
+[migration.testing]
+existing_tests = "All tests in vm_state_tests.rs should pass unchanged"
+no_api_changes = "VmRegistry public methods unchanged"
+component_tests = "Add unit tests for each component"
+
+# =============================================================================
+# BENEFITS
+# =============================================================================
+
+[benefits]
+single_responsibility = "Each component has ONE clear purpose"
+testability = "Can test VmPersistenceLayer without cache/indices"
+reduced_complexity = "Largest file 200 lines (facade) vs 859 lines before"
+maintainability = "Changes to persistence don't affect caching logic"
+backwards_compatible = "Zero breaking changes to consumers"
+
+[benefits.metrics]
+before_lines = 859
+after_total_lines = "~900 (distributed across 7 files)"
+before_largest_method = "143 lines (update_state)"
+after_largest_method = "~60 lines (update_state coordination)"
+complexity_reduction = "70% - Each component <200 lines"
+
+# =============================================================================
+# IMPLEMENTATION CHECKLIST
+# =============================================================================
+
+[checklist]
+design = "✓ Complete"
+create_directory = "○ mkdir registry/"
+persistence_layer = "○ Extract and implement"
+cache_layer = "○ Extract and implement"
+index_layer = "○ Extract and implement"
+recovery_service = "○ Extract and implement"
+consistency_checker = "○ Extract and implement"
+update_facade = "○ Update VmRegistry to delegate"
+run_tests = "○ Verify all tests pass"
+compile = "○ Test compilation"
+commit = "○ Create commit"
+
+# =============================================================================
+# ALTERNATIVE CONSIDERED: Complete Rewrite
+# =============================================================================
+
+[alternatives.complete_rewrite]
+description = "Replace VmRegistry with new trait-based architecture"
+pros = ["Cleaner design", "Better decoupling", "Easier to test"]
+cons = [
+    "Breaking changes to 5 consumers",
+    "~50+ call sites to update",
+    "High risk of bugs during migration",
+    "2-3 days additional effort"
+]
+verdict = "REJECTED - Facade pattern provides 90% of benefits with 10% of risk"
+
+# =============================================================================
+# RISK ASSESSMENT
+# =============================================================================
+
+[risks.low_risk]
+reason = "Internal refactoring only, public API unchanged"
+mitigation = "Existing test suite provides regression detection"
+rollback_easy = "Can revert to single file if issues found"
+
+[risks.testing_coverage]
+concern = "Need to ensure all edge cases covered"
+mitigation = "Run full vm_state_tests.rs suite, add component unit tests"
+
+# =============================================================================
+# SUCCESS CRITERIA
+# =============================================================================
+
+[success_criteria]
+compilation = "Code compiles with no new errors"
+tests_pass = "All existing tests pass unchanged"
+api_unchanged = "No changes to public VmRegistry methods"
+reduced_complexity = "Largest component <200 lines"
+single_responsibility = "Each component has ONE clear purpose"
+documentation = "Comprehensive design doc created"

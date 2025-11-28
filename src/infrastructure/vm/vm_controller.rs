@@ -7,7 +7,7 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 use super::resource_guard::VmResourceGuard;
-use super::vm_registry::VmRegistry;
+use super::registry::DefaultVmRepository as VmRegistry;
 use super::vm_types::{VmConfig, VmInstance, VmMode, VmState};
 use super::{network_manager::VmNetworkManager, process_manager::VmProcessManager, virtiofs_daemon::VirtiofsDaemon, filesystem::VmFilesystem, control_socket::VmControlSocket};
 use crate::infrastructure::vm::VmManagerConfig;
@@ -227,7 +227,7 @@ impl VmController {
 
     /// Send job to service VM
     pub async fn send_job_to_vm(&self, vm_id: Uuid, job: &crate::Job) -> Result<()> {
-        if let Some(vm_lock) = self.registry.get(vm_id).await? {
+        if let Some(vm_lock) = self.registry.get(&vm_id) {
             let vm = vm_lock.read().await;
 
             if let Some(control_socket) = &vm.control_socket {
@@ -238,7 +238,7 @@ impl VmController {
                 drop(vm); // Release read lock
                 self.registry
                     .update_state(
-                        vm_id,
+                        &vm_id,
                         VmState::Busy {
                             job_id: job.id.clone(),
                             started_at: chrono::Utc::now().timestamp(),
@@ -260,7 +260,7 @@ impl VmController {
     pub async fn shutdown_vm(&self, vm_id: Uuid, graceful: bool) -> Result<()> {
         tracing::info!(vm_id = %vm_id, graceful = graceful, "Shutting down VM");
 
-        if let Some(vm_lock) = self.registry.get(vm_id).await? {
+        if let Some(vm_lock) = self.registry.get(&vm_id) {
             let vm = vm_lock.read().await;
 
             if graceful {
@@ -299,7 +299,7 @@ impl VmController {
             // Update state
             self.registry
                 .update_state(
-                    vm_id,
+                    &vm_id,
                     VmState::Terminated {
                         reason: if graceful {
                             "Graceful shutdown".to_string()
@@ -325,7 +325,7 @@ impl VmController {
         tracing::info!(vm_id = %vm_id, "Restarting VM");
 
         // Get VM configuration
-        let config = if let Some(vm_lock) = self.registry.get(vm_id).await? {
+        let config = if let Some(vm_lock) = self.registry.get(&vm_id) {
             let vm = vm_lock.read().await;
             vm.config.as_ref().clone()
         } else {
@@ -336,7 +336,7 @@ impl VmController {
         self.shutdown_vm(vm_id, false).await?;
 
         // Remove from registry
-        self.registry.remove(vm_id).await?;
+        self.registry.remove(&vm_id).await?;
 
         // Start new VM with same config
         self.start_vm(config).await?;
@@ -346,7 +346,7 @@ impl VmController {
 
     /// Get VM status
     pub async fn get_vm_status(&self, vm_id: Uuid) -> Result<Option<VmState>> {
-        if let Some(vm_lock) = self.registry.get(vm_id).await? {
+        if let Some(vm_lock) = self.registry.get(&vm_id) {
             let vm = vm_lock.read().await;
             Ok(Some(vm.state.clone()))
         } else {

@@ -1,0 +1,414 @@
+# VmRegistry Clean Rewrite Design
+# Generated: 2025-11-27
+# Status: Implementation Phase
+# Approach: CLEAN REWRITE (No backwards compatibility)
+
+[metadata]
+created = "2025-11-27"
+task = "Clean rewrite of VmRegistry God Object"
+approach = "Complete architectural redesign"
+backwards_compatibility = false
+estimated_effort = "4-6 hours (ULTRA mode)"
+
+# =============================================================================
+# DESIGN DECISION: CLEAN REWRITE
+# =============================================================================
+
+[decision]
+pattern = "Repository Pattern with Trait-Based Components"
+rationale = """
+Since we DON'T care about backwards compatibility, we can implement
+the OPTIMAL architecture instead of Facade pattern workaround.
+
+BENEFITS OF CLEAN REWRITE:
+- Proper dependency inversion (traits for all components)
+- Better testability (mock each component)
+- Cleaner separation of concerns
+- More idiomatic Rust
+- Smaller, focused implementations
+- Easier to evolve independently
+
+APPROACH:
+1. Define traits for each concern
+2. Implement concrete types for each trait
+3. Compose them into VmRepository
+4. Update all consumers in one commit
+5. Delete old vm_registry.rs
+"""
+
+# =============================================================================
+# NEW ARCHITECTURE
+# =============================================================================
+
+[architecture.overview]
+description = """
+Replace monolithic VmRegistry with trait-based composition:
+
+TRAITS (abstractions):
+- VmPersistence - Database operations
+- VmCache - In-memory storage
+- VmStateIndex - Query optimization
+- VmRecovery - Startup recovery
+- VmConsistency - Verification
+
+IMPLEMENTATIONS:
+- HiqliteVmPersistence - Hiqlite-backed persistence
+- DashMapVmCache - Concurrent in-memory cache
+- StateIndexImpl - DashMap-based indices
+- VmRecoveryService - Recovery coordinator
+- VmConsistencyChecker - Verification service
+
+REPOSITORY:
+- VmRepository - Composes all traits, provides high-level API
+"""
+
+# =============================================================================
+# TRAIT: VmPersistence
+# =============================================================================
+
+[traits.persistence]
+name = "VmPersistence"
+file = "src/infrastructure/vm/registry/persistence.rs"
+purpose = "Abstract database operations"
+
+[traits.persistence.interface]
+code = """
+#[async_trait]
+pub trait VmPersistence: Send + Sync {
+    async fn save(&self, vm: &VmInstance) -> Result<()>;
+    async fn load(&self, vm_id: &Uuid) -> Result<Option<VmInstance>>;
+    async fn load_all(&self) -> Result<Vec<VmInstance>>;
+    async fn delete(&self, vm_id: &Uuid) -> Result<()>;
+    async fn update_state(&self, vm_id: &Uuid, state: &VmState) -> Result<()>;
+    async fn update_metrics(&self, vm_id: &Uuid, metrics: &VmMetrics) -> Result<()>;
+    async fn query_by_state(&self, state: &VmState) -> Result<Vec<Uuid>>;
+    async fn log_event(&self, vm_id: &Uuid, event: &str, data: Option<String>) -> Result<()>;
+}
+"""
+
+[traits.persistence.implementation]
+name = "HiqliteVmPersistence"
+file = "src/infrastructure/vm/registry/hiqlite_persistence.rs"
+lines_estimate = 200
+
+# =============================================================================
+# TRAIT: VmCache
+# =============================================================================
+
+[traits.cache]
+name = "VmCache"
+file = "src/infrastructure/vm/registry/cache.rs"
+purpose = "Abstract in-memory cache"
+
+[traits.cache.interface]
+code = """
+pub trait VmCache: Send + Sync {
+    fn insert(&self, vm: VmInstance) -> Arc<RwLock<VmInstance>>;
+    fn get(&self, vm_id: &Uuid) -> Option<Arc<RwLock<VmInstance>>>;
+    fn remove(&self, vm_id: &Uuid) -> Option<Arc<RwLock<VmInstance>>>;
+    fn get_all(&self) -> Vec<Arc<RwLock<VmInstance>>>;
+    fn count(&self) -> usize;
+    fn clear(&self);
+}
+"""
+
+[traits.cache.implementation]
+name = "DashMapVmCache"
+lines_estimate = 80
+
+# =============================================================================
+# TRAIT: VmStateIndex
+# =============================================================================
+
+[traits.index]
+name = "VmStateIndex"
+file = "src/infrastructure/vm/registry/index.rs"
+purpose = "Abstract query indices"
+
+[traits.index.interface]
+code = """
+pub trait VmStateIndex: Send + Sync {
+    fn add(&self, vm_id: Uuid, state: &VmState);
+    fn remove(&self, vm_id: &Uuid, state: &VmState);
+    fn update(&self, vm_id: Uuid, old_state: &VmState, new_state: &VmState);
+    fn find_by_state(&self, state: &VmState) -> Vec<Uuid>;
+    fn count_by_state(&self, state: &VmState) -> usize;
+    fn clear(&self);
+    fn rebuild<C: VmCache>(&self, cache: &C);
+}
+"""
+
+[traits.index.implementation]
+name = "StateIndexImpl"
+lines_estimate = 100
+
+# =============================================================================
+# SERVICE: VmRecovery
+# =============================================================================
+
+[services.recovery]
+name = "VmRecovery"
+file = "src/infrastructure/vm/registry/recovery.rs"
+purpose = "Startup recovery and self-healing"
+lines_estimate = 150
+
+[services.recovery.interface]
+code = """
+pub struct VmRecovery<P, C, I>
+where
+    P: VmPersistence,
+    C: VmCache,
+    I: VmStateIndex,
+{
+    persistence: Arc<P>,
+    cache: Arc<C>,
+    index: Arc<I>,
+}
+
+impl<P, C, I> VmRecovery<P, C, I>
+where
+    P: VmPersistence,
+    C: VmCache,
+    I: VmStateIndex,
+{
+    pub async fn recover(&self) -> Result<usize> { ... }
+    fn detect_dead_process(&self, vm: &VmInstance) -> bool { ... }
+    fn migrate_state_format(&self, state_str: &str) -> Result<VmState> { ... }
+}
+"""
+
+# =============================================================================
+# SERVICE: VmConsistency
+# =============================================================================
+
+[services.consistency]
+name = "VmConsistency"
+file = "src/infrastructure/vm/registry/consistency.rs"
+purpose = "Periodic consistency verification"
+lines_estimate = 120
+
+[services.consistency.interface]
+code = """
+pub struct VmConsistency<P, C, I>
+where
+    P: VmPersistence,
+    C: VmCache,
+    I: VmStateIndex,
+{
+    persistence: Arc<P>,
+    cache: Arc<C>,
+    index: Arc<I>,
+}
+
+impl<P, C, I> VmConsistency<P, C, I>
+where
+    P: VmPersistence,
+    C: VmCache,
+    I: VmStateIndex,
+{
+    pub async fn verify(&self) -> Result<ConsistencyReport> { ... }
+    async fn fix_cache_mismatch(&self, vm_id: &Uuid, db_vm: VmInstance) -> Result<()> { ... }
+}
+
+pub struct ConsistencyReport {
+    pub checked: usize,
+    pub found: usize,
+    pub fixed: usize,
+}
+"""
+
+# =============================================================================
+# REPOSITORY: VmRepository
+# =============================================================================
+
+[repository]
+name = "VmRepository"
+file = "src/infrastructure/vm/registry/mod.rs"
+purpose = "High-level VM repository composing all components"
+lines_estimate = 250
+
+[repository.structure]
+code = """
+pub struct VmRepository<P, C, I>
+where
+    P: VmPersistence,
+    C: VmCache,
+    I: VmStateIndex,
+{
+    persistence: Arc<P>,
+    cache: Arc<C>,
+    index: Arc<I>,
+    recovery: VmRecovery<P, C, I>,
+    consistency: VmConsistency<P, C, I>,
+    node_id: String,
+}
+
+impl<P, C, I> VmRepository<P, C, I>
+where
+    P: VmPersistence + 'static,
+    C: VmCache + 'static,
+    I: VmStateIndex + 'static,
+{
+    pub async fn new(
+        persistence: Arc<P>,
+        cache: Arc<C>,
+        index: Arc<I>,
+        node_id: String,
+    ) -> Result<Self> {
+        let recovery = VmRecovery::new(
+            persistence.clone(),
+            cache.clone(),
+            index.clone(),
+        );
+
+        // Recover on startup
+        recovery.recover().await?;
+
+        let consistency = VmConsistency::new(
+            persistence.clone(),
+            cache.clone(),
+            index.clone(),
+        );
+
+        Ok(Self {
+            persistence,
+            cache,
+            index,
+            recovery,
+            consistency,
+            node_id,
+        })
+    }
+
+    // High-level operations
+    pub async fn register(&self, vm: VmInstance) -> Result<()> { ... }
+    pub async fn update_state(&self, vm_id: &Uuid, new_state: VmState) -> Result<()> { ... }
+    pub async fn remove(&self, vm_id: &Uuid) -> Result<()> { ... }
+
+    // Query operations
+    pub fn get(&self, vm_id: &Uuid) -> Option<Arc<RwLock<VmInstance>>> { ... }
+    pub fn list_all(&self) -> Vec<VmInstance> { ... }
+    pub fn list_by_state(&self, state: &VmState) -> Vec<VmInstance> { ... }
+    pub fn count_by_state(&self, state: &VmState) -> usize { ... }
+
+    // Maintenance
+    pub async fn verify_consistency(&self) -> Result<ConsistencyReport> { ... }
+}
+"""
+
+# =============================================================================
+# TYPE ALIAS FOR PRODUCTION
+# =============================================================================
+
+[production_type]
+code = """
+// Production type alias with concrete implementations
+pub type DefaultVmRepository = VmRepository<
+    HiqliteVmPersistence,
+    DashMapVmCache,
+    StateIndexImpl,
+>;
+
+impl DefaultVmRepository {
+    pub async fn create(hiqlite: Arc<HiqliteService>, node_id: String) -> Result<Self> {
+        let persistence = Arc::new(HiqliteVmPersistence::new(hiqlite, node_id.clone()));
+        let cache = Arc::new(DashMapVmCache::new());
+        let index = Arc::new(StateIndexImpl::new());
+
+        Self::new(persistence, cache, index, node_id).await
+    }
+}
+"""
+
+# =============================================================================
+# FILE STRUCTURE
+# =============================================================================
+
+[file_structure]
+root = "src/infrastructure/vm/registry/"
+
+[file_structure.files]
+"mod.rs" = "VmRepository, re-exports, DefaultVmRepository alias"
+"persistence.rs" = "VmPersistence trait"
+"hiqlite_persistence.rs" = "HiqliteVmPersistence implementation"
+"cache.rs" = "VmCache trait + DashMapVmCache implementation"
+"index.rs" = "VmStateIndex trait + StateIndexImpl implementation"
+"recovery.rs" = "VmRecovery service"
+"consistency.rs" = "VmConsistency service"
+
+[file_structure.delete]
+old_file = "src/infrastructure/vm/vm_registry.rs (859 lines)"
+
+# =============================================================================
+# CONSUMER UPDATES
+# =============================================================================
+
+[consumers]
+count = 5
+
+[consumers.updates]
+VmCoordinator = "Change Arc<VmRegistry> → Arc<DefaultVmRepository>"
+VmController = "Change Arc<VmRegistry> → Arc<DefaultVmRepository>"
+JobRouter = "Change Arc<VmRegistry> → Arc<DefaultVmRepository>"
+ResourceMonitor = "Change Arc<VmRegistry> → Arc<DefaultVmRepository>"
+HealthChecker = "Change Arc<VmRegistry> → Arc<DefaultVmRepository>"
+
+[consumers.method_updates]
+description = "Most methods unchanged, some improved API"
+breaking_changes = [
+    "new() signature different (takes components vs path)",
+    "Some query methods return Vec<VmInstance> instead of async Result",
+    "State machine logic moved to separate service (optional)"
+]
+
+# =============================================================================
+# BENEFITS
+# =============================================================================
+
+[benefits]
+clean_architecture = "Proper dependency inversion with traits"
+testability = "Can mock each component independently"
+flexibility = "Easy to swap implementations (e.g., Redis cache)"
+clarity = "Each component has single responsibility"
+idiomatic = "Follows Rust best practices (traits, generics)"
+performance = "Same or better (fewer indirections)"
+
+[benefits.metrics]
+before = "1 file, 859 lines"
+after = "7 files, ~900 lines total"
+largest_file = "~250 lines (VmRepository)"
+trait_count = 3
+implementation_count = 6
+type_safety = "Improved (compile-time trait bounds)"
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+
+[implementation.order]
+1 = "Create registry/ directory"
+2 = "Define VmPersistence trait"
+3 = "Implement HiqliteVmPersistence"
+4 = "Define VmCache trait + DashMapVmCache"
+5 = "Define VmStateIndex trait + StateIndexImpl"
+6 = "Implement VmRecovery service"
+7 = "Implement VmConsistency service"
+8 = "Implement VmRepository coordinator"
+9 = "Create DefaultVmRepository type alias"
+10 = "Update all 5 consumers"
+11 = "Delete old vm_registry.rs"
+12 = "Compile and fix errors"
+13 = "Run tests and fix issues"
+14 = "Commit"
+
+# =============================================================================
+# SUCCESS CRITERIA
+# =============================================================================
+
+[success]
+compilation = "✓ Compiles with no errors"
+tests = "✓ Tests pass (may need updates)"
+reduced_complexity = "✓ Largest file <250 lines"
+single_responsibility = "✓ Each component has ONE purpose"
+trait_based = "✓ All components implement traits"
+documentation = "✓ Comprehensive design docs"

@@ -26,7 +26,7 @@ use tokio::sync::RwLock;
 use tokio::time::{interval, timeout, Duration};
 use uuid::Uuid;
 
-use super::vm_registry::VmRegistry;
+use super::registry::DefaultVmRepository as VmRegistry;
 use super::vm_types::{VmControlMessage, VmState};
 
 /// Health status for a VM
@@ -165,7 +165,7 @@ impl HealthChecker {
 
     /// Check health of all VMs
     async fn check_all_vms(&self) -> Result<()> {
-        let vms = self.registry.list_running_vms().await?;
+        let vms = self.registry.list_running_vms().await;
 
         for vm in vms {
             // Skip ephemeral VMs (they terminate after job)
@@ -222,7 +222,7 @@ impl HealthChecker {
                         );
 
                         // Update VM metrics
-                        let vm_lock = self.registry.get(vm.config.id).await?
+                        let vm_lock = self.registry.get(&vm.config.id)
                             .ok_or_else(|| anyhow!("VM not found"))?;
                         let mut vm = vm_lock.write().await;
                         vm.metrics.record_health_check(true);
@@ -456,7 +456,7 @@ impl HealthChecker {
     /// Mark VM as unhealthy in registry
     async fn mark_vm_unhealthy(&self, vm_id: Uuid) -> Result<()> {
         self.registry.update_state(
-            vm_id,
+            &vm_id,
             VmState::Failed {
                 error: "Health check failures exceeded threshold".to_string(),
             },
@@ -479,7 +479,7 @@ impl HealthChecker {
 
     /// Force health check on specific VM
     pub async fn force_check(&self, vm_id: Uuid) -> Result<()> {
-        if let Some(vm_lock) = self.registry.get(vm_id).await? {
+        if let Some(vm_lock) = self.registry.get(&vm_id) {
             let vm = vm_lock.read().await;
 
             let start = std::time::Instant::now();

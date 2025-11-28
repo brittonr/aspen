@@ -1,0 +1,110 @@
+# VmRegistry Analysis Summary
+# Generated: 2025-11-27 via ULTRA Mode
+# Parallel Agents: 5 (Deep analysis complete)
+
+[analysis_complete]
+status = "READY FOR IMPLEMENTATION"
+parallel_agents_used = 5
+analysis_depth = "COMPREHENSIVE"
+design_pattern_selected = "Facade Pattern with Component Decomposition"
+
+# =============================================================================
+# KEY FINDINGS
+# =============================================================================
+
+[findings.god_object_confirmed]
+file = "src/infrastructure/vm/vm_registry.rs"
+lines = 859
+responsibilities = 7
+largest_method = "update_state (143 lines)"
+complexity = "CRITICAL"
+
+[findings.seven_responsibilities]
+1 = "Persistence - SQL operations, serialization"
+2 = "State Machine - Atomic transitions, 3-phase commit"
+3 = "Caching - In-memory DashMap management"
+4 = "Indexing - State-based query optimization"
+5 = "Recovery - Startup recovery, self-healing"
+6 = "Consistency - Verification and auto-repair"
+7 = "Event Logging - Audit trail"
+
+[findings.usage_analysis]
+direct_consumers = 5
+call_sites = "50+"
+trait_abstraction = false
+api_stability_required = true
+
+# =============================================================================
+# DESIGN DECISION
+# =============================================================================
+
+[decision]
+pattern = "Facade Pattern"
+rationale = """
+CANNOT do complete rewrite like StateFactory because:
+- 5 direct consumers (VmCoordinator, VmController, JobRouter, ResourceMonitor, HealthChecker)
+- 50+ call sites across codebase
+- No trait abstraction exists
+- Breaking changes would require 2-3 days of updates
+
+SOLUTION: Internal refactoring only
+- Keep VmRegistry as public API
+- Extract 5 internal components
+- VmRegistry becomes thin coordination layer
+- ZERO breaking changes to consumers
+"""
+
+[decision.components]
+count = 5
+total_lines = "~700 lines (distributed)"
+facade_lines = "~200 lines (VmRegistry)"
+reduction = "75% complexity per component"
+
+[decision.components_list]
+VmPersistenceLayer = "150 lines - Database operations"
+VmCacheLayer = "100 lines - In-memory cache"
+VmIndexLayer = "120 lines - State indices"
+VmRecoveryService = "180 lines - Recovery & self-healing"
+VmConsistencyChecker = "150 lines - Verification"
+
+# =============================================================================
+# IMPLEMENTATION PLAN
+# =============================================================================
+
+[implementation]
+approach = "Extract components one-by-one, maintain working state at each step"
+estimated_time = "4-6 hours (ULTRA mode)"
+risk_level = "LOW (internal only, tests unchanged)"
+
+[implementation.order]
+1 = "Create registry/ directory structure"
+2 = "Extract VmPersistenceLayer (SQL, serialization)"
+3 = "Extract VmCacheLayer (DashMap operations)"
+4 = "Extract VmIndexLayer (state indices)"
+5 = "Extract VmRecoveryService (recovery, self-healing)"
+6 = "Extract VmConsistencyChecker (verification)"
+7 = "Update VmRegistry to coordinate components"
+8 = "Verify all tests pass (vm_state_tests.rs)"
+9 = "Compile and commit"
+
+# =============================================================================
+# BENEFITS
+# =============================================================================
+
+[benefits]
+single_responsibility = "Each component has ONE purpose"
+testability = "Can unit test each component independently"
+maintainability = "Changes to persistence don't affect caching"
+backwards_compatible = "ZERO breaking changes"
+reduced_complexity = "859 lines → 200-line facade + 5 focused components"
+risk_minimal = "Internal refactoring only"
+
+# =============================================================================
+# NEXT STEPS
+# =============================================================================
+
+[next_steps]
+status = "DESIGN COMPLETE - READY TO IMPLEMENT"
+start_with = "Create registry/ directory and VmPersistenceLayer"
+test_after_each = "Run vm_state_tests.rs after each component extraction"
+commit_when = "All components extracted, tests pass, compiles clean"

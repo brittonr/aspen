@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::time::{interval, Duration};
 
 use super::vm_controller::VmController;
-use super::vm_registry::VmRegistry;
+use super::registry::DefaultVmRepository as VmRegistry;
 use super::vm_types::{VmConfig, VmState};
 
 /// Resource monitor for VM management
@@ -69,11 +69,10 @@ impl ResourceMonitor {
         // Count available service VMs
         let idle_vms = self
             .registry
-            .count_by_state(VmState::Idle {
+            .count_by_state(&VmState::Idle {
                 jobs_completed: 0,
                 last_job_at: 0,
-            })
-            .await;
+            });
 
         // Scale up if needed (maintain at least 2 idle VMs)
         if idle_vms < 2 {

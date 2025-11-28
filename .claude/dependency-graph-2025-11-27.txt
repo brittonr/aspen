@@ -1,0 +1,274 @@
+================================================================================
+BLIXARD MODULE DEPENDENCY GRAPH
+================================================================================
+
+Legend:
+  -> : Direct dependency (A imports B)
+  <->: Bidirectional dependency (CIRCULAR - BAD)
+  [N]: Module depends on N other modules
+  (N): N modules depend on this module
+
+================================================================================
+CIRCULAR DEPENDENCY HOTSPOTS (⚠️  CRITICAL)
+================================================================================
+
+   ┌──────────┐
+   │ domain   │ (10 modules depend on it) [imports repositories, infrastructure]
+   └──────────┘
+        ↕ CIRCULAR
+   ┌──────────┐
+   │  repos   │ (3 modules depend on it) [imports domain, hiqlite, services]
+   └──────────┘
+        ↕ CIRCULAR
+   ┌──────────┐
+   │ hiqlite  │ (4 modules depend on it) [imports services]
+   └──────────┘
+        ↕ CIRCULAR
+   ┌──────────┐
+   │ services │ (3 modules depend on it) [imports domain]
+   └──────────┘
+        ↕ CIRCULAR
+   └─────────── BACK TO domain (4-WAY CYCLE)
+
+
+   ┌──────────┐
+   │ domain   │
+   └──────────┘
+        ↕ CIRCULAR
+   ┌──────────┐
+   │infrastruc│ (4 modules depend on it) [imports domain, hiqlite]
+   └──────────┘
+        ↕ CIRCULAR
+   └─────────── BACK TO domain (2-WAY CYCLE)
+
+================================================================================
+FULL MODULE DEPENDENCY GRAPH
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            PRESENTATION LAYER                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────┐         ┌────────────┐         ┌────────────┐          │
+│  │  handlers  │ [2]     │    api     │         │   views    │ [2]      │
+│  └────────────┘         └────────────┘         └────────────┘          │
+│       │                       │                       │                 │
+│       └───────────────┬───────┴───────────────────────┘                 │
+│                       ↓                                                 │
+│                  ┌─────────┐                                            │
+│                  │ domain  │                                            │
+│                  └─────────┘                                            │
+│                       ↓                                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           APPLICATION LAYER                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────┐         ┌────────────┐                                 │
+│  │   server   │ [4]     │    work    │ [5]                             │
+│  └────────────┘         └────────────┘                                 │
+│       │                       │                                         │
+│       │                       ├─→ work_item_cache                       │
+│       │                       ├─→ work_state_machine                    │
+│       │                       ├─→ persistent_store                      │
+│       │                       └─→ repositories ⚠️                       │
+│       │                                                                 │
+│       ├─→ api                                                           │
+│       ├─→ handlers                                                      │
+│       ├─→ domain                                                        │
+│       └─→ state [8] ⚠️ HIGH FAN-OUT                                    │
+│                │                                                        │
+│                ├─→ adapters                                             │
+│                ├─→ config                                               │
+│                ├─→ domain                                               │
+│                ├─→ hiqlite                                              │
+│                ├─→ hiqlite_persistent_store                             │
+│                ├─→ infrastructure ⚠️                                    │
+│                ├─→ iroh_service                                         │
+│                └─→ repositories ⚠️                                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            DOMAIN LAYER ⚠️                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────┐           │
+│  │              domain [2] (10 DEPENDENTS) ⚠️               │           │
+│  │                                                           │           │
+│  │  Contains:                                                │           │
+│  │    - job types, worker types, queue types                 │           │
+│  │    - domain services (JobCommandService, etc.)            │           │
+│  │    - vm_service ⚠️ (imports infrastructure)               │           │
+│  │                                                           │           │
+│  │  VIOLATIONS:                                              │           │
+│  │    - Imports repositories ⚠️ (should be reversed)         │           │
+│  │    - Imports infrastructure ⚠️ (should be reversed)       │           │
+│  └──────────────────────────────────────────────────────────┘           │
+│                                                                          │
+│  domain imports:                                                        │
+│    ├─→ repositories ⚠️ CIRCULAR                                         │
+│    └─→ infrastructure ⚠️ CIRCULAR                                       │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        INFRASTRUCTURE LAYER                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐          │
+│  │repositories  │ [4]  │ hiqlite      │ [1]  │ services     │ [1]      │
+│  │ (3 deps)     │      │ (4 deps)     │      │ (3 deps)     │          │
+│  └──────────────┘      └──────────────┘      └──────────────┘          │
+│       │                       │                       │                 │
+│       ├─→ common              ├─→ services ⚠️         └─→ domain ⚠️     │
+│       ├─→ domain ⚠️           │                                         │
+│       ├─→ hiqlite             │                                         │
+│       └─→ services ⚠️         │                                         │
+│                               │                                         │
+│  ┌──────────────┐             │                                         │
+│  │infrastructure│ [2]         │                                         │
+│  │ (4 deps)     │             │                                         │
+│  └──────────────┘             │                                         │
+│       │                       │                                         │
+│       ├─→ domain ⚠️           │                                         │
+│       └─→ hiqlite ←───────────┘                                         │
+│                                                                          │
+│  ┌──────────────┐      ┌──────────────┐                                │
+│  │  adapters    │ [5]  │ iroh_service │ [1]                            │
+│  └──────────────┘      └──────────────┘                                │
+│       │                       │                                         │
+│       ├─→ common              └─→ services                              │
+│       ├─→ domain                                                        │
+│       ├─→ infrastructure ⚠️                                             │
+│       ├─→ worker_flawless ⚠️ (concrete impl)                           │
+│       └─→ worker_trait                                                  │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          UTILITY MODULES                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐        │
+│  │   common   │  │  config    │  │    tofu    │  │ middleware │        │
+│  │ (4 deps)   │  │            │  │            │  │            │        │
+│  └────────────┘  └────────────┘  └────────────┘  └────────────┘        │
+│       ✓                                │                │               │
+│   No imports                            └─→ common      └─→ config      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          ROOT MODULE (lib.rs)                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────┐            │
+│  │        root [7] ⚠️ HIGH FAN-OUT                          │            │
+│  │                                                          │            │
+│  │  Exposes to other crates:                                │            │
+│  │    - All domain types                                    │            │
+│  │    - Worker traits and implementations                   │            │
+│  │    - Configuration                                       │            │
+│  │    - Client libraries                                    │            │
+│  │                                                          │            │
+│  │  ISSUE: Exposes too many internal modules publicly       │            │
+│  └─────────────────────────────────────────────────────────┘            │
+│                                                                          │
+│  root imports:                                                          │
+│    ├─→ domain                                                           │
+│    ├─→ hiqlite                                                          │
+│    ├─→ infrastructure                                                   │
+│    ├─→ persistent_store                                                 │
+│    ├─→ services                                                         │
+│    ├─→ state                                                            │
+│    └─→ worker_trait                                                     │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+DEPENDENCY METRICS SUMMARY
+================================================================================
+
+Module Coupling (out-degree / in-degree):
+
+  1. domain        [2 / 10] ⚠️  Hub module (over-depended)
+  2. state         [8 / 2]  ⚠️  Too many imports
+  3. root          [7 / 0]  ⚠️  Too many public exports
+  4. infrastructure[2 / 4]  ⚠️  Circular with domain
+  5. adapters      [5 / 0]  ⚠️  Imports concrete impls
+  6. work          [5 / 0]  ✓  Acceptable for coordinator
+  7. repositories  [4 / 3]  ⚠️  Circular with services
+  8. server        [4 / 0]  ✓  Composition root
+  9. hiqlite       [1 / 4]  ⚠️  Part of circular chain
+  10. services     [1 / 3]  ⚠️  Circular with domain
+  11. common       [0 / 4]  ✓  Pure utility module
+  12. handlers     [2 / 1]  ✓  Presentation layer
+  13. views        [2 / 1]  ✓  Presentation layer
+  14. config       [0 / 2]  ✓  Configuration module
+  15. middleware   [1 / 0]  ✓  HTTP middleware
+  16. tofu         [1 / 0]  ✓  Feature module
+
+================================================================================
+ARCHITECTURE VIOLATIONS MAP
+================================================================================
+
+CRITICAL VIOLATIONS (Break immediately):
+
+  domain → infrastructure
+  └─ vm_service.rs imports VmManagement, VmConfig, etc.
+  └─ FIX: Move VmManagement trait to domain
+
+  domain → repositories
+  └─ job_commands.rs imports WorkRepository
+  └─ job_queries.rs imports WorkRepository
+  └─ FIX: Repository traits should be in domain
+
+  services → domain → repositories → services
+  └─ Circular chain creating compilation issues
+  └─ FIX: Move HealthStatus or reverse dependencies
+
+HIGH-PRIORITY VIOLATIONS (Fix soon):
+
+  adapters → infrastructure (concrete VmManager)
+  └─ vm_adapter.rs imports concrete class
+  └─ FIX: Depend only on VmManagement trait
+
+  adapters → worker_flawless (concrete worker)
+  └─ flawless_adapter.rs imports concrete class
+  └─ FIX: Use factory pattern for instantiation
+
+  state → (everything)
+  └─ State knows about too many subsystems
+  └─ FIX: Split factory, reduce coupling
+
+================================================================================
+RECOMMENDED REFACTORING SEQUENCE
+================================================================================
+
+PHASE 1: Break Circular Dependencies (Week 1-2)
+  □ Move VmManagement trait from infrastructure to domain
+  □ Move repository traits from repositories to domain
+  □ Fix services/domain/repositories HealthStatus issue
+  □ Verify: No circular dependencies remain
+
+PHASE 2: Fix Layer Violations (Week 3-4)
+  □ Ensure domain never imports infrastructure
+  □ Ensure domain never imports repositories
+  □ Ensure repositories implement domain interfaces
+  □ Add architecture tests to enforce rules
+
+PHASE 3: Reduce Coupling (Week 5-6)
+  □ Split state/factory.rs into focused factories
+  □ Split adapters/registry.rs into smaller components
+  □ Fix adapters to depend only on traits
+  □ Reduce root module public exports
+
+PHASE 4: Verify and Document (Week 7-8)
+  □ Create architecture decision records
+  □ Add module-level documentation
+  □ Verify all tests still pass
+  □ Document dependency rules for new code
+
+================================================================================

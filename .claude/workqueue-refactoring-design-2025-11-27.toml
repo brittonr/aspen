@@ -1,0 +1,173 @@
+# WorkQueue Refactoring Design
+# Created: 2025-11-27
+# Purpose: Break down the WorkQueue God Object into properly separated concerns
+
+[problem]
+description = "WorkQueue is a 444-line God Object mixing cache, persistence, business logic, and queries"
+violations = [
+    "Single Responsibility Principle - does 4+ different things",
+    "Cache management (WorkItemCache coordination)",
+    "Persistence orchestration (PersistentStore)",
+    "Business logic (claim_work, state transitions)",
+    "Query operations (list_work, stats, pagination)",
+]
+impact = [
+    "Hard to test individual concerns",
+    "Difficult to modify without breaking other parts",
+    "Unclear which layer owns what responsibility",
+    "Cannot swap implementations easily",
+]
+
+[current_architecture]
+description = "Current WorkQueue mixes all concerns"
+
+[current_architecture.components]
+WorkQueue = "444 lines - does everything"
+WorkItemCache = "171 lines - in-memory cache (already separate)"
+PersistentStore = "62 lines - trait for storage (already separate)"
+WorkStateMachine = "21 lines - minimal state logic"
+JobClaimingService = "210 lines - domain logic (already separate)"
+
+[current_architecture.dependencies]
+WorkQueue_depends_on = ["WorkItemCache", "PersistentStore", "WorkStateMachine", "JobClaimingService"]
+WorkQueueWorkRepository = "72 lines - thin wrapper that just delegates to WorkQueue"
+
+[new_architecture]
+description = "Clean separation: Repository -> Domain Service -> Query Service"
+philosophy = "Each component has ONE responsibility and depends on abstractions"
+
+[new_architecture.layers]
+infrastructure = ["HiqlitePersistentStore - database access"]
+repository = ["WorkRepository trait - data access abstraction", "WorkRepositoryImpl - implements trait using PersistentStore"]
+domain = ["WorkCommandService - write operations (publish, claim, update)", "WorkQueryService - read operations (list, find, stats)"]
+cache = ["CachedWorkQueryService - decorates WorkQueryService with caching"]
+
+[new_architecture.responsibilities]
+
+[new_architecture.responsibilities.WorkRepositoryImpl]
+role = "Repository Layer - Data Access"
+responsibilities = [
+    "Direct interaction with PersistentStore",
+    "Convert between domain types and storage",
+    "Transaction coordination if needed",
+    "NO business logic, NO caching, NO queries beyond simple CRUD",
+]
+size_estimate = "~150 lines"
+dependencies = ["PersistentStore trait"]
+
+[new_architecture.responsibilities.WorkCommandService]
+role = "Domain Layer - Write Operations"
+responsibilities = [
+    "Business logic for publishing work",
+    "Business logic for claiming work (uses JobClaimingService)",
+    "Business logic for status updates (uses WorkStateMachine)",
+    "Coordinates writes through repository",
+    "Emits domain events for state changes",
+]
+size_estimate = "~200 lines"
+dependencies = ["WorkRepository trait", "JobClaimingService", "WorkStateMachine"]
+
+[new_architecture.responsibilities.WorkQueryService]
+role = "Domain Layer - Read Operations"
+responsibilities = [
+    "Query operations (list, find, filter)",
+    "Pagination logic",
+    "Statistics computation",
+    "NO caching - just delegates to repository",
+]
+size_estimate = "~150 lines"
+dependencies = ["WorkRepository trait"]
+
+[new_architecture.responsibilities.CachedWorkQueryService]
+role = "Cache Layer - Performance Optimization"
+responsibilities = [
+    "Decorates WorkQueryService with caching",
+    "Cache invalidation on version changes",
+    "Cache refresh strategies",
+    "Delegates to inner WorkQueryService on cache miss",
+]
+size_estimate = "~200 lines"
+dependencies = ["WorkQueryService", "WorkItemCache", "CacheVersion"]
+
+[new_architecture.responsibilities.WorkItemCache]
+role = "Infrastructure - In-Memory Storage"
+responsibilities = [
+    "Thread-safe HashMap operations",
+    "NO business logic, NO queries beyond basic get/put",
+    "Keep as-is (already well-designed)",
+]
+size_estimate = "171 lines (existing)"
+dependencies = ["None"]
+
+[new_architecture.data_flow]
+
+[new_architecture.data_flow.write_path]
+description = "Publish/Claim/Update operations"
+flow = [
+    "1. Handler calls WorkCommandService",
+    "2. WorkCommandService applies business rules",
+    "3. WorkCommandService writes through WorkRepository",
+    "4. WorkRepository updates PersistentStore",
+    "5. WorkCommandService emits CacheInvalidationEvent",
+    "6. CachedWorkQueryService invalidates cache on event",
+]
+
+[new_architecture.data_flow.read_path]
+description = "List/Find/Stats operations"
+flow = [
+    "1. Handler calls CachedWorkQueryService (or WorkQueryService directly)",
+    "2. CachedWorkQueryService checks cache version",
+    "3. If cache stale, refresh from WorkQueryService",
+    "4. WorkQueryService queries through WorkRepository",
+    "5. WorkRepository fetches from PersistentStore",
+    "6. Result cached and returned",
+]
+
+[benefits]
+separation_of_concerns = "Each component has single responsibility"
+testability = "Can test repository, commands, queries independently"
+swappable_implementations = "Can swap cache, repository implementations via traits"
+clear_boundaries = "Know exactly where to add new features"
+reduced_complexity = "No single file >200 lines, all logic clearly placed"
+
+[migration_strategy]
+approach = "Incremental refactoring with backward compatibility"
+
+[migration_strategy.phase1]
+description = "Create new components alongside existing WorkQueue"
+tasks = [
+    "Create WorkRepositoryImpl using PersistentStore",
+    "Create WorkCommandService using WorkRepository",
+    "Create WorkQueryService using WorkRepository",
+    "Create CachedWorkQueryService wrapping WorkQueryService",
+    "Keep existing WorkQueue functional",
+]
+
+[migration_strategy.phase2]
+description = "Update existing code to use new components"
+tasks = [
+    "Update state/factory.rs to wire new components",
+    "Update WorkQueueWorkRepository to use new services",
+    "Verify all tests pass",
+]
+
+[migration_strategy.phase3]
+description = "Remove old WorkQueue after migration"
+tasks = [
+    "Delete old WorkQueue file",
+    "Remove WorkQueueWorkRepository wrapper",
+    "Update imports across codebase",
+]
+
+[risks]
+behavioral_changes = "Must ensure exact same behavior during migration"
+test_coverage = "Need comprehensive tests before refactoring"
+cache_coherency = "Must maintain write-through guarantees"
+distributed_consistency = "Must preserve atomic claim semantics"
+
+[success_criteria]
+all_tests_pass = "Existing test suite must pass without modification"
+no_behavioral_changes = "External API remains identical"
+improved_structure = "Each file <250 lines, single responsibility"
+better_testability = "Can test components in isolation"
+maintained_performance = "No regression in cache hit rates or latency"

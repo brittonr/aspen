@@ -278,7 +278,7 @@ pub fn supervised_resource_monitor(
 
 /// Helper function to create a supervised consistency checker task
 pub fn supervised_consistency_checker(
-    registry: Arc<super::vm_registry::VmRegistry>,
+    registry: Arc<super::registry::DefaultVmRepository>,
     check_interval: Duration,
 ) -> impl Fn() -> JoinHandle<()> + Send + Sync + 'static {
     move || {
@@ -288,17 +288,17 @@ pub fn supervised_consistency_checker(
             loop {
                 ticker.tick().await;
                 match registry.verify_consistency().await {
-                    Ok((checked, found, fixed)) => {
-                        if found > 0 {
+                    Ok(report) => {
+                        if report.found > 0 {
                             tracing::warn!(
-                                checked = checked,
-                                found = found,
-                                fixed = fixed,
+                                checked = report.checked,
+                                found = report.found,
+                                fixed = report.fixed,
                                 "Consistency check found and fixed issues"
                             );
                         } else {
                             tracing::debug!(
-                                checked = checked,
+                                checked = report.checked,
                                 "Consistency check completed successfully"
                             );
                         }
