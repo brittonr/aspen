@@ -290,7 +290,17 @@ impl ExecutionBackend for VmAdapter {
 
         tokio::spawn(async move {
             // Acquire permit (blocks if limit reached)
-            let _permit = semaphore.acquire().await.expect("Semaphore closed");
+            // Handle semaphore closure gracefully (can happen during shutdown)
+            let _permit = match semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    tracing::warn!(
+                        job_id = %handle_clone.id,
+                        "Monitor semaphore closed, shutting down monitor gracefully"
+                    );
+                    return;
+                }
+            };
             self_clone.monitor_execution(handle_clone, vm_id).await;
             // Permit automatically released when dropped
         });
