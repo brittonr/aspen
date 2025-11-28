@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tracing::info;
+use tracing::{debug, info, warn};
 use crate::domain::types::Job;
 use crate::infrastructure::vm::{VmAssignment, VmManager, VmManagerConfig};
 use crate::worker_trait::WorkResult;
@@ -12,6 +12,8 @@ use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
+use super::cleanup::{CleanupConfig, CleanupMetrics};
+
 /// Adapter that wraps the existing VmManager to implement ExecutionBackend
 pub struct VmAdapter {
     vm_manager: Arc<VmManager>,
@@ -19,7 +21,14 @@ pub struct VmAdapter {
     executions: Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
     // Limit concurrent monitoring tasks to prevent resource exhaustion
     monitor_semaphore: Arc<tokio::sync::Semaphore>,
+    // Cleanup configuration
+    cleanup_config: CleanupConfig,
+    // Cleanup metrics
+    cleanup_metrics: Arc<tokio::sync::RwLock<CleanupMetrics>>,
+    // Background cleanup task handle
+    cleanup_task_handle: Arc<tokio::sync::RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
+
 #[derive(Debug, Clone)]
 struct VmExecutionState {
     handle: ExecutionHandle,
@@ -28,19 +37,36 @@ struct VmExecutionState {
     status: ExecutionStatus,
     started_at: u64,
     completed_at: Option<u64>,
+    last_accessed: u64,
 }
 impl VmAdapter {
     /// Create a new VM adapter wrapping an existing VmManager
     pub fn new(vm_manager: Arc<VmManager>) -> Self {
+        Self::with_cleanup_config(vm_manager, CleanupConfig::default())
+    }
+
+    /// Create a new VM adapter with custom cleanup configuration
+    pub fn with_cleanup_config(vm_manager: Arc<VmManager>, cleanup_config: CleanupConfig) -> Self {
         // Limit to 1000 concurrent monitoring tasks (prevent unbounded spawning)
         const MAX_CONCURRENT_MONITORS: usize = 1000;
 
-        Self {
+        let adapter = Self {
             vm_manager,
             executions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             monitor_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_MONITORS)),
+            cleanup_config: cleanup_config.clone(),
+            cleanup_metrics: Arc::new(tokio::sync::RwLock::new(CleanupMetrics::new())),
+            cleanup_task_handle: Arc::new(tokio::sync::RwLock::new(None)),
+        };
+
+        // Start background cleanup if enabled
+        if cleanup_config.enable_background_cleanup {
+            adapter.start_background_cleanup();
         }
+
+        adapter
     }
+
     /// Create a VM adapter with a new VmManager
     pub async fn create(
         config: VmManagerConfig,
@@ -48,6 +74,104 @@ impl VmAdapter {
     ) -> Result<Self> {
         let vm_manager = Arc::new(VmManager::new(config, hiqlite).await?);
         Ok(Self::new(vm_manager))
+    }
+
+    /// Start background cleanup task
+    fn start_background_cleanup(&self) {
+        let executions = self.executions.clone();
+        let config = self.cleanup_config.clone();
+        let metrics = self.cleanup_metrics.clone();
+        let cleanup_task_handle = self.cleanup_task_handle.clone();
+
+        let task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(config.cleanup_interval);
+            loop {
+                interval.tick().await;
+
+                debug!("Running background cleanup for VM adapter");
+                let start = std::time::Instant::now();
+
+                let (ttl_count, lru_count) = Self::cleanup_internal(&executions, &config).await;
+
+                let duration = start.elapsed();
+
+                if ttl_count > 0 || lru_count > 0 {
+                    info!(
+                        "VM adapter cleanup: {} TTL expired, {} LRU evicted in {:?}",
+                        ttl_count, lru_count, duration
+                    );
+                }
+
+                // Update metrics
+                let mut m = metrics.write().await;
+                m.record_cleanup(ttl_count, lru_count, duration);
+            }
+        });
+
+        // Store task handle
+        let handle_clone = cleanup_task_handle.clone();
+        tokio::spawn(async move {
+            let mut handle = handle_clone.write().await;
+            *handle = Some(task);
+        });
+    }
+
+    /// Internal cleanup implementation
+    async fn cleanup_internal(
+        executions: &Arc<tokio::sync::RwLock<HashMap<String, VmExecutionState>>>,
+        config: &CleanupConfig,
+    ) -> (usize, usize) {
+        let mut exec_map = executions.write().await;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let mut ttl_cleaned = 0;
+
+        // First pass: Remove entries that exceed TTL based on status
+        exec_map.retain(|_, state| {
+            if let Some(completed_at) = state.completed_at {
+                let age = now.saturating_sub(completed_at);
+                let should_remove = match &state.status {
+                    ExecutionStatus::Completed(_) => age > config.completed_ttl.as_secs(),
+                    ExecutionStatus::Failed(_) => age > config.failed_ttl.as_secs(),
+                    ExecutionStatus::Cancelled => age > config.cancelled_ttl.as_secs(),
+                    _ => false,
+                };
+
+                if should_remove {
+                    ttl_cleaned += 1;
+                    return false;
+                }
+            }
+            true
+        });
+
+        // Second pass: If still over size limit, evict oldest by last_accessed (LRU)
+        let mut lru_cleaned = 0;
+        if exec_map.len() > config.max_entries {
+            let mut entries: Vec<_> = exec_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.last_accessed))
+                .collect();
+
+            entries.sort_by_key(|(_, last_accessed)| *last_accessed);
+
+            let to_remove = exec_map.len() - config.max_entries;
+
+            for (key, _) in entries.iter().take(to_remove) {
+                exec_map.remove(key);
+                lru_cleaned += 1;
+            }
+        }
+
+        (ttl_cleaned, lru_cleaned)
+    }
+
+    /// Get cleanup metrics
+    pub async fn get_cleanup_metrics(&self) -> CleanupMetrics {
+        let metrics = self.cleanup_metrics.read().await;
+        metrics.clone()
     }
     /// Monitor VM job execution
     async fn monitor_execution(&self, handle: ExecutionHandle, vm_id: uuid::Uuid) {
@@ -192,16 +316,18 @@ impl ExecutionBackend for VmAdapter {
         // Create execution handle
         let handle = ExecutionHandle::vm(vm_id.to_string(), job.id.clone());
         // Store execution state
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let state = VmExecutionState {
             handle: handle.clone(),
             vm_id,
             assignment,
             status: ExecutionStatus::Running,
-            started_at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+            started_at: now,
             completed_at: None,
+            last_accessed: now,
         };
         let mut executions = self.executions.write().await;
         executions.insert(handle.id.clone(), state);
@@ -212,6 +338,9 @@ impl ExecutionBackend for VmAdapter {
             vm_manager: self.vm_manager.clone(),
             executions: self.executions.clone(),
             monitor_semaphore: self.monitor_semaphore.clone(),
+            cleanup_config: self.cleanup_config.clone(),
+            cleanup_metrics: self.cleanup_metrics.clone(),
+            cleanup_task_handle: Arc::new(tokio::sync::RwLock::new(None)),
         });
         let handle_clone = handle.clone();
         let semaphore = self.monitor_semaphore.clone();
@@ -227,11 +356,16 @@ impl ExecutionBackend for VmAdapter {
         Ok(handle)
     }
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
-        let executions = self.executions.read().await;
-        executions
-            .get(&handle.id)
-            .map(|state| state.status.clone())
-            .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))
+        let mut executions = self.executions.write().await;
+        if let Some(state) = executions.get_mut(&handle.id) {
+            state.last_accessed = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            Ok(state.status.clone())
+        } else {
+            Err(anyhow::anyhow!("Execution not found: {}", handle.id))
+        }
     }
     async fn cancel_execution(&self, handle: &ExecutionHandle) -> Result<()> {
         let mut executions = self.executions.write().await;
@@ -256,10 +390,15 @@ impl ExecutionBackend for VmAdapter {
         }
     }
     async fn get_metadata(&self, handle: &ExecutionHandle) -> Result<ExecutionMetadata> {
-        let executions = self.executions.read().await;
+        let mut executions = self.executions.write().await;
         let state = executions
-            .get(&handle.id)
+            .get_mut(&handle.id)
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
+
+        state.last_accessed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let mut custom = HashMap::new();
         custom.insert(
             "vm_id".to_string(),
@@ -391,6 +530,15 @@ impl ExecutionBackend for VmAdapter {
     }
     async fn shutdown(&self) -> Result<()> {
         info!("Shutting down VM adapter");
+
+        // Stop background cleanup task
+        let mut handle = self.cleanup_task_handle.write().await;
+        if let Some(task) = handle.take() {
+            task.abort();
+            info!("Stopped VM adapter background cleanup task");
+        }
+        drop(handle);
+
         self.vm_manager.shutdown().await?;
         Ok(())
     }

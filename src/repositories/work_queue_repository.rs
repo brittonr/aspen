@@ -65,6 +65,7 @@ impl WorkRepository for WorkQueueWorkRepository {
     }
 
     async fn stats(&self) -> QueueStats {
+        // stats() now returns QueueStats directly (no Result wrapper)
         self.work_queue.stats().await
     }
 }

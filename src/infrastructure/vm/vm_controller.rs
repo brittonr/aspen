@@ -1,11 +1,12 @@
 //! VM Controller - Manages VM lifecycle operations
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::time::Duration;
 use uuid::Uuid;
 
+use super::resource_guard::VmResourceGuard;
 use super::vm_registry::VmRegistry;
 use super::vm_types::{VmConfig, VmInstance, VmMode, VmState};
 use super::{network_manager::VmNetworkManager, process_manager::VmProcessManager, virtiofs_daemon::VirtiofsDaemon, filesystem::VmFilesystem, control_socket::VmControlSocket};
@@ -83,29 +84,55 @@ impl VmController {
     async fn start_ephemeral_vm(&self, vm: &mut VmInstance, job_id: &str) -> Result<()> {
         let vm_id = vm.config.id;
 
-        // Create directories
-        let (vm_dir, job_dir) = self.filesystem.create_vm_directories(vm_id).await?;
-        vm.job_dir = Some(job_dir.clone());
-
-        // Allocate IP address
-        vm.ip_address = Some(self.network_manager.allocate_ip_address(vm_id));
-
-        // Spawn VM process
-        let pid = self.process_manager.spawn_ephemeral_vm(
+        // Create resource guard for automatic cleanup on failure
+        let mut guard = VmResourceGuard::new(
             vm_id,
-            vm.config.memory_mb,
-            vm.config.vcpus,
-            &job_dir,
-            &vm_dir,
-        ).await?;
+            self.filesystem.clone(),
+            self.network_manager,
+            self.process_manager.clone(),
+            self.virtiofs_daemon.clone(),
+        );
 
-        vm.pid = Some(pid);
+        // Allocate directories - automatically rolled back on error
+        let (vm_dir, job_dir) = guard
+            .allocate_directories()
+            .await
+            .context("Failed to allocate directories for ephemeral VM")?;
+
+        // Allocate IP address - deterministic, no cleanup needed
+        let ip_address = guard.allocate_ip_address();
+
+        // Spawn VM process - automatically killed on error
+        let pid = guard
+            .spawn_ephemeral_vm(
+                vm.config.memory_mb,
+                vm.config.vcpus,
+                &job_dir,
+                &vm_dir,
+            )
+            .await
+            .context("Failed to spawn ephemeral VM process")?;
+
+        // All resources allocated successfully - commit them
+        let resources = guard.commit();
+
+        // Update VM instance with allocated resources
+        vm.job_dir = resources.job_dir;
+        vm.ip_address = resources.ip_address;
+        vm.pid = resources.vm_pid;
 
         // Update state
         vm.state = VmState::Busy {
             job_id: job_id.to_string(),
             started_at: chrono::Utc::now().timestamp(),
         };
+
+        tracing::info!(
+            vm_id = %vm_id,
+            pid = pid,
+            ip = %ip_address,
+            "Ephemeral VM started successfully"
+        );
 
         Ok(())
     }
@@ -114,18 +141,29 @@ impl VmController {
     async fn start_service_vm(&self, vm: &mut VmInstance, queue_name: &str) -> Result<()> {
         let vm_id = vm.config.id;
 
-        // Create directories
-        let (vm_dir, job_dir) = self.filesystem.create_vm_directories(vm_id).await?;
-        vm.job_dir = Some(job_dir.clone());
+        // Create resource guard for automatic cleanup on failure
+        let mut guard = VmResourceGuard::new(
+            vm_id,
+            self.filesystem.clone(),
+            self.network_manager,
+            self.process_manager.clone(),
+            self.virtiofs_daemon.clone(),
+        );
 
-        // Allocate IP address
-        vm.ip_address = Some(self.network_manager.allocate_ip_address(vm_id));
+        // Allocate directories - automatically rolled back on error
+        let (vm_dir, job_dir) = guard
+            .allocate_directories()
+            .await
+            .context("Failed to allocate directories for service VM")?;
 
-        // Create control socket path
+        // Allocate IP address - deterministic, no cleanup needed
+        let ip_address = guard.allocate_ip_address();
+
+        // Create control socket path and track it
         let control_socket = vm_dir.join("control.sock");
-        vm.control_socket = Some(control_socket.clone());
+        guard.track_control_socket(control_socket.clone());
 
-        // Generate VM configuration
+        // Generate VM configuration - write before starting processes
         let vm_config = serde_json::json!({
             "id": vm_id.to_string(),
             "mode": "service",
@@ -134,26 +172,44 @@ impl VmController {
             "vcpus": vm.config.vcpus,
         });
 
-        self.filesystem.write_vm_config(vm_id, &vm_config).await?;
+        self.filesystem
+            .write_vm_config(vm_id, &vm_config)
+            .await
+            .context("Failed to write VM configuration")?;
 
-        // Start virtiofsd daemon
-        let _virtiofsd_pid = self.virtiofs_daemon.start_virtiofsd(vm_id, &vm_dir).await?;
+        // Start virtiofsd daemon - automatically killed on error
+        let virtiofsd_pid = guard
+            .start_virtiofsd(&vm_dir)
+            .await
+            .context("Failed to start virtiofsd daemon")?;
 
-        // Spawn VM process
-        let pid = self.process_manager.spawn_service_vm(
-            vm_id,
-            vm.config.memory_mb,
-            vm.config.vcpus,
-            &job_dir,
-            &control_socket,
-            &vm_dir,
-            queue_name,
-        ).await?;
+        // Spawn VM process - automatically killed on error
+        let pid = guard
+            .spawn_service_vm(
+                vm.config.memory_mb,
+                vm.config.vcpus,
+                &job_dir,
+                &control_socket,
+                &vm_dir,
+                queue_name,
+            )
+            .await
+            .context("Failed to spawn service VM process")?;
 
-        vm.pid = Some(pid);
+        // Wait for VM to be ready - if this fails, all resources are cleaned up
+        self.control_socket
+            .wait_for_vm_ready(&control_socket)
+            .await
+            .context("VM failed to become ready")?;
 
-        // Wait for VM to be ready
-        self.control_socket.wait_for_vm_ready(&control_socket).await?;
+        // All resources allocated successfully and VM is ready - commit them
+        let resources = guard.commit();
+
+        // Update VM instance with allocated resources
+        vm.job_dir = resources.job_dir;
+        vm.ip_address = resources.ip_address;
+        vm.pid = resources.vm_pid;
+        vm.control_socket = resources.control_socket;
 
         // Update state
         vm.state = VmState::Ready;
@@ -161,6 +217,8 @@ impl VmController {
         tracing::info!(
             vm_id = %vm_id,
             pid = pid,
+            virtiofsd_pid = virtiofsd_pid,
+            ip = %ip_address,
             "Service VM started and ready"
         );
 

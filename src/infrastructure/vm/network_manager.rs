@@ -5,6 +5,7 @@
 use uuid::Uuid;
 
 /// Manages network resources for VMs
+#[derive(Clone, Copy)]
 pub struct VmNetworkManager;
 
 impl VmNetworkManager {
@@ -65,7 +66,12 @@ mod tests {
             assert!(ip.starts_with("192.168.100."));
 
             // Extract last octet
-            let last_octet: u8 = ip.split('.').last().unwrap().parse().unwrap();
+            let last_octet: u8 = ip
+                .split('.')
+                .last()
+                .expect("IP should have at least one component")
+                .parse()
+                .expect("Last octet should be a valid number");
 
             // Should be in valid range (2-254)
             assert!(last_octet >= 2 && last_octet <= 254);

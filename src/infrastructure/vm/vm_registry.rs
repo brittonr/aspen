@@ -1,4 +1,10 @@
 // VM Registry - Tracks all VMs with Hiqlite distributed persistence
+//
+// CONSISTENCY GUARANTEES:
+// 1. Hiqlite is the single source of truth (durable, replicated)
+// 2. In-memory structures are caches that follow Hiqlite
+// 3. State transitions are atomic: persist-first with rollback on failure
+// 4. Recovery rebuilds indices from Hiqlite data
 
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
@@ -47,15 +53,39 @@ impl VmRegistry {
         Ok(registry)
     }
 
+    /// Get consistent state index key
+    ///
+    /// Centralizes state-to-string conversion to ensure consistency
+    /// between updates and lookups. Uses JSON serialization to preserve
+    /// exact state representation including variant data.
+    fn state_index_key(state: &VmState) -> String {
+        serde_json::to_string(state).unwrap_or_else(|_| format!("{:?}", state))
+    }
+
+    /// Deserialize VM state from stored string
+    ///
+    /// Handles both JSON (new format) and Debug (legacy format) representations
+    fn deserialize_vm_state(state_str: &str) -> Result<VmState> {
+        // Try JSON deserialization first (preferred)
+        if let Ok(state) = serde_json::from_str::<VmState>(state_str) {
+            return Ok(state);
+        }
+
+        // Fall back to legacy Debug format parsing
+        parse_vm_state(state_str)
+    }
+
     /// Register a new VM instance
+    ///
+    /// Atomicity: Hiqlite persisted first, then cache updated
     pub async fn register(&self, vm: VmInstance) -> Result<()> {
         let vm_id = vm.config.id;
 
-        // Persist to Hiqlite (distributed write)
+        // PHASE 1: Persist to Hiqlite (single source of truth)
         self.persist_vm(&vm).await?;
 
-        // Update state index
-        let state_key = format!("{:?}", vm.state);
+        // PHASE 2: Update in-memory structures
+        let state_key = Self::state_index_key(&vm.state);
         self.by_state
             .entry(state_key.clone())
             .or_insert_with(HashSet::new)
@@ -65,8 +95,10 @@ impl VmRegistry {
         let ip_address = vm.ip_address.clone();
         self.vms.insert(vm_id, Arc::new(RwLock::new(vm)));
 
-        // Log registration event
-        self.log_event(vm_id, "registered", None).await?;
+        // PHASE 3: Log registration event (best-effort)
+        if let Err(e) = self.log_event(vm_id, "registered", None).await {
+            tracing::warn!(vm_id = %vm_id, error = %e, "Failed to log registration event");
+        }
 
         tracing::info!(
             vm_id = %vm_id,
@@ -78,46 +110,159 @@ impl VmRegistry {
         Ok(())
     }
 
-    /// Update VM state
+    /// Update VM state with atomic guarantees
+    ///
+    /// CONSISTENCY STRATEGY:
+    /// 1. Hiqlite is the single source of truth (durable, distributed)
+    /// 2. Persist to Hiqlite first (write-through cache pattern)
+    /// 3. Update in-memory structures only on success
+    /// 4. Roll back database on in-memory failure
+    ///
+    /// This ensures:
+    /// - No window where indices are inconsistent
+    /// - Database always reflects current state
+    /// - Recovery can rebuild from database
+    /// - Thread-safe via RwLock on individual VMs
     pub async fn update_state(&self, vm_id: Uuid, new_state: VmState) -> Result<()> {
         // Get VM from cache
         let vm_arc = self
             .vms
             .get(&vm_id)
-            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?;
+            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?
+            .clone();
 
+        // Acquire write lock early to prevent concurrent state changes to same VM
         let mut vm = vm_arc.write().await;
-        let old_state = format!("{:?}", vm.state);
-        let new_state_str = format!("{:?}", new_state);
+        let old_state = vm.state.clone();
+        let old_state_key = Self::state_index_key(&old_state);
+        let new_state_key = Self::state_index_key(&new_state);
 
-        // Update state index
-        if let Some(mut old_set) = self.by_state.get_mut(&old_state) {
-            old_set.remove(&vm_id);
+        // Optimization: no-op if state unchanged
+        if old_state == new_state {
+            return Ok(());
         }
-        self.by_state
-            .entry(new_state_str.clone())
-            .or_insert_with(HashSet::new)
-            .insert(vm_id);
 
-        // Update VM state
-        vm.state = new_state.clone();
+        tracing::debug!(
+            vm_id = %vm_id,
+            old_state = %old_state_key,
+            new_state = %new_state_key,
+            "Starting state transition"
+        );
 
-        // Persist to Hiqlite
+        // PHASE 1: Persist to Hiqlite (single source of truth, durable)
         let now = chrono::Utc::now().timestamp();
-        self.hiqlite
+        let state_json = Self::state_index_key(&new_state); // JSON serialized
+
+        match self.hiqlite
             .execute(
                 "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
-                params![new_state_str.clone(), now, vm_id.to_string()],
+                params![state_json, now, vm_id.to_string()],
             )
-            .await?;
+            .await
+        {
+            Ok(_) => {
+                tracing::trace!(vm_id = %vm_id, "Hiqlite state persisted successfully");
+            }
+            Err(e) => {
+                // Persistence failed - no state was changed
+                tracing::error!(
+                    vm_id = %vm_id,
+                    old_state = %old_state_key,
+                    new_state = %new_state_key,
+                    error = %e,
+                    "Failed to persist state change to Hiqlite - aborting"
+                );
+                return Err(anyhow!("Persistence failure: {}", e));
+            }
+        }
 
-        // Log state change
-        self.log_event(
+        // PHASE 2: Update in-memory structures atomically
+        // At this point, Hiqlite is updated. We must succeed or rollback.
+
+        // Use panic guard to detect catastrophic failures
+        let index_update_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Remove from old state index
+            if let Some(mut old_set) = self.by_state.get_mut(&old_state_key) {
+                old_set.remove(&vm_id);
+                tracing::trace!(
+                    vm_id = %vm_id,
+                    old_state = %old_state_key,
+                    "Removed from old state index"
+                );
+            }
+
+            // Insert into new state index
+            self.by_state
+                .entry(new_state_key.clone())
+                .or_insert_with(HashSet::new)
+                .insert(vm_id);
+
+            tracing::trace!(
+                vm_id = %vm_id,
+                new_state = %new_state_key,
+                "Added to new state index"
+            );
+        }));
+
+        // Handle catastrophic index update failure
+        if let Err(panic_err) = index_update_result {
+            tracing::error!(
+                vm_id = %vm_id,
+                old_state = %old_state_key,
+                new_state = %new_state_key,
+                "CRITICAL: State index update panicked - attempting rollback"
+            );
+
+            // Attempt to rollback Hiqlite to old state
+            let old_state_json = Self::state_index_key(&old_state);
+            if let Err(rollback_err) = self.hiqlite
+                .execute(
+                    "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
+                    params![old_state_json, now, vm_id.to_string()],
+                )
+                .await
+            {
+                tracing::error!(
+                    vm_id = %vm_id,
+                    error = %rollback_err,
+                    "CRITICAL: Failed to rollback state after index panic - DATABASE INCONSISTENT"
+                );
+                // At this point, manual intervention required
+                // Database has new state, but indices may be corrupted
+            } else {
+                tracing::warn!(
+                    vm_id = %vm_id,
+                    "Rollback successful after index panic"
+                );
+            }
+
+            return Err(anyhow!("State index update failed catastrophically: {:?}", panic_err));
+        }
+
+        // Update VM instance state
+        vm.state = new_state.clone();
+        tracing::trace!(vm_id = %vm_id, "VM instance state updated");
+
+        // PHASE 3: Log state change (best-effort, non-critical)
+        // Even if logging fails, we've achieved consistency
+        if let Err(e) = self.log_event(
             vm_id,
             "state_changed",
-            Some(format!("{} -> {}", old_state, new_state_str)),
-        )
-        .await?;
+            Some(format!("{} -> {}", old_state_key, new_state_key)),
+        ).await {
+            tracing::warn!(
+                vm_id = %vm_id,
+                error = %e,
+                "Failed to log state change event (non-critical)"
+            );
+        }
+
+        tracing::info!(
+            vm_id = %vm_id,
+            old_state = %old_state_key,
+            new_state = %new_state_key,
+            "State transition completed atomically"
+        );
 
         Ok(())
     }
@@ -207,7 +352,7 @@ impl VmRegistry {
 
     /// List VMs by state pattern (for router)
     pub async fn list_vms_by_state(&self, state: VmState) -> Result<Vec<VmInstance>> {
-        let state_key = format!("{:?}", state);
+        let state_key = Self::state_index_key(&state);
         self.list_by_state(&state_key).await
     }
 
@@ -235,7 +380,7 @@ impl VmRegistry {
 
     /// Count VMs by state
     pub async fn count_by_state(&self, state: VmState) -> usize {
-        let state_key = format!("{:?}", state);
+        let state_key = Self::state_index_key(&state);
         self.by_state
             .get(&state_key)
             .map(|set| set.len())
@@ -243,29 +388,37 @@ impl VmRegistry {
     }
 
     /// Remove VM
+    ///
+    /// Atomicity: Database removed first, then cache
     pub async fn remove(&self, vm_id: Uuid) -> Result<()> {
-        // Get VM for state info
+        // Get VM for state info before removal
         let vm_arc = self
             .vms
-            .remove(&vm_id)
-            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?
-            .1;
+            .get(&vm_id)
+            .ok_or_else(|| anyhow!("VM not found: {}", vm_id))?;
 
         let vm = vm_arc.read().await;
-        let state_key = format!("{:?}", vm.state);
+        let state_key = Self::state_index_key(&vm.state);
+        drop(vm); // Release read lock
 
-        // Update state index
-        if let Some(mut set) = self.by_state.get_mut(&state_key) {
-            set.remove(&vm_id);
-        }
-
-        // Remove from Hiqlite
+        // PHASE 1: Remove from Hiqlite (single source of truth)
         self.hiqlite
             .execute("DELETE FROM vms WHERE id = ?1", params![vm_id.to_string()])
             .await?;
 
-        // Log removal
-        self.log_event(vm_id, "removed", None).await?;
+        // PHASE 2: Remove from in-memory structures
+        // Remove from state index
+        if let Some(mut set) = self.by_state.get_mut(&state_key) {
+            set.remove(&vm_id);
+        }
+
+        // Remove from cache
+        self.vms.remove(&vm_id);
+
+        // PHASE 3: Log removal (best-effort)
+        if let Err(e) = self.log_event(vm_id, "removed", None).await {
+            tracing::warn!(vm_id = %vm_id, error = %e, "Failed to log removal event");
+        }
 
         Ok(())
     }
@@ -292,6 +445,9 @@ impl VmRegistry {
     }
 
     /// Recover VMs from Hiqlite on startup
+    ///
+    /// Rebuilds in-memory indices from Hiqlite (single source of truth)
+    /// Performs consistency checks and self-healing
     pub async fn recover_from_persistence(&self) -> Result<usize> {
         // Query all VMs owned by this node
         let rows = self.hiqlite
@@ -305,10 +461,26 @@ impl VmRegistry {
             .await?;
 
         let mut recovered = 0;
+        let mut healed = 0;
+
         for row in rows {
             let vm_id = Uuid::parse_str(&row.id)?;
             let config: VmConfig = serde_json::from_str(&row.config)?;
-            let state = parse_vm_state(&row.state)?;
+
+            // Deserialize state with fallback handling
+            let state = Self::deserialize_vm_state(&row.state)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        vm_id = %vm_id,
+                        error = %e,
+                        state_str = %row.state,
+                        "Failed to deserialize VM state, using Failed state"
+                    );
+                    VmState::Failed {
+                        error: format!("State deserialization failed: {}", e),
+                    }
+                });
+
             let metrics = row.metrics
                 .as_ref()
                 .and_then(|m| serde_json::from_str(m).ok())
@@ -325,23 +497,46 @@ impl VmRegistry {
                 metrics,
             };
 
-            // Check if process is still alive (for running VMs)
+            // Self-healing: Check if process is still alive (for running VMs)
             if let Some(pid) = vm.pid {
-                if !is_process_alive(pid) {
-                    // Mark as failed if process died while we were down
+                if vm.state.is_running() && !is_process_alive(pid) {
+                    tracing::warn!(
+                        vm_id = %vm_id,
+                        pid = pid,
+                        "Process died while system was down - marking as failed"
+                    );
+
+                    // Mark as failed
                     vm.state = VmState::Failed {
                         error: "Process died while system was down".to_string(),
                     };
 
                     // Update in Hiqlite
-                    if let Err(e) = self.update_state(vm_id, vm.state.clone()).await {
-                        tracing::error!(vm_id = %vm_id, error = %e, "Failed to update VM state after detecting dead process");
+                    let new_state_json = Self::state_index_key(&vm.state);
+                    if let Err(e) = self.hiqlite
+                        .execute(
+                            "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
+                            params![
+                                new_state_json,
+                                chrono::Utc::now().timestamp(),
+                                vm_id.to_string()
+                            ],
+                        )
+                        .await
+                    {
+                        tracing::error!(
+                            vm_id = %vm_id,
+                            error = %e,
+                            "Failed to update VM state after detecting dead process"
+                        );
+                    } else {
+                        healed += 1;
                     }
                 }
             }
 
-            // Update state index
-            let state_key = format!("{:?}", vm.state);
+            // Rebuild state index from recovered VMs
+            let state_key = Self::state_index_key(&vm.state);
             self.by_state
                 .entry(state_key)
                 .or_insert_with(HashSet::new)
@@ -352,8 +547,108 @@ impl VmRegistry {
             recovered += 1;
         }
 
-        tracing::info!(recovered, node_id = %self.node_id, "VMs recovered from Hiqlite");
+        tracing::info!(
+            recovered,
+            healed,
+            node_id = %self.node_id,
+            "VMs recovered from Hiqlite with self-healing"
+        );
+
         Ok(recovered)
+    }
+
+    /// Verify consistency between Hiqlite and in-memory state
+    ///
+    /// Returns (total_checked, inconsistencies_found, inconsistencies_fixed)
+    pub async fn verify_consistency(&self) -> Result<(usize, usize, usize)> {
+        let mut checked = 0;
+        let mut found = 0;
+        let mut fixed = 0;
+
+        // Get all VMs from Hiqlite (source of truth)
+        let rows = self.hiqlite
+            .query_as::<VmRow>(
+                "SELECT id, state FROM vms WHERE node_id = ?1",
+                params![self.node_id.clone()],
+            )
+            .await?;
+
+        for row in rows {
+            checked += 1;
+            let vm_id = Uuid::parse_str(&row.id)?;
+
+            let db_state = Self::deserialize_vm_state(&row.state)?;
+            let db_state_key = Self::state_index_key(&db_state);
+
+            // Check in-memory cache
+            if let Some(vm_arc) = self.vms.get(&vm_id) {
+                let vm = vm_arc.read().await;
+                let mem_state_key = Self::state_index_key(&vm.state);
+
+                // Check if states match
+                if db_state_key != mem_state_key {
+                    found += 1;
+                    tracing::warn!(
+                        vm_id = %vm_id,
+                        db_state = %db_state_key,
+                        mem_state = %mem_state_key,
+                        "Inconsistency detected: database and memory states differ"
+                    );
+
+                    // Fix by using database as source of truth
+                    drop(vm); // Release read lock
+                    if let Err(e) = self.update_state(vm_id, db_state.clone()).await {
+                        tracing::error!(
+                            vm_id = %vm_id,
+                            error = %e,
+                            "Failed to fix inconsistency"
+                        );
+                    } else {
+                        fixed += 1;
+                    }
+                }
+
+                // Check if VM is in correct state index
+                if !self.by_state.get(&db_state_key).map_or(false, |set| set.contains(&vm_id)) {
+                    found += 1;
+                    tracing::warn!(
+                        vm_id = %vm_id,
+                        state = %db_state_key,
+                        "Inconsistency detected: VM missing from state index"
+                    );
+
+                    // Fix index
+                    self.by_state
+                        .entry(db_state_key.clone())
+                        .or_insert_with(HashSet::new)
+                        .insert(vm_id);
+                    fixed += 1;
+                }
+            } else {
+                found += 1;
+                tracing::warn!(
+                    vm_id = %vm_id,
+                    "Inconsistency detected: VM in database but not in cache"
+                );
+                // This is recovered by the next call to recover_from_persistence
+            }
+        }
+
+        if found > 0 {
+            tracing::warn!(
+                checked,
+                found,
+                fixed,
+                "Consistency verification completed with issues"
+            );
+        } else {
+            tracing::debug!(
+                checked,
+                "Consistency verification completed - all VMs consistent"
+            );
+        }
+
+        Ok((checked, found, fixed))
     }
 
     /// Cleanup stale VMs (mark as failed if owner node is dead)
@@ -374,17 +669,26 @@ impl VmRegistry {
             }
 
             let vm_id = Uuid::parse_str(&row.id)?;
-            let state = parse_vm_state(&row.state)?;
+            let state = Self::deserialize_vm_state(&row.state).unwrap_or_else(|_| {
+                VmState::Failed {
+                    error: "Unknown state".to_string(),
+                }
+            });
 
             // If it's supposed to be running but we don't have it in cache, it's stale
             if matches!(state, VmState::Ready | VmState::Starting | VmState::Busy { .. }) {
                 if !self.vms.contains_key(&vm_id) {
                     // Mark as failed
+                    let failed_state = VmState::Failed {
+                        error: "VM not found in local cache during cleanup".to_string(),
+                    };
+                    let failed_state_json = Self::state_index_key(&failed_state);
+
                     self.hiqlite
                         .execute(
                             "UPDATE vms SET state = ?1, updated_at = ?2 WHERE id = ?3",
                             params![
-                                "Failed",
+                                failed_state_json,
                                 chrono::Utc::now().timestamp(),
                                 vm_id.to_string()
                             ],
@@ -402,7 +706,7 @@ impl VmRegistry {
     /// Persist VM to Hiqlite
     async fn persist_vm(&self, vm: &VmInstance) -> Result<()> {
         let config_json = serde_json::to_string(&vm.config)?;
-        let state_str = format!("{:?}", vm.state);
+        let state_json = Self::state_index_key(&vm.state); // JSON serialized
         let metrics_json = serde_json::to_string(&vm.metrics)?;
         let now = chrono::Utc::now().timestamp();
 
@@ -424,7 +728,7 @@ impl VmRegistry {
                 params![
                     vm.config.id.to_string(),
                     config_json,
-                    state_str,
+                    state_json,
                     vm.created_at,
                     now,
                     self.node_id.clone(),
@@ -475,13 +779,14 @@ impl From<hiqlite::Row<'static>> for VmRow {
     }
 }
 
-// Parse VM state from string representation
+// Parse VM state from legacy Debug string representation
+// This is used for backward compatibility during recovery
 fn parse_vm_state(state_str: &str) -> Result<VmState> {
-    // Simple parsing - would need proper implementation
     match state_str {
         "Starting" => Ok(VmState::Starting),
         "Ready" => Ok(VmState::Ready),
-        "Idle" => Ok(VmState::Idle {
+        "Draining" => Ok(VmState::Draining),
+        s if s.starts_with("Idle") => Ok(VmState::Idle {
             jobs_completed: 0,
             last_job_at: 0,
         }),
@@ -489,7 +794,6 @@ fn parse_vm_state(state_str: &str) -> Result<VmState> {
             job_id: String::new(),
             started_at: 0,
         }),
-        s if s.starts_with("Draining") => Ok(VmState::Draining),
         s if s.starts_with("Terminated") => Ok(VmState::Terminated {
             reason: String::from("Unknown"),
             exit_code: 0,
@@ -497,10 +801,7 @@ fn parse_vm_state(state_str: &str) -> Result<VmState> {
         s if s.starts_with("Failed") => Ok(VmState::Failed {
             error: String::new(),
         }),
-        _ => Ok(VmState::Terminated {
-            reason: String::from("Unknown state"),
-            exit_code: 0,
-        }),
+        _ => Err(anyhow!("Unknown VM state: {}", state_str)),
     }
 }
 

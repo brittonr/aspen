@@ -10,6 +10,7 @@ use serde_json::Value as JsonValue;
 use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
 
 pub mod hiqlite_repository;
+pub mod job_assignment;
 pub mod work_queue_repository;
 pub mod worker;
 
@@ -18,6 +19,7 @@ pub mod mocks;
 
 // Re-export concrete implementations
 pub use hiqlite_repository::HiqliteStateRepository;
+pub use job_assignment::JobAssignment;
 pub use work_queue_repository::WorkQueueWorkRepository;
 pub use worker::{HiqliteWorkerRepository, WorkerRepository};
 

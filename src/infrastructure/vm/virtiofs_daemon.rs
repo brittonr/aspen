@@ -9,6 +9,7 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 /// Manages virtiofsd daemons for VMs
+#[derive(Clone)]
 pub struct VirtiofsDaemon {
     flake_dir: PathBuf,
 }

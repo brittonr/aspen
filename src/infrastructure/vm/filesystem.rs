@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 /// Manages filesystem operations for VMs
+#[derive(Clone)]
 pub struct VmFilesystem {
     state_dir: PathBuf,
 }

@@ -17,10 +17,6 @@ pub mod validation;
 pub mod auth;
 pub mod features;
 
-// Deprecated - use operational module instead
-#[deprecated(since = "0.2.0", note = "Use operational module instead")]
-pub mod timing;
-
 use serde::{Deserialize, Serialize};
 
 pub use error::ConfigError;
@@ -33,11 +29,6 @@ pub use adapter::{AdapterConfig, JobRouterConfig};
 pub use validation::ValidationConfig;
 pub use auth::AuthConfig;
 pub use features::FeaturesConfig;
-
-// Deprecated - use OperationalConfig instead
-#[allow(deprecated)]
-#[deprecated(since = "0.2.0", note = "Use OperationalConfig instead")]
-pub use timing::{TimingConfig, TimeoutConfig, HealthCheckConfig, ResourceMonitorConfig, VmCheckConfig};
 
 /// Top-level application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,23 +53,6 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     #[serde(default)]
     pub features: FeaturesConfig,
-
-    // Deprecated fields - maintained for backward compatibility
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.2.0", note = "Use operational instead")]
-    pub timing: Option<TimingConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.2.0", note = "Use operational instead")]
-    pub timeouts: Option<TimeoutConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.2.0", note = "Use operational instead")]
-    pub health_check: Option<HealthCheckConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.2.0", note = "Use operational instead")]
-    pub resource_monitor: Option<ResourceMonitorConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[deprecated(since = "0.2.0", note = "Use operational instead")]
-    pub vm_check: Option<VmCheckConfig>,
 }
 
 impl AppConfig {
@@ -98,11 +72,6 @@ impl AppConfig {
             validation: ValidationConfig::load()?,
             auth: AuthConfig::load()?,
             features: FeaturesConfig::load()?,
-            timing: None,
-            timeouts: None,
-            health_check: None,
-            resource_monitor: None,
-            vm_check: None,
         })
     }
 
@@ -237,11 +206,6 @@ impl Default for AppConfig {
             validation: ValidationConfig::default(),
             auth: AuthConfig::default(),
             features: FeaturesConfig::default(),
-            timing: None,
-            timeouts: None,
-            health_check: None,
-            resource_monitor: None,
-            vm_check: None,
         }
     }
 }

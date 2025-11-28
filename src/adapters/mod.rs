@@ -22,6 +22,7 @@ pub const DEFAULT_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
 pub mod handle;
 pub mod placement;
 pub mod registry;
+pub mod cleanup;
 
 // Local adapter components
 pub mod output_capture;

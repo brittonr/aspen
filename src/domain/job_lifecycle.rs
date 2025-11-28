@@ -1,10 +1,15 @@
 //! Job lifecycle business logic (Facade over Command/Query services)
 //!
-//! This service provides a unified API over JobCommandService and JobQueryService,
-//! maintaining backward compatibility while following CQRS principles internally.
+//! **DEPRECATED:** This service is a useless middleman that just delegates to
+//! JobCommandService and JobQueryService. It violates the principle of avoiding
+//! unnecessary abstraction layers.
 //!
-//! New code should prefer using JobCommandService and JobQueryService directly
-//! for clearer intent (mutation vs read).
+//! **DO NOT USE THIS IN NEW CODE!** Use JobCommandService and JobQueryService directly:
+//! - JobCommandService for mutations (submit, claim, update status)
+//! - JobQueryService for reads (list jobs, get stats, search)
+//!
+//! This service exists only for backward compatibility during migration.
+//! It will be removed in a future version.
 
 use std::sync::Arc;
 use anyhow::Result;
@@ -19,11 +24,13 @@ pub use crate::domain::job_queries::{EnrichedJob, JobSortOrder};
 
 /// Facade service providing unified job lifecycle API
 ///
-/// This service delegates to JobCommandService (writes) and JobQueryService (reads)
-/// following the CQRS pattern. It exists for backward compatibility and convenience.
+/// **DEPRECATED:** This is a useless middleman layer that adds no value.
+/// It simply delegates to JobCommandService and JobQueryService.
 ///
-/// **Recommendation:** New code should use JobCommandService and JobQueryService
-/// directly for clearer separation of concerns.
+/// **Use JobCommandService and JobQueryService directly instead!**
+///
+/// This service will be removed in a future version.
+#[deprecated(since = "0.2.0", note = "Use JobCommandService and JobQueryService directly")]
 pub struct JobLifecycleService {
     commands: Arc<JobCommandService>,
     queries: Arc<JobQueryService>,

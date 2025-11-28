@@ -8,6 +8,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 /// Manages VM processes
+#[derive(Clone)]
 pub struct VmProcessManager {
     flake_dir: PathBuf,
 }

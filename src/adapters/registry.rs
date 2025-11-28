@@ -3,12 +3,13 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use crate::domain::types::Job;
 use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionStatus,
     JobPlacement, PlacementPolicy, PlacementStrategy,
 };
+use super::cleanup::{CleanupConfig, CleanupMetrics};
 /// Configuration for the execution registry
 #[derive(Debug, Clone)]
 pub struct RegistryConfig {
@@ -20,6 +21,8 @@ pub struct RegistryConfig {
     pub health_check_interval: u64,
     /// Maximum retries for failed job submissions
     pub max_submission_retries: u32,
+    /// Cleanup configuration for handle tracking
+    pub cleanup_config: CleanupConfig,
 }
 impl Default for RegistryConfig {
     fn default() -> Self {
@@ -28,9 +31,18 @@ impl Default for RegistryConfig {
             enable_failover: true,
             health_check_interval: 30,
             max_submission_retries: 3,
+            cleanup_config: CleanupConfig::default(),
         }
     }
 }
+/// Tracking entry for handle-to-backend mapping
+#[derive(Debug, Clone)]
+struct HandleMapping {
+    backend_name: String,
+    created_at: u64,
+    last_accessed: u64,
+}
+
 /// Registry for managing multiple execution backends
 ///
 /// This provides a unified interface for submitting jobs to various backends,
@@ -44,20 +56,128 @@ pub struct ExecutionRegistry {
     config: RegistryConfig,
     /// Health status of backends (cached for performance)
     health_cache: Arc<RwLock<HashMap<String, BackendHealth>>>,
-    /// Mapping from execution handles to backend names
-    handle_to_backend: Arc<RwLock<HashMap<String, String>>>,
+    /// Mapping from execution handles to backend names with metadata
+    handle_to_backend: Arc<RwLock<HashMap<String, HandleMapping>>>,
+    /// Cleanup metrics
+    cleanup_metrics: Arc<RwLock<CleanupMetrics>>,
+    /// Background cleanup task handle
+    cleanup_task_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 impl ExecutionRegistry {
     /// Create a new execution registry
     pub fn new(config: RegistryConfig) -> Self {
         let placement_strategy = Arc::new(JobPlacement::new(config.placement_policy.clone()));
-        Self {
+        let registry = Self {
             backends: Arc::new(RwLock::new(HashMap::new())),
             placement_strategy: placement_strategy as Arc<dyn PlacementStrategy>,
-            config,
+            config: config.clone(),
             health_cache: Arc::new(RwLock::new(HashMap::new())),
             handle_to_backend: Arc::new(RwLock::new(HashMap::new())),
+            cleanup_metrics: Arc::new(RwLock::new(CleanupMetrics::new())),
+            cleanup_task_handle: Arc::new(RwLock::new(None)),
+        };
+
+        // Start background cleanup if enabled
+        if config.cleanup_config.enable_background_cleanup {
+            registry.start_background_cleanup();
         }
+
+        registry
+    }
+
+    /// Start background cleanup task for handle mappings
+    fn start_background_cleanup(&self) {
+        let handle_to_backend = self.handle_to_backend.clone();
+        let backends = self.backends.clone();
+        let config = self.config.cleanup_config.clone();
+        let metrics = self.cleanup_metrics.clone();
+        let cleanup_task_handle = self.cleanup_task_handle.clone();
+
+        let task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(config.cleanup_interval);
+            loop {
+                interval.tick().await;
+
+                debug!("Running background cleanup for execution registry");
+                let start = std::time::Instant::now();
+
+                // Clean up orphaned handles (backends that no longer exist)
+                let mut handle_map = handle_to_backend.write().await;
+                let backend_list = backends.read().await;
+
+                let mut orphaned = 0;
+                handle_map.retain(|_handle_id, mapping| {
+                    let exists = backend_list.contains_key(&mapping.backend_name);
+                    if !exists {
+                        orphaned += 1;
+                    }
+                    exists
+                });
+                drop(backend_list);
+
+                // Clean up old handles based on age (using configured TTL)
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let cutoff = now.saturating_sub(config.completed_ttl.as_secs());
+
+                let mut ttl_cleaned = 0;
+                handle_map.retain(|_handle_id, mapping| {
+                    if mapping.created_at < cutoff {
+                        ttl_cleaned += 1;
+                        return false;
+                    }
+                    true
+                });
+
+                // LRU eviction if over size limit
+                let mut lru_cleaned = 0;
+                if handle_map.len() > config.max_entries {
+                    let mut entries: Vec<_> = handle_map
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.last_accessed))
+                        .collect();
+
+                    entries.sort_by_key(|(_, last_accessed)| *last_accessed);
+
+                    let to_remove = handle_map.len() - config.max_entries;
+
+                    for (key, _) in entries.iter().take(to_remove) {
+                        handle_map.remove(key);
+                        lru_cleaned += 1;
+                    }
+                }
+
+                drop(handle_map);
+
+                let duration = start.elapsed();
+
+                if orphaned > 0 || ttl_cleaned > 0 || lru_cleaned > 0 {
+                    info!(
+                        "Registry cleanup: {} orphaned, {} TTL expired, {} LRU evicted in {:?}",
+                        orphaned, ttl_cleaned, lru_cleaned, duration
+                    );
+                }
+
+                // Update metrics
+                let mut m = metrics.write().await;
+                m.record_cleanup(ttl_cleaned + orphaned, lru_cleaned, duration);
+            }
+        });
+
+        // Store task handle
+        let handle_clone = cleanup_task_handle.clone();
+        tokio::spawn(async move {
+            let mut handle = handle_clone.write().await;
+            *handle = Some(task);
+        });
+    }
+
+    /// Get cleanup metrics
+    pub async fn get_cleanup_metrics(&self) -> CleanupMetrics {
+        let metrics = self.cleanup_metrics.read().await;
+        metrics.clone()
     }
     /// Register a new execution backend
     pub async fn register_backend(
@@ -135,9 +255,18 @@ impl ExecutionRegistry {
             // Try to submit the job
             match backend.submit_job(job.clone(), config.clone()).await {
                 Ok(handle) => {
-                    // Record the mapping
+                    // Record the mapping with metadata
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let mapping = HandleMapping {
+                        backend_name: decision.backend_name.clone(),
+                        created_at: now,
+                        last_accessed: now,
+                    };
                     let mut handle_map = self.handle_to_backend.write().await;
-                    handle_map.insert(handle.id.clone(), decision.backend_name.clone());
+                    handle_map.insert(handle.id.clone(), mapping);
                     info!(
                         "Successfully submitted job {} to backend {}",
                         job.id, decision.backend_name
@@ -162,9 +291,18 @@ impl ExecutionRegistry {
                                     match alt_backend.submit_job(job.clone(), config.clone()).await
                                     {
                                         Ok(handle) => {
+                                            let now = std::time::SystemTime::now()
+                                                .duration_since(std::time::UNIX_EPOCH)
+                                                .map(|d| d.as_secs())
+                                                .unwrap_or(0);
+                                            let mapping = HandleMapping {
+                                                backend_name: alt.clone(),
+                                                created_at: now,
+                                                last_accessed: now,
+                                            };
                                             let mut handle_map =
                                                 self.handle_to_backend.write().await;
-                                            handle_map.insert(handle.id.clone(), alt.clone());
+                                            handle_map.insert(handle.id.clone(), mapping);
                                             info!(
                                                 "Failover successful: job {} submitted to {}",
                                                 job.id, alt
@@ -211,8 +349,8 @@ impl ExecutionRegistry {
         let backends = self.backends.read().await;
 
         let mut removed_count = 0;
-        handle_map.retain(|_handle_id, backend_name| {
-            let exists = backends.contains_key(backend_name);
+        handle_map.retain(|_handle_id, mapping| {
+            let exists = backends.contains_key(&mapping.backend_name);
             if !exists {
                 removed_count += 1;
             }
@@ -298,12 +436,23 @@ impl ExecutionRegistry {
         handle: &ExecutionHandle,
     ) -> Result<Arc<dyn ExecutionBackend>> {
         // First check our mapping
-        let handle_map = self.handle_to_backend.read().await;
-        if let Some(backend_name) = handle_map.get(&handle.id) {
-            if let Some(backend) = self.get_backend(backend_name).await {
+        let mut handle_map = self.handle_to_backend.write().await;
+        if let Some(mapping) = handle_map.get_mut(&handle.id) {
+            // Update last_accessed for LRU
+            mapping.last_accessed = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let backend_name = mapping.backend_name.clone();
+            drop(handle_map);
+
+            if let Some(backend) = self.get_backend(&backend_name).await {
                 return Ok(backend);
             }
+        } else {
+            drop(handle_map);
         }
+
         // Fall back to checking the backend_name in the handle
         if let Some(backend) = self.get_backend(&handle.backend_name).await {
             return Ok(backend);
@@ -335,6 +484,15 @@ impl ExecutionRegistry {
     /// Shutdown all backends and clean up resources
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down execution registry");
+
+        // Stop background cleanup task
+        let mut handle = self.cleanup_task_handle.write().await;
+        if let Some(task) = handle.take() {
+            task.abort();
+            info!("Stopped execution registry background cleanup task");
+        }
+        drop(handle);
+
         let backends = self.backends.read().await;
         for (name, backend) in backends.iter() {
             info!("Shutting down backend: {}", name);

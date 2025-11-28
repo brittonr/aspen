@@ -16,6 +16,7 @@ pub mod control_protocol;
 pub mod messages;
 pub mod coordinator;
 pub mod vm_management;
+pub mod supervisor;
 
 // VM controller components
 pub mod network_manager;
@@ -23,6 +24,11 @@ pub mod process_manager;
 pub mod virtiofs_daemon;
 pub mod filesystem;
 pub mod control_socket;
+pub mod resource_guard;
+
+// Tests
+#[cfg(test)]
+mod vm_state_tests;
 
 use anyhow::Result;
 use std::sync::Arc;

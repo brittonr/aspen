@@ -11,11 +11,16 @@
 
 use anyhow::Result;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::JoinHandle;
 
 use super::health_checker::{HealthChecker, HealthCheckConfig};
 use super::job_router::JobRouter;
 use super::resource_monitor::ResourceMonitor;
+use super::supervisor::{
+    supervised_consistency_checker, supervised_health_checker, supervised_resource_monitor,
+    SupervisionStrategy, TaskSupervisor,
+};
 use super::vm_controller::VmController;
 use super::vm_registry::VmRegistry;
 use super::VmManagerConfig;
@@ -30,7 +35,10 @@ pub struct VmCoordinator {
     monitor: Arc<ResourceMonitor>,
     health_checker: Arc<HealthChecker>,
 
-    // Background task handles for graceful shutdown
+    // Task supervisor for critical background tasks
+    supervisor: Arc<tokio::sync::Mutex<TaskSupervisor>>,
+
+    // Background task handles for graceful shutdown (non-critical tasks)
     task_handles: Arc<tokio::sync::Mutex<Vec<JoinHandle<()>>>>,
 
     config: VmManagerConfig,
@@ -67,6 +75,7 @@ impl VmCoordinator {
             router,
             monitor,
             health_checker,
+            supervisor: Arc::new(tokio::sync::Mutex::new(TaskSupervisor::new())),
             task_handles: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             config,
         })
@@ -76,21 +85,47 @@ impl VmCoordinator {
     pub async fn start_background_tasks(&self) -> Result<()> {
         tracing::info!("Starting VmCoordinator background tasks");
 
+        // Set up supervised critical tasks
+        let mut supervisor = self.supervisor.lock().await;
+
+        // Supervise health checker with restart on failure
+        supervisor.supervise(
+            "vm_health_checker".to_string(),
+            SupervisionStrategy::RestartWithBackoff {
+                initial_delay: Duration::from_secs(1),
+                max_delay: Duration::from_secs(60),
+                factor: 2.0,
+            },
+            supervised_health_checker(Arc::clone(&self.health_checker)),
+        );
+
+        // Supervise resource monitor with restart on failure
+        supervisor.supervise(
+            "vm_resource_monitor".to_string(),
+            SupervisionStrategy::RestartWithBackoff {
+                initial_delay: Duration::from_secs(1),
+                max_delay: Duration::from_secs(60),
+                factor: 2.0,
+            },
+            supervised_resource_monitor(Arc::clone(&self.monitor)),
+        );
+
+        // Supervise consistency checker (runs every 5 minutes)
+        supervisor.supervise(
+            "vm_consistency_checker".to_string(),
+            SupervisionStrategy::RestartAlways,
+            supervised_consistency_checker(
+                Arc::clone(&self.registry),
+                Duration::from_secs(300), // Check every 5 minutes
+            ),
+        );
+
+        tracing::info!("Started 3 supervised critical tasks");
+
+        // Drop supervisor lock before continuing
+        drop(supervisor);
+
         let mut handles = self.task_handles.lock().await;
-
-        // Start health checking loop
-        let health_checker = Arc::clone(&self.health_checker);
-        let handle = tokio::spawn(async move {
-            health_checker.health_check_loop().await;
-        });
-        handles.push(handle);
-
-        // Start resource monitoring loop
-        let monitor = Arc::clone(&self.monitor);
-        let handle = tokio::spawn(async move {
-            monitor.monitoring_loop().await;
-        });
-        handles.push(handle);
 
         // Pre-warm VMs if configured
         if self.config.auto_scaling && self.config.pre_warm_count > 0 {
@@ -153,8 +188,10 @@ impl VmCoordinator {
         // Stop accepting new jobs
         self.router.stop_routing().await;
 
-        // Stop monitoring and health checking
-        self.health_checker.stop().await;
+        // Stop monitoring and health checking via supervisor
+        let mut supervisor = self.supervisor.lock().await;
+        supervisor.shutdown().await?;
+        drop(supervisor);
 
         // Gracefully shutdown all VMs
         let all_vms = self.registry.list_all_vms().await?;
@@ -164,7 +201,7 @@ impl VmCoordinator {
             }
         }
 
-        // Cancel all background tasks
+        // Cancel any remaining non-supervised background tasks
         let mut handles = self.task_handles.lock().await;
         for handle in handles.drain(..) {
             handle.abort();

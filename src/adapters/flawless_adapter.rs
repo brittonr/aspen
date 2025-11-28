@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::domain::types::Job;
 use crate::worker_flawless::FlawlessWorker;
@@ -16,6 +16,7 @@ use super::{
     BackendHealth, ExecutionBackend, ExecutionConfig, ExecutionHandle, ExecutionMetadata,
     ExecutionStatus, ResourceInfo,
 };
+use super::cleanup::{CleanupConfig, CleanupMetrics};
 
 /// Adapter that wraps the existing FlawlessWorker to implement ExecutionBackend
 pub struct FlawlessAdapter {
@@ -23,6 +24,9 @@ pub struct FlawlessAdapter {
     executions: Arc<RwLock<HashMap<String, FlawlessExecutionState>>>,
     execution_counter: Arc<RwLock<u64>>,
     max_concurrent: usize,
+    cleanup_config: CleanupConfig,
+    cleanup_metrics: Arc<RwLock<CleanupMetrics>>,
+    cleanup_task_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,24 +36,142 @@ struct FlawlessExecutionState {
     status: ExecutionStatus,
     started_at: u64,
     completed_at: Option<u64>,
+    last_accessed: u64,
 }
 
 impl FlawlessAdapter {
     /// Create a new Flawless adapter
     pub async fn new(flawless_url: &str, max_concurrent: usize) -> Result<Self> {
+        Self::with_cleanup_config(flawless_url, max_concurrent, CleanupConfig::default()).await
+    }
+
+    /// Create a new Flawless adapter with custom cleanup configuration
+    pub async fn with_cleanup_config(
+        flawless_url: &str,
+        max_concurrent: usize,
+        cleanup_config: CleanupConfig,
+    ) -> Result<Self> {
         let worker = Arc::new(FlawlessWorker::new(flawless_url).await?);
 
-        Ok(Self {
+        let adapter = Self {
             worker,
             executions: Arc::new(RwLock::new(HashMap::new())),
             execution_counter: Arc::new(RwLock::new(0)),
             max_concurrent,
-        })
+            cleanup_config: cleanup_config.clone(),
+            cleanup_metrics: Arc::new(RwLock::new(CleanupMetrics::new())),
+            cleanup_task_handle: Arc::new(RwLock::new(None)),
+        };
+
+        // Start background cleanup if enabled
+        if cleanup_config.enable_background_cleanup {
+            adapter.start_background_cleanup();
+        }
+
+        Ok(adapter)
     }
 
     /// Create a Flawless adapter with default settings
     pub async fn default() -> Result<Self> {
         Self::new("http://localhost:27288", 10).await
+    }
+
+    /// Start background cleanup task
+    fn start_background_cleanup(&self) {
+        let executions = self.executions.clone();
+        let config = self.cleanup_config.clone();
+        let metrics = self.cleanup_metrics.clone();
+        let cleanup_task_handle = self.cleanup_task_handle.clone();
+
+        let task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(config.cleanup_interval);
+            loop {
+                interval.tick().await;
+
+                debug!("Running background cleanup for Flawless adapter");
+                let start = std::time::Instant::now();
+
+                let (ttl_count, lru_count) = Self::cleanup_internal(&executions, &config).await;
+
+                let duration = start.elapsed();
+
+                if ttl_count > 0 || lru_count > 0 {
+                    info!(
+                        "Flawless adapter cleanup: {} TTL expired, {} LRU evicted in {:?}",
+                        ttl_count, lru_count, duration
+                    );
+                }
+
+                // Update metrics
+                let mut m = metrics.write().await;
+                m.record_cleanup(ttl_count, lru_count, duration);
+            }
+        });
+
+        // Store task handle
+        let handle_clone = cleanup_task_handle.clone();
+        tokio::spawn(async move {
+            let mut handle = handle_clone.write().await;
+            *handle = Some(task);
+        });
+    }
+
+    /// Internal cleanup implementation
+    async fn cleanup_internal(
+        executions: &Arc<RwLock<HashMap<String, FlawlessExecutionState>>>,
+        config: &CleanupConfig,
+    ) -> (usize, usize) {
+        let mut exec_map = executions.write().await;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX epoch")
+            .as_secs();
+        let mut ttl_cleaned = 0;
+
+        // First pass: Remove entries that exceed TTL based on status
+        exec_map.retain(|_, state| {
+            if let Some(completed_at) = state.completed_at {
+                let age = now.saturating_sub(completed_at);
+                let should_remove = match &state.status {
+                    ExecutionStatus::Completed(_) => age > config.completed_ttl.as_secs(),
+                    ExecutionStatus::Failed(_) => age > config.failed_ttl.as_secs(),
+                    ExecutionStatus::Cancelled => age > config.cancelled_ttl.as_secs(),
+                    _ => false,
+                };
+
+                if should_remove {
+                    ttl_cleaned += 1;
+                    return false;
+                }
+            }
+            true
+        });
+
+        // Second pass: If still over size limit, evict oldest by last_accessed (LRU)
+        let mut lru_cleaned = 0;
+        if exec_map.len() > config.max_entries {
+            let mut entries: Vec<_> = exec_map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.last_accessed))
+                .collect();
+
+            entries.sort_by_key(|(_, last_accessed)| *last_accessed);
+
+            let to_remove = exec_map.len() - config.max_entries;
+
+            for (key, _) in entries.iter().take(to_remove) {
+                exec_map.remove(key);
+                lru_cleaned += 1;
+            }
+        }
+
+        (ttl_cleaned, lru_cleaned)
+    }
+
+    /// Get cleanup metrics
+    pub async fn get_cleanup_metrics(&self) -> CleanupMetrics {
+        let metrics = self.cleanup_metrics.read().await;
+        metrics.clone()
     }
 
     /// Generate a unique execution ID
@@ -105,15 +227,17 @@ impl ExecutionBackend for FlawlessAdapter {
         let handle = ExecutionHandle::flawless(exec_id.clone(), job.id.clone());
 
         // Create execution record
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX epoch")
+            .as_secs();
         let state = FlawlessExecutionState {
             handle: handle.clone(),
             job: job.clone(),
             status: ExecutionStatus::Running,
-            started_at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("System time is before UNIX epoch")
-                .as_secs(),
+            started_at: now,
             completed_at: None,
+            last_accessed: now,
         };
 
         // ATOMIC: Check limit and insert in single critical section (fixes TOCTOU race)
@@ -143,6 +267,9 @@ impl ExecutionBackend for FlawlessAdapter {
             executions: self.executions.clone(),
             execution_counter: self.execution_counter.clone(),
             max_concurrent: self.max_concurrent,
+            cleanup_config: self.cleanup_config.clone(),
+            cleanup_metrics: self.cleanup_metrics.clone(),
+            cleanup_task_handle: Arc::new(RwLock::new(None)),
         });
         let handle_clone = handle.clone();
         let job_clone = job.clone();
@@ -155,11 +282,16 @@ impl ExecutionBackend for FlawlessAdapter {
     }
 
     async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
-        let executions = self.executions.read().await;
-        executions
-            .get(&handle.id)
-            .map(|state| state.status.clone())
-            .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))
+        let mut executions = self.executions.write().await;
+        if let Some(state) = executions.get_mut(&handle.id) {
+            state.last_accessed = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("System time is before UNIX epoch")
+                .as_secs();
+            Ok(state.status.clone())
+        } else {
+            Err(anyhow::anyhow!("Execution not found: {}", handle.id))
+        }
     }
 
     async fn cancel_execution(&self, handle: &ExecutionHandle) -> Result<()> {
@@ -188,10 +320,15 @@ impl ExecutionBackend for FlawlessAdapter {
     }
 
     async fn get_metadata(&self, handle: &ExecutionHandle) -> Result<ExecutionMetadata> {
-        let executions = self.executions.read().await;
+        let mut executions = self.executions.write().await;
         let state = executions
-            .get(&handle.id)
+            .get_mut(&handle.id)
             .ok_or_else(|| anyhow::anyhow!("Execution not found: {}", handle.id))?;
+
+        state.last_accessed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX epoch")
+            .as_secs();
 
         let mut custom = HashMap::new();
         if let Some(url) = state.job.payload.get("url") {
@@ -346,6 +483,14 @@ impl ExecutionBackend for FlawlessAdapter {
 
     async fn shutdown(&self) -> Result<()> {
         info!("Shutting down Flawless adapter");
+
+        // Stop background cleanup task
+        let mut handle = self.cleanup_task_handle.write().await;
+        if let Some(task) = handle.take() {
+            task.abort();
+            info!("Stopped Flawless adapter background cleanup task");
+        }
+        drop(handle);
 
         // Wait for running executions to complete (with timeout)
         let timeout = Duration::from_secs(30);
