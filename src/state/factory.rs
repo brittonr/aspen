@@ -156,8 +156,11 @@ pub trait InfrastructureFactory: Send + Sync {
     /// Create state repository abstraction
     fn create_state_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn StateRepository>;
 
-    /// Create work repository abstraction
-    fn create_work_repository(&self, work_queue: WorkQueue) -> Arc<dyn WorkRepository>;
+    /// Create work repository using new clean architecture (no WorkQueue)
+    async fn create_work_repository_impl(
+        &self,
+        hiqlite: Arc<HiqliteService>,
+    ) -> Result<Arc<dyn WorkRepository>>;
 
     /// Create worker repository abstraction
     fn create_worker_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository>;
@@ -210,7 +213,7 @@ pub trait InfrastructureFactory: Send + Sync {
         let (state_repo, work_repo, worker_repo) = self.init_repositories(
             hiqlite_arc.clone(),
             work_queue.clone()
-        );
+        ).await?;
 
         // Phase 4: Initialize domain services
         let services = self.init_domain_services(
@@ -255,7 +258,8 @@ pub trait InfrastructureFactory: Send + Sync {
         // Create P2P networking service
         let iroh = self.create_iroh(config, endpoint.clone()).await?;
 
-        // Create distributed work queue
+        // Legacy: Create WorkQueue for backward compatibility (InfraState)
+        // TODO: Remove once InfraState no longer needs WorkQueue
         let work_queue = self.create_work_queue(
             config,
             endpoint,
@@ -297,20 +301,23 @@ pub trait InfrastructureFactory: Send + Sync {
     }
 
     /// Phase 3: Create repository layer
-    fn init_repositories(
+    async fn init_repositories(
         &self,
         hiqlite_arc: Arc<HiqliteService>,
-        work_queue: WorkQueue,
-    ) -> (
+        _work_queue: WorkQueue, // Legacy parameter, kept for InfraState
+    ) -> Result<(
         Arc<dyn StateRepository>,
         Arc<dyn WorkRepository>,
         Arc<dyn WorkerRepository>
-    ) {
+    )> {
         let state_repo = self.create_state_repository(hiqlite_arc.clone());
-        let work_repo = self.create_work_repository(work_queue);
+
+        // NEW: Use clean architecture repository instead of WorkQueue wrapper
+        let work_repo = self.create_work_repository_impl(hiqlite_arc.clone()).await?;
+
         let worker_repo = self.create_worker_repository(hiqlite_arc);
 
-        (state_repo, work_repo, worker_repo)
+        Ok((state_repo, work_repo, worker_repo))
     }
 
     /// Phase 4: Initialize domain services with CQRS pattern
@@ -444,6 +451,22 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
         Ok(IrohService::new(config.storage.iroh_blobs_path.clone(), endpoint))
     }
 
+    /// Create work repository using new clean architecture
+    ///
+    /// This replaces the old WorkQueue God Object with WorkRepositoryImpl,
+    /// which is a focused repository layer with no business logic or caching.
+    async fn create_work_repository_impl(
+        &self,
+        hiqlite: Arc<HiqliteService>,
+    ) -> Result<Arc<dyn WorkRepository>> {
+        use crate::work::WorkRepositoryImpl;
+        use crate::hiqlite_persistent_store::HiqlitePersistentStore;
+
+        let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite.as_ref().clone()));
+        Ok(Arc::new(WorkRepositoryImpl::new(persistent_store)))
+    }
+
+    // Legacy method - kept for backward compatibility during migration
     async fn create_work_queue(
         &self,
         _config: &AppConfig,
@@ -478,11 +501,6 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
     fn create_state_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn StateRepository> {
         use crate::repositories::HiqliteStateRepository;
         Arc::new(HiqliteStateRepository::new(hiqlite))
-    }
-
-    fn create_work_repository(&self, work_queue: WorkQueue) -> Arc<dyn WorkRepository> {
-        use crate::repositories::WorkQueueWorkRepository;
-        Arc::new(WorkQueueWorkRepository::new(work_queue))
     }
 
     fn create_worker_repository(&self, hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository> {
@@ -604,9 +622,12 @@ pub mod test_factory {
             Arc::new(MockStateRepository::new())
         }
 
-        fn create_work_repository(&self, _work_queue: WorkQueue) -> Arc<dyn WorkRepository> {
+        async fn create_work_repository_impl(
+            &self,
+            _hiqlite: Arc<HiqliteService>,
+        ) -> Result<Arc<dyn WorkRepository>> {
             // Return mock repository for testing
-            Arc::new(MockWorkRepository::new())
+            Ok(Arc::new(MockWorkRepository::new()))
         }
 
         fn create_worker_repository(&self, _hiqlite: Arc<HiqliteService>) -> Arc<dyn WorkerRepository> {
