@@ -214,6 +214,7 @@ pub trait ExecutionBackend: Send + Sync {
 }
 
 /// Factory for creating execution backends
+#[allow(async_fn_in_trait)]
 pub trait BackendFactory: Send + Sync {
     /// Create a new instance of the backend
     async fn create(&self, config: HashMap<String, String>) -> Result<Arc<dyn ExecutionBackend>>;

@@ -11,9 +11,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::types::{JobRequirements, JobResult, VmAssignment, VmConfig, VmInstance, VmState, VmStats};
+use super::types::{HealthStatus, JobRequirements, JobResult, VmAssignment, VmConfig, VmInstance, VmState, VmStats};
 use crate::domain::job::Job;
-use crate::infrastructure::vm::health_checker::HealthStatus;
 
 /// Trait for VM lifecycle management
 ///
@@ -51,7 +50,8 @@ pub trait VmManagement: Send + Sync {
     // === VM Queries ===
 
     /// Get a VM instance by ID (returns Arc<RwLock<VmInstance>> for internal state management)
-    async fn get_vm(&self, vm_id: Uuid) -> Result<Option<Arc<RwLock<VmInstance>>>>;
+    /// Note: This returns infrastructure VmInstance since it's used internally for state management
+    async fn get_vm(&self, vm_id: Uuid) -> Result<Option<Arc<RwLock<crate::infrastructure::vm::vm_types::VmInstance>>>>;
 
     /// List all VMs
     async fn list_all_vms(&self) -> Result<Vec<VmInstance>>;

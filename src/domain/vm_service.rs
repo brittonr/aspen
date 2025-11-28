@@ -125,7 +125,7 @@ impl VmService {
     ///
     /// # Errors
     /// Returns an error if VM manager is not available
-    pub async fn get_vm(&self, vm_id: Uuid) -> Result<Option<Arc<tokio::sync::RwLock<VmInstance>>>> {
+    pub async fn get_vm(&self, vm_id: Uuid) -> Result<Option<Arc<tokio::sync::RwLock<crate::infrastructure::vm::vm_types::VmInstance>>>> {
         let vm_manager = self.vm_manager()?;
         Ok(vm_manager.get_vm(vm_id).await?)
     }
@@ -243,7 +243,9 @@ impl VmService {
     pub async fn get_vm_state(&self, vm_id: Uuid) -> Result<Option<VmState>> {
         if let Some(vm_arc) = self.get_vm(vm_id).await? {
             let vm = vm_arc.read().await;
-            Ok(Some(vm.state.clone()))
+            // Convert infrastructure VmState to domain VmState
+            let domain_state = crate::infrastructure::vm::mappers::vm_state_from_infra(&vm.state);
+            Ok(Some(domain_state))
         } else {
             Ok(None)
         }

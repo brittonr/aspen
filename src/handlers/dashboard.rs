@@ -6,8 +6,7 @@ use askama::Template;
 use axum::{
     Form,
     extract::{Query, State},
-    http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
 };
 use serde::Deserialize;
 use std::sync::Arc;

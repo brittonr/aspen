@@ -17,6 +17,7 @@ use super::persistence::VmPersistence;
 /// Row representation for database queries
 #[derive(Debug, serde::Deserialize)]
 struct VmRow {
+    #[allow(dead_code)]
     id: String,
     config: String,
     state: String,

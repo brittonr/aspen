@@ -123,9 +123,10 @@ impl JobCommandService {
                 tracing::info!(job_id = %job.id, worker_id = ?worker_id, worker_type = ?worker_type, "Job claimed");
 
                 // Publish domain event
+                let assignment = self.work_repo.find_assignment_by_id(&job.id).await?.unwrap();
                 self.event_publisher.publish(DomainEvent::JobClaimed {
                     job_id: job.id.clone(),
-                    worker_id: job.claimed_by.clone().unwrap_or_else(|| "unknown".to_string()),
+                    worker_id: assignment.claimed_by_node.clone().unwrap_or_else(|| "unknown".to_string()),
                     timestamp: current_timestamp(),
                 }).await?;
 
@@ -178,18 +179,20 @@ impl JobCommandService {
         // Fetch updated job to get current field values
         let updated_job = self.work_repo.find_by_id(job_id).await?
             .ok_or_else(|| anyhow::anyhow!("Job not found after status update: {}", job_id))?;
+        
+        let assignment = self.work_repo.find_assignment_by_id(job_id).await?;
 
         // Publish appropriate domain event based on new status
         let event = match status {
             JobStatus::Completed => DomainEvent::JobCompleted {
                 job_id: job_id.to_string(),
-                worker_id: updated_job.completed_by.clone(),
+                worker_id: assignment.and_then(|a| a.completed_by_node),
                 duration_ms: updated_job.duration_ms() as u64,
                 timestamp: current_timestamp(),
             },
             JobStatus::Failed => DomainEvent::JobFailed {
                 job_id: job_id.to_string(),
-                worker_id: updated_job.completed_by.clone(),
+                worker_id: assignment.and_then(|a| a.completed_by_node),
                 error: updated_job.error_message.clone().unwrap_or_else(|| "Job failed".to_string()),
                 timestamp: current_timestamp(),
             },
@@ -318,9 +321,6 @@ mod tests {
             requirements: JobRequirements::default(),
             metadata: JobMetadata::new(),
             error_message: None,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
         }
     }
 

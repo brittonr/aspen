@@ -60,6 +60,11 @@ impl<'a> InfrastructureBuilder<'a> {
         let hiqlite =
             HiqliteService::new(self.config.storage.hiqlite_data_dir.clone()).await?;
         hiqlite.initialize_schema().await?;
+
+        // Initialize persistent store schema
+        let persistent_store = crate::hiqlite_persistent_store::HiqlitePersistentStore::new(hiqlite.clone());
+        persistent_store.initialize().await?;
+
         Ok(hiqlite)
     }
 

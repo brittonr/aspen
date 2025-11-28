@@ -1,0 +1,9 @@
+# structure adapters core
+Current project structure:
+- Main crate: mvm-ci (will become blixard-core)
+- Adapters: src/adapters/ (vm_adapter, flawless_adapter, local_adapter, mock_adapter)
+- Domain logic: src/domain/
+- Infrastructure: src/infrastructure/
+- Workflows: workflows/module1/ (Flawless WASM module)
+- Binaries: src/main.rs (control plane), src/bin/worker.rs (worker)
+

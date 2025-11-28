@@ -96,7 +96,7 @@ impl VmStateIndex for StateIndexImpl {
         self.by_state.clear();
     }
 
-    fn rebuild<C: VmCache>(&self, cache: &C) {
+    fn rebuild<C: VmCache>(&self, _cache: &C) {
         self.clear();
         // This is a synchronous rebuild, so we can't await RwLock reads
         // The caller should ensure this is called appropriately

@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::persistent_store::PersistentStore;
-use crate::repositories::WorkRepository;
+use crate::repositories::{JobAssignment, WorkRepository};
 use crate::domain::types::{Job, JobStatus, QueueStats};
 
 /// WorkRepository implementation backed by PersistentStore
@@ -42,19 +42,18 @@ impl WorkRepository for WorkRepositoryImpl {
 
         // Create a new Job with Pending status
         let job = Job {
-            id: job_id,
+            id: job_id.clone(),
             status: JobStatus::Pending,
             payload,
             requirements: JobRequirements::default(),
             metadata: JobMetadata::new(),
             error_message: None,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
         };
 
+        let assignment = JobAssignment::new(job_id);
+
         // Persist to store
-        self.store.upsert_workflow(&job).await
+        self.store.upsert_workflow(&job, &assignment).await
     }
 
     async fn claim_work(
@@ -66,9 +65,24 @@ impl WorkRepository for WorkRepositoryImpl {
         // The business logic for worker type filtering should be in the service layer
         // For now, we'll load all workflows and return None
         // The actual claiming logic will be in WorkCommandService
+        let all_jobs = self.store.load_all_workflows().await?;
+        let pending_jobs: Vec<Job> = all_jobs
+            .into_iter()
+            .filter(|j| j.status == JobStatus::Pending)
+            .collect();
 
-        // This method should not be used directly - use WorkCommandService instead
-        unimplemented!("claim_work should be called through WorkCommandService")
+        for job in &pending_jobs {
+            let now = chrono::Utc::now().timestamp();
+            let rows_affected = self.store.claim_workflow(&job.id, now).await?;
+            if rows_affected > 0 {
+                let mut assignment = self.store.find_job_assignment_by_id(&job.id).await?.unwrap_or_else(|| JobAssignment::new(job.id.clone()));
+                assignment.claim("node-id".to_string(), worker_id.map(|s| s.to_string()), now);
+                self.store.upsert_job_assignment(&assignment).await?;
+                return Ok(Some(job.clone()));
+            }
+        }
+
+        Ok(None)
     }
 
     async fn update_status(&self, job_id: &str, status: JobStatus) -> Result<()> {
@@ -102,15 +116,25 @@ impl WorkRepository for WorkRepositoryImpl {
 
     async fn find_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
         let all_jobs = self.store.load_all_workflows().await?;
+        let all_assignments = self.store.load_all_job_assignments().await?;
+        let assignments_map: std::collections::HashMap<String, JobAssignment> = all_assignments
+            .into_iter()
+            .map(|a| (a.job_id.clone(), a))
+            .collect();
+
         Ok(all_jobs
             .into_iter()
             .filter(|j| {
-                j.claimed_by
-                    .as_ref()
-                    .map(|id| id == worker_id)
+                assignments_map
+                    .get(&j.id)
+                    .map(|a| a.assigned_worker_id.as_deref() == Some(worker_id))
                     .unwrap_or(false)
             })
             .collect())
+    }
+
+    async fn find_assignment_by_id(&self, job_id: &str) -> Result<Option<JobAssignment>> {
+        self.store.find_job_assignment_by_id(job_id).await
     }
 
     async fn find_paginated(&self, offset: usize, limit: usize) -> Result<Vec<Job>> {
@@ -132,13 +156,19 @@ impl WorkRepository for WorkRepositoryImpl {
         worker_id: &str,
     ) -> Result<Vec<Job>> {
         let all_jobs = self.store.load_all_workflows().await?;
+        let all_assignments = self.store.load_all_job_assignments().await?;
+        let assignments_map: std::collections::HashMap<String, JobAssignment> = all_assignments
+            .into_iter()
+            .map(|a| (a.job_id.clone(), a))
+            .collect();
+
         Ok(all_jobs
             .into_iter()
             .filter(|j| {
                 j.status == status
-                    && j.claimed_by
-                        .as_ref()
-                        .map(|id| id == worker_id)
+                    && assignments_map
+                        .get(&j.id)
+                        .map(|a| a.assigned_worker_id.as_deref() == Some(worker_id))
                         .unwrap_or(false)
             })
             .collect())
@@ -146,6 +176,10 @@ impl WorkRepository for WorkRepositoryImpl {
 
     async fn list_work(&self) -> Result<Vec<Job>> {
         self.store.load_all_workflows().await
+    }
+
+    async fn list_job_assignments(&self) -> Result<Vec<JobAssignment>> {
+        self.store.load_all_job_assignments().await
     }
 
     async fn stats(&self) -> QueueStats {

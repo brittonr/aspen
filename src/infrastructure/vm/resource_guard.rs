@@ -205,6 +205,7 @@ impl VmResourceGuard {
     /// Manually rollback all allocated resources
     ///
     /// This is also called automatically on drop if commit() was not called
+    #[allow(dead_code)]
     async fn rollback(&mut self) {
         if self.committed {
             return;

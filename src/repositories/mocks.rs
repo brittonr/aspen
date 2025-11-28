@@ -6,8 +6,8 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
-use crate::domain::types::{Job, JobStatus, QueueStats, HealthStatus, Worker, WorkerRegistration, WorkerHeartbeat, WorkerStats, WorkerStatus};
+use crate::repositories::{JobAssignment, StateRepository, WorkRepository, WorkerRepository};
+use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats, Worker, WorkerHeartbeat, WorkerRegistration, WorkerStats, WorkerStatus};
 use crate::domain::job_metadata::JobMetadata;
 use crate::domain::job_requirements::JobRequirements;
 use crate::common::timestamp::current_timestamp_or_zero;
@@ -47,6 +47,7 @@ impl StateRepository for MockStateRepository {
 #[derive(Clone)]
 pub struct MockWorkRepository {
     jobs: Arc<Mutex<Vec<Job>>>,
+    assignments: Arc<Mutex<Vec<JobAssignment>>>,
     stats: Arc<Mutex<QueueStats>>,
 }
 
@@ -55,6 +56,7 @@ impl MockWorkRepository {
     pub fn new() -> Self {
         Self {
             jobs: Arc::new(Mutex::new(Vec::new())),
+            assignments: Arc::new(Mutex::new(Vec::new())),
             stats: Arc::new(Mutex::new(QueueStats {
                 total: 0,
                 pending: 0,
@@ -82,22 +84,21 @@ impl MockWorkRepository {
 impl WorkRepository for MockWorkRepository {
     async fn publish_work(&self, job_id: String, payload: JsonValue) -> Result<()> {
         let job = Job {
-            id: job_id,
+            id: job_id.clone(),
             status: JobStatus::Pending,
             payload,
             requirements: JobRequirements::default(),
             metadata: JobMetadata::new(),
             error_message: None,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
         };
         self.jobs.lock().await.push(job);
+        self.assignments.lock().await.push(JobAssignment::new(job_id));
         Ok(())
     }
 
     async fn claim_work(&self, worker_id: Option<&str>, worker_type: Option<crate::domain::types::WorkerType>) -> Result<Option<Job>> {
         let mut jobs = self.jobs.lock().await;
+        let mut assignments = self.assignments.lock().await;
         let now = current_timestamp_or_zero();
 
         // Find first pending job that matches worker type (if specified)
@@ -116,8 +117,10 @@ impl WorkRepository for MockWorkRepository {
             })
             .map(|job| {
                 job.status = JobStatus::Claimed;
-                job.assigned_worker_id = worker_id.map(|s| s.to_string());
                 job.metadata.updated_at = now;
+                if let Some(assignment) = assignments.iter_mut().find(|a| a.job_id == job.id) {
+                    assignment.claim(worker_id.unwrap_or("unknown").to_string(), worker_id.map(|s| s.to_string()), now);
+                }
                 job.clone()
             });
 
@@ -139,6 +142,11 @@ impl WorkRepository for MockWorkRepository {
         Ok(jobs.iter().find(|job| job.id == job_id).cloned())
     }
 
+    async fn find_assignment_by_id(&self, job_id: &str) -> Result<Option<JobAssignment>> {
+        let assignments = self.assignments.lock().await;
+        Ok(assignments.iter().find(|a| a.job_id == job_id).cloned())
+    }
+
     async fn find_by_status(&self, status: JobStatus) -> Result<Vec<Job>> {
         let jobs = self.jobs.lock().await;
         Ok(jobs
@@ -150,14 +158,16 @@ impl WorkRepository for MockWorkRepository {
 
     async fn find_by_worker(&self, worker_id: &str) -> Result<Vec<Job>> {
         let jobs = self.jobs.lock().await;
+        let assignments = self.assignments.lock().await;
+        let job_ids: std::collections::HashSet<String> = assignments
+            .iter()
+            .filter(|a| a.assigned_worker_id.as_deref() == Some(worker_id))
+            .map(|a| a.job_id.clone())
+            .collect();
+
         Ok(jobs
             .iter()
-            .filter(|job| {
-                job.claimed_by
-                    .as_ref()
-                    .map(|id| id == worker_id)
-                    .unwrap_or(false)
-            })
+            .filter(|j| job_ids.contains(&j.id))
             .cloned()
             .collect())
     }
@@ -178,22 +188,26 @@ impl WorkRepository for MockWorkRepository {
 
     async fn find_by_status_and_worker(&self, status: JobStatus, worker_id: &str) -> Result<Vec<Job>> {
         let jobs = self.jobs.lock().await;
+        let assignments = self.assignments.lock().await;
+        let job_ids: std::collections::HashSet<String> = assignments
+            .iter()
+            .filter(|a| a.assigned_worker_id.as_deref() == Some(worker_id))
+            .map(|a| a.job_id.clone())
+            .collect();
+
         Ok(jobs
             .iter()
-            .filter(|job| {
-                job.status == status
-                    && job
-                        .claimed_by
-                        .as_ref()
-                        .map(|id| id == worker_id)
-                        .unwrap_or(false)
-            })
+            .filter(|j| j.status == status && job_ids.contains(&j.id))
             .cloned()
             .collect())
     }
 
     async fn list_work(&self) -> Result<Vec<Job>> {
         Ok(self.jobs.lock().await.clone())
+    }
+
+    async fn list_job_assignments(&self) -> Result<Vec<JobAssignment>> {
+        Ok(self.assignments.lock().await.clone())
     }
 
     async fn stats(&self) -> QueueStats {

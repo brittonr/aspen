@@ -12,6 +12,7 @@ use crate::domain::types::{Job, JobStatus};
 use crate::domain::job_metadata::JobMetadata;
 use crate::domain::job_requirements::JobRequirements;
 use crate::params;
+use crate::repositories::JobAssignment;
 
 /// Hiqlite-backed implementation of PersistentStore
 ///
@@ -27,6 +28,48 @@ impl HiqlitePersistentStore {
     pub fn new(hiqlite: HiqliteService) -> Self {
         Self { hiqlite }
     }
+
+    pub async fn initialize(&self) -> Result<()> {
+        // Schema for workflows
+        self.hiqlite
+            .execute(
+                r#"
+            CREATE TABLE IF NOT EXISTS workflows (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                started_at INTEGER,
+                error_message TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                data TEXT,
+                compatible_worker_types TEXT
+            )
+            "#,
+                params!(),
+            )
+            .await?;
+
+        // Schema for job assignments (infrastructure concern)
+        self.hiqlite
+            .execute(
+                r#"
+            CREATE TABLE IF NOT EXISTS job_assignments (
+                job_id TEXT PRIMARY KEY,
+                claimed_by_node TEXT,
+                assigned_worker_id TEXT,
+                completed_by_node TEXT,
+                claimed_at INTEGER,
+                started_at INTEGER,
+                completed_at INTEGER,
+                FOREIGN KEY (job_id) REFERENCES workflows(id)
+            )
+            "#,
+                params!(),
+            )
+            .await?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -37,9 +80,6 @@ impl PersistentStore for HiqlitePersistentStore {
         struct WorkflowRow {
             id: String,
             status: String,
-            claimed_by: Option<String>,
-            assigned_worker_id: Option<String>,
-            completed_by: Option<String>,
             created_at: i64,
             updated_at: i64,
             started_at: Option<i64>,
@@ -54,9 +94,6 @@ impl PersistentStore for HiqlitePersistentStore {
                 Self {
                     id: row.get("id"),
                     status: row.get("status"),
-                    claimed_by: row.get("claimed_by"),
-                    assigned_worker_id: row.get("assigned_worker_id"),
-                    completed_by: row.get("completed_by"),
                     created_at: row.get("created_at"),
                     updated_at: row.get("updated_at"),
                     started_at: row.get("started_at"),
@@ -71,7 +108,7 @@ impl PersistentStore for HiqlitePersistentStore {
         // Query all workflows from hiqlite
         let rows: Vec<WorkflowRow> = self.hiqlite
             .query_as(
-                "SELECT id, status, claimed_by, assigned_worker_id, completed_by, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types FROM workflows",
+                "SELECT id, status, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types FROM workflows",
                 params!()
             )
             .await?;
@@ -117,16 +154,13 @@ impl PersistentStore for HiqlitePersistentStore {
                 requirements,
                 metadata,
                 error_message: row.error_message,
-                claimed_by: row.claimed_by,
-                assigned_worker_id: row.assigned_worker_id,
-                completed_by: row.completed_by,
             }
         }).collect();
 
         Ok(jobs)
     }
 
-    async fn upsert_workflow(&self, job: &Job) -> Result<()> {
+    async fn upsert_workflow(&self, job: &Job, assignment: &JobAssignment) -> Result<()> {
         let status_str = status_to_string(&job.status);
         let payload_str = serde_json::to_string(&job.payload)?;
         let compatible_worker_types_str = if job.requirements.compatible_worker_types.is_empty() {
@@ -137,13 +171,10 @@ impl PersistentStore for HiqlitePersistentStore {
 
         self.hiqlite
             .execute(
-                "INSERT OR REPLACE INTO workflows (id, status, claimed_by, assigned_worker_id, completed_by, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "INSERT OR REPLACE INTO workflows (id, status, created_at, updated_at, started_at, error_message, retry_count, data, compatible_worker_types) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                 params!(
                     job.id.clone(),
                     status_str,
-                    job.claimed_by.clone(),
-                    job.assigned_worker_id.clone(),
-                    job.completed_by.clone(),
                     job.metadata.created_at,
                     job.metadata.updated_at,
                     job.metadata.started_at,
@@ -154,23 +185,41 @@ impl PersistentStore for HiqlitePersistentStore {
                 ),
             )
             .await?;
+        
+        self.upsert_job_assignment(assignment).await?;
 
+        Ok(())
+    }
+
+    async fn upsert_job_assignment(&self, assignment: &JobAssignment) -> Result<()> {
+        self.hiqlite
+            .execute(
+                "INSERT OR REPLACE INTO job_assignments (job_id, claimed_by_node, assigned_worker_id, completed_by_node, claimed_at, started_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                params!(
+                    assignment.job_id.clone(),
+                    assignment.claimed_by_node.clone(),
+                    assignment.assigned_worker_id.clone(),
+                    assignment.completed_by_node.clone(),
+                    assignment.claimed_at,
+                    assignment.started_at,
+                    assignment.completed_at
+                ),
+            )
+            .await?;
         Ok(())
     }
 
     async fn claim_workflow(
         &self,
         job_id: &str,
-        claimed_by: &str,
-        assigned_worker_id: Option<&str>,
         updated_at: i64,
     ) -> Result<usize> {
         // Atomic claim operation with optimistic locking
         // Only succeeds if status is currently 'pending'
         let rows_affected = self.hiqlite
             .execute(
-                "UPDATE workflows SET status = $1, claimed_by = $2, assigned_worker_id = $3, updated_at = $4 WHERE id = $5 AND status = 'pending'",
-                params!("claimed", claimed_by, assigned_worker_id, updated_at, job_id),
+                "UPDATE workflows SET status = $1, updated_at = $2 WHERE id = $3 AND status = 'pending'",
+                params!("claimed", updated_at, job_id),
             )
             .await?;
 
@@ -193,8 +242,8 @@ impl PersistentStore for HiqlitePersistentStore {
             // Allow idempotent updates (completed→completed or failed→failed)
             self.hiqlite
                 .execute(
-                    "UPDATE workflows SET status = $1, completed_by = $2, updated_at = $3 WHERE id = $4 AND (status NOT IN ('completed', 'failed') OR status = $1)",
-                    params!(status_str, completed_by, updated_at, job_id),
+                    "UPDATE workflows SET status = $1, updated_at = $2 WHERE id = $3 AND (status NOT IN ('completed', 'failed') OR status = $1)",
+                    params!(status_str, updated_at, job_id),
                 )
                 .await?
         } else if *status == JobStatus::InProgress {
@@ -217,7 +266,34 @@ impl PersistentStore for HiqlitePersistentStore {
                 .await?
         };
 
+        if rows_affected > 0 && (*status == JobStatus::Completed || *status == JobStatus::Failed) {
+            self.hiqlite.execute(
+                "UPDATE job_assignments SET completed_by_node = $1, completed_at = $2 WHERE job_id = $3",
+                params!(completed_by, updated_at, job_id)
+            ).await?;
+        }
+
         Ok(rows_affected)
+    }
+
+    async fn find_job_assignment_by_id(&self, job_id: &str) -> Result<Option<JobAssignment>> {
+        let result = self.hiqlite
+            .query_as(
+                "SELECT job_id, claimed_by_node, assigned_worker_id, completed_by_node, claimed_at, started_at, completed_at FROM job_assignments WHERE job_id = $1",
+                params!(job_id),
+            )
+            .await?;
+        Ok(result.into_iter().next())
+    }
+
+    async fn load_all_job_assignments(&self) -> Result<Vec<JobAssignment>> {
+        let result = self.hiqlite
+            .query_as(
+                "SELECT job_id, claimed_by_node, assigned_worker_id, completed_by_node, claimed_at, started_at, completed_at FROM job_assignments",
+                params!(),
+            )
+            .await?;
+        Ok(result)
     }
 }
 

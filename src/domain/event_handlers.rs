@@ -296,29 +296,50 @@ impl EventHandler for WebhookEventHandler {
 }
 
 /// Audit log handler for compliance
-pub struct AuditEventHandler;
+///
+/// Uses the AuditRepository trait to persist audit logs without
+/// depending on concrete infrastructure implementations.
+pub struct AuditEventHandler {
+    repository: Arc<dyn crate::domain::audit::AuditRepository>,
+}
 
 impl AuditEventHandler {
-    pub fn new(_hiqlite: Arc<crate::hiqlite::HiqliteService>) -> Self {
-        Self
+    /// Create a new audit event handler
+    ///
+    /// # Arguments
+    /// * `repository` - Implementation of AuditRepository trait for persisting audit logs
+    pub fn new(repository: Arc<dyn crate::domain::audit::AuditRepository>) -> Self {
+        Self { repository }
     }
 }
 
 #[async_trait]
 impl EventHandler for AuditEventHandler {
     async fn handle(&self, event: &DomainEvent) -> DomainResult<()> {
-        // Store audit log in Hiqlite
-        let event_json = serde_json::to_string(event)
-            .map_err(|e| crate::domain::errors::DomainError::Generic(e.to_string()))?;
-
         let timestamp = chrono::Utc::now().timestamp();
+        let event_type = match event {
+            DomainEvent::JobSubmitted { .. } => "JobSubmitted",
+            DomainEvent::JobClaimed { .. } => "JobClaimed",
+            DomainEvent::JobCompleted { .. } => "JobCompleted",
+            DomainEvent::JobFailed { .. } => "JobFailed",
+            DomainEvent::JobCancelled { .. } => "JobCancelled",
+            DomainEvent::JobStatusChanged { .. } => "JobStatusChanged",
+            DomainEvent::JobRetried { .. } => "JobRetried",
+        };
 
-        // This would need an audit_log table in the schema
-        // For now, we'll just log it
-        tracing::info!(
-            event = %event_json,
+        // Serialize event to JSON value
+        let event_json = serde_json::to_value(event)
+            .map_err(|e| crate::domain::errors::DomainError::Generic(format!("Failed to serialize event: {}", e)))?;
+
+        // Store audit log using repository trait
+        self.repository
+            .store_audit_log(event_type, &event_json, timestamp)
+            .await?;
+
+        tracing::debug!(
+            event_type = event_type,
             timestamp = timestamp,
-            "Audit log entry"
+            "Audit log entry stored"
         );
 
         Ok(())

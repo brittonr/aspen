@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;

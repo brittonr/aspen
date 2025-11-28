@@ -4,7 +4,7 @@
 // background tasks are automatically restarted on failure. This prevents
 // silent failures where health checking or monitoring stops without notice.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;

@@ -627,9 +627,7 @@ mod tests {
             max_executions: 10, // 50% available
         }));
 
-        let score = placement.score_backend(&job, &config, &backend).await.unwrap();
-
-        // BestFit: (0.5 * 0.4 + 0.5 * 0.4 + 0.5 * 0.2) * 100.0 = 50.0
+        let score = placement.score_backend(&job, &config, &(backend as Arc<dyn ExecutionBackend>)).await.unwrap();
         assert_eq!(score, 50.0);
     }
 
@@ -650,7 +648,7 @@ mod tests {
             max_executions: 10, // 50% running
         }));
 
-        let score = placement.score_backend(&job, &config, &backend).await.unwrap();
+        let score = placement.score_backend(&job, &config, &(backend as Arc<dyn ExecutionBackend>)).await.unwrap();
 
         // WorstFit: (0.5 * 0.4 + 0.5 * 0.4 + 0.5 * 0.2) * 100.0 = 50.0
         assert_eq!(score, 50.0);
@@ -673,9 +671,7 @@ mod tests {
             max_executions: 0,
         }));
 
-        let score = placement.score_backend(&job, &config, &backend).await.unwrap();
-
-        // Should handle division by zero gracefully
+        let score = placement.score_backend(&job, &config, &(backend as Arc<dyn ExecutionBackend>)).await.unwrap();
         assert!(!score.is_nan());
         assert!(score >= 0.0);
     }
@@ -686,9 +682,7 @@ mod tests {
         let job = create_test_job();
         let config = create_test_config();
 
-        let backend = Arc::new(MockBackend::new("test").with_can_handle(false));
-
-        let score = placement.score_backend(&job, &config, &backend).await.unwrap();
+        let score = placement.score_backend(&job, &config, &(backend as Arc<dyn ExecutionBackend>)).await.unwrap();
         assert_eq!(score, 0.0);
     }
 

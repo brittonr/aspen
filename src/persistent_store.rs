@@ -10,6 +10,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use crate::domain::types::{Job, JobStatus};
+use crate::repositories::JobAssignment;
 
 /// Persistent storage abstraction for workflow data
 ///
@@ -26,7 +27,10 @@ pub trait PersistentStore: Send + Sync {
     ///
     /// If a workflow with the same job_id exists, it will be replaced.
     /// This operation should be atomic.
-    async fn upsert_workflow(&self, job: &Job) -> Result<()>;
+    async fn upsert_workflow(&self, job: &Job, assignment: &JobAssignment) -> Result<()>;
+
+    /// Insert or replace a job assignment in persistent storage
+    async fn upsert_job_assignment(&self, assignment: &JobAssignment) -> Result<()>;
 
     /// Atomically claim a pending workflow
     ///
@@ -38,8 +42,6 @@ pub trait PersistentStore: Send + Sync {
     async fn claim_workflow(
         &self,
         job_id: &str,
-        claimed_by: &str,
-        assigned_worker_id: Option<&str>,
         updated_at: i64,
     ) -> Result<usize>;
 
@@ -58,4 +60,10 @@ pub trait PersistentStore: Send + Sync {
         completed_by: Option<&str>,
         updated_at: i64,
     ) -> Result<usize>;
+
+    /// Find a job assignment by job ID
+    async fn find_job_assignment_by_id(&self, job_id: &str) -> Result<Option<JobAssignment>>;
+
+    /// Load all job assignments from persistent storage
+    async fn load_all_job_assignments(&self) -> Result<Vec<JobAssignment>>;
 }

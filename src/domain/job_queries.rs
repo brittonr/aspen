@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use anyhow::Result;
 
-use crate::repositories::WorkRepository;
+use crate::repositories::{JobAssignment, WorkRepository};
 use crate::domain::types::{Job, QueueStats};
 
 /// Job with enriched metadata for display
@@ -88,6 +88,11 @@ impl JobQueryService {
         limit: usize,
     ) -> Result<Vec<EnrichedJob>> {
         let mut jobs = self.work_repo.list_work().await?;
+        let assignments = self.work_repo.list_job_assignments().await?;
+        let assignments_map: std::collections::HashMap<String, JobAssignment> = assignments
+            .into_iter()
+            .map(|a| (a.job_id.clone(), a))
+            .collect();
 
         // Apply sorting
         self.sort_jobs(&mut jobs, sort_order);
@@ -99,7 +104,7 @@ impl JobQueryService {
         let now = Self::current_timestamp();
         let enriched = jobs
             .into_iter()
-            .map(|job| self.enrich_job(job, now))
+            .map(|job| self.enrich_job(job.clone(), assignments_map.get(&job.id), now))
             .collect();
 
         Ok(enriched)
@@ -223,7 +228,7 @@ impl JobQueryService {
     }
 
     /// Enrich a job with computed metadata
-    fn enrich_job(&self, job: Job, now: i64) -> EnrichedJob {
+    fn enrich_job(&self, job: Job, assignment: Option<&JobAssignment>, now: i64) -> EnrichedJob {
         // Generate a summary of the payload for display
         let payload_summary = if let Some(url) = job.payload.get("url").and_then(|v| v.as_str()) {
             url.to_string()
@@ -244,7 +249,7 @@ impl JobQueryService {
             payload_summary,
             duration_seconds,
             time_ago_seconds,
-            claimed_by: job.claimed_by,
+            claimed_by: assignment.and_then(|a| a.claimed_by_node.clone()),
         }
     }
 

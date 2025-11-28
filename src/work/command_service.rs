@@ -16,9 +16,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{debug, info, warn};
 
-use crate::repositories::WorkRepository;
 use crate::domain::types::{Job, JobStatus, WorkerType};
 use crate::domain::job_claiming::JobClaimingService;
+use crate::repositories::JobAssignment;
 use crate::work_state_machine::WorkStateMachine;
 use crate::persistent_store::PersistentStore;
 
@@ -86,6 +86,7 @@ impl WorkCommandService {
     pub async fn publish_work(&self, job_id: String, payload: serde_json::Value) -> Result<()> {
         use crate::domain::job_metadata::JobMetadata;
         use crate::domain::job_requirements::JobRequirements;
+use crate::repositories::JobAssignment;
 
         let job = Job {
             id: job_id.clone(),
@@ -94,13 +95,12 @@ impl WorkCommandService {
             requirements: JobRequirements::default(),
             metadata: JobMetadata::new(),
             error_message: None,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
         };
 
+        let assignment = JobAssignment::new(job_id.clone());
+
         // Persist to store
-        self.store.upsert_workflow(&job).await?;
+        self.store.upsert_workflow(&job, &assignment).await?;
 
         // Invalidate cache
         self.cache_version.increment();
@@ -192,7 +192,7 @@ impl WorkCommandService {
 
         // Atomically claim the job in the store
         let rows_affected = self.store
-            .claim_workflow(&job.id, &self.node_id, worker_id, now)
+            .claim_workflow(&job.id, now)
             .await?;
 
         if rows_affected == 0 {
@@ -201,11 +201,14 @@ impl WorkCommandService {
             return Ok(None);
         }
 
+        // Update the job assignment
+        let mut assignment = self.store.find_job_assignment_by_id(&job.id).await?.unwrap_or_else(|| JobAssignment::new(job.id.clone()));
+        assignment.claim(self.node_id.clone(), worker_id.map(|s| s.to_string()), now);
+        self.store.upsert_job_assignment(&assignment).await?;
+
         // Construct the claimed job
         let mut claimed_job = job.clone();
         claimed_job.status = JobStatus::Claimed;
-        claimed_job.claimed_by = Some(self.node_id.clone());
-        claimed_job.assigned_worker_id = worker_id.map(|s| s.to_string());
         claimed_job.metadata.updated_at = now;
 
         info!(

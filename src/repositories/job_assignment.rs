@@ -76,6 +76,20 @@ impl JobAssignment {
     }
 }
 
+impl From<hiqlite::Row<'static>> for JobAssignment {
+    fn from(mut row: hiqlite::Row) -> Self {
+        Self {
+            job_id: row.get("job_id"),
+            claimed_by_node: row.get("claimed_by_node"),
+            assigned_worker_id: row.get("assigned_worker_id"),
+            completed_by_node: row.get("completed_by_node"),
+            claimed_at: row.get("claimed_at"),
+            started_at: row.get("started_at"),
+            completed_at: row.get("completed_at"),
+        }
+    }
+}
+
 impl Default for JobAssignment {
     fn default() -> Self {
         Self::new(String::new())

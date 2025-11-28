@@ -15,7 +15,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::repositories::WorkRepository;
+use crate::repositories::{JobAssignment, WorkRepository};
 use crate::domain::types::{Job, JobStatus, QueueStats};
 
 /// Domain service for work query operations (reads)
@@ -35,6 +35,11 @@ impl WorkQueryService {
     /// List all work items
     pub async fn list_work(&self) -> Result<Vec<Job>> {
         self.repository.list_work().await
+    }
+
+    /// List all job assignments
+    pub async fn list_job_assignments(&self) -> Result<Vec<JobAssignment>> {
+        self.repository.list_job_assignments().await
     }
 
     /// Get a specific work item by ID

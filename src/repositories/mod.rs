@@ -9,6 +9,7 @@ use serde_json::Value as JsonValue;
 
 use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
 
+pub mod audit;
 pub mod hiqlite_repository;
 pub mod job_assignment;
 pub mod worker;
@@ -17,6 +18,7 @@ pub mod worker;
 pub mod mocks;
 
 // Re-export concrete implementations
+pub use audit::HiqliteAuditRepository;
 pub use hiqlite_repository::HiqliteStateRepository;
 pub use job_assignment::JobAssignment;
 pub use worker::{HiqliteWorkerRepository, WorkerRepository};
@@ -88,6 +90,9 @@ pub trait WorkRepository: Send + Sync {
     /// All jobs claimed by the specified worker
     async fn find_by_worker(&self, worker_id: &str) -> Result<Vec<Job>>;
 
+    /// Find a job assignment by ID
+    async fn find_assignment_by_id(&self, job_id: &str) -> Result<Option<JobAssignment>>;
+
     /// Find jobs with pagination support
     ///
     /// This is a **query** that performs data access filtering and pagination at the repository layer.
@@ -116,6 +121,9 @@ pub trait WorkRepository: Send + Sync {
 
     /// List all work items in the queue
     async fn list_work(&self) -> Result<Vec<Job>>;
+
+    /// List all job assignments in the queue
+    async fn list_job_assignments(&self) -> Result<Vec<JobAssignment>>;
 
     /// Get aggregate statistics for the work queue
     async fn stats(&self) -> QueueStats;

@@ -55,6 +55,7 @@ use crate::domain::types::HealthStatus;
 /// println!("Node ID: {}", node_id);
 /// # }
 /// ```
+#[allow(dead_code)]
 pub trait EndpointInfo: Send + Sync {
     /// Get the node's unique identifier (public key)
     fn endpoint_id(&self) -> EndpointId;
@@ -76,6 +77,7 @@ pub trait EndpointInfo: Send + Sync {
 /// Current implementations may return placeholder errors. Check specific
 /// implementations for availability.
 #[async_trait]
+#[allow(dead_code)]
 pub trait BlobStorage: Send + Sync {
     /// Store a blob and return its content hash
     ///
@@ -106,6 +108,7 @@ pub trait BlobStorage: Send + Sync {
 /// Current implementations may return placeholder errors. Check specific
 /// implementations for availability.
 #[async_trait]
+#[allow(dead_code)]
 pub trait GossipNetwork: Send + Sync {
     /// Subscribe to a gossip topic
     ///
@@ -131,6 +134,7 @@ pub trait GossipNetwork: Send + Sync {
 /// Current implementations may return placeholder errors. Check specific
 /// implementations for availability.
 #[async_trait]
+#[allow(dead_code)]
 pub trait PeerConnection: Send + Sync {
     /// Connect to a peer using an endpoint address or ticket
     ///
@@ -184,6 +188,7 @@ pub trait PeerConnection: Send + Sync {
 /// # }
 /// ```
 #[async_trait]
+#[allow(dead_code)]
 pub trait DatabaseQueries: Send + Sync {
     /// Execute a SQL statement (INSERT, UPDATE, DELETE)
     ///
@@ -254,6 +259,7 @@ pub trait DatabaseHealth: Send + Sync {
 ///
 /// Handles schema initialization, migrations, and DDL operations.
 #[async_trait]
+#[allow(dead_code)]
 pub trait DatabaseSchema: Send + Sync {
     /// Initialize database schema
     ///
@@ -266,6 +272,7 @@ pub trait DatabaseSchema: Send + Sync {
 ///
 /// Handles graceful shutdown and cleanup operations.
 #[async_trait]
+#[allow(dead_code)]
 pub trait DatabaseLifecycle: Send + Sync {
     /// Gracefully shutdown the database
     ///

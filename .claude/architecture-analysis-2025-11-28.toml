@@ -1,0 +1,778 @@
+# Blixard Architecture Analysis
+# Generated: 2025-11-28
+# Ultra Mode Deep Analysis
+
+[metadata]
+date = "2025-11-28"
+mode = "ultra"
+agents_used = ["Explore (complexity)", "Explore (coupling)", "rust-test-expert", "Explore (code-smells)"]
+
+# ============================================================================
+# EXECUTIVE SUMMARY
+# ============================================================================
+
+[summary]
+overall_health = "moderate"
+major_concerns = 3
+critical_issues = 7
+high_priority = 8
+medium_priority = 9
+low_priority = 5
+
+assessment = """
+The Blixard codebase demonstrates solid architectural foundations with good use of
+the Repository pattern, CQRS, and trait-based abstractions. However, there are
+significant issues with:
+
+1. **Cross-layer coupling** - Domain importing from infrastructure
+2. **Missing test coverage** - Only 19.4% of files have tests
+3. **God objects** - Several 1000+ line service modules
+4. **Error handling** - Excessive use of .unwrap()/.expect() without tests
+
+The good news: No circular dependencies, excellent tests where they exist, and
+clean separation in most adapters.
+"""
+
+# ============================================================================
+# CRITICAL ARCHITECTURAL VIOLATIONS
+# ============================================================================
+
+[[critical_issues]]
+id = "ARCH-001"
+severity = "critical"
+category = "architecture"
+title = "Domain layer imports from Infrastructure layer"
+impact = "Violates dependency inversion principle, creates tight coupling"
+
+description = """
+The domain layer directly imports and uses concrete types from the infrastructure
+layer, creating an inverted dependency that makes the domain layer dependent on
+infrastructure implementation details.
+"""
+
+[[critical_issues.violations]]
+file = "src/domain/vm/management.rs"
+line = 16
+code = "use crate::infrastructure::vm::health_checker::HealthStatus;"
+issue = "Domain trait returns infrastructure type HealthStatus"
+fix = "Create domain::vm::HealthStatus and map from infrastructure type"
+
+[[critical_issues.violations]]
+file = "src/domain/vm/types.rs"
+lines = "10-13"
+code = """
+pub use crate::infrastructure::vm::{
+    vm_types::{IsolationLevel, JobRequirements, VmConfig, VmInstance, VmMode, VmState},
+    JobResult, VmAssignment, VmStats,
+};
+"""
+issue = "Domain types are re-exports of infrastructure types"
+fix = "Define domain types independently, create adapters for infrastructure types"
+
+[[critical_issues.violations]]
+file = "src/domain/event_handlers.rs"
+line = 302
+code = "AuditEventHandler::new(_hiqlite: Arc<crate::hiqlite::HiqliteService>)"
+issue = "Domain event handler takes concrete infrastructure service"
+fix = "Create AuditRepository trait, inject trait object instead"
+
+# ----------------------------------------------------------------------------
+
+[[critical_issues]]
+id = "ARCH-002"
+severity = "critical"
+category = "abstraction"
+title = "Repository abstraction bypassed in services"
+impact = "Breaks layered architecture, couples domain to infrastructure"
+
+description = """
+Some domain services bypass the repository abstraction layer and depend directly
+on infrastructure persistence interfaces.
+"""
+
+[[critical_issues.violations]]
+file = "src/work/command_service.rs"
+lines = "60-64"
+code = "Arc<dyn PersistentStore>"
+issue = "Takes PersistentStore directly instead of WorkRepository trait"
+fix = "Change to Arc<dyn WorkRepository>"
+
+[[critical_issues.violations]]
+file = "src/work/repository.rs"
+lines = "40-41"
+issue = "Business logic in repository layer (creating Job with defaults)"
+fix = "Move business logic to domain service, repository should be pure data access"
+
+# ----------------------------------------------------------------------------
+
+[[critical_issues]]
+id = "TEST-001"
+severity = "critical"
+category = "testing"
+title = "Critical domain services have zero test coverage"
+impact = "Production bugs in business logic, no safety net for refactoring"
+
+description = """
+Core business logic in domain services completely lacks unit tests, despite
+containing critical state transitions, validations, and error handling.
+"""
+
+affected_files = [
+    "src/domain/job_commands.rs (command service with 4 .unwrap() calls)",
+    "src/domain/job_queries.rs (query service)",
+    "src/domain/validation.rs (validation logic)",
+    "src/domain/event_handlers.rs (event handling with TODOs)",
+    "src/work/command_service.rs (7 .unwrap() calls)",
+    "src/work/query_service.rs (7 .unwrap() calls)",
+    "src/work/cached_query_service.rs (7 .unwrap() calls)",
+    "src/work/repository.rs (6 .unwrap() calls)",
+]
+
+statistics = { total_source_files = 175, files_with_tests = 34, coverage_percentage = 19.4 }
+
+# ----------------------------------------------------------------------------
+
+[[critical_issues]]
+id = "ERROR-001"
+severity = "critical"
+category = "error-handling"
+title = "Production code crashes on unwrap/expect without error handling"
+impact = "Worker crashes, job failures, data loss"
+
+[[critical_issues.violations]]
+file = "src/infrastructure/vm/network_manager.rs"
+lines = "72-74"
+code = ".expect() on IP parsing"
+issue = "Multiple expect() calls that will crash on invalid IP addresses"
+fix = "Return Result and handle errors gracefully"
+
+[[critical_issues.violations]]
+file = "src/bin/worker.rs"
+lines = "26, 30"
+code = ".expect() on configuration loading"
+issue = "Worker binary crashes if config is invalid instead of logging error"
+fix = "Handle errors gracefully with proper error messages"
+
+[[critical_issues.violations]]
+file = "src/infrastructure/vm/resource_guard.rs"
+lines = "285, 288"
+code = "let _ = "
+issue = "Silently ignoring SIGKILL send errors"
+fix = "Log errors at minimum, potentially retry or alert"
+
+# ============================================================================
+# HIGH PRIORITY ISSUES
+# ============================================================================
+
+[[high_priority]]
+id = "COMPLEX-001"
+severity = "high"
+category = "complexity"
+title = "God objects with too many responsibilities"
+impact = "Hard to test, maintain, and reason about"
+
+[[high_priority.violations]]
+file = "src/adapters/registry.rs"
+lines = 1764
+responsibilities = [
+    "Backend registration/unregistration",
+    "Health checking and caching",
+    "Job placement and submission",
+    "Failover logic",
+    "Handle tracking with cleanup",
+    "Background task management",
+    "Metrics collection"
+]
+recommendation = """
+Split into 4 focused components:
+- BackendRegistry (registration/lifecycle)
+- BackendHealthManager (health monitoring)
+- JobSubmissionService (placement + submission)
+- HandleTracker (execution tracking)
+"""
+
+[[high_priority.violations]]
+file = "src/domain/worker_management.rs"
+lines = 1246
+responsibilities = [
+    "Worker registration",
+    "Heartbeat processing",
+    "Health monitoring",
+    "Orphaned job recovery",
+    "Worker statistics",
+    "Job count management"
+]
+recommendation = """
+Split into 3 components:
+- WorkerRegistry (registration/queries)
+- WorkerHealthMonitor (heartbeats + health checks)
+- OrphanedJobRecovery (failure recovery)
+"""
+
+# ----------------------------------------------------------------------------
+
+[[high_priority]]
+id = "COMPLEX-002"
+severity = "high"
+category = "complexity"
+title = "Complex functions with high cyclomatic complexity"
+impact = "Hard to understand, test, and debug"
+
+[[high_priority.violations]]
+file = "src/adapters/registry.rs"
+function = "submit_job()"
+lines = "231-288"
+length = 58
+complexity = "8-10"
+issues = ["Nested loops", "Multiple error paths", "Retry logic", "Failover logic"]
+recommendation = "Extract helper methods for retry logic and failover"
+
+[[high_priority.violations]]
+file = "src/adapters/placement.rs"
+function = "place_job()"
+lines = "144-232"
+length = 89
+issues = ["Complex sorting logic", "NaN handling", "Multiple policy branches", "Duplicated code"]
+recommendation = "Extract NaN-handling sort function, use Strategy pattern for policies"
+
+[[high_priority.violations]]
+file = "src/adapters/vm_adapter.rs"
+function = "monitor_execution()"
+lines = "161-250"
+length = 90
+nesting_depth = "3-4 levels"
+issues = ["Deeply nested match statements", "Exponential backoff", "Multiple failure paths"]
+recommendation = "Break into smaller state machine methods"
+
+# ----------------------------------------------------------------------------
+
+[[high_priority]]
+id = "COUPLING-001"
+severity = "high"
+category = "coupling"
+title = "Concrete types used instead of trait objects"
+impact = "Cannot mock for testing, hard to swap implementations"
+
+[[high_priority.violations]]
+file = "src/worker_microvm.rs"
+line = 66
+code = "vm_manager: Arc<VmManager>"
+issue = "Concrete type instead of Arc<dyn VmManagement>"
+fix = "Use trait object"
+
+[[high_priority.violations]]
+file = "src/state/builders/components.rs"
+line = 28
+code = "pub vm_manager: Option<Arc<VmManager>>"
+issue = "Builder exposes concrete type"
+fix = "Use Arc<dyn VmManagement>"
+
+[[high_priority.violations]]
+file = "src/adapters/vm_adapter.rs"
+line = 88
+code = "hiqlite: Arc<crate::hiqlite::HiqliteService>"
+issue = "Adapter coupled to specific database"
+fix = "Take persistence trait instead"
+
+# ----------------------------------------------------------------------------
+
+[[high_priority]]
+id = "TEST-002"
+severity = "high"
+category = "testing"
+title = "All API handlers lack tests"
+impact = "No validation of request handling, error responses, or HTTP status codes"
+
+affected_files = [
+    "src/handlers/worker.rs",
+    "src/handlers/queue.rs",
+    "src/handlers/dashboard.rs",
+    "src/handlers/mod.rs"
+]
+
+recommendation = "Add integration tests for all REST endpoints"
+
+# ----------------------------------------------------------------------------
+
+[[high_priority]]
+id = "TEST-003"
+severity = "high"
+category = "testing"
+title = "All configuration modules lack tests"
+impact = "Config parsing errors won't be caught before deployment"
+
+affected_files = [
+    "src/config/validation.rs",
+    "src/config/adapter.rs",
+    "src/config/auth.rs",
+    "src/config/features.rs (has .unwrap())",
+    "src/config/flawless.rs",
+    "src/config/loader.rs",
+    "src/config/network.rs",
+    "src/config/operational.rs",
+    "src/config/storage.rs",
+    "src/config/vm.rs",
+    "src/config/error.rs"
+]
+
+recommendation = "Add unit tests for config parsing, validation, and error cases"
+
+# ============================================================================
+# MEDIUM PRIORITY ISSUES
+# ============================================================================
+
+[[medium_priority]]
+id = "COMPLEX-003"
+severity = "medium"
+category = "complexity"
+title = "Duplicated code patterns"
+impact = "Maintenance burden, inconsistent behavior"
+
+[[medium_priority.violations]]
+name = "NaN handling in placement"
+file = "src/adapters/placement.rs"
+lines = ["174-185", "202-213"]
+code = """
+scores.sort_by(|a, b| {
+    if a.1.is_nan() && b.1.is_nan() {
+        std::cmp::Ordering::Equal
+    } else if a.1.is_nan() {
+        std::cmp::Ordering::Less
+    } else if b.1.is_nan() {
+        std::cmp::Ordering::Greater
+    } else {
+        b.1.partial_cmp(&a.1).unwrap()
+    }
+});
+"""
+fix = "Extract to fn sort_by_score_desc(scores: &mut [(String, f32, Arc<dyn ExecutionBackend>)])"
+
+[[medium_priority.violations]]
+name = "Background cleanup patterns"
+files = [
+    "src/adapters/registry.rs (lines 90-173)",
+    "src/adapters/vm_adapter.rs (lines 95-132)",
+    "src/adapters/flawless_adapter.rs (lines 94-131)"
+]
+issue = "All three implement TTL-based and LRU cleanup with metrics"
+fix = "Extract BackgroundCleanupTask with configurable cleanup strategy"
+
+# ----------------------------------------------------------------------------
+
+[[medium_priority]]
+id = "ARCH-003"
+severity = "medium"
+category = "architecture"
+title = "Business logic in infrastructure layer"
+impact = "Violates layering, hard to change business rules"
+
+[[medium_priority.violations]]
+file = "src/infrastructure/vm/job_router.rs"
+lines = "34-72"
+code = "RoutingRules struct with business logic patterns"
+issues = [
+    "high_isolation_patterns - regex patterns for isolation requirements",
+    "shareable_job_types - which job types can share VMs",
+    "dedicated_job_types - which need dedicated VMs"
+]
+fix = "Move business rules to domain layer"
+
+# ----------------------------------------------------------------------------
+
+[[medium_priority]]
+id = "COUPLING-002"
+severity = "medium"
+category = "coupling"
+title = "Tofu module tightly coupled to Hiqlite"
+impact = "Cannot swap database backend, hard to test"
+
+affected_files = [
+    "src/tofu/state_backend.rs (direct HiqliteService usage)",
+    "src/tofu/lock_manager.rs",
+    "src/tofu/plan_manager.rs",
+    "src/tofu/plan_executor.rs"
+]
+
+note = "Per project preferences, Hiqlite coupling is acceptable for core infrastructure"
+recommendation = "Consider TofuRepository trait if testing is important"
+
+# ----------------------------------------------------------------------------
+
+[[medium_priority]]
+id = "PERF-001"
+severity = "medium"
+category = "performance"
+title = "Excessive Arc::new(X.clone()) patterns"
+impact = "Unnecessary overhead from cloning Arc-wrapped objects"
+
+[[medium_priority.violations]]
+file = "src/state/builders/feature.rs"
+line = 54
+code = "Arc::new(TofuStateBackend::new(self.hiqlite.clone()))"
+
+[[medium_priority.violations]]
+file = "src/state/builders/repository.rs"
+lines = ["46", "51", "56"]
+code = "Creating multiple Arc wrappers with cloned hiqlite"
+
+[[medium_priority.violations]]
+file = "src/state/builders/assembler.rs"
+line = 62
+code = "Arc::new(self.config.auth.clone())"
+
+recommendation = "Avoid unnecessary Arc cloning - Arc::clone(&x) is cheap, Arc::new(x.clone()) is expensive"
+
+# ----------------------------------------------------------------------------
+
+[[medium_priority]]
+id = "ERROR-002"
+severity = "medium"
+category = "error-handling"
+title = "anyhow::Error leaking into domain types"
+impact = "Reduces type safety and error specificity in public APIs"
+
+[[medium_priority.violations]]
+file = "src/tofu/types.rs"
+lines = ["152", "175-176"]
+code = "TofuError wraps anyhow::Error"
+
+[[medium_priority.violations]]
+file = "src/domain/errors.rs"
+lines = "172-174"
+code = "DomainError converts from anyhow::Error"
+
+[[medium_priority.violations]]
+file = "src/handlers/view_renderer.rs"
+line = 37
+code = "Generic Result<T, anyhow::Error>"
+
+recommendation = "Use specific error types in domain/public APIs, reserve anyhow for internal implementation"
+
+# ----------------------------------------------------------------------------
+
+[[medium_priority]]
+id = "TYPE-001"
+severity = "medium"
+category = "type-safety"
+title = "Excessive type casting between u64/i64"
+impact = "Type mismatch between domain and persistence layers"
+
+affected_files = [
+    "src/repositories/worker.rs (lines 145-147, 191-192, 236-238)",
+    "src/time/* modules (timestamp conversions)",
+    "src/infrastructure/vm/vm_registry_hiqlite.rs",
+    "src/common/timestamp.rs (lines 101-106)"
+]
+
+root_cause = "SQLite uses i64, domain uses u64 for IDs/timestamps"
+recommendation = "Consider newtype pattern (e.g., struct DbId(i64)) to make conversions explicit"
+
+# ============================================================================
+# LOW PRIORITY ISSUES
+# ============================================================================
+
+[[low_priority]]
+id = "DEBT-001"
+severity = "low"
+category = "technical-debt"
+title = "TODO comments for future features"
+impact = "Minor technical debt, documented intentions"
+
+[[low_priority.todos]]
+file = "src/domain/event_handlers.rs"
+line = 239
+todo = "Add reqwest to dependencies when implementing webhooks"
+
+[[low_priority.todos]]
+file = "src/server/lifecycle.rs"
+line = 63
+todo = "Shut down P2P when h3_iroh supports it"
+
+# ----------------------------------------------------------------------------
+
+[[low_priority]]
+id = "PERF-002"
+severity = "low"
+category = "performance"
+title = "Heavy RwLock usage may cause contention"
+impact = "Potential performance bottleneck under high load"
+
+affected_files = [
+    "src/adapters/registry.rs (multiple RwLock fields)",
+    "src/infrastructure/vm/vm_registry_hiqlite.rs (Arc<RwLock<VmInstance>>)",
+    "src/infrastructure/vm/health_checker/coordinator.rs",
+    "src/infrastructure/vm/health_checker/circuit_breaker.rs",
+    "src/work_item_cache.rs"
+]
+
+note = "Most RwLock usage appears appropriate for concurrent read/write scenarios"
+recommendation = "Profile under load, consider lockless data structures if contention is observed"
+
+# ============================================================================
+# POSITIVE FINDINGS
+# ============================================================================
+
+[strengths]
+
+[[strengths.architecture]]
+name = "Clean layered architecture (mostly)"
+description = """
+Good separation between domain, adapters, and infrastructure in most areas.
+CQRS pattern cleanly separates commands and queries.
+"""
+
+[[strengths.architecture]]
+name = "No circular dependencies"
+description = "All module dependencies are unidirectional (except noted violations)"
+
+[[strengths.architecture]]
+name = "Repository pattern"
+description = """
+Domain services use trait objects (Arc<dyn WorkRepository>) enabling easy mocking
+and swapping of implementations.
+"""
+
+[[strengths.architecture]]
+name = "Trait-based abstractions"
+description = """
+ExecutionBackend, PlacementStrategy, VmManagement - good use of traits for
+polymorphism and testability.
+"""
+
+# ----------------------------------------------------------------------------
+
+[[strengths.testing]]
+name = "Excellent test quality where tests exist"
+description = """
+Modules with tests have comprehensive coverage:
+- src/adapters/placement.rs: 80+ tests covering all policies and edge cases
+- src/adapters/registry.rs: 100+ tests with proper mocking
+- src/domain/worker_management.rs: 100+ lifecycle and health tests
+"""
+
+[[strengths.testing]]
+name = "Well-structured test organization"
+description = """
+- Descriptive test names following test_<action>_<expected_result> pattern
+- Good use of test helpers and fixtures
+- Proper async/await patterns with tokio::test
+"""
+
+# ----------------------------------------------------------------------------
+
+[[strengths.code_quality]]
+name = "Strong type system usage"
+description = "Rust's type system catches many errors at compile time"
+
+[[strengths.code_quality]]
+name = "Clean separation in health checker"
+description = "Pure state machine in infrastructure/vm/health_checker/state_machine.rs"
+
+[[strengths.code_quality]]
+name = "Event-driven architecture"
+description = "Clean event publishing and handling with CQRS pattern"
+
+# ============================================================================
+# STATISTICS
+# ============================================================================
+
+[statistics]
+
+[statistics.files]
+total_source_files = 175
+files_over_500_lines = 15
+files_over_1000_lines = 4
+largest_file = { path = "src/adapters/registry.rs", lines = 1764 }
+
+[statistics.functions]
+functions_over_50_lines = 15
+functions_over_100_lines = 2
+longest_function = { path = "src/adapters/vm_adapter.rs", name = "monitor_execution", lines = 90 }
+
+[statistics.complexity]
+files_with_deep_nesting = 32
+duplicated_patterns = 3
+
+[statistics.testing]
+files_with_test_modules = 34
+files_with_test_functions = 16
+test_coverage_percentage = 19.4
+handlers_without_tests = 4
+config_modules_without_tests = 11
+domain_services_without_tests = 8
+
+[statistics.error_handling]
+files_with_unwrap = 18
+files_with_expect = 9
+production_unwraps_in_untested_code = "High risk"
+
+[statistics.imports]
+modules_with_over_10_imports = 8
+
+# ============================================================================
+# PRIORITIZED RECOMMENDATIONS
+# ============================================================================
+
+[recommendations]
+
+[[recommendations.p0_immediate]]
+priority = "P0"
+category = "Critical - Must Fix"
+items = [
+    "Fix domain → infrastructure imports (ARCH-001)",
+    "Create domain-owned types separate from infrastructure types",
+    "Fix repository abstraction leak in work/command_service.rs (ARCH-002)",
+    "Add tests for domain services: job_commands.rs, job_queries.rs, validation.rs (TEST-001)",
+    "Add tests for work services: all modules in /src/work/ (TEST-001)",
+    "Fix production .expect() calls in network_manager.rs and worker binary (ERROR-001)",
+    "Fix silent error ignoring in resource_guard.rs (ERROR-001)"
+]
+
+[[recommendations.p1_high]]
+priority = "P1"
+category = "High Priority - Should Fix Soon"
+items = [
+    "Split ExecutionRegistry into 4 focused components (COMPLEX-001)",
+    "Split WorkerManagementService into 3 components (COMPLEX-001)",
+    "Refactor monitor_execution() to reduce nesting (COMPLEX-002)",
+    "Extract duplicated NaN-handling sorting logic (COMPLEX-003)",
+    "Extract BackgroundCleanupTask to eliminate duplication (COMPLEX-003)",
+    "Use trait objects instead of concrete types in worker_microvm.rs (COUPLING-001)",
+    "Add integration tests for REST API handlers (TEST-002)",
+    "Add configuration validation tests (TEST-003)"
+]
+
+[[recommendations.p2_medium]]
+priority = "P2"
+category = "Medium Priority - Plan to Address"
+items = [
+    "Move business logic from infrastructure/vm/job_router.rs to domain (ARCH-003)",
+    "Apply Strategy pattern to PlacementPolicy scoring logic (COMPLEX-002)",
+    "Fix excessive Arc::new(X.clone()) patterns in builders (PERF-001)",
+    "Replace anyhow::Error in domain types with specific errors (ERROR-002)",
+    "Consider newtype pattern for u64/i64 conversions (TYPE-001)",
+    "Add TofuRepository trait if testing tofu module is needed (COUPLING-002)",
+    "Separate tests from implementation files (move to tests/ subdirectories)"
+]
+
+[[recommendations.p3_low]]
+priority = "P3"
+category = "Low Priority - Nice to Have"
+items = [
+    "Address TODO comments for webhooks and P2P shutdown (DEBT-001)",
+    "Profile RwLock usage under load (PERF-002)",
+    "Add property-based tests using proptest for algorithmic code",
+    "Make time-dependent tests deterministic with time mocking",
+    "Add doc comments to complex test helpers"
+]
+
+# ============================================================================
+# REFACTORING ROADMAP
+# ============================================================================
+
+[roadmap]
+
+[[roadmap.phase1]]
+name = "Fix Critical Architectural Violations"
+duration = "1-2 weeks"
+tasks = [
+    "Create domain/vm/health.rs with domain-owned HealthStatus type",
+    "Create domain/vm/types.rs with independent domain types (not re-exports)",
+    "Create domain/audit.rs with AuditRepository trait",
+    "Update all domain services to use domain types only",
+    "Create adapters/mappers.rs for domain ↔ infrastructure type conversions",
+    "Fix WorkCommandService to use WorkRepository trait",
+    "Move business logic from work/repository.rs to domain service"
+]
+
+[[roadmap.phase2]]
+name = "Add Critical Test Coverage"
+duration = "2-3 weeks"
+tasks = [
+    "Add unit tests for all domain services (job_commands, job_queries, validation)",
+    "Add unit tests for all work services (command_service, query_service, repository)",
+    "Add tests for domain/errors.rs error conversions",
+    "Add integration tests for API handlers",
+    "Add configuration parsing and validation tests",
+    "Replace .expect() with proper error handling and tests"
+]
+
+[[roadmap.phase3]]
+name = "Break Down God Objects"
+duration = "2-3 weeks"
+tasks = [
+    "Extract BackendRegistry from ExecutionRegistry",
+    "Extract BackendHealthManager from ExecutionRegistry",
+    "Extract JobSubmissionService from ExecutionRegistry",
+    "Extract HandleTracker from ExecutionRegistry",
+    "Extract WorkerRegistry from WorkerManagementService",
+    "Extract WorkerHealthMonitor from WorkerManagementService",
+    "Extract OrphanedJobRecovery from WorkerManagementService",
+    "Update all references to use new focused components"
+]
+
+[[roadmap.phase4]]
+name = "Reduce Coupling and Complexity"
+duration = "1-2 weeks"
+tasks = [
+    "Extract NaN-handling sort function in placement.rs",
+    "Extract BackgroundCleanupTask with configurable strategy",
+    "Refactor monitor_execution() to reduce nesting",
+    "Apply Strategy pattern to PlacementPolicy",
+    "Use trait objects instead of concrete types in builders",
+    "Move routing rules from infrastructure to domain"
+]
+
+[[roadmap.phase5]]
+name = "Code Quality Improvements"
+duration = "1 week"
+tasks = [
+    "Fix excessive Arc::new(X.clone()) patterns",
+    "Replace anyhow::Error in domain types",
+    "Add newtype wrappers for type conversions",
+    "Address TODO comments",
+    "Profile and optimize RwLock usage if needed"
+]
+
+# ============================================================================
+# IMPACT ASSESSMENT
+# ============================================================================
+
+[impact]
+
+[impact.by_category]
+architecture_violations = { critical = 2, high = 1, medium = 2 }
+testing_gaps = { critical = 1, high = 2, medium = 0 }
+complexity = { critical = 0, high = 2, medium = 1 }
+coupling = { critical = 0, high = 1, medium = 1 }
+error_handling = { critical = 1, high = 0, medium = 1 }
+performance = { critical = 0, high = 0, medium = 1, low = 1 }
+technical_debt = { critical = 0, high = 0, medium = 0, low = 1 }
+
+[impact.risk_levels]
+production_crash_risk = "HIGH (unwrap/expect in critical paths)"
+data_loss_risk = "MEDIUM (silent error ignoring)"
+maintenance_burden = "HIGH (god objects, tight coupling)"
+testing_difficulty = "HIGH (concrete types, missing tests)"
+refactoring_safety = "LOW (19.4% test coverage)"
+
+# ============================================================================
+# EFFORT ESTIMATES
+# ============================================================================
+
+[effort]
+
+[effort.by_phase]
+phase1_architecture = { days = 10, complexity = "high", risk = "medium" }
+phase2_testing = { days = 15, complexity = "medium", risk = "low" }
+phase3_refactoring = { days = 15, complexity = "high", risk = "medium" }
+phase4_optimization = { days = 10, complexity = "medium", risk = "low" }
+phase5_cleanup = { days = 5, complexity = "low", risk = "low" }
+
+total_effort_days = 55
+total_effort_weeks = 11
+
+[effort.notes]
+parallel_work = "Phases 1-2 can be partially parallelized"
+breaking_changes = "Phase 1 and 3 will have breaking changes - acceptable per project preferences"
+test_first = "Consider TDD approach for phase 2 - write tests before fixing issues"

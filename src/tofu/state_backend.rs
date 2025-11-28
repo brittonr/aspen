@@ -158,7 +158,7 @@ impl TofuStateBackend {
             // Delegate to lock manager
             match self.lock_manager.lock_workspace(workspace, lock_info.clone(), now).await {
                 Ok(_) => return Ok(()),
-                Err(e) if attempt == 0 => continue, // Retry once
+                Err(_e) if attempt == 0 => continue, // Retry once
                 Err(e) => return Err(e),
             }
         }

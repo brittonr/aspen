@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 
 use super::health_checker::{HealthChecker, HealthCheckConfig};
-use super::job_router::{JobRouter, VmAssignment};
+use super::job_router::JobRouter;
 use super::resource_monitor::ResourceMonitor;
 use super::supervisor::{
     supervised_consistency_checker, supervised_health_checker, supervised_resource_monitor,
@@ -23,11 +23,8 @@ use super::supervisor::{
 };
 use super::vm_controller::VmController;
 use super::registry::DefaultVmRepository as VmRegistry;
-use super::vm_types::{VmState, VmMode, VmConfig};
 use super::VmManagerConfig;
-use crate::domain::types::Job;
 use crate::hiqlite::HiqliteService;
-use uuid::Uuid;
 
 /// VmCoordinator orchestrates all VM management components
 pub struct VmCoordinator {
@@ -130,7 +127,7 @@ impl VmCoordinator {
         // Drop supervisor lock before continuing
         drop(supervisor);
 
-        let mut handles = self.task_handles.lock().await;
+        let _handles = self.task_handles.lock().await;
 
         // Pre-warm VMs if configured
         if self.config.auto_scaling && self.config.pre_warm_count > 0 {

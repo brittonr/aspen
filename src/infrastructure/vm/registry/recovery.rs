@@ -5,9 +5,8 @@
 
 use anyhow::Result;
 use std::sync::Arc;
-use uuid::Uuid;
 
-use crate::infrastructure::vm::vm_types::{VmInstance, VmState};
+use crate::infrastructure::vm::vm_types::VmState;
 
 use super::cache::VmCache;
 use super::index::VmStateIndex;

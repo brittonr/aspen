@@ -17,6 +17,7 @@ pub mod messages;
 pub mod coordinator;
 pub mod vm_management;
 pub mod supervisor;
+pub mod mappers; // Type mappers between domain and infrastructure
 
 // VM controller components
 pub mod network_manager;
@@ -322,6 +323,7 @@ impl VmManager {
 }
 
 // Implement VmManagement trait for VmManager
+// This adapts the infrastructure VmManager to the domain VmManagement interface
 #[async_trait::async_trait]
 impl VmManagement for VmManager {
     async fn start(&self) -> Result<()> {
@@ -332,72 +334,127 @@ impl VmManagement for VmManager {
         self.shutdown().await
     }
 
-    async fn start_vm(&self, config: VmConfig) -> Result<VmInstance> {
-        self.start_vm(config).await
+    async fn start_vm(&self, config: crate::domain::vm::types::VmConfig) -> Result<crate::domain::vm::types::VmInstance> {
+        // Convert domain VmConfig to infrastructure VmConfig
+        let infra_config = mappers::vm_config_to_infra(&config);
+
+        // Call infrastructure method
+        let infra_instance = self.start_vm(infra_config).await?;
+
+        // Convert infrastructure VmInstance back to domain VmInstance
+        Ok(mappers::vm_instance_from_infra(&infra_instance))
     }
 
     async fn stop_vm(&self, vm_id: uuid::Uuid) -> Result<()> {
         self.stop_vm(vm_id).await
     }
 
-    async fn execute_job(&self, job: crate::Job) -> Result<VmAssignment> {
-        self.execute_job(job).await
+    async fn execute_job(&self, job: crate::Job) -> Result<crate::domain::vm::types::VmAssignment> {
+        // Call infrastructure method
+        let infra_assignment = self.execute_job(job).await?;
+
+        // Convert infrastructure VmAssignment to domain VmAssignment
+        Ok(mappers::vm_assignment_from_infra(infra_assignment))
     }
 
-    async fn submit_job(&self, job: crate::Job) -> Result<JobResult> {
-        self.submit_job(job).await
+    async fn submit_job(&self, job: crate::Job) -> Result<crate::domain::vm::types::JobResult> {
+        // Call infrastructure method
+        let infra_result = self.submit_job(job).await?;
+
+        // Convert infrastructure JobResult to domain JobResult
+        Ok(mappers::job_result_from_infra(infra_result))
     }
 
-    async fn submit_job_to_vm(&self, vm_id: uuid::Uuid, job: crate::Job) -> Result<JobResult> {
-        self.submit_job_to_vm(vm_id, job).await
+    async fn submit_job_to_vm(&self, vm_id: uuid::Uuid, job: crate::Job) -> Result<crate::domain::vm::types::JobResult> {
+        // Call infrastructure method
+        let infra_result = self.submit_job_to_vm(vm_id, job).await?;
+
+        // Convert infrastructure JobResult to domain JobResult
+        Ok(mappers::job_result_from_infra(infra_result))
     }
 
-    async fn get_vm(&self, vm_id: uuid::Uuid) -> Result<Option<Arc<tokio::sync::RwLock<VmInstance>>>> {
+    async fn get_vm(&self, vm_id: uuid::Uuid) -> Result<Option<Arc<tokio::sync::RwLock<crate::infrastructure::vm::vm_types::VmInstance>>>> {
+        // This returns infrastructure VmInstance since it's used internally for state management
         self.get_vm(vm_id).await
     }
 
-    async fn list_all_vms(&self) -> Result<Vec<VmInstance>> {
-        self.list_all_vms().await
+    async fn list_all_vms(&self) -> Result<Vec<crate::domain::vm::types::VmInstance>> {
+        // Call infrastructure method
+        let infra_instances = self.list_all_vms().await?;
+
+        // Convert infrastructure VmInstances to domain VmInstances
+        Ok(infra_instances
+            .iter()
+            .map(|inst| mappers::vm_instance_from_infra(inst))
+            .collect())
     }
 
-    async fn list_by_state(&self, state_str: &str) -> Result<Vec<VmInstance>> {
+    async fn list_by_state(&self, _state_str: &str) -> Result<Vec<crate::domain::vm::types::VmInstance>> {
         // Parse state from string representation
-        // For now, this is a simplified implementation - could be enhanced
-        // to properly deserialize from string
+        // For now, this is a simplified implementation
         tracing::warn!("list_by_state with string parameter is deprecated, use typed version");
-        self.list_all_vms().await
+
+        // Call infrastructure method and map to domain types
+        let infra_instances = self.list_all_vms().await?;
+        Ok(infra_instances
+            .iter()
+            .map(|inst| mappers::vm_instance_from_infra(inst))
+            .collect())
     }
 
-    async fn list_running_vms(&self) -> Result<Vec<VmInstance>> {
-        self.list_running_vms().await
+    async fn list_running_vms(&self) -> Result<Vec<crate::domain::vm::types::VmInstance>> {
+        // Call infrastructure method
+        let infra_instances = self.list_running_vms().await?;
+
+        // Convert infrastructure VmInstances to domain VmInstances
+        Ok(infra_instances
+            .iter()
+            .map(|inst| mappers::vm_instance_from_infra(inst))
+            .collect())
     }
 
     async fn get_available_service_vm(&self) -> Option<uuid::Uuid> {
         self.get_available_service_vm().await
     }
 
-    async fn find_idle_vm(&self, requirements: &vm_types::JobRequirements) -> Option<uuid::Uuid> {
-        self.find_idle_vm(requirements).await
+    async fn find_idle_vm(&self, requirements: &crate::domain::vm::types::JobRequirements) -> Option<uuid::Uuid> {
+        // Convert domain JobRequirements to infrastructure JobRequirements
+        let infra_req = mappers::job_requirements_to_infra(requirements);
+        self.find_idle_vm(&infra_req).await
     }
 
-    async fn get_stats(&self) -> Result<VmStats> {
-        self.get_stats().await
+    async fn get_stats(&self) -> Result<crate::domain::vm::types::VmStats> {
+        // Call infrastructure method
+        let infra_stats = self.get_stats().await?;
+
+        // Convert infrastructure VmStats to domain VmStats
+        Ok(mappers::vm_stats_from_infra(infra_stats))
     }
 
     async fn count_all(&self) -> usize {
         self.registry.count_all()
     }
 
-    async fn count_by_state(&self, state: VmState) -> usize {
-        self.registry.count_by_state(&state)
+    async fn count_by_state(&self, state: crate::domain::vm::types::VmState) -> usize {
+        // Convert domain VmState to infrastructure VmState
+        let infra_state = mappers::vm_state_to_infra(&state);
+        self.registry.count_by_state(&infra_state)
     }
 
-    async fn get_vm_status(&self, vm_id: uuid::Uuid) -> Result<Option<VmState>> {
-        self.get_vm_status(vm_id).await
+    async fn get_vm_status(&self, vm_id: uuid::Uuid) -> Result<Option<crate::domain::vm::types::VmState>> {
+        // Call infrastructure method
+        let infra_state = self.get_vm_status(vm_id).await?;
+
+        // Convert infrastructure VmState to domain VmState
+        Ok(infra_state.map(|s| mappers::vm_state_from_infra(&s)))
     }
 
-    async fn get_health_status(&self, vm_id: uuid::Uuid) -> Result<health_checker::HealthStatus> {
-        self.get_health_status(vm_id).await
+    async fn get_health_status(&self, vm_id: uuid::Uuid) -> Result<crate::domain::vm::types::HealthStatus> {
+        // Call infrastructure method
+        let infra_health = self.get_health_status(vm_id).await?;
+
+        // Convert infrastructure HealthStatus to domain HealthStatus
+        Ok(mappers::health_status_from_infra(&infra_health))
     }
 
     async fn recover_from_persistence(&self) -> Result<usize> {
@@ -413,8 +470,10 @@ impl VmManagement for VmManager {
         self.log_event(vm_id, event_type, details).await
     }
 
-    async fn update_state(&self, vm_id: uuid::Uuid, new_state: VmState) -> Result<()> {
-        self.update_state(vm_id, new_state).await
+    async fn update_state(&self, vm_id: uuid::Uuid, new_state: crate::domain::vm::types::VmState) -> Result<()> {
+        // Convert domain VmState to infrastructure VmState
+        let infra_state = mappers::vm_state_to_infra(&new_state);
+        self.update_state(vm_id, infra_state).await
     }
 
     async fn start_monitoring(&self) -> Result<()> {

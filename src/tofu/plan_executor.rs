@@ -79,7 +79,7 @@ impl TofuPlanExecutor {
         work_dir: &Path,
         plan_output: &str,
     ) -> Result<String> {
-        let (resources_created, resources_updated, resources_destroyed) =
+        let (_resources_created, _resources_updated, _resources_destroyed) =
             parser::parse_plan_summary(plan_output);
 
         let plan_id = Uuid::new_v4().to_string();

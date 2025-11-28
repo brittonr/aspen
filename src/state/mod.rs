@@ -56,10 +56,13 @@ pub struct AppState {
     auth_config: Arc<AuthConfig>,
 
     // === Infrastructure services ===
+    #[allow(dead_code)]
     module: Option<Arc<DeployedModule>>,
     iroh: IrohService,
+    #[allow(dead_code)]
     hiqlite: HiqliteService,
     node_id: String,
+    #[allow(dead_code)]
     execution_registry: Arc<ExecutionRegistry>,
 
     // === Domain services ===
@@ -133,6 +136,7 @@ impl AppState {
     /// Get the Flawless module (if available)
     ///
     /// Internal use only - for startup/display purposes
+    #[allow(dead_code)]
     pub(crate) fn module(&self) -> Option<&DeployedModule> {
         self.module.as_ref().map(|m| m.as_ref())
     }
@@ -148,6 +152,7 @@ impl AppState {
     /// Get the Hiqlite service
     ///
     /// Internal use only - handlers should use domain services
+    #[allow(dead_code)]
     pub(crate) fn hiqlite(&self) -> &HiqliteService {
         &self.hiqlite
     }
@@ -162,6 +167,7 @@ impl AppState {
     /// Get the execution registry
     ///
     /// Internal use only - handlers should use domain services
+    #[allow(dead_code)]
     pub(crate) fn execution_registry(&self) -> &Arc<ExecutionRegistry> {
         &self.execution_registry
     }

@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use anyhow::Result;
 
-use crate::repositories::{StateRepository, WorkRepository};
+use crate::repositories::{JobAssignment, StateRepository, WorkRepository};
 use crate::domain::types::Job;
 
 /// Aggregated cluster health information
@@ -57,8 +57,8 @@ impl ClusterStatusService {
         let health_check = self.state_repo.health_check().await?;
 
         // Count active workers from recent job activity
-        let jobs = self.work_repo.list_work().await?;
-        let active_workers = Self::count_active_workers(&jobs);
+        let assignments = self.work_repo.list_job_assignments().await?;
+        let active_workers = Self::count_active_workers(&assignments);
 
         Ok(AggregatedClusterHealth {
             is_healthy: health_check.is_healthy,
@@ -71,7 +71,8 @@ impl ClusterStatusService {
     /// Get detailed statistics for all workers
     pub async fn get_worker_stats(&self) -> Result<Vec<WorkerStats>> {
         let jobs = self.work_repo.list_work().await?;
-        let stats_map = Self::aggregate_worker_stats(&jobs);
+        let assignments = self.work_repo.list_job_assignments().await?;
+        let stats_map = Self::aggregate_worker_stats(&jobs, &assignments);
 
         let now = Self::current_timestamp();
         let mut stats: Vec<WorkerStats> = stats_map
@@ -113,10 +114,10 @@ impl ClusterStatusService {
     }
 
     /// Count unique active workers from jobs
-    fn count_active_workers(jobs: &[Job]) -> HashSet<String> {
-        jobs
+    fn count_active_workers(assignments: &[JobAssignment]) -> HashSet<String> {
+        assignments
             .iter()
-            .filter_map(|job| job.claimed_by.clone())
+            .filter_map(|assignment| assignment.claimed_by_node.clone())
             .collect()
     }
 
@@ -124,25 +125,33 @@ impl ClusterStatusService {
     /// Returns: HashMap<node_id, (active_jobs, completed_jobs, last_seen_timestamp)>
     fn aggregate_worker_stats(
         jobs: &[Job],
+        assignments: &[JobAssignment],
     ) -> std::collections::HashMap<String, (usize, usize, i64)> {
         use crate::domain::types::JobStatus;
 
         let mut stats: std::collections::HashMap<String, (usize, usize, i64)> =
             std::collections::HashMap::new();
+        
+        let assignments_map: std::collections::HashMap<String, JobAssignment> = assignments
+            .iter()
+            .map(|a| (a.job_id.clone(), a.clone()))
+            .collect();
 
         for job in jobs {
-            if let Some(node_id) = &job.claimed_by {
-                let entry = stats.entry(node_id.clone()).or_insert((0, 0, 0));
+            if let Some(assignment) = assignments_map.get(&job.id) {
+                if let Some(node_id) = &assignment.claimed_by_node {
+                    let entry = stats.entry(node_id.clone()).or_insert((0, 0, 0));
 
-                match job.status {
-                    JobStatus::Completed => entry.1 += 1,
-                    JobStatus::InProgress | JobStatus::Claimed => entry.0 += 1,
-                    _ => {}
-                }
+                    match job.status {
+                        JobStatus::Completed => entry.1 += 1,
+                        JobStatus::InProgress | JobStatus::Claimed => entry.0 += 1,
+                        _ => {}
+                    }
 
-                // Track most recent activity
-                if job.updated_at() > entry.2 {
-                    entry.2 = job.updated_at();
+                    // Track most recent activity
+                    if job.updated_at() > entry.2 {
+                        entry.2 = job.updated_at();
+                    }
                 }
             }
         }

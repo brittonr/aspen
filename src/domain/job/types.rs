@@ -58,33 +58,6 @@ pub struct Job {
     pub metadata: JobMetadata,
     /// Error message if job failed
     pub error_message: Option<String>,
-
-    // === DEPRECATED: Infrastructure concerns (should be in JobAssignment) ===
-    //
-    // WARNING: These fields violate domain-infrastructure separation!
-    // They are infrastructure concerns (which worker/node) that leaked into
-    // the domain entity (business logic).
-    //
-    // These fields are DEPRECATED and should be accessed via repositories::JobAssignment
-    // instead. They are kept here only for backward compatibility during migration.
-    //
-    // DO NOT add new code that depends on these fields. Use JobAssignment instead.
-    // See: src/repositories/job_assignment.rs
-    //
-    /// Worker node that claimed this job (DEPRECATED - use JobAssignment)
-    #[deprecated(since = "0.2.0", note = "Use repositories::JobAssignment instead")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claimed_by: Option<String>,
-
-    /// Worker ID assigned to execute this job (DEPRECATED - use JobAssignment)
-    #[deprecated(since = "0.2.0", note = "Use repositories::JobAssignment instead")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assigned_worker_id: Option<String>,
-
-    /// Worker node that completed this job (DEPRECATED - use JobAssignment)
-    #[deprecated(since = "0.2.0", note = "Use repositories::JobAssignment instead")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub completed_by: Option<String>,
 }
 
 impl Default for Job {
@@ -96,9 +69,6 @@ impl Default for Job {
             requirements: JobRequirements::default(),
             metadata: JobMetadata::default(),
             error_message: None,
-            claimed_by: None,
-            assigned_worker_id: None,
-            completed_by: None,
         }
     }
 }

@@ -21,6 +21,7 @@ use super::components::FeatureComponents;
 pub struct FeatureBuilder<'a> {
     config: &'a AppConfig,
     vm_manager: Option<Arc<dyn VmManagement>>,
+    #[allow(dead_code)]
     execution_registry: Arc<ExecutionRegistry>,
     hiqlite: Arc<HiqliteService>,
 }

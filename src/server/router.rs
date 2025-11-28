@@ -118,7 +118,7 @@ fn dashboard_router(
 fn queue_api_router(
     job_commands: Arc<JobCommandService>,
     job_queries: Arc<JobQueryService>,
-    health_service: Arc<HealthService>,
+    _health_service: Arc<HealthService>,
     auth_config: Arc<crate::config::AuthConfig>,
 ) -> Router {
     Router::new()

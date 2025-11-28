@@ -22,8 +22,10 @@ use crate::iroh_service::IrohService;
 #[derive(Clone)]
 pub struct InfraState {
     iroh: IrohService,
+    #[allow(dead_code)]
     hiqlite: HiqliteService,
     node_id: String,
+    #[allow(dead_code)]
     execution_registry: Arc<ExecutionRegistry>,
 }
 
@@ -53,6 +55,7 @@ impl InfraState {
     /// Get Hiqlite database service
     ///
     /// INTERNAL - for health checks and service initialization only
+    #[allow(dead_code)]
     pub(crate) fn hiqlite(&self) -> &HiqliteService {
         &self.hiqlite
     }
@@ -72,6 +75,7 @@ impl InfraState {
     /// Get execution registry
     ///
     /// INTERNAL - for service initialization only
+    #[allow(dead_code)]
     pub(crate) fn execution_registry(&self) -> Arc<ExecutionRegistry> {
         self.execution_registry.clone()
     }

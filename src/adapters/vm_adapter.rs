@@ -257,8 +257,17 @@ impl ExecutionBackend for VmAdapter {
     async fn submit_job(&self, job: Job, _config: ExecutionConfig) -> Result<ExecutionHandle> {
         info!("VM adapter: submitting job {}", job.id);
         // Route job through VmManager
-        let assignment = self.vm_manager.execute_job(job.clone()).await?;
-        let vm_id = assignment.vm_id();
+        let domain_assignment = self.vm_manager.execute_job(job.clone()).await?;
+        let vm_id = domain_assignment.vm_id();
+
+        // Convert domain assignment to infrastructure assignment for internal storage
+        let assignment = match domain_assignment {
+            crate::domain::vm::types::VmAssignment::Ephemeral(id) =>
+                crate::infrastructure::vm::job_router::VmAssignment::Ephemeral(id),
+            crate::domain::vm::types::VmAssignment::Service(id) =>
+                crate::infrastructure::vm::job_router::VmAssignment::Service(id),
+        };
+
         // Create execution handle
         let handle = ExecutionHandle::vm(vm_id.to_string(), job.id.clone());
         // Store execution state

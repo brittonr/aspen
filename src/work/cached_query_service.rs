@@ -38,7 +38,8 @@ impl CachedWorkQueryService {
     pub async fn new(inner: WorkQueryService) -> Result<Self> {
         // Initialize cache by loading all work items
         let work_items = inner.list_work().await?;
-        let cache = WorkItemCache::from_items(work_items.clone());
+        let assignments = inner.list_job_assignments().await?;
+        let cache = WorkItemCache::from_items(work_items.clone(), assignments);
 
         info!(count = work_items.len(), "Initialized query cache");
 
@@ -53,7 +54,8 @@ impl CachedWorkQueryService {
     async fn refresh_cache(&self) -> Result<()> {
         debug!("Refreshing cache from query service");
         let work_items = self.inner.list_work().await?;
-        self.cache.replace_all(work_items).await;
+        let assignments = self.inner.list_job_assignments().await?;
+        self.cache.replace_all(work_items, assignments).await;
         Ok(())
     }
 
@@ -120,15 +122,15 @@ impl CachedWorkQueryService {
         self.refresh_cache_if_needed(cache_version).await?;
 
         let all_items = self.cache.get_all().await;
-        Ok(all_items
-            .into_iter()
-            .filter(|item| {
-                item.claimed_by
-                    .as_ref()
-                    .map(|id| id == worker_id)
-                    .unwrap_or(false)
-            })
-            .collect())
+        let mut result = Vec::new();
+        for item in all_items {
+            if let Some(assignment) = self.cache.get_assignment(&item.id).await {
+                if assignment.assigned_worker_id.as_deref() == Some(worker_id) {
+                    result.push(item);
+                }
+            }
+        }
+        Ok(result)
     }
 
     /// List work items with pagination (with caching)
@@ -160,17 +162,17 @@ impl CachedWorkQueryService {
         self.refresh_cache_if_needed(cache_version).await?;
 
         let all_items = self.cache.get_all().await;
-        Ok(all_items
-            .into_iter()
-            .filter(|item| {
-                item.status == status
-                    && item
-                        .claimed_by
-                        .as_ref()
-                        .map(|id| id == worker_id)
-                        .unwrap_or(false)
-            })
-            .collect())
+        let mut result = Vec::new();
+        for item in all_items {
+            if item.status == status {
+                if let Some(assignment) = self.cache.get_assignment(&item.id).await {
+                    if assignment.assigned_worker_id.as_deref() == Some(worker_id) {
+                        result.push(item);
+                    }
+                }
+            }
+        }
+        Ok(result)
     }
 
     /// Get work queue statistics (with caching)

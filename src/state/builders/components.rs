@@ -11,7 +11,7 @@ use crate::domain::{
     WorkerManagementService,
 };
 use crate::hiqlite::HiqliteService;
-use crate::infrastructure::vm::{VmManagement, VmManager};
+use crate::infrastructure::vm::VmManager;
 use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 

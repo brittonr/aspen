@@ -14,6 +14,7 @@ use crate::infrastructure::vm::VmManagerConfig;
 
 /// Controller for VM lifecycle operations
 pub struct VmController {
+    #[allow(dead_code)]
     config: VmManagerConfig,
     registry: Arc<VmRegistry>,
     network_manager: VmNetworkManager,

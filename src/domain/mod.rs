@@ -10,6 +10,7 @@
 //! - Makes business logic testable independently of HTTP layer
 //! - Provides clear API for complex operations
 
+pub mod audit;
 pub mod cluster_status;
 pub mod compatibility;
 pub mod errors;
