@@ -531,3 +531,1234 @@ impl ExecutionRegistry {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::time::Duration;
+    use tokio::sync::Mutex;
+    use crate::worker_trait::WorkResult;
+    use crate::adapters::{
+        ExecutionHandleType, ExecutionMetadata, ResourceInfo, ResourceRequirements,
+    };
+
+    /// Mock backend for testing registry operations
+    struct TestBackend {
+        name: String,
+        initialized: Arc<AtomicBool>,
+        shutdown_called: Arc<AtomicBool>,
+        healthy: Arc<AtomicBool>,
+        submit_count: Arc<AtomicU32>,
+        submission_delay: Duration,
+        should_fail_submit: Arc<AtomicBool>,
+        should_fail_init: Arc<AtomicBool>,
+        resource_info: Arc<Mutex<ResourceInfo>>,
+        executions: Arc<RwLock<HashMap<String, ExecutionStatus>>>,
+        can_handle_result: bool,
+    }
+
+    impl TestBackend {
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+                initialized: Arc::new(AtomicBool::new(false)),
+                shutdown_called: Arc::new(AtomicBool::new(false)),
+                healthy: Arc::new(AtomicBool::new(true)),
+                submit_count: Arc::new(AtomicU32::new(0)),
+                submission_delay: Duration::from_millis(0),
+                should_fail_submit: Arc::new(AtomicBool::new(false)),
+                should_fail_init: Arc::new(AtomicBool::new(false)),
+                resource_info: Arc::new(Mutex::new(ResourceInfo {
+                    total_cpu_cores: 8.0,
+                    available_cpu_cores: 4.0,
+                    total_memory_mb: 16384,
+                    available_memory_mb: 8192,
+                    total_disk_mb: 102400,
+                    available_disk_mb: 51200,
+                    running_executions: 0,
+                    max_executions: 10,
+                })),
+                executions: Arc::new(RwLock::new(HashMap::new())),
+                can_handle_result: true,
+            }
+        }
+
+        fn with_healthy(mut self, healthy: bool) -> Self {
+            self.healthy = Arc::new(AtomicBool::new(healthy));
+            self
+        }
+
+        fn with_submit_failure(mut self, should_fail: bool) -> Self {
+            self.should_fail_submit = Arc::new(AtomicBool::new(should_fail));
+            self
+        }
+
+        fn with_init_failure(mut self, should_fail: bool) -> Self {
+            self.should_fail_init = Arc::new(AtomicBool::new(should_fail));
+            self
+        }
+
+        fn with_delay(mut self, delay: Duration) -> Self {
+            self.submission_delay = delay;
+            self
+        }
+
+        fn with_resources(mut self, resources: ResourceInfo) -> Self {
+            self.resource_info = Arc::new(Mutex::new(resources));
+            self
+        }
+
+        fn with_can_handle(mut self, can_handle: bool) -> Self {
+            self.can_handle_result = can_handle;
+            self
+        }
+
+        fn is_initialized(&self) -> bool {
+            self.initialized.load(Ordering::SeqCst)
+        }
+
+        fn is_shutdown(&self) -> bool {
+            self.shutdown_called.load(Ordering::SeqCst)
+        }
+
+        fn get_submit_count(&self) -> u32 {
+            self.submit_count.load(Ordering::SeqCst)
+        }
+
+        fn set_healthy(&self, healthy: bool) {
+            self.healthy.store(healthy, Ordering::SeqCst);
+        }
+    }
+
+    #[async_trait]
+    impl ExecutionBackend for TestBackend {
+        fn backend_type(&self) -> &str {
+            &self.name
+        }
+
+        async fn submit_job(&self, job: Job, _config: ExecutionConfig) -> Result<ExecutionHandle> {
+            if self.submission_delay > Duration::from_millis(0) {
+                tokio::time::sleep(self.submission_delay).await;
+            }
+
+            if self.should_fail_submit.load(Ordering::SeqCst) {
+                return Err(anyhow::anyhow!("Simulated submission failure"));
+            }
+
+            let count = self.submit_count.fetch_add(1, Ordering::SeqCst);
+            let handle_id = format!("{}-handle-{}", self.name, count);
+
+            let handle = ExecutionHandle {
+                id: handle_id.clone(),
+                job_id: job.id.clone(),
+                backend_name: self.name.clone(),
+                handle_type: ExecutionHandleType::Process { pid: count as u32 },
+                created_at: current_timestamp_or_zero() as u64,
+            };
+
+            let mut executions = self.executions.write().await;
+            executions.insert(handle_id, ExecutionStatus::Running);
+
+            Ok(handle)
+        }
+
+        async fn get_status(&self, handle: &ExecutionHandle) -> Result<ExecutionStatus> {
+            let executions = self.executions.read().await;
+            executions
+                .get(&handle.id)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Handle not found"))
+        }
+
+        async fn cancel_execution(&self, handle: &ExecutionHandle) -> Result<()> {
+            let mut executions = self.executions.write().await;
+            executions.insert(handle.id.clone(), ExecutionStatus::Cancelled);
+            Ok(())
+        }
+
+        async fn get_metadata(&self, handle: &ExecutionHandle) -> Result<ExecutionMetadata> {
+            Ok(ExecutionMetadata {
+                execution_id: handle.id.clone(),
+                backend_type: self.name.clone(),
+                started_at: handle.created_at,
+                completed_at: None,
+                node_id: Some("test-node".to_string()),
+                custom: HashMap::new(),
+            })
+        }
+
+        async fn wait_for_completion(
+            &self,
+            handle: &ExecutionHandle,
+            timeout: Option<Duration>,
+        ) -> Result<ExecutionStatus> {
+            let timeout = timeout.unwrap_or(Duration::from_secs(5));
+            let start = std::time::Instant::now();
+
+            loop {
+                let status = self.get_status(handle).await?;
+                match status {
+                    ExecutionStatus::Running | ExecutionStatus::Preparing => {
+                        if start.elapsed() > timeout {
+                            return Err(anyhow::anyhow!("Timeout waiting for completion"));
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                    _ => return Ok(status),
+                }
+            }
+        }
+
+        async fn health_check(&self) -> Result<BackendHealth> {
+            let healthy = self.healthy.load(Ordering::SeqCst);
+            let resources = self.resource_info.lock().await;
+            Ok(BackendHealth {
+                healthy,
+                status_message: if healthy { "OK".to_string() } else { "Unhealthy".to_string() },
+                resource_info: Some(resources.clone()),
+                last_check: Some(current_timestamp_or_zero() as u64),
+                details: HashMap::new(),
+            })
+        }
+
+        async fn get_resource_info(&self) -> Result<ResourceInfo> {
+            let resources = self.resource_info.lock().await;
+            Ok(resources.clone())
+        }
+
+        async fn can_handle(&self, _job: &Job, _config: &ExecutionConfig) -> Result<bool> {
+            Ok(self.can_handle_result)
+        }
+
+        async fn list_executions(&self) -> Result<Vec<ExecutionHandle>> {
+            let executions = self.executions.read().await;
+            Ok(executions
+                .keys()
+                .map(|id| ExecutionHandle {
+                    id: id.clone(),
+                    job_id: "test-job".to_string(),
+                    backend_name: self.name.clone(),
+                    handle_type: ExecutionHandleType::Process { pid: 1 },
+                    created_at: 0,
+                })
+                .collect())
+        }
+
+        async fn cleanup_executions(&self, _older_than: Duration) -> Result<usize> {
+            let mut executions = self.executions.write().await;
+            let count = executions.len();
+            executions.clear();
+            Ok(count)
+        }
+
+        async fn initialize(&self) -> Result<()> {
+            if self.should_fail_init.load(Ordering::SeqCst) {
+                return Err(anyhow::anyhow!("Simulated initialization failure"));
+            }
+            self.initialized.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn shutdown(&self) -> Result<()> {
+            self.shutdown_called.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    fn create_test_job() -> Job {
+        Job {
+            id: "test-job-1".to_string(),
+            typ: "test".to_string(),
+            payload: vec![1, 2, 3],
+            created: current_timestamp_or_zero(),
+            updated: current_timestamp_or_zero(),
+        }
+    }
+
+    fn create_test_config() -> ExecutionConfig {
+        ExecutionConfig {
+            resources: ResourceRequirements {
+                cpu_cores: 1.0,
+                memory_mb: 1024,
+                disk_mb: 5120,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn create_registry_config() -> RegistryConfig {
+        RegistryConfig {
+            placement_policy: PlacementPolicy::BestFit,
+            enable_failover: true,
+            health_check_interval: 30,
+            max_submission_retries: 3,
+            cleanup_config: CleanupConfig {
+                enable_background_cleanup: false, // Disable for tests
+                ..CleanupConfig::default()
+            },
+        }
+    }
+
+    // Registry Construction Tests
+
+    #[tokio::test]
+    async fn test_registry_new_creates_empty_registry() {
+        let config = create_registry_config();
+        let registry = ExecutionRegistry::new(config);
+
+        let backends = registry.list_backends().await;
+        assert!(backends.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_registry_default_config() {
+        let config = RegistryConfig::default();
+        assert_eq!(config.placement_policy, PlacementPolicy::BestFit);
+        assert!(config.enable_failover);
+        assert_eq!(config.health_check_interval, 30);
+        assert_eq!(config.max_submission_retries, 3);
+    }
+
+    // Backend Registration Tests
+
+    #[tokio::test]
+    async fn test_register_backend_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("test-backend"));
+        let backend_clone = backend.clone();
+
+        let result = registry
+            .register_backend("test-backend".to_string(), backend_clone)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(backend.is_initialized());
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 1);
+        assert!(backends.contains(&"test-backend".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_register_multiple_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+        let backend3 = Arc::new(TestBackend::new("backend3"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1)
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2)
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend3".to_string(), backend3)
+            .await
+            .unwrap();
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 3);
+        assert!(backends.contains(&"backend1".to_string()));
+        assert!(backends.contains(&"backend2".to_string()));
+        assert!(backends.contains(&"backend3".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_register_backend_initialization_failure() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("failing").with_init_failure(true));
+
+        let result = registry
+            .register_backend("failing".to_string(), backend)
+            .await;
+
+        assert!(result.is_err());
+
+        let backends = registry.list_backends().await;
+        assert!(backends.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_register_unhealthy_backend_logs_warning() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("unhealthy").with_healthy(false));
+
+        let result = registry
+            .register_backend("unhealthy".to_string(), backend)
+            .await;
+
+        // Should succeed but log warning
+        assert!(result.is_ok());
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_register_duplicate_backend_replaces() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend"));
+        registry
+            .register_backend("backend".to_string(), backend1.clone())
+            .await
+            .unwrap();
+
+        let backend2 = Arc::new(TestBackend::new("backend-v2"));
+        registry
+            .register_backend("backend".to_string(), backend2)
+            .await
+            .unwrap();
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 1);
+    }
+
+    // Backend Unregistration Tests
+
+    #[tokio::test]
+    async fn test_unregister_backend_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("test-backend"));
+        let backend_clone = backend.clone();
+
+        registry
+            .register_backend("test-backend".to_string(), backend_clone)
+            .await
+            .unwrap();
+
+        let result = registry.unregister_backend("test-backend").await;
+        assert!(result.is_ok());
+        assert!(backend.is_shutdown());
+
+        let backends = registry.list_backends().await;
+        assert!(backends.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_unregister_nonexistent_backend() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let result = registry.unregister_backend("nonexistent").await;
+        assert!(result.is_ok()); // Should not fail
+    }
+
+    #[tokio::test]
+    async fn test_unregister_multiple_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+        let backend1_clone = backend1.clone();
+        let backend2_clone = backend2.clone();
+
+        registry
+            .register_backend("backend1".to_string(), backend1_clone)
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2_clone)
+            .await
+            .unwrap();
+
+        registry.unregister_backend("backend1").await.unwrap();
+        assert!(backend1.is_shutdown());
+        assert!(!backend2.is_shutdown());
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 1);
+        assert!(backends.contains(&"backend2".to_string()));
+    }
+
+    // Backend Retrieval Tests
+
+    #[tokio::test]
+    async fn test_get_backend_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("test-backend"));
+
+        registry
+            .register_backend("test-backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let retrieved = registry.get_backend("test-backend").await;
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().backend_type(), "test-backend");
+    }
+
+    #[tokio::test]
+    async fn test_get_backend_not_found() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let retrieved = registry.get_backend("nonexistent").await;
+        assert!(retrieved.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_backends_empty() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backends = registry.list_backends().await;
+        assert!(backends.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_backends_multiple() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        for i in 1..=5 {
+            let backend = Arc::new(TestBackend::new(&format!("backend{}", i)));
+            registry
+                .register_backend(format!("backend{}", i), backend)
+                .await
+                .unwrap();
+        }
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 5);
+    }
+
+    // Job Submission Tests
+
+    #[tokio::test]
+    async fn test_submit_job_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("test-backend"));
+        let backend_clone = backend.clone();
+
+        registry
+            .register_backend("test-backend".to_string(), backend_clone)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        assert_eq!(handle.backend_name, "test-backend");
+        assert_eq!(backend.get_submit_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_no_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let result = registry.submit_job(job, config).await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No healthy execution backends"));
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_all_backends_unhealthy() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("unhealthy").with_healthy(false));
+
+        registry
+            .register_backend("unhealthy".to_string(), backend)
+            .await
+            .unwrap();
+
+        // Update health status
+        registry.update_health_status().await.unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let result = registry.submit_job(job, config).await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No healthy execution backends"));
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_with_multiple_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        // Should submit to one of the backends
+        assert!(handle.backend_name == "backend1" || handle.backend_name == "backend2");
+
+        let total_submits = backend1.get_submit_count() + backend2.get_submit_count();
+        assert_eq!(total_submits, 1);
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_retry_on_failure() {
+        let mut config = create_registry_config();
+        config.max_submission_retries = 2;
+        let registry = ExecutionRegistry::new(config);
+
+        let backend = Arc::new(TestBackend::new("backend").with_submit_failure(true));
+
+        registry
+            .register_backend("backend".to_string(), backend.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let exec_config = create_test_config();
+
+        let result = registry.submit_job(job, exec_config).await;
+
+        assert!(result.is_err());
+        // Should have attempted retries
+        assert!(backend.get_submit_count() >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_failover_to_alternative() {
+        let mut config = create_registry_config();
+        config.enable_failover = true;
+        let registry = ExecutionRegistry::new(config);
+
+        let backend1 = Arc::new(TestBackend::new("failing").with_submit_failure(true));
+        let backend2 = Arc::new(TestBackend::new("working"));
+
+        registry
+            .register_backend("failing".to_string(), backend1.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("working".to_string(), backend2.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let exec_config = create_test_config();
+
+        let handle = registry.submit_job(job, exec_config).await.unwrap();
+
+        // Should have failed over to working backend
+        assert_eq!(handle.backend_name, "working");
+        assert_eq!(backend2.get_submit_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_failover_disabled() {
+        let mut config = create_registry_config();
+        config.enable_failover = false;
+        config.max_submission_retries = 1;
+        let registry = ExecutionRegistry::new(config);
+
+        let backend1 = Arc::new(TestBackend::new("failing").with_submit_failure(true));
+        let backend2 = Arc::new(TestBackend::new("working"));
+
+        registry
+            .register_backend("failing".to_string(), backend1)
+            .await
+            .unwrap();
+        registry
+            .register_backend("working".to_string(), backend2.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let exec_config = create_test_config();
+
+        let result = registry.submit_job(job, exec_config).await;
+
+        // Should fail without failover
+        assert!(result.is_err());
+        // Working backend should not be used
+        assert_eq!(backend2.get_submit_count(), 0);
+    }
+
+    // Execution Status and Control Tests
+
+    #[tokio::test]
+    async fn test_get_status_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+        let status = registry.get_status(&handle).await.unwrap();
+
+        assert_eq!(status, ExecutionStatus::Running);
+    }
+
+    #[tokio::test]
+    async fn test_get_status_backend_not_found() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let handle = ExecutionHandle {
+            id: "test-handle".to_string(),
+            job_id: "test-job".to_string(),
+            backend_name: "nonexistent".to_string(),
+            handle_type: ExecutionHandleType::Process { pid: 1 },
+            created_at: 0,
+        };
+
+        let result = registry.get_status(&handle).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No backend found"));
+    }
+
+    #[tokio::test]
+    async fn test_cancel_execution_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+        let result = registry.cancel_execution(&handle).await;
+
+        assert!(result.is_ok());
+
+        let status = registry.get_status(&handle).await.unwrap();
+        assert_eq!(status, ExecutionStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_completion_success() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        // Mark as completed in background
+        let handle_clone = handle.clone();
+        let backend_clone = backend.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let mut executions = backend_clone.executions.write().await;
+            executions.insert(
+                handle_clone.id.clone(),
+                ExecutionStatus::Completed(WorkResult {
+                    success: true,
+                    error_message: None,
+                    data: vec![],
+                }),
+            );
+        });
+
+        let status = registry
+            .wait_for_completion(&handle, Some(Duration::from_secs(2)))
+            .await
+            .unwrap();
+
+        match status {
+            ExecutionStatus::Completed(_) => {}
+            _ => panic!("Expected Completed status"),
+        }
+    }
+
+    // Health Check Tests
+
+    #[tokio::test]
+    async fn test_update_health_status_all_healthy() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1)
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2)
+            .await
+            .unwrap();
+
+        registry.update_health_status().await.unwrap();
+
+        let health = registry.get_health_status().await;
+        assert_eq!(health.len(), 2);
+        assert!(health.get("backend1").unwrap().healthy);
+        assert!(health.get("backend2").unwrap().healthy);
+    }
+
+    #[tokio::test]
+    async fn test_update_health_status_some_unhealthy() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("healthy"));
+        let backend2 = Arc::new(TestBackend::new("unhealthy").with_healthy(false));
+
+        registry
+            .register_backend("healthy".to_string(), backend1)
+            .await
+            .unwrap();
+        registry
+            .register_backend("unhealthy".to_string(), backend2)
+            .await
+            .unwrap();
+
+        registry.update_health_status().await.unwrap();
+
+        let health = registry.get_health_status().await;
+        assert!(health.get("healthy").unwrap().healthy);
+        assert!(!health.get("unhealthy").unwrap().healthy);
+    }
+
+    #[tokio::test]
+    async fn test_get_health_status_empty_registry() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let health = registry.get_health_status().await;
+        assert!(health.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_health_cache_updated_on_registration() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let health = registry.get_health_status().await;
+        assert_eq!(health.len(), 1);
+        assert!(health.contains_key("backend"));
+    }
+
+    // Handle Mapping Tests
+
+    #[tokio::test]
+    async fn test_handle_mapping_recorded_on_submit() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        // Verify handle can be used to get status (mapping exists)
+        let status = registry.get_status(&handle).await;
+        assert!(status.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_orphaned_handles() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        // Unregister the backend
+        registry.unregister_backend("backend").await.unwrap();
+
+        // Clean up orphaned handles
+        let removed = registry.cleanup_orphaned_handles().await.unwrap();
+        assert_eq!(removed, 1);
+
+        // Verify handle is orphaned
+        let result = registry.get_status(&handle).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_orphaned_handles_no_orphans() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        registry.submit_job(job, config).await.unwrap();
+
+        // No backends unregistered, so no orphans
+        let removed = registry.cleanup_orphaned_handles().await.unwrap();
+        assert_eq!(removed, 0);
+    }
+
+    // Backend Cleanup Tests
+
+    #[tokio::test]
+    async fn test_cleanup_executions_across_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2.clone())
+            .await
+            .unwrap();
+
+        // Create some executions
+        let job = create_test_job();
+        let config = create_test_config();
+        registry.submit_job(job.clone(), config.clone()).await.unwrap();
+        registry.submit_job(job, config).await.unwrap();
+
+        let cleaned = registry
+            .cleanup_executions(Duration::from_secs(0))
+            .await
+            .unwrap();
+
+        assert_eq!(cleaned, 2);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_executions_empty_registry() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let cleaned = registry
+            .cleanup_executions(Duration::from_secs(0))
+            .await
+            .unwrap();
+
+        assert_eq!(cleaned, 0);
+    }
+
+    // Shutdown Tests
+
+    #[tokio::test]
+    async fn test_shutdown_calls_backend_shutdown() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+        let backend_clone = backend.clone();
+
+        registry
+            .register_backend("backend".to_string(), backend_clone)
+            .await
+            .unwrap();
+
+        registry.shutdown().await.unwrap();
+
+        assert!(backend.is_shutdown());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_all_backends() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+        let backend3 = Arc::new(TestBackend::new("backend3"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend3".to_string(), backend3.clone())
+            .await
+            .unwrap();
+
+        registry.shutdown().await.unwrap();
+
+        assert!(backend1.is_shutdown());
+        assert!(backend2.is_shutdown());
+        assert!(backend3.is_shutdown());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_empty_registry() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let result = registry.shutdown().await;
+        assert!(result.is_ok());
+    }
+
+    // Cleanup Metrics Tests
+
+    #[tokio::test]
+    async fn test_get_cleanup_metrics_initial() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let metrics = registry.get_cleanup_metrics().await;
+        assert_eq!(metrics.total_cleaned, 0);
+        assert_eq!(metrics.ttl_expired, 0);
+        assert_eq!(metrics.lru_evicted, 0);
+    }
+
+    // Concurrent Access Tests
+
+    #[tokio::test]
+    async fn test_concurrent_backend_registration() {
+        let registry = Arc::new(ExecutionRegistry::new(create_registry_config()));
+
+        let mut handles = vec![];
+        for i in 0..10 {
+            let registry_clone = registry.clone();
+            let handle = tokio::spawn(async move {
+                let backend = Arc::new(TestBackend::new(&format!("backend{}", i)));
+                registry_clone
+                    .register_backend(format!("backend{}", i), backend)
+                    .await
+                    .unwrap();
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 10);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_job_submissions() {
+        let registry = Arc::new(ExecutionRegistry::new(create_registry_config()));
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend.clone())
+            .await
+            .unwrap();
+
+        let mut handles = vec![];
+        for i in 0..20 {
+            let registry_clone = registry.clone();
+            let handle = tokio::spawn(async move {
+                let mut job = create_test_job();
+                job.id = format!("job-{}", i);
+                let config = create_test_config();
+                registry_clone.submit_job(job, config).await
+            });
+            handles.push(handle);
+        }
+
+        let mut success_count = 0;
+        for handle in handles {
+            if handle.await.unwrap().is_ok() {
+                success_count += 1;
+            }
+        }
+
+        assert_eq!(success_count, 20);
+        assert_eq!(backend.get_submit_count(), 20);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_health_checks() {
+        let registry = Arc::new(ExecutionRegistry::new(create_registry_config()));
+
+        let backend1 = Arc::new(TestBackend::new("backend1"));
+        let backend2 = Arc::new(TestBackend::new("backend2"));
+
+        registry
+            .register_backend("backend1".to_string(), backend1)
+            .await
+            .unwrap();
+        registry
+            .register_backend("backend2".to_string(), backend2)
+            .await
+            .unwrap();
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let registry_clone = registry.clone();
+            let handle = tokio::spawn(async move {
+                registry_clone.update_health_status().await
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            assert!(handle.await.unwrap().is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_registration_and_retrieval() {
+        let registry = Arc::new(ExecutionRegistry::new(create_registry_config()));
+
+        let mut handles = vec![];
+
+        // Registration tasks
+        for i in 0..5 {
+            let registry_clone = registry.clone();
+            let handle = tokio::spawn(async move {
+                let backend = Arc::new(TestBackend::new(&format!("backend{}", i)));
+                registry_clone
+                    .register_backend(format!("backend{}", i), backend)
+                    .await
+            });
+            handles.push(handle);
+        }
+
+        // Retrieval tasks
+        for i in 0..5 {
+            let registry_clone = registry.clone();
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                registry_clone.get_backend(&format!("backend{}", i)).await
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        let backends = registry.list_backends().await;
+        assert_eq!(backends.len(), 5);
+    }
+
+    // Edge Cases
+
+    #[tokio::test]
+    async fn test_get_backend_for_handle_uses_mapping() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        // Should find backend through mapping
+        let status = registry.get_status(&handle).await;
+        assert!(status.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_backend_for_handle_falls_back_to_handle_name() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+        let backend = Arc::new(TestBackend::new("backend"));
+
+        registry
+            .register_backend("backend".to_string(), backend)
+            .await
+            .unwrap();
+
+        // Create handle without going through submit (no mapping)
+        let handle = ExecutionHandle {
+            id: "manual-handle".to_string(),
+            job_id: "test-job".to_string(),
+            backend_name: "backend".to_string(),
+            handle_type: ExecutionHandleType::Process { pid: 1 },
+            created_at: 0,
+        };
+
+        // Should find backend through handle's backend_name field
+        let result = registry.get_status(&handle).await;
+        // Will fail because execution doesn't exist, but should find backend
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Handle not found"));
+    }
+
+    #[tokio::test]
+    async fn test_submit_job_incompatible_backend_skipped() {
+        let registry = ExecutionRegistry::new(create_registry_config());
+
+        let backend_incompatible = Arc::new(TestBackend::new("incompatible").with_can_handle(false));
+        let backend_compatible = Arc::new(TestBackend::new("compatible"));
+
+        registry
+            .register_backend("incompatible".to_string(), backend_incompatible.clone())
+            .await
+            .unwrap();
+        registry
+            .register_backend("compatible".to_string(), backend_compatible.clone())
+            .await
+            .unwrap();
+
+        let job = create_test_job();
+        let config = create_test_config();
+
+        let handle = registry.submit_job(job, config).await.unwrap();
+
+        assert_eq!(handle.backend_name, "compatible");
+        assert_eq!(backend_incompatible.get_submit_count(), 0);
+        assert_eq!(backend_compatible.get_submit_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_registry_config_clone() {
+        let config1 = RegistryConfig::default();
+        let config2 = config1.clone();
+
+        assert_eq!(config1.placement_policy, config2.placement_policy);
+        assert_eq!(config1.enable_failover, config2.enable_failover);
+        assert_eq!(config1.health_check_interval, config2.health_check_interval);
+        assert_eq!(config1.max_submission_retries, config2.max_submission_retries);
+    }
+}
