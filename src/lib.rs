@@ -25,7 +25,8 @@ pub use config::AppConfig;
 pub mod common;
 
 // Internal modules (used by main binary)
-mod work_queue;
+pub mod work; // New clean architecture implementation
+mod work_queue; // Legacy - to be removed after migration
 mod work_state_machine;
 mod work_item_cache;
 mod persistent_store;
