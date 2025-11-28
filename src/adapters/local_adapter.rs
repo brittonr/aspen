@@ -144,7 +144,7 @@ impl LocalProcessAdapter {
                     cmd_obj.get("program").and_then(|p| p.as_str()),
                     cmd_obj.get("args")
                 ) {
-                    let args_vec = if let Some(args_array) = args.as_array() {
+                    let args_vec = if let Some(args_array) = args.and_then(|a| a.as_array()) {
                         args_array.iter()
                             .filter_map(|a| a.as_str().map(String::from))
                             .collect()

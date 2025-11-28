@@ -41,7 +41,7 @@ impl VmService {
     ///
     /// # Arguments
     /// * `vm_manager` - The underlying VM manager instance (must implement VmManagement)
-    pub fn new<T: VmManagement + 'static>(vm_manager: Arc<T>) -> Self {
+    pub fn new(vm_manager: Arc<dyn VmManagement>) -> Self {
         Self { vm_manager: Some(vm_manager) }
     }
 

@@ -15,19 +15,18 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 
 use super::health_checker::{HealthChecker, HealthCheckConfig};
-use super::job_router::JobRouter;
+use super::job_router::{JobRouter, VmAssignment};
 use super::resource_monitor::ResourceMonitor;
 use super::supervisor::{
     supervised_consistency_checker, supervised_health_checker, supervised_resource_monitor,
     SupervisionStrategy, TaskSupervisor,
 };
-use super::traits::{VmCommandExecutor, VmQueryService, VmState, VmType, VmAssignment, VmInfo, ResourceUsage};
 use super::vm_controller::VmController;
 use super::vm_registry::VmRegistry;
+use super::vm_types::{VmState, VmMode, VmConfig};
 use super::VmManagerConfig;
 use crate::domain::types::Job;
 use crate::hiqlite::HiqliteService;
-use async_trait::async_trait;
 use uuid::Uuid;
 
 /// VmCoordinator orchestrates all VM management components
@@ -246,6 +245,11 @@ impl VmCoordinator {
     }
 }
 
+// The following trait implementations are commented out pending refactoring
+// They depend on types that don't exist yet (VmType, VmInfo, ResourceUsage traits)
+// VmManager only uses the accessor methods above (registry, controller, etc)
+
+/*
 /// Implementation of VmCommandExecutor trait - single point of authority for VM state changes
 #[async_trait]
 impl VmCommandExecutor for VmCoordinator {
@@ -382,3 +386,4 @@ impl VmQueryService for VmCoordinator {
         Ok(ResourceUsage::default())
     }
 }
+*/
