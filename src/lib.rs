@@ -25,15 +25,11 @@ pub use config::AppConfig;
 pub mod common;
 
 // Internal modules (used by main binary)
-pub mod work; // New clean architecture implementation
-mod work_queue; // Legacy - to be removed after migration
+pub mod work; // Clean architecture implementation
 mod work_state_machine;
 mod work_item_cache;
 mod persistent_store;
 mod hiqlite_persistent_store;
-mod work_queue_tests;
-mod work_queue_proptest;
-mod work_queue_distributed_tests;
 mod services;
 mod iroh_service;
 mod iroh_api;

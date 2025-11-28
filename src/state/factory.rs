@@ -25,7 +25,6 @@ use crate::iroh_service::IrohService;
 use crate::repositories::{StateRepository, WorkRepository, WorkerRepository};
 use crate::state::{ConfigState, DomainState, FeaturesState, InfraState};
 use crate::infrastructure::vm::{VmManager, VmManagerConfig, VmManagement};
-use crate::work_queue::WorkQueue;
 use crate::{WorkerBackend, WorkerType};
 
 /// Helper struct to group domain services
@@ -54,7 +53,7 @@ pub struct StateBuilder {
     // Infrastructure components
     iroh: IrohService,
     hiqlite: HiqliteService,
-    work_queue: WorkQueue,
+    node_id: String,
     execution_registry: Arc<ExecutionRegistry>,
 
     // Configuration
@@ -92,7 +91,7 @@ impl StateBuilder {
         let infra = InfraState::new(
             self.iroh,
             self.hiqlite,
-            self.work_queue,
+            self.node_id,
             self.execution_registry,
         );
 
@@ -136,15 +135,6 @@ pub trait InfrastructureFactory: Send + Sync {
         config: &AppConfig,
         endpoint: Endpoint,
     ) -> Result<IrohService>;
-
-    /// Create distributed work queue
-    async fn create_work_queue(
-        &self,
-        config: &AppConfig,
-        endpoint: Endpoint,
-        node_id: String,
-        hiqlite: HiqliteService,
-    ) -> Result<WorkQueue>;
 
     /// Create VM manager for orchestrating microvms
     async fn create_vm_manager(
@@ -195,10 +185,10 @@ pub trait InfrastructureFactory: Send + Sync {
         node_id: String,
     ) -> Result<StateBuilder> {
         // Phase 1: Initialize core infrastructure
-        let (hiqlite, iroh, work_queue) = self.init_infrastructure(
+        let (hiqlite, iroh) = self.init_infrastructure(
             config,
             endpoint.clone(),
-            node_id
+            node_id.clone()
         ).await?;
 
         let hiqlite_arc = Arc::new(hiqlite.clone());
@@ -211,8 +201,7 @@ pub trait InfrastructureFactory: Send + Sync {
 
         // Phase 3: Create repositories
         let (state_repo, work_repo, worker_repo) = self.init_repositories(
-            hiqlite_arc.clone(),
-            work_queue.clone()
+            hiqlite_arc.clone()
         ).await?;
 
         // Phase 4: Initialize domain services
@@ -237,7 +226,7 @@ pub trait InfrastructureFactory: Send + Sync {
             module,
             hiqlite,
             iroh,
-            work_queue,
+            node_id,
             execution_registry,
             services,
             optional_features
@@ -250,7 +239,7 @@ pub trait InfrastructureFactory: Send + Sync {
         config: &AppConfig,
         endpoint: Endpoint,
         node_id: String,
-    ) -> Result<(HiqliteService, IrohService, WorkQueue)> {
+    ) -> Result<(HiqliteService, IrohService)> {
         // Create and initialize Hiqlite database
         let hiqlite = self.create_hiqlite(config).await?;
         hiqlite.initialize_schema().await?;
@@ -258,16 +247,7 @@ pub trait InfrastructureFactory: Send + Sync {
         // Create P2P networking service
         let iroh = self.create_iroh(config, endpoint.clone()).await?;
 
-        // Legacy: Create WorkQueue for backward compatibility (InfraState)
-        // TODO: Remove once InfraState no longer needs WorkQueue
-        let work_queue = self.create_work_queue(
-            config,
-            endpoint,
-            node_id,
-            hiqlite.clone()
-        ).await?;
-
-        Ok((hiqlite, iroh, work_queue))
+        Ok((hiqlite, iroh))
     }
 
     /// Phase 2: Create execution infrastructure (registry and VM manager)
@@ -304,7 +284,6 @@ pub trait InfrastructureFactory: Send + Sync {
     async fn init_repositories(
         &self,
         hiqlite_arc: Arc<HiqliteService>,
-        _work_queue: WorkQueue, // Legacy parameter, kept for InfraState
     ) -> Result<(
         Arc<dyn StateRepository>,
         Arc<dyn WorkRepository>,
@@ -396,7 +375,7 @@ pub trait InfrastructureFactory: Send + Sync {
         module: Option<DeployedModule>,
         hiqlite: HiqliteService,
         iroh: IrohService,
-        work_queue: WorkQueue,
+        node_id: String,
         execution_registry: Arc<ExecutionRegistry>,
         services: DomainServices,
         optional: OptionalFeatures,
@@ -406,7 +385,7 @@ pub trait InfrastructureFactory: Send + Sync {
         Ok(StateBuilder {
             iroh,
             hiqlite,
-            work_queue,
+            node_id,
             execution_registry,
             auth_config,
             module,
@@ -467,17 +446,6 @@ impl InfrastructureFactory for ProductionInfrastructureFactory {
     }
 
     // Legacy method - kept for backward compatibility during migration
-    async fn create_work_queue(
-        &self,
-        _config: &AppConfig,
-        endpoint: Endpoint,
-        node_id: String,
-        hiqlite: HiqliteService,
-    ) -> Result<WorkQueue> {
-        let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite));
-        WorkQueue::new(endpoint, node_id, persistent_store).await
-    }
-
     async fn create_vm_manager(
         &self,
         config: &AppConfig,
@@ -583,18 +551,6 @@ pub mod test_factory {
             // Use temporary test directory for iroh blobs
             let test_path = std::env::temp_dir().join("mvm-ci-test-iroh");
             Ok(IrohService::new(test_path, endpoint))
-        }
-
-        async fn create_work_queue(
-            &self,
-            _config: &AppConfig,
-            endpoint: Endpoint,
-            node_id: String,
-            hiqlite: HiqliteService,
-        ) -> Result<WorkQueue> {
-            // Same as production but with test hiqlite
-            let persistent_store = Arc::new(HiqlitePersistentStore::new(hiqlite));
-            WorkQueue::new(endpoint, node_id, persistent_store).await
         }
 
         async fn create_vm_manager(

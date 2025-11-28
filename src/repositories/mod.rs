@@ -11,7 +11,6 @@ use crate::domain::types::{HealthStatus, Job, JobStatus, QueueStats};
 
 pub mod hiqlite_repository;
 pub mod job_assignment;
-pub mod work_queue_repository;
 pub mod worker;
 
 // Export mocks module for testing (both unit tests and integration tests)
@@ -20,7 +19,6 @@ pub mod mocks;
 // Re-export concrete implementations
 pub use hiqlite_repository::HiqliteStateRepository;
 pub use job_assignment::JobAssignment;
-pub use work_queue_repository::WorkQueueWorkRepository;
 pub use worker::{HiqliteWorkerRepository, WorkerRepository};
 
 /// Repository abstraction for cluster state and database operations

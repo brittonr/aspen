@@ -5,7 +5,7 @@
 //! # State Containers
 //!
 //! - `DomainState` - Core business logic services (most handlers use this)
-//! - `InfraState` - Low-level infrastructure (Iroh, Hiqlite, WorkQueue)
+//! - `InfraState` - Low-level infrastructure (Iroh, Hiqlite)
 //! - `ConfigState` - Static configuration (AuthConfig, DeployedModule)
 //! - `FeaturesState` - Optional feature-gated services (VM, Tofu)
 //!
@@ -28,7 +28,6 @@ use crate::domain::VmService;
 use crate::domain::TofuService;
 use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
-use crate::work_queue::WorkQueue;
 
 // === New focused state containers ===
 pub mod config;
@@ -60,7 +59,7 @@ pub struct AppState {
     module: Option<Arc<DeployedModule>>,
     iroh: IrohService,
     hiqlite: HiqliteService,
-    work_queue: WorkQueue,
+    node_id: String,
     execution_registry: Arc<ExecutionRegistry>,
 
     // === Domain services ===
@@ -85,7 +84,7 @@ impl AppState {
         module: Option<DeployedModule>,
         iroh: IrohService,
         hiqlite: HiqliteService,
-        work_queue: WorkQueue,
+        node_id: String,
         execution_registry: Arc<ExecutionRegistry>,
         cluster_status: Arc<ClusterStatusService>,
         health: Arc<HealthService>,
@@ -102,7 +101,7 @@ impl AppState {
             module: module.map(Arc::new),
             iroh,
             hiqlite,
-            work_queue,
+            node_id,
             execution_registry,
             cluster_status,
             health,
@@ -153,18 +152,11 @@ impl AppState {
         &self.hiqlite
     }
 
-    /// Get the work queue
-    ///
-    /// Internal use only - for startup/display purposes
-    pub(crate) fn work_queue(&self) -> &WorkQueue {
-        &self.work_queue
-    }
-
     /// Get the work queue connection ticket for worker registration
     ///
-    /// This is exposed for startup/display purposes without exposing the full WorkQueue
+    /// This is exposed for startup/display purposes
     pub fn get_work_queue_ticket(&self) -> String {
-        self.work_queue.get_ticket()
+        format!("work-queue://{}", self.node_id)
     }
 
     /// Get the execution registry

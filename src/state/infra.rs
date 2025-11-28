@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::adapters::ExecutionRegistry;
 use crate::hiqlite::HiqliteService;
 use crate::iroh_service::IrohService;
-use crate::work_queue::WorkQueue;
 
 /// Infrastructure services state container
 ///
@@ -24,7 +23,7 @@ use crate::work_queue::WorkQueue;
 pub struct InfraState {
     iroh: IrohService,
     hiqlite: HiqliteService,
-    work_queue: WorkQueue,
+    node_id: String,
     execution_registry: Arc<ExecutionRegistry>,
 }
 
@@ -33,13 +32,13 @@ impl InfraState {
     pub fn new(
         iroh: IrohService,
         hiqlite: HiqliteService,
-        work_queue: WorkQueue,
+        node_id: String,
         execution_registry: Arc<ExecutionRegistry>,
     ) -> Self {
         Self {
             iroh,
             hiqlite,
-            work_queue,
+            node_id,
             execution_registry,
         }
     }
@@ -58,18 +57,16 @@ impl InfraState {
         &self.hiqlite
     }
 
-    /// Get work queue
-    ///
-    /// INTERNAL - for health checks and service initialization only
-    pub(crate) fn work_queue(&self) -> &WorkQueue {
-        &self.work_queue
+    /// Get node ID
+    pub fn node_id(&self) -> &str {
+        &self.node_id
     }
 
     /// Get work queue connection ticket for worker registration
     ///
-    /// This is exposed for startup/display purposes without exposing full WorkQueue
+    /// This is exposed for startup/display purposes
     pub fn work_queue_ticket(&self) -> String {
-        self.work_queue.get_ticket()
+        format!("work-queue://{}", self.node_id)
     }
 
     /// Get execution registry
