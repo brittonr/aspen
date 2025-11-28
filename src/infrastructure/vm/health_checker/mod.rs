@@ -36,6 +36,7 @@ pub mod circuit_breaker;
 pub mod monitor;
 pub mod side_effects;
 pub mod metrics;
+pub mod coordinator;
 
 // Re-export public types
 pub use types::{HealthStatus, StateTransition, SideEffect, CheckResult};
@@ -48,4 +49,4 @@ pub use metrics::HealthStats;
 
 // Re-export the coordinator implementation
 // The coordinator orchestrates all the extracted components
-pub use super::health_checker_old::HealthChecker;
+pub use coordinator::HealthChecker;
