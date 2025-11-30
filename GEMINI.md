@@ -20,7 +20,7 @@ This project is a Rust library crate. You can build and test it using the standa
     ```
 -   **Run Tests:**
     ```bash
-    cargo test
+    cargo nextest run
     ```
 -   **Check for compilation errors without building:**
     ```bash
@@ -84,7 +84,8 @@ Correct error handling keeps the system robust and reliable in all conditions.
 * **Fail fast on programmer errors:** Detect unexpected conditions immediately, stopping faulty code from continuing.
 * **Handle all errors:** Check and handle every error. Ignoring errors can lead to undefined behavior, security issues, or crashes. Write thorough tests for error-handling code to make sure your application works correctly in all cases.
 * **Treat compiler warnings as errors:** Use the strictest compiler settings and treat all warnings as errors. Warnings often point to potential issues that could cause bugs. Fixing them right away improves code quality and reliability.
-* **Avoid implicit defaults:** Explicitly specify options when calling library functions instead of relying on defaults. Implicit defaults can change between library versions or across environments, causing inconsistent behavior. Being explicit improves code clarity and stability.
+*   **Avoid implicit defaults:** Explicitly specify options when calling library functions instead of relying on defaults. Implicit defaults can change between library versions or across environments, causing inconsistent behavior. Being explicit improves code clarity and stability.
+*   **Use property-based testing:** Beyond unit tests, use property-based testing (e.g., `proptest`) to explore edge cases and ensure invariants hold across a wide range of inputs. This increases confidence in correctness and reduces the likelihood of subtle bugs.
 
 ### 2.2. Performance
 

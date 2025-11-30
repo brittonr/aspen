@@ -118,6 +118,20 @@ impl DistributedClient {
     {
         self.hiqlite_client.lock(key).await.map_err(anyhow::Error::from)
     }
+
+    /// Retrieves a distributed state.
+    pub async fn get_state(&self, key: String) -> Result<Option<String>> {
+        let rows = self.hiqlite_client.query_as::<String, _>(
+            "SELECT value FROM state WHERE key = ?",
+            params!(key.clone()),
+        ).await?;
+
+        if let Some(row) = rows.into_iter().next() {
+            Ok(Some(row))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -151,5 +165,21 @@ mod tests {
         let lock = client.get_distributed_lock(lock_key.clone()).await;
         assert!(lock.is_ok());
         // The lock is automatically released when it goes out of scope
+    }
+
+    // Proptests
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn proptest_store_and_get_state(key in "\\PC*", value in "\\PC*") {
+            tokio_test::block_on(async {
+                let client = DistributedClient::new().await.unwrap();
+                client.store_state(key.clone(), value.clone()).await.unwrap();
+                let retrieved_value = client.get_state(key.clone()).await.unwrap();
+                prop_assert_eq!(retrieved_value, Some(value));
+                Ok(())
+            })?
+        }
     }
 }
