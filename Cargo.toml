@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 iroh = "0.95.1"
+iroh-base = "0.95.1"
+iroh-bytes = "0.15.0"
+iroh-docs = "0.95.0"
 hiqlite = { version = "0.11.0", features = ["cache", "dlock"] } # Enabled dlock feature
 hiqlite-macros = "0.11.0"
 strum = "0.27"
