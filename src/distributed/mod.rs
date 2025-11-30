@@ -30,6 +30,11 @@ impl CacheIndex for Cache {
     }
 }
 
+use anyhow::anyhow;
+use portpicker;
+
+// ... (other imports)
+
 impl DistributedClient {
     /// Creates a new `DistributedClient`.
     pub async fn new() -> Result<Self> {
@@ -38,11 +43,15 @@ impl DistributedClient {
 
         // Configure Hiqlite node
         let node_id = 1;
+
+        let api_port = portpicker::pick_unused_port().ok_or_else(|| anyhow!("No unused API port found"))?;
+        let raft_port = portpicker::pick_unused_port().ok_or_else(|| anyhow!("No unused RAFT port found"))?;
+
         let nodes = vec![
             Node {
                 id: 1,
-                addr_api: "127.0.0.1:8101".to_string(),
-                addr_raft: "127.0.0.1:8201".to_string(),
+                addr_api: format!("127.0.0.1:{}", api_port),
+                addr_raft: format!("127.0.0.1:{}", raft_port),
             },
         ];
 
@@ -57,8 +66,8 @@ impl DistributedClient {
         let config = NodeConfig {
             node_id,
             nodes,
-            listen_addr_api: Cow::Borrowed("127.0.0.1:8101"),
-            listen_addr_raft: Cow::Borrowed("127.0.0.1:8201"),
+            listen_addr_api: Cow::Owned(format!("127.0.0.1:{}", api_port)),
+            listen_addr_raft: Cow::Owned(format!("127.0.0.1:{}", raft_port)),
             data_dir: data_dir.into(),
             filename_db: Cow::Borrowed("hiqlite.db"),
             log_statements: false,
@@ -169,17 +178,25 @@ mod tests {
 
     // Proptests
     use proptest::prelude::*;
+    use proptest::test_runner::TestRunner;
 
-    proptest! {
-        #[test]
-        fn proptest_store_and_get_state(key in "\\PC*", value in "\\PC*") {
-            tokio_test::block_on(async {
-                let client = DistributedClient::new().await.unwrap();
+    #[test]
+    fn proptest_store_and_get_state_performance() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = rt.block_on(async {
+            DistributedClient::new().await.unwrap()
+        });
+
+        let mut runner = TestRunner::default();
+        let strategy = any::<(String, String)>();
+
+        runner.run(&strategy, |(key, value)| {
+            rt.block_on(async {
                 client.store_state(key.clone(), value.clone()).await.unwrap();
                 let retrieved_value = client.get_state(key.clone()).await.unwrap();
                 prop_assert_eq!(retrieved_value, Some(value));
                 Ok(())
-            })?
-        }
+            })
+        }).unwrap();
     }
 }
