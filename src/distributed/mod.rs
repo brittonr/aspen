@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use iroh::Endpoint;
-use hiqlite::{Client as Hiqlite, NodeConfig, Node, start_node_with_cache, LogSync};
+use hiqlite::{Client as Hiqlite, NodeConfig, Node, start_node_with_cache, LogSync, Lock};
 use hiqlite_macros::params;
 use strum::EnumIter;
 use hiqlite::cache_idx::CacheIndex;
@@ -110,6 +110,14 @@ impl DistributedClient {
         println!("Storing distributed state: {} = {}", key, value);
         Ok(())
     }
+
+    /// Acquires a distributed lock.
+    pub async fn get_distributed_lock<K>(&self, key: K) -> Result<Lock>
+    where
+        K: Into<Cow<'static, str>>,
+    {
+        self.hiqlite_client.lock(key).await.map_err(anyhow::Error::from)
+    }
 }
 
 #[cfg(test)]
@@ -134,5 +142,14 @@ mod tests {
         let client = DistributedClient::new().await.unwrap();
         let result = client.store_state("test_key".to_string(), "test_value".to_string()).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_distributed_lock() {
+        let client = DistributedClient::new().await.unwrap();
+        let lock_key = "my_test_lock".to_string();
+        let lock = client.get_distributed_lock(lock_key.clone()).await;
+        assert!(lock.is_ok());
+        // The lock is automatically released when it goes out of scope
     }
 }
