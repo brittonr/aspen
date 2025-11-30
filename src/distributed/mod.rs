@@ -1,21 +1,29 @@
 //! This module provides distributed primitives using `iroh` and `hiqlite`.
 //! It aims to handle distributed state and communication for the Aspen project.
 
-use anyhow::Result;
-use iroh::Endpoint;
+use anyhow::{Result, Context, anyhow};
+use iroh::{Endpoint, RelayMode};
+use iroh_base::{EndpointAddr, SecretKey};
+use bytes::Bytes; // From the bytes crate
 use hiqlite::{Client as Hiqlite, NodeConfig, Node, start_node_with_cache, LogSync, Lock};
 use hiqlite_macros::params;
 use strum::EnumIter;
 use hiqlite::cache_idx::CacheIndex;
-use tokio::fs;
+use tokio::{fs, io::{AsyncReadExt, AsyncWriteExt}};
 use std::borrow::Cow;
 use cryptr::EncKeys;
 use uuid::Uuid;
+use portpicker;
+use std::net::SocketAddr; // Keep this for hiqlite Node config
+use rand::thread_rng; // Added for SecretKey::generate()
+
+// A constant ALPN (Application-Layer Protocol Negotiation) string for our protocol.
+const ALPN: &[u8] = b"aspen-example/message/0";
 
 
 /// A client for interacting with the distributed system.
 pub struct DistributedClient {
-    _iroh_node: Endpoint,
+    iroh_node: Endpoint,
     hiqlite_client: Hiqlite,
 }
 
@@ -30,16 +38,18 @@ impl CacheIndex for Cache {
     }
 }
 
-use anyhow::anyhow;
-use portpicker;
-
-// ... (other imports)
-
 impl DistributedClient {
     /// Creates a new `DistributedClient`.
     pub async fn new() -> Result<Self> {
-        // Placeholder for iroh node creation
-        let _iroh_node = Endpoint::bind().await?;
+        // Create iroh node
+        let iroh_secret_key = SecretKey::generate(&mut thread_rng()); // Added &mut thread_rng()
+        let iroh_node = Endpoint::builder()
+            .secret_key(iroh_secret_key)
+            .relay_mode(RelayMode::Default) // Changed to RelayMode::Default
+            .alpns(vec![ALPN.to_vec()])
+            .bind() // Bind to a random available port
+            .await
+            .context("Failed to bind iroh endpoint")?;
 
         // Configure Hiqlite node
         let node_id = 1;
@@ -93,15 +103,32 @@ impl DistributedClient {
         let hiqlite_client = start_node_with_cache::<Cache>(config).await?;
 
         Ok(Self {
-            _iroh_node,
+            iroh_node,
             hiqlite_client,
         })
     }
 
-    /// Placeholder for a distributed communication method.
-    pub async fn send_message(&self, message: String) -> Result<()> {
-        // In a real implementation, this would use iroh for communication
-        println!("Sending distributed message: {}", message);
+    /// Sends a distributed message using iroh.
+    pub async fn send_message(&self, receiver_addr: EndpointAddr, message: String) -> Result<()> {
+        let connection = self.iroh_node
+            .connect(receiver_addr.clone(), ALPN) // Cloned receiver_addr
+            .await
+            .context("Failed to connect to receiver")?;
+
+        let mut send_stream = connection
+            .open_uni()
+            .await
+            .context("Failed to open unidirectional stream")?;
+
+        send_stream
+            .write_all(message.as_bytes())
+            .await
+            .context("Failed to write to stream")?;
+        send_stream
+            .finish()
+            .context("Failed to finish sending message")?; // Removed .await
+
+        println!("Sending distributed message to {}: {}", receiver_addr.id, message); // Changed .id() to .id
         Ok(())
     }
 
@@ -156,8 +183,39 @@ mod tests {
     #[tokio::test]
     async fn test_send_message() {
         let client = DistributedClient::new().await.unwrap();
-        let result = client.send_message("Hello, distributed world!".to_string()).await;
-        assert!(result.is_ok());
+
+        // Create a receiver iroh Endpoint
+        let receiver_secret_key = SecretKey::generate(&mut thread_rng()); // Added &mut thread_rng()
+        let receiver_endpoint = Endpoint::builder()
+            .secret_key(receiver_secret_key)
+            .relay_mode(RelayMode::Default) // Changed to RelayMode::Default
+            .alpns(vec![ALPN.to_vec()])
+            .bind() // Bind to a random available port
+            .await
+            .unwrap();
+
+        let receiver_addr = receiver_endpoint.addr(); // Removed .await and .unwrap()
+
+        let test_message = "Hello, distributed world!".to_string();
+
+        // Send the message
+        let send_result = client.send_message(receiver_addr.clone(), test_message.clone()).await;
+        assert!(send_result.is_ok());
+
+        // Receive the message on the receiver endpoint
+        let received_message = tokio::time::timeout(
+            std::time::Duration::from_secs(5), // Timeout after 5 seconds
+            async {
+                let connection = receiver_endpoint.accept().await.unwrap().await.unwrap();
+                let mut recv_stream = connection.accept_uni().await.unwrap();
+
+                let mut received_message_bytes = Vec::new();
+                recv_stream.read(&mut received_message_bytes).await.unwrap(); // Changed to read
+                String::from_utf8(received_message_bytes).unwrap()
+            },
+        ).await.unwrap();
+
+        assert_eq!(received_message, test_message);
     }
 
     #[tokio::test]

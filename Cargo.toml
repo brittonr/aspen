@@ -6,8 +6,9 @@ edition = "2024"
 [dependencies]
 iroh = "0.95.1"
 iroh-base = "0.95.1"
-iroh-bytes = "0.15.0"
-iroh-docs = "0.95.0"
+iroh-relay = "0.95"
+bytes = "1.7"
+rand = "0.8"
 hiqlite = { version = "0.11.0", features = ["cache", "dlock"] } # Enabled dlock feature
 hiqlite-macros = "0.11.0"
 strum = "0.27"
@@ -22,7 +23,6 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "6.1.0"
 thiserror = "2.0"
-bytes = "1.5"
 portpicker = "0.1" # Moved from dev-dependencies
 
 [dev-dependencies]
