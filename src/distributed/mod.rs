@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 /// A client for interacting with the distributed system.
 pub struct DistributedClient {
-    iroh_node: Endpoint,
+    _iroh_node: Endpoint,
     hiqlite_client: Hiqlite,
 }
 
@@ -34,7 +34,7 @@ impl DistributedClient {
     /// Creates a new `DistributedClient`.
     pub async fn new() -> Result<Self> {
         // Placeholder for iroh node creation
-        let iroh_node = Endpoint::bind().await?;
+        let _iroh_node = Endpoint::bind().await?;
 
         // Configure Hiqlite node
         let node_id = 1;
@@ -84,7 +84,7 @@ impl DistributedClient {
         let hiqlite_client = start_node_with_cache::<Cache>(config).await?;
 
         Ok(Self {
-            iroh_node,
+            _iroh_node,
             hiqlite_client,
         })
     }

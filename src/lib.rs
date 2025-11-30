@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 pub mod orchestration;
 pub mod distributed;
 pub mod traits;
