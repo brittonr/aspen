@@ -23,3 +23,11 @@ Zero technical debt is part of Tiger Style, so commits should be small, intentio
 
 ## Environment & Security Notes
 GEMINI assumes the Nix dev shell plus the pinned Rust channel, so add tools via `nix-shell -p` instead of ad-hoc installs. Keep secrets out of the repo by leaning on local environment overlays. When adjusting dependencies such as `iroh` or `hiqlite`, record rationale in `docs/` and cross-check the upstream resources referenced at the end of GEMINI.
+
+## Ractor Cluster Notes
+We're adopting `ractor` with the `cluster` feature plus `ractor_cluster`/`ractor_actors` so we can host distributed actors. Key reminders:
+- `NodeServer` owns the listener plus the per-peer `NodeSession` actors and is the single entry point to bring a node online. Every host must run one.
+- Nodes authenticate via Erlang-style “magic cookies”; make sure peers share the same cookie before calling `client_connect`/`client_connect_enc`.
+- You can bring your own transport by implementing `ractor_cluster::ClusterBidiStream` and sending it into the node server via `ConnectionOpenedExternal`.
+- Message enums for actors that can be remoted must derive `RactorClusterMessage` (or implement `ractor::Message` + `BytesConvertable` manually) so they serialize across the wire. Use `#[rpc]` on variants that expect replies.
+- `ractor_actors` ships a set of helper actors (watchdog, broadcaster, filewatcher, etc.)—enable only the features you need to keep the dependency surface minimal.
