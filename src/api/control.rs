@@ -8,8 +8,10 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, Result as AnyResult, anyhow};
 use async_trait::async_trait;
+use hiqlite::{Client as HiqliteClient, Error as HiqliteError, Row};
+use hiqlite_macros::params;
 use reqwest::{Client, Response, StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -26,6 +28,9 @@ pub struct ClusterNode {
     pub id: NodeId,
     /// Address (host:port) where the control-plane can reach the node.
     pub addr: String,
+    /// Optional Raft transport address (used by external backends).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raft_addr: Option<String>,
 }
 
 impl ClusterNode {
@@ -34,6 +39,7 @@ impl ClusterNode {
         Self {
             id,
             addr: addr.into(),
+            raft_addr: None,
         }
     }
 }
@@ -305,6 +311,206 @@ impl ExternalControlPlane {
     }
 }
 
+/// Configuration required to connect to a remote Hiqlite cluster.
+#[derive(Debug, Clone)]
+pub struct HiqliteBackendConfig {
+    /// Host:port pairs reachable via the Hiqlite API.
+    pub nodes: Vec<String>,
+    /// Shared API secret used to authenticate HTTP/WebSocket calls.
+    pub api_secret: String,
+    /// Enable TLS for the client transport.
+    pub use_tls: bool,
+    /// Skip TLS certificate verification (useful for local testing only).
+    pub tls_no_verify: bool,
+    /// Whether the provided nodes point to a proxy instance.
+    pub proxy_mode: bool,
+    /// Table used to persist Aspen's key/value entries.
+    pub table: String,
+}
+
+/// Control-plane + KV shim backed by a Hiqlite cluster.
+pub struct HiqliteControlPlane {
+    client: HiqliteClient,
+    table: String,
+    http: Client,
+    api_secret: String,
+    use_tls: bool,
+}
+
+const HIQLITE_SECRET_HEADER: &str = "X-API-SECRET";
+const HIQLITE_CLUSTER_PREFIX: &str = "/cluster";
+const HIQLITE_RAFT_TYPE: &str = "sqlite";
+
+impl HiqliteControlPlane {
+    /// Establish a connection to the Hiqlite cluster and ensure the KV table exists.
+    pub async fn connect(cfg: HiqliteBackendConfig) -> AnyResult<Self> {
+        if cfg.nodes.is_empty() {
+            anyhow::bail!("hiqlite backend requires at least one --hiqlite-node");
+        }
+        let api_secret = cfg.api_secret.clone();
+        let client = HiqliteClient::remote(
+            cfg.nodes.clone(),
+            cfg.use_tls,
+            cfg.tls_no_verify,
+            cfg.api_secret,
+            cfg.proxy_mode,
+        )
+        .await
+        .context("connect to hiqlite cluster")?;
+        client.wait_until_healthy_db().await;
+        let plane = Self {
+            client,
+            table: cfg.table,
+            http: Client::builder()
+                .danger_accept_invalid_certs(cfg.tls_no_verify)
+                .build()
+                .context("build hiqlite http client")?,
+            api_secret,
+            use_tls: cfg.use_tls,
+        };
+        plane
+            .ensure_schema()
+            .await
+            .map_err(|err| anyhow!(err.to_string()))?;
+        Ok(plane)
+    }
+
+    async fn ensure_schema(&self) -> Result<(), ControlPlaneError> {
+        let sql = format!(
+            "CREATE TABLE IF NOT EXISTS {} (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            self.table
+        );
+        self.client
+            .execute(sql, params!())
+            .await
+            .map(|_| ())
+            .map_err(|err| ControlPlaneError::backend(err.to_string()))
+    }
+
+    async fn cluster_state(&self) -> Result<ClusterState, ControlPlaneError> {
+        let metrics = self
+            .client
+            .metrics_db()
+            .await
+            .map_err(|err| ControlPlaneError::backend(err.to_string()))?;
+        let membership = metrics.membership_config.membership().clone();
+        let members = membership.voter_ids().collect::<Vec<_>>();
+        let learners = membership
+            .learner_ids()
+            .filter_map(|learner| {
+                membership.get_node(&learner).map(|node| ClusterNode {
+                    id: learner,
+                    addr: node.addr_api.clone(),
+                    raft_addr: Some(node.addr_raft.clone()),
+                })
+            })
+            .collect::<Vec<_>>();
+        let nodes = membership
+            .nodes()
+            .map(|(id, node)| ClusterNode {
+                id: *id,
+                addr: node.addr_api.clone(),
+                raft_addr: Some(node.addr_raft.clone()),
+            })
+            .collect::<Vec<_>>();
+        Ok(ClusterState {
+            members,
+            learners,
+            nodes,
+        })
+    }
+
+    fn map_kv_error(err: HiqliteError) -> KeyValueStoreError {
+        KeyValueStoreError::Backend {
+            reason: err.to_string(),
+        }
+    }
+
+    fn scheme(&self) -> &'static str {
+        if self.use_tls { "https" } else { "http" }
+    }
+
+    async fn leader_api_addr(&self) -> Result<String, ControlPlaneError> {
+        let metrics = self
+            .client
+            .metrics_db()
+            .await
+            .map_err(|err| ControlPlaneError::backend(err.to_string()))?;
+        let leader = metrics
+            .current_leader
+            .ok_or_else(|| ControlPlaneError::backend("hiqlite cluster has no leader"))?;
+        let membership = metrics.membership_config.membership();
+        let node = membership.get_node(&leader).ok_or_else(|| {
+            ControlPlaneError::backend(format!("leader {leader} missing from hiqlite membership"))
+        })?;
+        Ok(node.addr_api.clone())
+    }
+
+    async fn post_management<B: Serialize>(
+        &self,
+        action: &str,
+        body: &B,
+    ) -> Result<(), ControlPlaneError> {
+        let mut attempts = 0usize;
+        loop {
+            attempts += 1;
+            let leader_addr = self.leader_api_addr().await?;
+            let url = format!(
+                "{}://{}{}/{}/{}",
+                self.scheme(),
+                leader_addr,
+                HIQLITE_CLUSTER_PREFIX,
+                action,
+                HIQLITE_RAFT_TYPE
+            );
+            let resp = self
+                .http
+                .post(&url)
+                .header(HIQLITE_SECRET_HEADER, &self.api_secret)
+                .json(body)
+                .send()
+                .await
+                .map_err(|err| ControlPlaneError::backend(err.to_string()))?;
+            if resp.status().is_success() {
+                return Ok(());
+            }
+            let err = resp
+                .json::<HiqliteError>()
+                .await
+                .map_err(|err| ControlPlaneError::backend(err.to_string()))?;
+            if err.is_forward_to_leader().is_some() && attempts < 5 {
+                continue;
+            }
+            return Err(ControlPlaneError::backend(err.to_string()));
+        }
+    }
+
+    fn parse_hiqlite_addrs(node: &ClusterNode) -> Result<(String, String), ControlPlaneError> {
+        let raft = node.raft_addr.clone().ok_or_else(|| {
+            ControlPlaneError::invalid(
+                "hiqlite backend requires `learner.raft_addr` (host:port) to be set",
+            )
+        })?;
+        Ok((node.addr.clone(), raft))
+    }
+}
+
+struct ValueRow(String);
+
+impl<'r> From<Row<'r>> for ValueRow {
+    fn from(mut row: Row<'r>) -> Self {
+        let value: String = row.get("value");
+        Self(value)
+    }
+}
+
+#[derive(Serialize)]
+struct HiqliteLearnerReq {
+    node_id: u64,
+    addr_api: String,
+    addr_raft: String,
+}
+
 #[async_trait]
 impl ClusterController for InMemoryControlPlane {
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
@@ -433,6 +639,78 @@ impl KeyValueStore for ExternalControlPlane {
                 }
                 ControlPlaneError::Backend { reason } => KeyValueStoreError::Backend { reason },
             })
+    }
+}
+
+#[async_trait]
+impl ClusterController for HiqliteControlPlane {
+    async fn init(&self, _request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+        self.client.wait_until_healthy_db().await;
+        self.cluster_state().await
+    }
+
+    async fn add_learner(
+        &self,
+        request: AddLearnerRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        let (addr_api, addr_raft) = Self::parse_hiqlite_addrs(&request.learner)?;
+        let payload = HiqliteLearnerReq {
+            node_id: request.learner.id,
+            addr_api,
+            addr_raft,
+        };
+        self.post_management("add_learner", &payload).await?;
+        self.cluster_state().await
+    }
+
+    async fn change_membership(
+        &self,
+        request: ChangeMembershipRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        self.post_management("membership", &request.members).await?;
+        self.cluster_state().await
+    }
+
+    async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+        self.cluster_state().await
+    }
+}
+
+#[async_trait]
+impl KeyValueStore for HiqliteControlPlane {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        match request.command {
+            WriteCommand::Set { key, value } => {
+                let sql = format!(
+                    "INSERT INTO {} (key, value) VALUES ($1, $2) \
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    self.table
+                );
+                self.client
+                    .execute(sql, params!(key.clone(), value.clone()))
+                    .await
+                    .map_err(Self::map_kv_error)?;
+                Ok(WriteResult {
+                    command: WriteCommand::Set { key, value },
+                })
+            }
+        }
+    }
+
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        let sql = format!("SELECT value FROM {} WHERE key = $1", self.table);
+        let row: Option<ValueRow> = self
+            .client
+            .query_map_optional(sql, params!(request.key.clone()))
+            .await
+            .map_err(Self::map_kv_error)?;
+        match row {
+            Some(ValueRow(value)) => Ok(ReadResult {
+                key: request.key,
+                value,
+            }),
+            None => Err(KeyValueStoreError::NotFound { key: request.key }),
+        }
     }
 }
 

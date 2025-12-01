@@ -22,8 +22,8 @@ use tracing::{error, info, warn};
 use aspen::StorageSurface;
 use aspen::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
-    ExternalControlPlane, InMemoryControlPlane, InitRequest, KeyValueStore, KeyValueStoreError,
-    ReadRequest, WriteRequest,
+    ExternalControlPlane, HiqliteBackendConfig, HiqliteControlPlane, InMemoryControlPlane,
+    InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, WriteRequest,
 };
 use aspen::cluster::{
     DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
@@ -85,6 +85,30 @@ struct Cli {
     #[arg(long, default_value_t = 5)]
     backend_timeout_secs: u64,
 
+    /// Host:port of a Hiqlite node (repeat to provide multiple nodes).
+    #[arg(long = "hiqlite-node", value_name = "HOST:PORT")]
+    hiqlite_nodes: Vec<String>,
+
+    /// API secret expected by the remote Hiqlite nodes.
+    #[arg(long)]
+    hiqlite_api_secret: Option<String>,
+
+    /// Enable TLS when talking to Hiqlite nodes.
+    #[arg(long, default_value_t = false)]
+    hiqlite_tls: bool,
+
+    /// Disable TLS certificate verification for Hiqlite connections.
+    #[arg(long, default_value_t = false)]
+    hiqlite_tls_no_verify: bool,
+
+    /// Indicates that the provided Hiqlite nodes are proxy instances.
+    #[arg(long, default_value_t = false)]
+    hiqlite_proxy_mode: bool,
+
+    /// Table used inside Hiqlite for Aspen's key/value store.
+    #[arg(long, default_value = "aspen_kv")]
+    hiqlite_table: String,
+
     /// Enable Iroh transport for cluster actor traffic.
     #[arg(long)]
     enable_iroh: bool,
@@ -107,6 +131,7 @@ enum ControlBackend {
     #[value(name = "in-memory")]
     InMemory,
     External,
+    Hiqlite,
 }
 
 fn parse_endpoint_addr_str(input: &str) -> anyhow::Result<EndpointAddr> {
@@ -270,6 +295,26 @@ async fn main() -> anyhow::Result<()> {
                 let plane = Arc::new(
                     ExternalControlPlane::new(url, Duration::from_secs(cli.backend_timeout_secs))
                         .context("build external backend client")?,
+                );
+                (plane.clone(), plane)
+            }
+            ControlBackend::Hiqlite => {
+                let api_secret = cli
+                    .hiqlite_api_secret
+                    .clone()
+                    .context("hiqlite backend requires --hiqlite-api-secret")?;
+                let config = HiqliteBackendConfig {
+                    nodes: cli.hiqlite_nodes.clone(),
+                    api_secret,
+                    use_tls: cli.hiqlite_tls,
+                    tls_no_verify: cli.hiqlite_tls_no_verify,
+                    proxy_mode: cli.hiqlite_proxy_mode,
+                    table: cli.hiqlite_table.clone(),
+                };
+                let plane = Arc::new(
+                    HiqliteControlPlane::connect(config)
+                        .await
+                        .context("connect hiqlite backend")?,
                 );
                 (plane.clone(), plane)
             }

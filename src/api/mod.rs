@@ -19,8 +19,9 @@ use crate::storage::StorageSurface;
 pub mod control;
 pub use control::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, ExternalControlPlane, InMemoryControlPlane, InitRequest, KeyValueStore,
-    KeyValueStoreError, NodeId, ReadRequest, ReadResult, WriteCommand, WriteRequest, WriteResult,
+    ControlPlaneError, ExternalControlPlane, HiqliteBackendConfig, HiqliteControlPlane,
+    InMemoryControlPlane, InitRequest, KeyValueStore, KeyValueStoreError, NodeId, ReadRequest,
+    ReadResult, WriteCommand, WriteRequest, WriteResult,
 };
 
 /// High-level API surface describing how future handlers gain access to cluster state.
