@@ -140,3 +140,30 @@ Every node must run `aspen-node` with the same `--cookie` value and a unique
 `--id`. The HTTP listener defaults to `127.0.0.1:21001` unless overridden.
 Cluster namespaces (e.g. `--cluster-namespace aspen::primary`) are surfaced in
 `/metrics` so operators can correlate metrics with backend logs.
+
+## Iroh Transport (Experimental)
+
+`aspen-node` can remap the actor cluster traffic onto [`iroh`](https://iroh.computer)
+instead of the default TCP sockets. Launch nodes with:
+
+```
+aspen-node \
+  --enable-iroh \
+  --iroh-secret-hex <64-hex-bytes> \
+  --iroh-endpoint-file /tmp/node1.iroh.json \
+  --iroh-peer <peer-endpoint-id-or-json>
+```
+
+Key notes:
+
+- `--iroh-secret-hex` makes the EndpointId deterministic (32-byte ed25519 secret
+  encoded as hex). If omitted, a random key is generated per run.
+- `--iroh-endpoint-file` dumps the current EndpointId plus any discovered relay/IP
+  addresses as JSON so automation can read the value without scraping logs.
+- Each `--iroh-peer` may be a plain EndpointId (`<hex>`) or a JSON-serialized
+  `EndpointAddr`. Nodes connect to those peers after their endpoint reports
+  `online`.
+
+The CLI will dial the configured peers and feed the resulting QUIC streams into
+`NodeServer` via the external transport hook, letting ractor actors communicate
+over QUIC/relay links without touching the built-in control-plane protocol.

@@ -23,6 +23,9 @@ use ractor_cluster::{
     ClusterBidiStream, IncomingEncryptionMode, NodeEventSubscription, NodeServer, NodeServerMessage,
 };
 
+pub mod iroh;
+pub use iroh::{IrohClusterConfig, IrohClusterTransport};
+
 /// Deterministic knobs used when running under `madsim`/turmoil.
 #[derive(Debug, Clone, Default)]
 pub struct DeterministicClusterConfig {
@@ -215,7 +218,7 @@ mod tests {
         pub enum DummyMessage {
             Ping,
             #[allow(dead_code)]
-            Echo(crate::storage::StorageSurface),
+            Echo(u64),
         }
     }
 

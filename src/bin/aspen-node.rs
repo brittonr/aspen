@@ -1,15 +1,18 @@
+use std::fs;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::{Parser, ValueEnum};
+use iroh::{EndpointAddr, EndpointId, SecretKey};
 use reqwest::Url;
 use serde::Serialize;
 use serde_json::json;
@@ -22,7 +25,9 @@ use aspen::api::{
     ExternalControlPlane, InMemoryControlPlane, InitRequest, KeyValueStore, KeyValueStoreError,
     ReadRequest, WriteRequest,
 };
-use aspen::cluster::{DeterministicClusterConfig, NodeServerConfig};
+use aspen::cluster::{
+    DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
+};
 use aspen::raft::{LocalRaftFactory, RaftActorFactory, RaftActorMessage, RaftNodeSpec};
 use aspen::storage::StoragePlan;
 use openraft::Config;
@@ -77,6 +82,22 @@ struct Cli {
     /// Timeout (in seconds) for backend HTTP requests.
     #[arg(long, default_value_t = 5)]
     backend_timeout_secs: u64,
+
+    /// Enable Iroh transport for cluster actor traffic.
+    #[arg(long)]
+    enable_iroh: bool,
+
+    /// Peer EndpointAddrs (EndpointId or JSON) to connect to when Iroh transport is enabled.
+    #[arg(long = "iroh-peer")]
+    iroh_peers: Vec<String>,
+
+    /// Hex-encoded 32-byte Iroh secret key (for deterministic EndpointIds).
+    #[arg(long)]
+    iroh_secret_hex: Option<String>,
+
+    /// File to write the local Iroh endpoint info (JSON) once online.
+    #[arg(long)]
+    iroh_endpoint_file: Option<PathBuf>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -84,6 +105,42 @@ enum ControlBackend {
     #[value(name = "in-memory")]
     InMemory,
     External,
+}
+
+fn parse_endpoint_addr_str(input: &str) -> anyhow::Result<EndpointAddr> {
+    if let Ok(id) = EndpointId::from_str(input) {
+        return Ok(EndpointAddr::from(id));
+    }
+    serde_json::from_str(input)
+        .map_err(|err| anyhow!("failed to parse EndpointAddr from '{input}': {err}"))
+}
+
+fn parse_secret_key_hex(input: &str) -> anyhow::Result<SecretKey> {
+    let hex = input.trim_start_matches("0x");
+    let bytes =
+        hex::decode(hex).map_err(|err| anyhow!("invalid iroh secret hex '{input}': {err}"))?;
+    let array: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| anyhow!("iroh secret hex '{input}' must decode to 32 bytes"))?;
+    Ok(SecretKey::from_bytes(&array))
+}
+
+fn write_iroh_endpoint_file(path: &Path, transport: &IrohClusterTransport) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("create dir {}", parent.display()))?;
+        }
+    }
+    let addr = transport.endpoint_addr();
+    let info = json!({
+        "endpoint_id": addr.id.to_string(),
+        "relay_urls": addr.relay_urls().map(|r| r.to_string()).collect::<Vec<_>>(),
+        "ip_addrs": addr.ip_addrs().map(|ip| ip.to_string()).collect::<Vec<_>>(),
+    });
+    let data = serde_json::to_vec_pretty(&info)?;
+    fs::write(path, data).with_context(|| format!("write {}", path.display()))?;
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -145,6 +202,39 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("spawn Raft actor")?;
 
+    let mut iroh_transport: Option<IrohClusterTransport> = None;
+    if cli.enable_iroh {
+        let mut iroh_cfg = IrohClusterConfig::default();
+        if let Some(secret_hex) = &cli.iroh_secret_hex {
+            let key = parse_secret_key_hex(secret_hex)?;
+            iroh_cfg.secret_key = Some(key);
+        }
+        let transport = IrohClusterTransport::spawn(&node_server, iroh_cfg)
+            .await
+            .context("launch iroh cluster transport")?;
+        transport.wait_until_online().await;
+        info!(
+            endpoint = ?transport.endpoint_addr(),
+            "iroh transport online"
+        );
+        if let Some(path) = &cli.iroh_endpoint_file {
+            write_iroh_endpoint_file(path, &transport)?;
+        }
+        for peer in &cli.iroh_peers {
+            match parse_endpoint_addr_str(peer) {
+                Ok(addr) => {
+                    if let Err(err) = transport.connect(addr).await {
+                        warn!(peer = peer, error = %err, "failed to connect to iroh peer");
+                    } else {
+                        info!(peer = peer, "connected to iroh peer");
+                    }
+                }
+                Err(err) => warn!(peer = peer, error = %err, "invalid iroh peer address"),
+            }
+        }
+        iroh_transport = Some(transport);
+    }
+
     let (controller, kv): (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) =
         match cli.control_backend {
             ControlBackend::InMemory => {
@@ -205,6 +295,12 @@ async fn main() -> anyhow::Result<()> {
 
     info!("shutting down raft actor and NodeServer");
     state.raft.stop(None);
+    if let Some(transport) = iroh_transport {
+        transport
+            .shutdown()
+            .await
+            .context("shutdown iroh transport")?;
+    }
     node_server
         .shutdown()
         .await
