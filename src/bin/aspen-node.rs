@@ -33,6 +33,8 @@ use aspen::storage::StoragePlan;
 use openraft::Config;
 use ractor::ActorRef;
 
+const IROH_ONLINE_TIMEOUT_SECS: u64 = 5;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "aspen-node",
@@ -212,13 +214,31 @@ async fn main() -> anyhow::Result<()> {
         let transport = IrohClusterTransport::spawn(&node_server, iroh_cfg)
             .await
             .context("launch iroh cluster transport")?;
-        transport.wait_until_online().await;
-        info!(
-            endpoint = ?transport.endpoint_addr(),
-            "iroh transport online"
-        );
         if let Some(path) = &cli.iroh_endpoint_file {
             write_iroh_endpoint_file(path, &transport)?;
+        }
+        let wait_result = tokio::time::timeout(
+            Duration::from_secs(IROH_ONLINE_TIMEOUT_SECS),
+            transport.wait_until_online(),
+        )
+        .await;
+        match wait_result {
+            Ok(_) => {
+                info!(
+                    endpoint = ?transport.endpoint_addr(),
+                    "iroh transport online"
+                );
+                if let Some(path) = &cli.iroh_endpoint_file {
+                    write_iroh_endpoint_file(path, &transport)?;
+                }
+            }
+            Err(_) => {
+                warn!(
+                    timeout_secs = IROH_ONLINE_TIMEOUT_SECS,
+                    endpoint = ?transport.endpoint_addr(),
+                    "iroh transport did not signal online before timeout; continuing without waiting"
+                );
+            }
         }
         for peer in &cli.iroh_peers {
             match parse_endpoint_addr_str(peer) {
