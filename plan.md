@@ -13,10 +13,13 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 ## Phase 2: Raft Integration
 1. **Storage backend** (in progress)
    - Created `storage::log` + `storage::state_machine` modules with deterministic in-memory backends and proptest seams so we can validate ordering/snapshot invariants.
-   - Next action: swap in the redb-backed engine and run `openraft::testing::Suite::test_all` against both the persistent and deterministic implementations.
+   - Added `redb`-backed implementations plus `StoragePlan` wiring so nodes can flip between deterministic and persistent surfaces.
+   - Next action: **defer** running the OpenRaft storage suite until the external Raft/DB plan solidifies. Aspen will keep using the in-memory handles via the HTTP façade while the real log/state machine live in a sibling service.
 2. **Raft actor** (in progress)
    - Added a placeholder Raft actor/factory that already wires into the NodeServer handle + `StorageSurface`, keeping the transport seams deterministic for `madsim`.
-   - Next action: wrap `openraft::Raft<TypeConfig>` inside this actor, expose the real RPC/message set, and plug property tests + simulator harnesses into the control flow.
+   - Added the `aspen-node` bootstrap binary plus HTTP endpoints (`/health`, `/metrics`, `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`) so we can drive multi-node scripts similar to the OpenRaft example.
+   - Added `scripts/aspen-cluster-smoke.sh` and `docs/cluster-smoke.md` so we can spin up five nodes locally and hit the HTTP API the same way the upstream OpenRaft script does; the handlers now depend on trait-based control-plane/key-value interfaces and can proxy to an external Raft service.
+   - Next action: implement the real external Raft/DB bridge behind those traits (replacing the in-crate in-memory stub) and document how to point `aspen-node` at that service in automation/CI.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**
