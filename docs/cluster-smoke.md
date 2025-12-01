@@ -21,6 +21,16 @@ with `jq` if it is installed. Because the current Raft actor is still a stub,
 the HTTP API updates in-memory state only; once the OpenRaft integration lands,
 the same script will drive a real replicated cluster.
 
+### Hiqlite backend
+
+Run `scripts/aspen-hiqlite-smoke.sh` to spin up a three-node local Hiqlite
+cluster (via `run-hiqlite-cluster.sh`), point the smoke harness at
+`--control-backend hiqlite`, and exercise the HTTP workflow against the real
+backend. Logs for the temporary Hiqlite nodes are stored at
+`target/hiqlite-smoke.log`. The base smoke script forwards any extra CLI
+arguments to each `aspen-node`, so other backends can be tested by passing
+flags directly to `scripts/aspen-cluster-smoke.sh`.
+
 ## HTTP Contract
 
 `aspen-node` exposes a small control-plane shim that will eventually forward to
@@ -58,6 +68,13 @@ controller stub.
   }
 }
 ```
+
+### `GET /iroh-metrics`
+
+Exposes the raw OpenMetrics text collected from the optional Iroh transport.
+The route returns `404` when `--enable-iroh` is not supplied. Use it to check
+`magicsock_*` counters during smoke tests or to feed the values into a local
+Prometheus scrape target.
 
 ### `POST /init`
 

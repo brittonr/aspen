@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$ROOT/target/debug/aspen-node"
+EXTRA_NODE_ARGS=("$@")
+
+if (( ${#EXTRA_NODE_ARGS[@]} > 0 )); then
+    echo "Forwarding extra aspen-node args: ${EXTRA_NODE_ARGS[*]}"
+fi
 
 rpc() {
     local uri=$1
@@ -117,6 +122,9 @@ start_node() {
         --iroh-secret-hex "$secret"
         --iroh-endpoint-file "$endpoint_file"
     )
+    if (( ${#EXTRA_NODE_ARGS[@]} > 0 )); then
+        cmd+=("${EXTRA_NODE_ARGS[@]}")
+    fi
     for peer in "${peers[@]}"; do
         cmd+=(--iroh-peer "$peer")
     done

@@ -23,7 +23,9 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Added a `netwatch` devshell tool (built from `n0-computer/net-tools`) so we can observe interface churn and confirm which adapters carry Iroh traffic during local testing.
    - Control backend now supports Hiqlite via `--control-backend hiqlite`, wiring `/write`/`/read` into a replicated SQLite table through the upstream client, reflecting live membership from the Hiqlite metrics surface, and forwarding `/add-learner`/`/change-membership` to the real cluster management APIs (expecting `raft_addr` metadata per node).
    - `scripts/run-hiqlite-cluster.sh` provisions a 3-node local Hiqlite cluster (build + configs + lifecycle) and we validate the entire flow by running it alongside `scripts/aspen-cluster-smoke.sh` to ensure the default control-plane smoke test still passes.
-   - Next action: capture a deterministic `madsim` scenario that exercises the Hiqlite-backed HTTP workflow so CI covers it without relying on best-effort shell scripts, then layer `iroh-metrics` exporters on top (using the new `netwatch` binary for manual diagnostics) to assert transport health in automation.
+   - `scripts/aspen-hiqlite-smoke.sh` now orchestrates the local Hiqlite cluster and reuses the smoke harness with `--control-backend hiqlite`, while `scripts/aspen-cluster-smoke.sh` forwards arbitrary CLI args so additional backends can be validated without editing the script.
+   - Added `tests/hiqlite_flow.rs`, a deterministic `madsim` scenario that replays the Hiqlite membership/write flow (including learner promotion) and asserts that the Iroh transport exports healthy counters via the new `/iroh-metrics` endpoint wiring.
+   - Next action: extend the deterministic scenario to exercise failure injection (leader churn + network delays) and publish the captured seeds/logs alongside CI artifacts so regressions can be replayed automatically.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**

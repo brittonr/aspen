@@ -2,17 +2,19 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::{Context, anyhow};
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::header::CONTENT_TYPE;
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::{Parser, ValueEnum};
 use iroh::{EndpointAddr, EndpointId, SecretKey};
+use iroh_metrics::{MetricsSource, Registry};
 use reqwest::Url;
 use serde::Serialize;
 use serde_json::json;
@@ -178,6 +180,7 @@ struct AppState {
     raft: ActorRef<RaftActorMessage>,
     controller: Arc<dyn ClusterController>,
     kv: Arc<dyn KeyValueStore>,
+    iroh_metrics: Option<Arc<RwLock<Registry>>>,
 }
 
 #[derive(Serialize)]
@@ -230,6 +233,7 @@ async fn main() -> anyhow::Result<()> {
             .context("spawn Raft actor")?;
 
     let mut iroh_transport: Option<IrohClusterTransport> = None;
+    let mut iroh_metrics_registry: Option<Arc<RwLock<Registry>>> = None;
     if cli.enable_iroh {
         let mut iroh_cfg = IrohClusterConfig::default();
         if let Some(secret_hex) = &cli.iroh_secret_hex {
@@ -239,6 +243,14 @@ async fn main() -> anyhow::Result<()> {
         let transport = IrohClusterTransport::spawn(&node_server, iroh_cfg)
             .await
             .context("launch iroh cluster transport")?;
+        let registry = Arc::new(RwLock::new(Registry::default()));
+        {
+            let mut guard = registry
+                .write()
+                .expect("iroh metrics registry poisoned during init");
+            guard.register_all(transport.endpoint().metrics());
+        }
+        iroh_metrics_registry = Some(registry);
         if let Some(path) = &cli.iroh_endpoint_file {
             write_iroh_endpoint_file(path, &transport)?;
         }
@@ -327,12 +339,14 @@ async fn main() -> anyhow::Result<()> {
         raft: raft_actor,
         controller,
         kv,
+        iroh_metrics: iroh_metrics_registry,
     };
 
     let router_state = state.clone();
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
+        .route("/iroh-metrics", get(iroh_metrics_handler))
         .route("/init", post(init_cluster))
         .route("/add-learner", post(add_learner))
         .route("/change-membership", post(change_membership))
@@ -402,6 +416,37 @@ async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
         cluster_state,
     };
     Json(body).into_response()
+}
+
+#[tracing::instrument(skip(state))]
+async fn iroh_metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match &state.iroh_metrics {
+        Some(registry) => match registry.read() {
+            Ok(registry) => match registry.encode_openmetrics_to_string() {
+                Ok(body) => (
+                    StatusCode::OK,
+                    [(
+                        CONTENT_TYPE,
+                        HeaderValue::from_static("text/plain; version=0.0.4"),
+                    )],
+                    body,
+                )
+                    .into_response(),
+                Err(err) => {
+                    error!(error = %err, "failed to encode iroh metrics");
+                    error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "unable to encode iroh metrics",
+                    )
+                }
+            },
+            Err(_) => error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "iroh metrics registry lock poisoned",
+            ),
+        },
+        None => error_response(StatusCode::NOT_FOUND, "iroh transport not enabled"),
+    }
 }
 
 #[tracing::instrument(skip(state, body))]
