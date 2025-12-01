@@ -1,24 +1,41 @@
-# Project Aspen - KV Module Implementation Plan
+# Aspen Reboot Plan
 
-## Current Progress:
+We wiped the previous modules to rebuild Aspen around a clean architecture that ties `openraft` into a `ractor` cluster using `iroh`/`irpc` transport. All cluster orchestration will run inside `ractor_cluster::NodeServer` instances so actors can be remoted across hosts. The milestones below describe how we get from an empty crate to a functioning distributed KV core again.
 
--   **Module rebuild:** Re-created the `src/kv` module with fresh `api`, `error`, `network`, `node`, `store`, and `types` files to give the project a clean, compiling baseline.
--   **`kv/types.rs`:** Declares the OpenRaft `TypeConfig`, plus the `Request`/`Response` enums used by the state machine.
--   **`kv/store.rs`:** Implements `KvLogStore` and `KvStateMachine` backed by `redb`, completes `RaftLogStorage`, `RaftLogReader`, `RaftStateMachine`, and `RaftSnapshotBuilder`, and exposes a simple unit test to keep serialization honest.
--   **`kv/api.rs`:** Provides helper functions for `set`, `delete`, and linearizable `get` operations that wire directly into OpenRaft.
--   **`kv/node.rs`:** Introduces `KvNode::start` to bootstrap a Raft instance with the new storage and a placeholder `KvNetworkFactory`.
--   **`kv/network.rs`:** Implements an actual iroh-backed transport with a Router-based server, framed request/response encoding, and peer registration utilities so Raft RPCs can flow between nodes.
--   **Dependencies:** Added OpenRaft, `redb`, `snafu`, `irpc`, and the testing crates back into `Cargo.toml` so the module can build in isolation once dependencies are fetched.
--   **Property-based tests:** Added `proptest` suites for `KvStateMachine::apply`, covering mixed workloads plus focused idempotent-set and delete semantics to protect the core invariants.
--   **Deterministic cluster harness:** Introduced `tests/kv_cluster.rs` with a `mad-turmoil` seeded router that exercises leader election, replication, and partition healing across three-node clusters.
--   **Txn/lease/watch logic:** Extended `kv/types.rs` and the state machine so Raft entries can encode multi-op transactions, lease lifecycle management, and watch registrations with bounded event queues, plus unit tests recognizing the new invariants.
--   **Crate integration:** Added a crate-level `error` module that wraps `kv::error::Error`, re-exported `KvNode`/`KvClient` from `lib.rs`, and converted `KvNode::start` to surface the unified `aspen::Error` so other modules can rely on a single result type.
--   **Service harness:** Implemented `KvServiceBuilder`/`KvService` to translate config inputs into `KvNode::start`, auto-register peers, and hand back a `KvClient`, plus an `examples/kv_service.rs` entry point that uses env vars to spin up a node.
--   **Harness adoption:** Added `tests/kv_service_smoke.rs` to boot a single node via the builder and exercise CRUD + txn flows, and documented the `ASPEN_KV_*` env contract in `docs/kv-service.md` for operator scripts.
--   **Cluster bootstrap experiments:** Updated `tests/kv_cluster.rs` to follow the OpenRaft docs flow (single-node init ➜ `add_learner` for each follower ➜ `change_membership`). The new sequence still times out because the second learner never finishes replicating; next work focuses on fixing the test network / replication so `cargo nextest run kv_cluster_` passes.
+## Phase 1: Core Building Blocks
+1. **Define crate boundaries**
+   - Sketch the top-level modules (`cluster`, `raft`, `storage`, `api`).
+   - Add skeletal files with doc-comments describing the responsibilities and dependencies (e.g., `cluster` depends on `ractor_cluster` + `iroh::Endpoint`).
+2. **Actor primitives**
+   - Implement a thin wrapper around `NodeServer` that configures magic-cookie auth and exposes a typed API for launching local actors.
+   - Provide helpers for encoding/decoding messages (derive `RactorClusterMessage`, prost helpers, etc.).
 
-## Next Steps:
+## Phase 2: Raft Integration
+1. **Storage backend**
+   - Reintroduce the `redb`-backed log/state machine from the old repo but split into `storage::log` and `storage::state_machine` modules with unit tests.
+   - Run `openraft::testing::Suite::test_all` to validate the implementation in isolation.
+2. **Raft actor**
+   - Wrap `openraft::Raft<TypeConfig>` in a `ractor` actor that owns storage + network handles.
+   - Expose RPC-oriented messages (`ClientWrite`, `ReadState`) plus lifecycle commands (`JoinCluster`, `InstallSnapshot`).
 
-1.  **Stabilize deterministic cluster tests:**
-    *   Investigate why the second learner never catches up (inspect `TestRouter`/`TestNetwork` wiring, ensure replication RPCs reach the learner, and add instrumentation around `add_learner`/`change_membership`).
-    *   Once replication succeeds, rerun `cargo nextest run kv_cluster_`, integrate the service harness into the cluster tests, and document a three-node walkthrough in `docs/kv-service.md`.
+## Phase 3: Network Fabric
+1. **IROH + IRPC transport**
+   - Build an `irpc` service that exposes the Raft RPC surface (AppendEntries, Vote, InstallSnapshot) over `iroh` sessions.
+   - Implement `RaftNetworkFactory` using the new `irpc` client and plug it into the Raft actor.
+2. **External transports**
+   - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
+
+## Phase 4: Cluster Services
+1. **Bootstrap orchestration**
+   - Write a `cluster::bootstrap` module that spins up a `NodeServer`, launches a Raft actor, and registers it with the cluster metadata store.
+   - Provide CLI/Config parsing for node IDs, data directories, and peer endpoints.
+2. **Client + API**
+   - Recreate the KV API (`set`, `get`, `txn`) but go through a `ractor` client actor that forwards to the Raft actor.
+   - Add smoke tests using `cargo nextest` that bring up two nodes via the new cluster harness.
+
+## Phase 5: Documentation & Hardening
+1. **Docs**
+   - Update `AGENTS.md`/`docs/` with a getting-started guide for the ractor-based stack (magic cookies, transport options).
+2. **Testing & Tooling**
+   - Reintroduce deterministic simulations (madsim) that exercise leader election, failover, and network partitions over the new transport layer.
+   - Ensure CI covers storage suites, actor unit tests, and integration runs via `cargo nextest`.
