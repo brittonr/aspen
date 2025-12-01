@@ -1,6 +1,7 @@
-#![deny(warnings)]
+pub mod error;
+pub mod kv;
 
-pub mod orchestration;
-pub mod distributed;
-pub mod traits;
-pub mod types;
+pub use error::{Error, Result};
+pub use kv::client::KvClient;
+pub use kv::node::KvNode;
+pub use kv::service::{KvService, KvServiceBuilder};

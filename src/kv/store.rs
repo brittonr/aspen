@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::Cursor;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -11,7 +11,8 @@ use openraft::{
     Entry, EntryPayload, LogId, LogState, OptionalSend, RaftTypeConfig, Snapshot, SnapshotMeta,
     StorageError, StorageIOError, StoredMembership, Vote,
 };
-use redb::{Database, ReadableTable, TableDefinition};
+use redb::{Database, ReadableTable, Table, TableDefinition};
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::kv::error::Error;
@@ -27,8 +28,70 @@ fn sto(err: StorageIOError<NodeIdOf>) -> StorageError<NodeIdOf> {
 const LOG_TABLE: TableDefinition<u64, Vec<u8>> = TableDefinition::new("raft_log");
 const META_TABLE: TableDefinition<&str, Vec<u8>> = TableDefinition::new("raft_meta");
 const STATE_TABLE: TableDefinition<&str, Vec<u8>> = TableDefinition::new("state_machine");
+const LEASE_TABLE: TableDefinition<u64, Vec<u8>> = TableDefinition::new("leases");
+const LEASE_INDEX_TABLE: TableDefinition<&str, u64> = TableDefinition::new("lease_index");
+const WATCH_TABLE: TableDefinition<u64, Vec<u8>> = TableDefinition::new("watches");
 
 type StoResult<T> = Result<T, StorageError<NodeIdOf>>;
+const TXN_MAX_OPERATIONS: usize = 64;
+const WATCH_QUEUE_LIMIT: usize = 128;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredWatch {
+    watch_id: u64,
+    key: String,
+    prefix: bool,
+    events: VecDeque<types::WatchEvent>,
+}
+
+impl StoredWatch {
+    fn new(watch_id: u64, key: String, prefix: bool) -> Self {
+        Self {
+            watch_id,
+            key,
+            prefix,
+            events: VecDeque::new(),
+        }
+    }
+
+    fn matches(&self, candidate: &str) -> bool {
+        if self.prefix {
+            candidate.starts_with(&self.key)
+        } else {
+            candidate == self.key
+        }
+    }
+
+    fn push_event(&mut self, event: types::WatchEvent) {
+        if self.events.len() >= WATCH_QUEUE_LIMIT {
+            self.events.pop_front();
+        }
+        self.events.push_back(event);
+    }
+
+    fn take_events(&mut self) -> Vec<types::WatchEvent> {
+        self.events.drain(..).collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SnapshotState {
+    kv: BTreeMap<String, Vec<u8>>,
+    leases: BTreeMap<u64, types::LeaseRecord>,
+    lease_index: BTreeMap<String, u64>,
+    watches: BTreeMap<u64, StoredWatch>,
+}
+
+impl SnapshotState {
+    fn empty() -> Self {
+        Self {
+            kv: BTreeMap::new(),
+            leases: BTreeMap::new(),
+            lease_index: BTreeMap::new(),
+            watches: BTreeMap::new(),
+        }
+    }
+}
 
 /// Log store backed by redb.
 #[derive(Clone)]
@@ -96,16 +159,16 @@ impl KvLogStore {
 /// State machine that persists key/value pairs in redb.
 pub struct KvStateMachine {
     db: Arc<Database>,
-    last_applied: RwLock<Option<LogId<NodeIdOf>>>,
-    last_membership: RwLock<StoredMembership<NodeIdOf, NodeOf>>,
+    last_applied: Arc<RwLock<Option<LogId<NodeIdOf>>>>,
+    last_membership: Arc<RwLock<StoredMembership<NodeIdOf, NodeOf>>>,
 }
 
 impl KvStateMachine {
     pub fn new(db: Arc<Database>) -> Self {
         Self {
             db,
-            last_applied: RwLock::new(None),
-            last_membership: RwLock::new(StoredMembership::default()),
+            last_applied: Arc::new(RwLock::new(None)),
+            last_membership: Arc::new(RwLock::new(StoredMembership::default())),
         }
     }
 
@@ -173,6 +236,531 @@ impl KvStateMachine {
 
         Ok((last_applied, membership))
     }
+
+    fn apply_command(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        request: types::Request,
+    ) -> StoResult<types::Response> {
+        match request {
+            types::Request::Set { key, value } => {
+                self.apply_set(state, watches, revision, key, value)
+            }
+            types::Request::Delete { key } => {
+                self.apply_delete(state, leases, lease_index, watches, revision, key)
+            }
+            types::Request::Txn { operations } => {
+                self.apply_txn(state, leases, lease_index, watches, revision, operations)
+            }
+            types::Request::LeaseGrant {
+                lease_id,
+                ttl_ms,
+                timestamp_ms,
+            } => self.apply_lease_grant(leases, lease_id, ttl_ms, timestamp_ms),
+            types::Request::LeaseAttach { lease_id, key } => {
+                self.apply_lease_attach(leases, lease_index, lease_id, key)
+            }
+            types::Request::LeaseKeepAlive {
+                lease_id,
+                timestamp_ms,
+            } => self.apply_lease_keepalive(leases, lease_id, timestamp_ms),
+            types::Request::LeaseRevoke { lease_id } => {
+                self.apply_lease_revoke(leases, lease_index, lease_id)
+            }
+            types::Request::WatchRegister {
+                watch_id,
+                key,
+                prefix,
+            } => self.apply_watch_register(watches, watch_id, key, prefix),
+            types::Request::WatchCancel { watch_id } => self.apply_watch_cancel(watches, watch_id),
+            types::Request::WatchFetch { watch_id } => self.apply_watch_fetch(watches, watch_id),
+        }
+    }
+
+    fn apply_set(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        key: String,
+        value: String,
+    ) -> StoResult<types::Response> {
+        let bytes = value.clone().into_bytes();
+        let previous = Self::write_value(state, key.as_str(), bytes)?;
+        self.enqueue_watch_event(
+            watches,
+            revision,
+            &key,
+            Some(value),
+            types::WatchEventKind::Put,
+        )?;
+        Ok(types::Response::Set { previous })
+    }
+
+    fn apply_delete(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        key: String,
+    ) -> StoResult<types::Response> {
+        let previous = Self::remove_value(state, key.as_str())?;
+        self.detach_key_from_leases(leases, lease_index, key.as_str())?;
+        if previous.is_some() {
+            self.enqueue_watch_event(watches, revision, &key, None, types::WatchEventKind::Delete)?;
+        }
+        Ok(types::Response::Delete { previous })
+    }
+
+    fn apply_txn(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        operations: Vec<types::TxnOp>,
+    ) -> StoResult<types::Response> {
+        let limited_ops: Vec<_> = operations.into_iter().take(TXN_MAX_OPERATIONS).collect();
+        let (results, committed) = self.preview_txn(state, &limited_ops)?;
+        if committed {
+            self.commit_txn(state, leases, lease_index, watches, revision, &limited_ops)?;
+        }
+        Ok(types::Response::Txn { committed, results })
+    }
+
+    fn preview_txn(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        ops: &[types::TxnOp],
+    ) -> StoResult<(Vec<types::TxnOpResult>, bool)> {
+        let mut results = Vec::new();
+        let mut staged = BTreeMap::new();
+        let mut committed = true;
+
+        for op in ops {
+            match op {
+                types::TxnOp::Assert { key, equals } => {
+                    let current = Self::project_value(state, &staged, key)?;
+                    let success = &current == equals;
+                    results.push(types::TxnOpResult::Assert {
+                        key: key.clone(),
+                        current: current.clone(),
+                        success,
+                    });
+                    if !success {
+                        committed = false;
+                        break;
+                    }
+                }
+                types::TxnOp::Set { key, value } => {
+                    let previous = Self::project_value(state, &staged, key)?;
+                    staged.insert(key.clone(), Some(value.clone()));
+                    results.push(types::TxnOpResult::Set {
+                        key: key.clone(),
+                        previous,
+                    });
+                }
+                types::TxnOp::Delete { key } => {
+                    let previous = Self::project_value(state, &staged, key)?;
+                    staged.insert(key.clone(), None);
+                    results.push(types::TxnOpResult::Delete {
+                        key: key.clone(),
+                        previous,
+                    });
+                }
+            }
+        }
+
+        Ok((results, committed))
+    }
+
+    fn commit_txn(
+        &self,
+        state: &mut Table<&str, Vec<u8>>,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        ops: &[types::TxnOp],
+    ) -> StoResult<()> {
+        for op in ops {
+            match op {
+                types::TxnOp::Set { key, value } => {
+                    let bytes = value.clone().into_bytes();
+                    Self::write_value(state, key.as_str(), bytes)?;
+                    self.enqueue_watch_event(
+                        watches,
+                        revision,
+                        key,
+                        Some(value.clone()),
+                        types::WatchEventKind::Put,
+                    )?;
+                }
+                types::TxnOp::Delete { key } => {
+                    let previous = Self::remove_value(state, key.as_str())?;
+                    self.detach_key_from_leases(leases, lease_index, key.as_str())?;
+                    if previous.is_some() {
+                        self.enqueue_watch_event(
+                            watches,
+                            revision,
+                            key,
+                            None,
+                            types::WatchEventKind::Delete,
+                        )?;
+                    }
+                }
+                types::TxnOp::Assert { .. } => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_lease_grant(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_id: u64,
+        ttl_ms: u64,
+        timestamp_ms: u64,
+    ) -> StoResult<types::Response> {
+        let mut record = types::LeaseRecord {
+            lease_id,
+            ttl_ms,
+            expires_at_ms: timestamp_ms.saturating_add(ttl_ms),
+            keys: Vec::new(),
+        };
+        record.keys.sort();
+        let bytes = serde_json::to_vec(&record).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        leases.insert(lease_id, bytes).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(types::Response::LeaseGranted { lease: record })
+    }
+
+    fn apply_lease_attach(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        lease_id: u64,
+        key: String,
+    ) -> StoResult<types::Response> {
+        if let Some(existing) = Self::take_lease_mapping(lease_index, key.as_str())? {
+            self.remove_key_from_lease(leases, existing, key.as_str())?;
+        }
+
+        let mut record = match Self::read_lease(leases, lease_id)? {
+            Some(record) => record,
+            None => types::LeaseRecord {
+                lease_id,
+                ttl_ms: 0,
+                expires_at_ms: 0,
+                keys: Vec::new(),
+            },
+        };
+        record.keys.push(key.clone());
+        record.keys.sort();
+        record.keys.dedup();
+        Self::write_lease(leases, &record)?;
+        lease_index.insert(key.as_str(), lease_id).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(types::Response::LeaseAttached { lease: record })
+    }
+
+    fn apply_lease_keepalive(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_id: u64,
+        timestamp_ms: u64,
+    ) -> StoResult<types::Response> {
+        let mut record = match Self::read_lease(leases, lease_id)? {
+            Some(record) => record,
+            None => return Ok(types::Response::LeaseKeepAlive { lease: None }),
+        };
+        record.expires_at_ms = timestamp_ms.saturating_add(record.ttl_ms);
+        Self::write_lease(leases, &record)?;
+        Ok(types::Response::LeaseKeepAlive {
+            lease: Some(record),
+        })
+    }
+
+    fn apply_lease_revoke(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        lease_id: u64,
+    ) -> StoResult<types::Response> {
+        let record = Self::read_lease(leases, lease_id)?;
+        if let Some(record) = record {
+            let released = record.keys.clone();
+            leases.remove(lease_id).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            for key in &released {
+                lease_index.remove(key.as_str()).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_state_machine(err))
+                })?;
+            }
+            Ok(types::Response::LeaseRevoked {
+                lease_id,
+                released_keys: released,
+            })
+        } else {
+            Ok(types::Response::LeaseRevoked {
+                lease_id,
+                released_keys: Vec::new(),
+            })
+        }
+    }
+
+    fn apply_watch_register(
+        &self,
+        watches: &mut Table<u64, Vec<u8>>,
+        watch_id: u64,
+        key: String,
+        prefix: bool,
+    ) -> StoResult<types::Response> {
+        let watch = StoredWatch::new(watch_id, key, prefix);
+        let bytes = serde_json::to_vec(&watch).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        watches.insert(watch_id, bytes).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(types::Response::WatchRegistered { watch_id })
+    }
+
+    fn apply_watch_cancel(
+        &self,
+        watches: &mut Table<u64, Vec<u8>>,
+        watch_id: u64,
+    ) -> StoResult<types::Response> {
+        let existed = watches
+            .remove(watch_id)
+            .map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?
+            .is_some();
+        Ok(types::Response::WatchCanceled { watch_id, existed })
+    }
+
+    fn apply_watch_fetch(
+        &self,
+        watches: &mut Table<u64, Vec<u8>>,
+        watch_id: u64,
+    ) -> StoResult<types::Response> {
+        let mut watch = match Self::read_watch(watches, watch_id)? {
+            Some(watch) => watch,
+            None => {
+                return Ok(types::Response::WatchEvents {
+                    watch_id,
+                    events: Vec::new(),
+                });
+            }
+        };
+        let events = watch.take_events();
+        let bytes = serde_json::to_vec(&watch).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        watches.insert(watch_id, bytes).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(types::Response::WatchEvents { watch_id, events })
+    }
+
+    fn project_value(
+        state: &mut Table<&str, Vec<u8>>,
+        staged: &BTreeMap<String, Option<String>>,
+        key: &str,
+    ) -> StoResult<Option<String>> {
+        if let Some(value) = staged.get(key) {
+            return Ok(value.clone());
+        }
+        let value = state.get(key).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(value.map(|v| {
+            let data = v.value();
+            String::from_utf8_lossy(data.as_slice()).to_string()
+        }))
+    }
+
+    fn write_value(
+        state: &mut Table<&str, Vec<u8>>,
+        key: &str,
+        value: Vec<u8>,
+    ) -> StoResult<Option<String>> {
+        let previous = state.insert(key, value).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(previous.map(|v| {
+            let data = v.value();
+            String::from_utf8_lossy(data.as_slice()).to_string()
+        }))
+    }
+
+    fn remove_value(state: &mut Table<&str, Vec<u8>>, key: &str) -> StoResult<Option<String>> {
+        let previous = state.remove(key).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(previous.map(|v| {
+            let data = v.value();
+            String::from_utf8_lossy(data.as_slice()).to_string()
+        }))
+    }
+
+    fn enqueue_watch_event(
+        &self,
+        watches: &mut Table<u64, Vec<u8>>,
+        revision: u64,
+        key: &str,
+        value: Option<String>,
+        kind: types::WatchEventKind,
+    ) -> StoResult<()> {
+        let mut updates = Vec::new();
+        let iter = watches.iter().map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        for item in iter {
+            let (watch_id, raw) = item.map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            let bytes = raw.value();
+            let mut watch: StoredWatch = serde_json::from_slice(bytes.as_slice()).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            if watch.matches(key) {
+                let event = types::WatchEvent {
+                    revision,
+                    key: key.to_string(),
+                    kind: kind.clone(),
+                    value: value.clone(),
+                };
+                watch.push_event(event);
+                updates.push((watch_id.value(), watch));
+            }
+        }
+        for (watch_id, watch) in updates {
+            let bytes = serde_json::to_vec(&watch).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            watches.insert(watch_id, bytes).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+        }
+        Ok(())
+    }
+
+    fn read_watch(
+        watches: &mut Table<u64, Vec<u8>>,
+        watch_id: u64,
+    ) -> StoResult<Option<StoredWatch>> {
+        let value = watches.get(watch_id).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        if let Some(bytes) = value {
+            let watch = serde_json::from_slice(bytes.value().as_slice()).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            Ok(Some(watch))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn read_lease(
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_id: u64,
+    ) -> StoResult<Option<types::LeaseRecord>> {
+        let value = leases.get(lease_id).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        if let Some(bytes) = value {
+            let record = serde_json::from_slice(bytes.value().as_slice()).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            Ok(Some(record))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn write_lease(leases: &mut Table<u64, Vec<u8>>, record: &types::LeaseRecord) -> StoResult<()> {
+        let bytes = serde_json::to_vec(record).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        leases.insert(record.lease_id, bytes).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(())
+    }
+
+    fn detach_key_from_leases(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_index: &mut Table<&str, u64>,
+        key: &str,
+    ) -> StoResult<()> {
+        if let Some(lease_id) = Self::take_lease_mapping(lease_index, key)? {
+            self.remove_key_from_lease(leases, lease_id, key)?;
+        }
+        Ok(())
+    }
+
+    fn take_lease_mapping(lease_index: &mut Table<&str, u64>, key: &str) -> StoResult<Option<u64>> {
+        let removed = lease_index.remove(key).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::write_state_machine(err))
+        })?;
+        Ok(removed.map(|v| v.value()))
+    }
+
+    fn remove_key_from_lease(
+        &self,
+        leases: &mut Table<u64, Vec<u8>>,
+        lease_id: u64,
+        key: &str,
+    ) -> StoResult<()> {
+        if let Some(mut record) = Self::read_lease(leases, lease_id)? {
+            record.keys.retain(|k| k != key);
+            record.keys.sort();
+            record.keys.dedup();
+            Self::write_lease(leases, &record)?;
+        }
+        Ok(())
+    }
 }
 
 pub async fn new_storage(db_path: &str) -> Result<(KvLogStore, KvStateMachine), Error> {
@@ -190,6 +778,15 @@ pub async fn new_storage(db_path: &str) -> Result<(KvLogStore, KvStateMachine), 
             message: e.to_string(),
         })?;
         tx.open_table(STATE_TABLE).map_err(|e| Error::Raft {
+            message: e.to_string(),
+        })?;
+        tx.open_table(LEASE_TABLE).map_err(|e| Error::Raft {
+            message: e.to_string(),
+        })?;
+        tx.open_table(LEASE_INDEX_TABLE).map_err(|e| Error::Raft {
+            message: e.to_string(),
+        })?;
+        tx.open_table(WATCH_TABLE).map_err(|e| Error::Raft {
             message: e.to_string(),
         })?;
         tx.commit().map_err(|e| Error::Raft {
@@ -395,12 +992,25 @@ impl RaftSnapshotBuilder<TypeConfig> for KvStateMachine {
             let err = AnyError::new(&e);
             sto(StorageIOError::read_snapshot(None, err))
         })?;
-        let table = tx.open_table(STATE_TABLE).map_err(|e| {
+        let state_table = tx.open_table(STATE_TABLE).map_err(|e| {
             let err = AnyError::new(&e);
             sto(StorageIOError::read_snapshot(None, err))
         })?;
-        let mut sm_data = BTreeMap::new();
-        for item in table.iter().map_err(|e| {
+        let lease_table = tx.open_table(LEASE_TABLE).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })?;
+        let lease_index = tx.open_table(LEASE_INDEX_TABLE).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })?;
+        let watch_table = tx.open_table(WATCH_TABLE).map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })?;
+
+        let mut snapshot = SnapshotState::empty();
+        for item in state_table.iter().map_err(|e| {
             let err = AnyError::new(&e);
             sto(StorageIOError::read_snapshot(None, err))
         })? {
@@ -408,9 +1018,54 @@ impl RaftSnapshotBuilder<TypeConfig> for KvStateMachine {
                 let err = AnyError::new(&e);
                 sto(StorageIOError::read_snapshot(None, err))
             })?;
-            sm_data.insert(key.value().to_string(), value.value().to_vec());
+            snapshot
+                .kv
+                .insert(key.value().to_string(), value.value().to_vec());
         }
-        let bytes = serde_json::to_vec(&sm_data).map_err(|e| {
+        for item in lease_table.iter().map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })? {
+            let (key, value) = item.map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::read_snapshot(None, err))
+            })?;
+            let record: types::LeaseRecord = serde_json::from_slice(value.value().as_slice())
+                .map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::read_snapshot(None, err))
+                })?;
+            snapshot.leases.insert(key.value(), record);
+        }
+        for item in lease_index.iter().map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })? {
+            let (key, value) = item.map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::read_snapshot(None, err))
+            })?;
+            snapshot
+                .lease_index
+                .insert(key.value().to_string(), value.value());
+        }
+        for item in watch_table.iter().map_err(|e| {
+            let err = AnyError::new(&e);
+            sto(StorageIOError::read_snapshot(None, err))
+        })? {
+            let (key, value) = item.map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::read_snapshot(None, err))
+            })?;
+            let watch: StoredWatch =
+                serde_json::from_slice(value.value().as_slice()).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::read_snapshot(None, err))
+                })?;
+            snapshot.watches.insert(key.value(), watch);
+        }
+
+        let bytes = serde_json::to_vec(&snapshot).map_err(|e| {
             let err = AnyError::new(&e);
             sto(StorageIOError::read_snapshot(None, err))
         })?;
@@ -454,9 +1109,24 @@ impl RaftStateMachine<TypeConfig> for KvStateMachine {
                 let err = AnyError::new(&e);
                 sto(StorageIOError::write_state_machine(err))
             })?;
+            let mut leases = tx.open_table(LEASE_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            let mut lease_index = tx.open_table(LEASE_INDEX_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
+            let mut watches = tx.open_table(WATCH_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_state_machine(err))
+            })?;
 
             for entry in entries {
-                *self.last_applied.write().await = Some(entry.log_id);
+                {
+                    let mut guard = self.last_applied.write().await;
+                    *guard = Some(entry.log_id);
+                }
                 meta.insert(
                     "last_applied",
                     serde_json::to_vec(&entry.log_id).map_err(|e| {
@@ -471,35 +1141,14 @@ impl RaftStateMachine<TypeConfig> for KvStateMachine {
 
                 let response = match entry.payload {
                     EntryPayload::Blank => types::Response::Get { value: None },
-                    EntryPayload::Normal(cmd) => match cmd {
-                        types::Request::Set { key, value } => {
-                            let bytes = value.into_bytes();
-                            let previous = state
-                                .insert(key.as_str(), bytes)
-                                .map_err(|e| {
-                                    let err = AnyError::new(&e);
-                                    sto(StorageIOError::write_state_machine(err))
-                                })?
-                                .map(|v| {
-                                    let data = v.value();
-                                    String::from_utf8_lossy(data.as_slice()).to_string()
-                                });
-                            types::Response::Set { previous }
-                        }
-                        types::Request::Delete { key } => {
-                            let previous = state
-                                .remove(key.as_str())
-                                .map_err(|e| {
-                                    let err = AnyError::new(&e);
-                                    sto(StorageIOError::write_state_machine(err))
-                                })?
-                                .map(|v| {
-                                    let data = v.value();
-                                    String::from_utf8_lossy(data.as_slice()).to_string()
-                                });
-                            types::Response::Delete { previous }
-                        }
-                    },
+                    EntryPayload::Normal(cmd) => self.apply_command(
+                        &mut state,
+                        &mut leases,
+                        &mut lease_index,
+                        &mut watches,
+                        entry.log_id.index,
+                        cmd,
+                    )?,
                     EntryPayload::Membership(m) => {
                         let stored = StoredMembership::new(Some(entry.log_id), m);
                         *self.last_membership.write().await = stored.clone();
@@ -541,44 +1190,144 @@ impl RaftStateMachine<TypeConfig> for KvStateMachine {
         snapshot: Box<Cursor<Vec<u8>>>,
     ) -> StoResult<()> {
         let raw_snapshot = snapshot.into_inner();
+        let signature = meta.signature();
         let tx = self.db.begin_write().map_err(|e| {
             let err = AnyError::new(&e);
-            sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+            sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
         })?;
         {
-            let mut table = tx.open_table(STATE_TABLE).map_err(|e| {
+            let mut state_table = tx.open_table(STATE_TABLE).map_err(|e| {
                 let err = AnyError::new(&e);
-                sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
             })?;
-            let keys: Vec<String> = table
+            let mut leases = tx.open_table(LEASE_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+            })?;
+            let mut lease_index = tx.open_table(LEASE_INDEX_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+            })?;
+            let mut watches = tx.open_table(WATCH_TABLE).map_err(|e| {
+                let err = AnyError::new(&e);
+                sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+            })?;
+
+            let snapshot_state: SnapshotState = serde_json::from_slice(raw_snapshot.as_slice())
+                .map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+
+            let state_keys: Vec<String> = state_table
                 .iter()
                 .map_err(|e| {
                     let err = AnyError::new(&e);
-                    sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
                 })?
                 .map(|item| {
                     item.map(|(key, _)| key.value().to_string()).map_err(|e| {
                         let err = AnyError::new(&e);
-                        sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                        sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            for key in keys {
-                table.remove(key.as_str()).map_err(|e| {
+            for key in state_keys {
+                state_table.remove(key.as_str()).map_err(|e| {
                     let err = AnyError::new(&e);
-                    sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+            }
+            for (key, value) in snapshot_state.kv {
+                state_table.insert(key.as_str(), value).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
                 })?;
             }
 
-            let new_data: BTreeMap<String, Vec<u8>> =
-                serde_json::from_slice(raw_snapshot.as_slice()).map_err(|e| {
+            let lease_keys: Vec<u64> = leases
+                .iter()
+                .map_err(|e| {
                     let err = AnyError::new(&e);
-                    sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?
+                .map(|item| {
+                    item.map(|(key, _)| key.value()).map_err(|e| {
+                        let err = AnyError::new(&e);
+                        sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            for key in lease_keys {
+                leases.remove(key).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
                 })?;
-            for (key, value) in new_data {
-                table.insert(key.as_str(), value).map_err(|e| {
+            }
+            for (key, record) in snapshot_state.leases {
+                let bytes = serde_json::to_vec(&record).map_err(|e| {
                     let err = AnyError::new(&e);
-                    sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+                leases.insert(key, bytes).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+            }
+
+            let lease_index_keys: Vec<String> = lease_index
+                .iter()
+                .map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?
+                .map(|item| {
+                    item.map(|(key, _)| key.value().to_string()).map_err(|e| {
+                        let err = AnyError::new(&e);
+                        sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            for key in lease_index_keys {
+                lease_index.remove(key.as_str()).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+            }
+            for (key, lease_id) in snapshot_state.lease_index {
+                lease_index.insert(key.as_str(), lease_id).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+            }
+
+            let watch_keys: Vec<u64> = watches
+                .iter()
+                .map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?
+                .map(|item| {
+                    item.map(|(key, _)| key.value()).map_err(|e| {
+                        let err = AnyError::new(&e);
+                        sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            for key in watch_keys {
+                watches.remove(key).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+            }
+            for (key, watch) in snapshot_state.watches {
+                let bytes = serde_json::to_vec(&watch).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
+                })?;
+                watches.insert(key, bytes).map_err(|e| {
+                    let err = AnyError::new(&e);
+                    sto(StorageIOError::write_snapshot(Some(signature.clone()), err))
                 })?;
             }
 
@@ -587,7 +1336,7 @@ impl RaftStateMachine<TypeConfig> for KvStateMachine {
         }
         tx.commit().map_err(|e| {
             let err = AnyError::new(&e);
-            sto(StorageIOError::write_snapshot(Some(meta.signature()), err))
+            sto(StorageIOError::write_snapshot(Some(signature), err))
         })?;
         Ok(())
     }
@@ -601,8 +1350,8 @@ impl Clone for KvStateMachine {
     fn clone(&self) -> Self {
         Self {
             db: self.db.clone(),
-            last_applied: RwLock::new(self.last_applied.blocking_read().clone()),
-            last_membership: RwLock::new(self.last_membership.blocking_read().clone()),
+            last_applied: self.last_applied.clone(),
+            last_membership: self.last_membership.clone(),
         }
     }
 }
@@ -731,6 +1480,179 @@ mod tests {
                     assert_eq!(stored, expected, "state mismatch for key {}", key);
                 }
             });
+        }
+    }
+
+    fn request_entry(request: types::Request, index: u64) -> Entry<TypeConfig> {
+        Entry {
+            log_id: LogId::new(openraft::CommittedLeaderId::new(1, 1), index),
+            payload: EntryPayload::Normal(request),
+        }
+    }
+
+    #[tokio::test]
+    async fn transaction_commits_when_assertions_hold() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("txn.redb");
+        let (_store, mut sm) = new_storage(path.to_str().unwrap()).await.unwrap();
+
+        let set_entry = request_entry(
+            types::Request::Set {
+                key: "alpha".into(),
+                value: "v1".into(),
+            },
+            1,
+        );
+        sm.apply(vec![set_entry]).await.unwrap();
+
+        let txn_entry = request_entry(
+            types::Request::Txn {
+                operations: vec![
+                    types::TxnOp::Assert {
+                        key: "alpha".into(),
+                        equals: Some("v1".into()),
+                    },
+                    types::TxnOp::Set {
+                        key: "alpha".into(),
+                        value: "v2".into(),
+                    },
+                ],
+            },
+            2,
+        );
+        let responses = sm.apply(vec![txn_entry]).await.unwrap();
+        match &responses[0] {
+            types::Response::Txn { committed, results } => {
+                assert!(*committed);
+                assert_eq!(results.len(), 2);
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+        let persisted = sm.get("alpha").await.unwrap();
+        assert_eq!(persisted.as_deref(), Some("v2"));
+    }
+
+    #[tokio::test]
+    async fn transaction_aborts_on_failed_assert() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("txn_fail.redb");
+        let (_store, mut sm) = new_storage(path.to_str().unwrap()).await.unwrap();
+
+        let txn_entry = request_entry(
+            types::Request::Txn {
+                operations: vec![
+                    types::TxnOp::Assert {
+                        key: "missing".into(),
+                        equals: Some("value".into()),
+                    },
+                    types::TxnOp::Set {
+                        key: "missing".into(),
+                        value: "should-not-write".into(),
+                    },
+                ],
+            },
+            1,
+        );
+        let responses = sm.apply(vec![txn_entry]).await.unwrap();
+        match &responses[0] {
+            types::Response::Txn { committed, .. } => assert!(!committed),
+            other => panic!("unexpected response: {:?}", other),
+        }
+        let persisted = sm.get("missing").await.unwrap();
+        assert!(persisted.is_none());
+    }
+
+    #[tokio::test]
+    async fn lease_lifecycle_tracks_keys() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("lease.redb");
+        let (_store, mut sm) = new_storage(path.to_str().unwrap()).await.unwrap();
+
+        let grant = request_entry(
+            types::Request::LeaseGrant {
+                lease_id: 7,
+                ttl_ms: 100,
+                timestamp_ms: 10,
+            },
+            1,
+        );
+        sm.apply(vec![grant]).await.unwrap();
+
+        let set_entry = request_entry(
+            types::Request::Set {
+                key: "wat".into(),
+                value: "value".into(),
+            },
+            2,
+        );
+        sm.apply(vec![set_entry]).await.unwrap();
+
+        let attach = request_entry(
+            types::Request::LeaseAttach {
+                lease_id: 7,
+                key: "wat".into(),
+            },
+            3,
+        );
+        let attach_resp = sm.apply(vec![attach]).await.unwrap();
+        match &attach_resp[0] {
+            types::Response::LeaseAttached { lease } => {
+                assert_eq!(lease.lease_id, 7);
+                assert_eq!(lease.keys, vec!["wat".to_string()]);
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+
+        let revoke = request_entry(types::Request::LeaseRevoke { lease_id: 7 }, 4);
+        let revoke_resp = sm.apply(vec![revoke]).await.unwrap();
+        match &revoke_resp[0] {
+            types::Response::LeaseRevoked {
+                lease_id,
+                released_keys,
+            } => {
+                assert_eq!(*lease_id, 7);
+                assert_eq!(released_keys, &vec!["wat".to_string()]);
+            }
+            other => panic!("unexpected response: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn watch_registration_collects_events() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("watch.redb");
+        let (_store, mut sm) = new_storage(path.to_str().unwrap()).await.unwrap();
+
+        let register = request_entry(
+            types::Request::WatchRegister {
+                watch_id: 5,
+                key: "cfg/".into(),
+                prefix: true,
+            },
+            1,
+        );
+        sm.apply(vec![register]).await.unwrap();
+
+        let set_entry = request_entry(
+            types::Request::Set {
+                key: "cfg/node".into(),
+                value: "payload".into(),
+            },
+            2,
+        );
+        sm.apply(vec![set_entry]).await.unwrap();
+
+        let fetch = request_entry(types::Request::WatchFetch { watch_id: 5 }, 3);
+        let responses = sm.apply(vec![fetch]).await.unwrap();
+        match &responses[0] {
+            types::Response::WatchEvents { watch_id, events } => {
+                assert_eq!(*watch_id, 5);
+                assert_eq!(events.len(), 1);
+                assert_eq!(events[0].key, "cfg/node");
+                assert!(matches!(events[0].kind, types::WatchEventKind::Put));
+                assert_eq!(events[0].value.as_deref(), Some("payload"));
+            }
+            other => panic!("unexpected response: {:?}", other),
         }
     }
 

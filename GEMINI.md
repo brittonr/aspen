@@ -1,5 +1,7 @@
 # Project Aspen
 
+**Note on Development Environment:** This project leverages Nix for its development environment. You have full access to `nixpkgs` using `nix-shell -p <package>`. We are currently working within the dev shell defined in `@flake.nix`, which can be modified as needed.
+
 ## Project Overview
 
 Project Aspen is a new core crate designed for the Blixard ecosystem. Its primary goal is to serve as the foundational layer for orchestration, providing essential logic and distributed primitives. It leverages Rust as its primary language and utilizes key technologies such as `iroh` and `hiqlite` for distributed state and communication.
@@ -9,6 +11,19 @@ The project is structured into the following main modules:
 -   `distributed`: Implements distributed primitives using `iroh` and `hiqlite`.
 -   `traits`: Defines core service traits for various components.
 -   `types`: Contains the core data structures and types used throughout the system.
+
+## Inspirations
+
+Project Aspen draws inspiration from several influential systems and concepts:
+-   **Erlang/BEAM/Gleam:** For their robust actor model, fault tolerance, and distributed computing principles.
+-   **The Actor Model:** As a foundational paradigm for concurrent computation and distributed systems.
+-   **Plan9:** For its elegant approach to distributed file systems and treating everything as a file.
+-   **Kubernetes (k8s):** For its powerful orchestration capabilities, declarative APIs, and self-healing properties in managing containerized workloads.
+-   **FoundationDB:** For its strong consistency, ACID properties, and distributed transaction model.
+-   **etcd:** For its reliable distributed key-value store, crucial for shared configuration and service discovery.
+-   **radicle.xyz:** For its decentralized code collaboration and peer-to-peer infrastructure.
+-   **Antithesis:** For its pioneering work in deterministic testing and finding bugs in distributed systems through simulation.
+-   **Nix:** For its declarative package management, reproducible builds, and atomic upgrades, ensuring consistent development and deployment environments.
 
 ## Building and Running
 
@@ -26,6 +41,7 @@ This project is a Rust library crate. You can build and test it using the standa
     ```bash
     cargo check
     ```
+-   **Using Context7 MCP Serve:** For development and testing with Context7, ensure `context7 mcp serve` is running in your environment. Refer to Context7 documentation for setup details.
 
 ## Development Conventions
 
@@ -77,15 +93,19 @@ Clear and consistent handling of memory and types is key to writing safe, portab
 #### Error handling
 Correct error handling keeps the system robust and reliable in all conditions.
 
-* **Use assertions:** Use assertions to verify that conditions hold true at specific points in the code. Assertions work as internal checks, increase robustness, and simplify debugging.
-* **Assert function arguments and return values:** Check that functions receive and return expected values.
-* **Validate invariants:** Keep critical conditions stable by asserting invariants during execution.
-* **Use pair assertions:** Check critical data at multiple points to catch inconsistencies early.
-* **Fail fast on programmer errors:** Detect unexpected conditions immediately, stopping faulty code from continuing.
-* **Handle all errors:** Check and handle every error. Ignoring errors can lead to undefined behavior, security issues, or crashes. Write thorough tests for error-handling code to make sure your application works correctly in all cases.
-* **Treat compiler warnings as errors:** Use the strictest compiler settings and treat all warnings as errors. Warnings often point to potential issues that could cause bugs. Fixing them right away improves code quality and reliability.
+*   **Aim for Jepsen-proof correctness:** Design and test for strong consistency guarantees and fault tolerance in distributed environments.
+*   **Use assertions:** Use assertions to verify that conditions hold true at specific points in the code. Assertions work as internal checks, increase robustness, and simplify debugging.
+*   **Assert function arguments and return values:** Check that functions receive and return expected values.
+*   **Validate invariants:** Keep critical conditions stable by asserting invariants during execution.
+*   **Use pair assertions:** Check critical data at multiple points to catch inconsistencies early.
+*   **Fail fast on programmer errors:** Detect unexpected conditions immediately, stopping faulty code from continuing.
+*   **Handle all errors:** Check and handle every error. Ignoring errors can lead to undefined behavior, security issues, or crashes. Write thorough tests for error-handling code to make sure your application works correctly in all cases.
+*   **Treat compiler warnings as errors:** Use the strictest compiler settings and treat all warnings as errors. Warnings often point to potential issues that could cause bugs. Fixing them right away improves code quality and reliability.
 *   **Avoid implicit defaults:** Explicitly specify options when calling library functions instead of relying on defaults. Implicit defaults can change between library versions or across environments, causing inconsistent behavior. Being explicit improves code clarity and stability.
 *   **Use property-based testing:** Beyond unit tests, use property-based testing (e.g., `proptest`) to explore edge cases and ensure invariants hold across a wide range of inputs. This increases confidence in correctness and reduces the likelihood of subtle bugs.
+
+#### Deterministic Simulation
+Deterministic simulation is crucial for building robust distributed systems. By writing code that can be deterministically tested on a simulator (like `madsim`), developers can induce race conditions and other issues that are difficult to find otherwise. This approach allows for significantly faster testing than traditional methods (e.g., Jepsen), helping to identify and fix bugs early in the development cycle.
 
 ### 2.2. Performance
 
@@ -207,4 +227,11 @@ This document is a "remix" inspired by the original **Tiger Style** guide from t
 * **Last updated:** October 2024
 * **License:** CC BY 4.0
 * **Source:** [github.com/simonklee/tigerstyle](https://github.com/simonklee/tigerstyle)
+
+## References
+
+-   **iroh-examples:** A local copy of the `iroh-examples` repository is maintained at `docs/iroh-examples` for reference on `iroh` usage patterns and examples.
+-   **iroh Blog:** `https://www.iroh.computer/blog` for articles and updates on iroh.
+-   **iroh Documentation:** `https://www.iroh.computer/docs` for comprehensive guides and API references.
+-   **openraft Examples:** `https://github.com/databendlabs/openraft/tree/main/examples` for various implementations and usage patterns of the OpenRaft library.
 

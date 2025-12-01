@@ -39,6 +39,7 @@ tokio-test = "0.4"
 cargo-nextest = "0.9.60"
 tempfile = "3.10"
 rand09 = { package = "rand", version = "0.9" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
