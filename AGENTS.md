@@ -28,6 +28,27 @@ GEMINI assumes the Nix dev shell plus the pinned Rust channel, so add tools via 
 We're adopting `ractor` with the `cluster` feature plus `ractor_cluster`/`ractor_actors` so we can host distributed actors. Key reminders:
 - `NodeServer` owns the listener plus the per-peer `NodeSession` actors and is the single entry point to bring a node online. Every host must run one.
 - Nodes authenticate via Erlang-style “magic cookies”; make sure peers share the same cookie before calling `client_connect`/`client_connect_enc`.
-- You can bring your own transport by implementing `ractor_cluster::ClusterBidiStream` and sending it into the node server via `ConnectionOpenedExternal`.
+- **Bring Your Own Transport:** implement `ractor_cluster::ClusterBidiStream` for your connected stream (just split into `AsyncRead`/`AsyncWrite` halves) and feed it to the node server with `NodeServerMessage::ConnectionOpenedExternal`/`client_connect_external`. The on-wire protocol stays the same (len-prefixed, prost-encoded frames), so you don’t touch auth or PG sync logic. This makes QUIC/WebSocket/in-memory transports possible alongside the default TCP/TLS paths. For example:
+  ```rust
+  use ractor_cluster::{ClusterBidiStream, BoxRead, BoxWrite};
+  use tokio::io::DuplexStream;
+
+  struct MyDuplex(DuplexStream);
+
+  impl ClusterBidiStream for MyDuplex {
+      fn split(self: Box<Self>) -> (BoxRead, BoxWrite) {
+          let (r, w) = tokio::io::split(self.0);
+          (Box::new(r), Box::new(w))
+      }
+      fn peer_label(&self) -> Option<String> { Some("duplex:peer".into()) }
+      fn local_label(&self) -> Option<String> { Some("duplex:local".into()) }
+  }
+
+  // elsewhere
+  // node_server.cast(NodeServerMessage::ConnectionOpenedExternal {
+  //     stream: Box::new(MyDuplex(conn)),
+  //     is_server: false,
+  // })?;
+  ```
 - Message enums for actors that can be remoted must derive `RactorClusterMessage` (or implement `ractor::Message` + `BytesConvertable` manually) so they serialize across the wire. Use `#[rpc]` on variants that expect replies.
 - `ractor_actors` ships a set of helper actors (watchdog, broadcaster, filewatcher, etc.)—enable only the features you need to keep the dependency surface minimal.
