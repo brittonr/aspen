@@ -32,9 +32,9 @@ snafu = "0.8.9"
 irpc = "0.11.0"
 madsim = { version = "0.2.34", features = ["macros"] }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", branch = "main" }
-ractor = { version = "0.15.9", features = ["cluster"] }
-ractor_cluster = "0.15.9"
-ractor_actors = { git = "https://github.com/slawlor/ractor_actors", branch = "main", default-features = false }
+ractor = { version = "0.15.9", features = ["cluster", "async-trait"] }
+ractor_cluster = { version = "0.15.9", features = ["async-trait"] }
+ractor_actors = { git = "https://github.com/slawlor/ractor_actors", branch = "main", default-features = false, features = ["async-trait"] }
 
 [dev-dependencies]
 proptest = "1.0"

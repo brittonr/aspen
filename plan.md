@@ -3,20 +3,20 @@
 We wiped the previous modules to rebuild Aspen around a clean architecture that ties `openraft` into a `ractor` cluster using `iroh`/`irpc` transport. All cluster orchestration will run inside `ractor_cluster::NodeServer` instances so actors can be remoted across hosts. The milestones below describe how we get from an empty crate to a functioning distributed KV core again.
 
 ## Phase 1: Core Building Blocks
-1. **Define crate boundaries**
-   - Sketch the top-level modules (`cluster`, `raft`, `storage`, `api`).
-   - Add skeletal files with doc-comments describing the responsibilities and dependencies (e.g., `cluster` depends on `ractor_cluster` + `iroh::Endpoint`).
-2. **Actor primitives**
-   - Implement a thin wrapper around `NodeServer` that configures magic-cookie auth and exposes a typed API for launching local actors.
-   - Provide helpers for encoding/decoding messages (derive `RactorClusterMessage`, prost helpers, etc.).
+1. **Define crate boundaries** ✅
+   - Top-level modules (`cluster`, `raft`, `storage`, `api`) now exist with Tiger Style doc-comments that describe responsibilities, dependencies, and how they compose.
+   - Next action: start threading these modules together via a bootstrap binary once the Raft actor exists (Phase 2).
+2. **Actor primitives** ✅
+   - Introduced a typed wrapper around `NodeServer` plus helpers for attaching BYO transports and deriving `RactorClusterMessage`.
+   - Next action: plug the upcoming Raft actor + storage bindings into `NodeServerHandle` so deterministic sims can drive message flow.
 
 ## Phase 2: Raft Integration
-1. **Storage backend**
-   - Reintroduce the `redb`-backed log/state machine from the old repo but split into `storage::log` and `storage::state_machine` modules with unit tests.
-   - Run `openraft::testing::Suite::test_all` to validate the implementation in isolation.
-2. **Raft actor**
-   - Wrap `openraft::Raft<TypeConfig>` in a `ractor` actor that owns storage + network handles.
-   - Expose RPC-oriented messages (`ClientWrite`, `ReadState`) plus lifecycle commands (`JoinCluster`, `InstallSnapshot`).
+1. **Storage backend** (in progress)
+   - Created `storage::log` + `storage::state_machine` modules with deterministic in-memory backends and proptest seams so we can validate ordering/snapshot invariants.
+   - Next action: swap in the redb-backed engine and run `openraft::testing::Suite::test_all` against both the persistent and deterministic implementations.
+2. **Raft actor** (in progress)
+   - Added a placeholder Raft actor/factory that already wires into the NodeServer handle + `StorageSurface`, keeping the transport seams deterministic for `madsim`.
+   - Next action: wrap `openraft::Raft<TypeConfig>` inside this actor, expose the real RPC/message set, and plug property tests + simulator harnesses into the control flow.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**
