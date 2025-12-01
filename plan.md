@@ -22,6 +22,7 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Added an Iroh transport option (enable via CLI, deterministic keys + endpoint files) so cluster traffic can ride QUIC/relay links in addition to TCP, plus hardened the smoke test + node startup waits so the HTTP layer comes up even if Iroh peers are slow to announce.
    - Added a `netwatch` devshell tool (built from `n0-computer/net-tools`) so we can observe interface churn and confirm which adapters carry Iroh traffic during local testing.
    - Control backend now supports Hiqlite via `--control-backend hiqlite`, wiring `/write`/`/read` into a replicated SQLite table through the upstream client, reflecting live membership from the Hiqlite metrics surface, and forwarding `/add-learner`/`/change-membership` to the real cluster management APIs (expecting `raft_addr` metadata per node).
+   - `scripts/run-hiqlite-cluster.sh` provisions a 3-node local Hiqlite cluster (build + configs + lifecycle) and we validate the entire flow by running it alongside `scripts/aspen-cluster-smoke.sh` to ensure the default control-plane smoke test still passes.
    - Next action: capture a deterministic `madsim` scenario that exercises the Hiqlite-backed HTTP workflow so CI covers it without relying on best-effort shell scripts, then layer `iroh-metrics` exporters on top (using the new `netwatch` binary for manual diagnostics) to assert transport health in automation.
 
 ## Phase 3: Network Fabric
