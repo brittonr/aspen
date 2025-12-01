@@ -71,6 +71,72 @@
           chmod +x $out/bin/flawless
 '';
       }; 
+
+      netwatchSrc = pkgs.fetchFromGitHub {
+        owner = "n0-computer";
+        repo = "net-tools";
+        rev = "cd7aba545996781786b8168d49b876f0844ad3d7";
+        hash = "sha256-FMuab/Disrd/l9nJFOZ7vQxE2KE98ZLvQvocbZELPPY=";
+      };
+
+      netwatchCommon = {
+        pname = "netwatch";
+        version = "0.12.0";
+        src = netwatchSrc;
+        cargoToml = "${netwatchSrc}/netwatch/Cargo.toml";
+        cargoLock = "${netwatchSrc}/Cargo.lock";
+      };
+
+      netwatchCargoArtifacts = craneLib.buildDepsOnly (
+        netwatchCommon
+        // {
+          doCheck = false;
+        }
+      );
+
+      netwatch = craneLib.buildPackage (
+        netwatchCommon
+        // {
+          cargoArtifacts = netwatchCargoArtifacts;
+          cargoExtraArgs = "--bin netwatch";
+          doCheck = false;
+          postPatch = ''
+            mkdir -p netwatch/src/bin
+            cat <<'RS' > netwatch/src/bin/netwatch.rs
+            use netwatch::netmon::Monitor;
+            use n0_watcher::Watcher as _;
+
+            #[tokio::main(flavor = "current_thread")]
+            async fn main() -> Result<(), netwatch::netmon::Error> {
+                let monitor = Monitor::new().await?;
+                let mut subscriber = monitor.interface_state();
+                println!("netwatch: initial interface state -> {:#?}", subscriber.get());
+
+                loop {
+                    tokio::select! {
+                        update = subscriber.updated() => {
+                            match update {
+                                Ok(state) => println!("netwatch: interface state updated -> {:#?}", state),
+                                Err(_) => {
+                                    eprintln!("netwatch: watcher closed, exiting");
+                                    break;
+                                }
+                            }
+                        }
+                        res = tokio::signal::ctrl_c() => {
+                            if let Err(err) = res {
+                                eprintln!("netwatch: ctrl-c handler error: {err}");
+                            }
+                            break;
+                        }
+                    }
+                }
+                Ok(())
+            }
+RS
+          '';
+        }
+      );
       
 
       srcFilters = path: type:
@@ -291,6 +357,7 @@
       };
 
       packages.default = mvm-ci;
+      packages.netwatch = netwatch;
 
       # Docker image for cluster testing (using streamLayeredImage for better caching)
       packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
@@ -366,6 +433,7 @@
         # Extra inputs can be added here; cargo and rustc are provided by default.
         packages = with pkgs; [
           flawless
+          netwatch
           litefs  # Transparent SQLite replication via FUSE filesystem
           bash
           coreutils
@@ -387,4 +455,3 @@
       };
     });
 }
-

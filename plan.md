@@ -20,7 +20,8 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Added the `aspen-node` bootstrap binary plus HTTP endpoints (`/health`, `/metrics`, `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`) so we can drive multi-node scripts similar to the OpenRaft example.
    - Added `scripts/aspen-cluster-smoke.sh` and `docs/cluster-smoke.md` so we can spin up five nodes locally and hit the HTTP API the same way the upstream OpenRaft script does; the handlers now depend on trait-based control-plane/key-value interfaces and can proxy to an external Raft service.
    - Added an Iroh transport option (enable via CLI, deterministic keys + endpoint files) so cluster traffic can ride QUIC/relay links in addition to TCP, plus hardened the smoke test + node startup waits so the HTTP layer comes up even if Iroh peers are slow to announce.
-   - Next action: implement the real external Raft/DB bridge behind those traits (replacing the in-crate in-memory stub), then capture a deterministic `madsim` scenario that exercises the same HTTP workflow so CI covers it without relying on best-effort shell scripts.
+   - Added a `netwatch` devshell tool (built from `n0-computer/net-tools`) so we can observe interface churn and confirm which adapters carry Iroh traffic during local testing.
+   - Next action: implement the real external Raft/DB bridge behind those traits (replacing the in-crate in-memory stub), then capture a deterministic `madsim` scenario that exercises the same HTTP workflow so CI covers it without relying on best-effort shell scripts. After that, integrate `iroh-metrics` exporters so CI can assert transport health, using the new `netwatch` binary for manual diagnostics.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**
