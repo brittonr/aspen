@@ -406,6 +406,112 @@ impl AspenRouter {
         let node = nodes.get(node_id)?;
         node.state_machine.get(key).await
     }
+
+    /// Initialize a single-node cluster with the given node as the leader.
+    pub async fn initialize(&self, node_id: NodeId) -> Result<()> {
+        use std::collections::BTreeMap;
+        use openraft::BasicNode;
+
+        let members: BTreeMap<NodeId, BasicNode> = {
+            let nodes = self.inner.nodes.lock().unwrap();
+            nodes.keys().map(|id| (*id, BasicNode::default())).collect()
+        };
+
+        let raft = self.get_raft_handle(&node_id)?;
+        raft.initialize(members).await?;
+        Ok(())
+    }
+
+    /// Add a learner node to the cluster.
+    pub async fn add_learner(&self, leader: NodeId, target: NodeId) -> Result<()> {
+        use openraft::BasicNode;
+
+        let raft = self.get_raft_handle(&leader)?;
+        raft.add_learner(target, BasicNode::default(), true)
+            .await
+            .map_err(|e| e.into_api_error().unwrap())?;
+        Ok(())
+    }
+
+    /// Execute a callback with read-only access to the internal Raft state.
+    pub async fn external_request<F>(&self, target: NodeId, req: F) -> Result<()>
+    where
+        F: FnOnce(&openraft::RaftState<AppTypeConfig>) + Send + 'static,
+    {
+        let raft = self.get_raft_handle(&target)?;
+        raft.external_request(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        Ok(())
+    }
+
+    /// Create a new cluster with the given voters and learners.
+    pub async fn new_cluster(
+        &mut self,
+        voter_ids: std::collections::BTreeSet<NodeId>,
+        learners: std::collections::BTreeSet<NodeId>,
+    ) -> Result<u64> {
+        use openraft::ServerState;
+
+        let leader_id = 0;
+        assert!(voter_ids.contains(&leader_id), "voter_ids must contain node 0");
+
+        self.new_raft_node(leader_id).await?;
+        self.wait(&leader_id, Some(Duration::from_secs(10))).applied_index(None, "empty").await?;
+
+        self.initialize(leader_id).await?;
+        let mut log_index = 1_u64;
+
+        self.wait(&leader_id, Some(Duration::from_secs(10))).applied_index(Some(log_index), "init").await?;
+
+        for id in voter_ids.iter() {
+            if *id == leader_id {
+                continue;
+            }
+            self.new_raft_node(*id).await?;
+            self.add_learner(leader_id, *id).await?;
+            log_index += 1;
+
+            self.wait(id, Some(Duration::from_secs(10))).state(ServerState::Learner, "empty node").await?;
+        }
+
+        for id in voter_ids.iter() {
+            self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("learners of {:?}", voter_ids)).await?;
+        }
+
+        if voter_ids.len() > 1 {
+            let raft = self.get_raft_handle(&leader_id)?;
+            raft.change_membership(voter_ids.clone(), false).await?;
+            log_index += 2;
+
+            for id in voter_ids.iter() {
+                self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("cluster of {:?}", voter_ids)).await?;
+            }
+        }
+
+        for id in learners.iter() {
+            self.new_raft_node(*id).await?;
+            self.add_learner(leader_id, *id).await?;
+            log_index += 1;
+        }
+
+        for id in learners.iter() {
+            self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("learners of {:?}", learners)).await?;
+        }
+
+        Ok(log_index)
+    }
+
+    /// Remove a node from the router and return its Raft handle and storage.
+    ///
+    /// Useful for testing append_entries and other Raft APIs directly without
+    /// going through the network layer.
+    pub fn remove_node(
+        &mut self,
+        node_id: NodeId,
+    ) -> Option<(Raft<AppTypeConfig>, InMemoryLogStore, Arc<StateMachineStore>)> {
+        let mut nodes = self.inner.nodes.lock().unwrap();
+        let node = nodes.remove(&node_id)?;
+        Some((node.raft, node.log_store, node.state_machine))
+    }
 }
 
 #[cfg(test)]
