@@ -75,7 +75,7 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Next action: Move to Phase 5 (Documentation & Hardening) or implement additional KV features
 
 ## Phase 5: Documentation & Hardening
-1. **Testing Foundation** (in progress)
+1. **Testing Foundation** ✅
    - ✅ Created `src/raft/storage.rs` test module with `StoreBuilder` implementation
    - ✅ Integrated OpenRaft's `Suite::test_all()` - validates 50+ storage scenarios (log, snapshots, membership)
    - ✅ Fixed `install_snapshot()` to properly persist snapshots for `get_current_snapshot()`
@@ -83,7 +83,11 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - ✅ Created `src/testing/router.rs` - AspenRouter for deterministic multi-node Raft tests
    - ✅ Implemented in-memory network with configurable delays/failures, wait helpers via OpenRaft's `Wait` API
    - ✅ Added 3 passing unit tests demonstrating router capabilities
-   - Next action: Port key OpenRaft tests (t10_initialization, t11_elect, t20_change_membership, t50_leader_restart, t51_remove_unreachable) to AspenRouter
+   - ✅ **Ported 12 OpenRaft tests across 6 test files** (initialization, election, membership, restart, partition, client writes)
+   - ✅ All tests passing except 1 skipped (add_learner multi-node issue requiring investigation)
+   - ✅ Validated: cluster init, election logic, client writes, leader recovery, network simulation, membership changes
+   - ⚠️  Known issue: Multi-node `add_learner` hits OpenRaft engine assertion (`self.leader.is_none()`) - needs deeper investigation
+   - Next action: Move to Phase 5.2 (Deterministic Simulations) or investigate add_learner issue
 2. **Deterministic Simulations** (pending)
    - Reintroduce madsim tests for leader election, failover, network partitions
    - Add snapshot & log compaction scenarios
