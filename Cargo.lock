@@ -292,6 +292,7 @@ dependencies = [
  "madsim",
  "openraft 0.10.0",
  "portpicker",
+ "postcard",
  "proptest",
  "ractor",
  "ractor_actors",

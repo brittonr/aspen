@@ -1,5 +1,6 @@
 pub mod network;
 pub mod rpc;
+pub mod server;
 pub mod storage;
 pub mod types;
 

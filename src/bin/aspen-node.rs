@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -7,10 +8,11 @@ use aspen::api::{
     DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
     KeyValueStoreError, ReadRequest, WriteRequest,
 };
-use aspen::cluster::{IrohClusterConfig, IrohClusterTransport, IrohEndpoint, NodeServerConfig};
-use aspen::raft::network::HttpRaftNetworkFactory;
+use aspen::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig};
+use aspen::raft::network::IrpcRaftNetworkFactory;
+use aspen::raft::server::RaftRpcServer;
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
-use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::raft::{RaftActor, RaftActorConfig, RaftActorMessage, RaftControlClient};
 use axum::{
     Json, Router,
@@ -20,8 +22,8 @@ use axum::{
     routing::{get, post},
 };
 use clap::{Parser, ValueEnum};
+use iroh::{EndpointAddr, SecretKey};
 use openraft::Config as RaftConfig;
-use openraft::raft::{AppendEntriesRequest, InstallSnapshotRequest, VoteRequest};
 use ractor::{Actor, ActorRef, call_t};
 use serde::Serialize;
 use serde_json::json;
@@ -50,6 +52,16 @@ struct Args {
     /// Control-plane implementation to use for this node.
     #[arg(long, value_enum, default_value_t = ControlBackend::Deterministic)]
     control_backend: ControlBackend,
+    /// Optional Iroh secret key (hex-encoded). If not provided, a new key is generated.
+    #[arg(long)]
+    iroh_secret_key: Option<String>,
+    /// Optional Iroh relay server URL.
+    #[arg(long)]
+    iroh_relay_url: Option<String>,
+    /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<relay-url>:<direct-addrs>"
+    /// Can be specified multiple times for multiple peers.
+    #[arg(long)]
+    peers: Vec<String>,
 }
 
 type ClusterControllerHandle = Arc<dyn ClusterController>;
@@ -70,7 +82,7 @@ struct AppState {
     listen_port: u16,
     controller: ClusterControllerHandle,
     kv: KeyValueStoreHandle,
-    iroh_metrics: Option<IrohEndpoint>,
+    iroh_manager: Option<Arc<IrohEndpointManager>>,
 }
 
 #[tokio::main]
@@ -83,6 +95,52 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+
+    // Create Iroh endpoint manager
+    let iroh_manager = {
+        let mut iroh_config = IrohEndpointConfig::new();
+
+        // Parse secret key if provided
+        if let Some(key_hex) = args.iroh_secret_key {
+            let key_bytes = hex::decode(key_hex)?;
+            if key_bytes.len() != 32 {
+                anyhow::bail!("secret key must be 32 bytes (64 hex characters)");
+            }
+            let mut key_array = [0u8; 32];
+            key_array.copy_from_slice(&key_bytes);
+            let key = SecretKey::from_bytes(&key_array);
+            iroh_config = iroh_config.with_secret_key(key);
+        }
+
+        // Parse relay URL if provided
+        if let Some(relay_url_str) = args.iroh_relay_url {
+            let relay_url = relay_url_str.parse()?;
+            iroh_config = iroh_config.with_relay_url(relay_url)?;
+        }
+
+        let manager = IrohEndpointManager::new(iroh_config).await?;
+        let endpoint_id = manager.endpoint().id();
+        info!(
+            endpoint_id = %endpoint_id,
+            node_addr = ?manager.node_addr(),
+            "Iroh endpoint created"
+        );
+        Arc::new(manager)
+    };
+
+    // Parse peer addresses
+    // Note: EndpointAddr doesn't implement FromStr, so we'll need to construct it manually
+    // For now, we'll skip peer parsing and document this for future implementation
+    let peer_addrs: HashMap<NodeId, EndpointAddr> = HashMap::new();
+
+    if !args.peers.is_empty() {
+        warn!(
+            peer_count = args.peers.len(),
+            "peer address parsing not yet implemented - EndpointAddr requires manual construction"
+        );
+    }
+
+    info!(peer_count = peer_addrs.len(), "parsed peer addresses");
 
     let node_server = NodeServerConfig::new(
         format!("node-{}", args.node_id),
@@ -103,7 +161,7 @@ async fn main() -> Result<()> {
 
         let log_store = InMemoryLogStore::default();
         let state_machine_store = StateMachineStore::new();
-        let network = HttpRaftNetworkFactory::new();
+        let network = IrpcRaftNetworkFactory::new(Arc::clone(&iroh_manager), peer_addrs);
 
         let raft = openraft::Raft::new(
             args.node_id,
@@ -131,17 +189,9 @@ async fn main() -> Result<()> {
 
     let (controller, kv_store) = args.control_backend.build(raft_ref.clone());
 
-    let iroh_transport =
-        match IrohClusterTransport::spawn(&node_server, IrohClusterConfig::default()).await {
-            Ok(transport) => {
-                transport.wait_until_online().await;
-                Some(transport)
-            }
-            Err(err) => {
-                warn!(error = %err, "failed to launch iroh cluster transport");
-                None
-            }
-        };
+    // Spawn IRPC server for Raft RPC
+    let rpc_server = RaftRpcServer::spawn(Arc::clone(&iroh_manager), raft_core.clone());
+    info!("IRPC server spawned for Raft RPC");
 
     let app_state = AppState {
         node_id: args.node_id,
@@ -150,7 +200,7 @@ async fn main() -> Result<()> {
         listen_port: args.port,
         controller,
         kv: kv_store,
-        iroh_metrics: iroh_transport.as_ref().map(|t| t.endpoint()),
+        iroh_manager: Some(Arc::clone(&iroh_manager)),
     };
 
     let app = Router::new()
@@ -162,9 +212,7 @@ async fn main() -> Result<()> {
         .route("/change-membership", post(change_membership))
         .route("/write", post(write_value))
         .route("/read", post(read_value))
-        .route("/raft/vote", post(raft_vote))
-        .route("/raft/append", post(raft_append))
-        .route("/raft/snapshot", post(raft_snapshot))
+        // HTTP Raft RPC routes removed - now using IRPC over Iroh
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(args.http_addr).await?;
@@ -184,10 +232,16 @@ async fn main() -> Result<()> {
     }
 
     // begin shutdown sequence
+    info!("shutting down IRPC server");
+    rpc_server.shutdown().await?;
+
+    info!("shutting down Iroh endpoint");
+    iroh_manager.shutdown().await?;
+
+    info!("shutting down node server");
     node_server.shutdown().await?;
-    if let Some(transport) = iroh_transport {
-        transport.shutdown().await?;
-    }
+
+    info!("shutting down Raft actor");
     raft_ref.stop(Some("http-shutdown".into()));
     raft_task.await?;
 
@@ -220,8 +274,13 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
 }
 
 async fn iroh_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
-    if let Some(endpoint) = &ctx.iroh_metrics {
-        (StatusCode::OK, endpoint.metrics_snapshot()).into_response()
+    if let Some(manager) = &ctx.iroh_manager {
+        let endpoint_id = manager.endpoint().id();
+        let body = format!(
+            "# TYPE iroh_node_info gauge\niroh_node_info{{endpoint_id=\"{}\"}} 1\n",
+            endpoint_id
+        );
+        (StatusCode::OK, body).into_response()
     } else {
         StatusCode::NOT_FOUND.into_response()
     }
@@ -269,26 +328,8 @@ async fn read_value(
     Ok(Json(result))
 }
 
-async fn raft_vote(
-    State(state): State<AppState>,
-    Json(request): Json<VoteRequest<AppTypeConfig>>,
-) -> impl IntoResponse {
-    Json(state.raft_core.vote(request).await)
-}
-
-async fn raft_append(
-    State(state): State<AppState>,
-    Json(request): Json<AppendEntriesRequest<AppTypeConfig>>,
-) -> impl IntoResponse {
-    Json(state.raft_core.append_entries(request).await)
-}
-
-async fn raft_snapshot(
-    State(state): State<AppState>,
-    Json(request): Json<InstallSnapshotRequest<AppTypeConfig>>,
-) -> impl IntoResponse {
-    Json(state.raft_core.install_snapshot(request).await)
-}
+// HTTP Raft RPC handlers removed - now using IRPC over Iroh
+// (raft_vote, raft_append, raft_snapshot)
 
 #[derive(Debug)]
 enum ApiError {

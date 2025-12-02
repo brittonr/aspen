@@ -1,6 +1,14 @@
 {
   "permissions": {
     "allow": [
+      "Bash(mkdir:*)",
+      "Bash(nix develop:*)",
+      "Bash(cat:*)",
+      "Bash(.gitignore)",
+      "WebFetch(domain:www.iroh.computer)",
+      "Bash(git add:*)",
+      "Bash(test:*)",
+      "WebFetch(domain:docs.rs)"
     ],
     "deny": [],
     "ask": []
