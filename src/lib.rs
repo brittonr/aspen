@@ -17,8 +17,7 @@ pub mod simulation;
 /// Testing infrastructure for deterministic multi-node Raft tests.
 ///
 /// Provides `AspenRouter` for managing in-memory Raft clusters with simulated
-/// networking. Used by integration tests and can be used in examples.
-#[cfg(any(test, feature = "testing"))]
+/// networking. Used by integration tests in tests/ directory.
 pub mod testing;
 
 pub use kv::{KvClient, KvServiceBuilder};
