@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::sync::RwLock;
 
 use anyhow::Context;
 use openraft::{BasicNode, OptionalSend, Snapshot, StorageError};
@@ -31,11 +32,13 @@ const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
+#[derive(Clone)]
 pub struct IrpcRaftNetworkFactory {
     endpoint_manager: Arc<IrohEndpointManager>,
     /// Map of NodeId to Iroh EndpointAddr for peer discovery.
     /// Populated from CLI args or config during bootstrap.
-    peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
+    /// Uses Arc<RwLock> to allow dynamic peer addition after initialization.
+    peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
 }
 
 impl IrpcRaftNetworkFactory {
@@ -45,8 +48,32 @@ impl IrpcRaftNetworkFactory {
     ) -> Self {
         Self {
             endpoint_manager,
-            peer_addrs,
+            peer_addrs: Arc::new(RwLock::new(peer_addrs)),
         }
+    }
+
+    /// Add a peer address for future connections.
+    ///
+    /// This allows dynamic peer addition after the network factory has been created.
+    /// Useful for integration tests where nodes exchange addresses at runtime.
+    pub fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
+        let mut peers = self.peer_addrs.write().unwrap();
+        peers.insert(node_id, addr);
+    }
+
+    /// Update peer addresses in bulk.
+    ///
+    /// Extends the existing peer map with new entries. Existing entries are replaced.
+    pub fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
+        let mut peers = self.peer_addrs.write().unwrap();
+        peers.extend(new_peers);
+    }
+
+    /// Get a clone of the current peer addresses map.
+    ///
+    /// Useful for debugging or inspection.
+    pub fn peer_addrs(&self) -> HashMap<NodeId, iroh::EndpointAddr> {
+        self.peer_addrs.read().unwrap().clone()
     }
 }
 
@@ -56,7 +83,10 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
         // Look up peer's Iroh address
-        let peer_addr = self.peer_addrs.get(&target).cloned();
+        let peer_addr = {
+            let peers = self.peer_addrs.read().unwrap();
+            peers.get(&target).cloned()
+        };
 
         IrpcRaftNetwork {
             endpoint_manager: Arc::clone(&self.endpoint_manager),

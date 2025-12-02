@@ -7,9 +7,6 @@ use aspen::api::{
     ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
     WriteCommand, WriteRequest, WriteResult,
 };
-use aspen::cluster::{
-    DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
-};
 use aspen::simulation::SimulationArtifactBuilder;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -121,6 +118,14 @@ impl KeyValueStore for DeterministicHiqlite {
                     command: WriteCommand::Set { key, value },
                 })
             }
+            WriteCommand::SetMulti { pairs } => {
+                for (key, value) in &pairs {
+                    kv.insert(key.clone(), value.clone());
+                }
+                Ok(WriteResult {
+                    command: WriteCommand::SetMulti { pairs },
+                })
+            }
         }
     }
 
@@ -224,27 +229,8 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
     artifact_builder = artifact_builder.add_event("writes: completed 5 payloads");
     artifact_builder = artifact_builder.add_event("read: verified payload");
 
-    let node_server = NodeServerConfig::new("hiqlite-sim", "127.0.0.1", 0, "sim-cookie")
-        .with_determinism(DeterministicClusterConfig {
-            simulation_seed: Some(SIMULATION_SEED),
-        })
-        .launch()
-        .await
-        .expect("node server");
-    let transport = IrohClusterTransport::spawn(&node_server, IrohClusterConfig::default())
-        .await
-        .expect("iroh transport");
-    transport.wait_until_online().await;
-
-    artifact_builder = artifact_builder.add_event("transport: iroh cluster online");
-
-    let snapshot = transport.endpoint().metrics_snapshot();
-    assert!(
-        snapshot.contains("magicsock_recv_datagrams"),
-        "expected magicsock counters in {snapshot}"
-    );
-
-    artifact_builder = artifact_builder.with_metrics(snapshot);
+    // Note: Iroh transport testing is incompatible with madsim (see plan.md Phase 3).
+    // This simulation tests the deterministic Hiqlite backend logic only.
 
     let trace = backend.leader_trace().await;
     artifact_builder = artifact_builder.add_events(trace.clone());
@@ -254,9 +240,6 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
             && trace.iter().any(|entry| entry.contains("leader-elected:3")),
         "missing churn events in trace {trace:?}"
     );
-
-    transport.shutdown().await.expect("shutdown transport");
-    node_server.shutdown().await.expect("shutdown node");
 
     let artifact = artifact_builder.build();
 

@@ -387,6 +387,9 @@ impl IrohEndpointManager {
             builder = builder.relay_mode(RelayMode::Default);
         }
 
+        // Configure ALPN for Raft RPC protocol
+        builder = builder.alpns(vec![b"raft-rpc".to_vec()]);
+
         let endpoint = builder
             .bind()
             .await

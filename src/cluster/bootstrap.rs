@@ -39,6 +39,8 @@ pub struct BootstrapHandle {
     pub state_machine: Arc<StateMachineStore>,
     /// IRPC server handle.
     pub rpc_server: RaftRpcServer,
+    /// IRPC network factory for dynamic peer addition.
+    pub network_factory: Arc<IrpcRaftNetworkFactory>,
 }
 
 impl BootstrapHandle {
@@ -178,7 +180,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     );
 
     // Create Raft core and state machine
-    let (raft_core, state_machine_store) = {
+    let (raft_core, state_machine_store, network_factory) = {
         let mut raft_config = RaftConfig::default();
         raft_config.heartbeat_interval = config.heartbeat_interval_ms;
         raft_config.election_timeout_min = config.election_timeout_min_ms;
@@ -191,19 +193,19 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
         let log_store = InMemoryLogStore::default();
         let state_machine_store = StateMachineStore::new();
-        let network = IrpcRaftNetworkFactory::new(Arc::clone(&iroh_manager), peer_addrs);
+        let network_factory = IrpcRaftNetworkFactory::new(Arc::clone(&iroh_manager), peer_addrs);
 
         let raft = openraft::Raft::new(
             config.node_id,
             validated_config,
-            network,
+            network_factory.clone(),
             log_store,
             state_machine_store.clone(),
         )
         .await
         .context("failed to initialize raft")?;
 
-        (raft, state_machine_store)
+        (raft, state_machine_store, Arc::new(network_factory))
     };
 
     // Spawn Raft actor
@@ -258,6 +260,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         raft_core,
         state_machine: state_machine_store,
         rpc_server,
+        network_factory,
     })
 }
 

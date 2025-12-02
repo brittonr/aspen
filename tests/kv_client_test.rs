@@ -2,8 +2,8 @@
 //!
 //! These tests validate the key-value client implementation by bootstrapping
 //! real nodes with the RaftActor backend and exercising KV operations. Multi-node
-//! replication tests are limited since IRPC peer discovery isn't fully implemented yet.
-//! Full multi-node scenarios are validated by the smoke test scripts.
+//! tests use runtime peer address exchange to enable IRPC connectivity.
+//! Full multi-node scenarios are also validated by the smoke test scripts.
 
 use std::time::Duration;
 
@@ -85,11 +85,7 @@ async fn test_single_node_write_read() {
 
 /// Test two nodes: initialize cluster, write on node1, read from node2.
 /// This validates that writes are replicated through Raft consensus.
-///
-/// NOTE: Skipped until IRPC peer discovery is fully implemented (see plan.md Phase 3).
-/// Multi-node Raft integration is validated by smoke test scripts.
 #[tokio::test]
-#[ignore]
 async fn test_two_node_replication() {
     let temp_dir1 = TempDir::new().unwrap();
     let temp_dir2 = TempDir::new().unwrap();
@@ -137,20 +133,54 @@ async fn test_two_node_replication() {
     )
     .unwrap();
 
+    // Exchange peer addresses between nodes
+    let addr1 = handle1.iroh_manager.node_addr().clone();
+    let addr2 = handle2.iroh_manager.node_addr().clone();
+
+    handle1.network_factory.add_peer(config2.node_id, addr2);
+    handle2.network_factory.add_peer(config1.node_id, addr1);
+
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
     let kv_client2 = KvClient::new(handle2.raft_actor.clone());
 
-    // Initialize cluster on node1 with both nodes as members
-    let init_req = InitRequest {
+    // Initialize cluster on both nodes with node1 only
+    // Note: Both nodes need to be initialized even if node2 will be added as learner
+    let init_req1 = InitRequest {
         initial_members: vec![
             ClusterNode::new(2001, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
-            ClusterNode::new(2002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
         ],
     };
-    cluster_client1.init(init_req).await.unwrap();
+    let init_req2 = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(2001, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+        ],
+    };
 
-    // Give Raft time to establish leadership and replicate
+    cluster_client1.init(init_req1).await.unwrap();
+
+    let cluster_client2 = RaftControlClient::new(handle2.raft_actor.clone());
+    cluster_client2.init(init_req2).await.unwrap();
+
+    // Give Raft time to establish leadership
+    sleep(Duration::from_millis(500)).await;
+
+    // Add node2 as a learner
+    let learner_req = AddLearnerRequest {
+        learner: ClusterNode::new(2002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+    };
+    cluster_client1.add_learner(learner_req).await.unwrap();
+
+    // Give time for learner to sync
+    sleep(Duration::from_millis(500)).await;
+
+    // Promote learner to voter
+    let membership_req = ChangeMembershipRequest {
+        members: vec![2001, 2002],
+    };
+    cluster_client1.change_membership(membership_req).await.unwrap();
+
+    // Give Raft time to establish new membership and replicate
     sleep(Duration::from_millis(1000)).await;
 
     // Write on node1
@@ -292,11 +322,7 @@ async fn test_multiple_operations() {
 }
 
 /// Test adding a learner to a running cluster.
-///
-/// NOTE: Skipped until IRPC peer discovery is fully implemented (see plan.md Phase 3).
-/// Multi-node Raft integration is validated by smoke test scripts.
 #[tokio::test]
-#[ignore]
 async fn test_add_learner_and_replicate() {
     let temp_dir1 = TempDir::new().unwrap();
     let temp_dir2 = TempDir::new().unwrap();
@@ -343,6 +369,13 @@ async fn test_add_learner_and_replicate() {
         bootstrap_node(config2.clone())
     )
     .unwrap();
+
+    // Exchange peer addresses between nodes
+    let addr1 = handle1.iroh_manager.node_addr().clone();
+    let addr2 = handle2.iroh_manager.node_addr().clone();
+
+    handle1.network_factory.add_peer(config2.node_id, addr2);
+    handle2.network_factory.add_peer(config1.node_id, addr1);
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
