@@ -158,10 +158,14 @@ Every node must run `aspen-node` with the same `--cookie` value and a unique
 Cluster namespaces (e.g. `--cluster-namespace aspen::primary`) are surfaced in
 `/metrics` so operators can correlate metrics with backend logs.
 
-## Iroh Transport (Experimental)
+## Iroh Transport
 
-`aspen-node` can remap the actor cluster traffic onto [`iroh`](https://iroh.computer)
-instead of the default TCP sockets. Launch nodes with:
+`aspen-node` uses [`iroh`](https://iroh.computer) for all Raft RPC communication
+via the IRPC protocol. The HTTP endpoints listed above remain for control-plane
+operations only (`/init`, `/add-learner`, `/change-membership`, `/write`, `/read`).
+All Raft consensus traffic (vote, append_entries, snapshot) flows over IRPC/Iroh.
+
+Launch nodes with:
 
 ```
 aspen-node \
@@ -177,10 +181,10 @@ Key notes:
   encoded as hex). If omitted, a random key is generated per run.
 - `--iroh-endpoint-file` dumps the current EndpointId plus any discovered relay/IP
   addresses as JSON so automation can read the value without scraping logs.
-- Each `--iroh-peer` may be a plain EndpointId (`<hex>`) or a JSON-serialized
-  `EndpointAddr`. Nodes connect to those peers after their endpoint reports
-  `online`.
+- Each `--iroh-peer` currently takes an EndpointId as a hex string. Full
+  `EndpointAddr` parsing from CLI is not yet implemented.
+- Nodes use the peer list to establish IRPC connections for Raft RPC.
 
-The CLI will dial the configured peers and feed the resulting QUIC streams into
-`NodeServer` via the external transport hook, letting ractor actors communicate
-over QUIC/relay links without touching the built-in control-plane protocol.
+Note: The `--peers` flag is not functional yet as `EndpointAddr` doesn't implement
+`FromStr`. Peer discovery currently works via the `--iroh-peer` flag which accepts
+endpoint IDs.

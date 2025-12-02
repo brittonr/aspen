@@ -19,15 +19,6 @@ impl DeterministicClusterController {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
-
-    fn ensure_members_have_raft_addr(node: &ClusterNode) -> Result<(), ControlPlaneError> {
-        if node.raft_addr.is_none() {
-            return Err(ControlPlaneError::InvalidRequest {
-                reason: "raft_addr must be set for every node".into(),
-            });
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -37,9 +28,6 @@ impl ClusterController for DeterministicClusterController {
             return Err(ControlPlaneError::InvalidRequest {
                 reason: "initial_members must not be empty".into(),
             });
-        }
-        for member in &request.initial_members {
-            Self::ensure_members_have_raft_addr(member)?;
         }
         let mut guard = self.state.lock().await;
         guard.nodes = request.initial_members.clone();
@@ -51,7 +39,6 @@ impl ClusterController for DeterministicClusterController {
         &self,
         request: AddLearnerRequest,
     ) -> Result<ClusterState, ControlPlaneError> {
-        Self::ensure_members_have_raft_addr(&request.learner)?;
         let mut guard = self.state.lock().await;
         guard.learners.push(request.learner);
         Ok(guard.clone())

@@ -47,7 +47,9 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - ✅ Fixed IRPC 0.11.0 usage (request-response pattern, proper serialization)
    - ⚠️  Peer discovery via CLI `--peers` not implemented (EndpointAddr doesn't implement FromStr)
    - ⚠️  Deferred: Deterministic simulation with real Iroh transport (incompatible with madsim)
-   - Next action: Update smoke tests for IRPC transport and implement peer address construction
+   - ✅ Cleaned up HTTP network types (`HttpRaftNetworkFactory`, `HttpRaftNetwork`)
+   - ✅ Verified smoke tests work with IRPC transport
+   - Next action: Move to Phase 4 (Cluster Services) or implement peer address construction from CLI
 2. **External transports**
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
