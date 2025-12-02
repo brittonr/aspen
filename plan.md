@@ -86,12 +86,22 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - ✅ **Ported 12 OpenRaft tests across 6 test files** (initialization, election, membership, restart, partition, client writes)
    - ✅ All tests passing except 1 skipped (add_learner multi-node issue requiring investigation)
    - ✅ Validated: cluster init, election logic, client writes, leader recovery, network simulation, membership changes
-   - ⚠️  Known issue: Multi-node `add_learner` hits OpenRaft engine assertion (`self.leader.is_none()`) - needs deeper investigation
-   - Next action: Move to Phase 5.2 (Deterministic Simulations) or investigate add_learner issue
-2. **Deterministic Simulations** (pending)
-   - Reintroduce madsim tests for leader election, failover, network partitions
-   - Add snapshot & log compaction scenarios
-   - Integrate simulation artifacts into CI for debugging
+   - ✅ **FIXED**: Multi-node `add_learner` issue resolved! Root cause was `InMemoryNetworkFactory::new_client` using wrong target parameter
+   - ✅ Network factory was sending RPCs to self.target instead of the parameter target, causing nodes to send to themselves
+   - ✅ All 13 router tests now passing (previously 1 skipped due to this bug)
+   - Next action: Continue Phase 5.2 (porting Priority 1-4 tests)
+2. **Deterministic Simulations** (in progress)
+   - ✅ **Phase 5.2 Research Complete**: Used 4 parallel agents to analyze test infrastructure, OpenRaft patterns, CI setup, and add_learner issue
+   - ✅ **add_learner Bug Fixed**: Root cause was `InMemoryNetworkFactory::new_client` using wrong target (self.target instead of parameter)
+   - ✅ **Network factory fix**: Nodes were sending RPCs to themselves, triggering OpenRaft assertion `self.leader.is_none()`
+   - ✅ **All router tests passing**: 13/13 tests now pass (previously 12 passing, 1 skipped)
+   - ✅ **Ported snapshot building test** (`router_snapshot_t10_build_snapshot.rs`) with 2 passing test cases
+   - ✅ Validates automatic snapshot creation based on SnapshotPolicy (threshold=50 and threshold=10)
+   - ✅ **Multi-node patterns documented**: Added AspenRouter documentation for correct cluster creation sequence
+   - ✅ **Test count**: 43/45 tests passing (2 KV client tests need pattern adjustments after fix)
+   - 🔄 **In Progress**: Continue porting Priority 1-4 tests (snapshots, replication, election, membership)
+   - Next actions: Port remaining Priority 1 tests, now unblocked by network fix
+   - Remaining: Reintroduce madsim tests for leader election, failover, network partitions
 3. **Documentation** (pending)
    - Update `AGENTS.md` with getting-started guide (ractor, Iroh, IRPC, OpenRaft integration)
    - Create `docs/getting-started.md` for single-node & 3-node quickstarts

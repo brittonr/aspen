@@ -41,22 +41,21 @@ pub struct AspenNode {
 /// simulated network layer with configurable delays and failures.
 #[derive(Clone)]
 struct InMemoryNetworkFactory {
-    target: NodeId,
     router: Arc<InnerRouter>,
 }
 
 impl InMemoryNetworkFactory {
-    fn new(target: NodeId, router: Arc<InnerRouter>) -> Self {
-        Self { target, router }
+    fn new(router: Arc<InnerRouter>) -> Self {
+        Self { router }
     }
 }
 
 impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFactory {
     type Network = InMemoryNetwork;
 
-    async fn new_client(&mut self, _target: NodeId, _node: &BasicNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
         InMemoryNetwork {
-            target: self.target,
+            target, // Use the target parameter, not self.target!
             router: self.router.clone(),
         }
     }
@@ -234,6 +233,17 @@ impl InnerRouter {
 /// - `wait(&id, timeout).applied_index(Some(5), "msg")` - Wait for log application
 /// - `wait(&id, timeout).current_leader(Some(0), "msg")` - Wait for leader election
 /// - `wait(&id, timeout).state(ServerState::Leader, "msg")` - Wait for state change
+///
+/// ## Multi-Node Cluster Pattern
+///
+/// When creating multi-node clusters, follow OpenRaft's pattern:
+/// 1. Create leader node first
+/// 2. Initialize the leader
+/// 3. Wait for leader to be ready (ServerState::Leader)
+/// 4. Create other nodes
+/// 5. Add them as learners via `add_learner()`
+///
+/// This ensures clean state transitions and avoids race conditions during replication setup.
 pub struct AspenRouter {
     config: Arc<Config>,
     inner: Arc<InnerRouter>,
@@ -279,7 +289,7 @@ impl AspenRouter {
         log_store: InMemoryLogStore,
         state_machine: Arc<StateMachineStore>,
     ) -> Result<()> {
-        let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
+        let network_factory = InMemoryNetworkFactory::new(self.inner.clone());
 
         let raft = Raft::new(id, self.config.clone(), network_factory, log_store.clone(), state_machine.clone())
             .await

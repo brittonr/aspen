@@ -33,7 +33,6 @@ fn timeout() -> Option<Duration> {
 /// a state machine initialization issue that needs further investigation. The test is
 /// currently ignored to unblock other test porting work.
 #[tokio::test]
-#[ignore = "OpenRaft engine state machine issue - needs investigation"]
 async fn test_add_learner_and_promote() -> Result<()> {
     let config = Arc::new(
         Config {
@@ -45,10 +44,13 @@ async fn test_add_learner_and_promote() -> Result<()> {
 
     let mut router = AspenRouter::new(config.clone());
 
-    // Create node 0 first
+    // IMPORTANT: Create leader node FIRST, initialize it, THEN create other nodes.
+    // This follows OpenRaft's pattern (see openraft/tests/tests/fixtures/mod.rs::new_cluster).
+    // Creating the leader first and waiting for it to be ready ensures clean state transitions
+    // when adding learners later.
+    tracing::info!("--- creating and initializing leader node 0");
     router.new_raft_node(0).await?;
 
-    tracing::info!("--- initialize single-node cluster with node 0");
     {
         let node0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
@@ -66,15 +68,16 @@ async fn test_add_learner_and_promote() -> Result<()> {
             .await?;
     }
 
-    tracing::info!("--- create node 1 and add as learner");
+    tracing::info!("--- creating node 1 and adding as learner");
     {
-        // Create node 1 after node 0 is initialized and leading
+        // Create node 1 AFTER leader is fully initialized
         router.new_raft_node(1).await?;
 
-        // Give node 1 a moment to fully initialize in learner state
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        tracing::info!("node 1 state: {:?}", router.get_raft_handle(&1)?.metrics().borrow().state);
+        // Give node 1 time to fully initialize in Learner state
+        router
+            .wait(&1, timeout())
+            .state(ServerState::Learner, "node 1 is learner")
+            .await?;
 
         let leader = router.get_raft_handle(&0)?;
         leader.add_learner(1, BasicNode::default(), false).await?;
