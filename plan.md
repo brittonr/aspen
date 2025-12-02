@@ -33,10 +33,20 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Integrated artifact collection into `flake.nix` nextest check with `postInstall` hook that copies artifacts to build output for CI visibility. ✅
    - Next action: move to Phase 3 (Network Fabric) to build the real IROH + IRPC transport layer.
 
-## Phase 3: Network Fabric
-1. **IROH + IRPC transport**
-   - Build an `irpc` service that exposes the Raft RPC surface (AppendEntries, Vote, InstallSnapshot) over `iroh` sessions.
-   - Implement `RaftNetworkFactory` using the new `irpc` client and plug it into the Raft actor.
+## Phase 3: Network Fabric (in progress)
+1. **IROH + IRPC transport** (in progress)
+   - ✅ Created `src/raft/rpc.rs` with serializable type definitions for Raft RPC messages (`RaftVoteRequest`, `RaftAppendEntriesRequest`, `RaftSnapshotRequest`)
+   - Next action: Implement real `IrohEndpointManager` in `src/cluster/iroh.rs` to replace the fake `IrohClusterTransport` stub
+   - Next action: Complete IRPC service definition with `#[rpc_requests]` macro for client/server code generation
+   - Next action: Build `IrpcRaftNetworkFactory` and `IrpcRaftNetwork<C>` implementing `RaftNetworkV2` trait in `src/raft/network.rs`
+   - Next action: Create IRPC server in `src/raft/server.rs` that forwards RPCs to `raft_core.*` methods
+   - Next action: Wire IRPC server into `aspen-node.rs`, replacing HTTP Raft RPC routes (keep HTTP control-plane)
+   - Next action: Extend cluster metadata with Iroh addresses (`raft_iroh_addr` field) for node discovery
+   - Next action: Update smoke tests to pass Iroh addresses and verify IRPC transport
+   - Decision: Upgrade from OpenRaft v1 network API to v2 (`RaftNetworkV2`) for better snapshot streaming control
+   - Decision: Store Iroh addresses in cluster metadata (via control API) rather than static config
+   - Decision: Remove HTTP Raft RPC routes after migration (HTTP remains for control-plane only)
+   - Deferred: Deterministic simulation strategy with real Iroh transport (focus on real transport first)
 2. **External transports**
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
