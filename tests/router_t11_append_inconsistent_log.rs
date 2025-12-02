@@ -145,9 +145,10 @@ async fn test_append_inconsistent_log() -> Result<()> {
     // This requires overwriting node-0's conflicting entries from term 2
 
     // Wait for node-0 to sync with leader's log
+    // Note: Leader appends a blank log entry when elected, so applied_index will be 101
     router
         .wait(&0, Some(Duration::from_secs(5)))
-        .applied_index(Some(100), "node-0 syncs to leader's log")
+        .applied_index(Some(101), "node-0 syncs to leader's log including blank leader entry")
         .await?;
 
     tracing::info!("--- section 6: verify conflict resolution");
@@ -187,7 +188,7 @@ async fn test_append_inconsistent_log() -> Result<()> {
     // Verify replication still works
     router
         .wait(&0, timeout())
-        .applied_index(Some(101), "node-0 applies new entry")
+        .applied_index(Some(102), "node-0 applies new entry")
         .await?;
 
     let val = router.read(&0, "test_key").await;

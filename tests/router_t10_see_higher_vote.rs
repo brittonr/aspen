@@ -82,12 +82,20 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     tracing::info!("--- section 3: trigger leader to see higher vote");
 
-    // Write to leader to trigger append-entries to node-1
-    // This should cause the leader to see node-1's higher vote
+    // First write triggers replication, which causes leader to see higher vote
+    let _ = router.write(&0, "trigger".to_string(), "value".to_string()).await;
+
+    // Wait for node-0 to step down after seeing higher vote from node-1
+    router
+        .wait(&0, timeout())
+        .state(ServerState::Follower, "node-0 steps down after seeing higher vote")
+        .await?;
+
+    // Now verify that subsequent writes fail
     let write_result = router.write(&0, "key1".to_string(), "value1".to_string()).await;
 
-    // The write should fail as the leader will step down
-    assert!(write_result.is_err(), "write should fail when leader steps down");
+    // The write should fail because the leader has stepped down
+    assert!(write_result.is_err(), "write should fail when leader has stepped down");
 
     tracing::info!("--- section 4: verify leader reverted to follower");
 

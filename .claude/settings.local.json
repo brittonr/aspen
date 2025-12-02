@@ -8,7 +8,13 @@
       "WebFetch(domain:www.iroh.computer)",
       "Bash(git add:*)",
       "Bash(test:*)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "Bash(cargo nextest list:*)",
+      "Bash(cargo test:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(cargo check:*)",
+      "mcp__context7__get-library-docs"
     ],
     "deny": [],
     "ask": []

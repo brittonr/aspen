@@ -111,20 +111,29 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
        - Validates followers reject vote requests while receiving heartbeats
        - Tests leader lease expiration and vote timing
        - Critical for preventing unnecessary elections
-   - ✅ **Test Statistics**: 18/23 router tests passing, 5 tests with runtime issues
-   - ✅ **Phase 5 Critical Tests Ported** (6 tests, all compile now):
+   - ✅ **Test Statistics**: **22/23 router tests passing (95.7% pass rate)**
+   - ✅ **Phase 5 Critical Tests Ported** (6 tests, 5 passing):
      - ✅ `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart (PASSING)
-     - ⚠️  `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote (runtime failure)
-     - ⚠️  `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs (runtime failure)
-     - ⚠️  `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition (runtime failure)
-     - ⚠️  `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries) (runtime failure)
-     - ⚠️  `router_t10_conflict_with_empty_entries.rs` - Conflict detection even with empty append-entries (runtime failure)
+     - ✅ `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote (PASSING)
+     - ✅ `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs (PASSING)
+     - ✅ `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition (PASSING)
+     - ✅ `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries) (PASSING)
+     - ⚠️  `router_t10_conflict_with_empty_entries.rs` - Conflict detection with empty append-entries (overly complex ported version, needs simplification)
+   - ✅ **Runtime Issues Fixed** (5 critical bugs identified and resolved via parallel agent investigation):
+     1. **Vote progression bug**: Section 4 was bumping term to 2, preventing section 5 from using term 1
+     2. **Leader stepdown race**: Added wait for stepdown before verifying write failures
+     3. **Snapshot index off-by-one**: Expected index 20, actual is 19 (last committed log)
+     4. **Leader lease timeout**: Missing 1-second sleep before election to allow old leader's lease to expire
+     5. **Blank leader log**: Multiple tests not accounting for blank log entry added when leader is elected
    - ✅ **Compilation Issues Fixed**: All type mismatches and RaftMetrics field access issues resolved
      - Fixed 8 `CommittedLeaderId` type mismatches by using `log_id::<AppTypeConfig>()` helper
      - Fixed 3 `metrics.applied_index` field access errors by using Wait API or removing redundant checks
      - Replaced direct storage manipulation with `append_entries` RPCs for proper vote handling
-   - ⚠️  **Runtime Issues Discovered**: 4 ported tests + 1 pre-existing test have deeper runtime failures requiring investigation
-   - 📝 **Key Learnings**: Direct storage manipulation after Raft initialization causes in-memory/storage sync issues; vote updates must go through Raft protocol
+   - 📝 **Key Learnings**:
+     - Direct storage manipulation after Raft initialization causes in-memory/storage sync issues; vote updates must go through Raft protocol
+     - Leader elections add blank log entries that tests must account for in applied_index expectations
+     - Leader leases prevent elections; must wait for expiration before triggering new elections
+     - Snapshot creation happens at last_committed_index, not at the trigger threshold index
    - 📝 **Documentation Created**: `.claude/phase5_test_migration.md` with detailed migration decisions and patterns
    - **Deferred** (need additional AspenRouter features):
      - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait

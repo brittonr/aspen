@@ -62,7 +62,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
         vote: Vote::new_committed(1, 1),
         prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 5)),
         entries: vec![],  // Empty entries
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 1, 5)),
+        leader_commit: None,  // No logs committed yet
     };
 
     let resp = r0.append_entries(req).await?;
@@ -104,12 +104,12 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     tracing::info!("--- section 4: test conflict with mismatched prev_log_id");
 
     // Send append-entries with prev_log_id that exists but doesn't match
-    // Node has log at index 2 with term 1, we claim it's term 2
+    // Node has log at index 2 with term 1, we claim it's at index 3
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(2, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(2, 1, 3)),
+        vote: Vote::new_committed(1, 1),  // Keep same vote to avoid bumping term
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 3)),
         entries: vec![],  // Still empty entries
-        leader_commit: Some(log_id::<AppTypeConfig>(2, 1, 3)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),  // Only logs 0-2 exist
     };
 
     let resp = r0.append_entries(req).await?;
@@ -164,7 +164,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
             blank_ent::<AppTypeConfig>(1, 0, 4),
             blank_ent::<AppTypeConfig>(1, 0, 5),
         ],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 5)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),  // Only committed up to 2 before these entries
     };
 
     let resp = r0.append_entries(req).await?;
@@ -178,7 +178,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
             blank_ent::<AppTypeConfig>(2, 1, 5),
             blank_ent::<AppTypeConfig>(2, 1, 6),
         ],
-        leader_commit: Some(log_id::<AppTypeConfig>(2, 1, 6)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 5)),  // Only logs 0-5 exist in term 1
     };
 
     let resp = r0.append_entries(req).await?;

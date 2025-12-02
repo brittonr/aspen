@@ -66,6 +66,11 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     tracing::info!("--- section 3: elect node-1 as new leader");
 
+    // Wait for leader lease to expire on node-2
+    // Otherwise node-2 will reject vote requests while it still has
+    // an active lease for the old leader (node-0)
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
+
     // Manually trigger election on node-1
     {
         let n1 = router.get_raft_handle(&1)?;
@@ -87,7 +92,8 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     tracing::info!("--- section 4: write entries while node-0 is partitioned");
 
     // Write multiple entries to the new leader
-    let mut new_log_index = log_index;
+    // Account for blank leader log when node-1 was elected
+    let mut new_log_index = log_index + 1;
     for i in 0..10 {
         router.write(&1, format!("key{}", i), format!("value{}", i)).await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;

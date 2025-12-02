@@ -83,9 +83,9 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
         if let Some(snapshot) = metrics.snapshot {
             assert_eq!(
-                snapshot.index, log_index,
-                "snapshot should be at index {}",
-                log_index
+                snapshot.index, log_index - 1,
+                "snapshot should be at index {} (last committed log)",
+                log_index - 1
             );
             tracing::info!("snapshot created at index {}", snapshot.index);
             break;
