@@ -73,6 +73,7 @@ pub trait ClusterController: Send + Sync {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WriteCommand {
     Set { key: String, value: String },
+    SetMulti { pairs: Vec<(String, String)> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -272,6 +272,9 @@ async fn handle_write(
             key: key.clone(),
             value: value.clone(),
         },
+        WriteCommand::SetMulti { ref pairs } => AppRequest::SetMulti {
+            pairs: pairs.clone(),
+        },
     };
     state
         .raft

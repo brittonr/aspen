@@ -85,6 +85,14 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     command: WriteCommand::Set { key, value },
                 })
             }
+            WriteCommand::SetMulti { ref pairs } => {
+                for (key, value) in pairs {
+                    inner.insert(key.clone(), value.clone());
+                }
+                Ok(WriteResult {
+                    command: request.command.clone(),
+                })
+            }
         }
     }
 

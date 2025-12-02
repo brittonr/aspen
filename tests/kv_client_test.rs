@@ -1,0 +1,517 @@
+//! Integration tests for KvClient with RaftActor backend.
+//!
+//! These tests validate the key-value client implementation by bootstrapping
+//! real nodes with the RaftActor backend and exercising KV operations. Multi-node
+//! replication tests are limited since IRPC peer discovery isn't fully implemented yet.
+//! Full multi-node scenarios are validated by the smoke test scripts.
+
+use std::time::Duration;
+
+use aspen::api::{
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
+    KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest,
+};
+use aspen::cluster::bootstrap::bootstrap_node;
+use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
+use aspen::raft::RaftControlClient;
+use tempfile::TempDir;
+use tokio::time::sleep;
+
+/// Test single node: initialize cluster, write a key, read it back.
+#[tokio::test]
+async fn test_single_node_write_read() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let config = ClusterBootstrapConfig {
+        node_id: 1000,
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0, // OS-assigned port
+        cookie: "test-kv-single".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let handle = bootstrap_node(config.clone()).await.unwrap();
+    let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
+    let kv_client = KvClient::new(handle.raft_actor.clone());
+
+    // Initialize cluster with single node
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            1000,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster_client.init(init_req).await.unwrap();
+
+    // Write a key-value pair
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "foo".into(),
+            value: "bar".into(),
+        },
+    };
+    let write_result = kv_client.write(write_req).await.unwrap();
+    assert_eq!(
+        write_result.command,
+        WriteCommand::Set {
+            key: "foo".into(),
+            value: "bar".into()
+        }
+    );
+
+    // Read the key back
+    let read_req = ReadRequest {
+        key: "foo".into(),
+    };
+    let read_result = kv_client.read(read_req).await.unwrap();
+    assert_eq!(read_result.key, "foo");
+    assert_eq!(read_result.value, "bar");
+
+    // Shutdown
+    handle.shutdown().await.unwrap();
+}
+
+/// Test two nodes: initialize cluster, write on node1, read from node2.
+/// This validates that writes are replicated through Raft consensus.
+///
+/// NOTE: Skipped until IRPC peer discovery is fully implemented (see plan.md Phase 3).
+/// Multi-node Raft integration is validated by smoke test scripts.
+#[tokio::test]
+#[ignore]
+async fn test_two_node_replication() {
+    let temp_dir1 = TempDir::new().unwrap();
+    let temp_dir2 = TempDir::new().unwrap();
+
+    let config1 = ClusterBootstrapConfig {
+        node_id: 2001,
+        data_dir: Some(temp_dir1.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-two-nodes".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let config2 = ClusterBootstrapConfig {
+        node_id: 2002,
+        data_dir: Some(temp_dir2.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-two-nodes".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("b".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    // Bootstrap both nodes
+    let (handle1, handle2) = tokio::try_join!(
+        bootstrap_node(config1.clone()),
+        bootstrap_node(config2.clone())
+    )
+    .unwrap();
+
+    let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
+    let kv_client1 = KvClient::new(handle1.raft_actor.clone());
+    let kv_client2 = KvClient::new(handle2.raft_actor.clone());
+
+    // Initialize cluster on node1 with both nodes as members
+    let init_req = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(2001, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+            ClusterNode::new(2002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+        ],
+    };
+    cluster_client1.init(init_req).await.unwrap();
+
+    // Give Raft time to establish leadership and replicate
+    sleep(Duration::from_millis(1000)).await;
+
+    // Write on node1
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "replicated_key".into(),
+            value: "replicated_value".into(),
+        },
+    };
+    kv_client1.write(write_req).await.unwrap();
+
+    // Give time for replication
+    sleep(Duration::from_millis(500)).await;
+
+    // Read from node2 to verify replication
+    let read_req = ReadRequest {
+        key: "replicated_key".into(),
+    };
+    let read_result = kv_client2.read(read_req).await.unwrap();
+    assert_eq!(read_result.key, "replicated_key");
+    assert_eq!(read_result.value, "replicated_value");
+
+    // Shutdown both nodes
+    let _ = tokio::try_join!(handle1.shutdown(), handle2.shutdown());
+}
+
+/// Test error handling: reading a key that doesn't exist.
+#[tokio::test]
+async fn test_read_nonexistent_key() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let config = ClusterBootstrapConfig {
+        node_id: 3000,
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-error".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let handle = bootstrap_node(config.clone()).await.unwrap();
+    let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
+    let kv_client = KvClient::new(handle.raft_actor.clone());
+
+    // Initialize cluster
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            3000,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster_client.init(init_req).await.unwrap();
+
+    // Try to read a key that doesn't exist
+    let read_req = ReadRequest {
+        key: "nonexistent".into(),
+    };
+    let result = kv_client.read(read_req).await;
+
+    // Verify we get a NotFound error
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(matches!(err, KeyValueStoreError::NotFound { .. }));
+
+    // Shutdown
+    handle.shutdown().await.unwrap();
+}
+
+/// Test multiple sequential writes and reads on a single node.
+#[tokio::test]
+async fn test_multiple_operations() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let config = ClusterBootstrapConfig {
+        node_id: 4000,
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-multi".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let handle = bootstrap_node(config.clone()).await.unwrap();
+    let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
+    let kv_client = KvClient::new(handle.raft_actor.clone());
+
+    // Initialize cluster
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            4000,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster_client.init(init_req).await.unwrap();
+
+    // Write multiple key-value pairs
+    for i in 0..10 {
+        let write_req = WriteRequest {
+            command: WriteCommand::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        };
+        kv_client.write(write_req).await.unwrap();
+    }
+
+    // Read all keys back and verify
+    for i in 0..10 {
+        let read_req = ReadRequest {
+            key: format!("key{}", i),
+        };
+        let read_result = kv_client.read(read_req).await.unwrap();
+        assert_eq!(read_result.key, format!("key{}", i));
+        assert_eq!(read_result.value, format!("value{}", i));
+    }
+
+    // Shutdown
+    handle.shutdown().await.unwrap();
+}
+
+/// Test adding a learner to a running cluster.
+///
+/// NOTE: Skipped until IRPC peer discovery is fully implemented (see plan.md Phase 3).
+/// Multi-node Raft integration is validated by smoke test scripts.
+#[tokio::test]
+#[ignore]
+async fn test_add_learner_and_replicate() {
+    let temp_dir1 = TempDir::new().unwrap();
+    let temp_dir2 = TempDir::new().unwrap();
+
+    let config1 = ClusterBootstrapConfig {
+        node_id: 5001,
+        data_dir: Some(temp_dir1.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-learner".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let config2 = ClusterBootstrapConfig {
+        node_id: 5002,
+        data_dir: Some(temp_dir2.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-learner".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("b".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    // Bootstrap both nodes
+    let (handle1, handle2) = tokio::try_join!(
+        bootstrap_node(config1.clone()),
+        bootstrap_node(config2.clone())
+    )
+    .unwrap();
+
+    let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
+    let kv_client1 = KvClient::new(handle1.raft_actor.clone());
+    let kv_client2 = KvClient::new(handle2.raft_actor.clone());
+
+    // Initialize cluster with only node1
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            5001,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder1".into()),
+        )],
+    };
+    cluster_client1.init(init_req).await.unwrap();
+
+    sleep(Duration::from_millis(500)).await;
+
+    // Write a key before adding learner
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "before_learner".into(),
+            value: "value1".into(),
+        },
+    };
+    kv_client1.write(write_req).await.unwrap();
+
+    // Add node2 as learner
+    let learner_req = AddLearnerRequest {
+        learner: ClusterNode::new(5002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+    };
+    cluster_client1.add_learner(learner_req).await.unwrap();
+
+    sleep(Duration::from_millis(1000)).await;
+
+    // Write another key after adding learner
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "after_learner".into(),
+            value: "value2".into(),
+        },
+    };
+    kv_client1.write(write_req).await.unwrap();
+
+    sleep(Duration::from_millis(500)).await;
+
+    // Promote learner to voting member
+    let membership_req = ChangeMembershipRequest {
+        members: vec![5001, 5002],
+    };
+    cluster_client1
+        .change_membership(membership_req)
+        .await
+        .unwrap();
+
+    sleep(Duration::from_millis(1000)).await;
+
+    // Verify node2 can read both keys
+    let read_req1 = ReadRequest {
+        key: "before_learner".into(),
+    };
+    let result1 = kv_client2.read(read_req1).await.unwrap();
+    assert_eq!(result1.value, "value1");
+
+    let read_req2 = ReadRequest {
+        key: "after_learner".into(),
+    };
+    let result2 = kv_client2.read(read_req2).await.unwrap();
+    assert_eq!(result2.value, "value2");
+
+    // Shutdown both nodes
+    let _ = tokio::try_join!(handle1.shutdown(), handle2.shutdown());
+}
+
+/// Test SetMulti: atomic multi-key writes on a single node.
+#[tokio::test]
+async fn test_setmulti_operations() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let config = ClusterBootstrapConfig {
+        node_id: 6000,
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        host: "127.0.0.1".into(),
+        ractor_port: 0,
+        cookie: "test-kv-setmulti".into(),
+        http_addr: "127.0.0.1:0".parse().unwrap(),
+        control_backend: ControlBackend::RaftActor,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig {
+            secret_key: Some("a".repeat(64)),
+            relay_url: None,
+        },
+        peers: vec![],
+    };
+
+    let handle = bootstrap_node(config.clone()).await.unwrap();
+    let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
+    let kv_client = KvClient::new(handle.raft_actor.clone());
+
+    // Initialize cluster
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            6000,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster_client.init(init_req).await.unwrap();
+
+    // Write multiple key-value pairs atomically using SetMulti
+    let pairs = vec![
+        ("multi_key1".to_string(), "multi_value1".to_string()),
+        ("multi_key2".to_string(), "multi_value2".to_string()),
+        ("multi_key3".to_string(), "multi_value3".to_string()),
+    ];
+    let write_req = WriteRequest {
+        command: WriteCommand::SetMulti {
+            pairs: pairs.clone(),
+        },
+    };
+    kv_client.write(write_req).await.unwrap();
+
+    // Read all keys back and verify they were all written
+    for (key, expected_value) in &pairs {
+        let read_req = ReadRequest { key: key.clone() };
+        let read_result = kv_client.read(read_req).await.unwrap();
+        assert_eq!(read_result.key, *key);
+        assert_eq!(read_result.value, *expected_value);
+    }
+
+    // Test overwriting existing keys with SetMulti
+    let new_pairs = vec![
+        ("multi_key1".to_string(), "updated1".to_string()),
+        ("multi_key2".to_string(), "updated2".to_string()),
+    ];
+    let write_req2 = WriteRequest {
+        command: WriteCommand::SetMulti {
+            pairs: new_pairs.clone(),
+        },
+    };
+    kv_client.write(write_req2).await.unwrap();
+
+    // Verify the values were updated
+    let read_result1 = kv_client
+        .read(ReadRequest {
+            key: "multi_key1".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(read_result1.value, "updated1");
+
+    let read_result2 = kv_client
+        .read(ReadRequest {
+            key: "multi_key2".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(read_result2.value, "updated2");
+
+    // Verify multi_key3 still has the original value
+    let read_result3 = kv_client
+        .read(ReadRequest {
+            key: "multi_key3".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(read_result3.value, "multi_value3");
+
+    // Shutdown
+    handle.shutdown().await.unwrap();
+}

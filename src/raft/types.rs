@@ -9,12 +9,23 @@ pub type NodeId = u64;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum AppRequest {
     Set { key: String, value: String },
+    SetMulti { pairs: Vec<(String, String)> },
 }
 
 impl fmt::Display for AppRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppRequest::Set { key, value } => write!(f, "Set {{ key: {key}, value: {value} }}"),
+            AppRequest::SetMulti { pairs } => {
+                write!(f, "SetMulti {{ pairs: [")?;
+                for (i, (k, v)) in pairs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "({k}, {v})")?;
+                }
+                write!(f, "] }}")
+            }
         }
     }
 }

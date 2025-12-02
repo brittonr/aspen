@@ -1,3 +1,4 @@
+pub mod client;
 pub mod types;
 
 use std::path::PathBuf;
@@ -5,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use iroh::{EndpointAddr, EndpointId, SecretKey};
 
+pub use self::client::KvClient;
 pub use self::types::NodeId;
 
 /// Builds a deterministic KV service surface for integration tests and examples.

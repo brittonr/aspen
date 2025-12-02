@@ -14,5 +14,5 @@ pub mod kv;
 pub mod raft;
 pub mod simulation;
 
-pub use kv::KvServiceBuilder;
+pub use kv::{KvClient, KvServiceBuilder};
 pub use raft::RaftControlClient;

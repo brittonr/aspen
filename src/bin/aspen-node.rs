@@ -10,6 +10,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::{bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
 use axum::{
     Json, Router,
@@ -160,8 +161,9 @@ async fn main() -> Result<()> {
                 DeterministicKeyValueStore::new(),
             ),
             ControlBackend::RaftActor => {
-                let client = Arc::new(RaftControlClient::new(handle.raft_actor.clone()));
-                (client.clone(), client)
+                let cluster_client = Arc::new(RaftControlClient::new(handle.raft_actor.clone()));
+                let kv_client = Arc::new(KvClient::new(handle.raft_actor.clone()));
+                (cluster_client, kv_client)
             }
         };
 

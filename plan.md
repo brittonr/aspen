@@ -62,9 +62,13 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - ✅ Updated smoke test scripts to work with new bootstrap
    - ✅ Added 5 comprehensive integration tests in `tests/bootstrap_test.rs`
    - Next action: Move to Phase 4.2 (Client + API)
-2. **Client + API**
-   - Recreate the KV API (`set`, `get`, `txn`) but go through a `ractor` client actor that forwards to the Raft actor.
-   - Add smoke tests using `cargo nextest` that bring up two nodes via the new cluster harness.
+2. **Client + API** ✅
+   - ✅ Created `KvClient` in `src/kv/client.rs` that forwards KV operations to RaftActor
+   - ✅ Wired KvClient into HTTP layer with clean separation from cluster control
+   - ✅ Added `SetMulti` command for atomic multi-key writes
+   - ✅ Created `tests/kv_client_test.rs` with 4 passing integration tests (2 skipped pending IRPC peer discovery)
+   - ✅ Verified smoke tests pass with new implementation
+   - Next action: Move to Phase 5 (Documentation & Hardening) or implement additional KV features
 
 ## Phase 5: Documentation & Hardening
 1. **Docs**

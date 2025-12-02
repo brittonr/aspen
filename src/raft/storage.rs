@@ -316,6 +316,12 @@ impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
                             value: Some(value.clone()),
                         }
                     }
+                    AppRequest::SetMulti { pairs } => {
+                        for (key, value) in pairs {
+                            sm.data.insert(key.clone(), value.clone());
+                        }
+                        AppResponse { value: None }
+                    }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =
