@@ -138,6 +138,11 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - **Deferred** (need additional AspenRouter features):
      - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait
      - `t50_append_entries_backoff` - Requires RPC counting infrastructure
+     - `t10_conflict_with_empty_entries` - Overly complex ported version, needs simplification to match original
+   - **Next Action**: Phase 5.2 complete. Move to Phase 5.3 (Documentation) or port additional high-value tests from analysis:
+     - `test_install_snapshot_conflict` - State consistency (highest priority)
+     - `test_truncate_logs_revert_effective_membership` - Membership safety
+     - `test_follower_do_append_entries_three_membership_entries` - Concurrent membership changes
 3. **Documentation** (pending)
    - Update `AGENTS.md` with getting-started guide (ractor, Iroh, IRPC, OpenRaft integration)
    - Create `docs/getting-started.md` for single-node & 3-node quickstarts
