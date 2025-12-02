@@ -94,6 +94,7 @@ start_node() {
         --port "$cluster_port"
         --cookie "aspen-dev-cookie"
         --iroh-secret-key "$secret"
+        --control-backend "deterministic"
     )
     if (( ${#EXTRA_NODE_ARGS[@]} > 0 )); then
         cmd+=("${EXTRA_NODE_ARGS[@]}")

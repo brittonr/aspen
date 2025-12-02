@@ -46,6 +46,7 @@ ractor_actors = { git = "https://github.com/slawlor/ractor_actors", branch = "ma
 kameo = { version = "0.19.2", features = ["remote"] }
 futures = "0.3.31"
 libp2p = { version = "0.56.0", features = ["serde"] }
+toml = "0.8"
 
 [dev-dependencies]
 proptest = "1.0"

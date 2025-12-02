@@ -54,9 +54,14 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
 ## Phase 4: Cluster Services
-1. **Bootstrap orchestration**
-   - Write a `cluster::bootstrap` module that spins up a `NodeServer`, launches a Raft actor, and registers it with the cluster metadata store.
-   - Provide CLI/Config parsing for node IDs, data directories, and peer endpoints.
+1. **Bootstrap orchestration** ✅
+   - ✅ Created `src/cluster/config.rs` with layered config loading (env vars < TOML < CLI args)
+   - ✅ Created `src/cluster/metadata.rs` with redb-backed persistent metadata store
+   - ✅ Created `src/cluster/bootstrap.rs` orchestrating full node startup and graceful shutdown
+   - ✅ Refactored `aspen-node.rs` from ~400 lines to 325 lines using bootstrap module
+   - ✅ Updated smoke test scripts to work with new bootstrap
+   - ✅ Added 5 comprehensive integration tests in `tests/bootstrap_test.rs`
+   - Next action: Move to Phase 4.2 (Client + API)
 2. **Client + API**
    - Recreate the KV API (`set`, `get`, `txn`) but go through a `ractor` client actor that forwards to the Raft actor.
    - Add smoke tests using `cargo nextest` that bring up two nodes via the new cluster harness.

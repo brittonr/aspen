@@ -17,6 +17,10 @@ use tokio::net::ToSocketAddrs;
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 use tokio::task::JoinHandle;
 
+pub mod bootstrap;
+pub mod config;
+pub mod metadata;
+
 /// Controls how the node server should behave while running in deterministic
 /// simulations.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
