@@ -126,17 +126,12 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     }
 
     // Verify node-1's metrics match other nodes
+    // Note: applied_index is already validated via Wait API above (lines 109-112)
     let n1 = router.get_raft_handle(&1)?;
     let metrics1 = n1.metrics().borrow().clone();
 
     let n0 = router.get_raft_handle(&0)?;
     let metrics0 = n0.metrics().borrow().clone();
-
-    assert_eq!(
-        metrics1.applied_index,
-        metrics0.applied_index,
-        "node-1 applied index should match leader"
-    );
 
     assert_eq!(
         metrics1.last_log_index,

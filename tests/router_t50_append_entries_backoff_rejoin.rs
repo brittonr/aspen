@@ -141,15 +141,13 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Verify all nodes have same applied index
     for node_id in [0, 1, 2] {
-        let n = router.get_raft_handle(&node_id)?;
-        let metrics = n.metrics().borrow().clone();
-        assert_eq!(
-            metrics.applied_index,
-            Some(new_log_index),
-            "node {} should have applied index {}",
-            node_id,
-            new_log_index
-        );
+        router
+            .wait(&node_id, timeout())
+            .applied_index(
+                Some(new_log_index),
+                &format!("node {} should have applied index {}", node_id, new_log_index)
+            )
+            .await?;
     }
 
     Ok(())

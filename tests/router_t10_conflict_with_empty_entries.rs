@@ -12,11 +12,10 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
-use openraft::{Config, LogId, ServerState, Vote, RaftLogReader};
+use openraft::{Config, ServerState, Vote};
 use openraft::raft::AppendEntriesRequest;
-use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
-use openraft::testing::{blank_ent};
-use openraft::vote::leader_id_std::CommittedLeaderId;
+use openraft::storage::{RaftLogStorage, RaftLogReader};
+use openraft::testing::{blank_ent, log_id};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -61,9 +60,9 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     // and empty entries list
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(LogId::new(CommittedLeaderId::new(1, 1), 5)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 5)),
         entries: vec![],  // Empty entries
-        leader_commit: Some(LogId::new(CommittedLeaderId::new(1, 1), 5)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 1, 5)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -79,13 +78,20 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     tracing::info!("--- section 3: add some logs to the node");
 
-    // Add logs to the storage
-    sto0.blocking_append([
-        blank_ent::<AppTypeConfig>(0, 0, 0),
-        blank_ent::<AppTypeConfig>(1, 0, 1),
-        blank_ent::<AppTypeConfig>(1, 0, 2),
-    ])
-    .await?;
+    // Feed logs using append_entries (this properly updates vote and logs)
+    let req = AppendEntriesRequest {
+        vote: Vote::new_committed(1, 1),
+        prev_log_id: None,
+        entries: vec![
+            blank_ent::<AppTypeConfig>(0, 0, 0),
+            blank_ent::<AppTypeConfig>(1, 0, 1),
+            blank_ent::<AppTypeConfig>(1, 0, 2),
+        ],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+    };
+
+    let resp = r0.append_entries(req).await?;
+    assert!(resp.is_success(), "should successfully feed logs");
 
     // Verify logs were added
     let logs = sto0
@@ -101,9 +107,9 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     // Node has log at index 2 with term 1, we claim it's term 2
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(2, 1),
-        prev_log_id: Some(LogId::new(CommittedLeaderId::new(2, 1), 3)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(2, 1, 3)),
         entries: vec![],  // Still empty entries
-        leader_commit: Some(LogId::new(CommittedLeaderId::new(2, 1), 3)),
+        leader_commit: Some(log_id::<AppTypeConfig>(2, 1, 3)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -122,9 +128,9 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     // Send append-entries with correct prev_log_id and empty entries
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(LogId::new(CommittedLeaderId::new(1, 0), 2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
         entries: vec![],  // Empty entries
-        leader_commit: Some(LogId::new(CommittedLeaderId::new(1, 0), 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -149,23 +155,30 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     // Extract node again for final test
     let (r0, mut sto0, _sm0) = router.remove_node(0).unwrap();
 
-    // Add more logs
-    sto0.blocking_append([
-        blank_ent::<AppTypeConfig>(1, 0, 3),
-        blank_ent::<AppTypeConfig>(1, 0, 4),
-        blank_ent::<AppTypeConfig>(1, 0, 5),
-    ])
-    .await?;
+    // Add more logs using append_entries
+    let req = AppendEntriesRequest {
+        vote: Vote::new_committed(1, 1),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        entries: vec![
+            blank_ent::<AppTypeConfig>(1, 0, 3),
+            blank_ent::<AppTypeConfig>(1, 0, 4),
+            blank_ent::<AppTypeConfig>(1, 0, 5),
+        ],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 5)),
+    };
+
+    let resp = r0.append_entries(req).await?;
+    assert!(resp.is_success(), "should successfully append more logs");
 
     // Test conflict with entries this time (not empty)
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(2, 1),
-        prev_log_id: Some(LogId::new(CommittedLeaderId::new(2, 1), 4)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(2, 1, 4)),
         entries: vec![
             blank_ent::<AppTypeConfig>(2, 1, 5),
             blank_ent::<AppTypeConfig>(2, 1, 6),
         ],
-        leader_commit: Some(LogId::new(CommittedLeaderId::new(2, 1), 6)),
+        leader_commit: Some(log_id::<AppTypeConfig>(2, 1, 6)),
     };
 
     let resp = r0.append_entries(req).await?;

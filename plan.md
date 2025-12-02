@@ -111,15 +111,20 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
        - Validates followers reject vote requests while receiving heartbeats
        - Tests leader lease expiration and vote timing
        - Critical for preventing unnecessary elections
-   - ✅ **Test Statistics**: 45/47 tests passing (15 router tests, 2 KV client failures are pre-existing)
-   - ✅ **Phase 5 Critical Tests Ported** (6 new tests, compilation in progress):
-     - `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote
-     - `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs
-     - `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition
-     - `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart
-     - `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries)
-     - `router_t10_conflict_with_empty_entries.rs` - Conflict detection even with empty append-entries
-   - ⚠️  **Compilation Issues**: Tests ported but need final fixes for RaftMetrics field access and type mismatches
+   - ✅ **Test Statistics**: 18/23 router tests passing, 5 tests with runtime issues
+   - ✅ **Phase 5 Critical Tests Ported** (6 tests, all compile now):
+     - ✅ `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart (PASSING)
+     - ⚠️  `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote (runtime failure)
+     - ⚠️  `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs (runtime failure)
+     - ⚠️  `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition (runtime failure)
+     - ⚠️  `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries) (runtime failure)
+     - ⚠️  `router_t10_conflict_with_empty_entries.rs` - Conflict detection even with empty append-entries (runtime failure)
+   - ✅ **Compilation Issues Fixed**: All type mismatches and RaftMetrics field access issues resolved
+     - Fixed 8 `CommittedLeaderId` type mismatches by using `log_id::<AppTypeConfig>()` helper
+     - Fixed 3 `metrics.applied_index` field access errors by using Wait API or removing redundant checks
+     - Replaced direct storage manipulation with `append_entries` RPCs for proper vote handling
+   - ⚠️  **Runtime Issues Discovered**: 4 ported tests + 1 pre-existing test have deeper runtime failures requiring investigation
+   - 📝 **Key Learnings**: Direct storage manipulation after Raft initialization causes in-memory/storage sync issues; vote updates must go through Raft protocol
    - 📝 **Documentation Created**: `.claude/phase5_test_migration.md` with detailed migration decisions and patterns
    - **Deferred** (need additional AspenRouter features):
      - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait
