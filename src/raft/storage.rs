@@ -349,14 +349,30 @@ impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
     async fn install_snapshot(
         &mut self,
         meta: &openraft::SnapshotMeta<AppTypeConfig>,
-        snapshot: SnapshotDataOf<AppTypeConfig>,
+        mut snapshot: SnapshotDataOf<AppTypeConfig>,
     ) -> Result<(), io::Error> {
-        let new_data: BTreeMap<String, String> = serde_json::from_reader(snapshot)
+        // Read snapshot data
+        let mut snapshot_data = Vec::new();
+        std::io::copy(&mut snapshot, &mut snapshot_data)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+
+        let new_data: BTreeMap<String, String> = serde_json::from_slice(&snapshot_data)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+
+        // Update state machine
         let mut sm = self.state_machine.write().await;
         sm.data = new_data;
         sm.last_applied_log = meta.last_log_id;
         sm.last_membership = meta.last_membership.clone();
+        drop(sm);
+
+        // Store the installed snapshot so get_current_snapshot() returns it
+        let mut current_snapshot = self.current_snapshot.write().await;
+        *current_snapshot = Some(StoredSnapshot {
+            meta: meta.clone(),
+            data: snapshot_data,
+        });
+
         Ok(())
     }
 
@@ -370,5 +386,45 @@ impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
 
     async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
         self.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openraft::testing::log::{StoreBuilder, Suite};
+    use openraft::StorageError;
+
+    /// Builder for testing Aspen's in-memory storage implementation against
+    /// OpenRaft's comprehensive test suite. Validates correctness of log operations,
+    /// snapshots, membership changes, and edge cases.
+    struct InMemoryStoreBuilder;
+
+    impl StoreBuilder<AppTypeConfig, InMemoryLogStore, Arc<StateMachineStore>, ()>
+        for InMemoryStoreBuilder
+    {
+        async fn build(
+            &self,
+        ) -> Result<((), InMemoryLogStore, Arc<StateMachineStore>), StorageError<AppTypeConfig>>
+        {
+            Ok((
+                (),
+                InMemoryLogStore::default(),
+                StateMachineStore::new(),
+            ))
+        }
+    }
+
+    /// Runs OpenRaft's full storage test suite (50+ tests) against Aspen's
+    /// in-memory log and state machine implementations. This validates:
+    /// - Log append, truncate, purge operations
+    /// - Snapshot building and installation
+    /// - Membership change persistence
+    /// - Edge cases (empty log, gaps, conflicts)
+    /// - State consistency under various scenarios
+    #[tokio::test]
+    async fn test_in_memory_storage_suite() -> Result<(), StorageError<AppTypeConfig>> {
+        Suite::test_all(InMemoryStoreBuilder).await?;
+        Ok(())
     }
 }

@@ -75,8 +75,26 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Next action: Move to Phase 5 (Documentation & Hardening) or implement additional KV features
 
 ## Phase 5: Documentation & Hardening
-1. **Docs**
-   - Update `AGENTS.md`/`docs/` with a getting-started guide for the ractor-based stack (magic cookies, transport options).
-2. **Testing & Tooling**
-   - Reintroduce deterministic simulations (madsim) that exercise leader election, failover, and network partitions over the new transport layer.
-   - Ensure CI covers storage suites, actor unit tests, and integration runs via `cargo nextest`.
+1. **Testing Foundation** (in progress)
+   - ✅ Created `src/raft/storage.rs` test module with `StoreBuilder` implementation
+   - ✅ Integrated OpenRaft's `Suite::test_all()` - validates 50+ storage scenarios (log, snapshots, membership)
+   - ✅ Fixed `install_snapshot()` to properly persist snapshots for `get_current_snapshot()`
+   - ✅ All storage tests passing - production-ready validation
+   - ✅ Created `src/testing/router.rs` - AspenRouter for deterministic multi-node Raft tests
+   - ✅ Implemented in-memory network with configurable delays/failures, wait helpers via OpenRaft's `Wait` API
+   - ✅ Added 3 passing unit tests demonstrating router capabilities
+   - Next action: Port key OpenRaft tests (t10_initialization, t11_elect, t20_change_membership, t50_leader_restart, t51_remove_unreachable) to AspenRouter
+2. **Deterministic Simulations** (pending)
+   - Reintroduce madsim tests for leader election, failover, network partitions
+   - Add snapshot & log compaction scenarios
+   - Integrate simulation artifacts into CI for debugging
+3. **Documentation** (pending)
+   - Update `AGENTS.md` with getting-started guide (ractor, Iroh, IRPC, OpenRaft integration)
+   - Create `docs/getting-started.md` for single-node & 3-node quickstarts
+   - Add Architecture Decision Records (ADRs) for key technology choices
+4. **CI Enhancements** (pending)
+   - Add storage suite to CI pipeline
+   - Run madsim tests with multiple seeds
+   - Include smoke tests in CI
+   - Upload simulation artifacts on failure
+   - Add code coverage reporting
