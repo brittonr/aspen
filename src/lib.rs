@@ -12,6 +12,7 @@ pub mod api;
 pub mod cluster;
 pub mod kv;
 pub mod raft;
+pub mod simulation;
 
 pub use kv::KvServiceBuilder;
 pub use raft::RaftControlClient;

@@ -10,6 +10,7 @@ use aspen::api::{
 use aspen::cluster::{
     DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
 };
+use aspen::simulation::SimulationArtifactBuilder;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
@@ -137,6 +138,11 @@ impl KeyValueStore for DeterministicHiqlite {
 
 #[madsim::test]
 async fn hiqlite_flow_simulation_tracks_transport_metrics() {
+    const SIMULATION_SEED: u64 = 42;
+    let mut artifact_builder =
+        SimulationArtifactBuilder::new("hiqlite_flow_simulation_tracks_transport_metrics", SIMULATION_SEED)
+            .start();
+
     let backend = DeterministicHiqlite::new();
 
     let initial = vec![
@@ -144,6 +150,8 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
         DeterministicHiqlite::node(2, 21012, 26012),
         DeterministicHiqlite::node(3, 21013, 26013),
     ];
+
+    artifact_builder = artifact_builder.add_event("init: cluster with nodes [1, 2, 3]");
     let cluster = backend
         .init(InitRequest {
             initial_members: initial.clone(),
@@ -152,12 +160,15 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
         .expect("init cluster");
     assert_eq!(cluster.members, vec![1, 2, 3]);
 
+    artifact_builder = artifact_builder.add_event("add-learner: node 4");
     backend
         .add_learner(AddLearnerRequest {
             learner: DeterministicHiqlite::node(4, 21014, 26014),
         })
         .await
         .expect("add learner");
+
+    artifact_builder = artifact_builder.add_event("change-membership: promote node 4 to voter");
     let cluster = backend
         .change_membership(ChangeMembershipRequest {
             members: vec![1, 2, 3, 4],
@@ -210,9 +221,12 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
     reader.await.expect("reader task");
     churner.await.expect("churn task");
 
+    artifact_builder = artifact_builder.add_event("writes: completed 5 payloads");
+    artifact_builder = artifact_builder.add_event("read: verified payload");
+
     let node_server = NodeServerConfig::new("hiqlite-sim", "127.0.0.1", 0, "sim-cookie")
         .with_determinism(DeterministicClusterConfig {
-            simulation_seed: Some(42),
+            simulation_seed: Some(SIMULATION_SEED),
         })
         .launch()
         .await
@@ -221,17 +235,32 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
         .await
         .expect("iroh transport");
     transport.wait_until_online().await;
+
+    artifact_builder = artifact_builder.add_event("transport: iroh cluster online");
+
     let snapshot = transport.endpoint().metrics_snapshot();
     assert!(
         snapshot.contains("magicsock_recv_datagrams"),
         "expected magicsock counters in {snapshot}"
     );
+
+    artifact_builder = artifact_builder.with_metrics(snapshot);
+
     let trace = backend.leader_trace().await;
+    artifact_builder = artifact_builder.add_events(trace.clone());
+
     assert!(
         trace.iter().any(|entry| entry.contains("leader-elected:2"))
             && trace.iter().any(|entry| entry.contains("leader-elected:3")),
         "missing churn events in trace {trace:?}"
     );
+
     transport.shutdown().await.expect("shutdown transport");
     node_server.shutdown().await.expect("shutdown node");
+
+    let artifact = artifact_builder.build();
+
+    if let Ok(path) = artifact.persist("docs/simulations") {
+        eprintln!("Simulation artifact persisted to: {}", path.display());
+    }
 }

@@ -27,7 +27,11 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Added `tests/hiqlite_flow.rs`, a deterministic `madsim` scenario that replays the Hiqlite membership/write flow (including learner promotion) and asserts that the Iroh transport exports healthy counters via the new `/iroh-metrics` endpoint wiring.
    - Extended the deterministic scenario with explicit leader churn and delay injection so we capture failover traces alongside the transport metrics snapshot.
    - OpenRaft is now wired back in: the Raft actor owns a real `openraft::Raft` handle, uses the new in-memory log/state-machine storage, exposes the HTTP Raft RPC routes, and the control-plane writes/reads call straight into OpenRaft.
-   - Next action: persist the captured seeds/logs (plus the churn trace) under `docs/` and teach CI to publish them whenever the simulator reproduces a failure.
+   - Created `src/simulation.rs` module with `SimulationArtifact` and `SimulationArtifactBuilder` for capturing deterministic simulation data (seeds, event traces, metrics, duration, status). ✅
+   - Updated `tests/hiqlite_flow.rs` to persist simulation artifacts to `docs/simulations/` as JSON files with full event trace and metrics snapshots. ✅
+   - Added `docs/simulations/README.md` documenting artifact format, usage, and purpose. ✅
+   - Integrated artifact collection into `flake.nix` nextest check with `postInstall` hook that copies artifacts to build output for CI visibility. ✅
+   - Next action: move to Phase 3 (Network Fabric) to build the real IROH + IRPC transport layer.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**

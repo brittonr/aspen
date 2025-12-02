@@ -317,6 +317,17 @@
               # Ensure dev is used since we rely on env variables being
               # set in tests.
               env.CARGO_PROFILE = "dev";
+
+              # Collect simulation artifacts if tests fail
+              postInstall = ''
+                if [ -d docs/simulations ]; then
+                  mkdir -p $out/simulations
+                  cp -r docs/simulations/*.json $out/simulations/ 2>/dev/null || true
+                  if [ -n "$(ls -A $out/simulations 2>/dev/null)" ]; then
+                    echo "Simulation artifacts collected in $out/simulations"
+                  fi
+                fi
+              '';
             }
           );
 
