@@ -112,11 +112,15 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
        - Tests leader lease expiration and vote timing
        - Critical for preventing unnecessary elections
    - ✅ **Test Statistics**: 45/47 tests passing (15 router tests, 2 KV client failures are pre-existing)
-   - 🔄 **In Progress**: Continue porting Priority 1-4 tests
-   - **Next Priorities**:
-     - Election safety: `t10_see_higher_vote` (leader stepdown on higher vote)
-     - Snapshot streaming: `t50_snapshot_when_lacking_log` (automatic snapshot when logs unavailable)
-     - Replication recovery: `t62_follower_clear_restart_recover`, `t50_append_entries_backoff_rejoin`
+   - ✅ **Phase 5 Critical Tests Ported** (6 new tests, compilation in progress):
+     - `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote
+     - `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs
+     - `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition
+     - `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart
+     - `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries)
+     - `router_t10_conflict_with_empty_entries.rs` - Conflict detection even with empty append-entries
+   - ⚠️  **Compilation Issues**: Tests ported but need final fixes for RaftMetrics field access and type mismatches
+   - 📝 **Documentation Created**: `.claude/phase5_test_migration.md` with detailed migration decisions and patterns
    - **Deferred** (need additional AspenRouter features):
      - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait
      - `t50_append_entries_backoff` - Requires RPC counting infrastructure
