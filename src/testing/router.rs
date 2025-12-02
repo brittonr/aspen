@@ -255,6 +255,30 @@ impl AspenRouter {
     pub async fn new_raft_node(&mut self, id: NodeId) -> Result<()> {
         let log_store = InMemoryLogStore::default();
         let state_machine = StateMachineStore::new();
+        self.new_raft_node_with_storage(id, log_store, state_machine).await
+    }
+
+    /// Create a new Raft node with custom storage.
+    ///
+    /// Useful for testing election logic, log comparison, and recovery scenarios
+    /// where you need to pre-populate the log or state machine.
+    ///
+    /// ## Example
+    ///
+    /// ```ignore
+    /// let mut log_store = InMemoryLogStore::default();
+    /// // Pre-populate log with entries
+    /// log_store.append([...]).await?;
+    ///
+    /// let state_machine = StateMachineStore::new();
+    /// router.new_raft_node_with_storage(0, log_store, state_machine).await?;
+    /// ```
+    pub async fn new_raft_node_with_storage(
+        &mut self,
+        id: NodeId,
+        log_store: InMemoryLogStore,
+        state_machine: Arc<StateMachineStore>,
+    ) -> Result<()> {
         let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
         let raft = Raft::new(id, self.config.clone(), network_factory, log_store.clone(), state_machine.clone())
@@ -272,6 +296,13 @@ impl AspenRouter {
         nodes.insert(id, node);
 
         Ok(())
+    }
+
+    /// Create a new storage pair (log store + state machine) for testing.
+    ///
+    /// Useful when you need to pre-populate storage before creating a node.
+    pub fn new_store(&self) -> (InMemoryLogStore, Arc<StateMachineStore>) {
+        (InMemoryLogStore::default(), StateMachineStore::new())
     }
 
     /// Get a handle to the Raft instance for the given node.
