@@ -1,144 +1,98 @@
-//! Raft orchestration lives here.
-//!
-//! # Responsibilities
-//! - Define the traits required to wire `openraft` state machines into the
-//!   cluster actors exposed in [`crate::cluster`].
-//! - Provide deterministic seams so we can embed Raft actors in `madsim`
-//!   simulations and capture seeds/failure traces.
-//! - Keep storage/network dependencies explicit so property tests can mock them.
-//!
-//! # Composition
-//! `raft` exposes [`RaftActorFactory`] so callers can spin up deterministic
-//! actors that will eventually host the actual `openraft::Raft` instance. Phase 2
-//! ships a placeholder actor that already enforces Tiger Style invariants and
-//! records the seams for attaching real storage and transport wiring.
+pub mod network;
+pub mod storage;
+pub mod types;
 
-use crate::cluster::NodeServerHandle;
-use crate::storage::StorageSurface;
-use anyhow::Context;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use openraft::Config;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use openraft::{BasicNode, Raft, ReadPolicy};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call_t};
+use tracing::{info, warn};
 
-/// Node metadata required before spawning Raft actors.
-#[derive(Debug, Clone)]
-pub struct RaftNodeSpec {
-    /// Numeric node ID used by OpenRaft.
+use crate::api::{
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
+    ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
+    WriteCommand, WriteRequest, WriteResult,
+};
+use crate::raft::storage::StateMachineStore;
+use crate::raft::types::{AppRequest, AppTypeConfig};
+
+/// Configuration used to initialize a Raft actor instance.
+#[derive(Clone, Debug)]
+pub struct RaftActorConfig {
     pub node_id: u64,
-    /// Cluster namespace (e.g., `aspen::primary`).
-    pub cluster: String,
+    pub raft: Raft<AppTypeConfig>,
+    pub state_machine: Arc<StateMachineStore>,
 }
 
-impl RaftNodeSpec {
-    /// Validate `node_id` is non-zero and the cluster label is present.
-    pub fn validate(&self) {
-        assert!(self.node_id > 0, "Raft node ids must be > 0");
-        assert!(
-            !self.cluster.is_empty(),
-            "cluster labels guide deterministic harness routing"
-        );
-    }
+/// Empty actor shell that will eventually drive the Raft state machine.
+pub struct RaftActor;
 
-    fn actor_name(&self) -> String {
-        format!("raft:{}:{}", self.cluster, self.node_id)
-    }
+#[derive(Debug)]
+pub struct RaftActorState {
+    node_id: u64,
+    raft: Raft<AppTypeConfig>,
+    state_machine: Arc<StateMachineStore>,
+    cluster_state: ClusterState,
+    initialized: bool,
 }
 
-/// Trait implemented by Raft actor factories.
+#[derive(Debug)]
+pub enum RaftActorMessage {
+    /// Lightweight RPC used by tests/monitors to confirm the actor is alive.
+    GetNodeId(RpcReplyPort<u64>),
+    /// Return the current cluster snapshot.
+    CurrentState(RpcReplyPort<Result<ClusterState, ControlPlaneError>>),
+    /// Initialize the cluster membership set.
+    InitCluster(
+        InitRequest,
+        RpcReplyPort<Result<ClusterState, ControlPlaneError>>,
+    ),
+    /// Add a learner node.
+    AddLearner(
+        AddLearnerRequest,
+        RpcReplyPort<Result<ClusterState, ControlPlaneError>>,
+    ),
+    /// Change the active membership set.
+    ChangeMembership(
+        ChangeMembershipRequest,
+        RpcReplyPort<Result<ClusterState, ControlPlaneError>>,
+    ),
+    /// Apply a write command.
+    Write(
+        WriteRequest,
+        RpcReplyPort<Result<WriteResult, KeyValueStoreError>>,
+    ),
+    /// Read the latest value for a key.
+    Read(
+        ReadRequest,
+        RpcReplyPort<Result<ReadResult, KeyValueStoreError>>,
+    ),
+    /// Graceful shutdown signal.
+    Shutdown,
+}
+
+impl ractor::Message for RaftActorMessage {}
+
 #[async_trait]
-pub trait RaftActorFactory {
-    /// Message type used by the actor; must stay remote-friendly.
-    type Message: ractor::Message;
-
-    /// Spawn a Raft actor wired to the provided storage + NodeServer.
-    async fn spawn_actor(
-        spec: RaftNodeSpec,
-        storage: StorageSurface,
-        node_handle: &NodeServerHandle,
-        config: Config,
-    ) -> anyhow::Result<ActorRef<Self::Message>>;
-}
-
-crate::cluster_message! {
-    /// Control channel for the placeholder Raft actor.
-    pub enum RaftActorMessage {
-        /// Apply a deterministic payload to the state machine.
-        Apply(Vec<u8>),
-        /// Install a snapshot captured by tests.
-        InstallSnapshot(Vec<u8>),
-        /// Graceful shutdown so harnesses can drain actors.
-        Shutdown,
-    }
-}
-
-/// Tiger Style implementation that will be swapped with the OpenRaft actor.
-pub struct LocalRaftFactory;
-
-#[async_trait]
-impl RaftActorFactory for LocalRaftFactory {
-    type Message = RaftActorMessage;
-
-    async fn spawn_actor(
-        spec: RaftNodeSpec,
-        storage: StorageSurface,
-        node_handle: &NodeServerHandle,
-        config: Config,
-    ) -> anyhow::Result<ActorRef<Self::Message>> {
-        spec.validate();
-        let deterministic = node_handle
-            .deterministic_config()
-            .simulation_seed
-            .map(|seed| format!("seed:{seed}"))
-            .unwrap_or_else(|| "live".to_string());
-        let args = RaftActorArgs {
-            storage,
-            config,
-            deterministic_label: deterministic,
-        };
-        let (actor, _) = Actor::spawn(Some(spec.actor_name()), RaftCoordinator { spec }, args)
-            .await
-            .context("failed to spawn Raft coordinator")?;
-        Ok(actor)
-    }
-}
-
-struct RaftActorArgs {
-    storage: StorageSurface,
-    config: Config,
-    deterministic_label: String,
-}
-
-struct RaftCoordinator {
-    spec: RaftNodeSpec,
-}
-
-struct RaftCoordinatorState {
-    storage: StorageSurface,
-    config: Config,
-    deterministic_label: String,
-}
-
-#[ractor::async_trait]
-impl Actor for RaftCoordinator {
+impl Actor for RaftActor {
     type Msg = RaftActorMessage;
-    type State = RaftCoordinatorState;
-    type Arguments = RaftActorArgs;
+    type State = RaftActorState;
+    type Arguments = RaftActorConfig;
 
     async fn pre_start(
         &self,
-        _: ActorRef<Self::Msg>,
-        args: Self::Arguments,
+        _myself: ActorRef<Self::Msg>,
+        config: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let RaftActorArgs {
-            storage,
-            config,
-            deterministic_label,
-        } = args;
-        let validated_config = config.validate().context("raft config failed validation")?;
-        Ok(RaftCoordinatorState {
-            storage,
-            config: validated_config,
-            deterministic_label,
+        info!(node_id = config.node_id, "raft actor starting");
+        Ok(RaftActorState {
+            node_id: config.node_id,
+            raft: config.raft,
+            state_machine: config.state_machine,
+            cluster_state: ClusterState::default(),
+            initialized: false,
         })
     }
 
@@ -148,74 +102,280 @@ impl Actor for RaftCoordinator {
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        debug_assert!(
-            self.spec.node_id > 0,
-            "node ids must stay positive for deterministic actor routing"
-        );
-        debug_assert!(
-            !state.deterministic_label.is_empty(),
-            "deterministic labels help seed property tests"
-        );
-        debug_assert!(
-            state.config.max_payload_entries > 0,
-            "max_payload_entries is validated at startup"
-        );
         match message {
-            RaftActorMessage::Apply(payload) => {
-                let sm = state.storage.state_machine();
-                sm.apply(&payload).map(|_| ()).map_err(|err| err.into())
+            RaftActorMessage::GetNodeId(reply) => {
+                let _ = reply.send(state.node_id);
             }
-            RaftActorMessage::InstallSnapshot(bytes) => {
-                let sm = state.storage.state_machine();
-                sm.hydrate(&bytes).map_err(|err| err.into())
+            RaftActorMessage::CurrentState(reply) => {
+                let result = ensure_initialized(state).map(|_| state.cluster_state.clone());
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::InitCluster(request, reply) => {
+                let result = handle_init(state, request).await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::AddLearner(request, reply) => {
+                let result = async {
+                    ensure_initialized(state)?;
+                    handle_add_learner(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::ChangeMembership(request, reply) => {
+                let result = async {
+                    ensure_initialized(state)?;
+                    handle_change_membership(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::Write(request, reply) => {
+                let result = async {
+                    ensure_initialized_kv(state)?;
+                    handle_write(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::Read(request, reply) => {
+                let result = async {
+                    ensure_initialized_kv(state)?;
+                    handle_read(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
             }
             RaftActorMessage::Shutdown => {
-                myself.get_cell().stop(Some("raft_shutdown".into()));
-                Ok(())
+                warn!(node_id = state.node_id, "raft actor shutting down");
+                myself.stop(Some("raft-actor-shutdown".into()));
             }
         }
+        Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::cluster::DeterministicClusterConfig;
-    use crate::cluster::NodeServerConfig;
-    use ractor::ActorRef;
+fn ensure_initialized(state: &RaftActorState) -> Result<(), ControlPlaneError> {
+    if state.initialized {
+        Ok(())
+    } else {
+        Err(ControlPlaneError::NotInitialized)
+    }
+}
 
-    #[tokio::test]
-    async fn raft_node_spec_validates_inputs() {
-        let spec = RaftNodeSpec {
-            node_id: 1,
-            cluster: "aspen::primary".into(),
-        };
-        spec.validate();
+fn ensure_initialized_kv(state: &RaftActorState) -> Result<(), KeyValueStoreError> {
+    if state.initialized {
+        Ok(())
+    } else {
+        Err(KeyValueStoreError::Failed {
+            reason: "cluster not initialized".into(),
+        })
+    }
+}
+
+fn ensure_raft_addr(node: &ClusterNode) -> Result<(), ControlPlaneError> {
+    if node.raft_addr.is_none() {
+        Err(ControlPlaneError::InvalidRequest {
+            reason: "raft_addr must be set for every node".into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+async fn handle_init(
+    state: &mut RaftActorState,
+    request: InitRequest,
+) -> Result<ClusterState, ControlPlaneError> {
+    if request.initial_members.is_empty() {
+        return Err(ControlPlaneError::InvalidRequest {
+            reason: "initial_members must not be empty".into(),
+        });
+    }
+    for member in &request.initial_members {
+        ensure_raft_addr(member)?;
+    }
+    let mut nodes = BTreeMap::new();
+    for node in &request.initial_members {
+        nodes.insert(
+            node.id,
+            BasicNode {
+                addr: node.addr.clone(),
+            },
+        );
+    }
+    state
+        .raft
+        .initialize(nodes)
+        .await
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
+    state.cluster_state.nodes = request.initial_members.clone();
+    state.cluster_state.learners.clear();
+    state.cluster_state.members = request.initial_members.iter().map(|node| node.id).collect();
+    state.initialized = true;
+    Ok(state.cluster_state.clone())
+}
+
+async fn handle_add_learner(
+    state: &mut RaftActorState,
+    request: AddLearnerRequest,
+) -> Result<ClusterState, ControlPlaneError> {
+    let learner = request.learner;
+    ensure_raft_addr(&learner)?;
+    let node = BasicNode {
+        addr: learner.addr.clone(),
+    };
+    state
+        .raft
+        .add_learner(learner.id, node, true)
+        .await
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
+    state.cluster_state.learners.push(learner);
+    Ok(state.cluster_state.clone())
+}
+
+async fn handle_change_membership(
+    state: &mut RaftActorState,
+    request: ChangeMembershipRequest,
+) -> Result<ClusterState, ControlPlaneError> {
+    if request.members.is_empty() {
+        return Err(ControlPlaneError::InvalidRequest {
+            reason: "members must include at least one voter".into(),
+        });
+    }
+    let new_members = request.members;
+    let members: BTreeSet<u64> = new_members.iter().copied().collect();
+    state
+        .raft
+        .change_membership(members, false)
+        .await
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
+    state.cluster_state.members = new_members;
+    Ok(state.cluster_state.clone())
+}
+
+async fn handle_write(
+    state: &mut RaftActorState,
+    request: WriteRequest,
+) -> Result<WriteResult, KeyValueStoreError> {
+    let cmd = request.command.clone();
+    let app_req = match cmd.clone() {
+        WriteCommand::Set { ref key, ref value } => AppRequest::Set {
+            key: key.clone(),
+            value: value.clone(),
+        },
+    };
+    state
+        .raft
+        .client_write(app_req)
+        .await
+        .map_err(|err| KeyValueStoreError::Failed {
+            reason: err.to_string(),
+        })?;
+    Ok(WriteResult { command: cmd })
+}
+
+async fn handle_read(
+    state: &RaftActorState,
+    request: ReadRequest,
+) -> Result<ReadResult, KeyValueStoreError> {
+    let linearizer = state
+        .raft
+        .get_read_linearizer(ReadPolicy::ReadIndex)
+        .await
+        .map_err(|err| KeyValueStoreError::Failed {
+            reason: err.to_string(),
+        })?;
+    linearizer
+        .await_ready(&state.raft)
+        .await
+        .map_err(|err| KeyValueStoreError::Failed {
+            reason: err.to_string(),
+        })?;
+    if let Some(value) = state.state_machine.get(&request.key).await {
+        Ok(ReadResult {
+            key: request.key,
+            value,
+        })
+    } else {
+        Err(KeyValueStoreError::NotFound { key: request.key })
+    }
+}
+
+/// Controller that proxies all operations through the Raft actor.
+#[derive(Clone)]
+pub struct RaftControlClient {
+    actor: ActorRef<RaftActorMessage>,
+}
+
+impl RaftControlClient {
+    pub fn new(actor: ActorRef<RaftActorMessage>) -> Self {
+        Self { actor }
+    }
+}
+
+#[async_trait]
+impl ClusterController for RaftControlClient {
+    async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::InitCluster, 500, request).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
     }
 
-    #[tokio::test]
-    async fn spawn_placeholder_actor_and_apply() {
-        let config = Config::default();
-        let surface = StorageSurface::in_memory();
-        let node_server = NodeServerConfig::new("node-a", "localhost", 0, "supersafe")
-            .with_determinism(DeterministicClusterConfig {
-                simulation_seed: Some(7),
-            })
-            .launch()
-            .await
-            .expect("node server");
-        let spec = RaftNodeSpec {
-            node_id: 1,
-            cluster: "aspen::primary".into(),
-        };
-        let actor: ActorRef<RaftActorMessage> =
-            LocalRaftFactory::spawn_actor(spec, surface.clone(), &node_server, config)
-                .await
-                .expect("spawn actor");
-        actor
-            .cast(RaftActorMessage::Apply(b"hello".to_vec()))
-            .unwrap();
-        actor.cast(RaftActorMessage::Shutdown).unwrap();
-        node_server.shutdown().await.unwrap();
+    async fn add_learner(
+        &self,
+        request: AddLearnerRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::AddLearner, 500, request).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn change_membership(
+        &self,
+        request: ChangeMembershipRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::ChangeMembership, 500, request).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::CurrentState, 500).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+}
+
+#[async_trait]
+impl KeyValueStore for RaftControlClient {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        call_t!(self.actor, RaftActorMessage::Write, 500, request).map_err(|err| {
+            KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        call_t!(self.actor, RaftActorMessage::Read, 500, request).map_err(|err| {
+            KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }
+        })?
     }
 }

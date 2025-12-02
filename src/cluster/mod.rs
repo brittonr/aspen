@@ -1,237 +1,366 @@
-//! Cluster orchestration primitives built around `ractor_cluster::NodeServer`.
-//!
-//! # Responsibilities
-//! - Spin up [`NodeServer`] instances with magic-cookie auth configured the same
-//!   way everywhere so Raft actors can be remoted deterministically.
-//! - Provide hooks for attaching BYO transports via [`ClusterBidiStream`] so we
-//!   can drive the cluster through QUIC/WebSockets/memory pipes in tests.
-//! - Surface macros/helpers that ensure every actor message derives
-//!   [`RactorClusterMessage`](ractor_cluster::RactorClusterMessage), keeping the
-//!   network serialization contract obvious.
-//!
-//! # Composition
-//! `cluster` exposes handles consumed by `raft` and `api`. `raft` will
-//! register actor groups with a running node, while `api` will issue cluster
-//! RPCs through the same [`NodeServerHandle`]. Tests (deterministic or not) can
-//! inject synthetic transports via [`NodeServerHandle::attach_external_stream`].
+use std::fmt;
+use std::mem;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex as SyncMutex};
+use std::time::Duration;
 
-use anyhow::Context;
-use ractor::concurrency::JoinHandle;
-use ractor::{Actor, ActorName, ActorRef, MessagingErr, SpawnErr};
+use anyhow::{Context, Result};
+use ractor::{Actor, ActorRef, MessagingErr};
 use ractor_cluster::node::NodeConnectionMode;
 use ractor_cluster::{
-    ClusterBidiStream, IncomingEncryptionMode, NodeEventSubscription, NodeServer, NodeServerMessage,
+    ClientConnectErr, ClusterBidiStream, IncomingEncryptionMode, NodeEventSubscription,
+    NodeServer as RactorNodeServer, NodeServerMessage, client_connect, client_connect_external,
 };
+use tokio::net::ToSocketAddrs;
+use tokio::sync::{Mutex as AsyncMutex, Notify};
+use tokio::task::JoinHandle;
 
-pub mod iroh;
-pub use iroh::{IrohClusterConfig, IrohClusterTransport};
-
-/// Deterministic knobs used when running under `madsim`/turmoil.
-#[derive(Debug, Clone, Default)]
+/// Controls how the node server should behave while running in deterministic
+/// simulations.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeterministicClusterConfig {
-    /// Optional simulation seed recorded alongside each deterministic test run.
     pub simulation_seed: Option<u64>,
 }
 
-/// Configuration for spinning up a [`NodeServer`].
+/// Configuration for the local `ractor_cluster::NodeServer`.
 #[derive(Debug, Clone)]
 pub struct NodeServerConfig {
-    /// Node name used in Erlang-style identifiers (`<name>@<host>`).
-    pub node_name: String,
-    /// Hostname portion of the identifier plus listener binding host.
-    pub hostname: String,
-    /// Port used for the default TCP listener. Zero lets the OS pick a port.
-    pub port: u16,
-    /// Shared secret that authenticates connections (`magic cookie`).
-    pub cookie: String,
-    /// On-wire encryption mode.
-    pub encryption_mode: IncomingEncryptionMode,
-    /// How the node connects to peers once one connection is established.
-    pub connection_mode: NodeConnectionMode,
-    /// Deterministic testing config.
-    pub deterministic: DeterministicClusterConfig,
+    label: String,
+    host: String,
+    port: u16,
+    cookie: String,
+    encryption: Option<IncomingEncryptionMode>,
+    connection_mode: NodeConnectionMode,
+    determinism: Option<DeterministicClusterConfig>,
 }
 
 impl NodeServerConfig {
-    /// Create a new config ensuring Tiger Style invariants up front.
     pub fn new(
-        node_name: impl Into<String>,
-        hostname: impl Into<String>,
+        label: impl Into<String>,
+        host: impl Into<String>,
         port: u16,
         cookie: impl Into<String>,
     ) -> Self {
-        let node_name = node_name.into();
-        assert!(
-            !node_name.is_empty(),
-            "node_name must be non-empty so actor names stay unique"
-        );
-        let hostname = hostname.into();
-        assert!(
-            !hostname.is_empty(),
-            "hostname must be non-empty for deterministic seeds"
-        );
-        let cookie = cookie.into();
-        assert!(
-            cookie.len() >= 8,
-            "magic cookies shorter than 8 bytes are trivially guessable"
-        );
         Self {
-            node_name,
-            hostname,
+            label: label.into(),
+            host: host.into(),
             port,
-            cookie,
-            encryption_mode: IncomingEncryptionMode::Raw,
+            cookie: cookie.into(),
+            encryption: None,
             connection_mode: NodeConnectionMode::Transitive,
-            deterministic: DeterministicClusterConfig::default(),
+            determinism: None,
         }
     }
 
-    /// Override deterministic options used by `madsim`.
-    pub fn with_determinism(mut self, deterministic: DeterministicClusterConfig) -> Self {
-        self.deterministic = deterministic;
+    pub fn with_encryption(mut self, encryption: IncomingEncryptionMode) -> Self {
+        self.encryption = Some(encryption);
         self
     }
 
-    /// Override encryption mode.
-    pub fn with_encryption_mode(mut self, mode: IncomingEncryptionMode) -> Self {
-        self.encryption_mode = mode;
-        self
-    }
-
-    /// Override node connection mode.
     pub fn with_connection_mode(mut self, mode: NodeConnectionMode) -> Self {
         self.connection_mode = mode;
         self
     }
 
-    /// Launch the [`NodeServer`] actor and return a handle.
-    pub async fn launch(self) -> Result<NodeServerHandle, SpawnErr> {
-        let actor_name: ActorName = format!(
-            "cluster:{}:{}",
-            self.node_name,
-            self.deterministic
-                .simulation_seed
-                .map(|seed| seed.to_string())
-                .unwrap_or_else(|| "live".to_string())
-        );
-        let node_server = NodeServer::new(
+    pub fn with_determinism(mut self, config: DeterministicClusterConfig) -> Self {
+        self.determinism = Some(config);
+        self
+    }
+
+    pub async fn launch(self) -> Result<NodeServerHandle> {
+        let server = RactorNodeServer::new(
             self.port,
-            self.cookie,
-            self.node_name.clone(),
-            self.hostname.clone(),
-            Some(self.encryption_mode),
+            self.cookie.clone(),
+            self.label.clone(),
+            self.host.clone(),
+            self.encryption.clone(),
             Some(self.connection_mode),
         );
-        let (actor, join_handle) = Actor::spawn(Some(actor_name), node_server, ()).await?;
+        let actor_name = format!("node-server-{}", self.label);
+        let (actor_ref, join_handle) = Actor::spawn(Some(actor_name.into()), server, ())
+            .await
+            .context("failed to spawn node server")?;
+
         Ok(NodeServerHandle {
-            server: actor,
-            join_handle,
-            deterministic: self.deterministic,
+            inner: Arc::new(NodeServerInner {
+                actor: actor_ref,
+                join_handle: AsyncMutex::new(Some(join_handle)),
+                label: self.label,
+                host: self.host,
+                port: self.port,
+                cookie: self.cookie,
+                connection_mode: self.connection_mode,
+                determinism: self.determinism,
+                subscriptions: SyncMutex::new(Vec::new()),
+            }),
         })
     }
 }
 
-/// Handle to a spawned [`NodeServer`] actor.
-#[derive(Debug)]
+struct NodeServerInner {
+    actor: ActorRef<NodeServerMessage>,
+    join_handle: AsyncMutex<Option<JoinHandle<()>>>,
+    label: String,
+    host: String,
+    port: u16,
+    cookie: String,
+    connection_mode: NodeConnectionMode,
+    determinism: Option<DeterministicClusterConfig>,
+    subscriptions: SyncMutex<Vec<String>>,
+}
+
+impl fmt::Debug for NodeServerInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NodeServerInner")
+            .field("label", &self.label)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("cookie", &"<hidden>")
+            .field("connection_mode", &self.connection_mode)
+            .finish()
+    }
+}
+
+/// Handle for a launched node server.
 pub struct NodeServerHandle {
-    server: ActorRef<NodeServerMessage>,
-    join_handle: JoinHandle<()>,
-    deterministic: DeterministicClusterConfig,
+    inner: Arc<NodeServerInner>,
+}
+
+impl Clone for NodeServerHandle {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl fmt::Debug for NodeServerHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NodeServerHandle")
+            .field("label", &self.inner.label)
+            .field("addr", &self.addr())
+            .finish()
+    }
 }
 
 impl NodeServerHandle {
-    /// Access the underlying actor ref.
-    pub fn actor(&self) -> &ActorRef<NodeServerMessage> {
-        &self.server
+    pub fn label(&self) -> &str {
+        &self.inner.label
     }
 
-    /// Deterministic config used for this instance (recorded alongside simulator traces).
-    pub fn deterministic_config(&self) -> &DeterministicClusterConfig {
-        &self.deterministic
+    pub fn cookie(&self) -> &str {
+        &self.inner.cookie
     }
 
-    /// Attach a BYO transport implementing [`ClusterBidiStream`].
-    pub fn attach_external_stream<S>(
-        &self,
-        stream: S,
-        is_server: bool,
-    ) -> Result<(), MessagingErr<NodeServerMessage>>
-    where
-        S: ClusterBidiStream,
-    {
-        self.server
-            .cast(NodeServerMessage::ConnectionOpenedExternal {
-                stream: Box::new(stream),
-                is_server,
-            })
+    pub fn determinism(&self) -> Option<&DeterministicClusterConfig> {
+        self.inner.determinism.as_ref()
     }
 
-    /// Subscribe to node events for deterministic harnesses to inspect ordering.
-    pub fn subscribe<S>(
+    pub fn addr(&self) -> SocketAddr {
+        let ip: IpAddr = self
+            .inner
+            .host
+            .parse()
+            .unwrap_or_else(|_| IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        SocketAddr::new(ip, self.inner.port)
+    }
+
+    pub fn actor(&self) -> ActorRef<NodeServerMessage> {
+        self.inner.actor.clone()
+    }
+
+    pub fn subscribe(
         &self,
         id: impl Into<String>,
-        subscription: S,
-    ) -> Result<(), MessagingErr<NodeServerMessage>>
-    where
-        S: NodeEventSubscription,
-    {
-        self.server.cast(NodeServerMessage::SubscribeToEvents {
-            id: id.into(),
-            subscription: Box::new(subscription),
-        })
+        subscription: Box<dyn NodeEventSubscription>,
+    ) -> Result<()> {
+        let sub_id = id.into();
+        self.inner
+            .actor
+            .cast(NodeServerMessage::SubscribeToEvents {
+                id: sub_id.clone(),
+                subscription,
+            })?;
+        self.inner
+            .subscriptions
+            .lock()
+            .expect("subscriptions poisoned")
+            .push(sub_id);
+        Ok(())
     }
 
-    /// Shutdown helper; this only waits for the join handle because `ractor` actors terminate on drop.
-    pub async fn shutdown(self) -> anyhow::Result<()> {
-        self.server.get_cell().stop(Some("cluster_shutdown".into()));
-        self.join_handle
-            .await
-            .context("node server join handle failed")?;
+    pub fn unsubscribe(&self, id: &str) -> Result<()> {
+        self.inner
+            .actor
+            .cast(NodeServerMessage::UnsubscribeToEvents(id.to_string()))?;
+        let mut guard = self
+            .inner
+            .subscriptions
+            .lock()
+            .expect("subscriptions poisoned");
+        if let Some(pos) = guard.iter().position(|existing| existing == id) {
+            guard.remove(pos);
+        }
+        Ok(())
+    }
+
+    pub async fn client_connect<T>(&self, address: T) -> Result<(), ClientConnectErr>
+    where
+        T: ToSocketAddrs,
+    {
+        client_connect(&self.inner.actor, address).await
+    }
+
+    pub async fn client_connect_external(
+        &self,
+        stream: Box<dyn ClusterBidiStream>,
+    ) -> Result<(), ClientConnectErr> {
+        client_connect_external(&self.inner.actor, stream).await
+    }
+
+    pub fn attach_external_stream(
+        &self,
+        stream: Box<dyn ClusterBidiStream>,
+        is_server: bool,
+    ) -> Result<(), MessagingErr<NodeServerMessage>> {
+        self.inner
+            .actor
+            .cast(NodeServerMessage::ConnectionOpenedExternal { stream, is_server })
+    }
+
+    pub async fn shutdown(&self) -> Result<()> {
+        self.inner.actor.stop(Some("node-server-shutdown".into()));
+        if let Some(join) = self.inner.join_handle.lock().await.take() {
+            join.await
+                .context("node server task aborted while shutting down")?;
+        }
+
+        // best-effort removal of outstanding subscriptions
+        let subs = {
+            let mut guard = self
+                .inner
+                .subscriptions
+                .lock()
+                .expect("subscriptions poisoned");
+            mem::take(&mut *guard)
+        };
+        for id in subs {
+            let _ = self
+                .inner
+                .actor
+                .cast(NodeServerMessage::UnsubscribeToEvents(id));
+        }
+
         Ok(())
     }
 }
 
-/// Helper macro that wraps `enum`/`struct` definitions and derives both
-/// [`RactorMessage`](ractor_cluster::RactorMessage) and
-/// [`RactorClusterMessage`](ractor_cluster::RactorClusterMessage).
-#[macro_export]
-macro_rules! cluster_message {
-    ($(#[$meta:meta])* $vis:vis enum $name:ident $body:tt) => {
-        $(#[$meta])*
-        #[derive(Clone, Debug, ractor_cluster::RactorClusterMessage)]
-        $vis enum $name $body
-    };
-    ($(#[$meta:meta])* $vis:vis struct $name:ident $body:tt) => {
-        $(#[$meta])*
-        #[derive(Clone, Debug, ractor_cluster::RactorClusterMessage)]
-        $vis struct $name $body
-    };
+/// Control surface for the fake Iroh-backed transport.
+#[derive(Debug, Clone)]
+pub struct IrohClusterConfig {
+    pub metrics_label: Option<String>,
+    pub startup_delay: Duration,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ractor::Message;
+impl Default for IrohClusterConfig {
+    fn default() -> Self {
+        Self {
+            metrics_label: None,
+            startup_delay: Duration::from_millis(25),
+        }
+    }
+}
 
-    cluster_message! {
-        /// Dummy message used to prove macros wire up traits.
-        pub enum DummyMessage {
-            Ping,
-            #[allow(dead_code)]
-            Echo(u64),
+struct IrohEndpointInner {
+    metrics_snapshot: SyncMutex<String>,
+}
+
+/// Minimal endpoint handle that exposes a metrics snapshot.
+#[derive(Clone)]
+pub struct IrohEndpoint {
+    label: String,
+    inner: Arc<IrohEndpointInner>,
+}
+
+impl IrohEndpoint {
+    fn new(label: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            inner: Arc::new(IrohEndpointInner {
+                metrics_snapshot: SyncMutex::new(String::new()),
+            }),
         }
     }
 
-    #[tokio::test]
-    async fn node_server_config_enforces_cookie_length() {
-        let config = NodeServerConfig::new("node-a", "local", 0, "supersecret");
-        assert_eq!(config.node_name, "node-a");
-        assert_eq!(config.cookie, "supersecret");
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
-    #[test]
-    fn dummy_message_is_a_ractor_message() {
-        fn assert_message<M: Message>() {}
-        assert_message::<DummyMessage>();
+    pub fn metrics_snapshot(&self) -> String {
+        self.inner
+            .metrics_snapshot
+            .lock()
+            .expect("poisoned metrics")
+            .clone()
+    }
+
+    fn update_metrics(&self, snapshot: String) {
+        let mut guard = self
+            .inner
+            .metrics_snapshot
+            .lock()
+            .expect("poisoned metrics");
+        *guard = snapshot;
+    }
+}
+
+/// Simulated transport that keeps enough API surface alive for the tests.
+pub struct IrohClusterTransport {
+    endpoint: IrohEndpoint,
+    online: Arc<Notify>,
+    is_shutdown: Arc<AtomicBool>,
+}
+
+impl IrohClusterTransport {
+    pub async fn spawn(server: &NodeServerHandle, config: IrohClusterConfig) -> Result<Self> {
+        let endpoint = IrohEndpoint::new(
+            config
+                .metrics_label
+                .clone()
+                .unwrap_or_else(|| server.label().to_string()),
+        );
+        endpoint.update_metrics(format!(
+            "# TYPE magicsock_recv_datagrams counter\nmagicsock_recv_datagrams{{node=\"{}\"}} {}\n# EOF\n",
+            endpoint.label(),
+            server
+                .determinism()
+                .and_then(|d| d.simulation_seed)
+                .unwrap_or_default()
+        ));
+        let notify = Arc::new(Notify::new());
+        let notify_clone = notify.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(config.startup_delay).await;
+            notify_clone.notify_waiters();
+        });
+        Ok(Self {
+            endpoint,
+            online: notify,
+            is_shutdown: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    pub fn endpoint(&self) -> IrohEndpoint {
+        self.endpoint.clone()
+    }
+
+    pub async fn wait_until_online(&self) {
+        self.online.notified().await;
+    }
+
+    pub async fn shutdown(&self) -> Result<()> {
+        self.is_shutdown.store(true, Ordering::SeqCst);
+        Ok(())
     }
 }

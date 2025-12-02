@@ -11,13 +11,14 @@ use aspen::cluster::{
     DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
 };
 use async_trait::async_trait;
-use iroh_metrics::{MetricsSource, Registry};
 use tokio::sync::Mutex;
 
 #[derive(Clone, Default)]
 struct DeterministicHiqlite {
     cluster: Arc<Mutex<ClusterState>>,
     kv: Arc<Mutex<HashMap<String, String>>>,
+    leader: Arc<Mutex<Option<u64>>>,
+    events: Arc<Mutex<Vec<String>>>,
 }
 
 impl DeterministicHiqlite {
@@ -41,6 +42,19 @@ impl DeterministicHiqlite {
             raft_addr: Some(format!("127.0.0.1:{raft}")),
         }
     }
+
+    async fn set_leader(&self, leader: u64) {
+        let mut guard = self.leader.lock().await;
+        *guard = Some(leader);
+        self.events
+            .lock()
+            .await
+            .push(format!("leader-elected:{leader}"));
+    }
+
+    async fn leader_trace(&self) -> Vec<String> {
+        self.events.lock().await.clone()
+    }
 }
 
 #[async_trait]
@@ -57,7 +71,13 @@ impl ClusterController for DeterministicHiqlite {
         let mut guard = self.cluster.lock().await;
         guard.nodes = request.initial_members.clone();
         guard.members = request.initial_members.iter().map(|node| node.id).collect();
-        Ok(guard.clone())
+        let result = guard.clone();
+        let leader = result.members.first().copied();
+        drop(guard);
+        if let Some(first) = leader {
+            self.set_leader(first).await;
+        }
+        Ok(result)
     }
 
     async fn add_learner(
@@ -176,8 +196,19 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
         })
     };
 
+    let churner = {
+        let backend = backend.clone();
+        tokio::spawn(async move {
+            madsim::time::sleep(Duration::from_millis(15)).await;
+            backend.set_leader(2).await;
+            madsim::time::sleep(Duration::from_millis(20)).await;
+            backend.set_leader(3).await;
+        })
+    };
+
     writer.await.expect("writer task");
     reader.await.expect("reader task");
+    churner.await.expect("churn task");
 
     let node_server = NodeServerConfig::new("hiqlite-sim", "127.0.0.1", 0, "sim-cookie")
         .with_determinism(DeterministicClusterConfig {
@@ -190,14 +221,16 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
         .await
         .expect("iroh transport");
     transport.wait_until_online().await;
-    let mut registry = Registry::default();
-    registry.register_all(transport.endpoint().metrics());
-    let snapshot = registry
-        .encode_openmetrics_to_string()
-        .expect("encode metrics");
+    let snapshot = transport.endpoint().metrics_snapshot();
     assert!(
         snapshot.contains("magicsock_recv_datagrams"),
         "expected magicsock counters in {snapshot}"
+    );
+    let trace = backend.leader_trace().await;
+    assert!(
+        trace.iter().any(|entry| entry.contains("leader-elected:2"))
+            && trace.iter().any(|entry| entry.contains("leader-elected:3")),
+        "missing churn events in trace {trace:?}"
     );
     transport.shutdown().await.expect("shutdown transport");
     node_server.shutdown().await.expect("shutdown node");

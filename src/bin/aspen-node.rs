@@ -1,543 +1,359 @@
-use std::fs;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
-use axum::extract::State;
-use axum::http::header::CONTENT_TYPE;
-use axum::http::{HeaderValue, StatusCode};
-use axum::response::IntoResponse;
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use anyhow::Result;
+use aspen::api::{
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ControlPlaneError,
+    DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
+    KeyValueStoreError, ReadRequest, WriteRequest,
+};
+use aspen::cluster::{IrohClusterConfig, IrohClusterTransport, IrohEndpoint, NodeServerConfig};
+use aspen::raft::network::HttpRaftNetworkFactory;
+use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::{RaftActor, RaftActorConfig, RaftActorMessage, RaftControlClient};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
+};
 use clap::{Parser, ValueEnum};
-use iroh::{EndpointAddr, EndpointId, SecretKey};
-use iroh_metrics::{MetricsSource, Registry};
-use reqwest::Url;
+use openraft::Config as RaftConfig;
+use openraft::raft::{AppendEntriesRequest, InstallSnapshotRequest, VoteRequest};
+use ractor::{Actor, ActorRef, call_t};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
-use tracing::{error, info, warn};
-
-use aspen::StorageSurface;
-use aspen::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
-    ExternalControlPlane, HiqliteBackendConfig, HiqliteControlPlane, InMemoryControlPlane,
-    InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, WriteRequest,
-};
-use aspen::cluster::{
-    DeterministicClusterConfig, IrohClusterConfig, IrohClusterTransport, NodeServerConfig,
-};
-use aspen::raft::{LocalRaftFactory, RaftActorFactory, RaftActorMessage, RaftNodeSpec};
-use aspen::storage::StoragePlan;
-use openraft::Config;
-use ractor::ActorRef;
-
-const IROH_ONLINE_TIMEOUT_SECS: u64 = 5;
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "aspen-node",
-    about = "Runs an Aspen node with HTTP control/metrics endpoints"
-)]
-struct Cli {
-    /// Unique Raft node identifier.
+#[command(name = "aspen-node")]
+struct Args {
+    /// Logical Raft node identifier.
     #[arg(long)]
-    id: u64,
-
-    /// HTTP listener address (e.g. 127.0.0.1:21001).
-    #[arg(long, default_value = "127.0.0.1:21001")]
-    http_addr: SocketAddr,
-
-    /// Cluster host portion used in NodeServer name and default listener.
+    node_id: u64,
+    /// Hostname recorded in the NodeServer's identity (informational).
     #[arg(long, default_value = "127.0.0.1")]
-    cluster_host: String,
-
-    /// Cluster listener port. Set to 0 for OS-assigned.
-    #[arg(long, default_value_t = 0)]
-    cluster_port: u16,
-
-    /// Magic cookie shared by all peers for authentication.
+    host: String,
+    /// Port for the Ractor node listener. Use 0 to request an OS-assigned port.
+    #[arg(long, default_value_t = 26000)]
+    port: u16,
+    /// Shared cookie for authenticating Ractor nodes.
     #[arg(long, default_value = "aspen-cookie")]
     cookie: String,
-
-    /// Optional data directory for persistent storage.
-    #[arg(long)]
-    data_dir: Option<PathBuf>,
-
-    /// Deterministic seed used by in-memory storage.
-    #[arg(long)]
-    deterministic_seed: Option<u64>,
-
-    /// Cluster namespace used for actor naming.
-    #[arg(long, default_value = "aspen::primary")]
-    cluster_namespace: String,
-
-    /// Backend used to service control-plane requests.
-    #[arg(long, value_enum, default_value = "in-memory")]
+    /// Address for the HTTP control API.
+    #[arg(long, default_value = "127.0.0.1:8080")]
+    http_addr: SocketAddr,
+    /// Control-plane implementation to use for this node.
+    #[arg(long, value_enum, default_value_t = ControlBackend::Deterministic)]
     control_backend: ControlBackend,
-
-    /// Base URL for the external backend (required when `--control-backend external`).
-    #[arg(long)]
-    backend_url: Option<String>,
-
-    /// Timeout (in seconds) for backend HTTP requests.
-    #[arg(long, default_value_t = 5)]
-    backend_timeout_secs: u64,
-
-    /// Host:port of a Hiqlite node (repeat to provide multiple nodes).
-    #[arg(long = "hiqlite-node", value_name = "HOST:PORT")]
-    hiqlite_nodes: Vec<String>,
-
-    /// API secret expected by the remote Hiqlite nodes.
-    #[arg(long)]
-    hiqlite_api_secret: Option<String>,
-
-    /// Enable TLS when talking to Hiqlite nodes.
-    #[arg(long, default_value_t = false)]
-    hiqlite_tls: bool,
-
-    /// Disable TLS certificate verification for Hiqlite connections.
-    #[arg(long, default_value_t = false)]
-    hiqlite_tls_no_verify: bool,
-
-    /// Indicates that the provided Hiqlite nodes are proxy instances.
-    #[arg(long, default_value_t = false)]
-    hiqlite_proxy_mode: bool,
-
-    /// Table used inside Hiqlite for Aspen's key/value store.
-    #[arg(long, default_value = "aspen_kv")]
-    hiqlite_table: String,
-
-    /// Enable Iroh transport for cluster actor traffic.
-    #[arg(long)]
-    enable_iroh: bool,
-
-    /// Peer EndpointAddrs (EndpointId or JSON) to connect to when Iroh transport is enabled.
-    #[arg(long = "iroh-peer")]
-    iroh_peers: Vec<String>,
-
-    /// Hex-encoded 32-byte Iroh secret key (for deterministic EndpointIds).
-    #[arg(long)]
-    iroh_secret_hex: Option<String>,
-
-    /// File to write the local Iroh endpoint info (JSON) once online.
-    #[arg(long)]
-    iroh_endpoint_file: Option<PathBuf>,
 }
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
-enum ControlBackend {
-    #[value(name = "in-memory")]
-    InMemory,
-    External,
-    Hiqlite,
-}
+type ClusterControllerHandle = Arc<dyn ClusterController>;
+type KeyValueStoreHandle = Arc<dyn KeyValueStore>;
 
-fn parse_endpoint_addr_str(input: &str) -> anyhow::Result<EndpointAddr> {
-    if let Ok(id) = EndpointId::from_str(input) {
-        return Ok(EndpointAddr::from(id));
-    }
-    serde_json::from_str(input)
-        .map_err(|err| anyhow!("failed to parse EndpointAddr from '{input}': {err}"))
-}
-
-fn parse_secret_key_hex(input: &str) -> anyhow::Result<SecretKey> {
-    let hex = input.trim_start_matches("0x");
-    let bytes =
-        hex::decode(hex).map_err(|err| anyhow!("invalid iroh secret hex '{input}': {err}"))?;
-    let array: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| anyhow!("iroh secret hex '{input}' must decode to 32 bytes"))?;
-    Ok(SecretKey::from_bytes(&array))
-}
-
-fn write_iroh_endpoint_file(path: &Path, transport: &IrohClusterTransport) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create dir {}", parent.display()))?;
-        }
-    }
-    let addr = transport.endpoint_addr();
-    let info = json!({
-        "endpoint_id": addr.id.to_string(),
-        "relay_urls": addr.relay_urls().map(|r| r.to_string()).collect::<Vec<_>>(),
-        "ip_addrs": addr.ip_addrs().map(|ip| ip.to_string()).collect::<Vec<_>>(),
-    });
-    let data = serde_json::to_vec_pretty(&info)?;
-    fs::write(path, data).with_context(|| format!("write {}", path.display()))?;
-    Ok(())
+#[derive(Serialize)]
+struct HealthResponse {
+    node_id: u64,
+    raft_node_id: u64,
+    raft_port: u16,
 }
 
 #[derive(Clone)]
 struct AppState {
     node_id: u64,
-    cluster: String,
-    storage: StorageSurface,
-    raft: ActorRef<RaftActorMessage>,
-    controller: Arc<dyn ClusterController>,
-    kv: Arc<dyn KeyValueStore>,
-    iroh_metrics: Option<Arc<RwLock<Registry>>>,
-}
-
-#[derive(Serialize)]
-struct MetricsResponse {
-    node_id: u64,
-    cluster: String,
-    log_next_index: u64,
-    last_applied: u64,
-    cluster_state: ClusterState,
-}
-
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    node_id: u64,
+    raft_actor: ActorRef<RaftActorMessage>,
+    raft_core: openraft::Raft<AppTypeConfig>,
+    listen_port: u16,
+    controller: ClusterControllerHandle,
+    kv: KeyValueStoreHandle,
+    iroh_metrics: Option<IrohEndpoint>,
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
-    let cli = Cli::parse();
+async fn main() -> Result<()> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .compact()
+        .init();
 
-    let plan = StoragePlan {
-        node_id: format!("node-{}", cli.id),
-        seed: cli.deterministic_seed,
-        data_dir: cli.data_dir.clone(),
-    };
-    let storage = plan.materialize().context("initialize storage surface")?;
+    let args = Args::parse();
 
-    let mut node_config = NodeServerConfig::new(
-        format!("node-{}", cli.id),
-        cli.cluster_host.clone(),
-        cli.cluster_port,
-        cli.cookie.clone(),
-    );
-    if let Some(seed) = cli.deterministic_seed {
-        node_config = node_config.with_determinism(DeterministicClusterConfig {
-            simulation_seed: Some(seed),
-        });
-    }
-    let node_server = node_config.launch().await.context("launch NodeServer")?;
+    let node_server = NodeServerConfig::new(
+        format!("node-{}", args.node_id),
+        args.host.clone(),
+        args.port,
+        args.cookie.clone(),
+    )
+    .launch()
+    .await?;
+    info!(label = %node_server.label(), addr = %node_server.addr(), "node server online");
 
-    let raft_spec = RaftNodeSpec {
-        node_id: cli.id,
-        cluster: cli.cluster_namespace.clone(),
-    };
-    let raft_actor =
-        LocalRaftFactory::spawn_actor(raft_spec, storage.clone(), &node_server, Config::default())
-            .await
-            .context("spawn Raft actor")?;
+    let (raft_core, state_machine_store) = {
+        let mut cfg = RaftConfig::default();
+        cfg.heartbeat_interval = 500;
+        cfg.election_timeout_min = 1_500;
+        cfg.election_timeout_max = 3_000;
+        let config = Arc::new(cfg.validate().expect("raft config"));
 
-    let mut iroh_transport: Option<IrohClusterTransport> = None;
-    let mut iroh_metrics_registry: Option<Arc<RwLock<Registry>>> = None;
-    if cli.enable_iroh {
-        let mut iroh_cfg = IrohClusterConfig::default();
-        if let Some(secret_hex) = &cli.iroh_secret_hex {
-            let key = parse_secret_key_hex(secret_hex)?;
-            iroh_cfg.secret_key = Some(key);
-        }
-        let transport = IrohClusterTransport::spawn(&node_server, iroh_cfg)
-            .await
-            .context("launch iroh cluster transport")?;
-        let registry = Arc::new(RwLock::new(Registry::default()));
-        {
-            let mut guard = registry
-                .write()
-                .expect("iroh metrics registry poisoned during init");
-            guard.register_all(transport.endpoint().metrics());
-        }
-        iroh_metrics_registry = Some(registry);
-        if let Some(path) = &cli.iroh_endpoint_file {
-            write_iroh_endpoint_file(path, &transport)?;
-        }
-        let wait_result = tokio::time::timeout(
-            Duration::from_secs(IROH_ONLINE_TIMEOUT_SECS),
-            transport.wait_until_online(),
+        let log_store = InMemoryLogStore::default();
+        let state_machine_store = StateMachineStore::new();
+        let network = HttpRaftNetworkFactory::new();
+
+        let raft = openraft::Raft::new(
+            args.node_id,
+            config,
+            network,
+            log_store,
+            state_machine_store.clone(),
         )
-        .await;
-        match wait_result {
-            Ok(_) => {
-                info!(
-                    endpoint = ?transport.endpoint_addr(),
-                    "iroh transport online"
-                );
-                if let Some(path) = &cli.iroh_endpoint_file {
-                    write_iroh_endpoint_file(path, &transport)?;
-                }
-            }
-            Err(_) => {
-                warn!(
-                    timeout_secs = IROH_ONLINE_TIMEOUT_SECS,
-                    endpoint = ?transport.endpoint_addr(),
-                    "iroh transport did not signal online before timeout; continuing without waiting"
-                );
-            }
-        }
-        for peer in &cli.iroh_peers {
-            match parse_endpoint_addr_str(peer) {
-                Ok(addr) => {
-                    if let Err(err) = transport.connect(addr).await {
-                        warn!(peer = peer, error = %err, "failed to connect to iroh peer");
-                    } else {
-                        info!(peer = peer, "connected to iroh peer");
-                    }
-                }
-                Err(err) => warn!(peer = peer, error = %err, "invalid iroh peer address"),
-            }
-        }
-        iroh_transport = Some(transport);
-    }
+        .await
+        .expect("raft init");
 
-    let (controller, kv): (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) =
-        match cli.control_backend {
-            ControlBackend::InMemory => {
-                let plane = Arc::new(InMemoryControlPlane::new());
-                (plane.clone(), plane)
+        (raft, state_machine_store)
+    };
+    let raft_config = RaftActorConfig {
+        node_id: args.node_id,
+        raft: raft_core.clone(),
+        state_machine: state_machine_store.clone(),
+    };
+    let (raft_ref, raft_task) = Actor::spawn(
+        Some(format!("raft-{}", args.node_id)),
+        RaftActor,
+        raft_config,
+    )
+    .await?;
+
+    let (controller, kv_store) = args.control_backend.build(raft_ref.clone());
+
+    let iroh_transport =
+        match IrohClusterTransport::spawn(&node_server, IrohClusterConfig::default()).await {
+            Ok(transport) => {
+                transport.wait_until_online().await;
+                Some(transport)
             }
-            ControlBackend::External => {
-                let raw_url = cli
-                    .backend_url
-                    .clone()
-                    .context("external backend requires --backend-url")?;
-                let url = Url::parse(&raw_url).context("invalid backend url")?;
-                let plane = Arc::new(
-                    ExternalControlPlane::new(url, Duration::from_secs(cli.backend_timeout_secs))
-                        .context("build external backend client")?,
-                );
-                (plane.clone(), plane)
-            }
-            ControlBackend::Hiqlite => {
-                let api_secret = cli
-                    .hiqlite_api_secret
-                    .clone()
-                    .context("hiqlite backend requires --hiqlite-api-secret")?;
-                let config = HiqliteBackendConfig {
-                    nodes: cli.hiqlite_nodes.clone(),
-                    api_secret,
-                    use_tls: cli.hiqlite_tls,
-                    tls_no_verify: cli.hiqlite_tls_no_verify,
-                    proxy_mode: cli.hiqlite_proxy_mode,
-                    table: cli.hiqlite_table.clone(),
-                };
-                let plane = Arc::new(
-                    HiqliteControlPlane::connect(config)
-                        .await
-                        .context("connect hiqlite backend")?,
-                );
-                (plane.clone(), plane)
+            Err(err) => {
+                warn!(error = %err, "failed to launch iroh cluster transport");
+                None
             }
         };
 
-    let state = AppState {
-        node_id: cli.id,
-        cluster: cli.cluster_namespace.clone(),
-        storage: storage.clone(),
-        raft: raft_actor,
+    let app_state = AppState {
+        node_id: args.node_id,
+        raft_actor: raft_ref.clone(),
+        raft_core: raft_core.clone(),
+        listen_port: args.port,
         controller,
-        kv,
-        iroh_metrics: iroh_metrics_registry,
+        kv: kv_store,
+        iroh_metrics: iroh_transport.as_ref().map(|t| t.endpoint()),
     };
 
-    let router_state = state.clone();
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
-        .route("/iroh-metrics", get(iroh_metrics_handler))
+        .route("/iroh-metrics", get(iroh_metrics))
         .route("/init", post(init_cluster))
         .route("/add-learner", post(add_learner))
         .route("/change-membership", post(change_membership))
-        .route("/write", post(write_handler))
-        .route("/read", post(read_handler))
-        .with_state(router_state);
+        .route("/write", post(write_value))
+        .route("/read", post(read_value))
+        .route("/raft/vote", post(raft_vote))
+        .route("/raft/append", post(raft_append))
+        .route("/raft/snapshot", post(raft_snapshot))
+        .with_state(app_state);
 
-    info!("aspen-node {} listening on {}", cli.id, cli.http_addr);
+    let listener = tokio::net::TcpListener::bind(args.http_addr).await?;
+    info!(addr = %args.http_addr, "http server listening");
 
-    let listener = tokio::net::TcpListener::bind(cli.http_addr)
-        .await
-        .context("bind HTTP listener")?;
-    let server = axum::serve(listener, app);
+    // TODO: expose this router via iroh-h3 once the QUIC transport is wired.
+    let http = axum::serve(listener, app.into_make_service()).with_graceful_shutdown(async {
+        let _ = signal::ctrl_c().await;
+    });
 
     tokio::select! {
-        res = server => {
-            if let Err(err) = res {
-                error!(error = %err, "http server failed");
+        result = http => {
+            if let Err(err) = result {
+                warn!(error = %err, "http server exited with error");
             }
-        },
-        _ = signal::ctrl_c() => {
-            info!("received shutdown signal");
         }
     }
 
-    info!("shutting down raft actor and NodeServer");
-    state.raft.stop(None);
+    // begin shutdown sequence
+    node_server.shutdown().await?;
     if let Some(transport) = iroh_transport {
-        transport
-            .shutdown()
-            .await
-            .context("shutdown iroh transport")?;
+        transport.shutdown().await?;
     }
-    node_server
-        .shutdown()
-        .await
-        .context("shutdown NodeServer")?;
+    raft_ref.stop(Some("http-shutdown".into()));
+    raft_task.await?;
+
     Ok(())
 }
 
-#[tracing::instrument(skip(state))]
-async fn health(State(state): State<AppState>) -> impl IntoResponse {
-    ok_response(json!(HealthResponse {
-        status: "ok",
-        node_id: state.node_id,
-    }))
-}
-
-#[tracing::instrument(skip(state))]
-async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
-    let cluster_state = match state.controller.current_state().await {
-        Ok(state) => state,
-        Err(err) => return control_plane_error(err),
-    };
-    let log_next_index = state
-        .storage
-        .log()
-        .next_index()
-        .unwrap_or(1)
-        .saturating_sub(1);
-    let last_applied = state.storage.state_machine().last_applied().unwrap_or(0);
-    let body = MetricsResponse {
-        node_id: state.node_id,
-        cluster: state.cluster.clone(),
-        log_next_index,
-        last_applied,
-        cluster_state,
-    };
-    Json(body).into_response()
-}
-
-#[tracing::instrument(skip(state))]
-async fn iroh_metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
-    match &state.iroh_metrics {
-        Some(registry) => match registry.read() {
-            Ok(registry) => match registry.encode_openmetrics_to_string() {
-                Ok(body) => (
-                    StatusCode::OK,
-                    [(
-                        CONTENT_TYPE,
-                        HeaderValue::from_static("text/plain; version=0.0.4"),
-                    )],
-                    body,
-                )
-                    .into_response(),
-                Err(err) => {
-                    error!(error = %err, "failed to encode iroh metrics");
-                    error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "unable to encode iroh metrics",
-                    )
-                }
-            },
-            Err(_) => error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "iroh metrics registry lock poisoned",
-            ),
-        },
-        None => error_response(StatusCode::NOT_FOUND, "iroh transport not enabled"),
+async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
+    match call_t!(ctx.raft_actor, RaftActorMessage::GetNodeId, 25) {
+        Ok(raft_node_id) => {
+            let payload = HealthResponse {
+                node_id: ctx.node_id,
+                raft_node_id,
+                raft_port: ctx.listen_port,
+            };
+            (StatusCode::OK, Json(payload)).into_response()
+        }
+        Err(err) => {
+            warn!(error = ?err, "raft RPC transport failure");
+            StatusCode::SERVICE_UNAVAILABLE.into_response()
+        }
     }
 }
 
-#[tracing::instrument(skip(state, body))]
+async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
+    let body = format!(
+        "# TYPE aspen_node_info gauge\naspen_node_info{{node_id=\"{}\"}} 1\n",
+        ctx.node_id
+    );
+    (StatusCode::OK, body)
+}
+
+async fn iroh_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
+    if let Some(endpoint) = &ctx.iroh_metrics {
+        (StatusCode::OK, endpoint.metrics_snapshot()).into_response()
+    } else {
+        StatusCode::NOT_FOUND.into_response()
+    }
+}
+
+type ApiResult<T> = Result<T, ApiError>;
+
 async fn init_cluster(
     State(state): State<AppState>,
-    Json(body): Json<InitRequest>,
-) -> impl IntoResponse {
-    match state.controller.init(body).await {
-        Ok(cluster) => ok_response(json!({ "cluster": cluster })),
-        Err(err) => control_plane_error(err),
-    }
+    Json(request): Json<InitRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let result = state.controller.init(request).await?;
+    Ok(Json(result))
 }
 
-#[tracing::instrument(skip(state, body))]
 async fn add_learner(
     State(state): State<AppState>,
-    Json(body): Json<AddLearnerRequest>,
-) -> impl IntoResponse {
-    match state.controller.add_learner(body).await {
-        Ok(cluster) => ok_response(json!({ "cluster": cluster })),
-        Err(err) => control_plane_error(err),
-    }
+    Json(request): Json<AddLearnerRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let result = state.controller.add_learner(request).await?;
+    Ok(Json(result))
 }
 
-#[tracing::instrument(skip(state, body))]
 async fn change_membership(
     State(state): State<AppState>,
-    Json(body): Json<ChangeMembershipRequest>,
-) -> impl IntoResponse {
-    match state.controller.change_membership(body).await {
-        Ok(cluster) => ok_response(json!({ "cluster": cluster })),
-        Err(err) => control_plane_error(err),
-    }
+    Json(request): Json<ChangeMembershipRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let result = state.controller.change_membership(request).await?;
+    Ok(Json(result))
 }
 
-#[tracing::instrument(skip(state, body))]
-async fn write_handler(
+async fn write_value(
     State(state): State<AppState>,
-    Json(body): Json<WriteRequest>,
-) -> impl IntoResponse {
-    match state.kv.write(body).await {
-        Ok(result) => ok_response(json!({ "write": result })),
-        Err(err) => kv_error(err),
-    }
+    Json(request): Json<WriteRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let result = state.kv.write(request).await?;
+    Ok(Json(result))
 }
 
-#[tracing::instrument(skip(state, body))]
-async fn read_handler(
+async fn read_value(
     State(state): State<AppState>,
-    Json(body): Json<ReadRequest>,
+    Json(request): Json<ReadRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let result = state.kv.read(request).await?;
+    Ok(Json(result))
+}
+
+async fn raft_vote(
+    State(state): State<AppState>,
+    Json(request): Json<VoteRequest<AppTypeConfig>>,
 ) -> impl IntoResponse {
-    match state.kv.read(body).await {
-        Ok(result) => ok_response(json!({ "read": result })),
-        Err(err) => kv_error(err),
+    Json(state.raft_core.vote(request).await)
+}
+
+async fn raft_append(
+    State(state): State<AppState>,
+    Json(request): Json<AppendEntriesRequest<AppTypeConfig>>,
+) -> impl IntoResponse {
+    Json(state.raft_core.append_entries(request).await)
+}
+
+async fn raft_snapshot(
+    State(state): State<AppState>,
+    Json(request): Json<InstallSnapshotRequest<AppTypeConfig>>,
+) -> impl IntoResponse {
+    Json(state.raft_core.install_snapshot(request).await)
+}
+
+#[derive(Debug)]
+enum ApiError {
+    Control(ControlPlaneError),
+    KeyValue(KeyValueStoreError),
+}
+
+impl From<ControlPlaneError> for ApiError {
+    fn from(value: ControlPlaneError) -> Self {
+        Self::Control(value)
     }
 }
 
-fn ok_response(payload: serde_json::Value) -> axum::response::Response {
-    Json(payload).into_response()
+impl From<KeyValueStoreError> for ApiError {
+    fn from(value: KeyValueStoreError) -> Self {
+        Self::KeyValue(value)
+    }
 }
 
-fn error_response(status: StatusCode, msg: &str) -> axum::response::Response {
-    (status, Json(json!({ "message": msg }))).into_response()
-}
-
-fn control_plane_error(err: ControlPlaneError) -> axum::response::Response {
-    match err {
-        ControlPlaneError::InvalidRequest { reason } => {
-            warn!(reason = %reason, "control-plane rejected request");
-            error_response(StatusCode::BAD_REQUEST, &reason)
-        }
-        ControlPlaneError::NotFound { reason } => {
-            warn!(reason = %reason, "control-plane reported missing resource");
-            error_response(StatusCode::NOT_FOUND, &reason)
-        }
-        ControlPlaneError::Backend { reason } => {
-            error!(reason = %reason, "control-plane backend failure");
-            error_response(StatusCode::INTERNAL_SERVER_ERROR, &reason)
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        match self {
+            ApiError::Control(ControlPlaneError::InvalidRequest { reason }) => {
+                (StatusCode::BAD_REQUEST, Json(json!({ "error": reason }))).into_response()
+            }
+            ApiError::Control(ControlPlaneError::NotInitialized) => (
+                StatusCode::PRECONDITION_FAILED,
+                Json(json!({ "error": "cluster not initialized" })),
+            )
+                .into_response(),
+            ApiError::Control(ControlPlaneError::Failed { reason }) => {
+                (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
+            }
+            ApiError::KeyValue(KeyValueStoreError::NotFound { key }) => (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("key '{key}' not found") })),
+            )
+                .into_response(),
+            ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
+                (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
+            }
         }
     }
 }
 
-fn kv_error(err: KeyValueStoreError) -> axum::response::Response {
-    match err {
-        KeyValueStoreError::NotFound { key } => {
-            warn!(%key, "key not found");
-            error_response(StatusCode::NOT_FOUND, "key not found")
-        }
-        KeyValueStoreError::Backend { reason } => {
-            error!(reason = %reason, "key-value backend failure");
-            error_response(StatusCode::INTERNAL_SERVER_ERROR, &reason)
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum ControlBackend {
+    Deterministic,
+    RaftActor,
+}
+
+impl ControlBackend {
+    fn build(
+        self,
+        raft: ActorRef<RaftActorMessage>,
+    ) -> (ClusterControllerHandle, KeyValueStoreHandle) {
+        match self {
+            ControlBackend::Deterministic => (
+                DeterministicClusterController::new(),
+                DeterministicKeyValueStore::new(),
+            ),
+            ControlBackend::RaftActor => {
+                let client = Arc::new(RaftControlClient::new(raft));
+                (client.clone(), client)
+            }
         }
     }
 }

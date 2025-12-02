@@ -1,22 +1,17 @@
-//! Aspen vNext crate boundary.
+//! Aspen library entry point.
 //!
-//! The rebuilt crate organizes functionality into explicit top-level modules so
-//! we can iterate on transport, Raft wiring, and the eventual API surface in
-//! isolation while still composing them through `ractor` actors later on.
+//! The previous iterations of the crate had a much richer surface area that
+//! bound `openraft`, Iroh, and `ractor`. Those modules were wiped so we could
+//! rebuild the stack deliberately. For now we expose lightweight scaffolding
+//! that mirrors the control-plane and transport traits used throughout the
+//! integration tests and examples. Each module intentionally keeps the API
+//! narrow so we can iterate quickly while wiring the real implementations back
+//! in.
 
-#![deny(missing_docs)]
-
-/// External API surfaces (CLI, RPC, embedding hooks) will be declared here.
 pub mod api;
-/// Cluster orchestration primitives that sit directly on top of
-/// `ractor_cluster::NodeServer` plus Aspen-specific helpers.
 pub mod cluster;
-/// Raft wiring (state machine + network glue) lives here. Phase 1 only defines
-/// the traits so Phase 2 can plug the actual OpenRaft actors in.
+pub mod kv;
 pub mod raft;
-/// Storage adapters (logs, state machines, snapshots) and their property-test
-/// seam points.
-pub mod storage;
-pub use storage::StorageSurface;
 
-pub use cluster::{DeterministicClusterConfig, NodeServerConfig, NodeServerHandle};
+pub use kv::KvServiceBuilder;
+pub use raft::RaftControlClient;

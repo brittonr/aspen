@@ -25,7 +25,9 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - `scripts/run-hiqlite-cluster.sh` provisions a 3-node local Hiqlite cluster (build + configs + lifecycle) and we validate the entire flow by running it alongside `scripts/aspen-cluster-smoke.sh` to ensure the default control-plane smoke test still passes.
    - `scripts/aspen-hiqlite-smoke.sh` now orchestrates the local Hiqlite cluster and reuses the smoke harness with `--control-backend hiqlite`, while `scripts/aspen-cluster-smoke.sh` forwards arbitrary CLI args so additional backends can be validated without editing the script.
    - Added `tests/hiqlite_flow.rs`, a deterministic `madsim` scenario that replays the Hiqlite membership/write flow (including learner promotion) and asserts that the Iroh transport exports healthy counters via the new `/iroh-metrics` endpoint wiring.
-   - Next action: extend the deterministic scenario to exercise failure injection (leader churn + network delays) and publish the captured seeds/logs alongside CI artifacts so regressions can be replayed automatically.
+   - Extended the deterministic scenario with explicit leader churn and delay injection so we capture failover traces alongside the transport metrics snapshot.
+   - OpenRaft is now wired back in: the Raft actor owns a real `openraft::Raft` handle, uses the new in-memory log/state-machine storage, exposes the HTTP Raft RPC routes, and the control-plane writes/reads call straight into OpenRaft.
+   - Next action: persist the captured seeds/logs (plus the churn trace) under `docs/` and teach CI to publish them whenever the simulator reproduces a failure.
 
 ## Phase 3: Network Fabric
 1. **IROH + IRPC transport**

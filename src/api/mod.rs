@@ -1,82 +1,111 @@
-//! Public API scaffolding.
-//!
-//! # Responsibilities
-//! - Describe how client-facing APIs (HTTP, CLI, SDKs) will call into the
-//!   underlying Raft actor graph.
-//! - Keep the seams deterministic so CLI smoke-tests can run under `madsim`
-//!   while replaying captured seeds.
-//! - Document where property-based request validation tests should land.
-//!
-//! # Composition
-//! The API layer depends on [`crate::cluster`] for node handles, on
-//! [`crate::raft`] for logical endpoints (client write, read-only queries), and
-//! on [`crate::storage`] for debugging/test hooks.
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::cluster::NodeServerHandle;
-use crate::raft::RaftNodeSpec;
-use crate::storage::StorageSurface;
+pub mod inmemory;
+pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
 
-pub mod control;
-pub use control::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, ExternalControlPlane, HiqliteBackendConfig, HiqliteControlPlane,
-    InMemoryControlPlane, InitRequest, KeyValueStore, KeyValueStoreError, NodeId, ReadRequest,
-    ReadResult, WriteCommand, WriteRequest, WriteResult,
-};
-
-/// High-level API surface describing how future handlers gain access to cluster state.
-#[derive(Debug, Clone)]
-pub struct ApiSurface {
-    cluster: String,
+/// Describes a node participating in the control-plane cluster.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ClusterNode {
+    pub id: u64,
+    pub addr: String,
+    pub raft_addr: Option<String>,
 }
 
-impl ApiSurface {
-    /// Build the API descriptor for the provided cluster namespace.
-    pub fn new(cluster: impl Into<String>) -> Self {
-        let cluster = cluster.into();
-        assert!(
-            !cluster.is_empty(),
-            "cluster namespace helps us pin API harnesses to deterministic seeds"
-        );
-        Self { cluster }
-    }
-
-    /// Build a request context; later phases will use this to feed Raft RPCs.
-    pub fn context<'a>(
-        &'a self,
-        node: &'a NodeServerHandle,
-        storage: &'a StorageSurface,
-        spec: &'a RaftNodeSpec,
-    ) -> ApiContext<'a> {
-        ApiContext {
-            cluster: &self.cluster,
-            node,
-            storage,
-            spec,
+impl ClusterNode {
+    pub fn new(id: u64, addr: impl Into<String>, raft_addr: Option<String>) -> Self {
+        Self {
+            id,
+            addr: addr.into(),
+            raft_addr,
         }
     }
 }
 
-/// Request context plumbed into actual API handlers.
-#[derive(Debug)]
-pub struct ApiContext<'a> {
-    /// Cluster namespace (mirrors `RaftNodeSpec::cluster`).
-    pub cluster: &'a str,
-    /// Node handle for registering temporary actors per request.
-    pub node: &'a NodeServerHandle,
-    /// Storage surface for diagnostics (read-only).
-    pub storage: &'a StorageSurface,
-    /// Raft node metadata for routing.
-    pub spec: &'a RaftNodeSpec,
+/// Reflects the state of the cluster from the perspective of the control plane.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ClusterState {
+    pub nodes: Vec<ClusterNode>,
+    pub members: Vec<u64>,
+    pub learners: Vec<ClusterNode>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InitRequest {
+    pub initial_members: Vec<ClusterNode>,
+}
 
-    #[test]
-    fn api_surface_requires_namespace() {
-        let surface = ApiSurface::new("aspen::primary");
-        assert_eq!(surface.cluster, "aspen::primary");
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AddLearnerRequest {
+    pub learner: ClusterNode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChangeMembershipRequest {
+    pub members: Vec<u64>,
+}
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum ControlPlaneError {
+    #[error("invalid request: {reason}")]
+    InvalidRequest { reason: String },
+    #[error("cluster not initialized")]
+    NotInitialized,
+    #[error("operation failed: {reason}")]
+    Failed { reason: String },
+}
+
+#[async_trait]
+pub trait ClusterController: Send + Sync {
+    async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError>;
+    async fn add_learner(
+        &self,
+        request: AddLearnerRequest,
+    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn change_membership(
+        &self,
+        request: ChangeMembershipRequest,
+    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn current_state(&self) -> Result<ClusterState, ControlPlaneError>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum WriteCommand {
+    Set { key: String, value: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WriteRequest {
+    pub command: WriteCommand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WriteResult {
+    pub command: WriteCommand,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReadRequest {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReadResult {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum KeyValueStoreError {
+    #[error("key '{key}' not found")]
+    NotFound { key: String },
+    #[error("operation failed: {reason}")]
+    Failed { reason: String },
+}
+
+#[async_trait]
+pub trait KeyValueStore: Send + Sync {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
 }
