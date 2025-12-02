@@ -52,3 +52,6 @@ We're adopting `ractor` with the `cluster` feature plus `ractor_cluster`/`ractor
   ```
 - Message enums for actors that can be remoted must derive `RactorClusterMessage` (or implement `ractor::Message` + `BytesConvertable` manually) so they serialize across the wire. Use `#[rpc]` on variants that expect replies.
 - `ractor_actors` ships a set of helper actors (watchdog, broadcaster, filewatcher, etc.)—enable only the features you need to keep the dependency surface minimal.
+
+## External Raft / DB Plan
+Aspen currently serves as the control-plane and transport façade. The actual Raft/DB implementation will live outside this crate in the near term, so keep the HTTP/API layer and actor interfaces cleanly separated behind traits. The goal is for `aspen-node` to expose `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`, and `/metrics` regardless of whether the storage/consensus engine is the in-memory stub or an out-of-process service. Document request/response formats and avoid baking storage assumptions into the HTTP handlers so the external Raft backend can slot in later without refactoring the API.

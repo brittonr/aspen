@@ -49,7 +49,7 @@ tokio-test = "0.4"
 cargo-nextest = "0.9.60"
 tempfile = "3.10"
 rand09 = { package = "rand", version = "0.9" }
-anyerror = "0.1"
+anyerror = { version = "0.1", features = ["anyhow"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

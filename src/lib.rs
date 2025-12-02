@@ -17,5 +17,6 @@ pub mod raft;
 /// Storage adapters (logs, state machines, snapshots) and their property-test
 /// seam points.
 pub mod storage;
+pub use storage::StorageSurface;
 
 pub use cluster::{DeterministicClusterConfig, NodeServerConfig, NodeServerHandle};

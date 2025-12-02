@@ -157,6 +157,7 @@ version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71add24cc141a1e8326f249b74c41cfd217aeb2a67c9c6cf9134d175469afd49"
 dependencies = [
+ "anyhow",
  "serde",
 ]
 
@@ -217,6 +218,7 @@ dependencies = [
  "hiqlite-macros",
  "iroh",
  "iroh-base",
+ "iroh-metrics",
  "iroh-relay",
  "irpc",
  "mad-turmoil",
