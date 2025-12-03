@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
+use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
+use iroh_gossip::proto::TopicId;
 use ractor::{Actor, ActorRef, MessagingErr};
 use ractor_cluster::node::NodeConnectionMode;
 use ractor_cluster::{
@@ -19,6 +21,7 @@ use tokio::task::JoinHandle;
 
 pub mod bootstrap;
 pub mod config;
+pub mod gossip_discovery;
 pub mod metadata;
 pub mod ticket;
 
@@ -306,6 +309,10 @@ pub struct IrohEndpointConfig {
     pub relay_urls: Vec<RelayUrl>,
     /// Bind port for the QUIC socket (0 = random port).
     pub bind_port: u16,
+    /// Enable gossip-based peer discovery (default: true).
+    pub enable_gossip: bool,
+    /// Optional explicit gossip topic ID. If None, derived from cluster cookie.
+    pub gossip_topic: Option<TopicId>,
 }
 
 impl Default for IrohEndpointConfig {
@@ -314,6 +321,8 @@ impl Default for IrohEndpointConfig {
             secret_key: None,
             relay_urls: Vec::new(),
             bind_port: 0,
+            enable_gossip: true,
+            gossip_topic: None,
         }
     }
 }
@@ -347,6 +356,18 @@ impl IrohEndpointConfig {
         self.bind_port = port;
         self
     }
+
+    /// Enable or disable gossip-based peer discovery.
+    pub fn with_gossip(mut self, enable: bool) -> Self {
+        self.enable_gossip = enable;
+        self
+    }
+
+    /// Set an explicit gossip topic ID.
+    pub fn with_gossip_topic(mut self, topic: TopicId) -> Self {
+        self.gossip_topic = Some(topic);
+        self
+    }
 }
 
 /// Manages the lifecycle of an Iroh endpoint for P2P transport.
@@ -358,6 +379,8 @@ impl IrohEndpointConfig {
 pub struct IrohEndpointManager {
     endpoint: IrohEndpoint,
     node_addr: EndpointAddr,
+    secret_key: SecretKey,
+    gossip: Option<Arc<Gossip>>,
 }
 
 impl IrohEndpointManager {
@@ -365,12 +388,17 @@ impl IrohEndpointManager {
     ///
     /// Tiger Style: Fail fast if endpoint creation fails.
     pub async fn new(config: IrohEndpointConfig) -> Result<Self> {
+        // Generate or use provided secret key
+        let secret_key = config.secret_key.unwrap_or_else(|| {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut bytes);
+            SecretKey::from(bytes)
+        });
+
         // Build endpoint with explicit configuration
         let mut builder = IrohEndpoint::builder();
-
-        if let Some(secret_key) = config.secret_key {
-            builder = builder.secret_key(secret_key);
-        }
+        builder = builder.secret_key(secret_key.clone());
 
         // Configure bind address if port is specified
         if config.bind_port > 0 {
@@ -388,8 +416,13 @@ impl IrohEndpointManager {
             builder = builder.relay_mode(RelayMode::Default);
         }
 
-        // Configure ALPN for Raft RPC protocol
-        builder = builder.alpns(vec![b"raft-rpc".to_vec()]);
+        // Configure ALPNs: raft-rpc + optionally gossip
+        let alpns = if config.enable_gossip {
+            vec![b"raft-rpc".to_vec(), GOSSIP_ALPN.to_vec()]
+        } else {
+            vec![b"raft-rpc".to_vec()]
+        };
+        builder = builder.alpns(alpns);
 
         let endpoint = builder
             .bind()
@@ -399,9 +432,20 @@ impl IrohEndpointManager {
         // Extract node address for discovery (synchronous in 0.95.1)
         let node_addr = endpoint.addr();
 
+        // Optionally spawn gossip
+        let gossip = if config.enable_gossip {
+            let gossip = Gossip::builder().spawn(endpoint.clone());
+            tracing::info!("gossip spawned for peer discovery");
+            Some(Arc::new(gossip))
+        } else {
+            None
+        };
+
         Ok(Self {
             endpoint,
             node_addr,
+            secret_key,
+            gossip,
         })
     }
 
@@ -416,6 +460,18 @@ impl IrohEndpointManager {
     /// so they can dial this endpoint.
     pub fn node_addr(&self) -> &EndpointAddr {
         &self.node_addr
+    }
+
+    /// Get the secret key used by this endpoint.
+    ///
+    /// Needed for signing gossip messages for peer discovery.
+    pub fn secret_key(&self) -> &SecretKey {
+        &self.secret_key
+    }
+
+    /// Get a reference to the gossip instance, if enabled.
+    pub fn gossip(&self) -> Option<&Arc<Gossip>> {
+        self.gossip.as_ref()
     }
 
     /// Add a known peer address to the endpoint for direct connections.
@@ -435,6 +491,9 @@ impl IrohEndpointManager {
     ///
     /// Tiger Style: Explicit cleanup with bounded wait time.
     pub async fn shutdown(&self) -> Result<()> {
+        // Note: Gossip and router are owned by the endpoint and will be
+        // cleaned up when the endpoint closes. No explicit shutdown needed.
+
         // Iroh endpoint shutdown is graceful with internal timeouts
         // In Iroh 0.95.1, close() returns () not Result
         self.endpoint.close().await;
