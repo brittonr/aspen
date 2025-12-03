@@ -425,6 +425,8 @@ mod tests {
             iroh: IrohConfig {
                 secret_key: Some("a".repeat(64)),
                 relay_url: Some("https://relay.example.com".into()),
+                enable_gossip: false,
+                gossip_ticket: Some("test-ticket".into()),
             },
             peers: vec!["peer1".into()],
         };
@@ -446,6 +448,8 @@ mod tests {
             base.iroh.relay_url,
             Some("https://relay.example.com".into())
         );
+        assert!(!base.iroh.enable_gossip);
+        assert_eq!(base.iroh.gossip_ticket, Some("test-ticket".into()));
         assert_eq!(base.peers, vec!["peer1"]);
     }
 }

@@ -34,10 +34,7 @@ async fn test_single_node_write_read() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -101,10 +98,7 @@ async fn test_two_node_replication() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -119,10 +113,7 @@ async fn test_two_node_replication() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("b".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -220,10 +211,7 @@ async fn test_read_nonexistent_key() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -272,10 +260,7 @@ async fn test_multiple_operations() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -335,10 +320,7 @@ async fn test_add_learner_and_replicate() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -353,10 +335,7 @@ async fn test_add_learner_and_replicate() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("b".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -464,10 +443,7 @@ async fn test_setmulti_operations() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 

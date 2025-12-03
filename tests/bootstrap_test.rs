@@ -23,10 +23,7 @@ async fn test_bootstrap_single_node() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -64,10 +61,7 @@ async fn test_bootstrap_multiple_nodes() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -82,10 +76,7 @@ async fn test_bootstrap_multiple_nodes() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("b".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -100,10 +91,7 @@ async fn test_bootstrap_multiple_nodes() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("c".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
@@ -242,10 +230,7 @@ async fn test_shutdown_updates_status() {
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,
-        iroh: IrohConfig {
-            secret_key: Some("a".repeat(64)),
-            relay_url: None,
-        },
+        iroh: IrohConfig::default(),
         peers: vec![],
     };
 
