@@ -166,7 +166,13 @@ fn ensure_initialized(state: &RaftActorState) -> Result<(), ControlPlaneError> {
 }
 
 fn ensure_initialized_kv(state: &RaftActorState) -> Result<(), KeyValueStoreError> {
-    if state.initialized {
+    // Check if node is part of a cluster (either as voter or learner)
+    // This allows reads from learners and promoted voters even if init() wasn't called
+    let node_id = state.node_id;
+    let is_voter = state.raft.voter_ids().any(|id| id == node_id);
+    let is_learner = state.raft.learner_ids().any(|id| id == node_id);
+
+    if state.initialized || is_voter || is_learner {
         Ok(())
     } else {
         Err(KeyValueStoreError::Failed {
