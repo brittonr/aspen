@@ -283,25 +283,47 @@ impl ClusterBootstrapConfig {
         }
     }
 
-    /// Validate the configuration.
+    /// Validate configuration on startup.
     ///
-    /// Returns an error if required fields are missing or invalid.
+    /// Performs Tiger Style validation with fail-fast semantics:
+    /// - Hard errors for invalid configuration (returns Err)
+    /// - Warnings for non-recommended settings (logs via tracing::warn!)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ConfigError` if configuration is invalid.
     pub fn validate(&self) -> Result<(), ConfigError> {
+        use tracing::warn;
+
+        // Required fields
         if self.node_id == 0 {
             return Err(ConfigError::Validation {
                 message: "node_id must be non-zero".into(),
             });
         }
 
+        if self.cookie.is_empty() {
+            return Err(ConfigError::Validation {
+                message: "cluster cookie cannot be empty".into(),
+            });
+        }
+
+        // Numeric ranges
         if self.heartbeat_interval_ms == 0 {
             return Err(ConfigError::Validation {
-                message: "heartbeat_interval_ms must be non-zero".into(),
+                message: "heartbeat_interval_ms must be greater than 0".into(),
             });
         }
 
         if self.election_timeout_min_ms == 0 {
             return Err(ConfigError::Validation {
-                message: "election_timeout_min_ms must be non-zero".into(),
+                message: "election_timeout_min_ms must be greater than 0".into(),
+            });
+        }
+
+        if self.election_timeout_max_ms == 0 {
+            return Err(ConfigError::Validation {
+                message: "election_timeout_max_ms must be greater than 0".into(),
             });
         }
 
@@ -312,7 +334,91 @@ impl ClusterBootstrapConfig {
             });
         }
 
-        // Validate Iroh secret key format if provided
+        // Raft sanity checks (warnings)
+        if self.heartbeat_interval_ms >= self.election_timeout_min_ms {
+            warn!(
+                heartbeat_interval_ms = self.heartbeat_interval_ms,
+                election_timeout_min_ms = self.election_timeout_min_ms,
+                "heartbeat interval should be less than election timeout (Raft requirement)"
+            );
+        }
+
+        if self.election_timeout_min_ms < 1000 {
+            warn!(
+                election_timeout_min_ms = self.election_timeout_min_ms,
+                "election timeout < 1000ms may be too aggressive for production"
+            );
+        }
+
+        if self.election_timeout_max_ms > 10000 {
+            warn!(
+                election_timeout_max_ms = self.election_timeout_max_ms,
+                "election timeout > 10000ms may be too conservative"
+            );
+        }
+
+        // File path validation
+        if let Some(ref data_dir) = self.data_dir {
+            if let Some(parent) = data_dir.parent() {
+                if !parent.exists() {
+                    return Err(ConfigError::Validation {
+                        message: format!(
+                            "data_dir parent directory does not exist: {}",
+                            parent.display()
+                        ),
+                    });
+                }
+
+                // Check if data_dir exists or can be created
+                if !data_dir.exists() {
+                    std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
+                        message: format!(
+                            "cannot create data_dir {}: {}",
+                            data_dir.display(),
+                            e
+                        ),
+                    })?;
+                }
+
+                // Check disk space (warning only, not error)
+                match crate::utils::check_disk_space(data_dir) {
+                    Ok(disk_space) => {
+                        if disk_space.usage_percent > 80 {
+                            warn!(
+                                data_dir = %data_dir.display(),
+                                usage_percent = disk_space.usage_percent,
+                                available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
+                                "disk space usage high (>80%)"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            data_dir = %data_dir.display(),
+                            error = %e,
+                            "could not check disk space (non-fatal)"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Network port validation (warn if using default ports)
+        if self.http_addr.port() == 8080 {
+            warn!(
+                http_addr = %self.http_addr,
+                "using default HTTP port 8080 (may conflict in production)"
+            );
+        }
+
+        if self.ractor_port == 26000 {
+            warn!(
+                ractor_port = self.ractor_port,
+                "using default ractor port 26000 (may conflict in production)"
+            );
+        }
+
+        // Iroh secret key validation
         if let Some(ref key_hex) = self.iroh.secret_key {
             if key_hex.len() != 64 {
                 return Err(ConfigError::Validation {
@@ -351,7 +457,9 @@ fn default_cookie() -> String {
 }
 
 fn default_http_addr() -> SocketAddr {
-    "127.0.0.1:8080".parse().unwrap()
+    "127.0.0.1:8080"
+        .parse()
+        .expect("hardcoded default address is valid")
 }
 
 fn default_heartbeat_interval_ms() -> u64 {

@@ -20,5 +20,11 @@ pub mod simulation;
 /// networking. Used by integration tests in tests/ directory.
 pub mod testing;
 
+/// System utility functions for resource management and health checks.
+///
+/// Provides Tiger Style resource management including disk space checking
+/// with fixed thresholds and fail-fast semantics.
+pub mod utils;
+
 pub use kv::{KvClient, KvServiceBuilder};
 pub use raft::RaftControlClient;

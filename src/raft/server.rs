@@ -164,13 +164,19 @@ async fn handle_rpc_stream(
     // Process the RPC and create response
     let response = match request {
         RaftRpcProtocol::Vote(vote_req) => {
-            // vote() returns Result<T, Infallible>, unwrap to get T
-            let result = raft_core.vote(vote_req.request).await.unwrap();
+            // vote() returns Result<T, Infallible>, so Err case is impossible
+            let result = raft_core
+                .vote(vote_req.request)
+                .await
+                .expect("Infallible: vote() cannot fail");
             RaftRpcResponse::Vote(result)
         }
         RaftRpcProtocol::AppendEntries(append_req) => {
-            // append_entries() returns Result<T, Infallible>, unwrap to get T
-            let result = raft_core.append_entries(append_req.request).await.unwrap();
+            // append_entries() returns Result<T, Infallible>, so Err case is impossible
+            let result = raft_core
+                .append_entries(append_req.request)
+                .await
+                .expect("Infallible: append_entries() cannot fail");
             RaftRpcResponse::AppendEntries(result)
         }
         RaftRpcProtocol::InstallSnapshot(snapshot_req) => {

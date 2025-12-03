@@ -149,6 +149,7 @@ struct AppState {
     network_factory: Arc<IrpcRaftNetworkFactory>,
     iroh_manager: Arc<aspen::cluster::IrohEndpointManager>,
     cluster_cookie: String,
+    data_dir: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
@@ -169,9 +170,11 @@ async fn main() -> Result<()> {
         host: args.host.unwrap_or_else(|| "127.0.0.1".into()),
         ractor_port: args.port.unwrap_or(26000),
         cookie: args.cookie.unwrap_or_else(|| "aspen-cookie".into()),
-        http_addr: args
-            .http_addr
-            .unwrap_or_else(|| "127.0.0.1:8080".parse().unwrap()),
+        http_addr: args.http_addr.unwrap_or_else(|| {
+            "127.0.0.1:8080"
+                .parse()
+                .expect("hardcoded default address is valid")
+        }),
         control_backend: args.control_backend.unwrap_or_default(),
         heartbeat_interval_ms: args.heartbeat_interval_ms.unwrap_or(500),
         election_timeout_min_ms: args.election_timeout_min_ms.unwrap_or(1500),
@@ -192,6 +195,9 @@ async fn main() -> Result<()> {
 
     // Load configuration with proper precedence (env < TOML < CLI)
     let config = load_config(args.config.as_deref(), cli_config)?;
+
+    // Validate configuration on startup (Tiger Style: fail-fast)
+    config.validate()?;
 
     info!(
         node_id = config.node_id,
@@ -227,6 +233,7 @@ async fn main() -> Result<()> {
         network_factory: handle.network_factory.clone(),
         iroh_manager: handle.iroh_manager.clone(),
         cluster_cookie: config.cookie.clone(),
+        data_dir: config.data_dir.clone(),
     };
 
     let app = Router::new()
@@ -407,6 +414,12 @@ async fn write_value(
     State(state): State<AppState>,
     Json(request): Json<WriteRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    // Tiger Style: Check disk space before writes to fail fast on resource exhaustion
+    if let Some(ref data_dir) = state.data_dir {
+        aspen::utils::ensure_disk_space_available(data_dir)
+            .map_err(|e| anyhow::anyhow!("disk space check failed: {}", e))?;
+    }
+
     let result = state.kv.write(request).await?;
     Ok(Json(result))
 }
@@ -517,6 +530,7 @@ async fn trigger_snapshot(State(ctx): State<AppState>) -> impl IntoResponse {
 enum ApiError {
     Control(ControlPlaneError),
     KeyValue(KeyValueStoreError),
+    General(anyhow::Error),
 }
 
 impl From<ControlPlaneError> for ApiError {
@@ -528,6 +542,18 @@ impl From<ControlPlaneError> for ApiError {
 impl From<KeyValueStoreError> for ApiError {
     fn from(value: KeyValueStoreError) -> Self {
         Self::KeyValue(value)
+    }
+}
+
+impl From<anyhow::Error> for ApiError {
+    fn from(value: anyhow::Error) -> Self {
+        Self::General(value)
+    }
+}
+
+impl From<std::io::Error> for ApiError {
+    fn from(value: std::io::Error) -> Self {
+        Self::General(value.into())
     }
 }
 
@@ -552,6 +578,10 @@ impl IntoResponse for ApiError {
                 .into_response(),
             ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
+            }
+            ApiError::General(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
+                    .into_response()
             }
         }
     }

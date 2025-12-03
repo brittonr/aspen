@@ -624,6 +624,109 @@ kv.read(ReadRequest { key }).await?;
   - 23 comprehensive integration tests with MockGossip infrastructure
   - Full inline documentation with architecture diagrams
 
-**Ready for**: Production hardening (authentication, persistent storage, enhanced observability) or deployment validation
+**Ready for**: Phase 6 Week 2 - Testing & Validation (chaos engineering, failure scenarios, load testing)
 
-**Latest**: Phase 5 complete (2025-12-03) - comprehensive documentation suite (8 ADRs, getting-started guide, integration architecture), full CI/CD pipeline (testing, coverage, multi-seed simulation), and 104/105 tests passing (1 skipped).
+**Latest**: Phase 6 Week 1 complete (2025-12-03) - reliability foundations established with error handling audit (all production unwrap() replaced), graceful degradation (disk space checking with 95% threshold), and comprehensive config validation on startup. 107/107 tests passing (1 skipped).
+
+---
+
+## Phase 6: Production Hardening - Stability & Reliability
+
+**Goal**: Ensure Aspen is stable and reliable under various conditions (deployment: months away, focus on fundamentals)
+
+### Week 1: Reliability Foundations ✅ COMPLETE (2025-12-03)
+
+**1.1 Error Handling Audit** ✅
+- Replaced all 7 production `unwrap()` calls with `.expect()` containing descriptive error messages
+- Locations: src/raft/server.rs (2), src/raft/network.rs (4), src/bin/aspen-node.rs (1), src/cluster/config.rs (1)
+- Maintained Tiger Style fail-fast semantics for programmer errors
+- All test cases passing after changes
+
+**1.2 Graceful Degradation for Resource Exhaustion** ✅
+- Created `src/utils.rs` module for system health checks
+- Implemented Unix disk space checking via `libc::statvfs`
+- Tiger Style fixed limit: 95% disk usage threshold (DISK_USAGE_THRESHOLD_PERCENT)
+- Integrated disk check into HTTP `/write` endpoint - fails fast when disk > 95%
+- Added `ApiError::General` variant for I/O errors
+- Added 3 unit tests: disk space calculation, current directory check, availability check
+- Added `libc = "0.2"` dependency
+
+**1.3 Config Validation on Startup** ✅
+- Enhanced `ClusterBootstrapConfig::validate()` with comprehensive checks:
+  - **Required fields**: node_id > 0, cookie non-empty
+  - **Numeric ranges**: all timeouts > 0, max > min
+  - **Raft sanity checks**: heartbeat < election timeout (warning), timeout ranges (1-10s recommended)
+  - **File path validation**: data_dir parent exists, data_dir creatable, disk space > 80% (warning)
+  - **Network ports**: default port warnings (8080, 26000)
+  - **Iroh secret key**: 64 hex character validation
+- Config validation called on startup in `aspen-node.rs` before bootstrap
+- Clear error messages with context for all validation failures
+- Uses `tracing::warn!` for non-critical issues (production best practices)
+
+**Test Status**: 107/107 tests passing (3 new utils tests), 1 skipped (mDNS localhost)
+
+### Week 2: Testing & Validation (IN PROGRESS)
+
+**2.1 Chaos Engineering Tests** (pending)
+- Add madsim-based chaos tests in `tests/chaos/`:
+  - Network partition during normal operation
+  - Node crash during leader election
+  - Node crash during membership change
+  - Slow network (high latency) simulation
+  - Random message drops
+- Run with multiple seeds (6+ like current tests)
+- Verify cluster always converges to consistent state
+
+**2.2 Failure Scenario Tests** (pending)
+- Add failure scenario tests in `tests/failures/`:
+  - Disk full → graceful write rejection
+  - All nodes crash → recovery via bootstrap
+  - Network split-brain → single leader maintained
+  - Corrupted storage detection (if feasible)
+
+**2.3 Basic Load Testing** (pending)
+- Add load tests in `tests/load/`:
+  - Sustained write load (1000 ops, measure throughput)
+  - Concurrent read load (100 concurrent readers)
+  - Mixed workload (70% reads, 30% writes)
+- Memory profiling: ensure no leaks under sustained load
+
+### Week 3: Basic Observability (PLANNED)
+
+**3.1 Structured Logging** (pending)
+- Replace println!/eprintln! with tracing spans
+- Add log levels: INFO for normal ops, WARN for retries, ERROR for failures
+- Focus on key events: leader elections, membership changes, write/read errors, network failures
+
+**3.2 Enhanced Metrics** (pending)
+- Add to `/metrics` endpoint:
+  - Error counters (write_errors, read_errors, network_errors)
+  - Replication lag per follower (leader only)
+  - Operation latency (basic histogram, p95/p99)
+
+**3.3 Better Health Checks** (pending)
+- Enhance `/health` to check:
+  - Storage is writable (quick write test)
+  - Raft has leader (or is leader)
+  - Return 200 (healthy) or 503 (unhealthy) with JSON details
+
+### Week 3: Operational Basics (PLANNED)
+
+**3.4 Basic Runbook** (pending)
+- Create minimal `docs/operations/runbook.md` with:
+  - How to add a node (5-step procedure)
+  - How to remove a node (3-step procedure)
+  - How to check cluster health (which endpoints to check)
+  - Common issues and fixes (3-5 scenarios)
+
+**3.5 Example Configs** (pending)
+- Create 3 example configs in `examples/configs/`:
+  - `single-node.toml` - dev/testing
+  - `three-node.toml` - production HA
+  - `five-node.toml` - high availability
+
+### Week 4: Optional Investigation (PLANNED)
+
+**4.1 Learner Assertion Bug** (pending)
+- Investigate openraft assertion in `tests/router_t20_change_membership.rs:31-34`
+- Either fix, workaround, or document limitation clearly

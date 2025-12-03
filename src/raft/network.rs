@@ -65,7 +65,10 @@ impl IrpcRaftNetworkFactory {
     /// This allows dynamic peer addition after the network factory has been created.
     /// Useful for integration tests where nodes exchange addresses at runtime.
     pub fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
-        let mut peers = self.peer_addrs.write().unwrap();
+        let mut peers = self
+            .peer_addrs
+            .write()
+            .expect("peer_addrs RwLock poisoned: a thread panicked while holding the lock");
         peers.insert(node_id, addr);
     }
 
@@ -73,7 +76,10 @@ impl IrpcRaftNetworkFactory {
     ///
     /// Extends the existing peer map with new entries. Existing entries are replaced.
     pub fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
-        let mut peers = self.peer_addrs.write().unwrap();
+        let mut peers = self
+            .peer_addrs
+            .write()
+            .expect("peer_addrs RwLock poisoned: a thread panicked while holding the lock");
         peers.extend(new_peers);
     }
 
@@ -81,7 +87,10 @@ impl IrpcRaftNetworkFactory {
     ///
     /// Useful for debugging or inspection.
     pub fn peer_addrs(&self) -> HashMap<NodeId, iroh::EndpointAddr> {
-        self.peer_addrs.read().unwrap().clone()
+        self.peer_addrs
+            .read()
+            .expect("peer_addrs RwLock poisoned: a thread panicked while holding the lock")
+            .clone()
     }
 }
 
@@ -92,7 +101,10 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
     async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
         // Look up peer's Iroh address
         let peer_addr = {
-            let peers = self.peer_addrs.read().unwrap();
+            let peers = self
+                .peer_addrs
+                .read()
+                .expect("peer_addrs RwLock poisoned: a thread panicked while holding the lock");
             peers.get(&target).cloned()
         };
 

@@ -304,6 +304,7 @@ dependencies = [
  "iroh-tickets",
  "irpc",
  "kameo",
+ "libc",
  "libp2p",
  "mad-turmoil",
  "madsim",
