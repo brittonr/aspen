@@ -83,6 +83,18 @@ struct Args {
     #[arg(long)]
     iroh_relay_url: Option<String>,
 
+    /// Disable iroh-gossip for automatic peer discovery.
+    /// When disabled, only manual peers (from --peers) are used.
+    /// Default: gossip is enabled.
+    #[arg(long)]
+    disable_gossip: bool,
+
+    /// Aspen cluster ticket for gossip-based bootstrap.
+    /// Contains the gossip topic ID and bootstrap peer endpoints.
+    /// Format: "aspen{base32-encoded-data}"
+    #[arg(long)]
+    ticket: Option<String>,
+
     /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<relay-url>:<direct-addrs>"
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
@@ -109,6 +121,7 @@ struct AppState {
     kv: KeyValueStoreHandle,
     network_factory: Arc<IrpcRaftNetworkFactory>,
     iroh_manager: Arc<aspen::cluster::IrohEndpointManager>,
+    cluster_cookie: String,
 }
 
 #[tokio::main]
@@ -139,6 +152,8 @@ async fn main() -> Result<()> {
         iroh: IrohConfig {
             secret_key: args.iroh_secret_key,
             relay_url: args.iroh_relay_url,
+            enable_gossip: !args.disable_gossip,
+            gossip_ticket: args.ticket,
         },
         peers: args.peers,
     };
@@ -179,6 +194,7 @@ async fn main() -> Result<()> {
         kv: kv_store,
         network_factory: handle.network_factory.clone(),
         iroh_manager: handle.iroh_manager.clone(),
+        cluster_cookie: config.cookie.clone(),
     };
 
     let app = Router::new()
@@ -186,6 +202,7 @@ async fn main() -> Result<()> {
         .route("/metrics", get(metrics))
         .route("/iroh-metrics", get(iroh_metrics))
         .route("/node-info", get(node_info))
+        .route("/cluster-ticket", get(cluster_ticket))
         .route("/init", post(init_cluster))
         .route("/add-learner", post(add_learner))
         .route("/change-membership", post(change_membership))
@@ -251,6 +268,31 @@ async fn node_info(State(ctx): State<AppState>) -> impl IntoResponse {
     Json(json!({
         "node_id": ctx.node_id,
         "endpoint_addr": ctx.iroh_manager.node_addr(),
+    }))
+}
+
+async fn cluster_ticket(State(ctx): State<AppState>) -> impl IntoResponse {
+    use aspen::cluster::ticket::AspenClusterTicket;
+    use iroh_gossip::proto::TopicId;
+
+    // Derive topic ID from cluster cookie using blake3
+    let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
+    let topic_id = TopicId::from_bytes(*hash.as_bytes());
+
+    // Create ticket with this node as bootstrap peer
+    let ticket = AspenClusterTicket::with_bootstrap(
+        topic_id,
+        ctx.cluster_cookie.clone(),
+        ctx.iroh_manager.endpoint().id(),
+    );
+
+    let ticket_str = ticket.serialize();
+
+    Json(json!({
+        "ticket": ticket_str,
+        "topic_id": format!("{:?}", topic_id),
+        "cluster_id": ctx.cluster_cookie,
+        "endpoint_id": ctx.iroh_manager.endpoint().id().to_string(),
     }))
 }
 
