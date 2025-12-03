@@ -66,7 +66,7 @@ pub struct ClusterBootstrapConfig {
 }
 
 /// Iroh networking configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrohConfig {
     /// Hex-encoded Iroh secret key (64 hex characters = 32 bytes).
     /// If not provided, a new key is generated.
@@ -74,6 +74,30 @@ pub struct IrohConfig {
 
     /// Iroh relay server URL.
     pub relay_url: Option<String>,
+
+    /// Enable iroh-gossip for automatic peer discovery.
+    /// When enabled, nodes broadcast their presence and discover peers automatically.
+    /// When disabled, only manual peers (from --peers) are used.
+    /// Default: true (gossip enabled).
+    #[serde(default = "default_enable_gossip")]
+    pub enable_gossip: bool,
+
+    /// Aspen cluster ticket for gossip-based bootstrap.
+    /// Contains the gossip topic ID and bootstrap peer endpoints.
+    /// Format: "aspen{base32-encoded-data}"
+    /// If provided, overrides manual peers for gossip bootstrap.
+    pub gossip_ticket: Option<String>,
+}
+
+impl Default for IrohConfig {
+    fn default() -> Self {
+        Self {
+            secret_key: None,
+            relay_url: None,
+            enable_gossip: default_enable_gossip(),
+            gossip_ticket: None,
+        }
+    }
 }
 
 /// Control-plane backend implementation.
@@ -129,6 +153,9 @@ impl ClusterBootstrapConfig {
             iroh: IrohConfig {
                 secret_key: parse_env("ASPEN_IROH_SECRET_KEY"),
                 relay_url: parse_env("ASPEN_IROH_RELAY_URL"),
+                enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP")
+                    .unwrap_or_else(default_enable_gossip),
+                gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
         }
@@ -172,6 +199,12 @@ impl ClusterBootstrapConfig {
         }
         if other.iroh.relay_url.is_some() {
             self.iroh.relay_url = other.iroh.relay_url;
+        }
+        if other.iroh.enable_gossip != default_enable_gossip() {
+            self.iroh.enable_gossip = other.iroh.enable_gossip;
+        }
+        if other.iroh.gossip_ticket.is_some() {
+            self.iroh.gossip_ticket = other.iroh.gossip_ticket;
         }
         if !other.peers.is_empty() {
             self.peers = other.peers;
@@ -259,6 +292,10 @@ fn default_election_timeout_min_ms() -> u64 {
 
 fn default_election_timeout_max_ms() -> u64 {
     3000
+}
+
+fn default_enable_gossip() -> bool {
+    true
 }
 
 // Helper functions for parsing environment variables

@@ -10,7 +10,9 @@ use ractor::{Actor, ActorRef};
 use tracing::info;
 
 use crate::cluster::config::{ClusterBootstrapConfig, ControlBackend};
+use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
+use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::server::RaftRpcServer;
@@ -42,17 +44,26 @@ pub struct BootstrapHandle {
     pub rpc_server: RaftRpcServer,
     /// IRPC network factory for dynamic peer addition.
     pub network_factory: Arc<IrpcRaftNetworkFactory>,
+    /// Gossip-based peer discovery (None if disabled).
+    pub gossip_discovery: Option<GossipPeerDiscovery>,
 }
 
 impl BootstrapHandle {
     /// Gracefully shutdown the node.
     ///
     /// Shuts down components in reverse order of startup:
-    /// 1. IRPC server
-    /// 2. Iroh endpoint
-    /// 3. Node server
-    /// 4. Raft actor
+    /// 1. Gossip discovery (if enabled)
+    /// 2. IRPC server
+    /// 3. Iroh endpoint
+    /// 4. Node server
+    /// 5. Raft actor
     pub async fn shutdown(self) -> Result<()> {
+        // Shutdown gossip discovery first
+        if let Some(gossip_discovery) = self.gossip_discovery {
+            info!("shutting down gossip discovery");
+            gossip_discovery.shutdown().await?;
+        }
+
         info!("shutting down IRPC server");
         self.rpc_server.shutdown().await?;
 
@@ -180,6 +191,9 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
             iroh_config = iroh_config.with_relay_url(relay_url)?;
         }
 
+        // Configure gossip if enabled
+        iroh_config = iroh_config.with_gossip(config.iroh.enable_gossip);
+
         let manager = IrohEndpointManager::new(iroh_config)
             .await
             .context("failed to create iroh endpoint manager")?;
@@ -187,9 +201,48 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         info!(
             endpoint_id = %endpoint_id,
             node_addr = ?manager.node_addr(),
+            gossip_enabled = config.iroh.enable_gossip,
             "iroh endpoint created"
         );
         Arc::new(manager)
+    };
+
+    // Spawn gossip peer discovery if enabled
+    let gossip_discovery = if config.iroh.enable_gossip {
+        use iroh_gossip::proto::TopicId;
+
+        // Determine topic ID: from ticket or derive from cookie
+        let topic_id = if let Some(ticket_str) = &config.iroh.gossip_ticket {
+            info!("parsing cluster ticket for gossip topic");
+            let ticket = AspenClusterTicket::deserialize(ticket_str)
+                .context("failed to parse cluster ticket")?;
+            info!(
+                topic_id = ?ticket.topic_id,
+                cluster_id = %ticket.cluster_id,
+                bootstrap_peers = ticket.bootstrap.len(),
+                "cluster ticket parsed"
+            );
+            ticket.topic_id
+        } else {
+            // Derive topic ID from cluster cookie using blake3
+            let hash = blake3::hash(config.cookie.as_bytes());
+            let topic_id = TopicId::from_bytes(*hash.as_bytes());
+            info!(
+                topic_id = ?topic_id,
+                "derived gossip topic from cluster cookie"
+            );
+            topic_id
+        };
+
+        // Spawn gossip discovery
+        let discovery = GossipPeerDiscovery::spawn(topic_id, &iroh_manager)
+            .await
+            .context("failed to spawn gossip peer discovery")?;
+        info!("gossip peer discovery spawned");
+        Some(discovery)
+    } else {
+        info!("gossip peer discovery disabled");
+        None
     };
 
     // Parse peer addresses
@@ -299,6 +352,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         state_machine: state_machine_store,
         rpc_server,
         network_factory,
+        gossip_discovery,
     })
 }
 
