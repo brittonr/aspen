@@ -41,12 +41,13 @@ pub struct AspenNode {
 /// simulated network layer with configurable delays and failures.
 #[derive(Clone)]
 struct InMemoryNetworkFactory {
+    source: NodeId,
     router: Arc<InnerRouter>,
 }
 
 impl InMemoryNetworkFactory {
-    fn new(router: Arc<InnerRouter>) -> Self {
-        Self { router }
+    fn new(source: NodeId, router: Arc<InnerRouter>) -> Self {
+        Self { source, router }
     }
 }
 
@@ -55,7 +56,8 @@ impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFac
 
     async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
         InMemoryNetwork {
-            target, // Use the target parameter, not self.target!
+            source: self.source,
+            target,
             router: self.router.clone(),
         }
     }
@@ -63,6 +65,7 @@ impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFac
 
 /// In-memory network client that routes RPCs through the router.
 struct InMemoryNetwork {
+    source: NodeId,
     target: NodeId,
     router: Arc<InnerRouter>,
 }
@@ -73,7 +76,7 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
         rpc: AppendEntriesRequest<AppTypeConfig>,
         _option: RPCOption,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.router.send_append_entries(self.target, rpc).await
+        self.router.send_append_entries(self.source, self.target, rpc).await
     }
 
     async fn vote(
@@ -81,7 +84,7 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
         rpc: VoteRequest<AppTypeConfig>,
         _option: RPCOption,
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.router.send_vote(self.target, rpc).await
+        self.router.send_vote(self.source, self.target, rpc).await
     }
 
     async fn full_snapshot(
@@ -91,7 +94,7 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
         _cancel: impl std::future::Future<Output = ReplicationClosed> + openraft::OptionalSend + 'static,
         _option: RPCOption,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        self.router.send_snapshot(self.target, vote, snapshot).await
+        self.router.send_snapshot(self.source, self.target, vote, snapshot).await
     }
 }
 
@@ -129,15 +132,25 @@ impl InnerRouter {
 
     async fn send_append_entries(
         &self,
+        source: NodeId,
         target: NodeId,
         rpc: AppendEntriesRequest<AppTypeConfig>,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         self.apply_network_delay().await;
 
+        // Check if SOURCE node is failed (can't send if you're dead)
+        if self.is_node_failed(source) {
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
+        }
+
+        // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
             return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
                 std::io::ErrorKind::ConnectionRefused,
-                "node marked as failed",
+                "target node marked as failed",
             ))));
         }
 
@@ -159,15 +172,25 @@ impl InnerRouter {
 
     async fn send_vote(
         &self,
+        source: NodeId,
         target: NodeId,
         rpc: VoteRequest<AppTypeConfig>,
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         self.apply_network_delay().await;
 
+        // Check if SOURCE node is failed (can't send if you're dead)
+        if self.is_node_failed(source) {
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
+        }
+
+        // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
             return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
                 std::io::ErrorKind::ConnectionRefused,
-                "node marked as failed",
+                "target node marked as failed",
             ))));
         }
 
@@ -189,16 +212,26 @@ impl InnerRouter {
 
     async fn send_snapshot(
         &self,
+        source: NodeId,
         target: NodeId,
         vote: VoteOf<AppTypeConfig>,
         snapshot: openraft::Snapshot<AppTypeConfig>,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
         self.apply_network_delay().await;
 
+        // Check if SOURCE node is failed (can't send if you're dead)
+        if self.is_node_failed(source) {
+            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
+        }
+
+        // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
             return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
                 std::io::ErrorKind::ConnectionRefused,
-                "node marked as failed",
+                "target node marked as failed",
             ))));
         }
 
@@ -289,7 +322,7 @@ impl AspenRouter {
         log_store: InMemoryLogStore,
         state_machine: Arc<StateMachineStore>,
     ) -> Result<()> {
-        let network_factory = InMemoryNetworkFactory::new(self.inner.clone());
+        let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
         let raft = Raft::new(id, self.config.clone(), network_factory, log_store.clone(), state_machine.clone())
             .await
@@ -369,14 +402,37 @@ impl AspenRouter {
     }
 
     /// Get the current leader node ID by checking metrics across all nodes.
+    /// Skips nodes that are marked as failed. Checks server state to find actual leader.
     pub fn leader(&self) -> Option<NodeId> {
         let nodes = self.inner.nodes.lock().unwrap();
+        let failed = self.inner.failed_nodes.lock().unwrap();
+
+        // First, try to find a node that thinks it's the leader (ServerState::Leader)
         for node in nodes.values() {
+            // Skip nodes marked as failed - they may have stale state
+            if failed.get(&node.id).copied().unwrap_or(false) {
+                continue;
+            }
+
+            let metrics = node.raft.metrics().borrow().clone();
+            if metrics.state == openraft::ServerState::Leader {
+                return Some(node.id);
+            }
+        }
+
+        // Fallback: check if any node reports itself as current_leader
+        // (in case metrics.state hasn't updated yet)
+        for node in nodes.values() {
+            if failed.get(&node.id).copied().unwrap_or(false) {
+                continue;
+            }
+
             let metrics = node.raft.metrics().borrow().clone();
             if metrics.current_leader == Some(node.id) {
                 return Some(node.id);
             }
         }
+
         None
     }
 

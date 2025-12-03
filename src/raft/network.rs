@@ -9,7 +9,7 @@ use openraft::error::{
 };
 use openraft::network::{RPCOption, RaftNetworkFactory, v2::RaftNetworkV2};
 use openraft::raft::{
-    AppendEntriesRequest, AppendEntriesResponse, InstallSnapshotRequest, InstallSnapshotResponse,
+    AppendEntriesRequest, AppendEntriesResponse,
     SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::type_config::alias::VoteOf;

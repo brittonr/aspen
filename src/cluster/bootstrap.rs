@@ -9,7 +9,7 @@ use openraft::Config as RaftConfig;
 use ractor::{Actor, ActorRef};
 use tracing::info;
 
-use crate::cluster::config::{ClusterBootstrapConfig, ControlBackend};
+use crate::cluster::config::ClusterBootstrapConfig;
 use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
@@ -412,6 +412,7 @@ pub fn load_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cluster::config::ControlBackend;
     use tempfile::TempDir;
 
     #[test]

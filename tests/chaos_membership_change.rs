@@ -17,7 +17,7 @@ use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
 use openraft::{BasicNode, Config, ServerState};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -47,7 +47,16 @@ async fn test_membership_change_leader_crash_joint_consensus() {
 
 async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Start with 3-node cluster (quorum = 2)
-    let config = Arc::new(Config::default().validate()?);
+    // Use shorter timeouts for faster leader election in chaos scenarios
+    let config = Arc::new(
+        Config {
+            heartbeat_interval: 500,           // 500ms heartbeat
+            election_timeout_min: 1500,        // 1.5s min election timeout
+            election_timeout_max: 3000,        // 3s max election timeout
+            ..Default::default()
+        }
+        .validate()?,
+    );
     let mut router = AspenRouter::new(config);
 
     // Create initial 3 nodes
@@ -125,10 +134,8 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
     ));
 
     // Wait for new leader election (should happen despite joint consensus)
-    tokio::time::sleep(Duration::from_millis(3000)).await;
-
-    // Wait for new leader election to complete
-    // We can't use current_leader to check for ANY new leader, so just wait and verify
+    // Election timeout max is 3000ms, so wait longer to ensure election completes
+    tokio::time::sleep(Duration::from_millis(10000)).await;
 
     let new_leader = router
         .leader()

@@ -70,9 +70,7 @@
 use std::fmt;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as SyncMutex};
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
@@ -85,7 +83,7 @@ use ractor_cluster::{
     NodeServer as RactorNodeServer, NodeServerMessage, client_connect, client_connect_external,
 };
 use tokio::net::ToSocketAddrs;
-use tokio::sync::{Mutex as AsyncMutex, Notify};
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
 pub mod bootstrap;

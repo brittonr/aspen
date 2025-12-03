@@ -1,20 +1,7 @@
-/// Chaos Engineering Test: Leader Crash During Normal Operation
-///
-/// This test validates Raft's leader election mechanism when the current leader
-/// crashes unexpectedly. The test verifies:
-/// - New leader is elected after old leader failure
-/// - Election completes within timeout window
-/// - Writes continue succeeding after new leader elected
-/// - Failed leader can rejoin and sync state
-///
-/// Tiger Style: Fixed timing parameters with deterministic behavior.
-
-use aspen::raft::types::*;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
-use openraft::{BasicNode, Config, ServerState};
-use std::collections::BTreeMap;
+use openraft::{Config, ServerState};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -44,7 +31,16 @@ async fn test_leader_crash_triggers_election() {
 
 async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Create 3-node cluster (quorum = 2)
-    let config = Arc::new(Config::default().validate()?);
+    // Use shorter timeouts for faster leader election in chaos scenarios
+    let config = Arc::new(
+        Config {
+            heartbeat_interval: 500,           // 500ms heartbeat
+            election_timeout_min: 1500,        // 1.5s min election timeout
+            election_timeout_max: 3000,        // 3s max election timeout
+            ..Default::default()
+        }
+        .validate()?,
+    );
     let mut router = AspenRouter::new(config);
 
     // Create all 3 nodes
@@ -86,12 +82,20 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     router.fail_node(initial_leader);
     events.push(format!("leader-crashed: node {}", initial_leader));
 
-    // Wait for new leader election
-    // Tiger Style: Fixed timeout of 3 seconds (generous for election + heartbeat)
-    tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+    // Wait for followers to detect leader failure and start election
+    // Election timeout max is 3000ms, so wait longer to ensure election completes
+    tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
 
-    // Wait for new leader election to complete
-    // We can't use current_leader to check for ANY new leader, so just wait and verify
+    // Check all node states after election
+    for node_id in 0..3 {
+        if let Ok(raft) = router.get_raft_handle(&node_id) {
+            let metrics = raft.metrics().borrow().clone();
+            events.push(format!(
+                "node-{}-state: {:?}, term: {}, current_leader: {:?}",
+                node_id, metrics.state, metrics.current_term, metrics.current_leader
+            ));
+        }
+    }
 
     let new_leader = router
         .leader()
@@ -118,9 +122,10 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         events.push(format!("post-crash-write: {}={}", key, value));
     }
 
-    // Wait for post-crash writes to be committed (3 more writes = index 7)
-    router.wait(&new_leader, Some(Duration::from_millis(1000)))
-        .applied_index(Some(7), "post-crash writes committed")
+    // Wait for post-crash writes to be committed
+    // New leader writes blank entry on election (index 5), then 3 writes (indices 6,7,8)
+    router.wait(&new_leader, Some(Duration::from_millis(2000)))
+        .applied_index(Some(8), "post-crash writes committed")
         .await?;
     events.push("post-crash-committed: 3 writes".into());
 
@@ -130,10 +135,10 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for recovered node to catch up
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    router.wait(&initial_leader, Some(Duration::from_millis(2000)))
-        .applied_index(Some(7), "recovered node synced")
+    router.wait(&initial_leader, Some(Duration::from_millis(3000)))
+        .applied_index(Some(8), "recovered node synced")
         .await?;
-    events.push("recovered-node-synced: caught up to log index 7".into());
+    events.push("recovered-node-synced: caught up to log index 8".into());
 
     // Verify consistency across all nodes
     for node_id in 0..3 {

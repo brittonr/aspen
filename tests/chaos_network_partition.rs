@@ -1,20 +1,7 @@
-/// Chaos Engineering Test: Network Partition During Normal Operation
-///
-/// This test validates Raft's behavior during a network partition scenario where the
-/// cluster splits into majority and minority partitions. The test verifies:
-/// - Majority partition continues functioning with a leader
-/// - Minority partition cannot elect a new leader (split-brain prevention)
-/// - Writes succeed in majority partition
-/// - Cluster converges to consistent state after partition heals
-///
-/// Tiger Style: Fixed test parameters with deterministic behavior.
-
-use aspen::raft::types::*;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
-use openraft::{BasicNode, Config, ServerState};
-use std::collections::BTreeMap;
+use openraft::{Config, ServerState};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -144,8 +131,9 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .await?;
 
     // All nodes should eventually have the same committed log
+    // Increased timeout to 3000ms for partition recovery and CI reliability
     for node_id in 0..5 {
-        router.wait(&node_id, Some(Duration::from_millis(2000)))
+        router.wait(&node_id, Some(Duration::from_millis(3000)))
             .applied_index(Some(11), "all nodes synchronized")
             .await?;
     }

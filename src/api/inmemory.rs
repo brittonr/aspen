@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use super::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState,
     ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
     WriteCommand, WriteRequest, WriteResult,
 };

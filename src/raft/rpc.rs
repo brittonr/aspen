@@ -11,9 +11,7 @@
 
 use irpc::channel::oneshot;
 use irpc::rpc_requests;
-use irpc::WithChannels;
 use openraft::error::RaftError;
-use openraft::network::RPCTypes;
 use openraft::raft::{AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse};
 use openraft::type_config::alias::VoteOf;
 use serde::{Deserialize, Serialize};
