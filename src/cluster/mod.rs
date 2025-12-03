@@ -366,6 +366,16 @@ pub struct IrohEndpointConfig {
     pub enable_gossip: bool,
     /// Optional explicit gossip topic ID. If None, derived from cluster cookie.
     pub gossip_topic: Option<TopicId>,
+    /// Enable mDNS discovery for local network (default: true).
+    pub enable_mdns: bool,
+    /// Enable DNS discovery for production (default: false).
+    pub enable_dns_discovery: bool,
+    /// Custom DNS discovery URL (None = use n0's service).
+    pub dns_discovery_url: Option<String>,
+    /// Enable Pkarr publisher (default: false).
+    pub enable_pkarr: bool,
+    /// Custom Pkarr relay URL (None = use n0's service).
+    pub pkarr_relay_url: Option<String>,
 }
 
 impl Default for IrohEndpointConfig {
@@ -376,6 +386,11 @@ impl Default for IrohEndpointConfig {
             bind_port: 0,
             enable_gossip: true,
             gossip_topic: None,
+            enable_mdns: true,
+            enable_dns_discovery: false,
+            dns_discovery_url: None,
+            enable_pkarr: false,
+            pkarr_relay_url: None,
         }
     }
 }
@@ -419,6 +434,36 @@ impl IrohEndpointConfig {
     /// Set an explicit gossip topic ID.
     pub fn with_gossip_topic(mut self, topic: TopicId) -> Self {
         self.gossip_topic = Some(topic);
+        self
+    }
+
+    /// Enable or disable mDNS discovery.
+    pub fn with_mdns(mut self, enable: bool) -> Self {
+        self.enable_mdns = enable;
+        self
+    }
+
+    /// Enable or disable DNS discovery.
+    pub fn with_dns_discovery(mut self, enable: bool) -> Self {
+        self.enable_dns_discovery = enable;
+        self
+    }
+
+    /// Set custom DNS discovery URL.
+    pub fn with_dns_discovery_url(mut self, url: String) -> Self {
+        self.dns_discovery_url = Some(url);
+        self
+    }
+
+    /// Enable or disable Pkarr publisher.
+    pub fn with_pkarr(mut self, enable: bool) -> Self {
+        self.enable_pkarr = enable;
+        self
+    }
+
+    /// Set custom Pkarr relay URL.
+    pub fn with_pkarr_relay_url(mut self, url: String) -> Self {
+        self.pkarr_relay_url = Some(url);
         self
     }
 }
@@ -476,6 +521,41 @@ impl IrohEndpointManager {
             vec![b"raft-rpc".to_vec()]
         };
         builder = builder.alpns(alpns);
+
+        // Configure discovery services for bootstrapping network connectivity
+        // mDNS: Local network discovery (default enabled for dev/testing)
+        if config.enable_mdns {
+            builder = builder.discovery(iroh::discovery::mdns::MdnsDiscovery::builder());
+            tracing::info!("mDNS discovery enabled for local network peer discovery");
+        }
+
+        // DNS Discovery: Production peer discovery via DNS lookups
+        if config.enable_dns_discovery {
+            let dns_discovery_builder = if let Some(ref url) = config.dns_discovery_url {
+                iroh::discovery::dns::DnsDiscovery::builder(url.clone())
+            } else {
+                iroh::discovery::dns::DnsDiscovery::n0_dns()
+            };
+            builder = builder.discovery(dns_discovery_builder);
+            tracing::info!(
+                "DNS discovery enabled with URL: {}",
+                config.dns_discovery_url.as_deref().unwrap_or("n0 DNS service (iroh.link)")
+            );
+        }
+
+        // Pkarr Publisher: Publish node addresses to DHT-based relay
+        if config.enable_pkarr {
+            let pkarr_builder = if let Some(ref url) = config.pkarr_relay_url {
+                iroh::discovery::pkarr::PkarrPublisher::builder(url.parse().context("invalid Pkarr relay URL")?)
+            } else {
+                iroh::discovery::pkarr::PkarrPublisher::n0_dns()
+            };
+            builder = builder.discovery(pkarr_builder);
+            tracing::info!(
+                "Pkarr publisher enabled with relay: {}",
+                config.pkarr_relay_url.as_deref().unwrap_or("n0 Pkarr service")
+            );
+        }
 
         let endpoint = builder
             .bind()

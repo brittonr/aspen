@@ -35,6 +35,11 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> ClusterBootstrapConf
             relay_url: None,
             enable_gossip,
             gossip_ticket: None,
+            enable_mdns: true,
+            enable_dns_discovery: false,
+            dns_discovery_url: None,
+            enable_pkarr: false,
+            pkarr_relay_url: None,
         },
         peers: vec![],
     }
@@ -216,6 +221,11 @@ fn test_config_with_ticket() {
         relay_url: None,
         enable_gossip: true,
         gossip_ticket: Some(ticket_str.clone()),
+        enable_mdns: true,
+        enable_dns_discovery: false,
+        dns_discovery_url: None,
+        enable_pkarr: false,
+        pkarr_relay_url: None,
     };
 
     assert_eq!(config.gossip_ticket, Some(ticket_str));
@@ -288,6 +298,11 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             relay_url: None,
             enable_gossip: true,
             gossip_ticket: None,
+            enable_mdns: true,
+            enable_dns_discovery: false,
+            dns_discovery_url: None,
+            enable_pkarr: false,
+            pkarr_relay_url: None,
         },
         peers: vec![],
     };
@@ -308,6 +323,11 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             relay_url: None,
             enable_gossip: false, // Override to disable
             gossip_ticket: Some("test-ticket".into()),
+            enable_mdns: false,
+            enable_dns_discovery: true,
+            dns_discovery_url: Some("https://dns.example.com".into()),
+            enable_pkarr: false,
+            pkarr_relay_url: None,
         },
         peers: vec![],
     };

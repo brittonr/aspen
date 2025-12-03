@@ -92,6 +92,46 @@ pub struct IrohConfig {
     /// Format: "aspen{base32-encoded-data}"
     /// If provided, overrides manual peers for gossip bootstrap.
     pub gossip_ticket: Option<String>,
+
+    /// Enable mDNS discovery for local network peer discovery.
+    ///
+    /// When enabled, nodes automatically discover peers on the same local network
+    /// without requiring relay servers or manual configuration. Perfect for development
+    /// and testing environments.
+    ///
+    /// Default: true (mDNS enabled).
+    #[serde(default = "default_enable_mdns")]
+    pub enable_mdns: bool,
+
+    /// Enable DNS discovery for production peer discovery.
+    ///
+    /// When enabled, nodes can discover each other via DNS lookups.
+    /// Uses n0's public DNS service by default, or a custom URL if dns_discovery_url is provided.
+    ///
+    /// Default: false (DNS discovery disabled).
+    #[serde(default)]
+    pub enable_dns_discovery: bool,
+
+    /// Custom DNS discovery service URL.
+    ///
+    /// If not provided, uses n0's public DNS service (https://dns.iroh.link).
+    /// Only relevant when enable_dns_discovery is true.
+    pub dns_discovery_url: Option<String>,
+
+    /// Enable Pkarr publisher for distributed peer discovery.
+    ///
+    /// When enabled, nodes publish their addresses to a Pkarr relay (DHT-based).
+    /// Other nodes can then discover them via DNS lookups.
+    ///
+    /// Default: false (Pkarr disabled).
+    #[serde(default)]
+    pub enable_pkarr: bool,
+
+    /// Custom Pkarr relay URL.
+    ///
+    /// If not provided, uses n0's public Pkarr service.
+    /// Only relevant when enable_pkarr is true.
+    pub pkarr_relay_url: Option<String>,
 }
 
 impl Default for IrohConfig {
@@ -101,6 +141,11 @@ impl Default for IrohConfig {
             relay_url: None,
             enable_gossip: default_enable_gossip(),
             gossip_ticket: None,
+            enable_mdns: default_enable_mdns(),
+            enable_dns_discovery: false,
+            dns_discovery_url: None,
+            enable_pkarr: false,
+            pkarr_relay_url: None,
         }
     }
 }
@@ -161,6 +206,13 @@ impl ClusterBootstrapConfig {
                 enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP")
                     .unwrap_or_else(default_enable_gossip),
                 gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
+                enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS")
+                    .unwrap_or_else(default_enable_mdns),
+                enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY")
+                    .unwrap_or(false),
+                dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
+                enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
+                pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
         }
@@ -210,6 +262,21 @@ impl ClusterBootstrapConfig {
         }
         if other.iroh.gossip_ticket.is_some() {
             self.iroh.gossip_ticket = other.iroh.gossip_ticket;
+        }
+        if other.iroh.enable_mdns != default_enable_mdns() {
+            self.iroh.enable_mdns = other.iroh.enable_mdns;
+        }
+        if other.iroh.enable_dns_discovery {
+            self.iroh.enable_dns_discovery = other.iroh.enable_dns_discovery;
+        }
+        if other.iroh.dns_discovery_url.is_some() {
+            self.iroh.dns_discovery_url = other.iroh.dns_discovery_url;
+        }
+        if other.iroh.enable_pkarr {
+            self.iroh.enable_pkarr = other.iroh.enable_pkarr;
+        }
+        if other.iroh.pkarr_relay_url.is_some() {
+            self.iroh.pkarr_relay_url = other.iroh.pkarr_relay_url;
         }
         if !other.peers.is_empty() {
             self.peers = other.peers;
@@ -300,6 +367,10 @@ fn default_election_timeout_max_ms() -> u64 {
 }
 
 fn default_enable_gossip() -> bool {
+    true
+}
+
+fn default_enable_mdns() -> bool {
     true
 }
 
@@ -432,6 +503,11 @@ mod tests {
                 relay_url: Some("https://relay.example.com".into()),
                 enable_gossip: false,
                 gossip_ticket: Some("test-ticket".into()),
+                enable_mdns: false,
+                enable_dns_discovery: true,
+                dns_discovery_url: Some("https://dns.example.com".into()),
+                enable_pkarr: true,
+                pkarr_relay_url: Some("https://pkarr.example.com".into()),
             },
             peers: vec!["peer1".into()],
         };

@@ -95,6 +95,33 @@ struct Args {
     #[arg(long)]
     ticket: Option<String>,
 
+    /// Disable mDNS discovery for local network peer discovery.
+    /// Default: mDNS is enabled.
+    #[arg(long)]
+    disable_mdns: bool,
+
+    /// Enable DNS discovery for production peer discovery.
+    /// Uses n0's public DNS service by default, or custom URL if --dns-discovery-url is provided.
+    /// Default: DNS discovery is disabled.
+    #[arg(long)]
+    enable_dns_discovery: bool,
+
+    /// Custom DNS discovery service URL.
+    /// Only relevant when --enable-dns-discovery is set.
+    #[arg(long)]
+    dns_discovery_url: Option<String>,
+
+    /// Enable Pkarr publisher for distributed peer discovery.
+    /// Publishes node addresses to a Pkarr relay (DHT-based).
+    /// Default: Pkarr is disabled.
+    #[arg(long)]
+    enable_pkarr: bool,
+
+    /// Custom Pkarr relay URL.
+    /// Only relevant when --enable-pkarr is set.
+    #[arg(long)]
+    pkarr_relay_url: Option<String>,
+
     /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<relay-url>:<direct-addrs>"
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
@@ -154,6 +181,11 @@ async fn main() -> Result<()> {
             relay_url: args.iroh_relay_url,
             enable_gossip: !args.disable_gossip,
             gossip_ticket: args.ticket,
+            enable_mdns: !args.disable_mdns,
+            enable_dns_discovery: args.enable_dns_discovery,
+            dns_discovery_url: args.dns_discovery_url,
+            enable_pkarr: args.enable_pkarr,
+            pkarr_relay_url: args.pkarr_relay_url,
         },
         peers: args.peers,
     };

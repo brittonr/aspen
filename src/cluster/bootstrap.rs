@@ -194,6 +194,17 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         // Configure gossip if enabled
         iroh_config = iroh_config.with_gossip(config.iroh.enable_gossip);
 
+        // Configure discovery services
+        iroh_config = iroh_config.with_mdns(config.iroh.enable_mdns);
+        iroh_config = iroh_config.with_dns_discovery(config.iroh.enable_dns_discovery);
+        if let Some(ref dns_url) = config.iroh.dns_discovery_url {
+            iroh_config = iroh_config.with_dns_discovery_url(dns_url.clone());
+        }
+        iroh_config = iroh_config.with_pkarr(config.iroh.enable_pkarr);
+        if let Some(ref pkarr_url) = config.iroh.pkarr_relay_url {
+            iroh_config = iroh_config.with_pkarr_relay_url(pkarr_url.clone());
+        }
+
         let manager = IrohEndpointManager::new(iroh_config)
             .await
             .context("failed to create iroh endpoint manager")?;
