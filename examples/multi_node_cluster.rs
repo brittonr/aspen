@@ -104,17 +104,25 @@ async fn main() -> Result<()> {
 
     // Exchange peer addresses for IRPC connectivity
     //
-    // NOTE: With gossip enabled (the default), peers can discover each other
-    // automatically once they're connected via the Iroh network. However, for
-    // local testing without relay servers, we need to manually exchange addresses
-    // to establish initial connectivity.
+    // DISCOVERY NOTE: Aspen supports multiple automatic discovery methods:
     //
-    // In production deployments with:
-    // - Cluster tickets (gossip_ticket) OR
-    // - Relay servers (relay_url) OR
-    // - At least one bootstrap peer
-    // ...this manual exchange would be automatic via gossip announcements.
-    info!("\n🔗 Exchanging peer addresses for IRPC connectivity");
+    // 1. **mDNS** (enabled by default): Discovers peers on the same LAN
+    //    ⚠️ Does NOT work on localhost/127.0.0.1 (multicast limitation)
+    //    ✅ Works for multi-machine testing on same network
+    //
+    // 2. **Gossip** (enabled by default): Broadcasts Raft metadata
+    //    ✅ Requires initial Iroh connectivity (via mDNS, DNS, Pkarr, or manual)
+    //
+    // 3. **DNS discovery** (opt-in): Production peer discovery via DNS service
+    //
+    // 4. **Pkarr** (opt-in): DHT-based distributed discovery
+    //
+    // For this single-host example, we use manual peer exchange because mDNS
+    // doesn't work on loopback interfaces. For multi-host deployments, the
+    // default config (mDNS + gossip) provides zero-config discovery!
+    //
+    // See examples/README.md "Discovery Methods" section for details.
+    info!("\n🔗 Exchanging peer addresses for IRPC connectivity (single-host workaround)");
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
     let addr3 = handle3.iroh_manager.node_addr().clone();
@@ -131,8 +139,9 @@ async fn main() -> Result<()> {
     handle3.network_factory.add_peer(1, addr1.clone());
     handle3.network_factory.add_peer(2, addr2.clone());
 
-    info!("✅ Peer addresses exchanged (manual configuration)");
-    info!("   Note: In production with gossip+tickets, this is automatic");
+    info!("✅ Peer addresses exchanged (manual configuration for single-host testing)");
+    info!("   💡 For multi-host LAN: mDNS + gossip provide zero-config discovery");
+    info!("   💡 For production: enable DNS discovery + Pkarr + relay server");
     info!("   Node 1 endpoint ID: {}", addr1.id);
     info!("   Node 2 endpoint ID: {}", addr2.id);
     info!("   Node 3 endpoint ID: {}", addr3.id);

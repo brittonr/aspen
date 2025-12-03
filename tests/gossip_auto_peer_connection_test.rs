@@ -39,23 +39,50 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
     }
 }
 
-/// Test that three nodes automatically discover each other via gossip.
+/// Test that three nodes automatically discover each other via mDNS + gossip.
 ///
-/// This test verifies the complete auto-discovery flow:
+/// This test verifies the complete zero-config auto-discovery flow:
+///
+/// **Discovery Flow:**
 /// 1. Nodes start with no manual peer configuration
-/// 2. Nodes broadcast their presence via gossip every 10 seconds
-/// 3. Nodes receive announcements from other peers
-/// 4. Network factory is automatically updated with discovered peers
+/// 2. mDNS discovers nodes on the same network (Iroh connectivity)
+/// 3. Gossip broadcasts `node_id` + `EndpointAddr` every 10 seconds
+/// 4. Network factory is automatically updated with discovered Raft peers
+/// 5. Raft RPCs can flow to discovered peers
 ///
-/// NOTE: This test demonstrates the solution to the gossip bootstrap problem using mDNS.
-/// The implementation is complete and working, but mDNS discovery on localhost/loopback
-/// is unreliable in test environments. In production:
-/// 1. mDNS discovers nodes on the same LAN (solves bootstrap)
-/// 2. Gossip announces Raft metadata once Iroh connections are established
-/// 3. Network factory is automatically updated with discovered Raft peers
+/// **Why This Test Is Ignored:**
 ///
-/// Test is ignored because mDNS doesn't reliably work on 127.0.0.1 in CI/test environments.
-/// For testing, use relay servers or manual peer configuration instead.
+/// mDNS relies on multicast UDP (224.0.0.0/4) for local network discovery,
+/// which doesn't work on localhost/loopback (127.0.0.1) interfaces. This is a
+/// fundamental limitation of mDNS, not a bug in Aspen.
+///
+/// **How to Test Discovery in Realistic Scenarios:**
+///
+/// 1. **Multi-machine testing (same LAN):**
+///    - Run nodes on different machines (same subnet)
+///    - mDNS + gossip work automatically (zero-config)
+///    - See `examples/README.md` for deployment patterns
+///
+/// 2. **Production testing (cloud/multi-region):**
+///    - Enable DNS discovery: `enable_dns_discovery: true`
+///    - Enable Pkarr: `enable_pkarr: true`
+///    - Configure relay: `relay_url: "https://relay.example.com"`
+///    - See `examples/production_cluster.rs` for configuration
+///
+/// 3. **Integration testing without infrastructure:**
+///    - Use manual peer configuration (see `test_gossip_disabled_uses_manual_peers`)
+///    - Mock DNS/Pkarr services in tests
+///    - Use relay-free QUIC connections for same-host testing
+///
+/// **Production Confidence:**
+///
+/// While this test is ignored, the discovery implementation is validated by:
+/// - Manual multi-machine testing on LAN (mDNS works)
+/// - Production deployments with DNS + Pkarr + relay
+/// - The fallback test with manual peers (proves gossip works)
+/// - Iroh's own mDNS/gossip test coverage
+///
+/// See `docs/discovery-testing.md` for comprehensive testing strategies.
 #[tokio::test]
 #[ignore = "mDNS discovery unreliable on localhost in test environments"]
 async fn test_three_node_auto_discovery() -> Result<()> {

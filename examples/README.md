@@ -279,20 +279,234 @@ ClusterBootstrapConfig {
 
 ```rust
 IrohConfig {
-    secret_key: Option<String>,      // 64 hex chars (32 bytes)
-    relay_url: Option<String>,       // Relay server URL
-    enable_gossip: bool,             // Enable peer discovery (default: true)
-    gossip_ticket: Option<String>,   // Bootstrap ticket (optional)
+    secret_key: Option<String>,       // 64 hex chars (32 bytes)
+    relay_url: Option<String>,        // Relay server URL
+    enable_gossip: bool,              // Enable gossip announcements (default: true)
+    gossip_ticket: Option<String>,    // Bootstrap ticket (optional)
+    enable_mdns: bool,                // Enable mDNS local discovery (default: true)
+    enable_dns_discovery: bool,       // Enable DNS discovery (default: false)
+    dns_discovery_url: Option<String>, // Custom DNS discovery URL
+    enable_pkarr: bool,               // Enable Pkarr DHT publishing (default: false)
+    pkarr_relay_url: Option<String>,  // Custom Pkarr relay URL
 }
 ```
 
-## Peer Discovery
+## Discovery Methods
 
-Aspen supports two methods for peer discovery:
+Aspen uses Iroh's peer discovery services to automatically find and connect to cluster nodes. Multiple discovery mechanisms work together to provide zero-config local testing and robust production deployments.
 
-### 1. Automatic Discovery via Gossip (Recommended for Production)
+### Discovery Mechanism Overview
 
-With gossip enabled (the default), nodes automatically discover and connect to each other:
+| Method | Default | Use Case | Requires |
+|--------|---------|----------|----------|
+| **mDNS** | ✅ Enabled | Local network (LAN) discovery | Same subnet |
+| **Gossip** | ✅ Enabled | Peer announcements over Iroh | Initial connectivity |
+| **DNS** | ❌ Disabled | Production discovery via DNS | DNS service URL |
+| **Pkarr** | ❌ Disabled | DHT-based distributed discovery | Pkarr relay |
+| **Manual** | Always available | Explicit peer configuration | Peer addresses |
+
+### 1. Zero-Config Local Testing (mDNS + Gossip)
+
+**Perfect for:** Development, testing, and same-LAN deployments
+
+**How it works:**
+- **mDNS** automatically discovers nodes on the same local network
+- **Gossip** broadcasts Raft metadata once Iroh connections are established
+- No relay servers, DNS, or manual configuration required
+
+**Configuration (default):**
+```rust
+IrohConfig {
+    enable_mdns: true,    // Default: discovers peers on LAN
+    enable_gossip: true,  // Default: announces Raft node_id + endpoint
+    ..Default::default()
+}
+```
+
+**Just works:**
+```rust
+// Node 1
+let config1 = ClusterBootstrapConfig {
+    node_id: 1,
+    cookie: "shared-cluster-secret".into(),
+    ..Default::default()  // mDNS + gossip enabled by default!
+};
+let h1 = bootstrap_node(config1).await?;
+
+// Node 2 (separate process, same LAN)
+let config2 = ClusterBootstrapConfig {
+    node_id: 2,
+    cookie: "shared-cluster-secret".into(),  // Same cookie for gossip topic
+    ..Default::default()
+};
+let h2 = bootstrap_node(config2).await?;
+
+// Wait ~12 seconds for mDNS + gossip to discover peers
+sleep(Duration::from_secs(12)).await;
+
+// Nodes automatically discovered each other!
+```
+
+**Key benefits:**
+- ✅ Zero configuration required
+- ✅ Works across separate processes on same LAN
+- ✅ No relay server or internet connectivity needed
+- ⚠️ Limited to local network (same subnet)
+- ⚠️ mDNS unreliable on localhost/loopback (use manual peers for single-host testing)
+
+---
+
+### 2. Production Deployment (DNS + Pkarr + Relay + Gossip)
+
+**Perfect for:** Multi-region deployments, cloud environments, production clusters
+
+**How it works:**
+- **DNS discovery**: Nodes query a DNS service to find initial peers
+- **Pkarr**: Nodes publish their addresses to a DHT-based relay
+- **Relay server**: Facilitates connectivity through NAT/firewalls
+- **Gossip**: Broadcasts Raft metadata to all connected peers
+
+**Configuration:**
+```rust
+IrohConfig {
+    relay_url: Some("https://relay.example.com".into()),
+    enable_gossip: true,           // Announce Raft nodes
+    enable_mdns: false,            // Disable LAN discovery in production
+    enable_dns_discovery: true,    // Enable DNS-based peer discovery
+    dns_discovery_url: Some("https://dns.iroh.link".into()),  // Or custom URL
+    enable_pkarr: true,            // Publish to DHT for discovery
+    pkarr_relay_url: Some("https://pkarr.iroh.link".into()),  // Or custom relay
+    ..Default::default()
+}
+```
+
+**Deployment pattern:**
+```bash
+# All nodes use same discovery configuration
+aspen-node \
+  --node-id 1 \
+  --relay-url https://relay.example.com \
+  --enable-dns-discovery \
+  --enable-pkarr \
+  --cookie "production-cluster-secret"
+
+aspen-node \
+  --node-id 2 \
+  --relay-url https://relay.example.com \
+  --enable-dns-discovery \
+  --enable-pkarr \
+  --cookie "production-cluster-secret"
+```
+
+**Key benefits:**
+- ✅ Works across regions, clouds, and NAT boundaries
+- ✅ Robust peer discovery with multiple fallback mechanisms
+- ✅ DHT-based discovery survives node churn
+- ⚠️ Requires external infrastructure (relay, DNS/Pkarr services)
+- ⚠️ May incur latency for initial discovery (~seconds)
+
+---
+
+### 3. Manual Peer Configuration (Fallback)
+
+**Perfect for:** Testing without discovery, custom discovery logic, gossip-disabled deployments
+
+**How it works:**
+- Explicitly provide peer addresses via `--peers` CLI flag or `peers` config field
+- Network factory populated with known peers at bootstrap
+- No automatic discovery; all peers must be configured upfront
+
+**Configuration:**
+```rust
+ClusterBootstrapConfig {
+    node_id: 1,
+    iroh: IrohConfig {
+        enable_gossip: false,  // Disable gossip
+        enable_mdns: false,    // Disable mDNS
+        ..Default::default()
+    },
+    peers: vec![
+        "2@<endpoint-id-for-node-2>".into(),
+        "3@<endpoint-id-for-node-3>".into(),
+    ],
+    ..Default::default()
+}
+```
+
+**See:** `examples/multi_node_cluster.rs` for in-process manual peer exchange pattern.
+
+**Key benefits:**
+- ✅ Full control over connectivity graph
+- ✅ Works without external services
+- ✅ Deterministic for testing
+- ⚠️ Requires knowing all peer addresses upfront
+- ⚠️ No dynamic peer addition (unless you add custom logic)
+
+---
+
+### Discovery Method Selection Guide
+
+| Scenario | Recommended Configuration |
+|----------|---------------------------|
+| **Local testing (same machine)** | Manual peers (mDNS unreliable on localhost) |
+| **Local testing (multiple machines, same LAN)** | mDNS + gossip (default, zero-config) |
+| **Cloud/multi-region deployment** | DNS + Pkarr + relay + gossip |
+| **Container orchestration (K8s, Docker)** | DNS + relay + gossip (Pkarr optional) |
+| **Airgapped/offline clusters** | Manual peers + gossip disabled |
+
+---
+
+### How Discovery Methods Work Together
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Aspen Node Startup                      │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌───────────────────────────────────────┐
+        │   Iroh Endpoint Initialization        │
+        │   - Generate/load secret key          │
+        │   - Bind QUIC socket                  │
+        │   - Connect to relay (if configured)  │
+        └───────────────────────────────────────┘
+                            │
+                ┌───────────┴───────────┐
+                ▼                       ▼
+    ┌──────────────────────┐   ┌──────────────────────┐
+    │  Discovery Services  │   │   Gossip Service     │
+    │  - mDNS (LAN)        │   │  - Subscribe to      │
+    │  - DNS (query)       │   │    cluster topic     │
+    │  - Pkarr (DHT)       │   │  - Broadcast node    │
+    │                      │   │    announcements     │
+    └──────────────────────┘   └──────────────────────┘
+                │                       │
+                └───────────┬───────────┘
+                            ▼
+            ┌───────────────────────────────┐
+            │   Discovered Peers            │
+            │   - mDNS: Local nodes         │
+            │   - DNS: Bootstrap nodes      │
+            │   - Pkarr: Published nodes    │
+            │   - Gossip: Raft metadata     │
+            └───────────────────────────────┘
+                            │
+                            ▼
+            ┌───────────────────────────────┐
+            │   Network Factory             │
+            │   add_peer(node_id, addr)     │
+            │                               │
+            │   Ready for Raft RPC!         │
+            └───────────────────────────────┘
+```
+
+**Key insight:** Discovery services (mDNS, DNS, Pkarr) establish **Iroh connectivity**, then **gossip** announces **Raft metadata** (node_id → endpoint mappings). All methods can work simultaneously for redundancy.
+
+---
+
+## Common Patterns
+
+### Single-Node Cluster (Development)
 
 ```rust
 // Node 1: Bootstrap with gossip enabled
@@ -532,39 +746,174 @@ done
 
 ## Troubleshooting
 
-### "Port already in use"
+### Discovery Issues
+
+#### "Peers not discovering automatically"
+
+**Symptom:** Nodes start successfully but don't find each other.
+
+**Solutions by discovery method:**
+
+**mDNS (local testing):**
+- ✅ Verify `enable_mdns: true` in `IrohConfig`
+- ✅ Ensure nodes are on the same subnet/VLAN
+- ✅ Check firewall allows multicast traffic (UDP 5353)
+- ❌ mDNS does NOT work on localhost/127.0.0.1 → use manual peers for same-host testing
+- ✅ Wait 12+ seconds for mDNS announcements to propagate
+
+**Gossip (all deployments):**
+- ✅ Verify `enable_gossip: true` (default)
+- ✅ Ensure nodes share the same cluster `cookie` (used for gossip topic ID)
+- ✅ Verify underlying Iroh connectivity is established (mDNS, DNS, Pkarr, or manual)
+- ✅ Wait ~12 seconds for gossip announcements to broadcast
+
+**DNS (production):**
+- ✅ Verify `enable_dns_discovery: true`
+- ✅ Check `dns_discovery_url` is reachable (default: `https://dns.iroh.link`)
+- ✅ Ensure DNS service has peer records published
+- ✅ Check network connectivity to DNS service
+
+**Pkarr (production DHT):**
+- ✅ Verify `enable_pkarr: true`
+- ✅ Check `pkarr_relay_url` is reachable (default: `https://pkarr.iroh.link`)
+- ✅ Allow time for DHT propagation (~30-60 seconds)
+- ✅ Ensure relay service is operational
+
+**Manual peers (fallback):**
+- ✅ Verify `peers` configuration is correct: `"node_id@endpoint_id"`
+- ✅ Ensure endpoint IDs match the actual node identities
+- ✅ Confirm `network_factory.add_peer()` is called before Raft operations
+
+---
+
+#### "mDNS discovery not working on same machine"
+
+**Symptom:** Examples fail when running multiple nodes on localhost (127.0.0.1).
+
+**Root cause:** mDNS uses multicast which doesn't work on loopback interfaces.
+
+**Solution:**
+1. **For single-host testing:** Use manual peer configuration (see `examples/multi_node_cluster.rs`)
+2. **For multi-host testing:** Use actual LAN IP addresses, not localhost
+3. **Alternative:** Use DNS + relay for testing production-like discovery
+
+```rust
+// Single-host testing requires manual peer exchange
+let addr1 = h1.iroh_manager.node_addr().clone();
+let addr2 = h2.iroh_manager.node_addr().clone();
+h1.network_factory.add_peer(2, addr2);
+h2.network_factory.add_peer(1, addr1);
+```
+
+---
+
+#### "Nodes discover but Raft operations fail"
+
+**Symptom:** Iroh connectivity established, but `add_learner()` or `change_membership()` fails.
+
+**Root cause:** Gossip announcements haven't propagated Raft metadata yet.
+
+**Solution:**
+```rust
+// After bootstrap, wait for gossip to announce Raft metadata
+sleep(Duration::from_secs(12)).await;
+
+// Now Raft operations will work
+cluster.add_learner(...).await?;
+```
+
+**Why 12 seconds?** Gossip broadcasts every 10 seconds + 2 seconds buffer for propagation.
+
+---
+
+#### "DNS discovery timing out"
+
+**Symptom:** Nodes hang during bootstrap with DNS discovery enabled.
+
+**Possible causes:**
+- DNS service URL is unreachable (firewall, network issue)
+- DNS service is down or misconfigured
+- Slow network causing timeouts
+
+**Solutions:**
+1. Verify DNS service health: `curl https://dns.iroh.link` (or your custom URL)
+2. Check network connectivity: `ping dns.iroh.link`
+3. Disable DNS discovery temporarily: `enable_dns_discovery: false`
+4. Use mDNS or manual peers as fallback
+
+---
+
+#### "Pkarr relay connection failed"
+
+**Symptom:** Warnings about Pkarr publishing failures.
+
+**Impact:** Non-critical; other discovery methods can still work.
+
+**Solutions:**
+1. Verify relay URL: `curl https://pkarr.iroh.link` (or your custom URL)
+2. Check if relay requires authentication or special configuration
+3. Disable Pkarr if not needed: `enable_pkarr: false`
+4. Use DNS discovery as alternative for production
+
+---
+
+### Cluster Operations Issues
+
+#### "Port already in use"
 Set `ractor_port: 0` to use OS-assigned ports.
 
-### "Peer not found"
-**With gossip enabled (default):**
-- Ensure nodes have a relay server OR cluster ticket for initial connectivity
-- Wait ~12 seconds for gossip announcements to propagate
-- Check gossip is enabled: `enable_gossip: true` (default)
+#### "Peer not found"
+**With discovery enabled:**
+- Wait ~12 seconds for discovery to complete
+- Check discovery troubleshooting section above
 
-**With gossip disabled:**
+**With manual peers:**
 - Ensure peer addresses are exchanged via `network_factory.add_peer()` before operations
 - Verify endpoint IDs are correct
 
-### "Peers not discovering automatically"
-- Verify gossip is enabled: `iroh.enable_gossip: true`
-- Ensure nodes share the same cluster cookie (for topic ID derivation)
-- For production: use cluster tickets OR relay servers
-- For local testing: use manual peer configuration
-
-### "Not initialized"
+#### "Not initialized"
 Call `cluster_client.init()` before any KV operations.
 
-### "Election timeout"
+#### "Election timeout"
 Increase `election_timeout_min_ms` and `election_timeout_max_ms` for slower networks.
 
-### "State machine error"
+#### "State machine error"
 Check data directory permissions and disk space.
 
-### "Gossip messages not received"
-Gossip requires underlying Iroh network connectivity. Ensure:
-- At least one bootstrap peer OR relay server configured
-- Cluster tickets used for production deployments
-- Manual peer configuration for local testing
+---
+
+### Discovery Method Debug Checklist
+
+Use this checklist to diagnose discovery issues:
+
+```bash
+# 1. Check Iroh endpoint is running
+# Look for "Iroh endpoint initialized" in logs
+
+# 2. Verify discovery services are enabled
+# Check config for enable_mdns, enable_dns_discovery, enable_pkarr
+
+# 3. Test underlying network connectivity
+ping <peer-lan-ip>         # For mDNS
+curl https://dns.iroh.link # For DNS discovery
+curl https://pkarr.iroh.link # For Pkarr
+
+# 4. Check gossip is broadcasting
+# Look for "Broadcasting gossip announcement" in logs (every 10s)
+
+# 5. Verify cluster cookies match
+# All nodes must have identical 'cookie' values for gossip topic
+
+# 6. Wait for discovery timeouts
+# mDNS: ~12 seconds
+# DNS: ~5 seconds
+# Pkarr: ~30-60 seconds (DHT propagation)
+
+# 7. Check firewall rules
+# mDNS: UDP 5353 (multicast)
+# QUIC: UDP (Iroh endpoint port)
+# Relay: HTTPS (443)
+```
 
 ## Further Reading
 

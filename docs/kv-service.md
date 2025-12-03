@@ -8,27 +8,68 @@ need to spin up KV nodes quickly.
 
 ## Environment Variables
 
-The example binary reads three variables to boot a node:
+The example binary reads configuration from environment variables:
 
-| Variable | Description |
-| --- | --- |
-| `ASPEN_KV_NODE_ID` | Unsigned integer Raft node ID. Every node in the cluster must have a unique ID. |
-| `ASPEN_KV_DATA_DIR` | Filesystem directory for the local Raft log and state machine. The process will create `kv.redb` inside this path if it doesn't exist. |
-| `ASPEN_KV_PEERS` | Optional comma-separated list of peer specifications in the form `id=endpoint`. `endpoint` uses `iroh::EndpointAddr` syntax (for example `default/ipv4/127.0.0.1/4001/quic`). |
+| Variable | Description | Default |
+| --- | --- | --- |
+| `ASPEN_NODE_ID` | Unsigned integer Raft node ID (required) | None |
+| `ASPEN_DATA_DIR` | Filesystem directory for Raft log and state machine | Temp directory |
+| `ASPEN_COOKIE` | Cluster authentication cookie (required for gossip) | "default-cookie" |
+| `ASPEN_PEERS` | Manual peer list: `"node_id@endpoint_id,..."` | None (uses discovery) |
+| `ASPEN_IROH_RELAY_URL` | Relay server URL for NAT traversal | None |
+| `ASPEN_IROH_ENABLE_MDNS` | Enable mDNS local discovery | true |
+| `ASPEN_IROH_ENABLE_DNS_DISCOVERY` | Enable DNS-based peer discovery | false |
+| `ASPEN_IROH_DNS_DISCOVERY_URL` | Custom DNS discovery service URL | n0's public DNS |
+| `ASPEN_IROH_ENABLE_PKARR` | Enable Pkarr DHT publishing | false |
+| `ASPEN_IROH_PKARR_RELAY_URL` | Custom Pkarr relay URL | n0's public Pkarr |
 
-Example invocation:
+### Discovery Configuration
+
+By default, nodes use **mDNS + gossip** for zero-config local discovery:
 
 ```bash
-ASPEN_KV_NODE_ID=1 \
-ASPEN_KV_DATA_DIR=/tmp/aspen-node-1 \
-ASPEN_KV_PEERS="2=default/ipv4/127.0.0.1/4002/quic,3=default/ipv4/127.0.0.1/4003/quic" \
+# Default: mDNS + gossip (works on same LAN, separate machines)
+ASPEN_NODE_ID=1 cargo run --example kv_service
+ASPEN_NODE_ID=2 cargo run --example kv_service  # On another machine
+```
+
+For production deployments, enable DNS + Pkarr + relay:
+
+```bash
+ASPEN_NODE_ID=1 \
+ASPEN_COOKIE="production-cluster" \
+ASPEN_IROH_RELAY_URL=https://relay.example.com \
+ASPEN_IROH_ENABLE_DNS_DISCOVERY=true \
+ASPEN_IROH_ENABLE_PKARR=true \
 cargo run --example kv_service
 ```
 
-Each peer listed in `ASPEN_KV_PEERS` is registered immediately after the node
+For single-host testing, use manual peers (mDNS doesn't work on localhost):
+
+```bash
+# First, get endpoint IDs from node logs
+ASPEN_NODE_ID=1 cargo run --example kv_service
+# Note the endpoint ID from logs (e.g., "abc123...")
+
+ASPEN_NODE_ID=2 \
+ASPEN_PEERS="1@abc123..." \
+cargo run --example kv_service
+```
+
+Each peer listed in `ASPEN_PEERS` is registered immediately after the node
 starts so Raft RPCs can flow without manual setup. The builder accepts the same
 inputs programmatically (see `KvServiceBuilder::with_peer`/`with_peers`) to ease
 test orchestration.
+
+### Peer Specification Format
+
+**Current format:** `"node_id@endpoint_id"`
+- Example: `"2@abc123def456...,3@xyz789..."`
+- The endpoint_id is the Iroh node's public key (hex encoded)
+
+**Legacy format (deprecated):** `"id=endpoint_addr"`
+- Example: `"2=default/ipv4/127.0.0.1/4002/quic"`
+- No longer supported; use discovery or new format
 
 ## Notes for Scripts and Tests
 

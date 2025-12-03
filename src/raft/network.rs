@@ -36,8 +36,16 @@ const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
 pub struct IrpcRaftNetworkFactory {
     endpoint_manager: Arc<IrohEndpointManager>,
     /// Map of NodeId to Iroh EndpointAddr for peer discovery.
-    /// Populated from CLI args or config during bootstrap.
-    /// Uses Arc<RwLock> to allow dynamic peer addition after initialization.
+    ///
+    /// Initially populated from:
+    /// - CLI args/config manual peers (`--peers` flag)
+    /// - Empty if using automatic discovery
+    ///
+    /// Dynamically updated via:
+    /// - Gossip announcements (when `enable_gossip: true`)
+    /// - `add_peer()`/`update_peers()` calls (manual/testing)
+    ///
+    /// Uses Arc<RwLock> to allow concurrent peer addition during runtime.
     peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
 }
 

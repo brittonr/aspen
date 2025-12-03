@@ -165,26 +165,63 @@ via the IRPC protocol. The HTTP endpoints listed above remain for control-plane
 operations only (`/init`, `/add-learner`, `/change-membership`, `/write`, `/read`).
 All Raft consensus traffic (vote, append_entries, snapshot) flows over IRPC/Iroh.
 
-Launch nodes with:
+### Discovery Methods
 
+Aspen supports multiple automatic peer discovery mechanisms (see `examples/README.md` for details):
+
+1. **mDNS** (enabled by default): Discovers peers on the same LAN
+2. **Gossip** (enabled by default): Broadcasts Raft metadata once Iroh is connected
+3. **DNS discovery** (opt-in): Production peer discovery via DNS service
+4. **Pkarr** (opt-in): DHT-based distributed discovery
+
+### Launch Patterns
+
+**Local testing (same LAN):**
+```bash
+# Zero-config discovery with mDNS + gossip (default)
+aspen-node --node-id 1 --cookie "cluster-secret"
+aspen-node --node-id 2 --cookie "cluster-secret"  # Separate machine, same LAN
 ```
+
+**Production deployment (DNS + Pkarr + relay):**
+```bash
 aspen-node \
-  --enable-iroh \
-  --iroh-secret-hex <64-hex-bytes> \
-  --iroh-endpoint-file /tmp/node1.iroh.json \
-  --iroh-peer <peer-endpoint-id-or-json>
+  --node-id 1 \
+  --cookie "production-cluster" \
+  --relay-url https://relay.example.com \
+  --enable-dns-discovery \
+  --dns-discovery-url https://dns.iroh.link \
+  --enable-pkarr \
+  --pkarr-relay-url https://pkarr.iroh.link
 ```
 
-Key notes:
+**Manual peer configuration (testing/airgapped):**
+```bash
+aspen-node \
+  --node-id 1 \
+  --peers "2@<node2-endpoint-id>,3@<node3-endpoint-id>" \
+  --disable-gossip
+```
 
-- `--iroh-secret-hex` makes the EndpointId deterministic (32-byte ed25519 secret
-  encoded as hex). If omitted, a random key is generated per run.
-- `--iroh-endpoint-file` dumps the current EndpointId plus any discovered relay/IP
-  addresses as JSON so automation can read the value without scraping logs.
-- Each `--iroh-peer` currently takes an EndpointId as a hex string. Full
-  `EndpointAddr` parsing from CLI is not yet implemented.
-- Nodes use the peer list to establish IRPC connections for Raft RPC.
+### Key Configuration Flags
 
-Note: The `--peers` flag is not functional yet as `EndpointAddr` doesn't implement
-`FromStr`. Peer discovery currently works via the `--iroh-peer` flag which accepts
-endpoint IDs.
+- `--node-id <ID>`: Unique Raft node identifier (required)
+- `--cookie <SECRET>`: Cluster authentication cookie (required for gossip)
+- `--relay-url <URL>`: Relay server for NAT traversal (optional)
+- `--enable-dns-discovery`: Enable DNS-based peer discovery (default: false)
+- `--dns-discovery-url <URL>`: Custom DNS service URL (default: n0's public DNS)
+- `--enable-pkarr`: Enable Pkarr DHT publishing (default: false)
+- `--pkarr-relay-url <URL>`: Custom Pkarr relay URL (default: n0's public Pkarr)
+- `--enable-mdns <BOOL>`: Enable mDNS local discovery (default: true)
+- `--disable-gossip`: Disable gossip announcements (default: gossip enabled)
+- `--peers <SPECS>`: Manual peer list in format "node_id@endpoint_id"
+
+### Discovery Configuration Notes
+
+- **Default behavior**: mDNS + gossip enabled (zero-config for LAN)
+- **Production**: Disable mDNS, enable DNS + Pkarr + relay
+- **Single-host testing**: Use manual peers (mDNS doesn't work on localhost)
+- **Multi-host LAN**: Default config works out of the box
+- **All methods can work simultaneously** for redundancy
+
+See `examples/production_cluster.rs` for a complete production deployment example.

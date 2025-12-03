@@ -11,20 +11,36 @@
 //!
 //! # Peer Discovery
 //!
-//! Aspen supports two modes for peer discovery:
+//! Aspen provides multiple automatic discovery mechanisms (all can work simultaneously):
 //!
-//! ## Automatic (Gossip - Default)
+//! ## Iroh Discovery Services (Establish Connectivity)
 //!
-//! When gossip is enabled (default), nodes automatically discover each other:
+//! 1. **mDNS** (enabled by default): Discovers peers on the same LAN
+//!    - Works automatically for multi-machine testing on same network
+//!    - Does NOT work on localhost/127.0.0.1 (multicast limitation)
+//!
+//! 2. **DNS Discovery** (opt-in): Production peer discovery via DNS service
+//!    - Query DNS service for initial bootstrap peers
+//!    - Recommended for cloud/multi-region deployments
+//!
+//! 3. **Pkarr** (opt-in): DHT-based distributed discovery
+//!    - Publish node addresses to DHT relay
+//!    - Provides resilience against DNS failures
+//!
+//! ## Gossip (Broadcasts Raft Metadata - Default)
+//!
+//! Once Iroh connectivity is established (via mDNS, DNS, Pkarr, or manual):
 //! 1. Each node subscribes to a gossip topic (derived from cluster cookie)
-//! 2. Nodes broadcast their EndpointAddr every 10 seconds
-//! 3. Received announcements are logged and available for connection attempts
+//! 2. Nodes broadcast their `node_id` + `EndpointAddr` every 10 seconds
+//! 3. Received announcements are automatically added to the Raft network factory
+//! 4. Raft RPCs can then flow to discovered peers
 //!
-//! ## Manual (Explicit Peers)
+//! ## Manual Peers (Fallback)
 //!
-//! When gossip is disabled, nodes must be configured with explicit peer addresses:
+//! When all discovery is disabled, nodes must be configured with explicit peer addresses:
 //! - Via CLI: `--peers "node_id@endpoint_id"`
 //! - Via config file: `peers = ["node_id@endpoint_id"]`
+//! - Use for: single-host testing, airgapped deployments, custom discovery logic
 //!
 //! # Cluster Tickets
 //!

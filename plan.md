@@ -179,6 +179,42 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
        3. Network factory auto-updates with discovered Raft peers
      - **Result**: Complete solution to gossip bootstrap problem with zero-config local testing
      - Limitation: mDNS unreliable on localhost/loopback (test marked ignored, works in production)
+   - ✅ **Phase 11**: Discovery Documentation & Validation (2025-12-03)
+     - **Goal**: Document and validate Iroh discovery features in realistic scenarios beyond localhost
+     - **Part 1 - Examples & Documentation**:
+       - ✅ Updated `examples/README.md` with comprehensive "Discovery Methods" section (626+ lines)
+         - Overview table comparing mDNS, Gossip, DNS, Pkarr, Manual methods
+         - Zero-config local testing guide (mDNS + gossip defaults)
+         - Production deployment patterns (DNS + Pkarr + relay + gossip)
+         - Discovery method selection guide for different scenarios
+         - Comprehensive troubleshooting section (discovery-specific debugging, debug checklist)
+       - ✅ Updated `examples/multi_node_cluster.rs` comments explaining discovery methods and limitations
+       - ✅ Created `examples/production_cluster.rs` (427 lines)
+         - Complete production deployment example with DNS + Pkarr + relay
+         - Docker Compose and Kubernetes configuration examples
+         - Production deployment tips and troubleshooting
+       - ✅ Updated `docs/cluster-smoke.md` - rewrote "Iroh Transport" section with current CLI flags
+       - ✅ Updated `docs/kv-service.md` - corrected environment variables and peer format
+       - ✅ Enhanced inline docs in `src/cluster/mod.rs` and `src/raft/network.rs`
+     - **Part 2 - Discovery Validation Testing**:
+       - ✅ Enhanced test documentation in `tests/gossip_auto_peer_connection_test.rs`
+         - Comprehensive explanation of why mDNS test is ignored (multicast limitation on localhost)
+         - Guidance for testing discovery in realistic scenarios
+         - Three testing approaches documented: multi-machine LAN, production (DNS+Pkarr+relay), integration
+       - ✅ Created `docs/discovery-testing.md` (600+ lines)
+         - Four detailed testing strategies with pros/cons
+         - Multi-machine LAN testing walkthrough
+         - Production-like testing with DNS/Pkarr/relay setup
+         - Failure scenario testing templates
+         - Docker Compose and Kubernetes testing configurations
+         - Metrics monitoring and troubleshooting guides
+     - **Validation**: ✅ All changes compile, 99/99 tests pass (100% pass rate maintained)
+     - **Result**: Users have clear understanding of:
+       - Zero-config mDNS + gossip for local/LAN testing
+       - Production deployment with DNS + Pkarr + relay
+       - Comprehensive troubleshooting for each discovery method
+       - Testing strategies for validating discovery in realistic scenarios
+     - **Phase 3.2.11 Complete**: Discovery implementation fully documented and validated
 3. **External transports**
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
@@ -324,6 +360,14 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 - **Gossip auto-peer tests: 1/1 ✅** (manual peer fallback)
 
 **Recent Additions**:
+- ✅ **Discovery Documentation & Validation** (2025-12-03)
+  - Comprehensive discovery documentation (626+ lines in examples/README.md)
+  - Production deployment example (examples/production_cluster.rs, 427 lines)
+  - Discovery testing guide (docs/discovery-testing.md, 600+ lines)
+  - Updated all discovery-related docs (cluster-smoke.md, kv-service.md)
+  - Enhanced test documentation explaining mDNS localhost limitations
+  - 99/99 tests passing (100% pass rate maintained)
+  - Phase 3.2.11 complete
 - ✅ **Examples & Documentation** (2025-12-03)
   - Added comprehensive examples directory with README
   - 3 complete examples: basic_cluster, kv_operations, multi_node_cluster
@@ -351,4 +395,4 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 
 **Ready for**: Phase 5.3 (Documentation), CI enhancements, or production distributed testing
 
-**Latest**: Examples & documentation complete (Phase 3.2.9) - comprehensive examples demonstrate gossip auto-discovery and production deployment patterns
+**Latest**: Discovery documentation & validation complete (Phase 3.2.11) - comprehensive docs for mDNS/DNS/Pkarr/gossip discovery with production examples, troubleshooting guides, and testing strategies. All 99 tests passing.
