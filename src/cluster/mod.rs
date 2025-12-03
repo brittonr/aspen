@@ -20,6 +20,7 @@ use tokio::task::JoinHandle;
 pub mod bootstrap;
 pub mod config;
 pub mod metadata;
+pub mod ticket;
 
 /// Controls how the node server should behave while running in deterministic
 /// simulations.

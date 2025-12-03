@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 iroh = "0.95.1"
 iroh-base = "0.95.1"
+iroh-gossip = "0.95"
+iroh-tickets = "0.2"
 iroh-relay = "0.95"
 iroh-metrics = "0.37"
+blake3 = "1.5"
 bytes = "1.7"
 rand = "0.8"
 hiqlite = { version = "0.11.0", features = ["cache", "dlock"] } # Enabled dlock feature
