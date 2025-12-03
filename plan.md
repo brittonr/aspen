@@ -137,7 +137,7 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
      - Cluster tickets for easy joining
      - 23/23 integration tests passing
      - Full inline documentation
-   - ✅ **Phase 8**: Automatic Peer Connection (Commit: aca8786)
+   - ✅ **Phase 8**: Automatic Peer Connection (Commit: 48860e5)
      - Modified `PeerAnnouncement` to include `node_id` field for Raft routing
      - Updated `GossipPeerDiscovery::spawn()` to accept `network_factory` reference
      - Receiver task now automatically calls `network_factory.add_peer()` when peers discovered
@@ -148,6 +148,15 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
      - 99/99 tests passing (100% pass rate maintained)
      - Limitation: requires initial Iroh network connectivity via tickets, manual peers, or relay servers
      - **Implementation Complete**: Discovered peers now automatically connect without manual configuration
+   - ✅ **Phase 9**: Examples & Documentation (Commit: c421222)
+     - Added comprehensive `examples/README.md` with peer discovery section
+     - Created `examples/basic_cluster.rs` - single-node cluster demo
+     - Created `examples/kv_operations.rs` - KV operations with Set/SetMulti
+     - Created `examples/multi_node_cluster.rs` - 3-node cluster with comments on auto-discovery
+     - Added `scripts/run-examples.sh` - automated example testing
+     - Documented gossip auto-discovery vs manual peer configuration patterns
+     - Updated troubleshooting guide with gossip-specific debugging steps
+     - **Examples Complete**: Production-ready patterns for both local testing and production deployment
 3. **External transports**
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
@@ -293,6 +302,12 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 - **Gossip auto-peer tests: 1/1 ✅** (manual peer fallback)
 
 **Recent Additions**:
+- ✅ **Examples & Documentation** (2025-12-03)
+  - Added comprehensive examples directory with README
+  - 3 complete examples: basic_cluster, kv_operations, multi_node_cluster
+  - Documented automatic peer discovery via gossip
+  - Production deployment patterns with cluster tickets
+  - Phase 3.2.9 complete
 - ✅ **Gossip Auto-Peer Connection** (2025-12-03)
   - Completed automatic peer connection via gossip discovery
   - Network factory automatically updated when peers announced via gossip
@@ -314,4 +329,4 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 
 **Ready for**: Phase 5.3 (Documentation), CI enhancements, or production distributed testing
 
-**Latest**: Gossip auto-peer connection complete (Phase 3.2.8) - nodes automatically discover and connect via gossip without manual peer configuration
+**Latest**: Examples & documentation complete (Phase 3.2.9) - comprehensive examples demonstrate gossip auto-discovery and production deployment patterns
