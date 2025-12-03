@@ -667,7 +667,15 @@ kv.read(ReadRequest { key }).await?;
 
 ### Week 2: Testing & Validation (IN PROGRESS)
 
-**2.1 Chaos Engineering Tests** (pending)
+**2.1 Chaos Engineering Tests** (in progress)
+- Created 3 chaos test files using AspenRouter:
+  - `tests/chaos_network_partition.rs` - Network partition with majority/minority split
+  - `tests/chaos_leader_crash.rs` - Leader failure and re-election validation
+  - `tests/chaos_slow_network.rs` - High latency tolerance (200ms delay)
+- All tests use SimulationArtifact for event capture and debugging
+- Fixed timing parameters and deterministic seeds (Tiger Style)
+- **Status**: Tests created but need API fixes (AspenRouter constructor pattern)
+- **TODO**: Fix router API usage, add membership change crash test, add random message drop test
 - Add madsim-based chaos tests in `tests/chaos/`:
   - Network partition during normal operation
   - Node crash during leader election
