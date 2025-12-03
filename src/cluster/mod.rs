@@ -1,3 +1,56 @@
+//! Cluster coordination and peer discovery for Aspen.
+//!
+//! This module provides the infrastructure for distributed cluster coordination,
+//! including:
+//!
+//! - **Ractor Cluster**: Actor-based node communication via NodeServer
+//! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal
+//! - **Gossip-based Peer Discovery**: Automatic node discovery via iroh-gossip (default)
+//! - **Cluster Tickets**: Compact bootstrap information for joining clusters
+//! - **Manual Peer Configuration**: Explicit peer list as fallback when gossip is disabled
+//!
+//! # Peer Discovery
+//!
+//! Aspen supports two modes for peer discovery:
+//!
+//! ## Automatic (Gossip - Default)
+//!
+//! When gossip is enabled (default), nodes automatically discover each other:
+//! 1. Each node subscribes to a gossip topic (derived from cluster cookie)
+//! 2. Nodes broadcast their EndpointAddr every 10 seconds
+//! 3. Received announcements are logged and available for connection attempts
+//!
+//! ## Manual (Explicit Peers)
+//!
+//! When gossip is disabled, nodes must be configured with explicit peer addresses:
+//! - Via CLI: `--peers "node_id@endpoint_id"`
+//! - Via config file: `peers = ["node_id@endpoint_id"]`
+//!
+//! # Cluster Tickets
+//!
+//! Tickets provide a convenient way to join clusters:
+//! - First node starts with default gossip (topic from cookie)
+//! - HTTP GET `/cluster-ticket` returns a serialized ticket
+//! - New nodes use `--ticket "aspen{...}"` to join automatically
+//!
+//! # Architecture
+//!
+//! ```text
+//! ┌─────────────────┐
+//! │  NodeServer     │  Ractor cluster coordination
+//! │  (ractor)       │
+//! └────────┬────────┘
+//!          │
+//! ┌────────▼────────┐
+//! │ IrohEndpoint    │  P2P QUIC transport
+//! │ (iroh)          │
+//! └────────┬────────┘
+//!          │
+//!          ├─────────► Gossip (peer discovery)
+//!          ├─────────► IRPC (Raft RPC)
+//!          └─────────► HTTP Control Plane
+//! ```
+
 use std::fmt;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

@@ -76,8 +76,13 @@ pub struct IrohConfig {
     pub relay_url: Option<String>,
 
     /// Enable iroh-gossip for automatic peer discovery.
-    /// When enabled, nodes broadcast their presence and discover peers automatically.
-    /// When disabled, only manual peers (from --peers) are used.
+    ///
+    /// When enabled, nodes broadcast their presence and discover peers automatically
+    /// via a shared gossip topic. The topic ID is derived from the cluster cookie or
+    /// provided via a cluster ticket.
+    ///
+    /// When disabled, only manual peers (from --peers CLI flag) are used for connections.
+    ///
     /// Default: true (gossip enabled).
     #[serde(default = "default_enable_gossip")]
     pub enable_gossip: bool,
