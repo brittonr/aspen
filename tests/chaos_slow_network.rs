@@ -10,10 +10,13 @@
 /// Tiger Style: Fixed latency parameters (200ms) with deterministic behavior.
 
 use aspen::raft::types::*;
-use aspen::simulation::{SimulationArtifact, SimulationStatus};
+use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
-use std::time::Instant;
+use openraft::{BasicNode, Config, ServerState};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn test_slow_network_high_latency() {
@@ -41,17 +44,24 @@ async fn test_slow_network_high_latency() {
 
 async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Create 3-node cluster
-    let mut router = AspenRouter::builder().nodes(3).build().await?;
+    let config = Arc::new(Config::default().validate()?);
+    let mut router = AspenRouter::new(config);
+
+    // Create all 3 nodes
+    for i in 0..3 {
+        router.new_raft_node(i).await?;
+    }
     events.push("cluster-created: 3 nodes".into());
 
     // Initialize with normal network
     router.initialize(0).await?;
     events.push("cluster-initialized: node 0".into());
 
-    router.wait_for_stable_leadership(2000).await?;
+    router.wait(&0, Some(Duration::from_millis(2000)))
+        .state(ServerState::Leader, "initial leader elected")
+        .await?;
     let leader = router
         .leader()
-        .await
         .ok_or_else(|| anyhow::anyhow!("no leader elected"))?;
     events.push(format!("leader-elected: node {}", leader));
 
@@ -59,11 +69,15 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     for i in 0..3 {
         let key = format!("normal-latency-{}", i);
         let value = format!("value-{}", i);
-        router.write(leader, key.clone(), value.clone()).await?;
+        router.write(&leader, key.clone(), value.clone()).await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
     }
 
-    router.wait_for_log_commit(2, 1000).await?;
+    // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
+    router.wait(&leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(4), "baseline writes committed")
+        .await?;
     events.push("baseline-committed: 3 writes at normal latency".into());
 
     // Introduce high network latency
@@ -75,10 +89,11 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
     // Verify cluster still has a leader despite slow network
-    router.wait_for_stable_leadership(3000).await?;
+    router.wait(&0, Some(Duration::from_millis(3000)))
+        .current_leader(leader, "leader stable despite latency")
+        .await?;
     let slow_leader = router
         .leader()
-        .await
         .ok_or_else(|| anyhow::anyhow!("lost leadership during slow network"))?;
     events.push(format!("leader-stable-despite-latency: node {}", slow_leader));
 
@@ -87,13 +102,16 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("high-latency-{}", i);
         let value = format!("slow-{}", i);
         router
-            .write(slow_leader, key.clone(), value.clone())
-            .await?;
+            .write(&slow_leader, key.clone(), value.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("slow-write: {}={}", key, value));
     }
 
-    // Tiger Style: Increased timeout for slow network (3 seconds)
-    router.wait_for_log_commit(5, 3000).await?;
+    // Tiger Style: Increased timeout for slow network (3 more writes = index 7)
+    router.wait(&slow_leader, Some(Duration::from_millis(3000)))
+        .applied_index(Some(7), "slow writes committed")
+        .await?;
     events.push("slow-writes-committed: 3 writes with 200ms latency".into());
 
     // Return network to normal
@@ -108,12 +126,16 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("restored-{}", i);
         let value = format!("fast-again-{}", i);
         router
-            .write(slow_leader, key.clone(), value.clone())
-            .await?;
+            .write(&slow_leader, key.clone(), value.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("fast-write: {}={}", key, value));
     }
 
-    router.wait_for_log_commit(8, 1000).await?;
+    // Fast commits again (3 more writes = index 10)
+    router.wait(&slow_leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(10), "restored writes committed")
+        .await?;
     events.push("restored-writes-committed: 3 writes at normal latency".into());
 
     // Verify all writes are present on all nodes
@@ -122,9 +144,9 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("normal-latency-{}", i);
             let expected = format!("value-{}", i);
-            match router.read(node_id, key.clone()).await {
-                Ok(Some(value)) if value == expected => {}
-                Ok(Some(value)) => {
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
                         node_id,
@@ -133,8 +155,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                         expected
                     );
                 }
-                Ok(None) => anyhow::bail!("node {} missing key {}", node_id, key),
-                Err(e) => anyhow::bail!("read error on node {}: {}", node_id, e),
+                None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
         }
 
@@ -142,9 +163,9 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("high-latency-{}", i);
             let expected = format!("slow-{}", i);
-            match router.read(node_id, key.clone()).await {
-                Ok(Some(value)) if value == expected => {}
-                Ok(Some(value)) => {
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
                         node_id,
@@ -153,8 +174,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                         expected
                     );
                 }
-                Ok(None) => anyhow::bail!("node {} missing key {}", node_id, key),
-                Err(e) => anyhow::bail!("read error on node {}: {}", node_id, e),
+                None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
         }
 
@@ -162,9 +182,9 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("restored-{}", i);
             let expected = format!("fast-again-{}", i);
-            match router.read(node_id, key.clone()).await {
-                Ok(Some(value)) if value == expected => {}
-                Ok(Some(value)) => {
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
                         node_id,
@@ -173,8 +193,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                         expected
                     );
                 }
-                Ok(None) => anyhow::bail!("node {} missing key {}", node_id, key),
-                Err(e) => anyhow::bail!("read error on node {}: {}", node_id, e),
+                None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
         }
     }

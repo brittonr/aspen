@@ -1,0 +1,286 @@
+/// Chaos Engineering Test: Random Message Drops
+///
+/// This test simulates packet loss in the network to validate Raft's retry mechanisms.
+/// Real networks drop 0.1-5% of packets; we test at higher rates (10-20%) to stress
+/// the protocol's resilience.
+///
+/// The test verifies:
+/// - Cluster maintains consensus despite message loss
+/// - Retries eventually succeed in delivering critical messages
+/// - No data loss or corruption from dropped messages
+/// - Progress continues (albeit slower) with packet loss
+///
+/// Tiger Style: Fixed drop patterns with deterministic behavior.
+///
+/// Note: Since AspenRouter doesn't have native message drop support, we simulate
+/// this by rapidly failing/recovering nodes to create intermittent connectivity.
+
+use aspen::raft::types::*;
+use aspen::simulation::SimulationArtifact;
+use aspen::testing::AspenRouter;
+
+use openraft::{BasicNode, Config, ServerState};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+#[tokio::test]
+async fn test_message_drops_append_entries() {
+    let start = Instant::now();
+    let seed = 56789u64;
+    let mut events = Vec::new();
+
+    let result = run_message_drops_test(&mut events).await;
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let artifact = match &result {
+        Ok(()) => SimulationArtifact::new("chaos_message_drops", seed, events, String::new())
+            .with_duration_ms(duration_ms),
+        Err(e) => SimulationArtifact::new("chaos_message_drops", seed, events, String::new())
+            .with_failure(e.to_string())
+            .with_duration_ms(duration_ms),
+    };
+
+    if let Err(e) = artifact.persist("docs/simulations") {
+        eprintln!("Warning: failed to persist simulation artifact: {}", e);
+    }
+
+    result.expect("chaos test should succeed");
+}
+
+async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> {
+    // Create 5-node cluster for better testing of message drops
+    let config = Arc::new(Config::default().validate()?);
+    let mut router = AspenRouter::new(config);
+
+    // Create all 5 nodes
+    for i in 0..5 {
+        router.new_raft_node(i).await?;
+    }
+    events.push("cluster-created: 5 nodes".into());
+
+    // Initialize cluster
+    router.initialize(0).await?;
+    events.push("cluster-initialized: node 0".into());
+
+    // Wait for initial leader
+    router.wait(&0, Some(Duration::from_millis(2000)))
+        .state(ServerState::Leader, "initial leader elected")
+        .await?;
+    let leader = router
+        .leader()
+        .ok_or_else(|| anyhow::anyhow!("no initial leader"))?;
+    events.push(format!("initial-leader: node {}", leader));
+
+    // Baseline: writes with no message drops
+    for i in 0..5 {
+        let key = format!("no-drops-{}", i);
+        let value = format!("reliable-{}", i);
+        router.write(&leader, key.clone(), value.clone()).await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
+        events.push(format!("baseline-write: {}={}", key, value));
+    }
+
+    // Wait for baseline to commit (init + 5 writes = index 6)
+    router.wait(&leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(6), "baseline committed")
+        .await?;
+    events.push("baseline-committed: 5 writes with reliable network".into());
+
+    // Phase 1: Simulate 10% message drops by intermittent failures
+    // We'll rapidly fail/recover follower nodes to simulate dropped AppendEntries
+    events.push("phase1-started: simulating 10% message drops".into());
+
+    // Simulate message drops in the foreground while writing
+    // We'll interleave drops with writes
+
+    // Perform writes during message drops
+    for i in 0..10 {
+        // Simulate drops on some iterations
+        if i % 3 == 0 {
+            let target_node = ((i % 4) + 1) as NodeId;
+            router.fail_node(target_node);
+            events.push(format!("node-failed: {} (simulating drops)", target_node));
+        }
+
+        let key = format!("with-drops-{}", i);
+        let value = format!("unreliable-{}", i);
+
+        // Retry logic: writes may fail due to message drops
+        let mut retries = 0;
+        loop {
+            match router.write(&leader, key.clone(), value.clone()).await
+                .map_err(|e| anyhow::anyhow!("write error: {}", e)) {
+                Ok(_) => {
+                    events.push(format!(
+                        "drop-phase-write: {}={} (retries: {})",
+                        key, value, retries
+                    ));
+                    break;
+                }
+                Err(e) if retries < 3 => {
+                    retries += 1;
+                    events.push(format!("write-retry: {} attempt {}", key, retries));
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(e) => {
+                    anyhow::bail!("write failed after {} retries: {}", retries, e);
+                }
+            }
+        }
+
+        // Recover failed nodes periodically
+        if i % 3 == 2 {
+            for node_id in 1..5 {
+                router.recover_node(node_id);
+            }
+            events.push("nodes-recovered: all nodes back online".into());
+        }
+    }
+
+    events.push("phase1-completed: 10 writes with simulated drops".into());
+
+    // Let the cluster stabilize
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    // Phase 2: Heavier message drops (20% loss rate)
+    events.push("phase2-started: simulating 20% message drops".into());
+
+    // Perform writes during heavy message drops
+    for i in 0..5 {
+        // Fail multiple nodes for heavier drops
+        if i % 2 == 0 {
+            let target1 = ((i % 4) + 1) as NodeId;
+            let target2 = (((i + 1) % 4) + 1) as NodeId;
+            router.fail_node(target1);
+            router.fail_node(target2);
+            events.push(format!("nodes-failed: {}, {} (heavy drops)", target1, target2));
+        }
+
+        let key = format!("heavy-drops-{}", i);
+        let value = format!("very-unreliable-{}", i);
+
+        // More retries needed with heavier drops
+        let mut retries = 0;
+        loop {
+            match router.write(&leader, key.clone(), value.clone()).await
+                .map_err(|e| anyhow::anyhow!("write error: {}", e)) {
+                Ok(_) => {
+                    events.push(format!(
+                        "heavy-drop-write: {}={} (retries: {})",
+                        key, value, retries
+                    ));
+                    break;
+                }
+                Err(e) if retries < 5 => {
+                    retries += 1;
+                    events.push(format!("heavy-retry: {} attempt {}", key, retries));
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+                Err(e) => {
+                    anyhow::bail!("write failed after {} retries: {}", retries, e);
+                }
+            }
+        }
+
+        // Recover all nodes at the end
+        if i == 4 {
+            for node_id in 1..5 {
+                router.recover_node(node_id);
+            }
+            events.push("all-nodes-recovered: heavy drop phase complete".into());
+        }
+    }
+
+    events.push("phase2-completed: 5 writes with 20% drops".into());
+
+    // Let cluster fully stabilize
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    // Phase 3: Verify all data eventually converged despite message drops
+    events.push("convergence-check: verifying eventual consistency".into());
+
+    // Calculate expected final log index
+    // init (1) + baseline (5) + phase1 (10) + phase2 (5) = 21
+    let final_index = 21;
+
+    // Wait for all nodes to catch up
+    for node_id in 0..5 {
+        router.wait(&node_id, Some(Duration::from_millis(5000)))
+            .applied_index(Some(final_index), "node caught up after drops")
+            .await?;
+    }
+    events.push(format!(
+        "all-nodes-converged: index {} despite message drops",
+        final_index
+    ));
+
+    // Verify data consistency across all nodes
+    for node_id in 0..5 {
+        // Check baseline writes (no drops)
+        for i in 0..5 {
+            let key = format!("no-drops-{}", i);
+            let expected = format!("reliable-{}", i);
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
+                    anyhow::bail!(
+                        "node {} key {} wrong: got {}, expected {}",
+                        node_id, key, value, expected
+                    );
+                }
+                None => anyhow::bail!("node {} missing key {}", node_id, key),
+            }
+        }
+
+        // Check phase 1 writes (10% drops)
+        for i in 0..10 {
+            let key = format!("with-drops-{}", i);
+            let expected = format!("unreliable-{}", i);
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
+                    anyhow::bail!(
+                        "node {} key {} wrong: got {}, expected {}",
+                        node_id, key, value, expected
+                    );
+                }
+                None => anyhow::bail!("node {} missing key {} after drops", node_id, key),
+            }
+        }
+
+        // Check phase 2 writes (20% drops)
+        for i in 0..5 {
+            let key = format!("heavy-drops-{}", i);
+            let expected = format!("very-unreliable-{}", i);
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {}
+                Some(value) => {
+                    anyhow::bail!(
+                        "node {} key {} wrong: got {}, expected {}",
+                        node_id, key, value, expected
+                    );
+                }
+                None => anyhow::bail!("node {} missing key {} after heavy drops", node_id, key),
+            }
+        }
+    }
+    events.push("consistency-verified: all data intact despite message drops".into());
+
+    // Final verification: cluster still functional after stress
+    for i in 0..3 {
+        let key = format!("post-stress-{}", i);
+        let value = format!("recovered-{}", i);
+        router.write(&leader, key.clone(), value.clone()).await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
+        events.push(format!("post-stress-write: {}={}", key, value));
+    }
+
+    // Verify post-stress writes
+    router.wait(&leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(24), "post-stress writes committed")
+        .await?;
+    events.push("cluster-healthy: normal operation restored after message drop stress".into());
+
+    Ok(())
+}

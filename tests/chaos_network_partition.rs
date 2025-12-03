@@ -10,10 +10,13 @@
 /// Tiger Style: Fixed test parameters with deterministic behavior.
 
 use aspen::raft::types::*;
-use aspen::simulation::{SimulationArtifact, SimulationStatus};
+use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
-use std::time::Instant;
+use openraft::{BasicNode, Config, ServerState};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn test_network_partition_during_normal_operation() {
@@ -42,19 +45,25 @@ async fn test_network_partition_during_normal_operation() {
 
 async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Create 5-node cluster (quorum = 3)
-    let mut router = AspenRouter::builder().nodes(5).build().await?;
+    let config = Arc::new(Config::default().validate()?);
+    let mut router = AspenRouter::new(config);
+
+    // Create all 5 nodes
+    for i in 0..5 {
+        router.new_raft_node(i).await?;
+    }
     events.push("cluster-created: 5 nodes".into());
 
     // Initialize cluster with all 5 nodes as voters
-    let voters = vec![0, 1, 2, 3, 4];
     router.initialize(0).await?;
     events.push("cluster-initialized: node 0".into());
 
     // Wait for leader election
-    router.wait_for_stable_leadership(2000).await?;
+    router.wait(&0, Some(Duration::from_millis(2000)))
+        .state(ServerState::Leader, "leader elected")
+        .await?;
     let leader = router
         .leader()
-        .await
         .ok_or_else(|| anyhow::anyhow!("no leader elected"))?;
     events.push(format!("leader-elected: node {}", leader));
 
@@ -62,11 +71,15 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     for i in 0..5 {
         let key = format!("key{}", i);
         let value = format!("value{}", i);
-        router.write(leader, key.clone(), value.clone()).await?;
+        router.write(&leader, key.clone(), value.clone()).await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("write: {}={}", key, value));
     }
 
-    router.wait_for_log_commit(4, 1000).await?;
+    // Wait for writes to be committed (log index starts at 1 after init, so 5 writes = index 6)
+    router.wait(&leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(6), "baseline writes committed")
+        .await?;
     events.push("baseline-writes-committed: 5 writes".into());
 
     // Partition the network: isolate nodes 3, 4 (minority)
@@ -80,10 +93,12 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // The majority partition (0, 1, 2) should still have a leader
-    router.wait_for_stable_leadership(2000).await?;
+    // Check a node in the majority partition
+    router.wait(&0, Some(Duration::from_millis(2000)))
+        .current_leader(leader, "majority partition maintains leader")
+        .await?;
     let majority_leader = router
         .leader()
-        .await
         .ok_or_else(|| anyhow::anyhow!("majority partition lost leadership"))?;
 
     // Verify majority leader is in majority partition
@@ -103,12 +118,16 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("key{}", i);
         let value = format!("during-partition-{}", i);
         router
-            .write(majority_leader, key.clone(), value.clone())
-            .await?;
+            .write(&majority_leader, key.clone(), value.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("partition-write: {}={}", key, value));
     }
 
-    router.wait_for_log_commit(9, 1000).await?;
+    // Wait for partition writes to be committed (5 more writes = index 11)
+    router.wait(&majority_leader, Some(Duration::from_millis(1000)))
+        .applied_index(Some(11), "partition writes committed")
+        .await?;
     events.push("partition-writes-committed: 5 writes".into());
 
     // Heal the partition by recovering minority nodes
@@ -118,11 +137,19 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for cluster to reconverge
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    router.wait_for_stable_leadership(2000).await?;
+
+    // Check that we still have a leader after healing
+    router.wait(&0, Some(Duration::from_millis(2000)))
+        .current_leader(majority_leader, "leader stable after healing")
+        .await?;
 
     // All nodes should eventually have the same committed log
-    router.wait_for_log_commit(9, 2000).await?;
-    events.push("cluster-reconverged: all nodes at log index 9".into());
+    for node_id in 0..5 {
+        router.wait(&node_id, Some(Duration::from_millis(2000)))
+            .applied_index(Some(11), "all nodes synchronized")
+            .await?;
+    }
+    events.push("cluster-reconverged: all nodes at log index 11".into());
 
     // Verify all writes are present on all nodes (consistency check)
     for node_id in 0..5 {
@@ -134,11 +161,11 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                 format!("during-partition-{}", i)
             };
 
-            match router.read(node_id, key.clone()).await {
-                Ok(Some(value)) if value == expected => {
+            match router.read(&node_id, &key).await {
+                Some(value) if value == expected => {
                     // Expected value found
                 }
-                Ok(Some(value)) => {
+                Some(value) => {
                     anyhow::bail!(
                         "node {} key {} has wrong value: got {}, expected {}",
                         node_id,
@@ -147,11 +174,8 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                         expected
                     );
                 }
-                Ok(None) => {
+                None => {
                     anyhow::bail!("node {} missing key {}", node_id, key);
-                }
-                Err(e) => {
-                    anyhow::bail!("read error on node {}: {}", node_id, e);
                 }
             }
         }
