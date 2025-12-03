@@ -21,14 +21,20 @@
 //! use aspen::cluster::gossip_discovery::GossipPeerDiscovery;
 //! use iroh_gossip::proto::TopicId;
 //!
-//! # async fn example(iroh_manager: &aspen::cluster::IrohEndpointManager) -> anyhow::Result<()> {
+//! # async fn example(
+//! #     node_id: u64,
+//! #     iroh_manager: &aspen::cluster::IrohEndpointManager,
+//! #     network_factory: Option<std::sync::Arc<aspen::raft::network::IrpcRaftNetworkFactory>>,
+//! # ) -> anyhow::Result<()> {
 //! let topic_id = TopicId::from_bytes([1u8; 32]);
 //! let discovery = GossipPeerDiscovery::spawn(
 //!     topic_id,
+//!     node_id,
 //!     iroh_manager,
+//!     network_factory,
 //! ).await?;
 //!
-//! // Discovery runs in background...
+//! // Discovery runs in background, automatically connecting to discovered peers...
 //!
 //! discovery.shutdown().await?;
 //! # Ok(())
@@ -49,14 +55,18 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 
 use super::IrohEndpointManager;
+use crate::raft::network::IrpcRaftNetworkFactory;
+use crate::raft::types::NodeId;
 
 /// Announcement message broadcast to the gossip topic.
 ///
-/// Contains node's EndpointAddr and a timestamp for freshness tracking.
+/// Contains node's ID, EndpointAddr, and a timestamp for freshness tracking.
 ///
 /// Tiger Style: Fixed-size payload, explicit timestamp in microseconds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PeerAnnouncement {
+    /// Node ID of the announcing node.
+    node_id: NodeId,
     /// The endpoint address of the announcing node.
     endpoint_addr: EndpointAddr,
     /// Timestamp when this announcement was created (microseconds since UNIX epoch).
@@ -65,13 +75,14 @@ struct PeerAnnouncement {
 
 impl PeerAnnouncement {
     /// Create a new announcement with the current timestamp.
-    fn new(endpoint_addr: EndpointAddr) -> Self {
+    fn new(node_id: NodeId, endpoint_addr: EndpointAddr) -> Self {
         let timestamp_micros = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system time before UNIX epoch")
             .as_micros() as u64;
 
         Self {
+            node_id,
             endpoint_addr,
             timestamp_micros,
         }
@@ -91,12 +102,13 @@ impl PeerAnnouncement {
 /// Manages gossip-based peer discovery lifecycle.
 ///
 /// Spawns two background tasks:
-/// 1. Announcer: Periodically broadcasts this node's EndpointAddr
-/// 2. Receiver: Listens for peer announcements and adds them to the endpoint
+/// 1. Announcer: Periodically broadcasts this node's ID and EndpointAddr
+/// 2. Receiver: Listens for peer announcements and automatically adds them to the network factory
 ///
 /// Tiger Style: Bounded announcement interval (10s), explicit shutdown mechanism.
 pub struct GossipPeerDiscovery {
     topic_id: TopicId,
+    node_id: NodeId,
     shutdown: Arc<AtomicBool>,
     announcer_task: JoinHandle<()>,
     receiver_task: JoinHandle<()>,
@@ -111,12 +123,17 @@ impl GossipPeerDiscovery {
     /// Spawn gossip peer discovery tasks.
     ///
     /// Subscribes to the gossip topic and starts background tasks for
-    /// announcing this node's address and receiving peer announcements.
+    /// announcing this node's ID/address and receiving peer announcements.
+    ///
+    /// If `network_factory` is provided, discovered peers are automatically
+    /// added to it for Raft networking.
     ///
     /// Tiger Style: Fail fast if gossip is not enabled or subscription fails.
     pub async fn spawn(
         topic_id: TopicId,
+        node_id: NodeId,
         iroh_manager: &IrohEndpointManager,
+        network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
     ) -> Result<Self> {
         // Get gossip instance or fail
         let gossip = iroh_manager
@@ -138,6 +155,7 @@ impl GossipPeerDiscovery {
         // Spawn announcer task
         let announcer_shutdown = Arc::clone(&shutdown);
         let announcer_sender = gossip_sender.clone();
+        let announcer_node_id = node_id;
         let announcer_task = tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(Self::ANNOUNCE_INTERVAL_SECS));
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -150,13 +168,13 @@ impl GossipPeerDiscovery {
 
                 ticker.tick().await;
 
-                let announcement = PeerAnnouncement::new(endpoint_addr.clone());
+                let announcement = PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone());
                 match announcement.to_bytes() {
                     Ok(bytes) => {
                         if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
                             tracing::warn!("failed to broadcast peer announcement: {}", e);
                         } else {
-                            tracing::trace!("broadcast peer announcement");
+                            tracing::trace!("broadcast peer announcement for node_id={}", announcer_node_id);
                         }
                     }
                     Err(e) => {
@@ -168,6 +186,8 @@ impl GossipPeerDiscovery {
 
         // Spawn receiver task
         let receiver_shutdown = Arc::clone(&shutdown);
+        let receiver_node_id = node_id;
+        let receiver_network_factory = network_factory.clone();
         let receiver_task = tokio::spawn(async move {
             loop {
                 if receiver_shutdown.load(Ordering::Relaxed) {
@@ -179,24 +199,38 @@ impl GossipPeerDiscovery {
                     Some(Ok(Event::Received(msg))) => {
                         match PeerAnnouncement::from_bytes(&msg.content) {
                             Ok(announcement) => {
+                                // Filter out our own announcements
+                                if announcement.node_id == receiver_node_id {
+                                    tracing::trace!("ignoring self-announcement");
+                                    continue;
+                                }
+
                                 tracing::debug!(
-                                    "received peer announcement from {:?}",
+                                    "received peer announcement from node_id={}, endpoint_id={:?}",
+                                    announcement.node_id,
                                     announcement.endpoint_addr.id
                                 );
 
-                                // Add peer to endpoint's known addresses
-                                // Note: In Iroh 0.95.1, there's no direct add_node_addr.
-                                // The endpoint will use these addresses when connecting.
-                                // For now, we just log the discovery.
-                                // In a full implementation, you might:
-                                // 1. Store addresses in a registry
-                                // 2. Pass them to NodeServer for Raft connections
-                                // 3. Use them in bootstrap_node() to initiate connections
+                                // Add peer to network factory if available
+                                if let Some(ref factory) = receiver_network_factory {
+                                    factory.add_peer(
+                                        announcement.node_id,
+                                        announcement.endpoint_addr.clone(),
+                                    );
 
-                                // Log the discovery
-                                let relay_urls: Vec<_> = announcement.endpoint_addr.relay_urls().collect();
+                                    tracing::info!(
+                                        "added peer to network factory: node_id={}, endpoint_id={:?}",
+                                        announcement.node_id,
+                                        announcement.endpoint_addr.id
+                                    );
+                                }
+
+                                // Log the discovery details
+                                let relay_urls: Vec<_> =
+                                    announcement.endpoint_addr.relay_urls().collect();
                                 tracing::info!(
-                                    "discovered peer: node_id={:?}, relay={:?}, direct_addresses={:?}",
+                                    "discovered peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
+                                    announcement.node_id,
                                     announcement.endpoint_addr.id,
                                     relay_urls,
                                     announcement.endpoint_addr.addrs.len()
@@ -207,11 +241,11 @@ impl GossipPeerDiscovery {
                             }
                         }
                     }
-                    Some(Ok(Event::NeighborUp(node_id))) => {
-                        tracing::debug!("neighbor up: {:?}", node_id);
+                    Some(Ok(Event::NeighborUp(neighbor_id))) => {
+                        tracing::debug!("neighbor up: {:?}", neighbor_id);
                     }
-                    Some(Ok(Event::NeighborDown(node_id))) => {
-                        tracing::debug!("neighbor down: {:?}", node_id);
+                    Some(Ok(Event::NeighborDown(neighbor_id))) => {
+                        tracing::debug!("neighbor down: {:?}", neighbor_id);
                     }
                     Some(Ok(Event::Lagged)) => {
                         tracing::warn!("gossip receiver lagged, messages may be lost");
@@ -230,6 +264,7 @@ impl GossipPeerDiscovery {
 
         Ok(Self {
             topic_id,
+            node_id,
             shutdown,
             announcer_task,
             receiver_task,
@@ -281,24 +316,27 @@ mod tests {
 
     #[test]
     fn test_peer_announcement_serialize_deserialize() {
+        let node_id = 123u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement = PeerAnnouncement::new(addr);
+        let announcement = PeerAnnouncement::new(node_id, addr);
 
         let bytes = announcement.to_bytes().unwrap();
         let deserialized = PeerAnnouncement::from_bytes(&bytes).unwrap();
 
+        assert_eq!(announcement.node_id, deserialized.node_id);
         assert_eq!(announcement.endpoint_addr, deserialized.endpoint_addr);
         assert_eq!(announcement.timestamp_micros, deserialized.timestamp_micros);
     }
 
     #[test]
     fn test_peer_announcement_timestamp() {
+        let node_id = 456u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement1 = PeerAnnouncement::new(addr.clone());
+        let announcement1 = PeerAnnouncement::new(node_id, addr.clone());
 
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        let announcement2 = PeerAnnouncement::new(addr);
+        let announcement2 = PeerAnnouncement::new(node_id, addr);
 
         // Second announcement should have a later timestamp
         assert!(announcement2.timestamp_micros > announcement1.timestamp_micros);

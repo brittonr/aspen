@@ -207,6 +207,20 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         Arc::new(manager)
     };
 
+    // Parse peer addresses
+    let peer_addrs = parse_peer_addresses(&config.peers)
+        .context("failed to parse peer addresses")?;
+    info!(
+        peer_count = peer_addrs.len(),
+        "parsed peer addresses"
+    );
+
+    // Create network factory for Raft
+    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
+        Arc::clone(&iroh_manager),
+        peer_addrs,
+    ));
+
     // Spawn gossip peer discovery if enabled
     let gossip_discovery = if config.iroh.enable_gossip {
         use iroh_gossip::proto::TopicId;
@@ -234,25 +248,21 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
             topic_id
         };
 
-        // Spawn gossip discovery
-        let discovery = GossipPeerDiscovery::spawn(topic_id, &iroh_manager)
-            .await
-            .context("failed to spawn gossip peer discovery")?;
-        info!("gossip peer discovery spawned");
+        // Spawn gossip discovery with network factory for automatic peer connection
+        let discovery = GossipPeerDiscovery::spawn(
+            topic_id,
+            config.node_id,
+            &iroh_manager,
+            Some(Arc::clone(&network_factory)),
+        )
+        .await
+        .context("failed to spawn gossip peer discovery")?;
+        info!("gossip peer discovery spawned with automatic peer connection");
         Some(discovery)
     } else {
         info!("gossip peer discovery disabled");
         None
     };
-
-    // Parse peer addresses
-    let peer_addrs = parse_peer_addresses(&config.peers)
-        .context("failed to parse peer addresses")?;
-
-    info!(
-        peer_count = peer_addrs.len(),
-        "parsed peer addresses"
-    );
 
     // Launch NodeServer
     let node_server = NodeServerConfig::new(
@@ -271,7 +281,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     );
 
     // Create Raft core and state machine
-    let (raft_core, state_machine_store, network_factory) = {
+    let (raft_core, state_machine_store) = {
         let mut raft_config = RaftConfig::default();
         raft_config.heartbeat_interval = config.heartbeat_interval_ms;
         raft_config.election_timeout_min = config.election_timeout_min_ms;
@@ -284,19 +294,18 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
         let log_store = InMemoryLogStore::default();
         let state_machine_store = StateMachineStore::new();
-        let network_factory = IrpcRaftNetworkFactory::new(Arc::clone(&iroh_manager), peer_addrs);
 
         let raft = openraft::Raft::new(
             config.node_id,
             validated_config,
-            network_factory.clone(),
+            (*network_factory).clone(),
             log_store,
             state_machine_store.clone(),
         )
         .await
         .context("failed to initialize raft")?;
 
-        (raft, state_machine_store, Arc::new(network_factory))
+        (raft, state_machine_store)
     };
 
     // Spawn Raft actor

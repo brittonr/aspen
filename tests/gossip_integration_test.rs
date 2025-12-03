@@ -139,11 +139,13 @@ async fn test_mock_gossip_peer_announcement() -> Result<()> {
 
     #[derive(serde::Serialize, serde::Deserialize)]
     struct PeerAnnouncement {
+        node_id: u64,
         endpoint_addr: iroh::EndpointAddr,
         timestamp_micros: u64,
     }
 
     let announcement = PeerAnnouncement {
+        node_id: 1,
         endpoint_addr: endpoint_addr1.clone(),
         timestamp_micros: 12345,
     };
@@ -158,6 +160,7 @@ async fn test_mock_gossip_peer_announcement() -> Result<()> {
         .unwrap();
 
     let parsed: PeerAnnouncement = postcard::from_bytes(&received)?;
+    assert_eq!(parsed.node_id, 1);
     assert_eq!(parsed.endpoint_addr.id, endpoint_addr1.id);
     assert_eq!(parsed.timestamp_micros, 12345);
 
