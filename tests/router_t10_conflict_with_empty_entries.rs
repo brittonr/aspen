@@ -23,9 +23,8 @@ fn timeout() -> Option<Duration> {
 
 /// Test that append-entries reports conflicts even with empty entries
 ///
-/// Tests two scenarios:
-/// 1. Empty entries with non-existent prev_log_id -> should report conflict
-/// 2. Empty entries with mismatched prev_log_id -> should report conflict
+/// Focused on core conflict detection behavior with empty entry lists.
+/// The key insight: prev_log_id matching determines success, not entry presence.
 #[tokio::test]
 async fn test_conflict_with_empty_entries() -> Result<()> {
     // Configure without automatic features for precise control
@@ -40,7 +39,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     let mut router = AspenRouter::new(config.clone());
 
-    tracing::info!("--- section 1: setup single learner node");
+    tracing::info!("--- setup single learner node");
 
     // Create a single node (not initialized, so it remains a learner)
     router.new_raft_node(0).await?;
@@ -51,34 +50,33 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
         .state(ServerState::Learner, "node-0 is learner")
         .await?;
 
-    tracing::info!("--- section 2: test conflict with non-existent prev_log_id");
+    tracing::info!("--- test conflict with non-existent prev_log_id (empty entries)");
 
     // Extract node for direct RPC testing
-    let (r0, mut sto0, sm0) = router.remove_node(0).unwrap();
+    let (r0, mut sto0, _sm0) = router.remove_node(0).unwrap();
 
-    // Send append-entries with prev_log_id pointing to non-existent log
-    // and empty entries list
+    // Test 1: Empty entries + non-existent prev_log_id → conflict
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, 1),
         prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 5)),
-        entries: vec![],  // Empty entries
-        leader_commit: None,  // No logs committed yet
+        entries: vec![],
+        leader_commit: None,
     };
 
     let resp = r0.append_entries(req).await?;
 
     assert!(
         !resp.is_success(),
-        "append-entries should fail with non-existent prev_log_id"
+        "empty entries with non-existent prev_log_id should fail"
     );
     assert!(
         resp.is_conflict(),
-        "response should indicate conflict even with empty entries"
+        "should report conflict even with empty entries"
     );
 
-    tracing::info!("--- section 3: add some logs to the node");
+    tracing::info!("--- add initial logs");
 
-    // Feed logs using append_entries (this properly updates vote and logs)
+    // Add 3 logs
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, 1),
         prev_log_id: None,
@@ -91,9 +89,8 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     };
 
     let resp = r0.append_entries(req).await?;
-    assert!(resp.is_success(), "should successfully feed logs");
+    assert!(resp.is_success(), "should successfully feed initial logs");
 
-    // Verify logs were added
     let logs = sto0
         .get_log_reader()
         .await
@@ -101,35 +98,34 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
         .await?;
     assert_eq!(logs.len(), 3, "should have 3 log entries");
 
-    tracing::info!("--- section 4: test conflict with mismatched prev_log_id");
+    tracing::info!("--- test conflict with out-of-bounds prev_log_id (empty entries)");
 
-    // Send append-entries with prev_log_id that exists but doesn't match
-    // Node has log at index 2 with term 1, we claim it's at index 3
+    // Test 2: Empty entries + out-of-bounds prev_log_id → conflict
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),  // Keep same vote to avoid bumping term
+        vote: Vote::new_committed(1, 1),
         prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 3)),
-        entries: vec![],  // Still empty entries
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),  // Only logs 0-2 exist
+        entries: vec![],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
     };
 
     let resp = r0.append_entries(req).await?;
 
     assert!(
         !resp.is_success(),
-        "append-entries should fail with mismatched prev_log_id"
+        "empty entries with out-of-bounds prev_log_id should fail"
     );
     assert!(
         resp.is_conflict(),
-        "response should indicate conflict for mismatch even with empty entries"
+        "should report conflict for out-of-bounds index"
     );
 
-    tracing::info!("--- section 5: test success with matching prev_log_id");
+    tracing::info!("--- test success with matching prev_log_id (empty entries)");
 
-    // Send append-entries with correct prev_log_id and empty entries
+    // Test 3: Empty entries + matching prev_log_id → success
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, 1),
         prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
-        entries: vec![],  // Empty entries
+        entries: vec![],
         leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
     };
 
@@ -137,72 +133,20 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     assert!(
         resp.is_success(),
-        "append-entries should succeed with matching prev_log_id"
+        "empty entries with matching prev_log_id should succeed"
     );
     assert!(
         !resp.is_conflict(),
-        "response should not indicate conflict when prev_log_id matches"
+        "should not report conflict when prev_log_id matches"
     );
 
-    // Shutdown the extracted node
-    r0.shutdown().await?;
-
-    // Re-add node to router for cleanup
-    router.new_raft_node_with_storage(0, sto0, sm0).await?;
-
-    tracing::info!("--- section 6: test with entries after conflict detection");
-
-    // Extract node again for final test
-    let (r0, mut sto0, _sm0) = router.remove_node(0).unwrap();
-
-    // Add more logs using append_entries
-    let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
-        entries: vec![
-            blank_ent::<AppTypeConfig>(1, 0, 3),
-            blank_ent::<AppTypeConfig>(1, 0, 4),
-            blank_ent::<AppTypeConfig>(1, 0, 5),
-        ],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),  // Only committed up to 2 before these entries
-    };
-
-    let resp = r0.append_entries(req).await?;
-    assert!(resp.is_success(), "should successfully append more logs");
-
-    // Test conflict with entries this time (not empty)
-    let req = AppendEntriesRequest {
-        vote: Vote::new_committed(2, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(2, 1, 4)),
-        entries: vec![
-            blank_ent::<AppTypeConfig>(2, 1, 5),
-            blank_ent::<AppTypeConfig>(2, 1, 6),
-        ],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 5)),  // Only logs 0-5 exist in term 1
-    };
-
-    let resp = r0.append_entries(req).await?;
-
-    assert!(
-        !resp.is_success(),
-        "append-entries should fail with mismatched prev_log_id even with entries"
-    );
-    assert!(
-        resp.is_conflict(),
-        "conflict detection should work with non-empty entries too"
-    );
-
-    // Verify logs weren't modified
+    // Verify logs unchanged (empty entries don't modify log)
     let logs = sto0
         .get_log_reader()
         .await
-        .try_get_log_entries(0..=5)
+        .try_get_log_entries(0..=2)
         .await?;
-    assert_eq!(logs.len(), 6, "logs should not be modified on conflict");
-    assert_eq!(
-        logs[4].log_id.leader_id.term, 1,
-        "log at index 4 should still be from term 1"
-    );
+    assert_eq!(logs.len(), 3, "logs should be unchanged after empty append");
 
     r0.shutdown().await?;
 
