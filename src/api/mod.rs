@@ -1,9 +1,14 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 pub mod inmemory;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
+
+// Re-export OpenRaft types for observability
+pub use openraft::metrics::RaftMetrics;
+pub use openraft::ServerState;
 
 /// Describes a node participating in the control-plane cluster.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -68,6 +73,40 @@ pub trait ClusterController: Send + Sync {
         request: ChangeMembershipRequest,
     ) -> Result<ClusterState, ControlPlaneError>;
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError>;
+
+    /// Get the current Raft metrics for observability.
+    ///
+    /// Returns comprehensive metrics including:
+    /// - Node state (Leader/Follower/Candidate/Learner)
+    /// - Current leader ID
+    /// - Term and vote information
+    /// - Log indices (last_log, last_applied, snapshot, purged)
+    /// - Replication state (leader only)
+    ///
+    /// This method provides raw OpenRaft metrics. For a simplified JSON format,
+    /// use the HTTP `/raft-metrics` endpoint.
+    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
+
+    /// Trigger a snapshot to be taken immediately.
+    ///
+    /// Returns the log ID of the created snapshot.
+    /// Useful for testing and manual cluster maintenance.
+    ///
+    /// # Returns
+    /// - `Ok(Some(log_id))` if snapshot was created successfully
+    /// - `Ok(None)` if no snapshot was needed (no logs to snapshot)
+    /// - `Err(_)` if snapshot creation failed
+    async fn trigger_snapshot(
+        &self,
+    ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError>;
+
+    /// Get the current leader ID, if known.
+    ///
+    /// Returns None if no leader is elected or leadership is unknown.
+    /// This is a convenience method that extracts current_leader from metrics.
+    async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
+        Ok(self.get_metrics().await?.current_leader)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

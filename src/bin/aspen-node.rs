@@ -241,6 +241,9 @@ async fn main() -> Result<()> {
         .route("/add-peer", post(add_peer))
         .route("/write", post(write_value))
         .route("/read", post(read_value))
+        .route("/raft-metrics", get(raft_metrics))
+        .route("/leader", get(get_leader))
+        .route("/trigger-snapshot", post(trigger_snapshot))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(config.http_addr).await?;
@@ -282,10 +285,56 @@ async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
 }
 
 async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
-    let body = format!(
+    let mut body = format!(
         "# TYPE aspen_node_info gauge\naspen_node_info{{node_id=\"{}\"}} 1\n",
         ctx.node_id
     );
+
+    // Add Raft metrics if available
+    if let Ok(raft_metrics) = ctx.controller.get_metrics().await {
+        // Current leader
+        body.push_str("# TYPE aspen_current_leader gauge\n");
+        if let Some(leader) = raft_metrics.current_leader {
+            body.push_str(&format!(
+                "aspen_current_leader{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, leader
+            ));
+        }
+
+        // Current term
+        body.push_str("# TYPE aspen_current_term gauge\n");
+        body.push_str(&format!(
+            "aspen_current_term{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, raft_metrics.current_term
+        ));
+
+        // Server state (as string label)
+        body.push_str("# TYPE aspen_state gauge\n");
+        let state_str = format!("{:?}", raft_metrics.state);
+        body.push_str(&format!(
+            "aspen_state{{node_id=\"{}\",state=\"{}\"}} 1\n",
+            ctx.node_id, state_str
+        ));
+
+        // Last log index
+        if let Some(last_log_index) = raft_metrics.last_log_index {
+            body.push_str("# TYPE aspen_last_log_index gauge\n");
+            body.push_str(&format!(
+                "aspen_last_log_index{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, last_log_index
+            ));
+        }
+
+        // Last applied
+        if let Some(ref last_applied) = raft_metrics.last_applied {
+            body.push_str("# TYPE aspen_last_applied_index gauge\n");
+            body.push_str(&format!(
+                "aspen_last_applied_index{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, last_applied.index
+            ));
+        }
+    }
+
     (StatusCode::OK, body)
 }
 
@@ -379,6 +428,89 @@ struct AddPeerRequest {
 async fn add_peer(State(ctx): State<AppState>, Json(req): Json<AddPeerRequest>) -> impl IntoResponse {
     ctx.network_factory.add_peer(req.node_id, req.endpoint_addr);
     StatusCode::OK
+}
+
+/// Get detailed Raft metrics as JSON.
+///
+/// Returns structured metrics including node state, leader, log indices,
+/// replication state, and heartbeat information.
+async fn raft_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
+    match ctx.controller.get_metrics().await {
+        Ok(metrics) => {
+            // Return full RaftMetrics as JSON
+            (StatusCode::OK, Json(json!({
+                "node_id": ctx.node_id,
+                "state": format!("{:?}", metrics.state),
+                "current_leader": metrics.current_leader,
+                "current_term": metrics.current_term,
+                "last_log_index": metrics.last_log_index,
+                "last_applied": metrics.last_applied.as_ref().map(|log_id| json!({
+                    "term": log_id.leader_id.term,
+                    "index": log_id.index
+                })),
+                "snapshot": metrics.snapshot.as_ref().map(|log_id| json!({
+                    "term": log_id.leader_id.term,
+                    "index": log_id.index
+                })),
+                "replication": metrics.replication.as_ref().map(|repl| {
+                    let repl_map: std::collections::BTreeMap<String, Option<serde_json::Value>> = repl.iter().map(|(node_id, log_id_opt)| {
+                        (node_id.to_string(), log_id_opt.as_ref().map(|log_id| json!({
+                            "term": log_id.leader_id.term,
+                            "index": log_id.index
+                        })))
+                    }).collect();
+                    repl_map
+                }),
+                "millis_since_quorum_ack": metrics.last_quorum_acked.as_ref().map(|t| t.elapsed().as_millis()),
+            }))).into_response()
+        }
+        Err(err) => {
+            warn!(error = ?err, "failed to get raft metrics");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": err.to_string() }))
+            ).into_response()
+        }
+    }
+}
+
+/// Get the current leader ID.
+///
+/// Returns JSON: {"leader": 1} or {"leader": null}
+async fn get_leader(State(ctx): State<AppState>) -> impl IntoResponse {
+    match ctx.controller.get_leader().await {
+        Ok(leader) => {
+            (StatusCode::OK, Json(json!({ "leader": leader }))).into_response()
+        }
+        Err(err) => {
+            warn!(error = ?err, "failed to get leader");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": err.to_string() }))
+            ).into_response()
+        }
+    }
+}
+
+/// Trigger a snapshot immediately.
+///
+/// Returns the log ID of the created snapshot.
+async fn trigger_snapshot(State(ctx): State<AppState>) -> impl IntoResponse {
+    match ctx.controller.trigger_snapshot().await {
+        Ok(snapshot_id) => {
+            (StatusCode::OK, Json(json!({ "snapshot": snapshot_id.as_ref().map(|log_id| json!({
+                "term": log_id.leader_id.term,
+                "index": log_id.index
+            })) }))).into_response()
+        }
+        Err(err) => {
+            warn!(error = ?err, "failed to trigger snapshot");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": err.to_string() }))
+            ).into_response()
+        }
+    }
 }
 
 #[derive(Debug)]

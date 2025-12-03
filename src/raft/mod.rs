@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use openraft::{BasicNode, Raft, ReadPolicy};
+use openraft::{BasicNode, LogId, Raft, ReadPolicy};
+use openraft::metrics::RaftMetrics;
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call_t};
 use tracing::{info, warn};
 
@@ -71,6 +72,10 @@ pub enum RaftActorMessage {
         ReadRequest,
         RpcReplyPort<Result<ReadResult, KeyValueStoreError>>,
     ),
+    /// Get current Raft metrics for observability.
+    GetMetrics(RpcReplyPort<Result<RaftMetrics<AppTypeConfig>, ControlPlaneError>>),
+    /// Trigger a snapshot immediately.
+    TriggerSnapshot(RpcReplyPort<Result<Option<LogId<AppTypeConfig>>, ControlPlaneError>>),
     /// Graceful shutdown signal.
     Shutdown,
 }
@@ -146,6 +151,26 @@ impl Actor for RaftActor {
                     handle_read(state, request).await
                 }
                 .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::GetMetrics(reply) => {
+                // Get metrics from the Raft instance's watch channel
+                let metrics = state.raft.metrics().borrow().clone();
+                let _ = reply.send(Ok(metrics));
+            }
+            RaftActorMessage::TriggerSnapshot(reply) => {
+                // Trigger snapshot creation
+                let result = match state.raft.trigger().snapshot().await {
+                    Ok(()) => {
+                        // Snapshot triggered successfully
+                        // Get the current snapshot ID from metrics
+                        let metrics = state.raft.metrics().borrow().clone();
+                        Ok(metrics.snapshot)
+                    }
+                    Err(err) => Err(ControlPlaneError::Failed {
+                        reason: err.to_string(),
+                    }),
+                };
                 let _ = reply.send(result);
             }
             RaftActorMessage::Shutdown => {
@@ -365,6 +390,22 @@ impl ClusterController for RaftControlClient {
 
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
         call_t!(self.actor, RaftActorMessage::CurrentState, 500).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn get_metrics(&self) -> Result<RaftMetrics<AppTypeConfig>, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::GetMetrics, 100).map_err(|err| {
+            ControlPlaneError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn trigger_snapshot(&self) -> Result<Option<LogId<AppTypeConfig>>, ControlPlaneError> {
+        call_t!(self.actor, RaftActorMessage::TriggerSnapshot, 5000).map_err(|err| {
             ControlPlaneError::Failed {
                 reason: err.to_string(),
             }

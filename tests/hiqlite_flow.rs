@@ -105,6 +105,20 @@ impl ClusterController for DeterministicHiqlite {
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
         Ok(self.cluster.lock().await.clone())
     }
+
+    async fn get_metrics(&self) -> Result<aspen::api::RaftMetrics<aspen::raft::types::AppTypeConfig>, ControlPlaneError> {
+        // Deterministic test backend doesn't have real Raft metrics
+        Err(ControlPlaneError::Failed {
+            reason: "metrics not available in deterministic test backend".into(),
+        })
+    }
+
+    async fn trigger_snapshot(&self) -> Result<Option<openraft::LogId<aspen::raft::types::AppTypeConfig>>, ControlPlaneError> {
+        // Deterministic test backend doesn't support snapshots
+        Err(ControlPlaneError::Failed {
+            reason: "snapshots not available in deterministic test backend".into(),
+        })
+    }
 }
 
 #[async_trait]
