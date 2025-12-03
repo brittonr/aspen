@@ -11,6 +11,7 @@ use aspen::api::{
 use aspen::cluster::bootstrap::{bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
+use aspen::raft::network::IrpcRaftNetworkFactory;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
 use axum::{
     Json, Router,
@@ -106,6 +107,8 @@ struct AppState {
     ractor_port: u16,
     controller: ClusterControllerHandle,
     kv: KeyValueStoreHandle,
+    network_factory: Arc<IrpcRaftNetworkFactory>,
+    iroh_manager: Arc<aspen::cluster::IrohEndpointManager>,
 }
 
 #[tokio::main]
@@ -174,15 +177,19 @@ async fn main() -> Result<()> {
         ractor_port: config.ractor_port,
         controller,
         kv: kv_store,
+        network_factory: handle.network_factory.clone(),
+        iroh_manager: handle.iroh_manager.clone(),
     };
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .route("/iroh-metrics", get(iroh_metrics))
+        .route("/node-info", get(node_info))
         .route("/init", post(init_cluster))
         .route("/add-learner", post(add_learner))
         .route("/change-membership", post(change_membership))
+        .route("/add-peer", post(add_peer))
         .route("/write", post(write_value))
         .route("/read", post(read_value))
         .with_state(app_state);
@@ -240,6 +247,13 @@ async fn iroh_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     StatusCode::NOT_FOUND.into_response()
 }
 
+async fn node_info(State(ctx): State<AppState>) -> impl IntoResponse {
+    Json(json!({
+        "node_id": ctx.node_id,
+        "endpoint_addr": ctx.iroh_manager.node_addr(),
+    }))
+}
+
 type ApiResult<T> = Result<T, ApiError>;
 
 async fn init_cluster(
@@ -280,6 +294,17 @@ async fn read_value(
 ) -> ApiResult<impl IntoResponse> {
     let result = state.kv.read(request).await?;
     Ok(Json(result))
+}
+
+#[derive(serde::Deserialize)]
+struct AddPeerRequest {
+    node_id: u64,
+    endpoint_addr: iroh::EndpointAddr,
+}
+
+async fn add_peer(State(ctx): State<AppState>, Json(req): Json<AddPeerRequest>) -> impl IntoResponse {
+    ctx.network_factory.add_peer(req.node_id, req.endpoint_addr);
+    StatusCode::OK
 }
 
 #[derive(Debug)]

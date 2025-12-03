@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use iroh::{EndpointAddr, SecretKey};
+use iroh::{EndpointAddr, EndpointId, SecretKey};
 use openraft::Config as RaftConfig;
 use ractor::{Actor, ActorRef};
 use tracing::info;
@@ -81,6 +82,48 @@ impl BootstrapHandle {
     }
 }
 
+/// Parse peer address specifications from CLI args.
+///
+/// Parses peer specs in the format:
+/// - "node_id@endpoint_id" (bare endpoint ID)
+/// - "node_id@{json}" (full JSON EndpointAddr)
+///
+/// # Examples
+///
+/// ```text
+/// "1@12D3KooWGdBx..."
+/// "1@{\"node_id\":\"12D3KooWGdBx...\",\"relay_url\":\"https://relay.example.com\"}"
+/// ```
+///
+/// Returns a HashMap mapping NodeId to EndpointAddr.
+fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, EndpointAddr>> {
+    let mut peer_addrs = HashMap::new();
+
+    for spec in peer_specs {
+        let (node_id_str, addr_str) = spec
+            .split_once('@')
+            .with_context(|| format!("invalid peer spec '{spec}', expected format 'node_id@endpoint_addr'"))?;
+
+        let node_id: NodeId = node_id_str
+            .parse()
+            .with_context(|| format!("invalid node_id '{node_id_str}' in peer spec '{spec}'"))?;
+
+        // Try parsing as JSON first, then fall back to bare endpoint ID
+        let endpoint_addr = if addr_str.starts_with('{') {
+            serde_json::from_str::<EndpointAddr>(addr_str)
+                .with_context(|| format!("failed to parse EndpointAddr JSON in peer spec '{spec}'"))?
+        } else {
+            let endpoint_id = EndpointId::from_str(addr_str)
+                .with_context(|| format!("invalid endpoint_id '{addr_str}' in peer spec '{spec}'"))?;
+            EndpointAddr::new(endpoint_id)
+        };
+
+        peer_addrs.insert(node_id, endpoint_addr);
+    }
+
+    Ok(peer_addrs)
+}
+
 /// Bootstrap a cluster node from configuration.
 ///
 /// This function orchestrates the entire node startup process:
@@ -150,18 +193,13 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     };
 
     // Parse peer addresses
-    // Note: EndpointAddr doesn't implement FromStr, so we'll need manual construction
-    // For now, we'll use an empty map and document this for future implementation
-    let peer_addrs: HashMap<NodeId, EndpointAddr> = HashMap::new();
+    let peer_addrs = parse_peer_addresses(&config.peers)
+        .context("failed to parse peer addresses")?;
 
-    if !config.peers.is_empty() {
-        tracing::warn!(
-            peer_count = config.peers.len(),
-            "peer address parsing not yet implemented - EndpointAddr requires manual construction"
-        );
-    }
-
-    info!(peer_count = peer_addrs.len(), "parsed peer addresses");
+    info!(
+        peer_count = peer_addrs.len(),
+        "parsed peer addresses"
+    );
 
     // Launch NodeServer
     let node_server = NodeServerConfig::new(
@@ -339,5 +377,84 @@ mod tests {
 
         // TOML should override default heartbeat_interval_ms
         assert_eq!(config.heartbeat_interval_ms, 1000);
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_bare_endpoint_id() {
+        // Generate valid endpoint IDs for testing
+        fn generate_endpoint_id(node_id: u64) -> EndpointId {
+            let mut seed = [0u8; 32];
+            seed[..8].copy_from_slice(&node_id.to_le_bytes());
+            SecretKey::from(seed).public()
+        }
+
+        let id1 = generate_endpoint_id(1);
+        let id2 = generate_endpoint_id(2);
+
+        let peers = vec![
+            format!("1@{}", id1),
+            format!("2@{}", id2),
+        ];
+
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_ok());
+
+        let addrs = result.unwrap();
+        assert_eq!(addrs.len(), 2);
+        assert!(addrs.contains_key(&1));
+        assert!(addrs.contains_key(&2));
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_json_format() {
+        // Generate valid endpoint ID for testing
+        fn generate_endpoint_id(node_id: u64) -> EndpointId {
+            let mut seed = [0u8; 32];
+            seed[..8].copy_from_slice(&node_id.to_le_bytes());
+            SecretKey::from(seed).public()
+        }
+
+        let id1 = generate_endpoint_id(1);
+        let endpoint_addr = EndpointAddr::new(id1);
+
+        // Serialize to get the actual JSON format
+        let actual_json = serde_json::to_string(&endpoint_addr).unwrap();
+
+        let peers = vec![format!("1@{}", actual_json)];
+
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_ok());
+
+        let addrs = result.unwrap();
+        assert_eq!(addrs.len(), 1);
+        assert!(addrs.contains_key(&1));
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_invalid_format() {
+        // Missing '@' separator
+        let peers = vec!["1-invalid".to_string()];
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_err());
+
+        // Invalid node_id
+        let peers = vec!["not_a_number@12D3KooWGdBx9YQp3LTZKHKqPmx1ypXwSWxrRqjATd8EgwPPjE9F".to_string()];
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_err());
+
+        // Invalid endpoint_id
+        let peers = vec!["1@invalid_endpoint_id".to_string()];
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_empty() {
+        let peers: Vec<String> = vec![];
+        let result = parse_peer_addresses(&peers);
+        assert!(result.is_ok());
+
+        let addrs = result.unwrap();
+        assert_eq!(addrs.len(), 0);
     }
 }

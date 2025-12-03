@@ -49,12 +49,15 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - ✅ **ALPN configuration added** - Iroh endpoint configured with "raft-rpc" ALPN for protocol negotiation
    - ✅ **Network factory exposed in BootstrapHandle** - tests can now exchange peer addresses at runtime
    - ✅ **Peer discovery infrastructure complete** - runtime peer exchange via `add_peer()` works correctly
-   - ⚠️  Peer discovery CLI/HTTP wiring deferred (EndpointAddr parsing in bootstrap.rs:152-164 not implemented)
+   - ✅ **Peer discovery CLI/HTTP wiring complete** - EndpointAddr parsing in bootstrap.rs + HTTP endpoints
+     - ✅ Implemented `parse_peer_addresses()` supporting bare endpoint IDs and JSON format
+     - ✅ Added `/node-info` endpoint exposing node_id and EndpointAddr
+     - ✅ Added `/add-peer` endpoint for runtime peer addition via HTTP
    - ⚠️  Deferred: Deterministic simulation with real Iroh transport (incompatible with madsim)
    - ✅ Cleaned up HTTP network types (`HttpRaftNetworkFactory`, `HttpRaftNetwork`)
    - ✅ Verified smoke tests work with IRPC transport
    - ✅ Multi-node integration tests fixed - corrected Raft initialization patterns
-   - Next action: Implement CLI peer parsing + HTTP /node-info endpoint for production peer discovery
+   - Next action: Move to Phase 4 or continue Phase 5 testing
 2. **External transports**
    - Demonstrate BYO transport by piping a `tokio::io::DuplexStream` through `ClusterBidiStream` for local tests.
 
