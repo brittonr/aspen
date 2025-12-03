@@ -1,0 +1,80 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: aspen-builds
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Install Rust nightly and llvm-tools-preview
+        run: |
+          # Enter Nix shell and install nightly toolchain
+          nix develop -c rustup toolchain install nightly --profile minimal --component llvm-tools-preview
+          nix develop -c rustup default nightly
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate coverage report
+        run: |
+          # Generate coverage with llvm-cov
+          # Exclude test code, examples, and vendored openraft
+          nix develop -c cargo llvm-cov \
+            --workspace \
+            --lcov \
+            --output-path lcov.info \
+            --ignore-filename-regex '(tests/|examples/|openraft/)'
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Generate coverage badge
+        run: |
+          # Parse coverage percentage from lcov.info for badge
+          COVERAGE=$(awk -F: '/^LF:/{lines+=$2} /^LH:/{hit+=$2} END {printf "%.1f", (hit/lines)*100}' lcov.info)
+          echo "Coverage: ${COVERAGE}%"
+          echo "coverage=${COVERAGE}" >> $GITHUB_OUTPUT
+        id: coverage
+
+      - name: Summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage: ${{ steps.coverage.outputs.coverage }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed report on [Codecov](https://codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY

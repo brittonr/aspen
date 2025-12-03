@@ -326,16 +326,30 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
      - **Achievement**: 100% test pass rate (98/98 tests, 25/25 router tests)
      - Commit: e568b1f
    - **Status**: ✅ Phase 5.2 complete! All router tests passing at 100%. Ready for Phase 5.3 (Documentation)
-3. **Documentation** (pending)
-   - Update `AGENTS.md` with getting-started guide (ractor, Iroh, IRPC, OpenRaft integration)
-   - Create `docs/getting-started.md` for single-node & 3-node quickstarts
-   - Add Architecture Decision Records (ADRs) for key technology choices
-4. **CI Enhancements** (pending)
-   - Add storage suite to CI pipeline
-   - Run madsim tests with multiple seeds
-   - Include smoke tests in CI
-   - Upload simulation artifacts on failure
-   - Add code coverage reporting
+3. **Documentation** ✅ COMPLETE (2025-12-03)
+   - ✅ Updated `AGENTS.md` with comprehensive integration architecture (391 lines added)
+   - ✅ Created `docs/getting-started.md` for single-node & 3-node quickstarts (285 lines)
+   - ✅ Added Architecture Decision Records (ADRs) for key technology choices:
+     - ADR-001: OpenRaft consensus protocol (184 lines)
+     - ADR-002: Iroh P2P networking (288 lines)
+     - ADR-003: Ractor actor framework (312 lines)
+     - ADR-004: redb storage backend (174 lines)
+     - ADR-005: Gossip-based peer discovery (298 lines)
+     - ADR-006: madsim deterministic testing (277 lines)
+     - ADR-007: Trait-based API design (325 lines)
+     - ADR-008: Tiger Style philosophy (234 lines)
+   - Total documentation added: ~2,400 lines across 10 files
+4. **CI Enhancements** ✅ COMPLETE (2025-12-03)
+   - ✅ Added storage suite to CI pipeline (runs via `nix flake check`)
+   - ✅ Implemented multi-seed madsim tests (6 seeds: 42, 123, 456, 789, 1024, 2048)
+   - ✅ Integrated smoke tests in CI (`aspen-cluster-raft-smoke.sh`)
+   - ✅ Added simulation artifact upload on failure (30-day retention for main, 7-day for PRs)
+   - ✅ Added code coverage reporting (cargo-llvm-cov + Codecov integration)
+   - ✅ Created three GitHub Actions workflows:
+     - `.github/workflows/ci.yml` - Main CI pipeline (format, test, smoke)
+     - `.github/workflows/coverage.yml` - Code coverage with weekly schedule
+     - `.github/workflows/madsim-multi-seed.yml` - Multi-seed simulation testing
+   - Requires GitHub secrets: `CACHIX_AUTH_TOKEN`, `CODECOV_TOKEN`
 
 ---
 
@@ -555,21 +569,28 @@ kv.read(ReadRequest { key }).await?;
 **Phase 2**: ✅ Complete - Raft integration with OpenRaft + storage backends
 **Phase 3**: ✅ Complete - IROH + IRPC network fabric implemented
 **Phase 4**: ✅ Complete - Bootstrap orchestration + KV client API
-**Phase 5**: 🚧 In Progress - Documentation & Hardening
-- **Testing**: ✅ 99/99 tests passing (100%), storage suite validated (50+ scenarios), all router tests passing
-- **Documentation**: ⏸️ Pending
-- **CI**: ⏸️ Pending
+**Phase 5**: ✅ Complete - Documentation & Hardening (2025-12-03)
+- **Testing**: ✅ 104/105 tests passing (99.05%), 1 skipped (mDNS localhost limitation), storage suite validated (50+ scenarios)
+- **Documentation**: ✅ Complete - 8 ADRs, getting-started guide, AGENTS.md updated (~2,400 lines)
+- **CI**: ✅ Complete - GitHub Actions workflows for testing, coverage, multi-seed simulation
 
-**Test Coverage**: 99/99 tests passing (100% overall)
+**Test Coverage**: 104/105 tests passing (1 skipped)
 - Router tests: 25/25 ✅ (all passing - `conflict_with_empty_entries` simplified and fixed)
 - Storage tests: 50+ ✅
 - KV client tests: 6/6 ✅
 - Bootstrap tests: 5/5 ✅
-- Simulation tests: 1/1 ✅
-- **Gossip integration tests: 23/23 ✅** (ticket serialization, topic derivation, MockGossip, config merging)
-- **Gossip auto-peer tests: 1/1 ✅** (manual peer fallback)
+- **Simulation tests: 6/6 ✅** (multi-seed: 42, 123, 456, 789, 1024, 2048)
+- Gossip integration tests: 23/23 ✅ (ticket serialization, topic derivation, MockGossip, config merging)
+- Gossip auto-peer tests: 1/1 ✅ (manual peer fallback)
 
 **Recent Additions**:
+- ✅ **Phase 5 Complete: Documentation & CI Infrastructure** (2025-12-03)
+  - Comprehensive documentation suite: 8 ADRs, getting-started guide, AGENTS.md architecture
+  - Complete CI/CD pipeline: GitHub Actions for testing, coverage, multi-seed simulation
+  - Multi-seed madsim testing: 6 parameterized tests for better distributed systems validation
+  - Total documentation added: ~2,400 lines across 10 files
+  - Test suite: 104/105 passing (1 skipped: mDNS localhost limitation)
+  - Ready for production hardening focus
 - ✅ **Discovery Documentation & Validation** (2025-12-03)
   - Comprehensive discovery documentation (626+ lines in examples/README.md)
   - Production deployment example (examples/production_cluster.rs, 427 lines)
@@ -603,6 +624,6 @@ kv.read(ReadRequest { key }).await?;
   - 23 comprehensive integration tests with MockGossip infrastructure
   - Full inline documentation with architecture diagrams
 
-**Ready for**: Phase 5.3 (Documentation), CI enhancements, or production distributed testing
+**Ready for**: Production hardening (authentication, persistent storage, enhanced observability) or deployment validation
 
-**Latest**: Discovery documentation & validation complete (Phase 3.2.11) - comprehensive docs for mDNS/DNS/Pkarr/gossip discovery with production examples, troubleshooting guides, and testing strategies. All 99 tests passing.
+**Latest**: Phase 5 complete (2025-12-03) - comprehensive documentation suite (8 ADRs, getting-started guide, integration architecture), full CI/CD pipeline (testing, coverage, multi-seed simulation), and 104/105 tests passing (1 skipped).

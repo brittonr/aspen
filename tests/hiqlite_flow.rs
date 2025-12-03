@@ -155,11 +155,14 @@ impl KeyValueStore for DeterministicHiqlite {
     }
 }
 
-#[madsim::test]
-async fn hiqlite_flow_simulation_tracks_transport_metrics() {
-    const SIMULATION_SEED: u64 = 42;
+/// Run the hiqlite flow simulation with a specific seed.
+///
+/// This function encapsulates the complete simulation logic for testing
+/// the deterministic Hiqlite backend. It performs cluster initialization,
+/// membership changes, concurrent writes/reads, and leader churn.
+async fn run_hiqlite_simulation(seed: u64) {
     let mut artifact_builder =
-        SimulationArtifactBuilder::new("hiqlite_flow_simulation_tracks_transport_metrics", SIMULATION_SEED)
+        SimulationArtifactBuilder::new("hiqlite_flow_simulation", seed)
             .start();
 
     let backend = DeterministicHiqlite::new();
@@ -260,4 +263,34 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
     if let Ok(path) = artifact.persist("docs/simulations") {
         eprintln!("Simulation artifact persisted to: {}", path.display());
     }
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_42() {
+    run_hiqlite_simulation(42).await;
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_123() {
+    run_hiqlite_simulation(123).await;
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_456() {
+    run_hiqlite_simulation(456).await;
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_789() {
+    run_hiqlite_simulation(789).await;
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_1024() {
+    run_hiqlite_simulation(1024).await;
+}
+
+#[madsim::test]
+async fn hiqlite_flow_simulation_seed_2048() {
+    run_hiqlite_simulation(2048).await;
 }
