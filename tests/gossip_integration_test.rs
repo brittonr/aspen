@@ -42,6 +42,9 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> ClusterBootstrapConf
             pkarr_relay_url: None,
         },
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     }
 }
 
@@ -51,11 +54,7 @@ fn test_ticket_serialization_roundtrip() {
     let secret_key = SecretKey::from([1u8; 32]);
     let endpoint_id = secret_key.public();
 
-    let ticket = AspenClusterTicket::with_bootstrap(
-        topic_id,
-        "test-cluster".into(),
-        endpoint_id,
-    );
+    let ticket = AspenClusterTicket::with_bootstrap(topic_id, "test-cluster".into(), endpoint_id);
 
     // Serialize
     let serialized = ticket.serialize();
@@ -305,6 +304,9 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             pkarr_relay_url: None,
         },
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let override_config = ClusterBootstrapConfig {
@@ -330,6 +332,9 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             pkarr_relay_url: None,
         },
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     base.merge(override_config);

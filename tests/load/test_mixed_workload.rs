@@ -16,10 +16,12 @@
 ///! - Fixed read/write ratio: 70/30
 ///! - Fixed key space: 100 keys (allows cache hits)
 ///! - Bounded test duration: expected < 60 seconds
-
 use std::time::{Duration, Instant};
 
-use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
+use aspen::api::{
+    ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteCommand,
+    WriteRequest,
+};
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
@@ -107,8 +109,12 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
     }
 
     // Execute mixed workload
-    println!("Executing {} operations ({}% read, {}% write)...",
-        TOTAL_OPS, READ_PERCENTAGE, 100 - READ_PERCENTAGE);
+    println!(
+        "Executing {} operations ({}% read, {}% write)...",
+        TOTAL_OPS,
+        READ_PERCENTAGE,
+        100 - READ_PERCENTAGE
+    );
 
     let start = Instant::now();
     let mut successful_reads = 0u64;
@@ -131,7 +137,10 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
         } else {
             let value = format!("updated-value-{}", i);
             let write_req = WriteRequest {
-                command: WriteCommand::Set { key: key.clone(), value },
+                command: WriteCommand::Set {
+                    key: key.clone(),
+                    value,
+                },
             };
             match kv.write(write_req).await {
                 Ok(_) => successful_writes += 1,
@@ -168,12 +177,21 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
     println!("Success rate:       {:.2}%", success_rate);
     println!("Duration:           {:.2} seconds", duration_secs);
     println!("Throughput:         {:.2} ops/sec", throughput);
-    println!("Average latency:    {:.2} ms/op", duration.as_millis() as f64 / total_ops as f64);
+    println!(
+        "Average latency:    {:.2} ms/op",
+        duration.as_millis() as f64 / total_ops as f64
+    );
     println!("\nOperation mix:");
-    println!("  Reads:  {} ({:.1}%)", successful_reads + failed_reads,
-        ((successful_reads + failed_reads) as f64 / total_ops as f64) * 100.0);
-    println!("  Writes: {} ({:.1}%)", successful_writes + failed_writes,
-        ((successful_writes + failed_writes) as f64 / total_ops as f64) * 100.0);
+    println!(
+        "  Reads:  {} ({:.1}%)",
+        successful_reads + failed_reads,
+        ((successful_reads + failed_reads) as f64 / total_ops as f64) * 100.0
+    );
+    println!(
+        "  Writes: {} ({:.1}%)",
+        successful_writes + failed_writes,
+        ((successful_writes + failed_writes) as f64 / total_ops as f64) * 100.0
+    );
 
     // Assertions
     // Note: Some failures are expected in mixed workload since reads may target
@@ -222,6 +240,9 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config).await?;
@@ -229,7 +250,11 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
     // Initialize single-node cluster
     let cluster = RaftControlClient::new(handle.raft_actor.clone());
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
     };
     cluster.init(init_req).await?;
 

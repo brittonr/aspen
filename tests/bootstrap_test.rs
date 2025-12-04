@@ -25,6 +25,9 @@ async fn test_bootstrap_single_node() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap the node
@@ -63,6 +66,9 @@ async fn test_bootstrap_multiple_nodes() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config2 = ClusterBootstrapConfig {
@@ -78,6 +84,9 @@ async fn test_bootstrap_multiple_nodes() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config3 = ClusterBootstrapConfig {
@@ -93,6 +102,9 @@ async fn test_bootstrap_multiple_nodes() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap all nodes concurrently
@@ -105,15 +117,30 @@ async fn test_bootstrap_multiple_nodes() {
 
     // Verify all nodes are registered
     assert_eq!(
-        handle1.metadata_store.get_node(201).unwrap().unwrap().node_id,
+        handle1
+            .metadata_store
+            .get_node(201)
+            .unwrap()
+            .unwrap()
+            .node_id,
         201
     );
     assert_eq!(
-        handle2.metadata_store.get_node(202).unwrap().unwrap().node_id,
+        handle2
+            .metadata_store
+            .get_node(202)
+            .unwrap()
+            .unwrap()
+            .node_id,
         202
     );
     assert_eq!(
-        handle3.metadata_store.get_node(203).unwrap().unwrap().node_id,
+        handle3
+            .metadata_store
+            .get_node(203)
+            .unwrap()
+            .unwrap()
+            .node_id,
         203
     );
 
@@ -149,8 +176,8 @@ fn test_load_config_from_toml() {
     let cli_config = ClusterBootstrapConfig {
         node_id: 0, // No explicit override, TOML will provide value
         data_dir: None,
-        host: "127.0.0.1".into(), // Default value
-        ractor_port: 26000, // Default value
+        host: "127.0.0.1".into(),      // Default value
+        ractor_port: 26000,            // Default value
         cookie: "aspen-cookie".into(), // Default value
         http_addr: "127.0.0.1:8080".parse().unwrap(),
         control_backend: ControlBackend::default(), // Use actual default
@@ -159,6 +186,9 @@ fn test_load_config_from_toml() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config = load_config(Some(&config_path), cli_config).unwrap();
@@ -202,6 +232,9 @@ fn test_config_precedence() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config = load_config(Some(&config_path), cli_config).unwrap();
@@ -232,6 +265,9 @@ async fn test_shutdown_updates_status() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();

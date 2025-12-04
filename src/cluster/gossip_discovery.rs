@@ -41,8 +41,8 @@
 //! # }
 //! ```
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -174,7 +174,10 @@ impl GossipPeerDiscovery {
                         if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
                             tracing::warn!("failed to broadcast peer announcement: {}", e);
                         } else {
-                            tracing::trace!("broadcast peer announcement for node_id={}", announcer_node_id);
+                            tracing::trace!(
+                                "broadcast peer announcement for node_id={}",
+                                announcer_node_id
+                            );
                         }
                     }
                     Err(e) => {

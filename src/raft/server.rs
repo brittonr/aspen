@@ -156,8 +156,8 @@ async fn handle_rpc_stream(
         .context("failed to read RPC message")?;
 
     // Deserialize the RPC request (protocol enum without channels)
-    let request: RaftRpcProtocol = postcard::from_bytes(&buffer)
-        .context("failed to deserialize RPC request")?;
+    let request: RaftRpcProtocol =
+        postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
     debug!(request_type = ?request, "received RPC request");
 
@@ -195,8 +195,8 @@ async fn handle_rpc_stream(
     };
 
     // Serialize and send response
-    let response_bytes = postcard::to_stdvec(&response)
-        .context("failed to serialize RPC response")?;
+    let response_bytes =
+        postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
     send.write_all(&response_bytes)
         .await
         .context("failed to write RPC response")?;

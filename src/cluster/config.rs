@@ -5,6 +5,8 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
+use crate::raft::storage::StorageBackend;
+
 /// Bootstrap configuration for an Aspen cluster node.
 ///
 /// Configuration is loaded in layers with the following precedence (lowest to highest):
@@ -21,6 +23,23 @@ pub struct ClusterBootstrapConfig {
     /// Directory for persistent data storage (metadata, Raft logs, state machine).
     /// Defaults to "./data/node-{node_id}" if not specified.
     pub data_dir: Option<PathBuf>,
+
+    /// Storage backend for Raft log and state machine.
+    /// - InMemory: Fast, non-durable (data lost on restart), good for testing
+    /// - Redb: ACID-compliant persistent storage (data survives restarts)
+    /// Default: InMemory
+    #[serde(default)]
+    pub storage_backend: StorageBackend,
+
+    /// Path for redb-backed Raft log database.
+    /// Only used when storage_backend = Redb.
+    /// Defaults to "{data_dir}/raft-log.redb" if not specified.
+    pub redb_log_path: Option<PathBuf>,
+
+    /// Path for redb-backed state machine database.
+    /// Only used when storage_backend = Redb.
+    /// Defaults to "{data_dir}/state-machine.redb" if not specified.
+    pub redb_sm_path: Option<PathBuf>,
 
     /// Hostname recorded in the NodeServer's identity (informational).
     #[serde(default = "default_host")]
@@ -188,6 +207,10 @@ impl ClusterBootstrapConfig {
         Self {
             node_id: parse_env("ASPEN_NODE_ID").unwrap_or(0),
             data_dir: parse_env("ASPEN_DATA_DIR"),
+            storage_backend: parse_env("ASPEN_STORAGE_BACKEND")
+                .unwrap_or_else(|| StorageBackend::default()),
+            redb_log_path: parse_env("ASPEN_REDB_LOG_PATH"),
+            redb_sm_path: parse_env("ASPEN_REDB_SM_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             ractor_port: parse_env("ASPEN_RACTOR_PORT").unwrap_or_else(default_ractor_port),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
@@ -208,8 +231,7 @@ impl ClusterBootstrapConfig {
                 gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
                 enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS")
                     .unwrap_or_else(default_enable_mdns),
-                enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY")
-                    .unwrap_or(false),
+                enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
                 dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
                 pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
@@ -372,11 +394,7 @@ impl ClusterBootstrapConfig {
                 // Check if data_dir exists or can be created
                 if !data_dir.exists() {
                     std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
-                        message: format!(
-                            "cannot create data_dir {}: {}",
-                            data_dir.display(),
-                            e
-                        ),
+                        message: format!("cannot create data_dir {}: {}", data_dir.display(), e),
                     })?;
                 }
 
@@ -532,6 +550,9 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         assert!(config.validate().is_ok());
@@ -553,6 +574,9 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         assert!(config.validate().is_err());
@@ -573,6 +597,9 @@ mod tests {
             election_timeout_max_ms: 1500,
             iroh: IrohConfig::default(),
             peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         assert!(config.validate().is_err());
@@ -593,6 +620,9 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         let override_config = ClusterBootstrapConfig {
@@ -618,6 +648,9 @@ mod tests {
                 pkarr_relay_url: Some("https://pkarr.example.com".into()),
             },
             peers: vec!["peer1".into()],
+            storage_backend: crate::raft::storage::StorageBackend::Redb,
+            redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
+            redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
         };
 
         base.merge(override_config);

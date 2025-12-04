@@ -7,7 +7,6 @@
 /// - Verifying membership state across all nodes
 ///
 /// Original: openraft/tests/tests/life_cycle/t10_initialization.rs
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -162,10 +161,7 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
         nodes.insert(0, BasicNode::default());
 
         let res = n0.initialize(nodes).await;
-        assert!(
-            res.is_err(),
-            "second initialization should be rejected"
-        );
+        assert!(res.is_err(), "second initialization should be rejected");
 
         let err = res.unwrap_err();
         tracing::info!("expected error on double init: {:?}", err);

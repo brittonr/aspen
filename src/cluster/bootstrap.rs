@@ -16,7 +16,9 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::server::RaftRpcServer;
-use crate::raft::storage::{InMemoryLogStore, StateMachineStore};
+use crate::raft::storage::{
+    InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
+};
 use crate::raft::types::{AppTypeConfig, NodeId};
 use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
 
@@ -111,9 +113,9 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
     let mut peer_addrs = HashMap::new();
 
     for spec in peer_specs {
-        let (node_id_str, addr_str) = spec
-            .split_once('@')
-            .with_context(|| format!("invalid peer spec '{spec}', expected format 'node_id@endpoint_addr'"))?;
+        let (node_id_str, addr_str) = spec.split_once('@').with_context(|| {
+            format!("invalid peer spec '{spec}', expected format 'node_id@endpoint_addr'")
+        })?;
 
         let node_id: NodeId = node_id_str
             .parse()
@@ -121,11 +123,13 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
 
         // Try parsing as JSON first, then fall back to bare endpoint ID
         let endpoint_addr = if addr_str.starts_with('{') {
-            serde_json::from_str::<EndpointAddr>(addr_str)
-                .with_context(|| format!("failed to parse EndpointAddr JSON in peer spec '{spec}'"))?
+            serde_json::from_str::<EndpointAddr>(addr_str).with_context(|| {
+                format!("failed to parse EndpointAddr JSON in peer spec '{spec}'")
+            })?
         } else {
-            let endpoint_id = EndpointId::from_str(addr_str)
-                .with_context(|| format!("invalid endpoint_id '{addr_str}' in peer spec '{spec}'"))?;
+            let endpoint_id = EndpointId::from_str(addr_str).with_context(|| {
+                format!("invalid endpoint_id '{addr_str}' in peer spec '{spec}'")
+            })?;
             EndpointAddr::new(endpoint_id)
         };
 
@@ -159,9 +163,8 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
     // Initialize metadata store
     let metadata_path = config.data_dir().join("metadata.redb");
-    let metadata_store = Arc::new(
-        MetadataStore::new(&metadata_path).context("failed to create metadata store")?,
-    );
+    let metadata_store =
+        Arc::new(MetadataStore::new(&metadata_path).context("failed to create metadata store")?);
     info!(
         path = %metadata_path.display(),
         "metadata store initialized"
@@ -185,9 +188,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
         // Parse relay URL if provided
         if let Some(relay_url_str) = &config.iroh.relay_url {
-            let relay_url = relay_url_str
-                .parse()
-                .context("invalid iroh relay URL")?;
+            let relay_url = relay_url_str.parse().context("invalid iroh relay URL")?;
             iroh_config = iroh_config.with_relay_url(relay_url)?;
         }
 
@@ -219,12 +220,9 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     };
 
     // Parse peer addresses
-    let peer_addrs = parse_peer_addresses(&config.peers)
-        .context("failed to parse peer addresses")?;
-    info!(
-        peer_count = peer_addrs.len(),
-        "parsed peer addresses"
-    );
+    let peer_addrs =
+        parse_peer_addresses(&config.peers).context("failed to parse peer addresses")?;
+    info!(peer_count = peer_addrs.len(), "parsed peer addresses");
 
     // Create network factory for Raft
     let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
@@ -292,7 +290,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     );
 
     // Create Raft core and state machine
-    let (raft_core, state_machine_store) = {
+    let raft_core = {
         let mut raft_config = RaftConfig::default();
         raft_config.heartbeat_interval = config.heartbeat_interval_ms;
         raft_config.election_timeout_min = config.election_timeout_min_ms;
@@ -303,27 +301,68 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .context("invalid raft configuration")?,
         );
 
-        let log_store = InMemoryLogStore::default();
-        let state_machine_store = StateMachineStore::new();
+        // Select storage backend based on configuration
+        match config.storage_backend {
+            StorageBackend::InMemory => {
+                info!("Using in-memory storage backend (non-durable)");
+                let log_store = InMemoryLogStore::default();
+                let state_machine_store = StateMachineStore::new();
 
-        let raft = openraft::Raft::new(
-            config.node_id,
-            validated_config,
-            (*network_factory).clone(),
-            log_store,
-            state_machine_store.clone(),
-        )
-        .await
-        .context("failed to initialize raft")?;
+                openraft::Raft::new(
+                    config.node_id,
+                    validated_config,
+                    (*network_factory).clone(),
+                    log_store,
+                    state_machine_store,
+                )
+                .await
+                .context("failed to initialize raft with in-memory storage")?
+            }
+            StorageBackend::Redb => {
+                info!("Using redb persistent storage backend");
 
-        (raft, state_machine_store)
+                // Determine paths for redb files
+                let data_dir = config.data_dir();
+                let log_path = config
+                    .redb_log_path
+                    .clone()
+                    .unwrap_or_else(|| data_dir.join("raft-log.redb"));
+                let sm_path = config
+                    .redb_sm_path
+                    .clone()
+                    .unwrap_or_else(|| data_dir.join("state-machine.redb"));
+
+                info!(
+                    log_path = %log_path.display(),
+                    sm_path = %sm_path.display(),
+                    "Initializing redb storage"
+                );
+
+                let log_store =
+                    RedbLogStore::new(&log_path).context("failed to create redb log store")?;
+                let state_machine = RedbStateMachine::new(&sm_path)
+                    .context("failed to create redb state machine")?;
+
+                openraft::Raft::new(
+                    config.node_id,
+                    validated_config,
+                    (*network_factory).clone(),
+                    log_store,
+                    state_machine,
+                )
+                .await
+                .context("failed to initialize raft with redb storage")?
+            }
+        }
     };
 
     // Spawn Raft actor
+    // Note: state_machine field is legacy/unused - Raft core owns the actual state machine
+    let placeholder_state_machine = StateMachineStore::new();
     let raft_actor_config = RaftActorConfig {
         node_id: config.node_id,
         raft: raft_core.clone(),
-        state_machine: state_machine_store.clone(),
+        state_machine: placeholder_state_machine.clone(),
     };
     let (raft_actor, raft_task) = Actor::spawn(
         Some(format!("raft-{}", config.node_id)),
@@ -371,7 +410,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         raft_actor,
         raft_task,
         raft_core,
-        state_machine: state_machine_store,
+        state_machine: placeholder_state_machine,
         rpc_server,
         network_factory,
         gossip_discovery,
@@ -444,6 +483,9 @@ mod tests {
             election_timeout_max_ms: 3000,
             iroh: crate::cluster::config::IrohConfig::default(),
             peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         let config = load_config(Some(&toml_path), cli_config).unwrap();
@@ -468,10 +510,7 @@ mod tests {
         let id1 = generate_endpoint_id(1);
         let id2 = generate_endpoint_id(2);
 
-        let peers = vec![
-            format!("1@{}", id1),
-            format!("2@{}", id2),
-        ];
+        let peers = vec![format!("1@{}", id1), format!("2@{}", id2)];
 
         let result = parse_peer_addresses(&peers);
         assert!(result.is_ok());
@@ -515,7 +554,8 @@ mod tests {
         assert!(result.is_err());
 
         // Invalid node_id
-        let peers = vec!["not_a_number@12D3KooWGdBx9YQp3LTZKHKqPmx1ypXwSWxrRqjATd8EgwPPjE9F".to_string()];
+        let peers =
+            vec!["not_a_number@12D3KooWGdBx9YQp3LTZKHKqPmx1ypXwSWxrRqjATd8EgwPPjE9F".to_string()];
         let result = parse_peer_addresses(&peers);
         assert!(result.is_err());
 

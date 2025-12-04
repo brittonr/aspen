@@ -12,7 +12,9 @@
 use irpc::channel::oneshot;
 use irpc::rpc_requests;
 use openraft::error::RaftError;
-use openraft::raft::{AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse};
+use openraft::raft::{
+    AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
+};
 use openraft::type_config::alias::VoteOf;
 use serde::{Deserialize, Serialize};
 

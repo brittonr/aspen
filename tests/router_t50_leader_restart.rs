@@ -10,7 +10,6 @@
 /// 4. Verify the restarted node doesn't immediately become leader
 ///
 /// Original: openraft/tests/tests/life_cycle/t50_leader_restart_clears_state.rs
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,9 +61,13 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
 
     tracing::info!("--- write some log entries");
     {
-        router.write(&0, "key1".to_string(), "value1".to_string()).await
+        router
+            .write(&0, "key1".to_string(), "value1".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
-        router.write(&0, "key2".to_string(), "value2".to_string()).await
+        router
+            .write(&0, "key2".to_string(), "value2".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
@@ -89,7 +92,9 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
         // with no state has no data.
 
         // Create node 3 with fresh storage to simulate a "restarted" node
-        router.new_raft_node_with_storage(3, new_log, new_sm).await?;
+        router
+            .new_raft_node_with_storage(3, new_log, new_sm)
+            .await?;
 
         // Verify the fresh node has no data
         let val = router.read(&3, "key1").await;
@@ -124,7 +129,9 @@ async fn test_follower_restart() -> Result<()> {
 
     tracing::info!("--- write data to cluster");
     {
-        router.write(&0, "persistent".to_string(), "data".to_string()).await
+        router
+            .write(&0, "persistent".to_string(), "data".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
@@ -143,13 +150,18 @@ async fn test_follower_restart() -> Result<()> {
     {
         // Get the existing storage
         let metrics = router.get_raft_handle(&0)?.metrics().borrow().clone();
-        tracing::info!("node 0 before restart - state: {:?}, log index: {:?}",
-                      metrics.state, metrics.last_log_index);
+        tracing::info!(
+            "node 0 before restart - state: {:?}, log index: {:?}",
+            metrics.state,
+            metrics.last_log_index
+        );
 
         // In a real restart scenario, we'd preserve the storage.
         // For now, we verify that fresh storage means fresh state.
         let (fresh_log, fresh_sm) = router.new_store();
-        router.new_raft_node_with_storage(1, fresh_log, fresh_sm).await?;
+        router
+            .new_raft_node_with_storage(1, fresh_log, fresh_sm)
+            .await?;
 
         let val = router.read(&1, "persistent").await;
         assert_eq!(val, None, "fresh node has no data until it joins cluster");

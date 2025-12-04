@@ -175,11 +175,7 @@ mod tests {
         let topic_id = TopicId::from_bytes([23u8; 32]);
         let peer_id = create_test_endpoint_id(1);
 
-        let ticket = AspenClusterTicket::with_bootstrap(
-            topic_id,
-            "test-cluster".into(),
-            peer_id,
-        );
+        let ticket = AspenClusterTicket::with_bootstrap(topic_id, "test-cluster".into(), peer_id);
 
         assert_eq!(ticket.bootstrap.len(), 1);
         assert!(ticket.bootstrap.contains(&peer_id));
@@ -212,7 +208,10 @@ mod tests {
             ticket.add_bootstrap(peer).unwrap();
         }
 
-        assert_eq!(ticket.bootstrap.len(), AspenClusterTicket::MAX_BOOTSTRAP_PEERS);
+        assert_eq!(
+            ticket.bootstrap.len(),
+            AspenClusterTicket::MAX_BOOTSTRAP_PEERS
+        );
 
         // Adding one more should fail
         let extra_peer = create_test_endpoint_id(255);

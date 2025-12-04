@@ -3,23 +3,21 @@ use std::future::Future;
 use std::sync::RwLock;
 
 use anyhow::Context;
-use openraft::{BasicNode, OptionalSend, Snapshot, StorageError};
-use openraft::error::{
-    NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable,
-};
+use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
 use openraft::network::{RPCOption, RaftNetworkFactory, v2::RaftNetworkV2};
 use openraft::raft::{
-    AppendEntriesRequest, AppendEntriesResponse,
-    SnapshotResponse, VoteRequest, VoteResponse,
+    AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::type_config::alias::VoteOf;
+use openraft::{BasicNode, OptionalSend, Snapshot, StorageError};
 use tokio::io::AsyncReadExt;
 use tokio::select;
 use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::rpc::{
-    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest, RaftVoteRequest,
+    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
+    RaftVoteRequest,
 };
 use crate::raft::types::{AppTypeConfig, NodeId};
 use std::sync::Arc;
@@ -159,7 +157,8 @@ impl IrpcRaftNetwork {
             .context("failed to open bidirectional stream")?;
 
         // Serialize and send the request
-        let serialized = postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
+        let serialized =
+            postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
         send_stream
             .write_all(&serialized)
             .await
@@ -175,8 +174,8 @@ impl IrpcRaftNetwork {
             .context("failed to read RPC response")?;
 
         // Deserialize response
-        let response: RaftRpcResponse = postcard::from_bytes(&response_buf)
-            .context("failed to deserialize RPC response")?;
+        let response: RaftRpcResponse =
+            postcard::from_bytes(&response_buf).context("failed to deserialize RPC response")?;
 
         Ok(response)
     }
@@ -293,16 +292,15 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
             RaftRpcResponse::InstallSnapshot(result) => {
                 // Handle remote RaftError as StorageError since snapshot installation failed
                 result.map_err(|raft_err| {
-                    StreamingError::StorageError(StorageError::read_snapshot(
-                        None,
-                        &raft_err,
-                    ))
+                    StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err))
                 })
             }
-            _ => Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "unexpected response type for install_snapshot",
-            )))),
+            _ => Err(StreamingError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unexpected response type for install_snapshot",
+                ),
+            ))),
         }
     }
 }

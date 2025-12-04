@@ -2,7 +2,6 @@
 ///
 /// AspenRouter manages multiple Raft nodes with simulated networking, enabling fast
 /// deterministic tests without real network I/O. Inspired by OpenRaft's RaftRouter.
-
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,8 +17,8 @@ use openraft::error::ReplicationClosed;
 use openraft::error::StreamingError;
 use openraft::error::Unreachable;
 use openraft::metrics::Wait;
-use openraft::network::v2::RaftNetworkV2;
 use openraft::network::RPCOption;
+use openraft::network::v2::RaftNetworkV2;
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
@@ -76,7 +75,9 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
         rpc: AppendEntriesRequest<AppTypeConfig>,
         _option: RPCOption,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.router.send_append_entries(self.source, self.target, rpc).await
+        self.router
+            .send_append_entries(self.source, self.target, rpc)
+            .await
     }
 
     async fn vote(
@@ -94,7 +95,9 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
         _cancel: impl std::future::Future<Output = ReplicationClosed> + openraft::OptionalSend + 'static,
         _option: RPCOption,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        self.router.send_snapshot(self.source, self.target, vote, snapshot).await
+        self.router
+            .send_snapshot(self.source, self.target, vote, snapshot)
+            .await
     }
 }
 
@@ -140,18 +143,22 @@ impl InnerRouter {
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionAborted,
+                    "source node marked as failed",
+                ),
+            )));
         }
 
         // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    "target node marked as failed",
+                ),
+            )));
         }
 
         let raft = {
@@ -180,18 +187,22 @@ impl InnerRouter {
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionAborted,
+                    "source node marked as failed",
+                ),
+            )));
         }
 
         // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    "target node marked as failed",
+                ),
+            )));
         }
 
         let raft = {
@@ -221,18 +232,22 @@ impl InnerRouter {
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
-            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
+            return Err(StreamingError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionAborted,
+                    "source node marked as failed",
+                ),
+            )));
         }
 
         // Check if TARGET node is failed (can't reach if they're dead)
         if self.is_node_failed(target) {
-            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
+            return Err(StreamingError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    "target node marked as failed",
+                ),
+            )));
         }
 
         let raft = {
@@ -298,7 +313,8 @@ impl AspenRouter {
     pub async fn new_raft_node(&mut self, id: NodeId) -> Result<()> {
         let log_store = InMemoryLogStore::default();
         let state_machine = StateMachineStore::new();
-        self.new_raft_node_with_storage(id, log_store, state_machine).await
+        self.new_raft_node_with_storage(id, log_store, state_machine)
+            .await
     }
 
     /// Create a new Raft node with custom storage.
@@ -324,9 +340,15 @@ impl AspenRouter {
     ) -> Result<()> {
         let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
-        let raft = Raft::new(id, self.config.clone(), network_factory, log_store.clone(), state_machine.clone())
-            .await
-            .context("failed to create Raft node")?;
+        let raft = Raft::new(
+            id,
+            self.config.clone(),
+            network_factory,
+            log_store.clone(),
+            state_machine.clone(),
+        )
+        .await
+        .context("failed to create Raft node")?;
 
         let node = AspenNode {
             id,
@@ -465,8 +487,8 @@ impl AspenRouter {
 
     /// Initialize a single-node cluster with the given node as the leader.
     pub async fn initialize(&self, node_id: NodeId) -> Result<()> {
-        use std::collections::BTreeMap;
         use openraft::BasicNode;
+        use std::collections::BTreeMap;
 
         let members: BTreeMap<NodeId, BasicNode> = {
             let nodes = self.inner.nodes.lock().unwrap();
@@ -495,7 +517,9 @@ impl AspenRouter {
         F: FnOnce(&openraft::RaftState<AppTypeConfig>) + Send + 'static,
     {
         let raft = self.get_raft_handle(&target)?;
-        raft.external_request(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        raft.external_request(req)
+            .await
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         Ok(())
     }
 
@@ -508,15 +532,22 @@ impl AspenRouter {
         use openraft::ServerState;
 
         let leader_id = 0;
-        assert!(voter_ids.contains(&leader_id), "voter_ids must contain node 0");
+        assert!(
+            voter_ids.contains(&leader_id),
+            "voter_ids must contain node 0"
+        );
 
         self.new_raft_node(leader_id).await?;
-        self.wait(&leader_id, Some(Duration::from_secs(10))).applied_index(None, "empty").await?;
+        self.wait(&leader_id, Some(Duration::from_secs(10)))
+            .applied_index(None, "empty")
+            .await?;
 
         self.initialize(leader_id).await?;
         let mut log_index = 1_u64;
 
-        self.wait(&leader_id, Some(Duration::from_secs(10))).applied_index(Some(log_index), "init").await?;
+        self.wait(&leader_id, Some(Duration::from_secs(10)))
+            .applied_index(Some(log_index), "init")
+            .await?;
 
         for id in voter_ids.iter() {
             if *id == leader_id {
@@ -526,11 +557,15 @@ impl AspenRouter {
             self.add_learner(leader_id, *id).await?;
             log_index += 1;
 
-            self.wait(id, Some(Duration::from_secs(10))).state(ServerState::Learner, "empty node").await?;
+            self.wait(id, Some(Duration::from_secs(10)))
+                .state(ServerState::Learner, "empty node")
+                .await?;
         }
 
         for id in voter_ids.iter() {
-            self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("learners of {:?}", voter_ids)).await?;
+            self.wait(id, Some(Duration::from_secs(10)))
+                .applied_index(Some(log_index), &format!("learners of {:?}", voter_ids))
+                .await?;
         }
 
         if voter_ids.len() > 1 {
@@ -539,7 +574,9 @@ impl AspenRouter {
             log_index += 2;
 
             for id in voter_ids.iter() {
-                self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("cluster of {:?}", voter_ids)).await?;
+                self.wait(id, Some(Duration::from_secs(10)))
+                    .applied_index(Some(log_index), &format!("cluster of {:?}", voter_ids))
+                    .await?;
             }
         }
 
@@ -550,7 +587,9 @@ impl AspenRouter {
         }
 
         for id in learners.iter() {
-            self.wait(id, Some(Duration::from_secs(10))).applied_index(Some(log_index), &format!("learners of {:?}", learners)).await?;
+            self.wait(id, Some(Duration::from_secs(10)))
+                .applied_index(Some(log_index), &format!("learners of {:?}", learners))
+                .await?;
         }
 
         Ok(log_index)
@@ -563,7 +602,11 @@ impl AspenRouter {
     pub fn remove_node(
         &mut self,
         node_id: NodeId,
-    ) -> Option<(Raft<AppTypeConfig>, InMemoryLogStore, Arc<StateMachineStore>)> {
+    ) -> Option<(
+        Raft<AppTypeConfig>,
+        InMemoryLogStore,
+        Arc<StateMachineStore>,
+    )> {
         let mut nodes = self.inner.nodes.lock().unwrap();
         let node = nodes.remove(&node_id)?;
         Some((node.raft, node.log_store, node.state_machine))
@@ -573,8 +616,8 @@ impl AspenRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
     use openraft::BasicNode;
+    use std::collections::BTreeMap;
 
     fn timeout() -> Option<Duration> {
         Some(Duration::from_secs(10))

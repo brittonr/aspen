@@ -14,7 +14,6 @@
 ///
 /// Note: Since AspenRouter doesn't have native message drop support, we simulate
 /// this by rapidly failing/recovering nodes to create intermittent connectivity.
-
 use aspen::raft::types::*;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
@@ -64,7 +63,8 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
     events.push("cluster-initialized: node 0".into());
 
     // Wait for initial leader
-    router.wait(&0, Some(Duration::from_millis(2000)))
+    router
+        .wait(&0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let leader = router
@@ -76,13 +76,16 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
     for i in 0..5 {
         let key = format!("no-drops-{}", i);
         let value = format!("reliable-{}", i);
-        router.write(&leader, key.clone(), value.clone()).await
+        router
+            .write(&leader, key.clone(), value.clone())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
     }
 
     // Wait for baseline to commit (init + 5 writes = index 6)
-    router.wait(&leader, Some(Duration::from_millis(1000)))
+    router
+        .wait(&leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(6), "baseline committed")
         .await?;
     events.push("baseline-committed: 5 writes with reliable network".into());
@@ -109,8 +112,11 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
         // Retry logic: writes may fail due to message drops
         let mut retries = 0;
         loop {
-            match router.write(&leader, key.clone(), value.clone()).await
-                .map_err(|e| anyhow::anyhow!("write error: {}", e)) {
+            match router
+                .write(&leader, key.clone(), value.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!("write error: {}", e))
+            {
                 Ok(_) => {
                     events.push(format!(
                         "drop-phase-write: {}={} (retries: {})",
@@ -154,7 +160,10 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
             let target2 = (((i + 1) % 4) + 1) as NodeId;
             router.fail_node(target1);
             router.fail_node(target2);
-            events.push(format!("nodes-failed: {}, {} (heavy drops)", target1, target2));
+            events.push(format!(
+                "nodes-failed: {}, {} (heavy drops)",
+                target1, target2
+            ));
         }
 
         let key = format!("heavy-drops-{}", i);
@@ -163,8 +172,11 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
         // More retries needed with heavier drops
         let mut retries = 0;
         loop {
-            match router.write(&leader, key.clone(), value.clone()).await
-                .map_err(|e| anyhow::anyhow!("write error: {}", e)) {
+            match router
+                .write(&leader, key.clone(), value.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!("write error: {}", e))
+            {
                 Ok(_) => {
                     events.push(format!(
                         "heavy-drop-write: {}={} (retries: {})",
@@ -208,13 +220,16 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
     // Wait for all nodes to catch up
     // Increased timeout to 10000ms for message drop recovery and CI reliability
     for node_id in 0..5 {
-        router.wait(&node_id, Some(Duration::from_millis(10000)))
+        router
+            .wait(&node_id, Some(Duration::from_millis(10000)))
             .applied_index(Some(final_index), "node caught up after drops")
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
                     "node {} did not converge to index {} within 10000ms after message drops: {}",
-                    node_id, final_index, e
+                    node_id,
+                    final_index,
+                    e
                 )
             })?;
     }
@@ -234,7 +249,10 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
                 Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
-                        node_id, key, value, expected
+                        node_id,
+                        key,
+                        value,
+                        expected
                     );
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
@@ -250,7 +268,10 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
                 Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
-                        node_id, key, value, expected
+                        node_id,
+                        key,
+                        value,
+                        expected
                     );
                 }
                 None => anyhow::bail!("node {} missing key {} after drops", node_id, key),
@@ -266,7 +287,10 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
                 Some(value) => {
                     anyhow::bail!(
                         "node {} key {} wrong: got {}, expected {}",
-                        node_id, key, value, expected
+                        node_id,
+                        key,
+                        value,
+                        expected
                     );
                 }
                 None => anyhow::bail!("node {} missing key {} after heavy drops", node_id, key),
@@ -279,13 +303,16 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
     for i in 0..3 {
         let key = format!("post-stress-{}", i);
         let value = format!("recovered-{}", i);
-        router.write(&leader, key.clone(), value.clone()).await
+        router
+            .write(&leader, key.clone(), value.clone())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("post-stress-write: {}={}", key, value));
     }
 
     // Verify post-stress writes
-    router.wait(&leader, Some(Duration::from_millis(1000)))
+    router
+        .wait(&leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(24), "post-stress writes committed")
         .await?;
     events.push("cluster-healthy: normal operation restored after message drop stress".into());

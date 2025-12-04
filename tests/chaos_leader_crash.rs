@@ -34,9 +34,9 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Use shorter timeouts for faster leader election in chaos scenarios
     let config = Arc::new(
         Config {
-            heartbeat_interval: 500,           // 500ms heartbeat
-            election_timeout_min: 1500,        // 1.5s min election timeout
-            election_timeout_max: 3000,        // 3s max election timeout
+            heartbeat_interval: 500,    // 500ms heartbeat
+            election_timeout_min: 1500, // 1.5s min election timeout
+            election_timeout_max: 3000, // 3s max election timeout
             ..Default::default()
         }
         .validate()?,
@@ -53,7 +53,8 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     router.initialize(0).await?;
     events.push("cluster-initialized: node 0".into());
 
-    router.wait(&0, Some(Duration::from_millis(2000)))
+    router
+        .wait(&0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let initial_leader = router
@@ -73,7 +74,8 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     }
 
     // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
-    router.wait(&initial_leader, Some(Duration::from_millis(1000)))
+    router
+        .wait(&initial_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed")
         .await?;
     events.push("baseline-committed: 3 writes".into());
@@ -124,7 +126,8 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for post-crash writes to be committed
     // New leader writes blank entry on election (index 5), then 3 writes (indices 6,7,8)
-    router.wait(&new_leader, Some(Duration::from_millis(2000)))
+    router
+        .wait(&new_leader, Some(Duration::from_millis(2000)))
         .applied_index(Some(8), "post-crash writes committed")
         .await?;
     events.push("post-crash-committed: 3 writes".into());
@@ -135,7 +138,8 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for recovered node to catch up
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    router.wait(&initial_leader, Some(Duration::from_millis(3000)))
+    router
+        .wait(&initial_leader, Some(Duration::from_millis(3000)))
         .applied_index(Some(8), "recovered node synced")
         .await?;
     events.push("recovered-node-synced: caught up to log index 8".into());

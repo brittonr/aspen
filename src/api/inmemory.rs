@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use super::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState,
-    ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
-    WriteCommand, WriteRequest, WriteResult,
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
+    InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult, WriteCommand,
+    WriteRequest, WriteResult,
 };
 
 #[derive(Clone, Default)]

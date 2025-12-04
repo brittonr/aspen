@@ -198,3 +198,10 @@ docs/simulations/*.json
 
 # Vendored/nested git repositories
 kameo/
+
+# Test and runtime data
+data/
+*.redb
+
+# Claude Code local settings
+.claude/settings.local.json

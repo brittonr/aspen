@@ -36,6 +36,9 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
             pkarr_relay_url: None,
         },
         peers: vec![], // No manual peers - rely on gossip!
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     }
 }
 
@@ -114,9 +117,21 @@ async fn test_three_node_auto_discovery() -> Result<()> {
     let peers2 = handle2.network_factory.peer_addrs();
     let peers3 = handle3.network_factory.peer_addrs();
 
-    tracing::info!("node 1 discovered {} peers: {:?}", peers1.len(), peers1.keys().collect::<Vec<_>>());
-    tracing::info!("node 2 discovered {} peers: {:?}", peers2.len(), peers2.keys().collect::<Vec<_>>());
-    tracing::info!("node 3 discovered {} peers: {:?}", peers3.len(), peers3.keys().collect::<Vec<_>>());
+    tracing::info!(
+        "node 1 discovered {} peers: {:?}",
+        peers1.len(),
+        peers1.keys().collect::<Vec<_>>()
+    );
+    tracing::info!(
+        "node 2 discovered {} peers: {:?}",
+        peers2.len(),
+        peers2.keys().collect::<Vec<_>>()
+    );
+    tracing::info!(
+        "node 3 discovered {} peers: {:?}",
+        peers3.len(),
+        peers3.keys().collect::<Vec<_>>()
+    );
 
     // Each node should know about the other two (not itself)
     assert_eq!(
@@ -188,6 +203,9 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
             pkarr_relay_url: None,
         },
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle1 = bootstrap_node(config1).await?;
@@ -219,13 +237,20 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
             pkarr_relay_url: None,
         },
         peers: vec![peer_spec], // Manual peer configuration
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle2 = bootstrap_node(config2).await?;
 
     // Verify manual peer was added to node 2
     let peers2 = handle2.network_factory.peer_addrs();
-    assert_eq!(peers2.len(), 1, "node 2 should have 1 manually configured peer");
+    assert_eq!(
+        peers2.len(),
+        1,
+        "node 2 should have 1 manually configured peer"
+    );
     assert!(peers2.contains_key(&10), "node 2 should know about node 10");
 
     // Verify gossip is None (disabled)

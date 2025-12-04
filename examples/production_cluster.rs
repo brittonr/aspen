@@ -71,8 +71,8 @@ use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
 use std::env;
 use tempfile::TempDir;
-use tokio::time::{sleep, Duration};
-use tracing::{info, warn, Level};
+use tokio::time::{Duration, sleep};
+use tracing::{Level, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 /// Parse environment variable with default
@@ -108,7 +108,10 @@ async fn main() -> Result<()> {
     info!("   Relay Server: {}", relay_url);
     info!("   DNS Discovery: {}", dns_url);
     info!("   Pkarr Relay: {}", pkarr_url);
-    info!("   mDNS: {}", if disable_mdns { "disabled" } else { "enabled" });
+    info!(
+        "   mDNS: {}",
+        if disable_mdns { "disabled" } else { "enabled" }
+    );
     info!("   Gossip: enabled (default)");
 
     // Create temporary directories for each node
@@ -129,8 +132,8 @@ async fn main() -> Result<()> {
     let iroh_config = IrohConfig {
         secret_key: None, // Let Iroh generate a key
         relay_url: Some(relay_url),
-        enable_gossip: true, // Announce Raft metadata
-        gossip_ticket: None, // First node doesn't need a ticket
+        enable_gossip: true,        // Announce Raft metadata
+        gossip_ticket: None,        // First node doesn't need a ticket
         enable_mdns: !disable_mdns, // Disable in production, useful for dev
         enable_dns_discovery: true, // Primary discovery mechanism
         dns_discovery_url: Some(dns_url),
@@ -167,6 +170,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: iroh_config.clone(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config3 = ClusterBootstrapConfig {
@@ -182,6 +188,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: iroh_config.clone(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap all nodes concurrently
@@ -228,9 +237,18 @@ async fn main() -> Result<()> {
     // In a real deployment, you'd check network_factory.peers() or similar
     warn!("\n⚠️  NOTE: This example requires external services (relay, DNS, Pkarr)");
     warn!("   If discovery fails, verify:");
-    warn!("   1. Relay server is reachable: curl {}", iroh_config.relay_url.as_ref().unwrap());
-    warn!("   2. DNS service is operational: curl {}", iroh_config.dns_discovery_url.as_ref().unwrap());
-    warn!("   3. Pkarr relay is available: curl {}", iroh_config.pkarr_relay_url.as_ref().unwrap());
+    warn!(
+        "   1. Relay server is reachable: curl {}",
+        iroh_config.relay_url.as_ref().unwrap()
+    );
+    warn!(
+        "   2. DNS service is operational: curl {}",
+        iroh_config.dns_discovery_url.as_ref().unwrap()
+    );
+    warn!(
+        "   3. Pkarr relay is available: curl {}",
+        iroh_config.pkarr_relay_url.as_ref().unwrap()
+    );
     warn!("   4. Network allows outbound HTTPS (port 443) and QUIC (UDP)");
 
     // For this example, fall back to manual peer exchange
@@ -270,11 +288,7 @@ async fn main() -> Result<()> {
     // Add node 2 as a learner
     info!("\n➕ Adding node 2 as learner");
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(
-            2,
-            "127.0.0.1:26001",
-            Some(format!("iroh://{}", addr2.id)),
-        ),
+        learner: ClusterNode::new(2, "127.0.0.1:26001", Some(format!("iroh://{}", addr2.id))),
     };
     let state = cluster_client1.add_learner(learner_req).await?;
     info!("✅ Node 2 added as learner");
@@ -285,11 +299,7 @@ async fn main() -> Result<()> {
     // Add node 3 as a learner
     info!("\n➕ Adding node 3 as learner");
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(
-            3,
-            "127.0.0.1:26002",
-            Some(format!("iroh://{}", addr3.id)),
-        ),
+        learner: ClusterNode::new(3, "127.0.0.1:26002", Some(format!("iroh://{}", addr3.id))),
     };
     let state = cluster_client1.add_learner(learner_req).await?;
     info!("✅ Node 3 added as learner");
@@ -312,7 +322,10 @@ async fn main() -> Result<()> {
     info!("\n📝 Writing data to production cluster");
     let pairs = vec![
         ("deployment:type".to_string(), "production".to_string()),
-        ("discovery:method".to_string(), "dns+pkarr+relay".to_string()),
+        (
+            "discovery:method".to_string(),
+            "dns+pkarr+relay".to_string(),
+        ),
         ("cluster:size".to_string(), "3".to_string()),
     ];
 

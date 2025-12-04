@@ -6,8 +6,8 @@ pub mod inmemory;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
 
 // Re-export OpenRaft types for observability
-pub use openraft::metrics::RaftMetrics;
 pub use openraft::ServerState;
+pub use openraft::metrics::RaftMetrics;
 
 /// Describes a node participating in the control-plane cluster.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,7 +84,9 @@ pub trait ClusterController: Send + Sync {
     ///
     /// This method provides raw OpenRaft metrics. For a simplified JSON format,
     /// use the HTTP `/raft-metrics` endpoint.
-    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
+    async fn get_metrics(
+        &self,
+    ) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
 
     /// Trigger a snapshot to be taken immediately.
     ///

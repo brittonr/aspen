@@ -17,10 +17,11 @@
 ///! - Fixed cluster size: 3 nodes
 ///! - Explicit measurement: total time, throughput
 ///! - Bounded test duration: expected < 60 seconds
-
 use std::time::{Duration, Instant};
 
-use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, WriteRequest, WriteCommand};
+use aspen::api::{
+    ClusterController, ClusterNode, InitRequest, KeyValueStore, WriteCommand, WriteRequest,
+};
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
@@ -121,13 +122,13 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
     println!("Failed writes:      {}", failed_writes);
     println!("Duration:           {:.2} seconds", duration_secs);
     println!("Throughput:         {:.2} ops/sec", throughput);
-    println!("Average latency:    {:.2} ms/op", duration.as_millis() as f64 / TOTAL_WRITES as f64);
+    println!(
+        "Average latency:    {:.2} ms/op",
+        duration.as_millis() as f64 / TOTAL_WRITES as f64
+    );
 
     // Assertions
-    assert_eq!(
-        successful_writes, TOTAL_WRITES,
-        "all writes should succeed"
-    );
+    assert_eq!(successful_writes, TOTAL_WRITES, "all writes should succeed");
     assert_eq!(failed_writes, 0, "no writes should fail");
 
     // Sanity check: expect at least 10 ops/sec (conservative baseline)
@@ -166,6 +167,9 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config).await?;
@@ -173,7 +177,11 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
     // Initialize single-node cluster
     let cluster = RaftControlClient::new(handle.raft_actor.clone());
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
     };
     cluster.init(init_req).await?;
 

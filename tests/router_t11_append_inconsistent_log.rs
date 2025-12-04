@@ -6,7 +6,6 @@
 /// leader's authoritative log.
 ///
 /// Original: openraft/tests/tests/append_entries/t11_append_inconsistent_log.rs
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,7 +15,7 @@ use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
-use openraft::{BasicNode, Config, ServerState, RaftLogReader};
+use openraft::{BasicNode, Config, RaftLogReader, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -35,7 +34,7 @@ async fn test_append_inconsistent_log() -> Result<()> {
     let config = Arc::new(
         Config {
             enable_heartbeat: false,
-            enable_elect: false,  // Manual election control
+            enable_elect: false, // Manual election control
             ..Default::default()
         }
         .validate()?,
@@ -148,7 +147,10 @@ async fn test_append_inconsistent_log() -> Result<()> {
     // Note: Leader appends a blank log entry when elected, so applied_index will be 101
     router
         .wait(&0, Some(Duration::from_secs(5)))
-        .applied_index(Some(101), "node-0 syncs to leader's log including blank leader entry")
+        .applied_index(
+            Some(101),
+            "node-0 syncs to leader's log including blank leader entry",
+        )
         .await?;
 
     tracing::info!("--- section 6: verify conflict resolution");
@@ -177,12 +179,16 @@ async fn test_append_inconsistent_log() -> Result<()> {
     );
 
     // Re-add node-0 to continue testing
-    router.new_raft_node_with_storage(0, sto0_after, _sm0_after).await?;
+    router
+        .new_raft_node_with_storage(0, sto0_after, _sm0_after)
+        .await?;
 
     tracing::info!("--- section 7: test continued operation");
 
     // Write new data to verify cluster continues functioning
-    router.write(&2, "test_key".to_string(), "test_value".to_string()).await
+    router
+        .write(&2, "test_key".to_string(), "test_value".to_string())
+        .await
         .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
 
     // Verify replication still works

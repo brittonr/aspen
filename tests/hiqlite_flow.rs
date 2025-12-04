@@ -106,14 +106,18 @@ impl ClusterController for DeterministicHiqlite {
         Ok(self.cluster.lock().await.clone())
     }
 
-    async fn get_metrics(&self) -> Result<aspen::api::RaftMetrics<aspen::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(
+        &self,
+    ) -> Result<aspen::api::RaftMetrics<aspen::raft::types::AppTypeConfig>, ControlPlaneError> {
         // Deterministic test backend doesn't have real Raft metrics
         Err(ControlPlaneError::Failed {
             reason: "metrics not available in deterministic test backend".into(),
         })
     }
 
-    async fn trigger_snapshot(&self) -> Result<Option<openraft::LogId<aspen::raft::types::AppTypeConfig>>, ControlPlaneError> {
+    async fn trigger_snapshot(
+        &self,
+    ) -> Result<Option<openraft::LogId<aspen::raft::types::AppTypeConfig>>, ControlPlaneError> {
         // Deterministic test backend doesn't support snapshots
         Err(ControlPlaneError::Failed {
             reason: "snapshots not available in deterministic test backend".into(),
@@ -162,8 +166,7 @@ impl KeyValueStore for DeterministicHiqlite {
 /// membership changes, concurrent writes/reads, and leader churn.
 async fn run_hiqlite_simulation(seed: u64) {
     let mut artifact_builder =
-        SimulationArtifactBuilder::new("hiqlite_flow_simulation", seed)
-            .start();
+        SimulationArtifactBuilder::new("hiqlite_flow_simulation", seed).start();
 
     let backend = DeterministicHiqlite::new();
 

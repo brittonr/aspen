@@ -97,8 +97,7 @@ impl SimulationArtifact {
     /// The artifact will be written to `{base_dir}/{run_id}.json`.
     pub fn persist(&self, base_dir: impl AsRef<Path>) -> Result<PathBuf> {
         let base_dir = base_dir.as_ref();
-        fs::create_dir_all(base_dir)
-            .context("failed to create simulation artifacts directory")?;
+        fs::create_dir_all(base_dir).context("failed to create simulation artifacts directory")?;
 
         let file_path = base_dir.join(format!("{}.json", self.run_id));
         let json = serde_json::to_string_pretty(self)
@@ -111,8 +110,8 @@ impl SimulationArtifact {
 
     /// Load a simulation artifact from a JSON file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let contents = fs::read_to_string(path.as_ref())
-            .context("failed to read simulation artifact")?;
+        let contents =
+            fs::read_to_string(path.as_ref()).context("failed to read simulation artifact")?;
         serde_json::from_str(&contents).context("failed to deserialize simulation artifact")
     }
 }
@@ -244,8 +243,7 @@ mod tests {
         );
 
         let json = serde_json::to_string(&original).expect("serialize");
-        let deserialized: SimulationArtifact =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: SimulationArtifact = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(original.test_name, deserialized.test_name);
         assert_eq!(original.seed, deserialized.seed);

@@ -74,7 +74,7 @@ use std::sync::{Arc, Mutex as SyncMutex};
 
 use anyhow::{Context, Result};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
-use iroh_gossip::net::{Gossip, GOSSIP_ALPN};
+use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
 use iroh_gossip::proto::TopicId;
 use ractor::{Actor, ActorRef, MessagingErr};
 use ractor_cluster::node::NodeConnectionMode;
@@ -424,10 +424,7 @@ impl IrohEndpointConfig {
     pub fn with_relay_url(mut self, url: RelayUrl) -> Result<Self> {
         const MAX_RELAY_URLS: usize = 4;
         if self.relay_urls.len() >= MAX_RELAY_URLS {
-            anyhow::bail!(
-                "cannot add more than {} relay URLs",
-                MAX_RELAY_URLS
-            );
+            anyhow::bail!("cannot add more than {} relay URLs", MAX_RELAY_URLS);
         }
         self.relay_urls.push(url);
         Ok(self)
@@ -553,21 +550,29 @@ impl IrohEndpointManager {
             builder = builder.discovery(dns_discovery_builder);
             tracing::info!(
                 "DNS discovery enabled with URL: {}",
-                config.dns_discovery_url.as_deref().unwrap_or("n0 DNS service (iroh.link)")
+                config
+                    .dns_discovery_url
+                    .as_deref()
+                    .unwrap_or("n0 DNS service (iroh.link)")
             );
         }
 
         // Pkarr Publisher: Publish node addresses to DHT-based relay
         if config.enable_pkarr {
             let pkarr_builder = if let Some(ref url) = config.pkarr_relay_url {
-                iroh::discovery::pkarr::PkarrPublisher::builder(url.parse().context("invalid Pkarr relay URL")?)
+                iroh::discovery::pkarr::PkarrPublisher::builder(
+                    url.parse().context("invalid Pkarr relay URL")?,
+                )
             } else {
                 iroh::discovery::pkarr::PkarrPublisher::n0_dns()
             };
             builder = builder.discovery(pkarr_builder);
             tracing::info!(
                 "Pkarr publisher enabled with relay: {}",
-                config.pkarr_relay_url.as_deref().unwrap_or("n0 Pkarr service")
+                config
+                    .pkarr_relay_url
+                    .as_deref()
+                    .unwrap_or("n0 Pkarr service")
             );
         }
 

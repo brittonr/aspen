@@ -5,7 +5,6 @@
 /// replication mode to bring the follower up to date.
 ///
 /// Original: openraft/tests/tests/snapshot_streaming/t50_snapshot_when_lacking_log.rs
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,8 +32,8 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     let config = Arc::new(
         Config {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
-            max_in_snapshot_log_to_keep: 0,  // Purge all logs covered by snapshot
-            purge_batch_size: 1,              // Purge aggressively
+            max_in_snapshot_log_to_keep: 0, // Purge all logs covered by snapshot
+            purge_batch_size: 1,            // Purge aggressively
             enable_heartbeat: false,
             ..Default::default()
         }
@@ -68,13 +67,18 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Write entries to reach snapshot threshold
     for i in 0..(snapshot_threshold - 1) {
-        router.write(&0, format!("key{}", i), format!("value{}", i)).await
+        router
+            .write(&0, format!("key{}", i), format!("value{}", i))
+            .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
     }
 
     // Wait for snapshot to be created
-    tracing::info!("--- section 3: wait for snapshot creation at log index {}", log_index);
+    tracing::info!(
+        "--- section 3: wait for snapshot creation at log index {}",
+        log_index
+    );
 
     let start = std::time::Instant::now();
     loop {
@@ -83,7 +87,8 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
         if let Some(snapshot) = metrics.snapshot {
             assert_eq!(
-                snapshot.index, log_index - 1,
+                snapshot.index,
+                log_index - 1,
                 "snapshot should be at index {} (last committed log)",
                 log_index - 1
             );
@@ -102,7 +107,9 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Write additional entries beyond snapshot
     for i in 0..11 {
-        router.write(&0, format!("key_after_{}", i), format!("value_after_{}", i)).await
+        router
+            .write(&0, format!("key_after_{}", i), format!("value_after_{}", i))
+            .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
     }
@@ -161,10 +168,18 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Verify data integrity - learner should have all data from snapshot + new entries
     let val = router.read(&1, "key0").await;
-    assert_eq!(val, Some("value0".to_string()), "data from snapshot should be present");
+    assert_eq!(
+        val,
+        Some("value0".to_string()),
+        "data from snapshot should be present"
+    );
 
     let val = router.read(&1, "key_after_0").await;
-    assert_eq!(val, Some("value_after_0".to_string()), "data after snapshot should be present");
+    assert_eq!(
+        val,
+        Some("value_after_0".to_string()),
+        "data after snapshot should be present"
+    );
 
     Ok(())
 }

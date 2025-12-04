@@ -19,7 +19,7 @@ use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig}
 use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
 use tempfile::TempDir;
-use tracing::{error, info, warn, Level};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -51,6 +51,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     info!("🔧 Bootstrapping node {}", config.node_id);

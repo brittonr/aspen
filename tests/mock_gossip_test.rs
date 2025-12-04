@@ -1,7 +1,7 @@
 mod support;
 
-use support::mock_gossip::MockGossip;
 use iroh_gossip::proto::TopicId;
+use support::mock_gossip::MockGossip;
 
 fn create_topic_id(seed: u8) -> TopicId {
     TopicId::from_bytes([seed; 32])

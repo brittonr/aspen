@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use openraft::{BasicNode, LogId, Raft, ReadPolicy};
 use openraft::metrics::RaftMetrics;
+use openraft::{BasicNode, LogId, Raft, ReadPolicy};
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call_t};
 use tracing::{info, warn};
 

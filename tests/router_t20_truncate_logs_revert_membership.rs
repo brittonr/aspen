@@ -18,7 +18,6 @@
 ///
 /// This validates the safety property that membership changes are only effective
 /// when committed, and truncation correctly reverts to the last committed membership.
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,9 +46,9 @@ fn timeout() -> Option<Duration> {
 /// 4. Verify node 0 adopts node 2's history including membership
 #[tokio::test]
 async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
+    use aspen::raft::types::AppTypeConfig;
     use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
     use openraft::testing::{blank_ent, membership_ent};
-    use aspen::raft::types::AppTypeConfig;
 
     let config = Arc::new(
         Config {
@@ -167,9 +166,9 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 /// 3. Node with stale entries must truncate and sync
 #[tokio::test]
 async fn test_simple_log_truncation() -> Result<()> {
+    use aspen::raft::types::AppTypeConfig;
     use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
     use openraft::testing::{blank_ent, membership_ent};
-    use aspen::raft::types::AppTypeConfig;
 
     let config = Arc::new(
         Config {

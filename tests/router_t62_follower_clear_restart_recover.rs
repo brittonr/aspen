@@ -5,7 +5,6 @@
 /// detect the state loss and help the follower recover through log reversion.
 ///
 /// Original: openraft/tests/tests/replication/t62_follower_clear_restart_recover.rs
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,9 +30,9 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     // Configure with log reversion allowed for recovery
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,  // Manual heartbeat control
-            enable_elect: false,      // No auto elections
-            allow_log_reversion: Some(true),  // Critical: allow log recovery after state loss
+            enable_heartbeat: false,         // Manual heartbeat control
+            enable_elect: false,             // No auto elections
+            allow_log_reversion: Some(true), // Critical: allow log recovery after state loss
             ..Default::default()
         }
         .validate()?,
@@ -58,7 +57,9 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Write test data
     for i in 0..10 {
-        router.write(&0, format!("key{}", i), format!("value{}", i)).await
+        router
+            .write(&0, format!("key{}", i), format!("value{}", i))
+            .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
     }
@@ -67,7 +68,10 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     for node_id in [0, 1, 2] {
         router
             .wait(&node_id, timeout())
-            .applied_index(Some(log_index), &format!("node-{} has initial data", node_id))
+            .applied_index(
+                Some(log_index),
+                &format!("node-{} has initial data", node_id),
+            )
             .await?;
     }
 
@@ -134,15 +138,20 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     let metrics0 = n0.metrics().borrow().clone();
 
     assert_eq!(
-        metrics1.last_log_index,
-        metrics0.last_log_index,
+        metrics1.last_log_index, metrics0.last_log_index,
         "node-1 log index should match leader"
     );
 
     tracing::info!("--- section 7: test continued operation after recovery");
 
     // Write more data to ensure cluster continues functioning
-    router.write(&0, "post_recovery_key".to_string(), "post_recovery_value".to_string()).await
+    router
+        .write(
+            &0,
+            "post_recovery_key".to_string(),
+            "post_recovery_value".to_string(),
+        )
+        .await
         .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
     log_index += 1;
 
@@ -150,7 +159,10 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     for node_id in [0, 1, 2] {
         router
             .wait(&node_id, timeout())
-            .applied_index(Some(log_index), &format!("node-{} applied post-recovery write", node_id))
+            .applied_index(
+                Some(log_index),
+                &format!("node-{} applied post-recovery write", node_id),
+            )
             .await?;
 
         let val = router.read(&node_id, "post_recovery_key").await;

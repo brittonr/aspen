@@ -36,6 +36,9 @@ async fn test_single_node_write_read() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
@@ -69,9 +72,7 @@ async fn test_single_node_write_read() {
     );
 
     // Read the key back
-    let read_req = ReadRequest {
-        key: "foo".into(),
-    };
+    let read_req = ReadRequest { key: "foo".into() };
     let read_result = kv_client.read(read_req).await.unwrap();
     assert_eq!(read_result.key, "foo");
     assert_eq!(read_result.value, "bar");
@@ -100,6 +101,9 @@ async fn test_two_node_replication() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config2 = ClusterBootstrapConfig {
@@ -115,6 +119,9 @@ async fn test_two_node_replication() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap both nodes
@@ -138,9 +145,11 @@ async fn test_two_node_replication() {
     // Initialize cluster with only node1 as the initial member
     // Node2 will join later as a learner via add_learner()
     let init_req = InitRequest {
-        initial_members: vec![
-            ClusterNode::new(2001, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
-        ],
+        initial_members: vec![ClusterNode::new(
+            2001,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder1".into()),
+        )],
     };
 
     cluster_client1.init(init_req).await.unwrap();
@@ -165,7 +174,10 @@ async fn test_two_node_replication() {
     let membership_req = ChangeMembershipRequest {
         members: vec![2001, 2002],
     };
-    cluster_client1.change_membership(membership_req).await.unwrap();
+    cluster_client1
+        .change_membership(membership_req)
+        .await
+        .unwrap();
 
     // Give Raft time to establish new membership and replicate
     sleep(Duration::from_millis(1000)).await;
@@ -213,6 +225,9 @@ async fn test_read_nonexistent_key() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
@@ -262,6 +277,9 @@ async fn test_multiple_operations() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
@@ -322,6 +340,9 @@ async fn test_add_learner_and_replicate() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config2 = ClusterBootstrapConfig {
@@ -337,6 +358,9 @@ async fn test_add_learner_and_replicate() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap both nodes
@@ -445,6 +469,9 @@ async fn test_setmulti_operations() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();

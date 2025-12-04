@@ -6,7 +6,6 @@
 ///
 /// Original: openraft/tests/tests/membership/t20_change_membership.rs
 /// Note: Simplified to work with current AspenRouter capabilities
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;

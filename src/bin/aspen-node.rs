@@ -43,6 +43,23 @@ struct Args {
     #[arg(long)]
     data_dir: Option<PathBuf>,
 
+    /// Storage backend for Raft log and state machine.
+    /// Options: "inmemory" (default), "redb"
+    #[arg(long)]
+    storage_backend: Option<String>,
+
+    /// Path for redb-backed Raft log database.
+    /// Only used when storage_backend = redb.
+    /// Defaults to "{data_dir}/raft-log.redb" if not specified.
+    #[arg(long)]
+    redb_log_path: Option<PathBuf>,
+
+    /// Path for redb-backed state machine database.
+    /// Only used when storage_backend = redb.
+    /// Defaults to "{data_dir}/state-machine.redb" if not specified.
+    #[arg(long)]
+    redb_sm_path: Option<PathBuf>,
+
     /// Hostname recorded in the NodeServer's identity (informational).
     #[arg(long)]
     host: Option<String>,
@@ -167,6 +184,13 @@ async fn main() -> Result<()> {
     let cli_config = ClusterBootstrapConfig {
         node_id: args.node_id.unwrap_or(0),
         data_dir: args.data_dir,
+        storage_backend: args
+            .storage_backend
+            .as_deref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default(),
+        redb_log_path: args.redb_log_path,
+        redb_sm_path: args.redb_sm_path,
         host: args.host.unwrap_or_else(|| "127.0.0.1".into()),
         ractor_port: args.port.unwrap_or(26000),
         cookie: args.cookie.unwrap_or_else(|| "aspen-cookie".into()),
@@ -438,7 +462,10 @@ struct AddPeerRequest {
     endpoint_addr: iroh::EndpointAddr,
 }
 
-async fn add_peer(State(ctx): State<AppState>, Json(req): Json<AddPeerRequest>) -> impl IntoResponse {
+async fn add_peer(
+    State(ctx): State<AppState>,
+    Json(req): Json<AddPeerRequest>,
+) -> impl IntoResponse {
     ctx.network_factory.add_peer(req.node_id, req.endpoint_addr);
     StatusCode::OK
 }
@@ -481,8 +508,9 @@ async fn raft_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
             warn!(error = ?err, "failed to get raft metrics");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() }))
-            ).into_response()
+                Json(json!({ "error": err.to_string() })),
+            )
+                .into_response()
         }
     }
 }
@@ -492,15 +520,14 @@ async fn raft_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
 /// Returns JSON: {"leader": 1} or {"leader": null}
 async fn get_leader(State(ctx): State<AppState>) -> impl IntoResponse {
     match ctx.controller.get_leader().await {
-        Ok(leader) => {
-            (StatusCode::OK, Json(json!({ "leader": leader }))).into_response()
-        }
+        Ok(leader) => (StatusCode::OK, Json(json!({ "leader": leader }))).into_response(),
         Err(err) => {
             warn!(error = ?err, "failed to get leader");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() }))
-            ).into_response()
+                Json(json!({ "error": err.to_string() })),
+            )
+                .into_response()
         }
     }
 }
@@ -510,18 +537,23 @@ async fn get_leader(State(ctx): State<AppState>) -> impl IntoResponse {
 /// Returns the log ID of the created snapshot.
 async fn trigger_snapshot(State(ctx): State<AppState>) -> impl IntoResponse {
     match ctx.controller.trigger_snapshot().await {
-        Ok(snapshot_id) => {
-            (StatusCode::OK, Json(json!({ "snapshot": snapshot_id.as_ref().map(|log_id| json!({
+        Ok(snapshot_id) => (
+            StatusCode::OK,
+            Json(
+                json!({ "snapshot": snapshot_id.as_ref().map(|log_id| json!({
                 "term": log_id.leader_id.term,
                 "index": log_id.index
-            })) }))).into_response()
-        }
+            })) }),
+            ),
+        )
+            .into_response(),
         Err(err) => {
             warn!(error = ?err, "failed to trigger snapshot");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() }))
-            ).into_response()
+                Json(json!({ "error": err.to_string() })),
+            )
+                .into_response()
         }
     }
 }
@@ -579,10 +611,11 @@ impl IntoResponse for ApiError {
             ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
             }
-            ApiError::General(err) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
-                    .into_response()
-            }
+            ApiError::General(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": err.to_string() })),
+            )
+                .into_response(),
         }
     }
 }

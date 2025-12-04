@@ -106,7 +106,8 @@ impl MetadataStore {
         let result = match table.get(node_id).context(GetSnafu)? {
             Some(value) => {
                 let bytes = value.value();
-                let metadata: NodeMetadata = bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                let metadata: NodeMetadata =
+                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
                 Some(metadata)
             }
             None => None,

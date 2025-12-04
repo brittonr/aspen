@@ -4,7 +4,6 @@
 ///
 /// Original: openraft/tests/tests/client_api/t10_client_writes.rs
 /// Note: Simplified to single-node cluster due to add_learner limitations
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -59,7 +58,9 @@ async fn test_client_writes() -> Result<()> {
         for i in 0..10 {
             let key = format!("key{}", i);
             let value = format!("value{}", i);
-            router.write(&0, key, value).await
+            router
+                .write(&0, key, value)
+                .await
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
 
@@ -82,9 +83,13 @@ async fn test_client_writes() -> Result<()> {
 
     tracing::info!("--- overwrite existing keys");
     {
-        router.write(&0, "key0".to_string(), "updated0".to_string()).await
+        router
+            .write(&0, "key0".to_string(), "updated0".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
-        router.write(&0, "key5".to_string(), "updated5".to_string()).await
+        router
+            .write(&0, "key5".to_string(), "updated5".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
@@ -140,7 +145,9 @@ async fn test_leader_write_path() -> Result<()> {
 
     tracing::info!("--- write via leader");
     {
-        router.write(&0, "test".to_string(), "data".to_string()).await
+        router
+            .write(&0, "test".to_string(), "data".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         let val = router.read(&0, "test").await;
@@ -186,7 +193,9 @@ async fn test_sequential_log_indices() -> Result<()> {
         for i in 0..5 {
             expected_log_index += 1;
 
-            router.write(&0, format!("k{}", i), format!("v{}", i)).await
+            router
+                .write(&0, format!("k{}", i), format!("v{}", i))
+                .await
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
             router

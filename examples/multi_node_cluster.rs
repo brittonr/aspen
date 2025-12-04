@@ -19,8 +19,8 @@ use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig}
 use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
 use tempfile::TempDir;
-use tokio::time::{sleep, Duration};
-use tracing::{info, Level};
+use tokio::time::{Duration, sleep};
+use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -61,6 +61,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config2 = ClusterBootstrapConfig {
@@ -76,6 +79,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config3 = ClusterBootstrapConfig {
@@ -91,6 +97,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     // Bootstrap all nodes concurrently
@@ -175,11 +184,7 @@ async fn main() -> Result<()> {
     // Add node 2 as a learner
     info!("\n➕ Adding node 2 as learner");
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(
-            2,
-            "127.0.0.1:26001",
-            Some(format!("iroh://{}", addr2.id)),
-        ),
+        learner: ClusterNode::new(2, "127.0.0.1:26001", Some(format!("iroh://{}", addr2.id))),
     };
     let state = cluster_client1.add_learner(learner_req).await?;
     info!("✅ Node 2 added as learner");
@@ -192,11 +197,7 @@ async fn main() -> Result<()> {
     // Add node 3 as a learner
     info!("\n➕ Adding node 3 as learner");
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(
-            3,
-            "127.0.0.1:26002",
-            Some(format!("iroh://{}", addr3.id)),
-        ),
+        learner: ClusterNode::new(3, "127.0.0.1:26002", Some(format!("iroh://{}", addr3.id))),
     };
     let state = cluster_client1.add_learner(learner_req).await?;
     info!("✅ Node 3 added as learner");
@@ -299,7 +300,10 @@ async fn main() -> Result<()> {
     info!("\n📊 Summary:");
     info!("  - Bootstrapped 3-node cluster");
     info!("  - Established Raft consensus with 1 leader and 2 followers");
-    info!("  - Successfully replicated {} keys across all nodes", pairs.len() + 5);
+    info!(
+        "  - Successfully replicated {} keys across all nodes",
+        pairs.len() + 5
+    );
     info!("  - All nodes have consistent state (last_applied matches)");
 
     // Graceful shutdown of all nodes

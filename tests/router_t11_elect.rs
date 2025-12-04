@@ -5,7 +5,6 @@
 /// - Vote requests must have last_log >= local last_log
 ///
 /// Original: openraft/tests/tests/elect/t10_elect_compare_last_log.rs
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;

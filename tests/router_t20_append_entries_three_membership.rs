@@ -13,7 +13,6 @@
 ///
 /// Original: openraft/openraft/src/engine/handler/following_handler/do_append_entries_test.rs
 ///           test_follower_do_append_entries_three_membership_entries
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +22,7 @@ use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
-use openraft::{BasicNode, Config, ServerState, RaftLogReader};
+use openraft::{BasicNode, Config, RaftLogReader, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -106,8 +105,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
 
     // Set up node-5 with initial log state
     // Initial vote (following term 1, leader 0)
-    sto5.save_vote(&openraft::Vote::new_committed(1, 0))
-        .await?;
+    sto5.save_vote(&openraft::Vote::new_committed(1, 0)).await?;
 
     // Initial log: just the membership entry at index 1 for {0}
     let initial_membership = vec![BTreeSet::from([0])];
@@ -180,11 +178,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
     // Verify the membership configuration
     // The effective membership should be {4, 5}
     let voters: Vec<_> = metrics.membership_config.voter_ids().collect();
-    assert_eq!(
-        voters.len(),
-        2,
-        "effective membership should have 2 voters"
-    );
+    assert_eq!(voters.len(), 2, "effective membership should have 2 voters");
     assert!(
         voters.contains(&&4) && voters.contains(&&5),
         "effective membership should be {{4, 5}}, got {:?}",
@@ -209,24 +203,15 @@ async fn test_append_entries_three_membership() -> Result<()> {
 
     // Verify log entries 3, 4, 5 are membership entries
     assert!(
-        matches!(
-            all_logs[3].payload,
-            openraft::EntryPayload::Membership(_)
-        ),
+        matches!(all_logs[3].payload, openraft::EntryPayload::Membership(_)),
         "entry at index 3 should be membership"
     );
     assert!(
-        matches!(
-            all_logs[4].payload,
-            openraft::EntryPayload::Membership(_)
-        ),
+        matches!(all_logs[4].payload, openraft::EntryPayload::Membership(_)),
         "entry at index 4 should be membership"
     );
     assert!(
-        matches!(
-            all_logs[5].payload,
-            openraft::EntryPayload::Membership(_)
-        ),
+        matches!(all_logs[5].payload, openraft::EntryPayload::Membership(_)),
         "entry at index 5 should be membership"
     );
 

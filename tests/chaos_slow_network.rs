@@ -45,7 +45,8 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     router.initialize(0).await?;
     events.push("cluster-initialized: node 0".into());
 
-    router.wait(&0, Some(Duration::from_millis(2000)))
+    router
+        .wait(&0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let leader = router
@@ -57,13 +58,16 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     for i in 0..3 {
         let key = format!("normal-latency-{}", i);
         let value = format!("value-{}", i);
-        router.write(&leader, key.clone(), value.clone()).await
+        router
+            .write(&leader, key.clone(), value.clone())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
     }
 
     // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
-    router.wait(&leader, Some(Duration::from_millis(1000)))
+    router
+        .wait(&leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed")
         .await?;
     events.push("baseline-committed: 3 writes at normal latency".into());
@@ -77,13 +81,17 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
 
     // Verify cluster still has a leader despite slow network
-    router.wait(&0, Some(Duration::from_millis(5000)))
+    router
+        .wait(&0, Some(Duration::from_millis(5000)))
         .current_leader(leader, "leader stable despite latency")
         .await?;
     let slow_leader = router
         .leader()
         .ok_or_else(|| anyhow::anyhow!("lost leadership during slow network"))?;
-    events.push(format!("leader-stable-despite-latency: node {}", slow_leader));
+    events.push(format!(
+        "leader-stable-despite-latency: node {}",
+        slow_leader
+    ));
 
     // Writes should still succeed, just slower
     for i in 0..3 {
@@ -98,7 +106,8 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Increased timeout for slow network: 200ms latency * 2 (RTT) * 2 (quorum) + overhead
     // Use 10 seconds to account for CI slowness and multiple round trips
-    router.wait(&slow_leader, Some(Duration::from_millis(10000)))
+    router
+        .wait(&slow_leader, Some(Duration::from_millis(10000)))
         .applied_index(Some(7), "slow writes committed")
         .await
         .map_err(|e| {
@@ -129,7 +138,8 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Fast commits again (3 more writes = index 10)
     // Increased timeout for CI reliability
-    router.wait(&slow_leader, Some(Duration::from_millis(2000)))
+    router
+        .wait(&slow_leader, Some(Duration::from_millis(2000)))
         .applied_index(Some(10), "restored writes committed")
         .await?;
     events.push("restored-writes-committed: 3 writes at normal latency".into());

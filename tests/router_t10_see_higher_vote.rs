@@ -5,14 +5,13 @@
 /// This is critical for election safety to prevent split-brain scenarios.
 ///
 /// Original: openraft/tests/tests/append_entries/t10_see_higher_vote.rs
-
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
-use openraft::{BasicNode, Config, ServerState, Vote};
 use openraft::storage::RaftLogStorage;
+use openraft::{BasicNode, Config, ServerState, Vote};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -83,26 +82,39 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
     tracing::info!("--- section 3: trigger leader to see higher vote");
 
     // First write triggers replication, which causes leader to see higher vote
-    let _ = router.write(&0, "trigger".to_string(), "value".to_string()).await;
+    let _ = router
+        .write(&0, "trigger".to_string(), "value".to_string())
+        .await;
 
     // Wait for node-0 to step down after seeing higher vote from node-1
     router
         .wait(&0, timeout())
-        .state(ServerState::Follower, "node-0 steps down after seeing higher vote")
+        .state(
+            ServerState::Follower,
+            "node-0 steps down after seeing higher vote",
+        )
         .await?;
 
     // Now verify that subsequent writes fail
-    let write_result = router.write(&0, "key1".to_string(), "value1".to_string()).await;
+    let write_result = router
+        .write(&0, "key1".to_string(), "value1".to_string())
+        .await;
 
     // The write should fail because the leader has stepped down
-    assert!(write_result.is_err(), "write should fail when leader has stepped down");
+    assert!(
+        write_result.is_err(),
+        "write should fail when leader has stepped down"
+    );
 
     tracing::info!("--- section 4: verify leader reverted to follower");
 
     // Node-0 should now be a follower after seeing higher vote
     router
         .wait(&0, timeout())
-        .state(ServerState::Follower, "node-0 becomes follower after seeing higher vote")
+        .state(
+            ServerState::Follower,
+            "node-0 becomes follower after seeing higher vote",
+        )
         .await?;
 
     // Verify node-0 has stored the higher vote

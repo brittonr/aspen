@@ -26,7 +26,6 @@
 /// router.wait(&0, timeout()).applied_index(Some(1), "initialized").await?;
 /// router.wait(&0, timeout()).current_leader(Some(0), "leader elected").await?;
 /// ```
-
 pub mod router;
 
 pub use router::AspenRouter;

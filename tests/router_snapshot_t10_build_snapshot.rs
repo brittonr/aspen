@@ -9,7 +9,6 @@
 /// when adding learners post-initialization (documented in router_t20_change_membership.rs).
 ///
 /// Original: openraft/tests/tests/snapshot_building/t10_build_snapshot.rs
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,7 +61,10 @@ async fn test_build_snapshot() -> Result<()> {
 
     let mut log_index = 1; // Initialization log at index 1
 
-    tracing::info!("--- writing entries to trigger snapshot (threshold={})", snapshot_threshold);
+    tracing::info!(
+        "--- writing entries to trigger snapshot (threshold={})",
+        snapshot_threshold
+    );
     {
         // Write enough entries to reach the snapshot threshold
         // We need to write (snapshot_threshold - 1 - log_index) more entries
@@ -109,8 +111,7 @@ async fn test_build_snapshot() -> Result<()> {
 
         if let Some(snapshot_log_id) = metrics.snapshot {
             assert_eq!(
-                snapshot_log_id.index,
-                log_index,
+                snapshot_log_id.index, log_index,
                 "snapshot should include all logs up to threshold"
             );
         }
@@ -123,7 +124,11 @@ async fn test_build_snapshot() -> Result<()> {
         assert_eq!(val0, Some("value0".to_string()), "key0 should be persisted");
 
         let val10 = router.read(&0, "key10").await;
-        assert_eq!(val10, Some("value10".to_string()), "key10 should be persisted");
+        assert_eq!(
+            val10,
+            Some("value10".to_string()),
+            "key10 should be persisted"
+        );
     }
 
     // TODO: Add learner replication test once we resolve the OpenRaft engine assertion issue

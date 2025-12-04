@@ -6,7 +6,6 @@
 ///
 /// Original: openraft/tests/tests/membership/t51_remove_unreachable_follower.rs
 /// Note: Simplified due to add_learner multi-node limitations
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -58,7 +57,9 @@ async fn test_network_partition_simulation() -> Result<()> {
 
     tracing::info!("--- write some data");
     {
-        router.write(&0, "key1".to_string(), "value1".to_string()).await
+        router
+            .write(&0, "key1".to_string(), "value1".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
@@ -93,7 +94,9 @@ async fn test_network_partition_simulation() -> Result<()> {
 
         // After recovery, node 0 should be reachable again
         // Verify by writing more data
-        router.write(&0, "key2".to_string(), "value2".to_string()).await
+        router
+            .write(&0, "key2".to_string(), "value2".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
@@ -137,7 +140,9 @@ async fn test_network_delay() -> Result<()> {
 
         // Write should still work but be slower
         let start = std::time::Instant::now();
-        router.write(&0, "slow".to_string(), "data".to_string()).await
+        router
+            .write(&0, "slow".to_string(), "data".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         let elapsed = start.elapsed();
 
@@ -153,7 +158,9 @@ async fn test_network_delay() -> Result<()> {
         router.set_network_delay(0);
 
         // Write should be fast again
-        router.write(&0, "fast".to_string(), "data".to_string()).await
+        router
+            .write(&0, "fast".to_string(), "data".to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         let val = router.read(&0, "fast").await;

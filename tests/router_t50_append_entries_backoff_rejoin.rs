@@ -5,7 +5,6 @@
 /// current log state through append-entries replication.
 ///
 /// Original: openraft/tests/tests/replication/t50_append_entries_backoff_rejoin.rs
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,7 +32,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
         Config {
             election_timeout_min: 100,
             election_timeout_max: 200,
-            enable_elect: false,  // Manual election control
+            enable_elect: false, // Manual election control
             enable_heartbeat: true,
             ..Default::default()
         }
@@ -95,7 +94,9 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     // Account for blank leader log when node-1 was elected
     let mut new_log_index = log_index + 1;
     for i in 0..10 {
-        router.write(&1, format!("key{}", i), format!("value{}", i)).await
+        router
+            .write(&1, format!("key{}", i), format!("value{}", i))
+            .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         new_log_index += 1;
     }
@@ -151,7 +152,10 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
             .wait(&node_id, timeout())
             .applied_index(
                 Some(new_log_index),
-                &format!("node {} should have applied index {}", node_id, new_log_index)
+                &format!(
+                    "node {} should have applied index {}",
+                    node_id, new_log_index
+                ),
             )
             .await?;
     }

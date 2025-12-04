@@ -6,7 +6,6 @@
 /// a node falls behind and needs snapshot recovery.
 ///
 /// Original: openraft/openraft/src/engine/handler/following_handler/install_snapshot_test.rs::test_install_snapshot_conflict
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;

@@ -17,11 +17,13 @@
 ///! - Fixed data set: 100 keys
 ///! - Bounded test duration: expected < 30 seconds
 ///! - Explicit measurement: total time, throughput
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
+use aspen::api::{
+    ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteCommand,
+    WriteRequest,
+};
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
@@ -166,14 +168,14 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     println!("Failed reads:       {}", total_failed);
     println!("Duration:           {:.2} seconds", duration_secs);
     println!("Throughput:         {:.2} reads/sec", throughput);
-    println!("Average latency:    {:.2} ms/read", duration.as_millis() as f64 / total_reads as f64);
+    println!(
+        "Average latency:    {:.2} ms/read",
+        duration.as_millis() as f64 / total_reads as f64
+    );
 
     // Assertions
     let expected_total = NUM_READERS as u64 * NUM_KEYS;
-    assert_eq!(
-        total_successful, expected_total,
-        "all reads should succeed"
-    );
+    assert_eq!(total_successful, expected_total, "all reads should succeed");
     assert_eq!(total_failed, 0, "no reads should fail");
 
     // Sanity check: expect at least 100 reads/sec with concurrency
@@ -213,6 +215,9 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let handle = bootstrap_node(config).await?;
@@ -220,7 +225,11 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     // Initialize single-node cluster
     let cluster = RaftControlClient::new(handle.raft_actor.clone());
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
     };
     cluster.init(init_req).await?;
 

@@ -5,17 +5,16 @@
 /// be based on prev_log_id matching, not the presence of entries.
 ///
 /// Original: openraft/tests/tests/append_entries/t10_conflict_with_empty_entries.rs
-
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
-use openraft::{Config, ServerState, Vote};
 use openraft::raft::AppendEntriesRequest;
-use openraft::storage::{RaftLogStorage, RaftLogReader};
+use openraft::storage::{RaftLogReader, RaftLogStorage};
 use openraft::testing::{blank_ent, log_id};
+use openraft::{Config, ServerState, Vote};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))

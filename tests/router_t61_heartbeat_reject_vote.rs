@@ -12,7 +12,6 @@
 /// 5. Shows that vote requests are granted after lease expires
 ///
 /// Original: openraft/tests/tests/append_entries/t61_heartbeat_reject_vote.rs
-
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
@@ -20,9 +19,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
+use openraft::raft::VoteRequest;
 use openraft::testing::log_id;
 use openraft::{Config, TokioInstant, Vote};
-use openraft::raft::VoteRequest;
 use tokio::time::sleep;
 
 fn timeout() -> Option<Duration> {
@@ -88,10 +87,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
     tracing::info!(log_index, "--- leader lease rejects vote request");
     {
         let res = node1
-            .vote(VoteRequest::new(
-                Vote::new(10, 2),
-                Some(log_id(10, 1, 10)),
-            ))
+            .vote(VoteRequest::new(Vote::new(10, 2), Some(log_id(10, 1, 10))))
             .await?;
         assert!(
             !res.is_granted_to(&Vote::new(10, 2)),
@@ -99,10 +95,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
         );
     }
 
-    tracing::info!(
-        log_index,
-        "--- ensures no more blank-log heartbeat is used"
-    );
+    tracing::info!(log_index, "--- ensures no more blank-log heartbeat is used");
     {
         // This verifies that blank-log heartbeats (if any) don't write extra log entries
         sleep(Duration::from_millis(1500)).await;
@@ -112,7 +105,10 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
             .await?;
     }
 
-    tracing::info!(log_index, "--- disable heartbeat, vote request will be granted");
+    tracing::info!(
+        log_index,
+        "--- disable heartbeat, vote request will be granted"
+    );
     {
         node0.runtime_config().heartbeat(false);
         sleep(Duration::from_millis(1500)).await;
@@ -123,10 +119,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
             .await?;
 
         let res = node1
-            .vote(VoteRequest::new(
-                Vote::new(10, 2),
-                Some(log_id(10, 1, 10)),
-            ))
+            .vote(VoteRequest::new(Vote::new(10, 2), Some(log_id(10, 1, 10))))
             .await?;
         assert!(
             res.is_granted_to(&Vote::new(10, 2)),

@@ -4,7 +4,6 @@
 /// - Fixed limits (95% disk usage threshold)
 /// - Fail-fast semantics for resource exhaustion
 /// - Explicit error types
-
 use std::path::Path;
 
 /// Disk space information for a filesystem.
@@ -141,10 +140,7 @@ mod tests {
         assert!(result.is_ok(), "disk space check should succeed");
 
         let disk_space = result.unwrap();
-        assert!(
-            disk_space.total_bytes > 0,
-            "total bytes should be positive"
-        );
+        assert!(disk_space.total_bytes > 0, "total bytes should be positive");
         assert!(
             disk_space.available_bytes <= disk_space.total_bytes,
             "available should be <= total"
