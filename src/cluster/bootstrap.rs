@@ -340,15 +340,17 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     info!("irpc server spawned for raft rpc");
 
     // Register node in metadata store
+    let last_updated_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("system time is set before Unix epoch (1970-01-01)")?
+        .as_secs();
+
     let node_metadata = NodeMetadata {
         node_id: config.node_id,
         endpoint_id: iroh_manager.endpoint().id().to_string(),
         raft_addr: format!("{}:{}", config.host, config.ractor_port),
         status: NodeStatus::Online,
-        last_updated_secs: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_secs(),
+        last_updated_secs,
     };
 
     metadata_store
