@@ -160,7 +160,7 @@ impl MetadataStore {
 
             // Update status and timestamp
             metadata.status = status;
-            metadata.last_updated_secs = current_timestamp_secs();
+            metadata.last_updated_secs = current_timestamp_secs()?;
 
             // Write back
             let serialized = bincode::serialize(&metadata).context(SerializeSnafu)?;
@@ -194,11 +194,13 @@ impl MetadataStore {
 }
 
 /// Get the current Unix timestamp in seconds.
-fn current_timestamp_secs() -> u64 {
+///
+/// Returns error if system clock is set before Unix epoch (1970-01-01).
+fn current_timestamp_secs() -> Result<u64, MetadataError> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time before Unix epoch")
-        .as_secs()
+        .context(SystemTimeSnafu)
+        .map(|d| d.as_secs())
 }
 
 /// Metadata store errors.
@@ -285,6 +287,11 @@ pub enum MetadataError {
 
     #[snafu(display("node {node_id} not found in metadata store"))]
     NodeNotFound { node_id: u64 },
+
+    #[snafu(display("system time is before Unix epoch (clock misconfigured)"))]
+    SystemTime {
+        source: std::time::SystemTimeError,
+    },
 }
 
 #[cfg(test)]
@@ -303,7 +310,7 @@ mod tests {
             endpoint_id: "test-endpoint-id".into(),
             raft_addr: "127.0.0.1:26000".into(),
             status: NodeStatus::Online,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         store.register_node(metadata.clone()).unwrap();
@@ -326,7 +333,7 @@ mod tests {
             endpoint_id: "endpoint-1".into(),
             raft_addr: "127.0.0.1:26001".into(),
             status: NodeStatus::Online,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         let metadata2 = NodeMetadata {
@@ -334,7 +341,7 @@ mod tests {
             endpoint_id: "endpoint-2".into(),
             raft_addr: "127.0.0.1:26002".into(),
             status: NodeStatus::Starting,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         store.register_node(metadata1.clone()).unwrap();
@@ -357,7 +364,7 @@ mod tests {
             endpoint_id: "test-endpoint-id".into(),
             raft_addr: "127.0.0.1:26000".into(),
             status: NodeStatus::Starting,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         store.register_node(metadata).unwrap();
@@ -394,7 +401,7 @@ mod tests {
             endpoint_id: "test-endpoint-id".into(),
             raft_addr: "127.0.0.1:26000".into(),
             status: NodeStatus::Online,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         store.register_node(metadata).unwrap();
@@ -414,7 +421,7 @@ mod tests {
             endpoint_id: "test-endpoint-id".into(),
             raft_addr: "127.0.0.1:26000".into(),
             status: NodeStatus::Online,
-            last_updated_secs: current_timestamp_secs(),
+            last_updated_secs: current_timestamp_secs().unwrap(),
         };
 
         // Create store and write data

@@ -309,6 +309,7 @@ dependencies = [
  "mad-turmoil",
  "madsim",
  "openraft 0.10.0",
+ "parking_lot",
  "portpicker",
  "postcard",
  "proptest",

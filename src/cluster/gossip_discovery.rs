@@ -75,17 +75,17 @@ struct PeerAnnouncement {
 
 impl PeerAnnouncement {
     /// Create a new announcement with the current timestamp.
-    fn new(node_id: NodeId, endpoint_addr: EndpointAddr) -> Self {
+    fn new(node_id: NodeId, endpoint_addr: EndpointAddr) -> Result<Self> {
         let timestamp_micros = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before UNIX epoch")
+            .context("system time before Unix epoch")?
             .as_micros() as u64;
 
-        Self {
+        Ok(Self {
             node_id,
             endpoint_addr,
             timestamp_micros,
-        }
+        })
     }
 
     /// Serialize to bytes using postcard.
@@ -168,7 +168,13 @@ impl GossipPeerDiscovery {
 
                 ticker.tick().await;
 
-                let announcement = PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone());
+                let announcement = match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
+                    Ok(ann) => ann,
+                    Err(e) => {
+                        tracing::error!("failed to create peer announcement: {}", e);
+                        continue;
+                    }
+                };
                 match announcement.to_bytes() {
                     Ok(bytes) => {
                         if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
@@ -321,7 +327,7 @@ mod tests {
     fn test_peer_announcement_serialize_deserialize() {
         let node_id = 123u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement = PeerAnnouncement::new(node_id, addr);
+        let announcement = PeerAnnouncement::new(node_id, addr).unwrap();
 
         let bytes = announcement.to_bytes().unwrap();
         let deserialized = PeerAnnouncement::from_bytes(&bytes).unwrap();
@@ -335,11 +341,11 @@ mod tests {
     fn test_peer_announcement_timestamp() {
         let node_id = 456u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement1 = PeerAnnouncement::new(node_id, addr.clone());
+        let announcement1 = PeerAnnouncement::new(node_id, addr.clone()).unwrap();
 
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        let announcement2 = PeerAnnouncement::new(node_id, addr);
+        let announcement2 = PeerAnnouncement::new(node_id, addr).unwrap();
 
         // Second announcement should have a later timestamp
         assert!(announcement2.timestamp_micros > announcement1.timestamp_micros);
