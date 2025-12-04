@@ -20,7 +20,7 @@ use crate::raft::storage::{
     InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
 };
 use crate::raft::types::{AppTypeConfig, NodeId};
-use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
+use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage, StateMachineVariant};
 
 /// Handle to a bootstrapped cluster node.
 ///
@@ -40,8 +40,8 @@ pub struct BootstrapHandle {
     pub raft_task: tokio::task::JoinHandle<()>,
     /// Raft core for direct access.
     pub raft_core: openraft::Raft<AppTypeConfig>,
-    /// State machine store.
-    pub state_machine: Arc<StateMachineStore>,
+    /// State machine variant (actual state machine used by Raft).
+    pub state_machine: StateMachineVariant,
     /// IRPC server handle.
     pub rpc_server: RaftRpcServer,
     /// IRPC network factory for dynamic peer addition.
@@ -290,8 +290,8 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         "node server online"
     );
 
-    // Create Raft core and state machine
-    let raft_core = {
+    // Create Raft core and capture the actual state machine
+    let (raft_core, state_machine_variant) = {
         let mut raft_config = RaftConfig::default();
         raft_config.heartbeat_interval = config.heartbeat_interval_ms;
         raft_config.election_timeout_min = config.election_timeout_min_ms;
@@ -309,15 +309,17 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 let log_store = InMemoryLogStore::default();
                 let state_machine_store = StateMachineStore::new();
 
-                openraft::Raft::new(
+                let raft = openraft::Raft::new(
                     config.node_id,
                     validated_config,
                     (*network_factory).clone(),
                     log_store,
-                    state_machine_store,
+                    state_machine_store.clone(),
                 )
                 .await
-                .context("failed to initialize raft with in-memory storage")?
+                .context("failed to initialize raft with in-memory storage")?;
+
+                (raft, StateMachineVariant::InMemory(state_machine_store))
             }
             StorageBackend::Redb => {
                 info!("Using redb persistent storage backend");
@@ -344,26 +346,26 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 let state_machine = RedbStateMachine::new(&sm_path)
                     .context("failed to create redb state machine")?;
 
-                openraft::Raft::new(
+                let raft = openraft::Raft::new(
                     config.node_id,
                     validated_config,
                     (*network_factory).clone(),
                     log_store,
-                    state_machine,
+                    state_machine.clone(),
                 )
                 .await
-                .context("failed to initialize raft with redb storage")?
+                .context("failed to initialize raft with redb storage")?;
+
+                (raft, StateMachineVariant::Redb(state_machine))
             }
         }
     };
 
-    // Spawn Raft actor
-    // Note: state_machine field is legacy/unused - Raft core owns the actual state machine
-    let placeholder_state_machine = StateMachineStore::new();
+    // Spawn Raft actor with the actual state machine
     let raft_actor_config = RaftActorConfig {
         node_id: config.node_id,
         raft: raft_core.clone(),
-        state_machine: placeholder_state_machine.clone(),
+        state_machine: state_machine_variant.clone(),
     };
     let (raft_actor, raft_task) = Actor::spawn(
         Some(format!("raft-{}", config.node_id)),
@@ -411,7 +413,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         raft_actor,
         raft_task,
         raft_core,
-        state_machine: placeholder_state_machine,
+        state_machine: state_machine_variant,
         rpc_server,
         network_factory,
         gossip_discovery,

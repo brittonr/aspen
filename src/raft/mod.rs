@@ -18,15 +18,36 @@ use crate::api::{
     ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
     WriteCommand, WriteRequest, WriteResult,
 };
-use crate::raft::storage::StateMachineStore;
+use crate::raft::storage::{RedbStateMachine, StateMachineStore};
 use crate::raft::types::{AppRequest, AppTypeConfig};
+
+/// State machine variant that can hold either in-memory or redb-backed storage.
+///
+/// This enum allows the RaftActor to read from the same state machine that
+/// receives writes through the Raft core, fixing the NotFound bug where reads
+/// queried a placeholder state machine.
+#[derive(Clone, Debug)]
+pub enum StateMachineVariant {
+    InMemory(Arc<StateMachineStore>),
+    Redb(Arc<RedbStateMachine>),
+}
+
+impl StateMachineVariant {
+    /// Read a value from the state machine.
+    pub async fn get(&self, key: &str) -> Option<String> {
+        match self {
+            Self::InMemory(sm) => sm.get(key).await,
+            Self::Redb(sm) => sm.get(key).await.ok().flatten(),
+        }
+    }
+}
 
 /// Configuration used to initialize a Raft actor instance.
 #[derive(Clone, Debug)]
 pub struct RaftActorConfig {
     pub node_id: u64,
     pub raft: Raft<AppTypeConfig>,
-    pub state_machine: Arc<StateMachineStore>,
+    pub state_machine: StateMachineVariant,
 }
 
 /// Empty actor shell that will eventually drive the Raft state machine.
@@ -36,7 +57,7 @@ pub struct RaftActor;
 pub struct RaftActorState {
     node_id: u64,
     raft: Raft<AppTypeConfig>,
-    state_machine: Arc<StateMachineStore>,
+    state_machine: StateMachineVariant,
     cluster_state: ClusterState,
     initialized: bool,
 }
