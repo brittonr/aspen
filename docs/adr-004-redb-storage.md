@@ -1,8 +1,9 @@
 # ADR-004: redb for Raft State Machine Storage
 
-**Status:** Proposed
+**Status:** Accepted - In Progress (70% Complete)
 
 **Date:** 2025-12-03
+**Updated:** 2025-12-03
 
 **Context:** Aspen requires a persistent storage engine for Raft's log and state machine. The storage layer must provide ACID guarantees, perform efficiently under concurrent workloads, and align with Tiger Style principles.
 
@@ -166,6 +167,39 @@ const RAFT_LOG: TableDefinition<u64, &[u8]> = TableDefinition::new("log");
 const RAFT_STATE: TableDefinition<&str, &[u8]> = TableDefinition::new("state");
 const STATE_MACHINE_KV: TableDefinition<&str, &str> = TableDefinition::new("kv");
 ```
+
+## Implementation Progress (2025-12-03)
+
+**Status: 70% Complete**
+
+### ✅ Completed
+- `StorageBackend` enum for InMemory/Redb selection
+- `RedbLogStore` (~270 lines) fully implementing `RaftLogStorage`:
+  - Vote persistence (`save_vote`, `read_vote`)
+  - Committed index tracking (`save_committed`, `read_committed`)
+  - Log operations (`append`, `truncate`, `purge`, `get_log_state`)
+  - ACID transactions with proper error handling
+- `RedbStateMachine` (~370 lines) fully implementing `RaftStateMachine`:
+  - KV data persistence (`apply`)
+  - Snapshot building and installation
+  - Metadata tracking (last_applied_log, last_membership)
+  - ACID guarantees via redb transactions
+- Persistence tests: `test_redb_log_persistence`, `test_redb_state_machine_persistence` (both passing)
+- Tiger Style compliance: explicit u64 types, bounded operations, fail-fast semantics
+
+### ⏸️ In Progress
+- OpenRaft comprehensive test suite: 1 failure in `test_redb_storage_suite` (last_applied_log state sync issue)
+- Bootstrap integration: need to wire Redb storage into `bootstrap_node()`
+- Configuration: add backend selection to `ClusterBootstrapConfig`
+
+### 📊 Test Results
+```
+test_redb_log_persistence            PASS ✅ (0.167s)
+test_redb_state_machine_persistence  PASS ✅
+test_redb_storage_suite              FAIL ❌ (assertion failure - investigating)
+```
+
+**Next Steps**: Debug storage suite failure, integrate into bootstrap, validate all existing tests pass.
 
 ## References
 
