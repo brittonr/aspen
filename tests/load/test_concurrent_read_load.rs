@@ -1,22 +1,23 @@
-///! Test: Concurrent Read Load
-///!
-///! Validates that the cluster can handle concurrent read operations
-///! and measures read throughput under load.
-///!
-///! # Test Strategy
-///!
-///! 1. Start 3-node cluster
-///! 2. Pre-populate 100 keys
-///! 3. Spawn 100 concurrent read tasks
-///! 4. Measure total time and throughput
-///! 5. Verify all reads succeed
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed concurrent readers: 100 tasks
-///! - Fixed data set: 100 keys
-///! - Bounded test duration: expected < 30 seconds
-///! - Explicit measurement: total time, throughput
+//! Test: Concurrent Read Load
+//!
+//! Validates that the cluster can handle concurrent read operations
+//! and measures read throughput under load.
+//!
+//! # Test Strategy
+//!
+//! 1. Start 3-node cluster
+//! 2. Pre-populate 100 keys
+//! 3. Spawn 100 concurrent read tasks
+//! 4. Measure total time and throughput
+//! 5. Verify all reads succeed
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed concurrent readers: 100 tasks
+//! - Fixed data set: 100 keys
+//! - Bounded test duration: expected < 30 seconds
+//! - Explicit measurement: total time, throughput
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

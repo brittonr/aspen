@@ -1,26 +1,27 @@
-///! Test: Cluster Total Shutdown and Recovery
-///!
-///! Validates that a cluster can gracefully shutdown and restart cleanly.
-///!
-///! # Test Strategy
-///!
-///! With in-memory storage (current implementation):
-///! 1. Start 3-node cluster
-///! 2. Write data and verify replication
-///! 3. Gracefully shutdown all nodes
-///! 4. Restart all nodes
-///! 5. Verify cluster can be re-initialized (data lost due to in-memory storage)
-///!
-///! With persistent storage (future redb implementation):
-///! - Data should be recovered after restart
-///! - No re-initialization needed
-///! - Log indices and membership preserved
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed cluster size: 3 nodes
-///! - Explicit shutdown order: reverse of startup
-///! - Bounded timeouts: 500ms for initialization, 200ms for replication
+//! Test: Cluster Total Shutdown and Recovery
+//!
+//! Validates that a cluster can gracefully shutdown and restart cleanly.
+//!
+//! # Test Strategy
+//!
+//! With in-memory storage (current implementation):
+//! 1. Start 3-node cluster
+//! 2. Write data and verify replication
+//! 3. Gracefully shutdown all nodes
+//! 4. Restart all nodes
+//! 5. Verify cluster can be re-initialized (data lost due to in-memory storage)
+//!
+//! With persistent storage (future redb implementation):
+//! - Data should be recovered after restart
+//! - No re-initialization needed
+//! - Log indices and membership preserved
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed cluster size: 3 nodes
+//! - Explicit shutdown order: reverse of startup
+//! - Bounded timeouts: 500ms for initialization, 200ms for replication
+
 use std::time::Duration;
 
 use aspen::api::{

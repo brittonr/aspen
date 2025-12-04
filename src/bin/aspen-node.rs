@@ -270,7 +270,7 @@ impl MetricsCollector {
 static METRICS: OnceLock<MetricsCollector> = OnceLock::new();
 
 fn metrics_collector() -> &'static MetricsCollector {
-    METRICS.get_or_init(|| MetricsCollector::new())
+    METRICS.get_or_init(MetricsCollector::new)
 }
 
 /// Detailed health check response with individual component status.
@@ -638,8 +638,8 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
         }
 
         // Replication lag (leader only)
-        if let Some(ref replication) = raft_metrics.replication {
-            if let Some(leader_last_log) = raft_metrics.last_log_index {
+        if let Some(ref replication) = raft_metrics.replication
+            && let Some(leader_last_log) = raft_metrics.last_log_index {
                 body.push_str("# TYPE aspen_replication_lag gauge\n");
                 body.push_str("# HELP aspen_replication_lag Number of log entries follower is behind leader\n");
 
@@ -658,7 +658,6 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
                     ));
                 }
             }
-        }
 
         // Heartbeat metrics (leader only) - time since last heartbeat ack
         if let Some(ref heartbeat) = raft_metrics.heartbeat {
@@ -918,10 +917,9 @@ async fn write_value(
             })?;
     }
 
-    let result = state.kv.write(request).await.map_err(|e| {
+    let result = state.kv.write(request).await.inspect_err(|_e| {
         // Record RPC error for write failures
         metrics_collector().record_rpc_error();
-        e
     })?;
 
     // Record write latency
@@ -938,10 +936,9 @@ async fn read_value(
 ) -> ApiResult<impl IntoResponse> {
     let start = Instant::now();
 
-    let result = state.kv.read(request).await.map_err(|e| {
+    let result = state.kv.read(request).await.inspect_err(|_e| {
         // Record RPC error for read failures
         metrics_collector().record_rpc_error();
-        e
     })?;
 
     // Record read latency

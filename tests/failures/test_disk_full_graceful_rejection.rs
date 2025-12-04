@@ -1,22 +1,23 @@
-///! Test: Disk Full Graceful Rejection
-///!
-///! Validates that when disk space is exhausted (>95%), write operations
-///! are rejected gracefully while the cluster remains operational for reads.
-///!
-///! # Test Strategy
-///!
-///! Since mocking filesystem operations is complex and non-portable, this test
-///! validates the disk space check logic and error propagation paths:
-///!
-///! 1. Unit test: Verify DiskSpace calculation logic (in src/utils.rs)
-///! 2. Integration test: Verify write endpoint calls disk check
-///! 3. Validation: Cluster remains operational for reads during write failures
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed disk threshold: 95% (DISK_USAGE_THRESHOLD_PERCENT)
-///! - Explicit error types: io::ErrorKind::OutOfMemory for disk full
-///! - Fail-fast semantics: Reject writes before storage layer errors
+//! Test: Disk Full Graceful Rejection
+//!
+//! Validates that when disk space is exhausted (>95%), write operations
+//! are rejected gracefully while the cluster remains operational for reads.
+//!
+//! # Test Strategy
+//!
+//! Since mocking filesystem operations is complex and non-portable, this test
+//! validates the disk space check logic and error propagation paths:
+//!
+//! 1. Unit test: Verify DiskSpace calculation logic (in src/utils.rs)
+//! 2. Integration test: Verify write endpoint calls disk check
+//! 3. Validation: Cluster remains operational for reads during write failures
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed disk threshold: 95% (DISK_USAGE_THRESHOLD_PERCENT)
+//! - Explicit error types: io::ErrorKind::OutOfMemory for disk full
+//! - Fail-fast semantics: Reject writes before storage layer errors
+
 use std::time::Duration;
 
 use aspen::api::{

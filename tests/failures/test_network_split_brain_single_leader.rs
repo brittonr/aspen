@@ -1,23 +1,24 @@
-///! Test: Network Split-Brain Single Leader
-///!
-///! Validates that during network partitions, only the majority partition
-///! maintains or elects a leader, preventing split-brain scenarios.
-///!
-///! # Test Strategy
-///!
-///! 1. Start 5-node cluster (quorum = 3)
-///! 2. Partition network: 3-node majority + 2-node minority
-///! 3. Verify: Only majority partition has leader
-///! 4. Verify: Minority partition remains in follower/candidate state
-///! 5. Heal partition
-///! 6. Verify: Single leader maintained, logs converge
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed cluster size: 5 nodes
-///! - Fixed partition: 3-node majority, 2-node minority
-///! - Bounded timeouts: 2s for leader election, 1s for log convergence
-///! - Deterministic behavior: no randomness
+//! Test: Network Split-Brain Single Leader
+//!
+//! Validates that during network partitions, only the majority partition
+//! maintains or elects a leader, preventing split-brain scenarios.
+//!
+//! # Test Strategy
+//!
+//! 1. Start 5-node cluster (quorum = 3)
+//! 2. Partition network: 3-node majority + 2-node minority
+//! 3. Verify: Only majority partition has leader
+//! 4. Verify: Minority partition remains in follower/candidate state
+//! 5. Heal partition
+//! 6. Verify: Single leader maintained, logs converge
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed cluster size: 5 nodes
+//! - Fixed partition: 3-node majority, 2-node minority
+//! - Bounded timeouts: 2s for leader election, 1s for log convergence
+//! - Deterministic behavior: no randomness
+
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 

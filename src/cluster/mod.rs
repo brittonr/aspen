@@ -161,7 +161,7 @@ impl NodeServerConfig {
             Some(self.connection_mode),
         );
         let actor_name = format!("node-server-{}", self.label);
-        let (actor_ref, join_handle) = Actor::spawn(Some(actor_name.into()), server, ())
+        let (actor_ref, join_handle) = Actor::spawn(Some(actor_name), server, ())
             .await
             .context("failed to spawn node server")?;
 
@@ -258,7 +258,7 @@ impl NodeServerHandle {
             .inner
             .host
             .parse()
-            .unwrap_or_else(|_| IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+            .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         SocketAddr::new(ip, self.inner.port)
     }
 

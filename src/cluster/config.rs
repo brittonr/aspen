@@ -27,6 +27,7 @@ pub struct ClusterBootstrapConfig {
     /// Storage backend for Raft log and state machine.
     /// - InMemory: Fast, non-durable (data lost on restart), good for testing
     /// - Redb: ACID-compliant persistent storage (data survives restarts)
+    ///
     /// Default: InMemory
     #[serde(default)]
     pub storage_backend: StorageBackend,
@@ -208,7 +209,7 @@ impl ClusterBootstrapConfig {
             node_id: parse_env("ASPEN_NODE_ID").unwrap_or(0),
             data_dir: parse_env("ASPEN_DATA_DIR"),
             storage_backend: parse_env("ASPEN_STORAGE_BACKEND")
-                .unwrap_or_else(|| StorageBackend::default()),
+                .unwrap_or_else(StorageBackend::default),
             redb_log_path: parse_env("ASPEN_REDB_LOG_PATH"),
             redb_sm_path: parse_env("ASPEN_REDB_SM_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
@@ -380,8 +381,8 @@ impl ClusterBootstrapConfig {
         }
 
         // File path validation
-        if let Some(ref data_dir) = self.data_dir {
-            if let Some(parent) = data_dir.parent() {
+        if let Some(ref data_dir) = self.data_dir
+            && let Some(parent) = data_dir.parent() {
                 if !parent.exists() {
                     return Err(ConfigError::Validation {
                         message: format!(
@@ -419,7 +420,6 @@ impl ClusterBootstrapConfig {
                     }
                 }
             }
-        }
 
         // Network port validation (warn if using default ports)
         if self.http_addr.port() == 8080 {

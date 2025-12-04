@@ -619,12 +619,6 @@ impl AspenRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    
-
-    fn timeout() -> Option<Duration> {
-        Some(Duration::from_secs(10))
-    }
 
     #[tokio::test]
     async fn test_router_basic_workflow() -> Result<()> {

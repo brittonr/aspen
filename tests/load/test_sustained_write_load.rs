@@ -1,22 +1,23 @@
-///! Test: Sustained Write Load
-///!
-///! Validates that the cluster can handle sustained write operations and
-///! measures baseline throughput performance.
-///!
-///! # Test Strategy
-///!
-///! 1. Start 3-node cluster
-///! 2. Write 1000 key-value pairs sequentially
-///! 3. Measure total time and throughput (ops/sec)
-///! 4. Verify all writes succeed
-///! 5. Log baseline metrics for performance tracking
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed operation count: 1000 writes
-///! - Fixed cluster size: 3 nodes
-///! - Explicit measurement: total time, throughput
-///! - Bounded test duration: expected < 60 seconds
+//! Test: Sustained Write Load
+//!
+//! Validates that the cluster can handle sustained write operations and
+//! measures baseline throughput performance.
+//!
+//! # Test Strategy
+//!
+//! 1. Start 3-node cluster
+//! 2. Write 1000 key-value pairs sequentially
+//! 3. Measure total time and throughput (ops/sec)
+//! 4. Verify all writes succeed
+//! 5. Log baseline metrics for performance tracking
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed operation count: 1000 writes
+//! - Fixed cluster size: 3 nodes
+//! - Explicit measurement: total time, throughput
+//! - Bounded test duration: expected < 60 seconds
+
 use std::time::{Duration, Instant};
 
 use aspen::api::{

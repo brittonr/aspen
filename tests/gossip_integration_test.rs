@@ -204,8 +204,10 @@ fn test_config_gossip_enabled_by_default() {
 
 #[test]
 fn test_config_gossip_disabled() {
-    let mut config = IrohConfig::default();
-    config.enable_gossip = false;
+    let config = IrohConfig {
+        enable_gossip: false,
+        ..Default::default()
+    };
     assert!(!config.enable_gossip);
 }
 

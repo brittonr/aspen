@@ -180,7 +180,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
     let voters: Vec<_> = metrics.membership_config.voter_ids().collect();
     assert_eq!(voters.len(), 2, "effective membership should have 2 voters");
     assert!(
-        voters.contains(&&4) && voters.contains(&&5),
+        voters.contains(&4) && voters.contains(&5),
         "effective membership should be {{4, 5}}, got {:?}",
         voters
     );

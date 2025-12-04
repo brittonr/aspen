@@ -1,21 +1,22 @@
-///! Test: Mixed Workload (70% Reads, 30% Writes)
-///!
-///! Validates cluster performance under realistic mixed read/write workload.
-///!
-///! # Test Strategy
-///!
-///! 1. Start 3-node cluster
-///! 2. Run 1000 operations: 70% reads, 30% writes
-///! 3. Randomize key access patterns (realistic distribution)
-///! 4. Measure throughput and success rate
-///! 5. Verify >99% success rate
-///!
-///! # Tiger Style Compliance
-///!
-///! - Fixed total operations: 1000
-///! - Fixed read/write ratio: 70/30
-///! - Fixed key space: 100 keys (allows cache hits)
-///! - Bounded test duration: expected < 60 seconds
+//! Test: Mixed Workload (70% Reads, 30% Writes)
+//!
+//! Validates cluster performance under realistic mixed read/write workload.
+//!
+//! # Test Strategy
+//!
+//! 1. Start 3-node cluster
+//! 2. Run 1000 operations: 70% reads, 30% writes
+//! 3. Randomize key access patterns (realistic distribution)
+//! 4. Measure throughput and success rate
+//! 5. Verify >99% success rate
+//!
+//! # Tiger Style Compliance
+//!
+//! - Fixed total operations: 1000
+//! - Fixed read/write ratio: 70/30
+//! - Fixed key space: 100 keys (allows cache hits)
+//! - Bounded test duration: expected < 60 seconds
+
 use std::time::{Duration, Instant};
 
 use aspen::api::{

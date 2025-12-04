@@ -1,6 +1,6 @@
-///! Test: Enhanced Health Endpoint
-///!
-///! Validates that the enhanced /health endpoint returns detailed component status.
+//! Test: Enhanced Health Endpoint
+//!
+//! Validates that the enhanced /health endpoint returns detailed component status.
 
 use std::sync::Arc;
 
@@ -14,6 +14,7 @@ use reqwest::StatusCode;
 use serde_json::Value;
 
 // Test helper to start HTTP server with health endpoint
+#[allow(clippy::too_many_arguments)]
 async fn start_test_server(
     http_addr: std::net::SocketAddr,
     node_id: u64,

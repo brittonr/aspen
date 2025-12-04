@@ -32,9 +32,11 @@ use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 /// - **Redb**: Persistent ACID storage for production deployments
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum StorageBackend {
     /// In-memory storage using BTreeMap. Data is lost on restart.
     /// Use for: unit tests, madsim simulations, development.
+    #[default]
     InMemory,
     /// Persistent storage using redb. Data survives restarts.
     /// Use for: production deployments, integration tests.
@@ -65,11 +67,6 @@ impl std::fmt::Display for StorageBackend {
     }
 }
 
-impl Default for StorageBackend {
-    fn default() -> Self {
-        StorageBackend::InMemory
-    }
-}
 
 // ====================================================================================
 // Redb Table Definitions (Tiger Style: explicitly named, typed tables)
@@ -173,7 +170,7 @@ pub enum StorageError {
 
 impl From<StorageError> for io::Error {
     fn from(err: StorageError) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, err.to_string())
+        io::Error::other(err.to_string())
     }
 }
 
@@ -212,9 +209,9 @@ impl LogStoreInner {
             .log
             .iter()
             .next_back()
-            .map(|(_, entry)| entry.log_id().clone());
-        let last_purged = self.last_purged_log_id.clone();
-        let last = last_log_id.or(last_purged.clone());
+            .map(|(_, entry)| entry.log_id());
+        let last_purged = self.last_purged_log_id;
+        let last = last_log_id.or(last_purged);
         Ok(LogState {
             last_purged_log_id: last_purged,
             last_log_id: last,
@@ -230,16 +227,16 @@ impl LogStoreInner {
     }
 
     async fn read_committed(&mut self) -> Result<Option<LogIdOf<AppTypeConfig>>, io::Error> {
-        Ok(self.committed.clone())
+        Ok(self.committed)
     }
 
     async fn save_vote(&mut self, vote: &VoteOf<AppTypeConfig>) -> Result<(), io::Error> {
-        self.vote = Some(vote.clone());
+        self.vote = Some(*vote);
         Ok(())
     }
 
     async fn read_vote(&mut self) -> Result<Option<VoteOf<AppTypeConfig>>, io::Error> {
-        Ok(self.vote.clone())
+        Ok(self.vote)
     }
 
     async fn append<I>(
@@ -273,7 +270,7 @@ impl LogStoreInner {
         if let Some(prev) = &self.last_purged_log_id {
             assert!(prev <= &log_id);
         }
-        self.last_purged_log_id = Some(log_id.clone());
+        self.last_purged_log_id = Some(log_id);
         let keys = self
             .log
             .range(..=log_id.index())
@@ -523,12 +520,12 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 let bytes = value.value();
                 let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
                     bincode::deserialize(bytes).context(DeserializeSnafu)?;
-                Ok::<_, StorageError>(entry.log_id().clone())
+                Ok::<_, StorageError>(entry.log_id())
             })
             .transpose()?;
 
         let last_purged: Option<LogIdOf<AppTypeConfig>> = self.read_meta("last_purged_log_id")?;
-        let last = last_log_id.or(last_purged.clone());
+        let last = last_log_id.or(last_purged);
 
         Ok(LogState {
             last_purged_log_id: last_purged,

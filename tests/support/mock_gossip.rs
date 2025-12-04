@@ -111,6 +111,7 @@ impl Default for MockGossip {
 /// Provides methods to broadcast messages and receive messages from other
 /// subscribers on the same topic.
 pub struct MockGossipHandle {
+    #[allow(dead_code)]
     topic: TopicId,
     sender: broadcast::Sender<Bytes>,
     receiver: Arc<tokio::sync::Mutex<broadcast::Receiver<Bytes>>>,
@@ -166,6 +167,7 @@ impl MockGossipHandle {
     }
 
     /// Get the topic ID for this handle.
+    #[allow(dead_code)]
     pub fn topic_id(&self) -> TopicId {
         self.topic
     }
@@ -274,7 +276,7 @@ mod tests {
         let topic = create_topic_id(1);
 
         let handle1 = gossip.subscribe(topic).unwrap();
-        let handle2 = gossip.subscribe(topic).unwrap();
+        let _handle2 = gossip.subscribe(topic).unwrap();
 
         // Fill the channel (capacity 2)
         handle1.broadcast(b"msg1".to_vec()).await.unwrap();

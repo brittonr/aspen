@@ -292,10 +292,12 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
     // Create Raft core and capture the actual state machine
     let (raft_core, state_machine_variant) = {
-        let mut raft_config = RaftConfig::default();
-        raft_config.heartbeat_interval = config.heartbeat_interval_ms;
-        raft_config.election_timeout_min = config.election_timeout_min_ms;
-        raft_config.election_timeout_max = config.election_timeout_max_ms;
+        let raft_config = RaftConfig {
+            heartbeat_interval: config.heartbeat_interval_ms,
+            election_timeout_min: config.election_timeout_min_ms,
+            election_timeout_max: config.election_timeout_max_ms,
+            ..Default::default()
+        };
         let validated_config = Arc::new(
             raft_config
                 .validate()

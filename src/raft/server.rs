@@ -191,7 +191,7 @@ async fn handle_rpc_stream(
             let result = raft_core
                 .install_full_snapshot(snapshot_req.vote, snapshot)
                 .await
-                .map_err(|fatal_err| openraft::error::RaftError::Fatal(fatal_err));
+                .map_err(openraft::error::RaftError::Fatal);
             RaftRpcResponse::InstallSnapshot(result)
         }
     };

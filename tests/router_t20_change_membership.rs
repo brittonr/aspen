@@ -118,7 +118,7 @@ async fn test_add_learner_and_promote() -> Result<()> {
         let metrics0 = router.get_raft_handle(&0)?.metrics().borrow().clone();
         let metrics1 = router.get_raft_handle(&1)?.metrics().borrow().clone();
 
-        let states = vec![metrics0.state, metrics1.state];
+        let states = [metrics0.state, metrics1.state];
         assert!(
             states.contains(&ServerState::Leader),
             "one node should be leader"

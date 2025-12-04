@@ -196,8 +196,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         let response = self.send_rpc(protocol).await.map_err(|err| {
             warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
             let err_str = err.to_string();
-            RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::Other,
+            RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
                 err_str,
             )))
         })?;
@@ -225,8 +224,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         let response = self.send_rpc(protocol).await.map_err(|err| {
             warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
             let err_str = err.to_string();
-            RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::Other,
+            RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
                 err_str,
             )))
         })?;
@@ -275,8 +273,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                 send_result.map_err(|err| {
                     warn!(target_node = %self.target, error = %err, "failed to send snapshot RPC");
                     let err_str = err.to_string();
-                    StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
                         err_str,
                     )))
                 })?
