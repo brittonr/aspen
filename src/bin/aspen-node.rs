@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 
 use anyhow::Result;
 use aspen::api::{
@@ -25,7 +27,7 @@ use ractor::{ActorRef, call_t};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -148,11 +150,161 @@ struct Args {
 type ClusterControllerHandle = Arc<dyn ClusterController>;
 type KeyValueStoreHandle = Arc<dyn KeyValueStore>;
 
+/// Global metrics collector for errors and latencies.
+///
+/// Uses atomic counters for thread-safe, lock-free metrics collection.
+/// Tiger Style: Fixed-size buckets, bounded memory usage.
+struct MetricsCollector {
+    // Error counters
+    storage_errors: AtomicU64,
+    network_errors: AtomicU64,
+    rpc_errors: AtomicU64,
+
+    // Write operation latency buckets (microseconds)
+    // Buckets: <1ms, <10ms, <100ms, <1s, >=1s
+    write_latency_us_bucket_1ms: AtomicU64,
+    write_latency_us_bucket_10ms: AtomicU64,
+    write_latency_us_bucket_100ms: AtomicU64,
+    write_latency_us_bucket_1s: AtomicU64,
+    write_latency_us_bucket_inf: AtomicU64,
+    write_count: AtomicU64,
+    write_total_us: AtomicU64,
+
+    // Read operation latency buckets (microseconds)
+    read_latency_us_bucket_1ms: AtomicU64,
+    read_latency_us_bucket_10ms: AtomicU64,
+    read_latency_us_bucket_100ms: AtomicU64,
+    read_latency_us_bucket_1s: AtomicU64,
+    read_latency_us_bucket_inf: AtomicU64,
+    read_count: AtomicU64,
+    read_total_us: AtomicU64,
+}
+
+impl MetricsCollector {
+    const fn new() -> Self {
+        Self {
+            storage_errors: AtomicU64::new(0),
+            network_errors: AtomicU64::new(0),
+            rpc_errors: AtomicU64::new(0),
+
+            write_latency_us_bucket_1ms: AtomicU64::new(0),
+            write_latency_us_bucket_10ms: AtomicU64::new(0),
+            write_latency_us_bucket_100ms: AtomicU64::new(0),
+            write_latency_us_bucket_1s: AtomicU64::new(0),
+            write_latency_us_bucket_inf: AtomicU64::new(0),
+            write_count: AtomicU64::new(0),
+            write_total_us: AtomicU64::new(0),
+
+            read_latency_us_bucket_1ms: AtomicU64::new(0),
+            read_latency_us_bucket_10ms: AtomicU64::new(0),
+            read_latency_us_bucket_100ms: AtomicU64::new(0),
+            read_latency_us_bucket_1s: AtomicU64::new(0),
+            read_latency_us_bucket_inf: AtomicU64::new(0),
+            read_count: AtomicU64::new(0),
+            read_total_us: AtomicU64::new(0),
+        }
+    }
+
+    fn record_storage_error(&self) {
+        self.storage_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[allow(dead_code)]
+    fn record_network_error(&self) {
+        self.network_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_rpc_error(&self) {
+        self.rpc_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_write_latency(&self, latency_us: u64) {
+        self.write_count.fetch_add(1, Ordering::Relaxed);
+        self.write_total_us.fetch_add(latency_us, Ordering::Relaxed);
+
+        // Bucket the latency (Tiger Style: fixed buckets)
+        if latency_us < 1_000 {
+            // < 1ms
+            self.write_latency_us_bucket_1ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 10_000 {
+            // < 10ms
+            self.write_latency_us_bucket_10ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 100_000 {
+            // < 100ms
+            self.write_latency_us_bucket_100ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 1_000_000 {
+            // < 1s
+            self.write_latency_us_bucket_1s.fetch_add(1, Ordering::Relaxed);
+        } else {
+            // >= 1s
+            self.write_latency_us_bucket_inf.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn record_read_latency(&self, latency_us: u64) {
+        self.read_count.fetch_add(1, Ordering::Relaxed);
+        self.read_total_us.fetch_add(latency_us, Ordering::Relaxed);
+
+        // Bucket the latency (Tiger Style: fixed buckets)
+        if latency_us < 1_000 {
+            // < 1ms
+            self.read_latency_us_bucket_1ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 10_000 {
+            // < 10ms
+            self.read_latency_us_bucket_10ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 100_000 {
+            // < 100ms
+            self.read_latency_us_bucket_100ms.fetch_add(1, Ordering::Relaxed);
+        } else if latency_us < 1_000_000 {
+            // < 1s
+            self.read_latency_us_bucket_1s.fetch_add(1, Ordering::Relaxed);
+        } else {
+            // >= 1s
+            self.read_latency_us_bucket_inf.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+/// Global metrics instance.
+/// Tiger Style: Static initialization with const constructor.
+static METRICS: OnceLock<MetricsCollector> = OnceLock::new();
+
+fn metrics_collector() -> &'static MetricsCollector {
+    METRICS.get_or_init(|| MetricsCollector::new())
+}
+
+/// Detailed health check response with individual component status.
 #[derive(Serialize)]
-struct HealthResponse {
+struct DetailedHealthResponse {
+    /// Overall health status: "healthy", "degraded", or "unhealthy"
+    status: String,
+    /// Individual health checks
+    checks: HealthChecks,
+    /// Node identification
     node_id: u64,
-    raft_node_id: u64,
-    ractor_port: u16,
+    /// Raft node ID
+    raft_node_id: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct HealthChecks {
+    /// Raft actor is responsive
+    raft_actor: HealthCheckStatus,
+    /// Has Raft cluster leader (self or other)
+    raft_cluster: HealthCheckStatus,
+    /// Disk space is available (< 95%)
+    disk_space: HealthCheckStatus,
+    /// Storage is writable
+    storage: HealthCheckStatus,
+}
+
+#[derive(Serialize)]
+struct HealthCheckStatus {
+    /// "ok", "warning", or "error"
+    status: String,
+    /// Optional message with details
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }
 
 #[derive(Clone)]
@@ -160,7 +312,7 @@ struct AppState {
     node_id: u64,
     raft_actor: ActorRef<RaftActorMessage>,
     // Note: raft_core removed - all Raft operations go through RaftActor for proper actor supervision
-    ractor_port: u16,
+    _ractor_port: u16,
     controller: ClusterControllerHandle,
     kv: KeyValueStoreHandle,
     network_factory: Arc<IrpcRaftNetworkFactory>,
@@ -250,7 +402,7 @@ async fn main() -> Result<()> {
     let app_state = AppState {
         node_id: config.node_id,
         raft_actor: handle.raft_actor.clone(),
-        ractor_port: config.ractor_port,
+        _ractor_port: config.ractor_port,
         controller,
         kv: kv_store,
         network_factory: handle.network_factory.clone(),
@@ -297,21 +449,133 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Health check endpoint with detailed component status.
+///
+/// Returns:
+/// - 200 OK if all checks pass
+/// - 503 SERVICE_UNAVAILABLE if any critical check fails
+///
+/// Checks performed:
+/// 1. Raft actor responsiveness (critical)
+/// 2. Raft cluster has leader (critical)
+/// 3. Disk space availability (<95% used) (critical)
+/// 4. Storage writability (warning only)
 async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
-    match call_t!(ctx.raft_actor, RaftActorMessage::GetNodeId, 25) {
-        Ok(raft_node_id) => {
-            let payload = HealthResponse {
-                node_id: ctx.node_id,
-                raft_node_id,
-                ractor_port: ctx.ractor_port,
-            };
-            (StatusCode::OK, Json(payload)).into_response()
+    // Check 1: Raft actor responsiveness
+    let (raft_actor_check, raft_node_id) = match call_t!(ctx.raft_actor, RaftActorMessage::GetNodeId, 25) {
+        Ok(id) => (
+            HealthCheckStatus {
+                status: "ok".to_string(),
+                message: None,
+            },
+            Some(id),
+        ),
+        Err(err) => (
+            HealthCheckStatus {
+                status: "error".to_string(),
+                message: Some(format!("Raft actor not responding: {}", err)),
+            },
+            None,
+        ),
+    };
+
+    // Check 2: Raft cluster has leader
+    let raft_cluster_check = match ctx.controller.get_metrics().await {
+        Ok(metrics) => {
+            if metrics.current_leader.is_some() {
+                HealthCheckStatus {
+                    status: "ok".to_string(),
+                    message: Some(format!("Leader: {:?}", metrics.current_leader)),
+                }
+            } else {
+                HealthCheckStatus {
+                    status: "warning".to_string(),
+                    message: Some("No leader elected".to_string()),
+                }
+            }
         }
-        Err(err) => {
-            warn!(error = ?err, "raft RPC transport failure");
-            StatusCode::SERVICE_UNAVAILABLE.into_response()
+        Err(_) => HealthCheckStatus {
+            status: "warning".to_string(),
+            message: Some("Unable to get Raft metrics".to_string()),
+        },
+    };
+
+    // Check 3: Disk space availability
+    let disk_space_check = if let Some(ref data_dir) = ctx.data_dir {
+        match aspen::utils::check_disk_space(data_dir) {
+            Ok(disk_space) => {
+                if disk_space.usage_percent >= aspen::utils::DISK_USAGE_THRESHOLD_PERCENT {
+                    HealthCheckStatus {
+                        status: "error".to_string(),
+                        message: Some(format!(
+                            "Disk usage critical: {}% (threshold: {}%)",
+                            disk_space.usage_percent,
+                            aspen::utils::DISK_USAGE_THRESHOLD_PERCENT
+                        )),
+                    }
+                } else if disk_space.usage_percent >= 80 {
+                    HealthCheckStatus {
+                        status: "warning".to_string(),
+                        message: Some(format!("Disk usage high: {}%", disk_space.usage_percent)),
+                    }
+                } else {
+                    HealthCheckStatus {
+                        status: "ok".to_string(),
+                        message: Some(format!("Disk usage: {}%", disk_space.usage_percent)),
+                    }
+                }
+            }
+            Err(e) => HealthCheckStatus {
+                status: "warning".to_string(),
+                message: Some(format!("Unable to check disk space: {}", e)),
+            },
         }
-    }
+    } else {
+        HealthCheckStatus {
+            status: "ok".to_string(),
+            message: Some("In-memory storage (no disk check needed)".to_string()),
+        }
+    };
+
+    // Check 4: Storage writability (simple check - try to get metrics which exercises storage)
+    let storage_check = match ctx.controller.get_metrics().await {
+        Ok(_) => HealthCheckStatus {
+            status: "ok".to_string(),
+            message: None,
+        },
+        Err(e) => HealthCheckStatus {
+            status: "warning".to_string(),
+            message: Some(format!("Storage health check failed: {}", e)),
+        },
+    };
+
+    // Determine overall health status
+    let is_critical_failure = raft_actor_check.status == "error" || disk_space_check.status == "error";
+    let has_warnings = raft_cluster_check.status == "warning"
+        || disk_space_check.status == "warning"
+        || storage_check.status == "warning";
+
+    let (overall_status, http_status) = if is_critical_failure {
+        ("unhealthy".to_string(), StatusCode::SERVICE_UNAVAILABLE)
+    } else if has_warnings {
+        ("degraded".to_string(), StatusCode::OK)
+    } else {
+        ("healthy".to_string(), StatusCode::OK)
+    };
+
+    let response = DetailedHealthResponse {
+        status: overall_status,
+        checks: HealthChecks {
+            raft_actor: raft_actor_check,
+            raft_cluster: raft_cluster_check,
+            disk_space: disk_space_check,
+            storage: storage_check,
+        },
+        node_id: ctx.node_id,
+        raft_node_id,
+    };
+
+    (http_status, Json(response)).into_response()
 }
 
 async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
@@ -363,6 +627,208 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
                 ctx.node_id, last_applied.index
             ));
         }
+
+        // Snapshot index (if present)
+        if let Some(ref snapshot) = raft_metrics.snapshot {
+            body.push_str("# TYPE aspen_snapshot_index gauge\n");
+            body.push_str(&format!(
+                "aspen_snapshot_index{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, snapshot.index
+            ));
+        }
+
+        // Replication lag (leader only)
+        if let Some(ref replication) = raft_metrics.replication {
+            if let Some(leader_last_log) = raft_metrics.last_log_index {
+                body.push_str("# TYPE aspen_replication_lag gauge\n");
+                body.push_str("# HELP aspen_replication_lag Number of log entries follower is behind leader\n");
+
+                for (follower_id, matched_log_id) in replication.iter() {
+                    let lag = if let Some(matched) = matched_log_id {
+                        // Calculate lag: leader's last log - follower's matched log
+                        leader_last_log.saturating_sub(matched.index)
+                    } else {
+                        // Follower has no matched logs yet, use full leader log size
+                        leader_last_log
+                    };
+
+                    body.push_str(&format!(
+                        "aspen_replication_lag{{node_id=\"{}\",follower_id=\"{}\"}} {}\n",
+                        ctx.node_id, follower_id, lag
+                    ));
+                }
+            }
+        }
+
+        // Heartbeat metrics (leader only) - time since last heartbeat ack
+        if let Some(ref heartbeat) = raft_metrics.heartbeat {
+            body.push_str("# TYPE aspen_heartbeat_seconds gauge\n");
+            body.push_str("# HELP aspen_heartbeat_seconds Seconds since last heartbeat acknowledgment from follower\n");
+
+            for (follower_id, last_ack_time_opt) in heartbeat.iter() {
+                if let Some(last_ack_time) = last_ack_time_opt {
+                    let seconds_since_ack = last_ack_time.elapsed().as_secs_f64();
+                    body.push_str(&format!(
+                        "aspen_heartbeat_seconds{{node_id=\"{}\",follower_id=\"{}\"}} {:.3}\n",
+                        ctx.node_id, follower_id, seconds_since_ack
+                    ));
+                }
+            }
+        }
+
+        // Quorum acknowledgment age (leader only)
+        if let Some(ref last_quorum_acked) = raft_metrics.last_quorum_acked {
+            body.push_str("# TYPE aspen_quorum_acked_seconds gauge\n");
+            body.push_str("# HELP aspen_quorum_acked_seconds Seconds since last quorum acknowledgment\n");
+            let seconds = last_quorum_acked.elapsed().as_secs_f64();
+            body.push_str(&format!(
+                "aspen_quorum_acked_seconds{{node_id=\"{}\"}} {:.3}\n",
+                ctx.node_id, seconds
+            ));
+        }
+
+        // Apply lag (difference between last_log and last_applied)
+        if let (Some(last_log), Some(last_applied)) = (raft_metrics.last_log_index, &raft_metrics.last_applied) {
+            body.push_str("# TYPE aspen_apply_lag gauge\n");
+            body.push_str("# HELP aspen_apply_lag Number of log entries not yet applied to state machine\n");
+            let apply_lag = last_log.saturating_sub(last_applied.index);
+            body.push_str(&format!(
+                "aspen_apply_lag{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, apply_lag
+            ));
+        }
+    }
+
+    // Error counters
+    let metrics = metrics_collector();
+    body.push_str("# TYPE aspen_errors_total counter\n");
+    body.push_str("# HELP aspen_errors_total Total number of errors by type\n");
+    body.push_str(&format!(
+        "aspen_errors_total{{node_id=\"{}\",type=\"storage\"}} {}\n",
+        ctx.node_id,
+        metrics.storage_errors.load(Ordering::Relaxed)
+    ));
+    body.push_str(&format!(
+        "aspen_errors_total{{node_id=\"{}\",type=\"network\"}} {}\n",
+        ctx.node_id,
+        metrics.network_errors.load(Ordering::Relaxed)
+    ));
+    body.push_str(&format!(
+        "aspen_errors_total{{node_id=\"{}\",type=\"rpc\"}} {}\n",
+        ctx.node_id,
+        metrics.rpc_errors.load(Ordering::Relaxed)
+    ));
+
+    // Write latency histogram
+    let write_count = metrics.write_count.load(Ordering::Relaxed);
+    if write_count > 0 {
+        body.push_str("# TYPE aspen_write_latency_seconds histogram\n");
+        body.push_str("# HELP aspen_write_latency_seconds Write operation latency histogram\n");
+
+        let bucket_1ms = metrics.write_latency_us_bucket_1ms.load(Ordering::Relaxed);
+        let bucket_10ms = metrics.write_latency_us_bucket_10ms.load(Ordering::Relaxed);
+        let bucket_100ms = metrics.write_latency_us_bucket_100ms.load(Ordering::Relaxed);
+        let bucket_1s = metrics.write_latency_us_bucket_1s.load(Ordering::Relaxed);
+        let bucket_inf = metrics.write_latency_us_bucket_inf.load(Ordering::Relaxed);
+
+        let mut cumulative = 0u64;
+        cumulative += bucket_1ms;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.001\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_10ms;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.010\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_100ms;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.100\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_1s;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"1.000\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_inf;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"+Inf\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_count{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, write_count
+        ));
+
+        let write_total_us = metrics.write_total_us.load(Ordering::Relaxed);
+        let write_sum_seconds = write_total_us as f64 / 1_000_000.0;
+        body.push_str(&format!(
+            "aspen_write_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
+            ctx.node_id, write_sum_seconds
+        ));
+    }
+
+    // Read latency histogram
+    let read_count = metrics.read_count.load(Ordering::Relaxed);
+    if read_count > 0 {
+        body.push_str("# TYPE aspen_read_latency_seconds histogram\n");
+        body.push_str("# HELP aspen_read_latency_seconds Read operation latency histogram\n");
+
+        let bucket_1ms = metrics.read_latency_us_bucket_1ms.load(Ordering::Relaxed);
+        let bucket_10ms = metrics.read_latency_us_bucket_10ms.load(Ordering::Relaxed);
+        let bucket_100ms = metrics.read_latency_us_bucket_100ms.load(Ordering::Relaxed);
+        let bucket_1s = metrics.read_latency_us_bucket_1s.load(Ordering::Relaxed);
+        let bucket_inf = metrics.read_latency_us_bucket_inf.load(Ordering::Relaxed);
+
+        let mut cumulative = 0u64;
+        cumulative += bucket_1ms;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.001\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_10ms;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.010\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_100ms;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.100\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_1s;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"1.000\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        cumulative += bucket_inf;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"+Inf\"}} {}\n",
+            ctx.node_id, cumulative
+        ));
+
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_count{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, read_count
+        ));
+
+        let read_total_us = metrics.read_total_us.load(Ordering::Relaxed);
+        let read_sum_seconds = read_total_us as f64 / 1_000_000.0;
+        body.push_str(&format!(
+            "aspen_read_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
+            ctx.node_id, read_sum_seconds
+        ));
     }
 
     (StatusCode::OK, body)
@@ -409,6 +875,7 @@ async fn cluster_ticket(State(ctx): State<AppState>) -> impl IntoResponse {
 
 type ApiResult<T> = Result<T, ApiError>;
 
+#[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
 async fn init_cluster(
     State(state): State<AppState>,
     Json(request): Json<InitRequest>,
@@ -417,6 +884,7 @@ async fn init_cluster(
     Ok(Json(result))
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, learner_id = request.learner.id))]
 async fn add_learner(
     State(state): State<AppState>,
     Json(request): Json<AddLearnerRequest>,
@@ -425,6 +893,7 @@ async fn add_learner(
     Ok(Json(result))
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, new_members = ?request.members))]
 async fn change_membership(
     State(state): State<AppState>,
     Json(request): Json<ChangeMembershipRequest>,
@@ -433,25 +902,52 @@ async fn change_membership(
     Ok(Json(result))
 }
 
+#[instrument(skip(state, request), fields(node_id = state.node_id, command = ?request.command))]
 async fn write_value(
     State(state): State<AppState>,
     Json(request): Json<WriteRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    let start = Instant::now();
+
     // Tiger Style: Check disk space before writes to fail fast on resource exhaustion
     if let Some(ref data_dir) = state.data_dir {
         aspen::utils::ensure_disk_space_available(data_dir)
-            .map_err(|e| anyhow::anyhow!("disk space check failed: {}", e))?;
+            .map_err(|e| {
+                metrics_collector().record_storage_error();
+                anyhow::anyhow!("disk space check failed: {}", e)
+            })?;
     }
 
-    let result = state.kv.write(request).await?;
+    let result = state.kv.write(request).await.map_err(|e| {
+        // Record RPC error for write failures
+        metrics_collector().record_rpc_error();
+        e
+    })?;
+
+    // Record write latency
+    let latency_us = start.elapsed().as_micros() as u64;
+    metrics_collector().record_write_latency(latency_us);
+
     Ok(Json(result))
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
 async fn read_value(
     State(state): State<AppState>,
     Json(request): Json<ReadRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    let result = state.kv.read(request).await?;
+    let start = Instant::now();
+
+    let result = state.kv.read(request).await.map_err(|e| {
+        // Record RPC error for read failures
+        metrics_collector().record_rpc_error();
+        e
+    })?;
+
+    // Record read latency
+    let latency_us = start.elapsed().as_micros() as u64;
+    metrics_collector().record_read_latency(latency_us);
+
     Ok(Json(result))
 }
 

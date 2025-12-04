@@ -17,7 +17,7 @@ use anyhow::{Context, Result};
 use openraft::Raft;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
@@ -112,6 +112,7 @@ async fn run_server(
 }
 
 /// Handle a single incoming Iroh connection.
+#[instrument(skip(connecting, raft_core))]
 async fn handle_connection(
     connecting: iroh::endpoint::Incoming,
     raft_core: Raft<AppTypeConfig>,
@@ -145,6 +146,7 @@ async fn handle_connection(
 }
 
 /// Handle a single RPC message on a bidirectional stream.
+#[instrument(skip(recv, send, raft_core))]
 async fn handle_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     raft_core: Raft<AppTypeConfig>,

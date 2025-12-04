@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use openraft::metrics::RaftMetrics;
 use openraft::{BasicNode, LogId, Raft, ReadPolicy};
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call_t};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
@@ -216,6 +216,7 @@ fn ensure_raft_addr(node: &ClusterNode) -> Result<(), ControlPlaneError> {
     }
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
 async fn handle_init(
     state: &mut RaftActorState,
     request: InitRequest,
@@ -251,6 +252,7 @@ async fn handle_init(
     Ok(state.cluster_state.clone())
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, learner_id = request.learner.id))]
 async fn handle_add_learner(
     state: &mut RaftActorState,
     request: AddLearnerRequest,
@@ -271,6 +273,7 @@ async fn handle_add_learner(
     Ok(state.cluster_state.clone())
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, new_members = ?request.members))]
 async fn handle_change_membership(
     state: &mut RaftActorState,
     request: ChangeMembershipRequest,
@@ -293,6 +296,7 @@ async fn handle_change_membership(
     Ok(state.cluster_state.clone())
 }
 
+#[instrument(skip(state, request), fields(node_id = state.node_id, command = ?request.command))]
 async fn handle_write(
     state: &mut RaftActorState,
     request: WriteRequest,
@@ -317,6 +321,7 @@ async fn handle_write(
     Ok(WriteResult { command: cmd })
 }
 
+#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
 async fn handle_read(
     state: &RaftActorState,
     request: ReadRequest,

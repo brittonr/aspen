@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ractor::{ActorRef, call_t};
+use tracing::instrument;
 
 use crate::api::{
     KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult, WriteRequest, WriteResult,
@@ -78,6 +79,7 @@ impl KvClient {
 
 #[async_trait]
 impl KeyValueStore for KvClient {
+    #[instrument(skip(self, request), fields(command = ?request.command))]
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         call_t!(
             self.raft_actor,
@@ -90,6 +92,7 @@ impl KeyValueStore for KvClient {
         })?
     }
 
+    #[instrument(skip(self), fields(key = %request.key))]
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         call_t!(
             self.raft_actor,

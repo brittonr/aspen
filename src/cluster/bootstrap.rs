@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use iroh::{EndpointAddr, EndpointId, SecretKey};
 use openraft::Config as RaftConfig;
 use ractor::{Actor, ActorRef};
-use tracing::info;
+use tracing::{info, instrument};
 
 use crate::cluster::config::ClusterBootstrapConfig;
 use crate::cluster::gossip_discovery::GossipPeerDiscovery;
@@ -151,6 +151,7 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
 ///
 /// Returns a `BootstrapHandle` that can be used to access node resources
 /// and perform graceful shutdown.
+#[instrument(skip(config), fields(node_id = config.node_id, storage_backend = ?config.storage_backend))]
 pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapHandle> {
     // Validate configuration
     config.validate().context("invalid configuration")?;

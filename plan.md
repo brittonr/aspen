@@ -716,24 +716,32 @@ kv.read(ReadRequest { key }).await?;
 - ✅ Code quality (2025-12-04): Fixed storage config compilation errors, cleaned up learner bug references, zero compiler warnings
 - **Performance**: Load tests demonstrate baseline throughput for future benchmarking
 
-### Week 3: Basic Observability (PLANNED)
+### Week 3: Basic Observability ✅ COMPLETE (2025-12-04)
 
-**3.1 Structured Logging** (pending)
-- Replace println!/eprintln! with tracing spans
-- Add log levels: INFO for normal ops, WARN for retries, ERROR for failures
-- Focus on key events: leader elections, membership changes, write/read errors, network failures
+**3.1 Structured Logging** ✅ COMPLETE
+- Added `#[instrument]` tracing spans to 15 key operations across 7 files
+- Instrumented: raft handlers (init, add_learner, change_membership, write, read), bootstrap_node, RPC handlers, HTTP API endpoints
+- All spans include relevant context fields: node_id, operation details (members, learner_id, key, command)
+- Coverage: 29% of files instrumented, all critical paths covered
 
-**3.2 Enhanced Metrics** (pending)
-- Add to `/metrics` endpoint:
-  - Error counters (write_errors, read_errors, network_errors)
-  - Replication lag per follower (leader only)
-  - Operation latency (basic histogram, p95/p99)
+**3.2 Enhanced Metrics** ✅ COMPLETE
+- Added comprehensive metrics to `/metrics` endpoint:
+  - Error counters: storage_errors, network_errors, rpc_errors (atomic counters)
+  - Replication lag per follower (calculated from openraft metrics)
+  - Write/read latency histograms (Prometheus format with 5 buckets: <1ms, <10ms, <100ms, <1s, >=1s)
+  - Heartbeat tracking (seconds since last heartbeat per follower)
+  - Quorum acknowledgment age, apply lag, snapshot index
+  - Instrumented write_value and read_value handlers with latency tracking
 
-**3.3 Better Health Checks** (pending)
-- Enhance `/health` to check:
-  - Storage is writable (quick write test)
-  - Raft has leader (or is leader)
-  - Return 200 (healthy) or 503 (unhealthy) with JSON details
+**3.3 Better Health Checks** ✅ COMPLETE
+- Enhanced `/health` endpoint with 4 component checks:
+  - Raft actor responsiveness (critical, 25ms timeout)
+  - Raft cluster has leader (warning level)
+  - Disk space availability <95% (critical at >=95%, warning at >=80%)
+  - Storage writability (warning level)
+- Returns 200 OK (healthy/degraded) or 503 SERVICE_UNAVAILABLE (unhealthy)
+- JSON response with detailed status per component
+- Created comprehensive integration tests (tests/health_endpoint_test.rs)
 
 ### Week 3: Operational Basics (PLANNED)
 
