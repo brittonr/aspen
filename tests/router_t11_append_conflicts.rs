@@ -19,7 +19,7 @@ use aspen::testing::AspenRouter;
 use openraft::raft::AppendEntriesRequest;
 use openraft::storage::{RaftLogReader, RaftLogStorage};
 use openraft::testing::{blank_ent, log_id};
-use openraft::{Config, Entry, RaftTypeConfig, ServerState, Vote};
+use openraft::{Config, Entry, ServerState, Vote};
 
 /// Helper to check if logs match expected terms.
 async fn check_logs(

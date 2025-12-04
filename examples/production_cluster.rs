@@ -155,6 +155,9 @@ async fn main() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: iroh_config.clone(),
         peers: vec![], // No manual peers - rely on discovery!
+        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        redb_log_path: None,
+        redb_sm_path: None,
     };
 
     let config2 = ClusterBootstrapConfig {

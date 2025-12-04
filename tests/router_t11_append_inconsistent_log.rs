@@ -6,7 +6,7 @@
 /// leader's authoritative log.
 ///
 /// Original: openraft/tests/tests/append_entries/t11_append_inconsistent_log.rs
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
-use openraft::{BasicNode, Config, RaftLogReader, ServerState};
+use openraft::{Config, RaftLogReader, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))

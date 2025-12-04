@@ -897,7 +897,8 @@ impl RedbStateMachine {
         }
     }
 
-    // Internal helper: Write metadata
+    // Internal helper: Write metadata (reserved for future use)
+    #[allow(dead_code)]
     fn write_meta<T: Serialize>(&self, key: &str, value: &T) -> Result<(), StorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {

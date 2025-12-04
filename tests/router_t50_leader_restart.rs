@@ -38,7 +38,7 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
 
     let mut router = AspenRouter::new(config.clone());
 
-    // Create a single-node cluster first to avoid the add_learner issue
+    // Create a single-node cluster
     router.new_raft_node(0).await?;
 
     tracing::info!("--- initialize single-node cluster");

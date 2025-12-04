@@ -108,7 +108,7 @@ impl PeerAnnouncement {
 /// Tiger Style: Bounded announcement interval (10s), explicit shutdown mechanism.
 pub struct GossipPeerDiscovery {
     topic_id: TopicId,
-    node_id: NodeId,
+    _node_id: NodeId, // Stored for debugging/logging purposes
     shutdown: Arc<AtomicBool>,
     announcer_task: JoinHandle<()>,
     receiver_task: JoinHandle<()>,
@@ -267,7 +267,7 @@ impl GossipPeerDiscovery {
 
         Ok(Self {
             topic_id,
-            node_id,
+            _node_id: node_id,
             shutdown,
             announcer_task,
             receiver_task,

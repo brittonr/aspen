@@ -159,7 +159,7 @@ struct HealthResponse {
 struct AppState {
     node_id: u64,
     raft_actor: ActorRef<RaftActorMessage>,
-    raft_core: openraft::Raft<aspen::raft::types::AppTypeConfig>,
+    // Note: raft_core removed - all Raft operations go through RaftActor for proper actor supervision
     ractor_port: u16,
     controller: ClusterControllerHandle,
     kv: KeyValueStoreHandle,
@@ -250,7 +250,6 @@ async fn main() -> Result<()> {
     let app_state = AppState {
         node_id: config.node_id,
         raft_actor: handle.raft_actor.clone(),
-        raft_core: handle.raft_core.clone(),
         ractor_port: config.ractor_port,
         controller,
         kv: kv_store,
@@ -369,7 +368,7 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, body)
 }
 
-async fn iroh_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
+async fn iroh_metrics(State(_ctx): State<AppState>) -> impl IntoResponse {
     // Note: We don't have direct access to IrohEndpointManager in AppState anymore.
     // This endpoint would need to be restructured to access it from BootstrapHandle.
     // For now, return NOT_FOUND.

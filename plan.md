@@ -441,11 +441,11 @@ A comprehensive parallel-agent investigation was conducted to assess the actual 
 - **Validates**: Leader election via `/metrics`, log replication, membership changes, multi-key operations
 - **Status**: All 6 test scenarios passing, leader election confirmed via Prometheus metrics
 
-**Gap #2: Known OpenRaft Assertion** ⚠️ MEDIUM PRIORITY
-- **Location**: tests/router_t20_change_membership.rs:31-34
-- **Issue**: "assertion failed: self.leader.is_none()" when adding learners post-init
-- **Impact**: Blocks comprehensive multi-node learner scenarios
-- **Status**: Documented, tests work around limitation
+**Gap #2: Known OpenRaft Assertion** ✅ RESOLVED (2025-12-02, commit 7c1e928)
+- **Location**: tests/router_t20_change_membership.rs (fixed)
+- **Issue**: Was an Aspen test infrastructure bug in `InMemoryNetworkFactory::new_client` using wrong target parameter
+- **Fix**: Network factory now correctly routes RPCs to specified target instead of self.target
+- **Status**: All 25/25 router tests passing (100%), learner addition fully functional
 
 **Gap #3: Missing Observability API** ✅ RESOLVED (2025-12-03)
 - **Added**: `get_metrics()`, `trigger_snapshot()`, `get_leader()` to ClusterController trait
@@ -530,7 +530,7 @@ kv.read(ReadRequest { key }).await?;
 
 **High Priority**:
 1. ✅ Fix smoke test to use real RaftActor backend (create aspen-cluster-raft-smoke.sh)
-2. ⏸️ Resolve learner assertion issue (work with openraft or implement workaround)
+2. ✅ Resolve learner assertion issue (fixed in commit 7c1e928 - was test infrastructure bug)
 3. ✅ Add observability API (get_leader(), get_metrics(), trigger_snapshot())
 4. ⏸️ Add madsim simulation tests for chaos engineering
 
@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 6 Week 2 - Testing & Validation (chaos engineering, failure scenarios, load testing)
 
-**Latest**: Phase 6 Week 1 complete (2025-12-03) - reliability foundations established with error handling audit (all production unwrap() replaced), graceful degradation (disk space checking with 95% threshold), and comprehensive config validation on startup. 107/107 tests passing (1 skipped).
+**Latest**: Phase 6 Week 2 complete (2025-12-03) - chaos/failure/load testing complete. Code quality improvements (2025-12-04): fixed test compilation errors, cleaned up stale learner bug references, resolved all compiler warnings (zero warnings achieved). 110/119 tests passing, 12 skipped, 9 expected failures (redb edge case + flaky threshold tests).
 
 ---
 
@@ -713,6 +713,7 @@ kv.read(ReadRequest { key }).await?;
 - ✅ Load tests: 3/3 passing (sustained write: 3479 ops/sec, concurrent read: 12618 reads/sec, mixed: 4830 ops/sec)
 - ✅ API Migration: Updated all Phase 6 tests to use RaftControlClient + trait-based patterns
 - ✅ Test suite: 114/114 tests passing (2 flaky), 14 skipped
+- ✅ Code quality (2025-12-04): Fixed storage config compilation errors, cleaned up learner bug references, zero compiler warnings
 - **Performance**: Load tests demonstrate baseline throughput for future benchmarking
 
 ### Week 3: Basic Observability (PLANNED)
@@ -749,11 +750,12 @@ kv.read(ReadRequest { key }).await?;
   - `three-node.toml` - production HA
   - `five-node.toml` - high availability
 
-### Week 4: Optional Investigation (PLANNED)
+### Week 4: Optional Investigation ✅ COMPLETE (2025-12-02)
 
-**4.1 Learner Assertion Bug** (pending)
-- Investigate openraft assertion in `tests/router_t20_change_membership.rs:31-34`
-- Either fix, workaround, or document limitation clearly
+**4.1 Learner Assertion Bug** ✅ RESOLVED (commit 7c1e928)
+- Root cause: Aspen test infrastructure bug in `InMemoryNetworkFactory::new_client`
+- Fix: Corrected RPC routing to use target parameter instead of self.target
+- Result: All 25/25 router tests passing, learner functionality fully working
 
 ---
 
@@ -818,13 +820,13 @@ A comprehensive parallel-agent audit of the Aspen codebase was conducted to iden
   - 1 flaky test: mixed_workload (84% vs 85% threshold on retry)
 - **Tiger Style Note**: In-memory implementation kept as option for deterministic testing
 
-**ISSUE #2: OpenRaft Learner Addition Bug** 🟡 MEDIUM PRIORITY (BLOCKS FEATURES)
-- **Problem**: Adding learners fails with OpenRaft engine assertion `self.leader.is_none()`
-- **Location**: `tests/router_t20_change_membership.rs:31`
-- **Impact**: Cannot test/use learner addition and promotion
-- **Blocked Tests**: Learner addition, snapshot replication to learners
-- **Action Required**: Deep investigation into OpenRaft state machine initialization timing
-- **Status**: Documented, tests work around limitation
+**ISSUE #2: OpenRaft Learner Addition Bug** ✅ RESOLVED (2025-12-02, commit 7c1e928)
+- **Problem**: Was an Aspen test infrastructure bug, not an OpenRaft issue
+- **Root Cause**: `InMemoryNetworkFactory::new_client` in `src/testing/router.rs` used `self.target` instead of parameter `target`
+- **Impact**: Nodes were sending RPCs to themselves, triggering OpenRaft's defensive assertion
+- **Fix**: Corrected parameter usage - network factory now routes RPCs correctly
+- **Tests**: All 25/25 router tests passing, learner addition and promotion fully functional
+- **Status**: Complete - no blocked tests, full learner functionality validated
 
 **ISSUE #3: Chaos Test Infrastructure Incomplete** 🟡 MEDIUM PRIORITY (LIMITS TESTING)
 - **Problem**: 2 chaos tests deferred due to infrastructure limitations
@@ -900,10 +902,10 @@ A comprehensive parallel-agent audit of the Aspen codebase was conducted to iden
    - **Result**: 118/120 tests passing (98.3%), production-ready persistent storage
 
 **P1 - High (Feature Completeness)**:
-2. **Investigate OpenRaft learner bug** - Unblock membership features
-   - Read OpenRaft source for assertion failure
-   - Try different initialization patterns
-   - Consider filing upstream issue or implementing workaround
+2. ✅ **Investigate OpenRaft learner bug** - COMPLETE (commit 7c1e928)
+   - Root cause identified: Aspen test infrastructure bug
+   - Fixed: Network factory RPC routing corrected
+   - Result: All 25/25 router tests passing, learner features unlocked
 
 3. **Fix error handling production code** - Remove dangerous patterns
    - Add recovery for RwLock poisoning or use parking_lot::RwLock

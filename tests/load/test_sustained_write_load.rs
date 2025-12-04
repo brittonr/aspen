@@ -60,6 +60,9 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
             election_timeout_max_ms: 3000,
             iroh: IrohConfig::default(),
             peers: vec![],
+            storage_backend: aspen::raft::storage::StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
         };
 
         let handle = bootstrap_node(config).await?;

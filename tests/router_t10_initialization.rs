@@ -67,7 +67,7 @@ async fn test_cluster_initialization() -> Result<()> {
         // Wait for initialization
         router
             .wait(&0, timeout())
-            .log_at_least(Some(1), "init")
+            .log_index_at_least(Some(1), "init")
             .await?;
 
         // Verify node 0 is initialized
@@ -150,7 +150,9 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
         nodes.insert(0, BasicNode::default());
         n0.initialize(nodes).await?;
 
-        n0.wait(timeout()).log_at_least(Some(1), "init").await?;
+        n0.wait(timeout())
+            .log_index_at_least(Some(1), "init")
+            .await?;
     }
 
     // Try to initialize again - should fail

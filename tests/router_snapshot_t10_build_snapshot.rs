@@ -131,10 +131,6 @@ async fn test_build_snapshot() -> Result<()> {
         );
     }
 
-    // TODO: Add learner replication test once we resolve the OpenRaft engine assertion issue
-    // with adding learners to an already-initialized cluster. The issue is documented in
-    // tests/router_t20_change_membership.rs and needs proper investigation.
-
     Ok(())
 }
 

@@ -26,11 +26,6 @@ fn timeout() -> Option<Duration> {
 /// 3. Verify node 1 is in learner state
 /// 4. Change membership to include both nodes as voters
 /// 5. Verify both nodes are in the cluster
-///
-/// TODO: This test currently fails with "assertion failed: self.leader.is_none()" in
-/// OpenRaft's engine when node 1 receives AppendEntries from node 0. This appears to be
-/// a state machine initialization issue that needs further investigation. The test is
-/// currently ignored to unblock other test porting work.
 #[tokio::test]
 async fn test_add_learner_and_promote() -> Result<()> {
     let config = Arc::new(
