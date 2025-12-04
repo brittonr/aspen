@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 6 Week 2 - Testing & Validation (chaos engineering, failure scenarios, load testing)
 
-**Latest**: Phase 6 Week 3 observability complete (2025-12-04) - structured logging with tracing spans, enhanced metrics (latency histograms, error counters, replication lag), comprehensive health checks. Code quality improvements: fixed test compilation errors, cleaned up stale learner bug references, resolved all compiler warnings (zero warnings achieved). 110/119 tests passing, 12 skipped, 9 expected failures (redb edge case + flaky threshold tests).
+**Latest**: Phase 6 Week 3 observability complete (2025-12-04) - structured logging with tracing spans, enhanced metrics (latency histograms, error counters, replication lag), comprehensive health checks. Code quality improvements: fixed test compilation errors, cleaned up stale learner bug references, boxed large error variants (35+ clippy warnings resolved), fixed mutex-across-await, resolved flaky tests (chaos_network_partition dynamic index handling, test_mixed_workload 90% pre-population). **120/120 tests passing (100% pass rate), 13 skipped**.
 
 ---
 

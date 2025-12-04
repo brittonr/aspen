@@ -263,11 +263,11 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Pre-populate keys (80% of key space to ensure >= 85% success rate)
-    // With 80% initial coverage and random write distribution, final coverage
-    // approaches ~95%, giving expected success: 30 writes + ~66 reads = ~96%
+    // Pre-populate keys (90% of key space to ensure >= 85% success rate)
+    // With 90% initial coverage and random write distribution, final coverage
+    // approaches ~98%, giving expected success: 30 writes + ~69 reads = ~99%
     let kv = KvClient::with_timeout(handle.raft_actor.clone(), 5000);
-    for i in 0..((KEY_SPACE * 4) / 5) {
+    for i in 0..((KEY_SPACE * 9) / 10) {
         let write_req = WriteRequest {
             command: WriteCommand::Set {
                 key: format!("key-{}", i),

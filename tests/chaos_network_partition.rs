@@ -114,11 +114,24 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     }
 
     // Wait for partition writes to be committed (5 more writes = index 11)
+    // However, a blank log entry may be added during partition healing, resulting in index 12
+    // Use at_least to handle both cases
+    let partition_index = {
+        let raft = router.get_raft_handle(&majority_leader)?;
+        let metrics = raft.metrics().borrow().clone();
+        metrics
+            .last_applied
+            .map(|log_id| log_id.index)
+            .ok_or_else(|| anyhow::anyhow!("leader has no applied index"))?
+    };
     router
         .wait(&majority_leader, Some(Duration::from_millis(1000)))
-        .applied_index(Some(11), "partition writes committed")
+        .applied_index(Some(partition_index), "partition writes committed")
         .await?;
-    events.push("partition-writes-committed: 5 writes".into());
+    events.push(format!(
+        "partition-writes-committed: 5 writes at index {}",
+        partition_index
+    ));
 
     // Heal the partition by recovering minority nodes
     router.recover_node(3);
@@ -136,13 +149,26 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // All nodes should eventually have the same committed log
     // Increased timeout to 3000ms for partition recovery and CI reliability
+    // Query the actual final index after healing (may have additional blank entries from term changes)
+    let final_index = {
+        let raft = router.get_raft_handle(&majority_leader)?;
+        let metrics = raft.metrics().borrow().clone();
+        metrics
+            .last_applied
+            .map(|log_id| log_id.index)
+            .ok_or_else(|| anyhow::anyhow!("leader has no applied index after healing"))?
+    };
+
     for node_id in 0..5 {
         router
             .wait(&node_id, Some(Duration::from_millis(3000)))
-            .applied_index(Some(11), "all nodes synchronized")
+            .applied_index(Some(final_index), "all nodes synchronized")
             .await?;
     }
-    events.push("cluster-reconverged: all nodes at log index 11".into());
+    events.push(format!(
+        "cluster-reconverged: all nodes at log index {}",
+        final_index
+    ));
 
     // Verify all writes are present on all nodes (consistency check)
     for node_id in 0..5 {

@@ -480,9 +480,12 @@ impl AspenRouter {
     /// so it may return stale data if the node is behind. For linearizable reads,
     /// use the Raft read API.
     pub async fn read(&self, node_id: &NodeId, key: &str) -> Option<String> {
-        let nodes = self.inner.nodes.lock().unwrap();
-        let node = nodes.get(node_id)?;
-        node.state_machine.get(key).await
+        let state_machine = {
+            let nodes = self.inner.nodes.lock().unwrap();
+            let node = nodes.get(node_id)?;
+            node.state_machine.clone() // Clone the Arc before awaiting
+        }; // Lock released here
+        state_machine.get(key).await
     }
 
     /// Initialize a single-node cluster with the given node as the leader.
