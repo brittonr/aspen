@@ -18,19 +18,18 @@
 ///! - Bounded test duration: expected < 30 seconds
 ///! - Explicit measurement: total time, throughput
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use aspen::api::{KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
+use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend};
-use aspen::kv::client::KvClient;
+use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
+use aspen::raft::RaftControlClient;
 use tokio::task::JoinSet;
 
 /// Test concurrent read load with 100 parallel readers.
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 #[ignore] // Resource-intensive test, run explicitly with --ignored
 async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     const NUM_KEYS: u64 = 100;
@@ -50,13 +49,17 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     ] {
         let config = ClusterBootstrapConfig {
             node_id,
-            control_backend: ControlBackend::Deterministic,
+            control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
-            
-            ractor_port: 67000 + node_id as u16,
+            http_addr: format!("127.0.0.1:{}", 37000 + node_id as u16).parse()?,
+            ractor_port: 0, // OS-assigned
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "concurrent-read-load".to_string(),
-            ..Default::default()
+            heartbeat_interval_ms: 500,
+            election_timeout_min_ms: 1500,
+            election_timeout_max_ms: 3000,
+            iroh: IrohConfig::default(),
+            peers: vec![],
         };
 
         let handle = bootstrap_node(config).await?;
@@ -64,10 +67,15 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     }
 
     // Initialize cluster
-    let members = BTreeSet::from([1, 2, 3]);
-    handles[0]
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest { initial_members: members }, answer_port))?;
+    let cluster = RaftControlClient::new(handles[0].raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+            ClusterNode::new(2, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+            ClusterNode::new(3, "127.0.0.1:26002", Some("iroh://placeholder3".into())),
+        ],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -111,7 +119,7 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
                     Ok(response) => {
                         // Verify data
                         let expected_value = format!("value-{}", i);
-                        if response.value.as_ref() == Some(&expected_value) {
+                        if response.value == expected_value {
                             successful_reads += 1;
                         } else {
                             eprintln!(
@@ -185,7 +193,6 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
 
 /// Smaller concurrent read test for faster CI execution (10 readers, 10 keys).
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     const NUM_KEYS: u64 = 10;
     const NUM_READERS: usize = 10;
@@ -195,22 +202,27 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
 
     let config = ClusterBootstrapConfig {
         node_id: 1,
-        control_backend: ControlBackend::Deterministic,
+        control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
-        
-        ractor_port: 77000,
+        http_addr: "127.0.0.1:47000".parse()?,
+        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "concurrent-read-small".to_string(),
-        ..Default::default()
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
     };
 
     let handle = bootstrap_node(config).await?;
 
-    handle
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest {
-            members: BTreeSet::from([1]),
-        })?;
+    // Initialize single-node cluster
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 

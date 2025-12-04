@@ -18,47 +18,50 @@
 ///! - Explicit error types: io::ErrorKind::OutOfMemory for disk full
 ///! - Fail-fast semantics: Reject writes before storage layer errors
 
-use std::path::PathBuf;
 use std::time::Duration;
 
-use aspen::api::{KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
+use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend};
-use aspen::kv::client::KvClient;
+use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
+use aspen::raft::RaftControlClient;
 
 /// Test that write operations fail gracefully when disk space check fails,
 /// but read operations continue to work.
 ///
 /// This test verifies error handling paths without requiring actual disk exhaustion.
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 async fn test_disk_full_error_handling() -> anyhow::Result<()> {
     // Start a single-node cluster with a valid data directory
     let temp_dir = tempfile::tempdir()?;
-    let data_dir = temp_dir.path().to_path_buf();
 
     let config = ClusterBootstrapConfig {
         node_id: 1,
-        control_backend: ControlBackend::Deterministic,
+        control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
-        
-        ractor_port: 36000,
-        data_dir: Some(data_dir.clone()),
+        http_addr: "127.0.0.1:0".parse()?,
+        ractor_port: 0,
+        data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "disk-full-test".to_string(),
-        ..Default::default()
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
     };
 
     let handle = bootstrap_node(config).await?;
-    let kv = KvClient::new(handle.raft_actor.clone());
 
-    // Initialize the cluster
-    handle
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest {
-            members: std::collections::BTreeSet::from([1]),
-        })?;
+    // Initialize single-node cluster
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let kv = KvClient::new(handle.raft_actor.clone());
 
     // Write some initial data (should succeed - disk not full yet)
     let write_req = WriteRequest {
@@ -74,7 +77,7 @@ async fn test_disk_full_error_handling() -> anyhow::Result<()> {
         key: "test-key".to_string(),
     };
     let result = kv.read(read_req).await?;
-    assert_eq!(result.value, Some("test-value".to_string()));
+    assert_eq!(result.value, "test-value".to_string());
 
     // Note: Actually triggering disk full requires either:
     // 1. Filling up a real filesystem (not practical in tests)

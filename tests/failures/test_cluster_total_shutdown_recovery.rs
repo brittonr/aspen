@@ -22,13 +22,13 @@
 ///! - Explicit shutdown order: reverse of startup
 ///! - Bounded timeouts: 500ms for initialization, 200ms for replication
 
-use std::collections::BTreeSet;
 use std::time::Duration;
 
-use aspen::api::{KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
+use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, ReadRequest, WriteRequest, WriteCommand};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend};
-use aspen::kv::client::KvClient;
+use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
+use aspen::raft::RaftControlClient;
 
 /// Test that cluster shuts down gracefully and can be restarted cleanly.
 ///
@@ -36,7 +36,7 @@ use aspen::kv::client::KvClient;
 /// clean shutdown/restart paths. With redb persistence (future), data recovery
 /// would also be tested.
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
+#[ignore] // Requires peer discovery setup for multi-node initialization
 async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     // Phase 1: Start and populate cluster
     let temp_dir1 = tempfile::tempdir()?;
@@ -49,13 +49,17 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     for (node_id, data_dir) in [(1, temp_dir1.path()), (2, temp_dir2.path()), (3, temp_dir3.path())] {
         let config = ClusterBootstrapConfig {
             node_id,
-            control_backend: ControlBackend::Deterministic,
+            control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
-            
-            ractor_port: 46000 + node_id as u16,
+            http_addr: format!("127.0.0.1:{}", 46000 + node_id as u16).parse()?,
+            ractor_port: 0,
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "shutdown-recovery-test".to_string(),
-            ..Default::default()
+            heartbeat_interval_ms: 500,
+            election_timeout_min_ms: 1500,
+            election_timeout_max_ms: 3000,
+            iroh: IrohConfig::default(),
+            peers: vec![],
         };
 
         let handle = bootstrap_node(config).await?;
@@ -63,12 +67,18 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     }
 
     // Initialize cluster on node 1
-    let members = BTreeSet::from([1, 2, 3]);
-    handles[0]
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest { initial_members: members }, answer_port))?;
+    let cluster = RaftControlClient::new(handles[0].raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+            ClusterNode::new(2, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+            ClusterNode::new(3, "127.0.0.1:26002", Some("iroh://placeholder3".into())),
+        ],
+    };
+    cluster.init(init_req).await?;
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for leader election
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Write test data
     let kv = KvClient::new(handles[0].raft_actor.clone());
@@ -87,7 +97,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
         key: "recovery-test".to_string(),
     };
     let result = kv.read(read_req).await?;
-    assert_eq!(result.value, Some("data-before-shutdown".to_string()));
+    assert_eq!(result.value, "data-before-shutdown".to_string());
 
     // Phase 2: Graceful shutdown of all nodes
     for handle in handles {
@@ -103,28 +113,36 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     for (node_id, data_dir) in [(1, temp_dir1.path()), (2, temp_dir2.path()), (3, temp_dir3.path())] {
         let config = ClusterBootstrapConfig {
             node_id,
-            control_backend: ControlBackend::Deterministic,
+            control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
-            
-            ractor_port: 46000 + node_id as u16,
+            http_addr: format!("127.0.0.1:{}", 46000 + node_id as u16).parse()?,
+            ractor_port: 0,
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "shutdown-recovery-test".to_string(),
-            ..Default::default()
+            heartbeat_interval_ms: 500,
+            election_timeout_min_ms: 1500,
+            election_timeout_max_ms: 3000,
+            iroh: IrohConfig::default(),
+            peers: vec![],
         };
 
         let handle = bootstrap_node(config).await?;
         new_handles.push(handle);
     }
 
-    // Phase 4: Verify cluster can be re-initialized
-    // Note: With in-memory storage, we need to re-init. With redb, the cluster
-    // would recover its previous state automatically.
-    let members = BTreeSet::from([1, 2, 3]);
-    new_handles[0]
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest { initial_members: members }, answer_port))?;
+    // Phase 4: Re-initialize cluster (in-memory storage loses state)
+    let cluster_new = RaftControlClient::new(new_handles[0].raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+            ClusterNode::new(2, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+            ClusterNode::new(3, "127.0.0.1:26002", Some("iroh://placeholder3".into())),
+        ],
+    };
+    cluster_new.init(init_req).await?;
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for leader election
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Phase 5: Verify cluster is operational
     let kv_new = KvClient::new(new_handles[0].raft_actor.clone());
@@ -133,11 +151,8 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     let read_req = ReadRequest {
         key: "recovery-test".to_string(),
     };
-    let result = kv_new.read(read_req).await?;
-    assert_eq!(
-        result.value, None,
-        "With in-memory storage, data is lost after restart"
-    );
+    // Expect read to fail (key not found) since in-memory storage lost data
+    assert!(kv_new.read(read_req).await.is_err(), "With in-memory storage, data is lost after restart");
 
     // But we can write new data
     let write_req = WriteRequest {
@@ -154,7 +169,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
         key: "new-data".to_string(),
     };
     let result = kv_new.read(read_req).await?;
-    assert_eq!(result.value, Some("after-restart".to_string()));
+    assert_eq!(result.value, "after-restart".to_string());
 
     // Cleanup
     for handle in new_handles {
@@ -166,30 +181,33 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
 
 /// Test that a single node can shutdown and restart independently.
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 async fn test_single_node_restart() -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
 
     // Start node
     let config = ClusterBootstrapConfig {
         node_id: 1,
-        control_backend: ControlBackend::Deterministic,
+        control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
-        
-        ractor_port: 56000,
+        http_addr: "127.0.0.1:0".parse()?,
+        ractor_port: 0,
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "single-node-restart".to_string(),
-        ..Default::default()
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
     };
 
     let handle = bootstrap_node(config.clone()).await?;
 
     // Initialize single-node cluster
-    handle
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest {
-            members: BTreeSet::from([1]),
-        })?;
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -211,12 +229,12 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
     // Restart
     let new_handle = bootstrap_node(config).await?;
 
-    // Re-initialize
-    new_handle
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest {
-            members: BTreeSet::from([1]),
-        })?;
+    // Re-initialize (in-memory storage lost state)
+    let cluster_new = RaftControlClient::new(new_handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+    };
+    cluster_new.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -234,7 +252,7 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
         key: "new-test".to_string(),
     };
     let result = kv_new.read(read_req).await?;
-    assert_eq!(result.value, Some("new-value".to_string()));
+    assert_eq!(result.value, "new-value".to_string());
 
     // Cleanup
     new_handle.shutdown().await?;

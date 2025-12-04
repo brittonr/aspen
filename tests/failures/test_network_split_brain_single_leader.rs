@@ -27,7 +27,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 async fn test_split_brain_single_leader() {
     let start = Instant::now();
     let seed = 99999u64;

@@ -18,19 +18,18 @@
 ///! - Explicit measurement: total time, throughput
 ///! - Bounded test duration: expected < 60 seconds
 
-use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
-use aspen::api::{KeyValueStore, WriteRequest, WriteCommand};
+use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore, WriteRequest, WriteCommand};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend};
-use aspen::kv::client::KvClient;
+use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::kv::KvClient;
+use aspen::raft::RaftControlClient;
 
 /// Test sustained write load with 1000 sequential operations.
 ///
 /// Measures baseline write throughput for performance tracking.
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 #[ignore] // Resource-intensive test, run explicitly with --ignored
 async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
     const TOTAL_WRITES: u64 = 1000;
@@ -49,13 +48,17 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
     ] {
         let config = ClusterBootstrapConfig {
             node_id,
-            control_backend: ControlBackend::Deterministic,
+            control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
-            
-            ractor_port: 66000 + node_id as u16,
+            http_addr: format!("127.0.0.1:{}", 36000 + node_id as u16).parse()?,
+            ractor_port: 0, // OS-assigned
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "sustained-write-load".to_string(),
-            ..Default::default()
+            heartbeat_interval_ms: 500,
+            election_timeout_min_ms: 1500,
+            election_timeout_max_ms: 3000,
+            iroh: IrohConfig::default(),
+            peers: vec![],
         };
 
         let handle = bootstrap_node(config).await?;
@@ -63,10 +66,15 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
     }
 
     // Initialize cluster
-    let members = BTreeSet::from([1, 2, 3]);
-    handles[0]
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest { initial_members: members }, answer_port))?;
+    let cluster = RaftControlClient::new(handles[0].raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![
+            ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
+            ClusterNode::new(2, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+            ClusterNode::new(3, "127.0.0.1:26002", Some("iroh://placeholder3".into())),
+        ],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
@@ -139,7 +147,6 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
 
 /// Smaller sustained write test for faster CI execution (100 writes).
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
     const TOTAL_WRITES: u64 = 100;
 
@@ -148,23 +155,27 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
 
     let config = ClusterBootstrapConfig {
         node_id: 1,
-        control_backend: ControlBackend::Deterministic,
+        control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
-        
-        ractor_port: 76000,
+        http_addr: "127.0.0.1:46000".parse()?,
+        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "sustained-write-small".to_string(),
-        ..Default::default()
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
     };
 
     let handle = bootstrap_node(config).await?;
 
     // Initialize single-node cluster
-    handle
-        .raft_actor
-        .cast(aspen::raft::RaftActorMessage::InitCluster(InitRequest {
-            members: BTreeSet::from([1]),
-        })?;
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder".into()))],
+    };
+    cluster.init(init_req).await?;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -177,7 +188,7 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
 
     for i in 0..TOTAL_WRITES {
         let write_req = WriteRequest {
-            command: AppRequest::Set {
+            command: WriteCommand::Set {
                 key: format!("key-{}", i),
                 value: format!("value-{}", i),
             },
@@ -206,7 +217,6 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
 
 /// Batch write test to measure batching improvements (future optimization).
 #[tokio::test]
-#[ignore] // TODO: Fix initialization and API usage to match working test patterns
 #[ignore] // Future optimization - batching not yet implemented
 async fn test_batch_write_optimization() -> anyhow::Result<()> {
     // Placeholder for future batch write optimization
