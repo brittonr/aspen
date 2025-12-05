@@ -270,11 +270,61 @@ impl RaftSupervisor {
         .context(SpawnFailedSnafu)
     }
 
-    /// Stub for storage validation (Phase 2).
-    async fn validate_storage(&self, _state: &RaftSupervisorState) -> Result<(), String> {
-        // TODO: Implement in Phase 2
-        // For now, always return success
-        Ok(())
+    /// Validates Raft storage integrity before allowing actor restart.
+    ///
+    /// For redb-backed storage, performs comprehensive validation checks:
+    /// - Database accessibility
+    /// - Log entry monotonicity (no gaps)
+    /// - Snapshot metadata integrity
+    /// - Vote state consistency
+    /// - Committed index bounds
+    ///
+    /// For in-memory storage, always returns Ok (no disk persistence to corrupt).
+    ///
+    /// Tiger Style: Fail-fast on validation errors to prevent restarting with corrupt state.
+    async fn validate_storage(&self, state: &RaftSupervisorState) -> Result<(), String> {
+        use crate::raft::storage_validation::validate_raft_storage;
+        use crate::raft::StateMachineVariant;
+
+        let node_id = state.raft_actor_config.node_id;
+
+        match &state.raft_actor_config.state_machine {
+            StateMachineVariant::InMemory(_) => {
+                // In-memory storage cannot be corrupted on disk
+                debug!(node_id = node_id, "skipping storage validation for in-memory backend");
+                Ok(())
+            }
+            StateMachineVariant::Redb(state_machine) => {
+                let storage_path = state_machine.path();
+
+                debug!(
+                    node_id = node_id,
+                    path = %storage_path.display(),
+                    "validating redb storage before restart"
+                );
+
+                match validate_raft_storage(node_id, storage_path) {
+                    Ok(report) => {
+                        info!(
+                            node_id = node_id,
+                            checks_passed = report.checks_passed,
+                            last_log_index = ?report.last_log_index,
+                            validation_duration_ms = report.validation_duration.as_millis(),
+                            "storage validation passed"
+                        );
+                        Ok(())
+                    }
+                    Err(err) => {
+                        error!(
+                            node_id = node_id,
+                            error = %err,
+                            "storage validation failed"
+                        );
+                        Err(format!("storage validation failed: {}", err))
+                    }
+                }
+            }
+        }
     }
 
     /// Handle actor failure and restart logic.
