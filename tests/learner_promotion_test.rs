@@ -52,6 +52,16 @@ async fn test_promote_learner_basic() {
         handles.push(handle);
     }
 
+    // Exchange peer addresses between all nodes
+    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    for (i, handle) in handles.iter().enumerate() {
+        for (j, addr) in addrs.iter().enumerate() {
+            if i != j {
+                handle.network_factory.add_peer((j + 1) as u64, addr.clone()).await;
+            }
+        }
+    }
+
     // Initialize cluster on node 1
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
@@ -65,13 +75,37 @@ async fn test_promote_learner_basic() {
 
     controller_1.init(init_request).await.unwrap();
 
-    // Wait for cluster to stabilize
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for node to become leader and cluster to be ready
+    let timeout = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let metrics = controller_1.get_metrics().await.unwrap();
+
+        // Check if node is leader with established membership
+        if metrics.current_leader == Some(1) {
+            break;
+        }
+
+        if std::time::Instant::now() > timeout {
+            panic!("Timeout waiting for leader election. Last metrics: {:?}", metrics);
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Additional stabilization time for replication
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Add node 4 as learner
     let temp_dir_4 = tempfile::tempdir().unwrap();
     let learner_config = create_test_config(4, temp_dir_4.path());
     let learner_handle = bootstrap_node(learner_config).await.unwrap();
+
+    // Exchange peer addresses with the learner
+    let learner_addr = learner_handle.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(4, learner_addr.clone()).await;
+        learner_handle.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(4, "127.0.0.1:20004", Some("127.0.0.1:20004".to_string())),
@@ -129,6 +163,16 @@ async fn test_promote_learner_replace_voter() {
         handles.push(handle);
     }
 
+    // Exchange peer addresses between all nodes
+    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    for (i, handle) in handles.iter().enumerate() {
+        for (j, addr) in addrs.iter().enumerate() {
+            if i != j {
+                handle.network_factory.add_peer((j + 1) as u64, addr.clone()).await;
+            }
+        }
+    }
+
     // Initialize cluster on node 1
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
@@ -142,13 +186,37 @@ async fn test_promote_learner_replace_voter() {
 
     controller_1.init(init_request).await.unwrap();
 
-    // Wait for cluster to stabilize
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for node to become leader and cluster to be ready
+    let timeout = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let metrics = controller_1.get_metrics().await.unwrap();
+
+        // Check if node is leader with established membership
+        if metrics.current_leader == Some(1) {
+            break;
+        }
+
+        if std::time::Instant::now() > timeout {
+            panic!("Timeout waiting for leader election. Last metrics: {:?}", metrics);
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Additional stabilization time for replication
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Add node 4 as learner
     let temp_dir_4 = tempfile::tempdir().unwrap();
     let learner_config = create_test_config(4, temp_dir_4.path());
     let learner_handle = bootstrap_node(learner_config).await.unwrap();
+
+    // Exchange peer addresses with the learner
+    let learner_addr = learner_handle.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(4, learner_addr.clone()).await;
+        learner_handle.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(4, "127.0.0.1:21004", Some("127.0.0.1:21004".to_string())),
@@ -206,6 +274,16 @@ async fn test_membership_cooldown_enforced() {
         handles.push(handle);
     }
 
+    // Exchange peer addresses between all nodes
+    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    for (i, handle) in handles.iter().enumerate() {
+        for (j, addr) in addrs.iter().enumerate() {
+            if i != j {
+                handle.network_factory.add_peer((j + 1) as u64, addr.clone()).await;
+            }
+        }
+    }
+
     // Initialize cluster on node 1
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
@@ -219,13 +297,37 @@ async fn test_membership_cooldown_enforced() {
 
     controller_1.init(init_request).await.unwrap();
 
-    // Wait for cluster to stabilize
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for node to become leader and cluster to be ready
+    let timeout = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let metrics = controller_1.get_metrics().await.unwrap();
+
+        // Check if node is leader with established membership
+        if metrics.current_leader == Some(1) {
+            break;
+        }
+
+        if std::time::Instant::now() > timeout {
+            panic!("Timeout waiting for leader election. Last metrics: {:?}", metrics);
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Additional stabilization time for replication
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Add node 4 as learner
     let temp_dir_4 = tempfile::tempdir().unwrap();
     let learner_config = create_test_config(4, temp_dir_4.path());
     let learner_handle = bootstrap_node(learner_config).await.unwrap();
+
+    // Exchange peer addresses with the learner
+    let learner_addr = learner_handle.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(4, learner_addr.clone()).await;
+        learner_handle.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(4, "127.0.0.1:22004", Some("127.0.0.1:22004".to_string())),
@@ -253,6 +355,16 @@ async fn test_membership_cooldown_enforced() {
     let temp_dir_5 = tempfile::tempdir().unwrap();
     let learner_config_5 = create_test_config(5, temp_dir_5.path());
     let learner_handle_5 = bootstrap_node(learner_config_5).await.unwrap();
+
+    // Exchange peer addresses with node 5
+    let learner_addr_5 = learner_handle_5.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(5, learner_addr_5.clone()).await;
+        learner_handle_5.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
+    // Also connect node 4 and node 5 to each other
+    learner_handle_5.network_factory.add_peer(4, learner_addr.clone()).await;
+    learner_handle.network_factory.add_peer(5, learner_addr_5.clone()).await;
 
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(5, "127.0.0.1:22005", Some("127.0.0.1:22005".to_string())),
@@ -315,6 +427,16 @@ async fn test_force_bypasses_cooldown() {
         handles.push(handle);
     }
 
+    // Exchange peer addresses between all nodes
+    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    for (i, handle) in handles.iter().enumerate() {
+        for (j, addr) in addrs.iter().enumerate() {
+            if i != j {
+                handle.network_factory.add_peer((j + 1) as u64, addr.clone()).await;
+            }
+        }
+    }
+
     // Initialize cluster on node 1
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
@@ -328,13 +450,37 @@ async fn test_force_bypasses_cooldown() {
 
     controller_1.init(init_request).await.unwrap();
 
-    // Wait for cluster to stabilize
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for node to become leader and cluster to be ready
+    let timeout = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let metrics = controller_1.get_metrics().await.unwrap();
+
+        // Check if node is leader with established membership
+        if metrics.current_leader == Some(1) {
+            break;
+        }
+
+        if std::time::Instant::now() > timeout {
+            panic!("Timeout waiting for leader election. Last metrics: {:?}", metrics);
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Additional stabilization time for replication
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Add node 4 as learner
     let temp_dir_4 = tempfile::tempdir().unwrap();
     let learner_config = create_test_config(4, temp_dir_4.path());
     let learner_handle = bootstrap_node(learner_config).await.unwrap();
+
+    // Exchange peer addresses with the learner
+    let learner_addr = learner_handle.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(4, learner_addr.clone()).await;
+        learner_handle.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(4, "127.0.0.1:23004", Some("127.0.0.1:23004".to_string())),
@@ -362,6 +508,16 @@ async fn test_force_bypasses_cooldown() {
     let temp_dir_5 = tempfile::tempdir().unwrap();
     let learner_config_5 = create_test_config(5, temp_dir_5.path());
     let learner_handle_5 = bootstrap_node(learner_config_5).await.unwrap();
+
+    // Exchange peer addresses with node 5
+    let learner_addr_5 = learner_handle_5.iroh_manager.node_addr().clone();
+    for (i, handle) in handles.iter().enumerate() {
+        handle.network_factory.add_peer(5, learner_addr_5.clone()).await;
+        learner_handle_5.network_factory.add_peer((i + 1) as u64, addrs[i].clone()).await;
+    }
+    // Also connect node 4 and node 5 to each other
+    learner_handle_5.network_factory.add_peer(4, learner_addr.clone()).await;
+    learner_handle.network_factory.add_peer(5, learner_addr_5.clone()).await;
 
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
         learner: ClusterNode::new(5, "127.0.0.1:23005", Some("127.0.0.1:23005".to_string())),

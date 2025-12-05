@@ -473,7 +473,10 @@ mod tests {
     #[test]
     fn test_validation_report_contains_metrics() {
         let (_temp_dir, db_path) = create_test_db();
-        let _db = create_db_with_log_entries(&db_path, 100);
+        {
+            let _db = create_db_with_log_entries(&db_path, 100);
+            // Database is closed when _db is dropped here
+        }
 
         let result = validate_raft_storage(42, &db_path);
         assert!(result.is_ok());

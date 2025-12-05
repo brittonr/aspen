@@ -404,6 +404,9 @@ impl RedbLogStore {
             write_txn
                 .open_table(RAFT_META_TABLE)
                 .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(SNAPSHOT_TABLE)
+                .context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -899,6 +902,12 @@ impl RedbStateMachine {
                 .context(OpenTableSnafu)?;
             write_txn
                 .open_table(SNAPSHOT_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(RAFT_META_TABLE)
                 .context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;

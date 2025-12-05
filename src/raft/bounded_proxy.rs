@@ -71,6 +71,16 @@ pub enum BoundedMailboxError {
         /// The underlying messaging error from ractor.
         source: MessagingErr<RaftActorMessage>,
     },
+
+    /// Internal error: semaphore closed unexpectedly.
+    ///
+    /// This indicates a serious internal error where the semaphore was closed
+    /// while proxies still hold references to it.
+    #[snafu(display("internal error: {}", message))]
+    Internal {
+        /// Error message describing the internal failure.
+        message: String,
+    },
 }
 
 /// Metrics for bounded mailbox monitoring.
@@ -305,9 +315,11 @@ impl BoundedRaftActorProxy {
     /// ```
     pub async fn send(&self, msg: RaftActorMessage) -> Result<(), BoundedMailboxError> {
         // Acquire permit (blocks if mailbox full)
-        let permit = self.semaphore.acquire().await.expect(
-            "semaphore should not be closed (only closed when all proxies are dropped)",
-        );
+        let permit = self.semaphore.acquire().await.map_err(|_| {
+            BoundedMailboxError::Internal {
+                message: "semaphore closed unexpectedly".to_string(),
+            }
+        })?;
 
         // Send message
         match self.inner.send_message(msg) {

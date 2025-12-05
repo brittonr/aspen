@@ -166,19 +166,27 @@ async fn handle_rpc_stream(
     // Process the RPC and create response
     let response = match request {
         RaftRpcProtocol::Vote(vote_req) => {
-            // vote() returns Result<T, Infallible>, so Err case is impossible
-            let result = raft_core
-                .vote(vote_req.request)
-                .await
-                .expect("Infallible: vote() cannot fail");
+            // vote() returns Result<T, RaftError<C>>
+            // Handle Fatal errors by logging and returning error response
+            let result = match raft_core.vote(vote_req.request).await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!(error = ?err, "vote RPC failed with fatal error");
+                    return Err(anyhow::anyhow!("vote failed: {:?}", err));
+                }
+            };
             RaftRpcResponse::Vote(result)
         }
         RaftRpcProtocol::AppendEntries(append_req) => {
-            // append_entries() returns Result<T, Infallible>, so Err case is impossible
-            let result = raft_core
-                .append_entries(append_req.request)
-                .await
-                .expect("Infallible: append_entries() cannot fail");
+            // append_entries() returns Result<T, RaftError<C>>
+            // Handle Fatal errors by logging and returning error response
+            let result = match raft_core.append_entries(append_req.request).await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!(error = ?err, "append_entries RPC failed with fatal error");
+                    return Err(anyhow::anyhow!("append_entries failed: {:?}", err));
+                }
+            };
             RaftRpcResponse::AppendEntries(result)
         }
         RaftRpcProtocol::InstallSnapshot(snapshot_req) => {

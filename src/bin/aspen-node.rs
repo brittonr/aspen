@@ -1185,7 +1185,7 @@ async fn add_peer(
     State(ctx): State<AppState>,
     Json(req): Json<AddPeerRequest>,
 ) -> impl IntoResponse {
-    ctx.network_factory.add_peer(req.node_id, req.endpoint_addr);
+    ctx.network_factory.add_peer(req.node_id, req.endpoint_addr).await;
     StatusCode::OK
 }
 

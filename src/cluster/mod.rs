@@ -70,12 +70,13 @@
 use std::fmt;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::{Arc, Mutex as SyncMutex};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
 use iroh_gossip::proto::TopicId;
+use parking_lot::Mutex as SyncMutex;
 use ractor::{Actor, ActorRef, MessagingErr};
 use ractor_cluster::node::NodeConnectionMode;
 use ractor_cluster::{
@@ -285,7 +286,6 @@ impl NodeServerHandle {
         self.inner
             .subscriptions
             .lock()
-            .expect("subscriptions poisoned")
             .push(sub_id);
         Ok(())
     }
@@ -297,8 +297,7 @@ impl NodeServerHandle {
         let mut guard = self
             .inner
             .subscriptions
-            .lock()
-            .expect("subscriptions poisoned");
+            .lock();
         if let Some(pos) = guard.iter().position(|existing| existing == id) {
             guard.remove(pos);
         }
@@ -341,8 +340,7 @@ impl NodeServerHandle {
             let mut guard = self
                 .inner
                 .subscriptions
-                .lock()
-                .expect("subscriptions poisoned");
+                .lock();
             mem::take(&mut *guard)
         };
         for id in subs {

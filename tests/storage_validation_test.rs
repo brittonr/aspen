@@ -13,6 +13,7 @@ use tempfile::TempDir;
 /// Redb table definitions (must match storage.rs)
 const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
 const RAFT_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("raft_meta");
+const SNAPSHOT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("snapshots");
 
 /// Helper: Creates a temporary directory for tests
 fn create_temp_dir() -> TempDir {
@@ -29,6 +30,10 @@ fn create_db_with_log_entries(db_path: &PathBuf, num_entries: u32) -> Database {
     let db = Database::create(db_path).expect("failed to create database");
     let write_txn = db.begin_write().expect("failed to begin write transaction");
     {
+        // Create all required tables that validation expects
+        let _ = write_txn.open_table(SNAPSHOT_TABLE);
+        let _ = write_txn.open_table(RAFT_META_TABLE);
+
         let mut table = write_txn
             .open_table(RAFT_LOG_TABLE)
             .expect("failed to open log table");
@@ -56,7 +61,9 @@ fn create_db_with_log_entries(db_path: &PathBuf, num_entries: u32) -> Database {
 fn test_validation_passes_on_healthy_storage() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "healthy");
-    let _db = create_db_with_log_entries(&db_path, 10);
+    {
+        let _db = create_db_with_log_entries(&db_path, 10);
+    }  // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok(), "validation should pass on healthy storage");
@@ -121,7 +128,9 @@ fn test_validation_fails_on_log_gap() {
 fn test_validation_report_contains_metrics() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "metrics");
-    let _db = create_db_with_log_entries(&db_path, 100);
+    {
+        let _db = create_db_with_log_entries(&db_path, 100);
+    }  // Database dropped here
 
     let result = validate_raft_storage(42, &db_path);
     assert!(result.is_ok());
@@ -147,6 +156,9 @@ fn test_empty_log_is_valid() {
         write_txn
             .open_table(RAFT_META_TABLE)
             .expect("failed to open table");
+        write_txn
+            .open_table(SNAPSHOT_TABLE)
+            .expect("failed to open table");
     }
     write_txn.commit().expect("failed to commit");
     drop(db);
@@ -163,22 +175,23 @@ fn test_empty_log_is_valid() {
 fn test_validation_with_vote_state() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "vote");
-    let db = create_db_with_log_entries(&db_path, 5);
-
-    // Add vote state
-    let write_txn = db.begin_write().expect("failed to begin write");
     {
-        let mut table = write_txn
-            .open_table(RAFT_META_TABLE)
-            .expect("failed to open table");
-        let vote = openraft::Vote::<AppTypeConfig>::new(3, 1);
-        let serialized = bincode::serialize(&vote).expect("failed to serialize vote");
-        table
-            .insert("vote", serialized.as_slice())
-            .expect("failed to insert vote");
-    }
-    write_txn.commit().expect("failed to commit");
-    drop(db);
+        let db = create_db_with_log_entries(&db_path, 5);
+
+        // Add vote state
+        let write_txn = db.begin_write().expect("failed to begin write");
+        {
+            let mut table = write_txn
+                .open_table(RAFT_META_TABLE)
+                .expect("failed to open table");
+            let vote = openraft::Vote::<AppTypeConfig>::new(3, 1);
+            let serialized = bincode::serialize(&vote).expect("failed to serialize vote");
+            table
+                .insert("vote", serialized.as_slice())
+                .expect("failed to insert vote");
+        }
+        write_txn.commit().expect("failed to commit");
+    }  // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -191,22 +204,23 @@ fn test_validation_with_vote_state() {
 fn test_validation_with_committed_index() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "committed");
-    let db = create_db_with_log_entries(&db_path, 10);
-
-    // Add committed state
-    let write_txn = db.begin_write().expect("failed to begin write");
     {
-        let mut table = write_txn
-            .open_table(RAFT_META_TABLE)
-            .expect("failed to open table");
-        let committed = log_id::<AppTypeConfig>(1, 1, 5);
-        let serialized = bincode::serialize(&committed).expect("failed to serialize committed");
-        table
-            .insert("committed", serialized.as_slice())
-            .expect("failed to insert committed");
-    }
-    write_txn.commit().expect("failed to commit");
-    drop(db);
+        let db = create_db_with_log_entries(&db_path, 10);
+
+        // Add committed state
+        let write_txn = db.begin_write().expect("failed to begin write");
+        {
+            let mut table = write_txn
+                .open_table(RAFT_META_TABLE)
+                .expect("failed to open table");
+            let committed = log_id::<AppTypeConfig>(1, 1, 5);
+            let serialized = bincode::serialize(&committed).expect("failed to serialize committed");
+            table
+                .insert("committed", serialized.as_slice())
+                .expect("failed to insert committed");
+        }
+        write_txn.commit().expect("failed to commit");
+    }  // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -219,22 +233,23 @@ fn test_validation_with_committed_index() {
 fn test_validation_fails_on_committed_beyond_log() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "committed_beyond");
-    let db = create_db_with_log_entries(&db_path, 5);
-
-    // Set committed index beyond last log index
-    let write_txn = db.begin_write().expect("failed to begin write");
     {
-        let mut table = write_txn
-            .open_table(RAFT_META_TABLE)
-            .expect("failed to open table");
-        let committed = log_id::<AppTypeConfig>(1, 1, 100); // Beyond log index 4
-        let serialized = bincode::serialize(&committed).expect("failed to serialize committed");
-        table
-            .insert("committed", serialized.as_slice())
-            .expect("failed to insert committed");
-    }
-    write_txn.commit().expect("failed to commit");
-    drop(db);
+        let db = create_db_with_log_entries(&db_path, 5);
+
+        // Set committed index beyond last log index
+        let write_txn = db.begin_write().expect("failed to begin write");
+        {
+            let mut table = write_txn
+                .open_table(RAFT_META_TABLE)
+                .expect("failed to open table");
+            let committed = log_id::<AppTypeConfig>(1, 1, 100); // Beyond log index 4
+            let serialized = bincode::serialize(&committed).expect("failed to serialize committed");
+            table
+                .insert("committed", serialized.as_slice())
+                .expect("failed to insert committed");
+        }
+        write_txn.commit().expect("failed to commit");
+    }  // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_err());
@@ -285,8 +300,12 @@ async fn test_integration_with_redb_log_store() {
     // Wait for IO to complete
     rx.await.expect("failed to receive callback").expect("IO failed");
 
+    // Drop log store before validation
+    let log_path = log_store.path().to_path_buf();
+    drop(log_store);
+
     // Validate storage directly
-    let result = validate_raft_storage(1, log_store.path());
+    let result = validate_raft_storage(1, &log_path);
     assert!(result.is_ok());
 
     let report = result.unwrap();
@@ -312,8 +331,12 @@ async fn test_integration_with_redb_state_machine() {
     let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
     sm.apply(entries).await.expect("failed to apply entry");
 
+    // Drop state machine before validation
+    let sm_path = sm.path().to_path_buf();
+    drop(sm);
+
     // Validate storage directly
-    let result = validate_raft_storage(1, sm.path());
+    let result = validate_raft_storage(1, &sm_path);
     assert!(result.is_ok());
 }
 
@@ -323,7 +346,9 @@ fn test_validation_performance() {
     let db_path = create_db_path(&temp_dir, "performance");
 
     // Create a large log (1000 entries)
-    let _db = create_db_with_log_entries(&db_path, 1000);
+    {
+        let _db = create_db_with_log_entries(&db_path, 1000);
+    }  // Database dropped here
 
     // Measure validation time
     let start = std::time::Instant::now();
@@ -347,7 +372,9 @@ fn test_validation_with_large_log() {
     let db_path = create_db_path(&temp_dir, "large");
 
     // Create a very large log (10000 entries)
-    let _db = create_db_with_log_entries(&db_path, 10000);
+    {
+        let _db = create_db_with_log_entries(&db_path, 10000);
+    }  // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -361,7 +388,9 @@ fn test_validation_with_large_log() {
 fn test_validation_multiple_times() {
     let temp_dir = create_temp_dir();
     let db_path = create_db_path(&temp_dir, "multiple");
-    let _db = create_db_with_log_entries(&db_path, 10);
+    {
+        let _db = create_db_with_log_entries(&db_path, 10);
+    }  // Database dropped here
 
     // Run validation multiple times (should be idempotent)
     for i in 0..5 {

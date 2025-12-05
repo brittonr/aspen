@@ -141,8 +141,8 @@ async fn test_two_node_replication() {
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
-    handle1.network_factory.add_peer(config2.node_id, addr2);
-    handle2.network_factory.add_peer(config1.node_id, addr1);
+    handle1.network_factory.add_peer(config2.node_id, addr2).await;
+    handle2.network_factory.add_peer(config1.node_id, addr1).await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
@@ -388,8 +388,8 @@ async fn test_add_learner_and_replicate() {
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
-    handle1.network_factory.add_peer(config2.node_id, addr2);
-    handle2.network_factory.add_peer(config1.node_id, addr1);
+    handle1.network_factory.add_peer(config2.node_id, addr2).await;
+    handle2.network_factory.add_peer(config1.node_id, addr1).await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
