@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 7 - Advanced features or deployment preparation
 
-**Latest**: Phase 6 Week 5.3 (Madsim Phase 4) complete (2025-12-05) - failure injection and chaos testing implemented. **207/207 tests (206 passed, 1 flaky), 13 skipped**. Leader crash/re-election, network partitions, message delays, and concurrent writes under failure conditions all working. Deterministic chaos engineering validated across 4 seeds.
+**Latest**: Phase 6 Week 5.4 (Madsim Phase 5) complete (2025-12-05) - advanced failure scenarios implemented. **211/211 tests (210 passed, 1 flaky), 13 skipped**. 5-node clusters, rolling failures, asymmetric partitions, and complex concurrent write scenarios all working. Comprehensive distributed systems testing complete.
 
 ---
 
@@ -1141,6 +1141,78 @@ MadsimRaftRouter
 - Deterministic chaos engineering with reproducible failures
 
 **Next Steps**: Phase 5 (Advanced scenarios) or refine failure injection patterns
+
+### Week 5.4: Madsim Phase 5 - Advanced Failure Scenarios ✅ COMPLETE (2025-12-05)
+
+**Goal**: Implement advanced distributed systems testing scenarios with increased complexity
+
+**Approach**: Test edge cases with 5-node clusters, rolling failures, asymmetric partitions, and complex concurrent operations
+
+**5.5 Advanced Scenario Tests** ✅ COMPLETE
+- **Created `tests/madsim_advanced_scenarios_test.rs`** (522 lines)
+  - 4 advanced chaos engineering tests with seeds 42, 123, 456, 789
+  - **test_five_node_cluster_with_concurrent_failures_seed_42**: 5-node cluster resilience
+    - Initializes 5-node Raft cluster
+    - Crashes 2 follower nodes simultaneously
+    - Validates writes succeed with 3/5 quorum
+    - Tests majority (3 nodes) can maintain consensus
+  - **test_rolling_failures_seed_123**: Sequential node failures and recoveries
+    - Crashes node 1, waits for re-election, recovers node 1
+    - Crashes node 2, waits for re-election, recovers node 2
+    - Validates cluster survives sequential failures without quorum loss
+    - Tests resilience to cascading failures
+  - **test_asymmetric_partition_seed_456**: Triangle partition pattern
+    - Creates asymmetric partition (node 1 ↔ node 2 blocked)
+    - Node 3 maintains connectivity to both node 1 and node 2
+    - Tests split-brain prevention with partial connectivity
+    - Validates cluster behavior under complex network topology
+  - **test_concurrent_writes_complex_failures_seed_789**: Load testing under degraded conditions
+    - Injects 500ms network delays between multiple node pairs
+    - Submits 5 concurrent write operations to leader
+    - Validates all writes replicate despite network degradation
+    - Tests throughput under realistic latency conditions
+
+**Test Results**:
+- Before: 207/207 tests (206 passed, 1 flaky), 13 skipped
+- After: 211/211 tests (210 passed, 1 flaky), 13 skipped
+- Change: +4 tests (advanced failure scenarios)
+- Flaky test: `test_flapping_node_detection` (pre-existing, unrelated to Phase 5)
+- Simulation artifacts: 4 new JSON files with advanced failure traces
+- Test runtime: ~13 seconds total for all 4 tests
+
+**What Works Now**:
+- ✅ 5-node cluster with 2 concurrent failures (maintains 3/5 quorum)
+- ✅ Rolling failures without quorum loss
+- ✅ Asymmetric network partitions (triangle topology)
+- ✅ Concurrent writes (5 operations) under network delays
+- ✅ Sequential failure and recovery patterns
+- ✅ Split-brain prevention with partial connectivity
+- ✅ Load testing with 500ms latency
+
+**Advanced Scenarios Tested**:
+- **5-Node Clusters**: Larger cluster sizes for increased fault tolerance
+- **Concurrent Failures**: Multiple nodes failing simultaneously
+- **Rolling Failures**: Sequential failure-recovery cycles
+- **Asymmetric Partitions**: Complex network topologies beyond simple splits
+- **Concurrent Writes**: Multiple write operations under degraded conditions
+- **Complex Latency**: Multi-path delays simulating real-world networks
+
+**Key Findings**:
+- 5-node cluster: Maintains consensus with 2/5 nodes down (3/5 quorum)
+- Rolling failures: Cluster remains available during sequential node restarts
+- Asymmetric partition: Node 3 acts as bridge, prevents split-brain
+- Concurrent writes: All 5 writes replicate successfully with 500ms delays
+- Test determinism: Same seeds produce same failure patterns (validated)
+
+**Week 5.4 Summary**: ✅ COMPLETE
+- Advanced failure scenarios complete
+- 211/211 tests (210 passed, 1 pre-existing flaky)
+- 4 new advanced distributed systems tests
+- 5-node clusters, rolling failures, asymmetric partitions all validated
+- Concurrent write load testing under network degradation confirmed
+- Comprehensive madsim simulation testing infrastructure complete
+
+**Madsim Implementation Complete**: All 5 phases (Infrastructure, RaftActor Integration, Multi-Node Clusters, Failure Injection, Advanced Scenarios) validated with 11 comprehensive simulation tests
 
 ---
 
