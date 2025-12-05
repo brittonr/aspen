@@ -348,8 +348,8 @@ fn validate_committed_index(
     let committed_index = committed.index;
 
     // Validate committed index is <= last_log_index
-    if let Some(last_index) = last_log_index {
-        if committed_index > last_index {
+    if let Some(last_index) = last_log_index
+        && committed_index > last_index {
             return Err(StorageValidationError::CommittedInconsistent {
                 reason: format!(
                     "committed index {} > last log index {}",
@@ -357,7 +357,6 @@ fn validate_committed_index(
                 ),
             });
         }
-    }
 
     Ok(Some(committed_index))
 }

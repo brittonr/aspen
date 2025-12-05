@@ -73,7 +73,7 @@ async fn create_test_raft_config(
     let raft_config = Arc::new(RaftConfig::default());
     let log_store = InMemoryLogStore::default();
     let state_machine = StateMachineStore::default();
-    let network = MockNetworkFactory::default();
+    let network = MockNetworkFactory;
 
     let state_machine_arc = Arc::new(state_machine);
 
@@ -230,7 +230,7 @@ async fn test_manual_restart_command() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Send ManualRestart command
-    supervisor_ref.cast(SupervisorMessage::ManualRestart);
+    let _ = supervisor_ref.cast(SupervisorMessage::ManualRestart);
 
     // Give it time to process
     tokio::time::sleep(Duration::from_millis(100)).await;

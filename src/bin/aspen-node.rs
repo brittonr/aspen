@@ -674,6 +674,7 @@ async fn check_supervision_health(
 /// Build health response from individual check results.
 ///
 /// Tiger Style: Focused function for response construction.
+#[allow(clippy::too_many_arguments)]
 fn build_health_response(
     raft_actor_check: HealthCheckStatus,
     raft_cluster_check: HealthCheckStatus,
@@ -686,10 +687,10 @@ fn build_health_response(
 ) -> (StatusCode, Json<DetailedHealthResponse>) {
     let supervision_unhealthy = supervision_health
         .as_ref()
-        .map_or(false, |s| s.status == "unhealthy");
+        .is_some_and(|s| s.status == "unhealthy");
     let supervision_degraded = supervision_health
         .as_ref()
-        .map_or(false, |s| s.status == "degraded");
+        .is_some_and(|s| s.status == "degraded");
 
     let is_critical_failure = raft_actor_check.status == "error"
         || disk_space_check.status == "error"
@@ -840,8 +841,8 @@ fn append_raft_leader_metrics(
     raft_metrics: &openraft::RaftMetrics<aspen::raft::types::AppTypeConfig>,
 ) {
     // Replication lag (leader only)
-    if let Some(ref replication) = raft_metrics.replication {
-        if let Some(leader_last_log) = raft_metrics.last_log_index {
+    if let Some(ref replication) = raft_metrics.replication
+        && let Some(leader_last_log) = raft_metrics.last_log_index {
             body.push_str("# TYPE aspen_replication_lag gauge\n");
             body.push_str(
                 "# HELP aspen_replication_lag Number of log entries follower is behind leader\n",
@@ -860,7 +861,6 @@ fn append_raft_leader_metrics(
                 ));
             }
         }
-    }
 
     // Heartbeat metrics (leader only)
     if let Some(ref heartbeat) = raft_metrics.heartbeat {
@@ -1142,11 +1142,11 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
 
     // Error counters
     let metrics = metrics_collector();
-    append_error_metrics(&mut body, ctx.node_id, &metrics);
+    append_error_metrics(&mut body, ctx.node_id, metrics);
 
     // Write and read latency histograms
-    append_write_latency_histogram(&mut body, ctx.node_id, &metrics);
-    append_read_latency_histogram(&mut body, ctx.node_id, &metrics);
+    append_write_latency_histogram(&mut body, ctx.node_id, metrics);
+    append_read_latency_histogram(&mut body, ctx.node_id, metrics);
 
     // Node failure detection metrics
     if let Ok(detector) = ctx.network_factory.failure_detector().try_read() {

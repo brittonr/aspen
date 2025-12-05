@@ -3,11 +3,45 @@
 //! Provides safe, operator-controlled promotion of learner nodes to voters
 //! when failures occur. This is Phase 5 of the Actor Supervision system.
 //!
-//! Safety mechanisms:
+//! # Safety Mechanisms
+//!
 //! - Membership cooldown (300s between changes)
-//! - Learner health verification
-//! - Log catchup verification (<100 entries behind)
-//! - Quorum verification
+//! - Learner health verification (via NodeFailureDetector)
+//! - Log catchup verification (<100 entries behind leader)
+//! - Quorum verification (cluster maintains quorum after change)
+//! - Maximum voters limit (100 nodes)
+//!
+//! # HTTP API Usage
+//!
+//! ## Basic Promotion
+//!
+//! ```bash
+//! curl -X POST http://localhost:8081/admin/promote-learner \
+//!   -H "Content-Type: application/json" \
+//!   -d '{"learner_id": 4}'
+//! ```
+//!
+//! ## Replace Failed Voter
+//!
+//! ```bash
+//! curl -X POST http://localhost:8081/admin/promote-learner \
+//!   -H "Content-Type: application/json" \
+//!   -d '{"learner_id": 5, "replace_node": 2}'
+//! ```
+//!
+//! ## Force Promotion (skip safety checks)
+//!
+//! ```bash
+//! curl -X POST http://localhost:8081/admin/promote-learner \
+//!   -H "Content-Type: application/json" \
+//!   -d '{"learner_id": 4, "force": true}'
+//! ```
+//!
+//! # Response Format
+//!
+//! Success: `{"success": true, "learner_id": 4, "previous_voters": [1,2,3], "new_voters": [1,2,3,4]}`
+//!
+//! Error: `HTTP 400 Bad Request` with error message
 //!
 //! Tiger Style: Fixed timeouts, bounded membership (max 100 voters), explicit types.
 

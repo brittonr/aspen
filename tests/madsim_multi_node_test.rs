@@ -100,7 +100,7 @@ async fn test_three_node_cluster_seed_42() {
     );
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
-    artifact = artifact.add_event(&format!("validation: leader is node {}", leader_id));
+    artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
     let leader_raft = match leader_id {
@@ -206,7 +206,7 @@ async fn test_three_node_cluster_seed_123() {
     );
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
-    artifact = artifact.add_event(&format!("validation: leader is node {}", leader_id));
+    artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
     let leader_raft = match leader_id {
@@ -311,7 +311,7 @@ async fn test_three_node_cluster_seed_456() {
     );
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
-    artifact = artifact.add_event(&format!("validation: leader is node {}", leader_id));
+    artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
     let leader_raft = match leader_id {

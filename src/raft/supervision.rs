@@ -907,7 +907,7 @@ mod health_monitor_tests {
         let config = Arc::new(RaftConfig::default());
         let log_store = InMemoryLogStore::default();
         let state_machine = StateMachineStore::default();
-        let network = MockNetworkFactory::default();
+        let network = MockNetworkFactory;
 
         let state_machine_arc = Arc::new(state_machine);
 

@@ -95,7 +95,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let initial_leader = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(&format!("validation: initial leader is node {}", initial_leader));
+    artifact = artifact.add_event(format!("validation: initial leader is node {}", initial_leader));
 
     artifact = artifact.add_event("write: first write before failures");
     let leader_raft = match initial_leader {
@@ -120,7 +120,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     let followers: Vec<u64> = (1..=5).filter(|id| *id != initial_leader).take(2).collect();
     router.mark_node_failed(followers[0], true);
     router.mark_node_failed(followers[1], true);
-    artifact = artifact.add_event(&format!(
+    artifact = artifact.add_event(format!(
         "failure: nodes {} and {} crashed",
         followers[0], followers[1]
     ));
@@ -383,7 +383,7 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
                 value: format!("value_{}", i),
             })
             .await
-            .expect(&format!("write {} should succeed", i));
+            .unwrap_or_else(|_| panic!("write {} should succeed", i));
     }
 
     artifact = artifact.add_event("wait: for replication with delays");

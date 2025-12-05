@@ -85,9 +85,9 @@ async fn test_leader_crash_and_reelection_seed_42() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let initial_leader = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(&format!("validation: initial leader is node {}", initial_leader));
+    artifact = artifact.add_event(format!("validation: initial leader is node {}", initial_leader));
 
-    artifact = artifact.add_event(&format!("failure: crash node {} (leader)", initial_leader));
+    artifact = artifact.add_event(format!("failure: crash node {} (leader)", initial_leader));
     router.mark_node_failed(initial_leader, true);
 
     artifact = artifact.add_event("wait: for re-election (5s)");
@@ -95,11 +95,9 @@ async fn test_leader_crash_and_reelection_seed_42() {
 
     artifact = artifact.add_event("metrics: check new leader elected");
     // Check remaining nodes for new leader
-    let remaining_nodes = vec![
-        (1, &raft1),
+    let remaining_nodes = [(1, &raft1),
         (2, &raft2),
-        (3, &raft3),
-    ];
+        (3, &raft3)];
 
     let mut new_leader = None;
     for (id, raft) in remaining_nodes.iter() {
@@ -119,7 +117,7 @@ async fn test_leader_crash_and_reelection_seed_42() {
         "new leader should be different from crashed leader"
     );
 
-    artifact = artifact.add_event(&format!(
+    artifact = artifact.add_event(format!(
         "validation: new leader is node {} after crash",
         new_leader.unwrap()
     ));
@@ -373,7 +371,7 @@ async fn test_concurrent_writes_with_failures_seed_789() {
     // Find a follower to crash
     let follower_id = if leader_id == 1 { 2 } else { 1 };
     router.mark_node_failed(follower_id, true);
-    artifact = artifact.add_event(&format!("failure: node {} crashed", follower_id));
+    artifact = artifact.add_event(format!("failure: node {} crashed", follower_id));
 
     artifact = artifact.add_event("write: second write with follower down");
     leader_raft

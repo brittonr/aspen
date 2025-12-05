@@ -3,7 +3,6 @@
 //! Tests the classification logic, metrics integration, and alert behavior
 //! for distinguishing between actor-level crashes and node-level failures.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::node_failure_detection::{

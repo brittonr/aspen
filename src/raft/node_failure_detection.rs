@@ -69,7 +69,7 @@ pub struct NodeFailureDetector {
     /// Map of currently unreachable nodes with failure details.
     unreachable_nodes: HashMap<NodeId, UnreachableInfo>,
     /// Timeout before considering a node failed (60 seconds).
-    failure_timeout: Duration,
+    _failure_timeout: Duration,
     /// Threshold for alerting operator (60 seconds).
     alert_threshold: Duration,
 }
@@ -82,7 +82,7 @@ impl NodeFailureDetector {
     pub fn new(failure_timeout: Duration) -> Self {
         Self {
             unreachable_nodes: HashMap::new(),
-            failure_timeout,
+            _failure_timeout: failure_timeout,
             alert_threshold: failure_timeout,
         }
     }
