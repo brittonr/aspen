@@ -42,13 +42,13 @@ use crate::raft::RaftActorMessage;
 ///
 /// This provides a reasonable buffer for normal operations while preventing
 /// unbounded memory growth. At ~1KB per message, this is ~1MB of buffering.
-const DEFAULT_CAPACITY: usize = 1000;
+const DEFAULT_CAPACITY: u32 = 1000;
 
 /// Maximum allowed mailbox capacity (10,000 messages).
 ///
 /// This prevents misconfiguration that could lead to excessive memory usage.
 /// At ~1KB per message, this is ~10MB of buffering maximum.
-const MAX_CAPACITY: usize = 10_000;
+const MAX_CAPACITY: u32 = 10_000;
 
 /// Errors that can occur when sending messages through the bounded proxy.
 #[derive(Debug, Snafu)]
@@ -60,7 +60,7 @@ pub enum BoundedMailboxError {
     #[snafu(display("mailbox full (capacity: {}), message rejected", capacity))]
     MailboxFull {
         /// The configured capacity of the mailbox.
-        capacity: usize,
+        capacity: u32,
     },
 
     /// Failed to send message to the underlying actor.
@@ -161,7 +161,7 @@ pub struct BoundedRaftActorProxy {
     semaphore: Arc<Semaphore>,
 
     /// Configured mailbox capacity.
-    capacity: usize,
+    capacity: u32,
 
     /// Node ID for logging and debugging.
     node_id: NodeId,
@@ -206,7 +206,7 @@ impl BoundedRaftActorProxy {
     /// ```
     pub fn with_capacity(
         inner: ActorRef<RaftActorMessage>,
-        capacity: usize,
+        capacity: u32,
         node_id: NodeId,
     ) -> Self {
         assert!(
@@ -223,7 +223,7 @@ impl BoundedRaftActorProxy {
 
         Self {
             inner,
-            semaphore: Arc::new(Semaphore::new(capacity)),
+            semaphore: Arc::new(Semaphore::new(capacity as usize)),
             capacity,
             node_id,
             metrics: BoundedMailboxMetrics::new(),
@@ -359,9 +359,9 @@ impl BoundedRaftActorProxy {
     /// let depth = proxy.mailbox_depth();
     /// println!("Mailbox is {}% full", (depth * 100) / proxy.capacity());
     /// ```
-    pub fn mailbox_depth(&self) -> usize {
-        self.capacity
-            .saturating_sub(self.semaphore.available_permits())
+    pub fn mailbox_depth(&self) -> u32 {
+        let available = self.semaphore.available_permits() as u32;
+        self.capacity.saturating_sub(available)
     }
 
     /// Get mailbox capacity.
@@ -371,7 +371,7 @@ impl BoundedRaftActorProxy {
     /// # Returns
     ///
     /// The configured capacity.
-    pub fn capacity(&self) -> usize {
+    pub fn capacity(&self) -> u32 {
         self.capacity
     }
 

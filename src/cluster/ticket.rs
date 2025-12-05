@@ -54,7 +54,7 @@ impl AspenClusterTicket {
     /// Maximum number of bootstrap peers in a ticket.
     ///
     /// Tiger Style: Fixed limit to prevent unbounded ticket size.
-    pub const MAX_BOOTSTRAP_PEERS: usize = 16;
+    pub const MAX_BOOTSTRAP_PEERS: u32 = 16;
 
     /// Create a new ticket with a topic ID and cluster identifier.
     ///
@@ -85,7 +85,7 @@ impl AspenClusterTicket {
     ///
     /// Tiger Style: Fail fast on limit violation.
     pub fn add_bootstrap(&mut self, peer: EndpointId) -> Result<()> {
-        if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS {
+        if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS as usize {
             anyhow::bail!(
                 "cannot add more than {} bootstrap peers to ticket",
                 Self::MAX_BOOTSTRAP_PEERS
@@ -210,7 +210,7 @@ mod tests {
 
         assert_eq!(
             ticket.bootstrap.len(),
-            AspenClusterTicket::MAX_BOOTSTRAP_PEERS
+            AspenClusterTicket::MAX_BOOTSTRAP_PEERS as usize
         );
 
         // Adding one more should fail

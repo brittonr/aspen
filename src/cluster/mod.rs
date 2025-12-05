@@ -420,8 +420,8 @@ impl IrohEndpointConfig {
 
     /// Add a relay server URL (max 4 relays enforced).
     pub fn with_relay_url(mut self, url: RelayUrl) -> Result<Self> {
-        const MAX_RELAY_URLS: usize = 4;
-        if self.relay_urls.len() >= MAX_RELAY_URLS {
+        const MAX_RELAY_URLS: u32 = 4;
+        if self.relay_urls.len() >= MAX_RELAY_URLS as usize {
             anyhow::bail!("cannot add more than {} relay URLs", MAX_RELAY_URLS);
         }
         self.relay_urls.push(url);

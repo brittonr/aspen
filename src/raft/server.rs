@@ -26,7 +26,7 @@ use crate::raft::types::AppTypeConfig;
 /// Maximum size for RPC messages (10 MB).
 ///
 /// Tiger Style: Fixed limit to prevent unbounded memory use.
-const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
 /// IRPC server for handling Raft RPC requests.
 ///
@@ -153,7 +153,7 @@ async fn handle_rpc_stream(
 ) -> Result<()> {
     // Read the RPC message with size limit
     let buffer = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE)
+        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
         .await
         .context("failed to read RPC message")?;
 

@@ -94,10 +94,10 @@ pub struct ClusterBootstrapConfig {
     /// Default: 1000 messages
     /// Maximum: 10000 messages
     #[serde(default = "default_raft_mailbox_capacity")]
-    pub raft_mailbox_capacity: usize,
+    pub raft_mailbox_capacity: u32,
 }
 
-fn default_raft_mailbox_capacity() -> usize {
+fn default_raft_mailbox_capacity() -> u32 {
     1000
 }
 

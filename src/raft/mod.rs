@@ -432,7 +432,7 @@ impl RaftControlClient {
     /// * `node_id` - Node ID for logging and debugging
     pub fn new_with_capacity(
         actor: ActorRef<RaftActorMessage>,
-        capacity: usize,
+        capacity: u32,
         node_id: u64,
     ) -> Self {
         let proxy = bounded_proxy::BoundedRaftActorProxy::with_capacity(

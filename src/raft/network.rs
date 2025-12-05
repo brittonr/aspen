@@ -26,7 +26,7 @@ use tokio::sync::RwLock;
 /// Maximum size for RPC messages (10 MB).
 ///
 /// Tiger Style: Fixed limit to prevent unbounded memory use.
-const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
@@ -178,7 +178,7 @@ impl IrpcRaftNetwork {
 
         // Read response (with 10 MB size limit)
         let response_buf = recv_stream
-            .read_to_end(MAX_RPC_MESSAGE_SIZE)
+            .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
             .await
             .context("failed to read RPC response")?;
 

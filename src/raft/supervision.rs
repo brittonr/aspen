@@ -12,7 +12,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
 
-const MAX_RESTART_HISTORY_SIZE: usize = 100;
+const MAX_RESTART_HISTORY_SIZE: u32 = 100;
 const MAX_BACKOFF_SECONDS: u64 = 16;
 
 // ============================================================================
@@ -80,7 +80,7 @@ pub struct SupervisionConfig {
     pub restart_window_secs: u64,
 
     /// Maximum size of restart history (default: 100).
-    pub restart_history_size: usize,
+    pub restart_history_size: u32,
 }
 
 impl Default for SupervisionConfig {
@@ -243,7 +243,7 @@ impl RaftSupervisor {
         state.restart_history.push_back(event);
 
         // Maintain size limit using bounded loop
-        let max_size = state.config.restart_history_size;
+        let max_size = state.config.restart_history_size as usize;
         let mut trim_count = 0;
         while state.restart_history.len() > max_size && trim_count < max_size {
             state.restart_history.pop_front();
@@ -467,7 +467,7 @@ impl Actor for RaftSupervisor {
         );
 
         Ok(RaftSupervisorState {
-            restart_history: VecDeque::with_capacity(args.supervision_config.restart_history_size),
+            restart_history: VecDeque::with_capacity(args.supervision_config.restart_history_size as usize),
             config: args.supervision_config,
             raft_actor_config: args.raft_actor_config,
             current_raft_actor: Some(raft_actor),

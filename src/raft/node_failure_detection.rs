@@ -14,7 +14,7 @@ use crate::raft::types::NodeId;
 /// Maximum number of unreachable nodes to track.
 ///
 /// Tiger Style: Bounded resource usage prevents unbounded memory growth.
-const MAX_UNREACHABLE_NODES: usize = 1000;
+const MAX_UNREACHABLE_NODES: u32 = 1000;
 
 /// Classification of node failures based on connection status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,7 +123,7 @@ impl NodeFailureDetector {
                 // Tiger Style: Enforce bounded map size before insertion
                 // Check if we need to evict before the entry() call to avoid borrow checker issues
                 if !self.unreachable_nodes.contains_key(&node_id)
-                    && self.unreachable_nodes.len() >= MAX_UNREACHABLE_NODES
+                    && self.unreachable_nodes.len() >= MAX_UNREACHABLE_NODES as usize
                 {
                     tracing::error!(
                         max_unreachable_nodes = MAX_UNREACHABLE_NODES,
@@ -222,8 +222,8 @@ impl NodeFailureDetector {
     }
 
     /// Get count of currently unreachable nodes.
-    pub fn unreachable_count(&self) -> usize {
-        self.unreachable_nodes.len()
+    pub fn unreachable_count(&self) -> u32 {
+        self.unreachable_nodes.len() as u32
     }
 
     /// Find the oldest unreachable node by elapsed time.
@@ -292,8 +292,8 @@ impl AlertManager {
     }
 
     /// Get count of currently active alerts.
-    pub fn active_alert_count(&self) -> usize {
-        self.alerted_nodes.len()
+    pub fn active_alert_count(&self) -> u32 {
+        self.alerted_nodes.len() as u32
     }
 
     /// Clear all alerts (used for testing).

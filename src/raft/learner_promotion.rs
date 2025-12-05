@@ -24,7 +24,7 @@ use crate::raft::types::NodeId;
 /// Maximum number of voters allowed in the cluster.
 ///
 /// Tiger Style: Bounded resource to prevent unbounded membership growth.
-const MAX_VOTERS: usize = 100;
+const MAX_VOTERS: u32 = 100;
 
 /// Lag threshold for learner promotion (entries behind leader).
 ///
@@ -351,7 +351,7 @@ where
         }
 
         // Tiger Style: Enforce maximum voters limit
-        if new_members.len() > MAX_VOTERS {
+        if new_members.len() > MAX_VOTERS as usize {
             return Err(PromotionError::MaxVotersExceeded);
         }
 
