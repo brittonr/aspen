@@ -56,7 +56,8 @@ use crate::raft::types::{AppTypeConfig, NodeId};
 /// Maximum size for RPC messages in madsim simulations (10 MB).
 ///
 /// Tiger Style: Fixed limit to prevent unbounded memory use during simulations.
-const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+/// Note: Reserved for future message size validation in madsim transport.
+const _MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
 /// Maximum number of concurrent connections per node.
 ///
