@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 7 - Advanced features or deployment preparation
 
-**Latest**: Phase 6 Week 4 complete (2025-12-04) - fixed 18 test failures using parallel ultrathink agents, eliminated 5 P0 production blockers. **197/197 tests passing (100% pass rate), 13 skipped**. All critical production issues resolved: unbounded snapshot allocation, production panic paths, unawaited futures, database lifecycle bugs, Iroh peer discovery requirements.
+**Latest**: Phase 6 Week 5 (Madsim Phase 1) complete (2025-12-04) - built madsim simulation infrastructure foundation. **202/202 tests passing (100% pass rate), 13 skipped**. Created `MadsimRaftRouter`, `MadsimRaftNetwork`, `FailureInjector` with 5 smoke tests validating infrastructure before RaftActor integration. Ready for Phase 2: Single-node RPC dispatch.
 
 ---
 
@@ -852,6 +852,102 @@ kv.read(ReadRequest { key }).await?;
 - Tiger Style compliance restored for error handling
 - Production safety: OOM prevention, panic elimination, silent failure fixes
 - Ready for deployment preparation or Phase 7 features
+
+### Week 5: Madsim Simulation Infrastructure - Phase 1 ✅ COMPLETE (2025-12-04)
+
+**Goal**: Build foundation for deterministic distributed systems testing using madsim
+
+**Approach**: Replace DeterministicHiqlite (HashMap mock with 0% real coverage) with real RaftActor simulation infrastructure
+
+**5.1 Network Infrastructure Foundation** ✅ COMPLETE
+- **Created `src/raft/madsim_network.rs`** (435 lines)
+  - `MadsimRaftNetwork`: Implements OpenRaft's `RaftNetworkV2` trait for deterministic RPC
+  - `MadsimNetworkFactory`: Factory for creating network clients per target node
+  - `MadsimRaftRouter`: Coordinates message passing between Raft nodes in simulation
+  - `FailureInjector`: Chaos testing with deterministic network delays and message drops
+  - Tiger Style compliant:
+    - `MAX_RPC_MESSAGE_SIZE = 10MB` (bounded memory)
+    - `MAX_CONNECTIONS_PER_NODE = 100` (bounded resources)
+    - Explicit u32/u64 types, no usize
+    - Fail-fast: All errors propagated, no `.expect()` panics
+    - Uses `parking_lot::Mutex` (non-poisoning)
+
+- **Created `tests/madsim_smoke_test.rs`** (167 lines)
+  - 5 smoke tests validating infrastructure before RaftActor integration:
+    1. `test_router_initialization` - Node registration (3 nodes)
+    2. `test_failure_injector` - Network delay/drop configuration
+    3. `test_network_factory` - Factory creation for multiple nodes
+    4. `test_node_failure` - Node failure marking and recovery
+    5. `test_max_nodes_limit` - Bounded resource limit enforcement
+  - All tests run with different seeds (42, 123, 456, 789, 1024) - fully deterministic
+  - Simulation artifacts persisted to `docs/simulations/madsim_*.json`
+
+- **Modified `src/raft/mod.rs`**
+  - Added `pub mod madsim_network;` after `learner_promotion`
+
+**Test Results**:
+- Before: 197/197 passing (100%)
+- After: 202/202 passing (100%), 13 skipped
+- New tests: 5 madsim smoke tests (all passing)
+- Simulation artifacts: 25+ JSON files in `docs/simulations/`
+- 1 pre-existing flaky test: `test_flapping_node_detection` (unrelated)
+
+**Architecture**:
+```
+MadsimRaftRouter
+  ├─ MadsimNetworkFactory (per node)
+  │   └─ MadsimRaftNetwork (per RPC target)
+  │       ├─ check_failure_injection()
+  │       ├─ apply_network_delay()
+  │       └─ router.send_*() [TODO: Phase 2]
+  └─ FailureInjector
+      ├─ Network delays (deterministic)
+      └─ Message drops (chaos testing)
+```
+
+**What Works Now**:
+- ✅ Router initialization and node registration
+- ✅ Failure injection configuration (delays, drops)
+- ✅ Network factory creation
+- ✅ Node failure marking/tracking
+- ✅ Bounded resource limits enforced
+- ✅ Deterministic execution with seeds
+- ✅ Simulation artifact persistence
+
+**What's Missing (Phase 2)**:
+- ❌ Actual RPC dispatch over madsim::net::TcpStream
+- ❌ Integration with real `RaftActor` message handlers
+- ❌ Single-node Raft initialization
+- ❌ Vote and AppendEntries RPC handlers
+- ❌ Snapshot streaming
+
+**Network Implementation Comparison**:
+
+| Feature | IrpcRaftNetwork | InMemoryNetwork | MadsimRaftNetwork |
+|---------|----------------|-----------------|-------------------|
+| Purpose | Production P2P | Testing helper | Deterministic simulation |
+| Transport | Iroh P2P | In-memory channels | madsim::net (Phase 2) |
+| Determinism | ❌ | ✅ | ✅ |
+| Failure Injection | ❌ | ✅ Basic | ✅ Advanced (chaos) |
+| Real Network Bugs | N/A | ❌ Can't detect | ✅ Auto-detects (Phase 2+) |
+
+**Documentation**:
+- Created `MADSIM_PHASE1_COMPLETE.md` with full implementation details, architecture diagrams, test results, and Phase 2 roadmap
+
+**Impact**:
+- Before: 0% real distributed systems testing (DeterministicHiqlite = HashMap)
+- After Phase 1: Network infrastructure foundation complete
+- After Phase 5 (future): 14+ bug classes auto-detectable, 50+ deterministic failure scenarios
+
+**Week 5 Summary**: ✅ COMPLETE
+- Madsim network infrastructure foundation complete
+- 202/202 tests passing (100% pass rate), 5 new smoke tests
+- Deterministic execution validated with multiple seeds
+- Tiger Style compliance: bounded resources, explicit types, fail-fast
+- Ready for Phase 2: Single-node RPC dispatch + RaftActor integration
+- Timeline: Phase 2 (3-4 days), Phase 3 (5-6 days), Phase 4 (6-7 days), Phase 5 (4-5 days)
+
+**Next Steps**: Proceed with Phase 2 (Single-Node RPC Integration) or continue with other Phase 6/7 priorities
 
 ---
 

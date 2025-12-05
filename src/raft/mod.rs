@@ -1,5 +1,6 @@
 pub mod bounded_proxy;
 pub mod learner_promotion;
+pub mod madsim_network;
 pub mod network;
 pub mod node_failure_detection;
 pub mod rpc;
