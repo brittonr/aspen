@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 7 - Advanced features or deployment preparation
 
-**Latest**: Phase 6 Week 5 (Madsim Phase 1) complete (2025-12-04) - built madsim simulation infrastructure foundation. **202/202 tests passing (100% pass rate), 13 skipped**. Created `MadsimRaftRouter`, `MadsimRaftNetwork`, `FailureInjector` with 5 smoke tests validating infrastructure before RaftActor integration. Ready for Phase 2: Single-node RPC dispatch.
+**Latest**: Phase 6 Week 5.1 (Madsim Phase 2) complete (2025-12-04) - integrated real RaftActor with madsim router. **200/200 tests passing (100% pass rate), 13 skipped**. Direct RPC dispatch via Raft handle storage, single-node initialization validated with 3 deterministic tests. Ready for Phase 3: Multi-node clusters.
 
 ---
 
@@ -947,7 +947,70 @@ MadsimRaftRouter
 - Ready for Phase 2: Single-node RPC dispatch + RaftActor integration
 - Timeline: Phase 2 (3-4 days), Phase 3 (5-6 days), Phase 4 (6-7 days), Phase 5 (4-5 days)
 
-**Next Steps**: Proceed with Phase 2 (Single-Node RPC Integration) or continue with other Phase 6/7 priorities
+### Week 5.1: Madsim Phase 2 - Single-Node RPC Integration ✅ COMPLETE (2025-12-04)
+
+**Goal**: Integrate real RaftActor with madsim router, validate consensus works
+
+**Approach**: Direct dispatch via Raft handle storage (simpler than TCP, validates core integration)
+
+**5.2 RaftActor Integration** ✅ COMPLETE
+- **Modified `src/raft/madsim_network.rs`**
+  - Updated `NodeHandle` to store `Raft<AppTypeConfig>` instance
+  - Implemented `send_append_entries()` - direct dispatch to `raft.append_entries()`
+  - Implemented `send_vote()` - direct dispatch to `raft.vote()`
+  - Updated `register_node()` signature to accept Raft parameter
+  - Added `debug!()` tracing for RPC dispatch
+
+- **Created `tests/madsim_single_node_test.rs`** (166 lines)
+  - 3 integration tests with seeds 42, 123, 456
+  - Tests single-node initialization, leader election, metrics validation
+  - Uses real Raft instances with InMemoryLogStore + StateMachineStore
+  - Simulation artifacts persisted to `docs/simulations/`
+  - Helper function: `create_raft_node()` for test setup
+
+- **Removed `tests/madsim_smoke_test.rs`**
+  - Replaced 5 infrastructure smoke tests with 3 real integration tests
+  - Quality improvement: testing actual consensus vs just plumbing
+
+**Test Results**:
+- Before: 202/202 passing (100%)
+- After: 200/200 passing (100%), 13 skipped
+- Change: -2 tests (replaced 5 plumbing tests with 3 real tests)
+- Simulation artifacts: 3+ new JSON files for single-node init
+
+**What Works Now**:
+- ✅ Single-node Raft initialization
+- ✅ Leader election in single-node cluster
+- ✅ Vote RPC dispatch (direct to Raft handle)
+- ✅ AppendEntries RPC dispatch (direct to Raft handle)
+- ✅ Metrics validation (current_leader == Some(1))
+- ✅ Deterministic execution (3 seeds validated)
+- ✅ Simulation artifact capture
+
+**Design Decision: Direct Dispatch vs TCP**:
+- **Chosen**: Direct dispatch via Raft handle storage
+- **Rationale**:
+  - Simpler implementation (no TCP serialization/deserialization)
+  - Validates core Raft integration faster
+  - Sufficient for catching consensus bugs
+- **Future**: Can add real madsim::net::TcpStream in later phase for network-level testing
+
+**What's Missing (Phase 3)**:
+- ❌ Multi-node clusters (3+ nodes)
+- ❌ Leader election with multiple candidates
+- ❌ Log replication between nodes
+- ❌ Membership changes (add learner, promote to voter)
+- ❌ Network partition simulation
+
+**Week 5.1 Summary**: ✅ COMPLETE
+- Real RaftActor integrated with madsim router
+- 200/200 tests passing (100% pass rate), 3 new integration tests
+- Single-node initialization and leader election validated
+- Direct RPC dispatch working for vote and append_entries
+- Deterministic execution confirmed with 3 different seeds
+- Ready for Phase 3: Multi-node cluster testing
+
+**Next Steps**: Proceed with Phase 3 (Multi-Node Clusters) or continue with other Phase 6/7 priorities
 
 ---
 

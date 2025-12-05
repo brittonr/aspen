@@ -47,8 +47,9 @@ use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::type_config::alias::VoteOf;
-use openraft::{BasicNode, OptionalSend, Snapshot};
+use openraft::{BasicNode, OptionalSend, Raft, Snapshot};
 use parking_lot::Mutex as SyncMutex;
+use tracing::debug;
 
 use crate::raft::types::{AppTypeConfig, NodeId};
 
@@ -228,11 +229,15 @@ pub struct MadsimRaftRouter {
 
 /// Handle to a Raft node in the simulation.
 ///
-/// Contains the node's listen address for madsim TCP connections.
+/// Contains the node's listen address and Raft instance for direct RPC dispatch.
 struct NodeHandle {
     /// TCP listen address for this node (e.g., "127.0.0.1:26001")
-    listen_addr: String,
-    // Future: Add Raft<AppTypeConfig> handle for direct RPC dispatch
+    _listen_addr: String,
+    /// Raft instance for direct RPC dispatch
+    ///
+    /// Phase 2: Direct dispatch (simpler implementation, validates integration)
+    /// Future Phase: Replace with real madsim::net::TcpStream for network-level testing
+    raft: Raft<AppTypeConfig>,
 }
 
 impl MadsimRaftRouter {
@@ -247,7 +252,12 @@ impl MadsimRaftRouter {
     /// Register a node with the router.
     ///
     /// Tiger Style: Bounded registration - fails if max nodes exceeded.
-    pub fn register_node(&self, node_id: NodeId, listen_addr: String) -> Result<()> {
+    pub fn register_node(
+        &self,
+        node_id: NodeId,
+        listen_addr: String,
+        raft: Raft<AppTypeConfig>,
+    ) -> Result<()> {
         let mut nodes = self.nodes.lock();
         if nodes.len() >= MAX_CONNECTIONS_PER_NODE as usize {
             anyhow::bail!(
@@ -256,7 +266,13 @@ impl MadsimRaftRouter {
                 MAX_CONNECTIONS_PER_NODE
             );
         }
-        nodes.insert(node_id, NodeHandle { listen_addr });
+        nodes.insert(
+            node_id,
+            NodeHandle {
+                _listen_addr: listen_addr,
+                raft,
+            },
+        );
         Ok(())
     }
 
@@ -275,11 +291,12 @@ impl MadsimRaftRouter {
     /// Send AppendEntries RPC to target node.
     ///
     /// Tiger Style: Bounded message size checked at serialization.
+    /// Phase 2: Direct dispatch via Raft handle (validates integration)
     async fn send_append_entries(
         &self,
         source: NodeId,
         target: NodeId,
-        _rpc: AppendEntriesRequest<AppTypeConfig>,
+        rpc: AppendEntriesRequest<AppTypeConfig>,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
@@ -299,22 +316,34 @@ impl MadsimRaftRouter {
             )));
         }
 
-        // TODO: Implement actual madsim TCP RPC dispatch
-        // For now, return a placeholder error
-        Err(RPCError::Unreachable(Unreachable::new(
-            &std::io::Error::new(
-                std::io::ErrorKind::NotConnected,
-                "madsim RPC dispatch not yet implemented",
-            ),
-        )))
+        // Get target node's Raft handle
+        let raft = {
+            let nodes = self.nodes.lock();
+            let Some(node) = nodes.get(&target) else {
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("target node {target} not registered"),
+                ))));
+            };
+            node.raft.clone()
+        };
+
+        debug!(source, target, "dispatching append_entries RPC");
+
+        // Dispatch RPC directly to Raft core
+        raft.append_entries(rpc)
+            .await
+            .map_err(|err| RPCError::Network(NetworkError::new(&err)))
     }
 
     /// Send Vote RPC to target node.
+    ///
+    /// Phase 2: Direct dispatch via Raft handle (validates integration)
     async fn send_vote(
         &self,
         source: NodeId,
         target: NodeId,
-        _rpc: VoteRequest<AppTypeConfig>,
+        rpc: VoteRequest<AppTypeConfig>,
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
@@ -334,13 +363,24 @@ impl MadsimRaftRouter {
             )));
         }
 
-        // TODO: Implement actual madsim TCP RPC dispatch
-        Err(RPCError::Unreachable(Unreachable::new(
-            &std::io::Error::new(
-                std::io::ErrorKind::NotConnected,
-                "madsim RPC dispatch not yet implemented",
-            ),
-        )))
+        // Get target node's Raft handle
+        let raft = {
+            let nodes = self.nodes.lock();
+            let Some(node) = nodes.get(&target) else {
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("target node {target} not registered"),
+                ))));
+            };
+            node.raft.clone()
+        };
+
+        debug!(source, target, "dispatching vote RPC");
+
+        // Dispatch RPC directly to Raft core
+        raft.vote(rpc)
+            .await
+            .map_err(|err| RPCError::Network(NetworkError::new(&err)))
     }
 
     /// Send Snapshot RPC to target node.
