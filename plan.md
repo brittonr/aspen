@@ -626,7 +626,7 @@ kv.read(ReadRequest { key }).await?;
 
 **Ready for**: Phase 7 - Advanced features or deployment preparation
 
-**Latest**: Phase 6 Week 5.1 (Madsim Phase 2) complete (2025-12-04) - integrated real RaftActor with madsim router. **200/200 tests passing (100% pass rate), 13 skipped**. Direct RPC dispatch via Raft handle storage, single-node initialization validated with 3 deterministic tests. Ready for Phase 3: Multi-node clusters.
+**Latest**: Phase 6 Week 5.2 (Madsim Phase 3) complete (2025-12-04) - multi-node cluster consensus validated. **203/203 tests passing (100% pass rate), 13 skipped**. 3-node clusters with leader election, log replication, and write operations working. Deterministic execution confirmed across 3 seeds. Ready for Phase 4: Failure injection.
 
 ---
 
@@ -1010,7 +1010,62 @@ MadsimRaftRouter
 - Deterministic execution confirmed with 3 different seeds
 - Ready for Phase 3: Multi-node cluster testing
 
-**Next Steps**: Proceed with Phase 3 (Multi-Node Clusters) or continue with other Phase 6/7 priorities
+### Week 5.2: Madsim Phase 3 - Multi-Node Clusters ✅ COMPLETE (2025-12-04)
+
+**Goal**: Validate 3-node clusters with leader election, log replication, and consensus
+
+**Approach**: Build on Phase 2's direct dispatch, test real distributed consensus
+
+**5.3 Multi-Node Consensus** ✅ COMPLETE
+- **Created `tests/madsim_multi_node_test.rs`** (348 lines)
+  - 3 integration tests with seeds 42, 123, 456
+  - Tests 3-node cluster initialization via `raft.initialize()`
+  - Validates leader election across multiple candidates
+  - Submits write operations (`client_write`) to leader
+  - Verifies log replication via metrics on all nodes
+  - All nodes agree on leader identity (consensus validation)
+  - Helper function: `create_raft_node()` for setup
+
+**Test Results**:
+- Before: 200/200 passing (100%)
+- After: 203/203 passing (100%), 13 skipped
+- Change: +3 tests (multi-node cluster scenarios)
+- Simulation artifacts: 3+ new JSON files for 3-node clusters
+- Test runtime: ~7 seconds per test (5s election + 2s replication)
+
+**What Works Now**:
+- ✅ 3-node cluster initialization
+- ✅ Leader election with multiple candidates
+- ✅ Vote RPC between nodes
+- ✅ AppendEntries RPC for log replication
+- ✅ Write operations replicated to all nodes
+- ✅ Metrics validation (all nodes agree on leader)
+- ✅ Deterministic execution (same leader with same seed)
+- ✅ Simulation artifact capture with full event trace
+
+**Key Findings**:
+- With seed 42: Node 1 elected as leader (deterministic!)
+- Log replication completes in <2 seconds
+- All nodes see `last_applied.is_some()` after replication
+- Direct dispatch sufficient for multi-node consensus testing
+
+**What's Missing (Phase 4)**:
+- ❌ Network partition simulation (split-brain scenarios)
+- ❌ Node crash recovery
+- ❌ Message drop/delay injection
+- ❌ Leader crash and re-election
+- ❌ Concurrent write load testing
+
+**Week 5.2 Summary**: ✅ COMPLETE
+- Multi-node cluster consensus validated
+- 203/203 tests passing (100% pass rate), 3 new tests
+- Leader election working across 3 nodes
+- Log replication verified via write operations
+- Deterministic leader selection confirmed (seed 42 → node 1)
+- Full event traces captured in simulation artifacts
+- Ready for Phase 4: Failure injection and chaos testing
+
+**Next Steps**: Proceed with Phase 4 (Failure Injection) or continue with other Phase 6/7 priorities
 
 ---
 
