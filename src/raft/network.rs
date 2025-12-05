@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::future::Future;
-use parking_lot::RwLock;
 
 use anyhow::Context;
 use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
@@ -15,12 +14,14 @@ use tokio::select;
 use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
     RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
     RaftVoteRequest,
 };
 use crate::raft::types::{AppTypeConfig, NodeId};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Maximum size for RPC messages (10 MB).
 ///
@@ -45,6 +46,10 @@ pub struct IrpcRaftNetworkFactory {
     ///
     /// Uses Arc<RwLock> to allow concurrent peer addition during runtime.
     peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
+    /// Failure detector for distinguishing actor crashes from node crashes.
+    ///
+    /// Updated automatically based on Raft RPC success/failure and Iroh connection status.
+    failure_detector: Arc<RwLock<NodeFailureDetector>>,
 }
 
 impl IrpcRaftNetworkFactory {
@@ -55,31 +60,37 @@ impl IrpcRaftNetworkFactory {
         Self {
             endpoint_manager,
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
+            failure_detector: Arc::new(RwLock::new(NodeFailureDetector::default_timeout())),
         }
+    }
+
+    /// Get a reference to the failure detector for metrics/monitoring.
+    pub fn failure_detector(&self) -> Arc<RwLock<NodeFailureDetector>> {
+        Arc::clone(&self.failure_detector)
     }
 
     /// Add a peer address for future connections.
     ///
     /// This allows dynamic peer addition after the network factory has been created.
     /// Useful for integration tests where nodes exchange addresses at runtime.
-    pub fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
-        let mut peers = self.peer_addrs.write();
+    pub async fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
+        let mut peers = self.peer_addrs.write().await;
         peers.insert(node_id, addr);
     }
 
     /// Update peer addresses in bulk.
     ///
     /// Extends the existing peer map with new entries. Existing entries are replaced.
-    pub fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
-        let mut peers = self.peer_addrs.write();
+    pub async fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
+        let mut peers = self.peer_addrs.write().await;
         peers.extend(new_peers);
     }
 
     /// Get a clone of the current peer addresses map.
     ///
     /// Useful for debugging or inspection.
-    pub fn peer_addrs(&self) -> HashMap<NodeId, iroh::EndpointAddr> {
-        self.peer_addrs.read().clone()
+    pub async fn peer_addrs(&self) -> HashMap<NodeId, iroh::EndpointAddr> {
+        self.peer_addrs.read().await.clone()
     }
 }
 
@@ -90,7 +101,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
     async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
         // Look up peer's Iroh address
         let peer_addr = {
-            let peers = self.peer_addrs.read();
+            let peers = self.peer_addrs.read().await;
             peers.get(&target).cloned()
         };
 
@@ -98,6 +109,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
             endpoint_manager: Arc::clone(&self.endpoint_manager),
             peer_addr,
             target,
+            failure_detector: Arc::clone(&self.failure_detector),
         }
     }
 }
@@ -112,6 +124,7 @@ pub struct IrpcRaftNetwork {
     endpoint_manager: Arc<IrohEndpointManager>,
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
+    failure_detector: Arc<RwLock<NodeFailureDetector>>,
 }
 
 impl IrpcRaftNetwork {
@@ -124,6 +137,8 @@ impl IrpcRaftNetwork {
     /// 2. Send it over Iroh bidirectional stream
     /// 3. Wait for response on the same stream
     /// 4. Deserialize and return the response
+    ///
+    /// Updates failure detector based on RPC success/failure and Iroh connection status.
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self
             .peer_addr
@@ -133,10 +148,16 @@ impl IrpcRaftNetwork {
         let endpoint = self.endpoint_manager.endpoint();
 
         // Open a connection to the peer
-        let connection = endpoint
-            .connect(peer_addr.clone(), b"raft-rpc")
-            .await
-            .context("failed to connect to peer")?;
+        let connection_result = endpoint.connect(peer_addr.clone(), b"raft-rpc").await;
+
+        // Determine Iroh connection status based on connect attempt
+        let iroh_status = if connection_result.is_ok() {
+            ConnectionStatus::Connected
+        } else {
+            ConnectionStatus::Disconnected
+        };
+
+        let connection = connection_result.context("failed to connect to peer")?;
 
         // Open bidirectional stream
         let (mut send_stream, mut recv_stream) = connection
@@ -165,7 +186,38 @@ impl IrpcRaftNetwork {
         let response: RaftRpcResponse =
             postcard::from_bytes(&response_buf).context("failed to deserialize RPC response")?;
 
+        // Update failure detector: RPC succeeded, Iroh connection succeeded
+        self.failure_detector.write().await.update_node_status(
+            self.target,
+            ConnectionStatus::Connected,
+            iroh_status,
+        );
+
         Ok(response)
+    }
+
+    /// Update failure detector when RPC fails.
+    ///
+    /// Called by RPC methods when send_rpc returns an error.
+    /// Assumes Iroh connection status based on error type.
+    async fn update_failure_on_rpc_error(&self, err: &anyhow::Error) {
+        // Determine Iroh status from error message
+        // Connection/stream errors suggest Iroh is down
+        // Other errors (serialization, etc.) suggest Iroh is up but Raft is down
+        let iroh_status = if err.to_string().contains("connect")
+            || err.to_string().contains("stream")
+            || err.to_string().contains("peer address not found")
+        {
+            ConnectionStatus::Disconnected
+        } else {
+            ConnectionStatus::Connected
+        };
+
+        self.failure_detector.write().await.update_node_status(
+            self.target,
+            ConnectionStatus::Disconnected,
+            iroh_status,
+        );
     }
 }
 
@@ -181,13 +233,17 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         let protocol = RaftRpcProtocol::AppendEntries(request);
 
         // Send the RPC and get response
-        let response = self.send_rpc(protocol).await.map_err(|err| {
-            warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
-            let err_str = err.to_string();
-            RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                err_str,
-            )))
-        })?;
+        let response = match self.send_rpc(protocol).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
+                self.update_failure_on_rpc_error(&err).await;
+                let err_str = err.to_string();
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
+                    err_str,
+                ))));
+            }
+        };
 
         // Extract result from response
         match response {
@@ -209,13 +265,17 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         let protocol = RaftRpcProtocol::Vote(request);
 
         // Send the RPC and get response
-        let response = self.send_rpc(protocol).await.map_err(|err| {
-            warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
-            let err_str = err.to_string();
-            RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                err_str,
-            )))
-        })?;
+        let response = match self.send_rpc(protocol).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
+                self.update_failure_on_rpc_error(&err).await;
+                let err_str = err.to_string();
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
+                    err_str,
+                ))));
+            }
+        };
 
         // Extract result from response
         match response {
@@ -258,13 +318,17 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         // Send the RPC with cancellation support
         let response = select! {
             send_result = self.send_rpc(protocol) => {
-                send_result.map_err(|err| {
-                    warn!(target_node = %self.target, error = %err, "failed to send snapshot RPC");
-                    let err_str = err.to_string();
-                    StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
-                        err_str,
-                    )))
-                })?
+                match send_result {
+                    Ok(resp) => resp,
+                    Err(err) => {
+                        warn!(target_node = %self.target, error = %err, "failed to send snapshot RPC");
+                        self.update_failure_on_rpc_error(&err).await;
+                        let err_str = err.to_string();
+                        return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
+                            err_str,
+                        ))));
+                    }
+                }
             }
             closed = cancel => {
                 warn!(target_node = %self.target, "snapshot transmission cancelled");

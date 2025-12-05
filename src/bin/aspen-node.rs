@@ -13,7 +13,9 @@ use aspen::api::{
 use aspen::cluster::bootstrap::{bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
+use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 use aspen::raft::network::IrpcRaftNetworkFactory;
+use aspen::raft::supervision::HealthMonitor;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
 use axum::{
     Json, Router,
@@ -284,6 +286,21 @@ struct DetailedHealthResponse {
     node_id: u64,
     /// Raft node ID
     raft_node_id: Option<u64>,
+    /// Uptime in seconds
+    uptime_seconds: u64,
+    /// Supervision health monitoring (if enabled)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    supervision: Option<SupervisionHealth>,
+}
+
+#[derive(Serialize)]
+struct SupervisionHealth {
+    /// Health monitor status: "healthy", "degraded", or "unhealthy"
+    status: String,
+    /// Number of consecutive health check failures
+    consecutive_failures: u32,
+    /// Whether supervision is enabled
+    enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -319,6 +336,9 @@ struct AppState {
     iroh_manager: Arc<aspen::cluster::IrohEndpointManager>,
     cluster_cookie: String,
     data_dir: Option<std::path::PathBuf>,
+    promotion_coordinator: Option<Arc<LearnerPromotionCoordinator<RaftControlClient>>>,
+    health_monitor: Option<Arc<HealthMonitor>>,
+    start_time: Instant,
 }
 
 #[tokio::main]
@@ -367,6 +387,8 @@ async fn main() -> Result<()> {
             pkarr_relay_url: args.pkarr_relay_url,
         },
         peers: args.peers,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     // Load configuration with proper precedence (env < TOML < CLI)
@@ -386,18 +408,34 @@ async fn main() -> Result<()> {
     let handle = bootstrap_node(config.clone()).await?;
 
     // Build controller and KV store based on control backend
-    let (controller, kv_store): (ClusterControllerHandle, KeyValueStoreHandle) =
-        match config.control_backend {
-            ControlBackend::Deterministic => (
-                DeterministicClusterController::new(),
-                DeterministicKeyValueStore::new(),
-            ),
-            ControlBackend::RaftActor => {
-                let cluster_client = Arc::new(RaftControlClient::new(handle.raft_actor.clone()));
-                let kv_client = Arc::new(KvClient::new(handle.raft_actor.clone()));
-                (cluster_client, kv_client)
-            }
-        };
+    let (controller, kv_store, promotion_coordinator): (
+        ClusterControllerHandle,
+        KeyValueStoreHandle,
+        Option<Arc<LearnerPromotionCoordinator<RaftControlClient>>>,
+    ) = match config.control_backend {
+        ControlBackend::Deterministic => (
+            DeterministicClusterController::new(),
+            DeterministicKeyValueStore::new(),
+            None, // No promotion coordinator for deterministic backend
+        ),
+        ControlBackend::RaftActor => {
+            // Use bounded mailbox to prevent memory exhaustion under high load
+            let cluster_client = Arc::new(RaftControlClient::new_with_capacity(
+                handle.raft_actor.clone(),
+                config.raft_mailbox_capacity,
+                config.node_id,
+            ));
+            let kv_client = Arc::new(KvClient::new(handle.raft_actor.clone()));
+
+            // Create promotion coordinator with failure detector integration
+            let coordinator = Arc::new(LearnerPromotionCoordinator::with_failure_detector(
+                cluster_client.clone(),
+                handle.network_factory.failure_detector().clone(),
+            ));
+
+            (cluster_client, kv_client, Some(coordinator))
+        }
+    };
 
     let app_state = AppState {
         node_id: config.node_id,
@@ -409,6 +447,9 @@ async fn main() -> Result<()> {
         iroh_manager: handle.iroh_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         data_dir: config.data_dir.clone(),
+        promotion_coordinator,
+        health_monitor: handle.health_monitor.clone(),
+        start_time: Instant::now(),
     };
 
     let app = Router::new()
@@ -426,6 +467,7 @@ async fn main() -> Result<()> {
         .route("/raft-metrics", get(raft_metrics))
         .route("/leader", get(get_leader))
         .route("/trigger-snapshot", post(trigger_snapshot))
+        .route("/admin/promote-learner", post(promote_learner))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(config.http_addr).await?;
@@ -549,11 +591,38 @@ async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
         },
     };
 
+    // Check 5: Supervision health monitoring (if enabled)
+    let supervision_health = if let Some(ref monitor) = ctx.health_monitor {
+        use aspen::raft::supervision::HealthStatus;
+        let status = monitor.get_status().await;
+        let consecutive_failures = monitor.get_consecutive_failures();
+
+        let status_str = match status {
+            HealthStatus::Healthy => "healthy",
+            HealthStatus::Degraded => "degraded",
+            HealthStatus::Unhealthy => "unhealthy",
+        };
+
+        Some(SupervisionHealth {
+            status: status_str.to_string(),
+            consecutive_failures,
+            enabled: true,
+        })
+    } else {
+        None
+    };
+
     // Determine overall health status
-    let is_critical_failure = raft_actor_check.status == "error" || disk_space_check.status == "error";
+    let supervision_unhealthy = supervision_health.as_ref().map_or(false, |s| s.status == "unhealthy");
+    let supervision_degraded = supervision_health.as_ref().map_or(false, |s| s.status == "degraded");
+
+    let is_critical_failure = raft_actor_check.status == "error"
+        || disk_space_check.status == "error"
+        || supervision_unhealthy;
     let has_warnings = raft_cluster_check.status == "warning"
         || disk_space_check.status == "warning"
-        || storage_check.status == "warning";
+        || storage_check.status == "warning"
+        || supervision_degraded;
 
     let (overall_status, http_status) = if is_critical_failure {
         ("unhealthy".to_string(), StatusCode::SERVICE_UNAVAILABLE)
@@ -573,6 +642,8 @@ async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
         },
         node_id: ctx.node_id,
         raft_node_id,
+        uptime_seconds: ctx.start_time.elapsed().as_secs(),
+        supervision: supervision_health,
     };
 
     (http_status, Json(response)).into_response()
@@ -830,6 +901,83 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
         ));
     }
 
+    // Node failure detection metrics
+    if let Ok(detector) = ctx
+        .network_factory
+        .failure_detector()
+        .try_read()
+    {
+        // Count of currently unreachable nodes
+        body.push_str("# TYPE aspen_unreachable_nodes gauge\n");
+        body.push_str("# HELP aspen_unreachable_nodes Number of nodes currently unreachable\n");
+        body.push_str(&format!(
+            "aspen_unreachable_nodes{{node_id=\"{}\"}} {}\n",
+            ctx.node_id,
+            detector.unreachable_count()
+        ));
+
+        // Nodes needing attention (unreachable > threshold)
+        let nodes_needing_attention = detector.get_nodes_needing_attention();
+        body.push_str("# TYPE aspen_nodes_needing_attention gauge\n");
+        body.push_str("# HELP aspen_nodes_needing_attention Number of nodes requiring operator intervention\n");
+        body.push_str(&format!(
+            "aspen_nodes_needing_attention{{node_id=\"{}\"}} {}\n",
+            ctx.node_id,
+            nodes_needing_attention.len()
+        ));
+
+        // Per-node unreachable duration
+        body.push_str("# TYPE aspen_node_unreachable_seconds gauge\n");
+        body.push_str("# HELP aspen_node_unreachable_seconds Seconds a specific node has been unreachable\n");
+
+        for (peer_id, failure_type, duration) in nodes_needing_attention {
+            let failure_type_str = match failure_type {
+                aspen::raft::node_failure_detection::FailureType::ActorCrash => "actor_crash",
+                aspen::raft::node_failure_detection::FailureType::NodeCrash => "node_crash",
+                aspen::raft::node_failure_detection::FailureType::Healthy => "healthy",
+            };
+
+            body.push_str(&format!(
+                "aspen_node_unreachable_seconds{{node_id=\"{}\",peer_id=\"{}\",failure_type=\"{}\"}} {:.3}\n",
+                ctx.node_id, peer_id, failure_type_str, duration.as_secs_f64()
+            ));
+        }
+    }
+
+    // Health monitoring metrics (if supervision is enabled)
+    if ctx.health_monitor.is_some() {
+        use aspen::raft::supervision::get_health_metrics;
+        let (health_status, consecutive_failures, checks_total, failures_total) = get_health_metrics();
+
+        body.push_str("# TYPE aspen_raft_actor_health_status gauge\n");
+        body.push_str("# HELP aspen_raft_actor_health_status RaftActor health status (0=unhealthy, 1=degraded, 2=healthy)\n");
+        body.push_str(&format!(
+            "aspen_raft_actor_health_status{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, health_status
+        ));
+
+        body.push_str("# TYPE aspen_consecutive_health_failures gauge\n");
+        body.push_str("# HELP aspen_consecutive_health_failures Number of consecutive health check failures\n");
+        body.push_str(&format!(
+            "aspen_consecutive_health_failures{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, consecutive_failures
+        ));
+
+        body.push_str("# TYPE aspen_health_checks_total counter\n");
+        body.push_str("# HELP aspen_health_checks_total Total number of health checks performed\n");
+        body.push_str(&format!(
+            "aspen_health_checks_total{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, checks_total
+        ));
+
+        body.push_str("# TYPE aspen_health_check_failures_total counter\n");
+        body.push_str("# HELP aspen_health_check_failures_total Total number of health check failures\n");
+        body.push_str(&format!(
+            "aspen_health_check_failures_total{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, failures_total
+        ));
+    }
+
     (StatusCode::OK, body)
 }
 
@@ -870,6 +1018,85 @@ async fn cluster_ticket(State(ctx): State<AppState>) -> impl IntoResponse {
         "cluster_id": ctx.cluster_cookie,
         "endpoint_id": ctx.iroh_manager.endpoint().id().to_string(),
     }))
+}
+
+/// Request to promote a learner to voter.
+#[derive(Debug, serde::Deserialize)]
+struct PromoteLearnerRequest {
+    learner_id: u64,
+    replace_node: Option<u64>,
+    #[serde(default)]
+    force: bool,
+}
+
+/// Response from learner promotion endpoint.
+#[derive(serde::Serialize)]
+struct PromoteLearnerResponse {
+    success: bool,
+    learner_id: u64,
+    previous_voters: Vec<u64>,
+    new_voters: Vec<u64>,
+    message: String,
+}
+
+/// Promote a learner to voter with safety validation.
+///
+/// POST /admin/promote-learner
+/// Body: { "learner_id": 4, "replace_node": 2, "force": false }
+///
+/// Safety checks (unless force=true):
+/// - Membership cooldown elapsed (300s)
+/// - Learner is healthy and reachable
+/// - Learner is caught up on log (<100 entries behind)
+/// - Cluster maintains quorum after change
+#[instrument(skip(state), fields(node_id = state.node_id, learner_id = req.learner_id, replace_node = ?req.replace_node, force = req.force))]
+async fn promote_learner(
+    State(state): State<AppState>,
+    Json(req): Json<PromoteLearnerRequest>,
+) -> Result<Json<PromoteLearnerResponse>, (StatusCode, String)> {
+    // Check if promotion coordinator is available
+    let coordinator = state.promotion_coordinator.as_ref().ok_or_else(|| {
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            "Learner promotion not available with deterministic backend".to_string(),
+        )
+    })?;
+
+    let promotion_request = PromotionRequest {
+        learner_id: req.learner_id,
+        replace_node: req.replace_node,
+        force: req.force,
+    };
+
+    match coordinator.promote_learner(promotion_request).await {
+        Ok(result) => {
+            info!(
+                learner_id = result.learner_id,
+                previous_voters = ?result.previous_voters,
+                new_voters = ?result.new_voters,
+                "learner promoted successfully"
+            );
+
+            Ok(Json(PromoteLearnerResponse {
+                success: true,
+                learner_id: result.learner_id,
+                previous_voters: result.previous_voters,
+                new_voters: result.new_voters,
+                message: format!(
+                    "Learner {} promoted to voter successfully",
+                    result.learner_id
+                ),
+            }))
+        }
+        Err(e) => {
+            warn!(
+                learner_id = req.learner_id,
+                error = %e,
+                "learner promotion failed"
+            );
+            Err((StatusCode::BAD_REQUEST, e.to_string()))
+        }
+    }
 }
 
 type ApiResult<T> = Result<T, ApiError>;

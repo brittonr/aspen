@@ -233,6 +233,8 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle = bootstrap_node(config.clone()).await?;
@@ -354,6 +356,8 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle = bootstrap_node(config.clone()).await?;

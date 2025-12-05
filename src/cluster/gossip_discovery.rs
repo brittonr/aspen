@@ -225,7 +225,7 @@ impl GossipPeerDiscovery {
                                     factory.add_peer(
                                         announcement.node_id,
                                         announcement.endpoint_addr.clone(),
-                                    );
+                                    ).await;
 
                                     tracing::info!(
                                         "added peer to network factory: node_id={}, endpoint_id={:?}",

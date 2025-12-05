@@ -65,6 +65,8 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
             storage_backend: aspen::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -247,6 +249,8 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle = bootstrap_node(config).await?;

@@ -28,6 +28,8 @@ async fn test_bootstrap_single_node() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     // Bootstrap the node
@@ -69,6 +71,8 @@ async fn test_bootstrap_multiple_nodes() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let config2 = ClusterBootstrapConfig {
@@ -87,6 +91,8 @@ async fn test_bootstrap_multiple_nodes() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let config3 = ClusterBootstrapConfig {
@@ -105,6 +111,8 @@ async fn test_bootstrap_multiple_nodes() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     // Bootstrap all nodes concurrently
@@ -189,6 +197,8 @@ fn test_load_config_from_toml() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let config = load_config(Some(&config_path), cli_config).unwrap();
@@ -235,6 +245,8 @@ fn test_config_precedence() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let config = load_config(Some(&config_path), cli_config).unwrap();
@@ -268,6 +280,8 @@ async fn test_shutdown_updates_status() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle = bootstrap_node(config.clone()).await.unwrap();

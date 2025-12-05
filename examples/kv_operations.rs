@@ -54,6 +54,8 @@ async fn main() -> Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     info!("🔧 Bootstrapping node {}", config.node_id);

@@ -19,8 +19,9 @@ use crate::raft::server::RaftRpcServer;
 use crate::raft::storage::{
     InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
 };
+use crate::raft::supervision::{HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage};
 use crate::raft::types::{AppTypeConfig, NodeId};
-use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage, StateMachineVariant};
+use crate::raft::{RaftActorConfig, RaftActorMessage, StateMachineVariant};
 
 /// Handle to a bootstrapped cluster node.
 ///
@@ -34,10 +35,12 @@ pub struct BootstrapHandle {
     pub iroh_manager: Arc<IrohEndpointManager>,
     /// Ractor node server handle.
     pub node_server: NodeServerHandle,
-    /// Raft actor reference.
+    /// Raft actor reference (managed by supervisor).
     pub raft_actor: ActorRef<RaftActorMessage>,
-    /// Raft actor join handle.
-    pub raft_task: tokio::task::JoinHandle<()>,
+    /// Raft supervisor reference.
+    pub raft_supervisor: ActorRef<SupervisorMessage>,
+    /// Raft supervisor join handle.
+    pub supervisor_task: tokio::task::JoinHandle<()>,
     /// Raft core for direct access.
     pub raft_core: openraft::Raft<AppTypeConfig>,
     /// State machine variant (actual state machine used by Raft).
@@ -48,6 +51,8 @@ pub struct BootstrapHandle {
     pub network_factory: Arc<IrpcRaftNetworkFactory>,
     /// Gossip-based peer discovery (None if disabled).
     pub gossip_discovery: Option<GossipPeerDiscovery>,
+    /// Health monitor for the RaftActor.
+    pub health_monitor: Option<Arc<HealthMonitor>>,
 }
 
 impl BootstrapHandle {
@@ -75,9 +80,10 @@ impl BootstrapHandle {
         info!("shutting down node server");
         self.node_server.shutdown().await?;
 
-        info!("shutting down Raft actor");
-        self.raft_actor.stop(Some("bootstrap-shutdown".into()));
-        self.raft_task.await?;
+        info!("shutting down Raft supervisor");
+        self.raft_supervisor
+            .stop(Some("bootstrap-shutdown".into()));
+        self.supervisor_task.await?;
 
         // Update node status to offline
         if let Err(err) = self
@@ -363,21 +369,46 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         }
     };
 
-    // Spawn Raft actor with the actual state machine
+    // Spawn Raft supervisor which will manage the RaftActor
     let raft_actor_config = RaftActorConfig {
         node_id: config.node_id,
         raft: raft_core.clone(),
         state_machine: state_machine_variant.clone(),
     };
-    let (raft_actor, raft_task) = Actor::spawn(
-        Some(format!("raft-{}", config.node_id)),
-        RaftActor,
+
+    let supervisor_args = SupervisorArguments {
         raft_actor_config,
+        supervision_config: config.supervision_config.clone(),
+    };
+
+    let (raft_supervisor, supervisor_task) = Actor::spawn(
+        Some(format!("raft-supervisor-{}", config.node_id)),
+        RaftSupervisor,
+        supervisor_args,
     )
     .await
-    .context("failed to spawn raft actor")?;
+    .context("failed to spawn raft supervisor")?;
 
-    info!(node_id = config.node_id, "raft actor spawned");
+    info!(
+        node_id = config.node_id,
+        "raft supervisor spawned (will spawn raft actor)"
+    );
+
+    // Retrieve the RaftActor reference from the supervisor
+    use ractor::call_t;
+    let raft_actor = call_t!(raft_supervisor, SupervisorMessage::GetRaftActor, 100)
+        .context("failed to get raft actor from supervisor")?
+        .context("raft actor not yet spawned by supervisor")?;
+
+    // Retrieve the HealthMonitor reference from the supervisor
+    let health_monitor = call_t!(raft_supervisor, SupervisorMessage::GetHealthMonitor, 100)
+        .context("failed to get health monitor from supervisor")?;
+
+    info!(
+        node_id = config.node_id,
+        health_monitor_available = health_monitor.is_some(),
+        "health monitor retrieved from supervisor"
+    );
 
     // Spawn IRPC server for Raft RPC
     let rpc_server = RaftRpcServer::spawn(Arc::clone(&iroh_manager), raft_core.clone());
@@ -413,12 +444,14 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         iroh_manager,
         node_server,
         raft_actor,
-        raft_task,
+        raft_supervisor,
+        supervisor_task,
         raft_core,
         state_machine: state_machine_variant,
         rpc_server,
         network_factory,
         gossip_discovery,
+        health_monitor,
     })
 }
 
@@ -491,6 +524,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            supervision_config: crate::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let config = load_config(Some(&toml_path), cli_config).unwrap();

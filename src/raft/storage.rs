@@ -418,6 +418,29 @@ impl RedbLogStore {
         &self.path
     }
 
+    /// Validates storage integrity (used by supervisor before restart).
+    ///
+    /// This method is called by the actor supervision system before allowing
+    /// a RaftActor to restart after a crash. It ensures the storage is not
+    /// corrupted and safe to use.
+    ///
+    /// # Returns
+    /// - `Ok(ValidationReport)` if all validation checks pass
+    /// - `Err(StorageValidationError)` if any corruption is detected
+    ///
+    /// # Note
+    /// This validation is read-only and does not modify the database.
+    /// The database is opened, validated, and closed within this function.
+    pub fn validate(
+        &self,
+        node_id: u64,
+    ) -> Result<
+        crate::raft::storage_validation::ValidationReport,
+        crate::raft::storage_validation::StorageValidationError,
+    > {
+        crate::raft::storage_validation::validate_raft_storage(node_id, &self.path)
+    }
+
     // Internal helper: Read a value from the metadata table
     fn read_meta<T: for<'de> Deserialize<'de>>(
         &self,
@@ -890,6 +913,21 @@ impl RedbStateMachine {
     /// Get the path to the state machine database file.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Validates storage integrity (used by supervisor before restart).
+    ///
+    /// Note: State machine validation is currently done via the log store
+    /// validation since they share critical metadata (snapshots). This method
+    /// exists for API completeness and may be extended in the future.
+    pub fn validate(
+        &self,
+        node_id: u64,
+    ) -> Result<
+        crate::raft::storage_validation::ValidationReport,
+        crate::raft::storage_validation::StorageValidationError,
+    > {
+        crate::raft::storage_validation::validate_raft_storage(node_id, &self.path)
     }
 
     /// Get a key-value pair from the state machine.

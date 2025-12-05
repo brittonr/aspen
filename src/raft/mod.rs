@@ -1,7 +1,12 @@
+pub mod bounded_proxy;
+pub mod learner_promotion;
 pub mod network;
+pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
 pub mod storage;
+pub mod storage_validation;
+pub mod supervision;
 pub mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -66,6 +71,8 @@ pub struct RaftActorState {
 pub enum RaftActorMessage {
     /// Lightweight RPC used by tests/monitors to confirm the actor is alive.
     GetNodeId(RpcReplyPort<u64>),
+    /// Health check ping - respond immediately to confirm actor is responsive.
+    Ping(RpcReplyPort<()>),
     /// Return the current cluster snapshot.
     CurrentState(RpcReplyPort<Result<ClusterState, ControlPlaneError>>),
     /// Initialize the cluster membership set.
@@ -133,6 +140,10 @@ impl Actor for RaftActor {
         match message {
             RaftActorMessage::GetNodeId(reply) => {
                 let _ = reply.send(state.node_id);
+            }
+            RaftActorMessage::Ping(reply) => {
+                // Immediately respond to health check ping (actor is alive)
+                let _ = reply.send(());
             }
             RaftActorMessage::CurrentState(reply) => {
                 let result = ensure_initialized(state).map(|_| state.cluster_state.clone());
@@ -371,14 +382,74 @@ async fn handle_read(
 }
 
 /// Controller that proxies all operations through the Raft actor.
+///
+/// RaftControlClient now uses a bounded mailbox proxy by default to prevent
+/// memory exhaustion under high load. The bounded mailbox enforces a capacity
+/// limit and provides backpressure when the mailbox is full.
 #[derive(Clone)]
 pub struct RaftControlClient {
     actor: ActorRef<RaftActorMessage>,
+    proxy: Option<bounded_proxy::BoundedRaftActorProxy>,
 }
 
 impl RaftControlClient {
+    /// Create a new RaftControlClient without bounded mailbox (legacy).
+    ///
+    /// # Warning
+    ///
+    /// This creates an unbounded mailbox which can lead to memory exhaustion
+    /// under high load. Consider using `new_bounded` instead.
     pub fn new(actor: ActorRef<RaftActorMessage>) -> Self {
-        Self { actor }
+        Self {
+            actor,
+            proxy: None,
+        }
+    }
+
+    /// Create a new RaftControlClient with bounded mailbox (recommended).
+    ///
+    /// Uses default capacity of 1000 messages.
+    ///
+    /// # Arguments
+    ///
+    /// * `actor` - The RaftActor reference to wrap
+    /// * `node_id` - Node ID for logging and debugging
+    pub fn new_bounded(actor: ActorRef<RaftActorMessage>, node_id: u64) -> Self {
+        let proxy = bounded_proxy::BoundedRaftActorProxy::new(actor.clone(), node_id);
+        Self {
+            actor,
+            proxy: Some(proxy),
+        }
+    }
+
+    /// Create a new RaftControlClient with custom mailbox capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `actor` - The RaftActor reference to wrap
+    /// * `capacity` - Maximum number of messages in mailbox
+    /// * `node_id` - Node ID for logging and debugging
+    pub fn new_with_capacity(
+        actor: ActorRef<RaftActorMessage>,
+        capacity: usize,
+        node_id: u64,
+    ) -> Self {
+        let proxy = bounded_proxy::BoundedRaftActorProxy::with_capacity(
+            actor.clone(),
+            capacity,
+            node_id,
+        );
+        Self {
+            actor,
+            proxy: Some(proxy),
+        }
+    }
+
+    /// Get the bounded mailbox proxy if available.
+    ///
+    /// Returns None if the client was created without bounded mailbox.
+    pub fn proxy(&self) -> Option<&bounded_proxy::BoundedRaftActorProxy> {
+        self.proxy.as_ref()
     }
 }
 

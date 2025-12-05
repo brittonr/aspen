@@ -66,6 +66,8 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
             storage_backend: aspen::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -222,6 +224,8 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle = bootstrap_node(config).await?;

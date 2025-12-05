@@ -39,6 +39,8 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     }
 }
 
@@ -113,9 +115,9 @@ async fn test_three_node_auto_discovery() -> Result<()> {
     sleep(Duration::from_secs(12)).await;
 
     // Verify each node discovered the other two peers
-    let peers1 = handle1.network_factory.peer_addrs();
-    let peers2 = handle2.network_factory.peer_addrs();
-    let peers3 = handle3.network_factory.peer_addrs();
+    let peers1 = handle1.network_factory.peer_addrs().await;
+    let peers2 = handle2.network_factory.peer_addrs().await;
+    let peers3 = handle3.network_factory.peer_addrs().await;
 
     tracing::info!(
         "node 1 discovered {} peers: {:?}",
@@ -206,6 +208,8 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle1 = bootstrap_node(config1).await?;
@@ -240,12 +244,14 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
     };
 
     let handle2 = bootstrap_node(config2).await?;
 
     // Verify manual peer was added to node 2
-    let peers2 = handle2.network_factory.peer_addrs();
+    let peers2 = handle2.network_factory.peer_addrs().await;
     assert_eq!(
         peers2.len(),
         1,
@@ -264,7 +270,7 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
     );
 
     // Node 1 should have zero peers (no gossip, no manual config)
-    let peers1 = handle1.network_factory.peer_addrs();
+    let peers1 = handle1.network_factory.peer_addrs().await;
     assert_eq!(peers1.len(), 0, "node 1 should have 0 peers");
 
     handle1.shutdown().await?;

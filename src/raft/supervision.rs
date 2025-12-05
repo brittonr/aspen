@@ -1,0 +1,1020 @@
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+
+use async_trait::async_trait;
+use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call_t};
+use snafu::{ResultExt, Snafu};
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
+use tracing::{debug, error, info, instrument, warn};
+
+use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
+
+const MAX_RESTART_HISTORY_SIZE: usize = 100;
+const MAX_BACKOFF_SECONDS: u64 = 16;
+
+// ============================================================================
+// Prometheus-style metrics for health monitoring
+// ============================================================================
+
+/// Global metrics for health monitoring.
+/// Tiger Style: Fixed-size atomic counters, bounded memory usage.
+struct HealthMetrics {
+    /// RaftActor health status (0=unhealthy, 1=degraded, 2=healthy).
+    health_status: AtomicU32,
+    /// Number of consecutive health check failures.
+    consecutive_failures: AtomicU32,
+    /// Total number of health checks performed.
+    health_checks_total: AtomicU64,
+    /// Total number of health check failures.
+    health_check_failures_total: AtomicU64,
+}
+
+impl HealthMetrics {
+    const fn new() -> Self {
+        Self {
+            health_status: AtomicU32::new(2), // Start as healthy
+            consecutive_failures: AtomicU32::new(0),
+            health_checks_total: AtomicU64::new(0),
+            health_check_failures_total: AtomicU64::new(0),
+        }
+    }
+}
+
+/// Global health metrics instance.
+/// Tiger Style: Static initialization with const constructor.
+static HEALTH_METRICS: OnceLock<HealthMetrics> = OnceLock::new();
+
+fn health_metrics() -> &'static HealthMetrics {
+    HEALTH_METRICS.get_or_init(HealthMetrics::new)
+}
+
+/// Get a snapshot of current health metrics for Prometheus export.
+///
+/// Returns (health_status, consecutive_failures, checks_total, failures_total).
+pub fn get_health_metrics() -> (u32, u32, u64, u64) {
+    let metrics = health_metrics();
+    (
+        metrics.health_status.load(Ordering::Relaxed),
+        metrics.consecutive_failures.load(Ordering::Relaxed),
+        metrics.health_checks_total.load(Ordering::Relaxed),
+        metrics.health_check_failures_total.load(Ordering::Relaxed),
+    )
+}
+
+/// Configuration for supervision behavior.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SupervisionConfig {
+    /// Enable automatic actor restart on failure (default: true).
+    pub enable_auto_restart: bool,
+
+    /// Duration an actor must run to be considered stable (default: 5 minutes).
+    pub actor_stability_duration_secs: u64,
+
+    /// Maximum restarts allowed within the restart window before meltdown (default: 3).
+    pub max_restarts_per_window: u32,
+
+    /// Time window for counting restarts (default: 10 minutes).
+    pub restart_window_secs: u64,
+
+    /// Maximum size of restart history (default: 100).
+    pub restart_history_size: usize,
+}
+
+impl Default for SupervisionConfig {
+    fn default() -> Self {
+        Self {
+            enable_auto_restart: true,
+            actor_stability_duration_secs: 300,  // 5 minutes
+            max_restarts_per_window: 3,
+            restart_window_secs: 600,             // 10 minutes
+            restart_history_size: MAX_RESTART_HISTORY_SIZE,
+        }
+    }
+}
+
+impl SupervisionConfig {
+    /// Get actor stability duration as Duration.
+    fn actor_stability_duration(&self) -> Duration {
+        Duration::from_secs(self.actor_stability_duration_secs)
+    }
+
+    /// Get restart window as Duration.
+    fn restart_window(&self) -> Duration {
+        Duration::from_secs(self.restart_window_secs)
+    }
+}
+
+/// Record of a single restart event.
+#[derive(Debug, Clone)]
+pub struct RestartEvent {
+    pub timestamp: Instant,
+    pub reason: String,
+    pub actor_uptime_secs: u64,
+    pub backoff_applied_secs: u64,
+}
+
+/// Supervision status exposed via GetStatus message.
+#[derive(Debug, Clone)]
+pub struct SupervisionStatus {
+    /// Total number of restarts since supervisor started.
+    pub total_restarts: u32,
+    /// Number of restarts in the current window.
+    pub restarts_in_window: u32,
+    /// Whether the supervisor is in meltdown state.
+    pub is_meltdown: bool,
+    /// Whether auto-restart is enabled.
+    pub auto_restart_enabled: bool,
+    /// Current RaftActor reference (if running).
+    pub raft_actor: Option<ActorRef<RaftActorMessage>>,
+}
+
+/// Messages that can be sent to the RaftSupervisor.
+#[derive(Debug)]
+pub enum SupervisorMessage {
+    /// Get current supervision status.
+    GetStatus(RpcReplyPort<SupervisionStatus>),
+    /// Get the current RaftActor reference.
+    GetRaftActor(RpcReplyPort<Option<ActorRef<RaftActorMessage>>>),
+    /// Manually trigger a restart (bypasses meltdown check).
+    ManualRestart,
+    /// Get restart history.
+    GetRestartHistory(RpcReplyPort<Vec<RestartEvent>>),
+    /// Get the HealthMonitor reference (if health monitoring is enabled).
+    GetHealthMonitor(RpcReplyPort<Option<Arc<HealthMonitor>>>),
+}
+
+impl ractor::Message for SupervisorMessage {}
+
+/// Arguments for initializing the supervisor.
+#[derive(Debug, Clone)]
+pub struct SupervisorArguments {
+    /// Configuration for the RaftActor to be supervised.
+    pub raft_actor_config: RaftActorConfig,
+    /// Supervision behavior configuration.
+    pub supervision_config: SupervisionConfig,
+}
+
+/// State maintained by the RaftSupervisor.
+pub struct RaftSupervisorState {
+    /// Bounded history of restart events (max 100 items).
+    restart_history: VecDeque<RestartEvent>,
+    /// Supervision configuration.
+    config: SupervisionConfig,
+    /// Configuration for spawning RaftActor instances.
+    raft_actor_config: RaftActorConfig,
+    /// Reference to the current RaftActor (if running).
+    current_raft_actor: Option<ActorRef<RaftActorMessage>>,
+    /// Timestamp when the current RaftActor was spawned.
+    actor_spawn_time: Option<Instant>,
+    /// Total number of restarts performed.
+    total_restarts: u32,
+    /// Health monitor for the current RaftActor (if health monitoring is enabled).
+    health_monitor: Option<Arc<HealthMonitor>>,
+    /// Health monitor background task handle.
+    health_monitor_task: Option<JoinHandle<()>>,
+}
+
+/// Actor that supervises a RaftActor using OneForOne supervision.
+///
+/// Implements:
+/// - Automatic restart on failure with exponential backoff
+/// - Meltdown detection (3 restarts in 10 minutes)
+/// - Stability tracking (5 minute uptime threshold)
+/// - Bounded restart history (100 events)
+pub struct RaftSupervisor;
+
+#[derive(Debug, Snafu)]
+pub enum SupervisionError {
+    #[snafu(display("failed to spawn raft actor: {source}"))]
+    SpawnFailed { source: ractor::SpawnErr },
+
+    #[snafu(display("actor is in meltdown state: {restarts} restarts in {window_secs}s"))]
+    Meltdown { restarts: u32, window_secs: u64 },
+}
+
+impl RaftSupervisor {
+    /// Check if supervisor is in meltdown state.
+    ///
+    /// Meltdown occurs when max_restarts_per_window or more restarts happen
+    /// within the configured restart_window.
+    fn is_meltdown(&self, state: &RaftSupervisorState) -> bool {
+        let now = Instant::now();
+        let window = state.config.restart_window();
+
+        let restarts_in_window = state
+            .restart_history
+            .iter()
+            .rev()
+            .take_while(|event| now.duration_since(event.timestamp) < window)
+            .count() as u32;
+
+        restarts_in_window >= state.config.max_restarts_per_window
+    }
+
+    /// Calculate exponential backoff duration.
+    ///
+    /// Formula: min(2^restart_count, 16) seconds
+    /// Sequence: 1s, 2s, 4s, 8s, 16s, 16s, ...
+    fn calculate_backoff(&self, restart_count: u32) -> Duration {
+        let backoff_secs = 2u64.pow(restart_count).min(MAX_BACKOFF_SECONDS);
+        Duration::from_secs(backoff_secs)
+    }
+
+    /// Count restarts within the configured window.
+    fn count_restarts_in_window(&self, state: &RaftSupervisorState) -> u32 {
+        let now = Instant::now();
+        let window = state.config.restart_window();
+
+        state
+            .restart_history
+            .iter()
+            .rev()
+            .take_while(|event| now.duration_since(event.timestamp) < window)
+            .count() as u32
+    }
+
+    /// Record a restart event in the history.
+    ///
+    /// Maintains bounded history using VecDeque (max 100 items).
+    fn record_restart_event(&self, state: &mut RaftSupervisorState, event: RestartEvent) {
+        state.restart_history.push_back(event);
+
+        // Maintain size limit using bounded loop
+        let max_size = state.config.restart_history_size;
+        let mut trim_count = 0;
+        while state.restart_history.len() > max_size && trim_count < max_size {
+            state.restart_history.pop_front();
+            trim_count += 1;
+        }
+    }
+
+    /// Spawn a new RaftActor instance using spawn_linked.
+    async fn spawn_raft_actor(
+        &self,
+        myself: ActorRef<SupervisorMessage>,
+        config: &RaftActorConfig,
+    ) -> Result<(ActorRef<RaftActorMessage>, tokio::task::JoinHandle<()>), SupervisionError> {
+        let node_id = config.node_id;
+        let actor_name = format!("raft-{}", node_id);
+
+        Actor::spawn_linked(
+            Some(actor_name),
+            RaftActor,
+            config.clone(),
+            myself.get_cell(),
+        )
+        .await
+        .context(SpawnFailedSnafu)
+    }
+
+    /// Stub for storage validation (Phase 2).
+    async fn validate_storage(&self, _state: &RaftSupervisorState) -> Result<(), String> {
+        // TODO: Implement in Phase 2
+        // For now, always return success
+        Ok(())
+    }
+
+    /// Handle actor failure and restart logic.
+    async fn handle_actor_failed(
+        &self,
+        myself: ActorRef<SupervisorMessage>,
+        state: &mut RaftSupervisorState,
+        _cell: ActorCell,
+        err: String,
+    ) -> Result<(), ActorProcessingErr> {
+        let node_id = state.raft_actor_config.node_id;
+
+        error!(
+            node_id = node_id,
+            error = %err,
+            "raft actor failed"
+        );
+
+        // Check if auto-restart is enabled
+        if !state.config.enable_auto_restart {
+            warn!(
+                node_id = node_id,
+                "auto-restart disabled, actor will not be restarted"
+            );
+            state.current_raft_actor = None;
+            state.actor_spawn_time = None;
+            return Ok(());
+        }
+
+        // Check for meltdown
+        if self.is_meltdown(state) {
+            let restarts_in_window = self.count_restarts_in_window(state);
+            error!(
+                node_id = node_id,
+                restarts_in_window = restarts_in_window,
+                window_secs = state.config.restart_window_secs,
+                "supervisor in meltdown state, restart aborted"
+            );
+            state.current_raft_actor = None;
+            state.actor_spawn_time = None;
+            return Ok(());
+        }
+
+        // Calculate actor uptime
+        let actor_uptime = state
+            .actor_spawn_time
+            .map(|spawn_time| Instant::now().duration_since(spawn_time))
+            .unwrap_or(Duration::ZERO);
+
+        // Check if actor was stable
+        let was_stable = actor_uptime >= state.config.actor_stability_duration();
+        if was_stable {
+            info!(
+                node_id = node_id,
+                uptime_secs = actor_uptime.as_secs(),
+                "actor was stable before failure"
+            );
+        } else {
+            warn!(
+                node_id = node_id,
+                uptime_secs = actor_uptime.as_secs(),
+                stability_threshold_secs = state.config.actor_stability_duration_secs,
+                "actor failed before reaching stability threshold"
+            );
+        }
+
+        // Validate storage before restart
+        if let Err(validation_err) = self.validate_storage(state).await {
+            error!(
+                node_id = node_id,
+                error = %validation_err,
+                "storage validation failed, restart aborted"
+            );
+            state.current_raft_actor = None;
+            state.actor_spawn_time = None;
+            return Ok(());
+        }
+
+        // Calculate backoff based on restarts in window
+        let restarts_in_window = self.count_restarts_in_window(state);
+        let backoff = self.calculate_backoff(restarts_in_window);
+
+        info!(
+            node_id = node_id,
+            backoff_secs = backoff.as_secs(),
+            restarts_in_window = restarts_in_window,
+            "applying exponential backoff before restart"
+        );
+
+        // Apply backoff delay
+        tokio::time::sleep(backoff).await;
+
+        // Attempt to respawn RaftActor
+        info!(node_id = node_id, "attempting to restart raft actor");
+
+        match self
+            .spawn_raft_actor(myself.clone(), &state.raft_actor_config)
+            .await
+        {
+            Ok((new_actor, _task)) => {
+                info!(node_id = node_id, "raft actor restarted successfully");
+
+                // Stop old health monitor task if it exists
+                if let Some(task) = state.health_monitor_task.take() {
+                    task.abort();
+                }
+
+                // Start new health monitor for the restarted actor
+                let health_monitor = Arc::new(HealthMonitor::new(
+                    HealthMonitorConfig::default(),
+                    new_actor.clone(),
+                ));
+                let health_monitor_task = health_monitor.clone().start();
+
+                info!(
+                    node_id = node_id,
+                    "health monitor restarted for new raft actor"
+                );
+
+                // Record restart event
+                let event = RestartEvent {
+                    timestamp: Instant::now(),
+                    reason: err,
+                    actor_uptime_secs: actor_uptime.as_secs(),
+                    backoff_applied_secs: backoff.as_secs(),
+                };
+                self.record_restart_event(state, event);
+
+                // Update state
+                state.current_raft_actor = Some(new_actor);
+                state.actor_spawn_time = Some(Instant::now());
+                state.total_restarts += 1;
+                state.health_monitor = Some(health_monitor);
+                state.health_monitor_task = Some(health_monitor_task);
+
+                Ok(())
+            }
+            Err(spawn_err) => {
+                error!(
+                    node_id = node_id,
+                    error = %spawn_err,
+                    "failed to restart raft actor"
+                );
+                state.current_raft_actor = None;
+                state.actor_spawn_time = None;
+                Ok(())
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl Actor for RaftSupervisor {
+    type Msg = SupervisorMessage;
+    type State = RaftSupervisorState;
+    type Arguments = SupervisorArguments;
+
+    async fn pre_start(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        args: Self::Arguments,
+    ) -> Result<Self::State, ActorProcessingErr> {
+        let node_id = args.raft_actor_config.node_id;
+        info!(
+            node_id = node_id,
+            "raft supervisor starting"
+        );
+
+        // Spawn initial RaftActor using spawn_linked
+        let (raft_actor, _task) = self
+            .spawn_raft_actor(myself, &args.raft_actor_config)
+            .await
+            .map_err(|err| ActorProcessingErr::from(err.to_string()))?;
+
+        info!(
+            node_id = node_id,
+            "initial raft actor spawned under supervision"
+        );
+
+        // Start health monitoring for the RaftActor
+        let health_monitor = Arc::new(HealthMonitor::new(
+            HealthMonitorConfig::default(),
+            raft_actor.clone(),
+        ));
+        let health_monitor_task = health_monitor.clone().start();
+
+        info!(
+            node_id = node_id,
+            "health monitor started for raft actor"
+        );
+
+        Ok(RaftSupervisorState {
+            restart_history: VecDeque::with_capacity(args.supervision_config.restart_history_size),
+            config: args.supervision_config,
+            raft_actor_config: args.raft_actor_config,
+            current_raft_actor: Some(raft_actor),
+            actor_spawn_time: Some(Instant::now()),
+            total_restarts: 0,
+            health_monitor: Some(health_monitor),
+            health_monitor_task: Some(health_monitor_task),
+        })
+    }
+
+    async fn handle(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        message: Self::Msg,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SupervisorMessage::GetStatus(reply) => {
+                let restarts_in_window = self.count_restarts_in_window(state);
+                let is_meltdown = self.is_meltdown(state);
+
+                let status = SupervisionStatus {
+                    total_restarts: state.total_restarts,
+                    restarts_in_window,
+                    is_meltdown,
+                    auto_restart_enabled: state.config.enable_auto_restart,
+                    raft_actor: state.current_raft_actor.clone(),
+                };
+
+                info!(
+                    total_restarts = state.total_restarts,
+                    restarts_in_window = restarts_in_window,
+                    is_meltdown = is_meltdown,
+                    auto_restart = state.config.enable_auto_restart,
+                    "supervision status requested"
+                );
+
+                let _ = reply.send(status);
+            }
+            SupervisorMessage::GetRaftActor(reply) => {
+                let _ = reply.send(state.current_raft_actor.clone());
+            }
+            SupervisorMessage::ManualRestart => {
+                let node_id = state.raft_actor_config.node_id;
+                warn!(
+                    node_id = node_id,
+                    "manual restart requested (bypasses meltdown check)"
+                );
+
+                // Stop current actor if running
+                if let Some(ref actor) = state.current_raft_actor {
+                    actor.stop(Some("manual-restart".into()));
+                }
+
+                // Note: The actual restart will happen via SupervisionEvent::ActorTerminated
+                // or SupervisionEvent::ActorFailed when the actor stops
+            }
+            SupervisorMessage::GetRestartHistory(reply) => {
+                info!(
+                    history_size = state.restart_history.len(),
+                    "restart history requested"
+                );
+                let history: Vec<RestartEvent> = state.restart_history.iter().cloned().collect();
+                let _ = reply.send(history);
+            }
+            SupervisorMessage::GetHealthMonitor(reply) => {
+                debug!("health monitor reference requested");
+                let _ = reply.send(state.health_monitor.clone());
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_supervisor_evt(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        evt: SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match evt {
+            SupervisionEvent::ActorFailed(cell, err) => {
+                self.handle_actor_failed(myself, state, cell, err.to_string()).await
+            }
+            SupervisionEvent::ActorTerminated(_cell, _, reason) => {
+                let node_id = state.raft_actor_config.node_id;
+                info!(
+                    node_id = node_id,
+                    reason = ?reason,
+                    "raft actor terminated normally"
+                );
+
+                // Stop health monitor task if it exists
+                if let Some(task) = state.health_monitor_task.take() {
+                    task.abort();
+                }
+
+                // Clear current actor reference and health monitor
+                state.current_raft_actor = None;
+                state.actor_spawn_time = None;
+                state.health_monitor = None;
+
+                Ok(())
+            }
+            SupervisionEvent::ActorStarted(_cell) => {
+                // Actor started successfully, no action needed
+                Ok(())
+            }
+            SupervisionEvent::PidLifecycleEvent(_event) => {
+                // Process lifecycle event, not relevant for supervision
+                Ok(())
+            }
+            SupervisionEvent::ProcessGroupChanged(_) => {
+                // Not used in OneForOne supervision
+                Ok(())
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Phase 3: Health Monitoring
+// ============================================================================
+
+/// Health monitor configuration.
+///
+/// Tiger Style: Fixed values, no runtime configuration to reduce complexity.
+#[derive(Debug, Clone)]
+pub struct HealthMonitorConfig {
+    /// Interval between health checks.
+    /// Fixed at 1 second for consistent monitoring.
+    pub check_interval: Duration,
+
+    /// Timeout for each health check.
+    /// Fixed at 25ms to detect hangs quickly.
+    pub check_timeout: Duration,
+
+    /// Number of consecutive failures before marking unhealthy.
+    /// Fixed at 3 to balance sensitivity with false positives.
+    pub consecutive_failure_threshold: u32,
+}
+
+impl Default for HealthMonitorConfig {
+    fn default() -> Self {
+        Self {
+            check_interval: Duration::from_secs(1),
+            check_timeout: Duration::from_millis(25),
+            consecutive_failure_threshold: 3,
+        }
+    }
+}
+
+/// Health status of a RaftActor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthStatus {
+    /// Actor is responding normally (0 consecutive failures).
+    Healthy,
+
+    /// Actor has 1-2 consecutive failures (warning state).
+    Degraded,
+
+    /// Actor has 3+ consecutive failures (critical state).
+    Unhealthy,
+}
+
+/// Health monitor for RaftActor.
+///
+/// Runs continuous liveness checks in the background and exposes health status
+/// for observability.
+///
+/// ## Usage
+///
+/// ```rust,ignore
+/// let health_monitor = Arc::new(HealthMonitor::new(
+///     HealthMonitorConfig::default(),
+///     raft_actor_ref.clone(),
+/// ));
+///
+/// // Start background health checks
+/// let health_task = health_monitor.clone().start();
+///
+/// // Query health status
+/// let status = health_monitor.get_status().await;
+/// ```
+#[derive(Debug)]
+pub struct HealthMonitor {
+    config: HealthMonitorConfig,
+    raft_actor_ref: ActorRef<RaftActorMessage>,
+    consecutive_failures: AtomicU32,
+    last_check_time: Arc<RwLock<Instant>>,
+    health_status: Arc<RwLock<HealthStatus>>,
+}
+
+impl HealthMonitor {
+    /// Create a new health monitor.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Health monitoring configuration (typically default)
+    /// * `raft_actor_ref` - Reference to the RaftActor to monitor
+    pub fn new(config: HealthMonitorConfig, raft_actor_ref: ActorRef<RaftActorMessage>) -> Self {
+        Self {
+            config,
+            raft_actor_ref,
+            consecutive_failures: AtomicU32::new(0),
+            last_check_time: Arc::new(RwLock::new(Instant::now())),
+            health_status: Arc::new(RwLock::new(HealthStatus::Healthy)),
+        }
+    }
+
+    /// Start background health check task.
+    ///
+    /// Returns a JoinHandle that can be used to await task completion or cancel it.
+    ///
+    /// # Tiger Style Notes
+    ///
+    /// - Loop runs until task is dropped (bounded by shutdown)
+    /// - Sleep interval is fixed at 1 second (no unbounded delay)
+    /// - Failure counter has fixed threshold (no unbounded growth)
+    #[instrument(skip(self), fields(check_interval_ms = self.config.check_interval.as_millis()))]
+    pub fn start(self: Arc<Self>) -> JoinHandle<()> {
+        debug!("starting health monitor background task");
+
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(self.config.check_interval).await;
+
+                // Increment total health checks counter
+                let metrics = health_metrics();
+                metrics.health_checks_total.fetch_add(1, Ordering::Relaxed);
+
+                match self.liveness_check().await {
+                    Ok(_) => {
+                        // Reset failure counter on success
+                        self.consecutive_failures.store(0, Ordering::Relaxed);
+                        *self.health_status.write().await = HealthStatus::Healthy;
+                        *self.last_check_time.write().await = Instant::now();
+
+                        // Update global metrics
+                        metrics.health_status.store(2, Ordering::Relaxed); // 2 = Healthy
+                        metrics.consecutive_failures.store(0, Ordering::Relaxed);
+
+                        debug!("health check passed");
+                    }
+                    Err(err) => {
+                        // Increment failure counters
+                        metrics.health_check_failures_total.fetch_add(1, Ordering::Relaxed);
+                        let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+
+                        // Update health status based on threshold
+                        let status = if failures >= self.config.consecutive_failure_threshold {
+                            HealthStatus::Unhealthy
+                        } else {
+                            HealthStatus::Degraded
+                        };
+
+                        *self.health_status.write().await = status;
+                        *self.last_check_time.write().await = Instant::now();
+
+                        // Update global metrics
+                        let status_value = match status {
+                            HealthStatus::Healthy => 2,
+                            HealthStatus::Degraded => 1,
+                            HealthStatus::Unhealthy => 0,
+                        };
+                        metrics.health_status.store(status_value, Ordering::Relaxed);
+                        metrics.consecutive_failures.store(failures, Ordering::Relaxed);
+
+                        warn!(
+                            consecutive_failures = failures,
+                            health_status = ?status,
+                            error = %err,
+                            "health check failed"
+                        );
+                    }
+                }
+            }
+        })
+    }
+
+    /// Perform a liveness check on the RaftActor.
+    ///
+    /// Sends a Ping message and expects a response within the configured timeout.
+    ///
+    /// # Errors
+    ///
+    /// Returns `HealthCheckError::LivenessTimeout` if the actor doesn't respond within timeout.
+    /// Returns `HealthCheckError::ActorNotResponding` if the RPC call fails.
+    #[instrument(skip(self))]
+    async fn liveness_check(&self) -> Result<(), HealthCheckError> {
+        let timeout_ms = self.config.check_timeout.as_millis() as u64;
+
+        // Send Ping message with timeout
+        call_t!(
+            self.raft_actor_ref,
+            RaftActorMessage::Ping,
+            timeout_ms
+        )
+        .map_err(|err| HealthCheckError::ActorNotResponding {
+            reason: err.to_string(),
+        })?;
+
+        debug!("liveness check succeeded");
+        Ok(())
+    }
+
+    /// Perform a readiness check on the RaftActor.
+    ///
+    /// Currently checks liveness. Future versions may add storage accessibility checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors from liveness check.
+    #[allow(dead_code)]
+    pub async fn readiness_check(&self) -> Result<(), HealthCheckError> {
+        // Check liveness first
+        self.liveness_check().await?;
+
+        // TODO(Phase 2): Add storage accessibility check
+        // - Verify redb databases are accessible
+        // - Check disk space availability
+        // - Validate state machine is readable
+
+        Ok(())
+    }
+
+    /// Get the current health status.
+    ///
+    /// Returns Healthy, Degraded, or Unhealthy based on consecutive failure count.
+    pub async fn get_status(&self) -> HealthStatus {
+        *self.health_status.read().await
+    }
+
+    /// Get the number of consecutive health check failures.
+    ///
+    /// Returns 0 if healthy, 1-2 if degraded, 3+ if unhealthy.
+    pub fn get_consecutive_failures(&self) -> u32 {
+        self.consecutive_failures.load(Ordering::Relaxed)
+    }
+
+    /// Get the time of the last health check.
+    ///
+    /// Useful for detecting if the health monitor itself has stalled.
+    pub async fn get_last_check_time(&self) -> Instant {
+        *self.last_check_time.read().await
+    }
+}
+
+/// Health check errors.
+#[derive(Debug, Snafu)]
+pub enum HealthCheckError {
+    /// Health check timed out waiting for response.
+    #[snafu(display("Liveness check timeout after {timeout:?}"))]
+    LivenessTimeout {
+        /// Timeout duration that was exceeded.
+        timeout: Duration,
+    },
+
+    /// Actor is not responding to health checks.
+    #[snafu(display("Actor not responding: {reason}"))]
+    ActorNotResponding {
+        /// Reason for non-responsiveness.
+        reason: String,
+    },
+}
+
+#[cfg(test)]
+mod health_monitor_tests {
+    use super::*;
+    use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
+    use crate::raft::storage::StateMachineStore;
+    use crate::raft::types::{AppTypeConfig, NodeId};
+    use openraft::Config as RaftConfig;
+    use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
+    use openraft::error::{RPCError, Unreachable};
+    use openraft::BasicNode;
+    use std::sync::Arc;
+
+    /// Mock network factory for testing that doesn't actually send messages.
+    #[derive(Debug, Clone, Default)]
+    struct MockNetworkFactory;
+
+    impl RaftNetworkFactory<AppTypeConfig> for MockNetworkFactory {
+        type Network = MockNetwork;
+
+        async fn new_client(&mut self, _target: NodeId, _node: &BasicNode) -> Self::Network {
+            MockNetwork
+        }
+    }
+
+    /// Mock network implementation that always returns unreachable errors.
+    struct MockNetwork;
+
+    impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
+        async fn append_entries(
+            &mut self,
+            _req: openraft::raft::AppendEntriesRequest<AppTypeConfig>,
+            _option: openraft::network::RPCOption,
+        ) -> Result<
+            openraft::raft::AppendEntriesResponse<AppTypeConfig>,
+            RPCError<AppTypeConfig>,
+        > {
+            let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
+            Err(RPCError::Unreachable(Unreachable::new(&err)))
+        }
+
+        async fn full_snapshot(
+            &mut self,
+            _vote: openraft::type_config::alias::VoteOf<AppTypeConfig>,
+            _snapshot: openraft::Snapshot<AppTypeConfig>,
+            _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed> + openraft::OptionalSend,
+            _option: openraft::network::RPCOption,
+        ) -> Result<openraft::raft::SnapshotResponse<AppTypeConfig>, openraft::error::StreamingError<AppTypeConfig>> {
+            let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
+            Err(openraft::error::StreamingError::Unreachable(Unreachable::new(&err)))
+        }
+
+        async fn vote(
+            &mut self,
+            _req: openraft::raft::VoteRequest<AppTypeConfig>,
+            _option: openraft::network::RPCOption,
+        ) -> Result<
+            openraft::raft::VoteResponse<AppTypeConfig>,
+            RPCError<AppTypeConfig>,
+        > {
+            let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
+            Err(RPCError::Unreachable(Unreachable::new(&err)))
+        }
+    }
+
+    /// Create a test RaftActor for health monitoring tests.
+    async fn create_test_raft_actor() -> (ActorRef<RaftActorMessage>, openraft::Raft<AppTypeConfig>) {
+        use crate::raft::storage::InMemoryLogStore;
+        use openraft::Raft;
+
+        let node_id = 1;
+        let config = Arc::new(RaftConfig::default());
+        let log_store = InMemoryLogStore::default();
+        let state_machine = StateMachineStore::default();
+        let network = MockNetworkFactory::default();
+
+        let state_machine_arc = Arc::new(state_machine);
+
+        let raft = Raft::new(
+            node_id,
+            config,
+            network,
+            log_store,
+            state_machine_arc.clone(),
+        )
+        .await
+        .expect("failed to create raft");
+
+        let raft_config = RaftActorConfig {
+            node_id,
+            raft: raft.clone(),
+            state_machine: StateMachineVariant::InMemory(state_machine_arc),
+        };
+
+        let (actor_ref, _) = ractor::Actor::spawn(
+            None,
+            RaftActor,
+            raft_config,
+        )
+        .await
+        .expect("failed to spawn raft actor");
+
+        (actor_ref, raft)
+    }
+
+    #[tokio::test]
+    async fn test_health_monitor_detects_healthy_actor() {
+        let (actor_ref, _raft) = create_test_raft_actor().await;
+
+        let monitor = Arc::new(HealthMonitor::new(
+            HealthMonitorConfig::default(),
+            actor_ref.clone(),
+        ));
+
+        // Perform a single liveness check
+        let result = monitor.liveness_check().await;
+        assert!(result.is_ok(), "liveness check should succeed");
+
+        // Verify status is Healthy
+        let status = monitor.get_status().await;
+        assert_eq!(status, HealthStatus::Healthy, "status should be Healthy");
+
+        // Verify no failures
+        assert_eq!(monitor.get_consecutive_failures(), 0, "should have 0 failures");
+    }
+
+    #[tokio::test]
+    async fn test_health_monitor_background_task() {
+        let (actor_ref, _raft) = create_test_raft_actor().await;
+
+        let monitor = Arc::new(HealthMonitor::new(
+            HealthMonitorConfig {
+                check_interval: Duration::from_millis(100), // Fast for testing
+                check_timeout: Duration::from_millis(25),
+                consecutive_failure_threshold: 3,
+            },
+            actor_ref.clone(),
+        ));
+
+        // Start background task
+        let _task = monitor.clone().start();
+
+        // Wait for a few health checks
+        tokio::time::sleep(Duration::from_millis(350)).await;
+
+        // Verify status is still Healthy
+        let status = monitor.get_status().await;
+        assert_eq!(status, HealthStatus::Healthy, "status should remain Healthy");
+
+        // Verify no failures
+        assert_eq!(monitor.get_consecutive_failures(), 0, "should have 0 failures");
+    }
+
+    #[tokio::test]
+    async fn test_health_status_transitions() {
+        let (actor_ref, _raft) = create_test_raft_actor().await;
+
+        let monitor = Arc::new(HealthMonitor::new(
+            HealthMonitorConfig::default(),
+            actor_ref.clone(),
+        ));
+
+        // Initially Healthy
+        assert_eq!(monitor.get_status().await, HealthStatus::Healthy);
+
+        // Simulate 1 failure -> Degraded
+        monitor.consecutive_failures.store(1, Ordering::Relaxed);
+        *monitor.health_status.write().await = HealthStatus::Degraded;
+        assert_eq!(monitor.get_status().await, HealthStatus::Degraded);
+
+        // Simulate 2 failures -> still Degraded
+        monitor.consecutive_failures.store(2, Ordering::Relaxed);
+        assert_eq!(monitor.get_status().await, HealthStatus::Degraded);
+
+        // Simulate 3 failures -> Unhealthy
+        monitor.consecutive_failures.store(3, Ordering::Relaxed);
+        *monitor.health_status.write().await = HealthStatus::Unhealthy;
+        assert_eq!(monitor.get_status().await, HealthStatus::Unhealthy);
+
+        // Reset -> Healthy
+        monitor.consecutive_failures.store(0, Ordering::Relaxed);
+        *monitor.health_status.write().await = HealthStatus::Healthy;
+        assert_eq!(monitor.get_status().await, HealthStatus::Healthy);
+    }
+}

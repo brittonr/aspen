@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
 use crate::raft::storage::StorageBackend;
+use crate::raft::supervision::SupervisionConfig;
 
 /// Bootstrap configuration for an Aspen cluster node.
 ///
@@ -83,6 +84,21 @@ pub struct ClusterBootstrapConfig {
     /// Format: "node_id@endpoint_id:relay_url:direct_addrs"
     #[serde(default)]
     pub peers: Vec<String>,
+
+    /// Supervision configuration for RaftActor.
+    #[serde(default)]
+    pub supervision_config: SupervisionConfig,
+
+    /// RaftActor mailbox capacity (bounded mailbox size).
+    /// Prevents memory exhaustion under high load by enforcing backpressure.
+    /// Default: 1000 messages
+    /// Maximum: 10000 messages
+    #[serde(default = "default_raft_mailbox_capacity")]
+    pub raft_mailbox_capacity: usize,
+}
+
+fn default_raft_mailbox_capacity() -> usize {
+    1000
 }
 
 /// Iroh networking configuration.
@@ -238,6 +254,9 @@ impl ClusterBootstrapConfig {
                 pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: parse_env("ASPEN_RAFT_MAILBOX_CAPACITY")
+                .unwrap_or_else(default_raft_mailbox_capacity),
         }
     }
 
@@ -304,6 +323,8 @@ impl ClusterBootstrapConfig {
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
+        // Always merge supervision config
+        self.supervision_config = other.supervision_config;
     }
 
     /// Validate configuration on startup.
@@ -553,6 +574,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         assert!(config.validate().is_ok());
@@ -574,6 +597,8 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
@@ -600,6 +625,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         assert!(config.validate().is_err());
@@ -623,6 +650,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let override_config = ClusterBootstrapConfig {
@@ -651,6 +680,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::Redb,
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
+            supervision_config: SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         base.merge(override_config);

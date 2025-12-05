@@ -110,6 +110,42 @@ pub trait ClusterController: Send + Sync {
     }
 }
 
+// Blanket implementation for Arc<T> where T: ClusterController
+#[async_trait]
+impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
+    async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+        (**self).init(request).await
+    }
+
+    async fn add_learner(
+        &self,
+        request: AddLearnerRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        (**self).add_learner(request).await
+    }
+
+    async fn change_membership(
+        &self,
+        request: ChangeMembershipRequest,
+    ) -> Result<ClusterState, ControlPlaneError> {
+        (**self).change_membership(request).await
+    }
+
+    async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+        (**self).current_state().await
+    }
+
+    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+        (**self).get_metrics().await
+    }
+
+    async fn trigger_snapshot(
+        &self,
+    ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError> {
+        (**self).trigger_snapshot().await
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WriteCommand {
     Set { key: String, value: String },
