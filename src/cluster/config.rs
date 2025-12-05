@@ -496,9 +496,8 @@ fn default_cookie() -> String {
 }
 
 fn default_http_addr() -> SocketAddr {
-    "127.0.0.1:8080"
-        .parse()
-        .expect("hardcoded default address is valid")
+    // Tiger Style: Compile-time constant instead of runtime parsing
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080)
 }
 
 fn default_heartbeat_interval_ms() -> u64 {

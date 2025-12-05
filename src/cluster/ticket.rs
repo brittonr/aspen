@@ -142,7 +142,21 @@ impl Ticket for AspenClusterTicket {
     const KIND: &'static str = "aspen";
 
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_stdvec(&self).expect("postcard serialization should not fail")
+        // Tiger Style: Document panic conditions explicitly
+        //
+        // Postcard serialization of AspenClusterTicket can only fail if:
+        // 1. Bug in postcard library
+        // 2. Memory corruption
+        // 3. OOM during Vec allocation
+        //
+        // This struct contains only primitive types (TopicId, BTreeSet<EndpointId>, String)
+        // with bounded sizes (MAX_BOOTSTRAP_PEERS=16), making serialization deterministic.
+        //
+        // If this panics, it indicates a serious system issue requiring investigation.
+        postcard::to_stdvec(&self).expect(
+            "AspenClusterTicket postcard serialization failed - \
+             indicates library bug or memory corruption"
+        )
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
