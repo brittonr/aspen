@@ -853,6 +853,59 @@ kv.read(ReadRequest { key }).await?;
 - Production safety: OOM prevention, panic elimination, silent failure fixes
 - Ready for deployment preparation or Phase 7 features
 
+## Madsim Deterministic Simulation Testing - COMPLETE ✅ (2025-12-04 to 2025-12-05)
+
+**Summary**: Implemented comprehensive deterministic testing infrastructure for distributed Raft consensus using madsim. Replaced mock-based testing (0% real coverage) with 11 production-grade simulation tests validating real consensus behavior under realistic failure conditions.
+
+**Test Coverage**: 211/211 tests passing (100%), 13 skipped
+- **Phase 1**: Network infrastructure foundation (3 smoke tests → replaced by integration tests)
+- **Phase 2**: RaftActor integration with direct RPC dispatch (3 single-node tests)
+- **Phase 3**: Multi-node cluster consensus (3 cluster tests)
+- **Phase 4**: Failure injection and chaos engineering (4 chaos tests)
+- **Phase 5**: Advanced failure scenarios (4 advanced tests)
+- **Total**: 11 comprehensive simulation tests across 3 test files
+
+**Files Created**:
+- `src/raft/madsim_network.rs` (435 lines) - Core infrastructure
+- `tests/madsim_single_node_test.rs` (166 lines) - Single-node Raft
+- `tests/madsim_multi_node_test.rs` (348 lines) - Multi-node clusters
+- `tests/madsim_failure_injection_test.rs` (446 lines) - Chaos engineering
+- `tests/madsim_advanced_scenarios_test.rs` (522 lines) - Advanced scenarios
+
+**Capabilities Validated**:
+- ✅ 3-node and 5-node cluster initialization and consensus
+- ✅ Leader election and automatic re-election after crashes
+- ✅ Log replication and write operations under normal conditions
+- ✅ Network partitions with split-brain prevention (symmetric and asymmetric)
+- ✅ Network delays (500-1000ms) maintaining consensus
+- ✅ Message drops and packet loss scenarios
+- ✅ Rolling failures (sequential node crashes and recoveries)
+- ✅ Concurrent node failures (2 simultaneous crashes in 5-node cluster)
+- ✅ Concurrent write load testing under degraded network conditions
+- ✅ Deterministic execution with reproducible failures (seeds: 42, 123, 456, 789)
+
+**Simulation Artifacts**: All tests persist detailed JSON traces to `docs/simulations/` capturing event sequences, failure patterns, metrics snapshots, and test outcomes.
+
+**Infrastructure Components**:
+- **MadsimRaftRouter**: Coordinates message passing between Raft nodes, stores Raft handles for direct dispatch
+- **MadsimRaftNetwork**: Implements OpenRaft's RaftNetworkV2 trait for deterministic RPC
+- **MadsimNetworkFactory**: Creates network clients per target node
+- **FailureInjector**: Chaos testing with `set_network_delay()`, `set_message_drop()`, `clear_all()`
+- **Tiger Style**: Bounded resources (MAX_CONNECTIONS_PER_NODE=100), explicit u32/u64 types, fail-fast errors
+
+**Design Decision**: Direct Raft handle dispatch (storing `Raft<AppTypeConfig>` in NodeHandle) instead of TCP serialization for faster validation and simpler integration. This approach validates core consensus logic without network serialization overhead.
+
+**Git Commits**:
+- `e6cf133`: Phase 1 - Network infrastructure foundation
+- `fccf81b`: Phase 2 - RaftActor integration with direct RPC dispatch
+- `5bf4fcd`: Phase 3 - Multi-node cluster consensus
+- `4d6cbfa`: Phase 4 - Failure injection and chaos engineering
+- `663cd93`: Phase 5 - Advanced failure scenarios and comprehensive testing
+
+**Impact**: Aspen now has production-grade deterministic testing infrastructure for automated distributed systems validation, replacing mock-based testing with real consensus behavior under realistic failure conditions.
+
+---
+
 ### Week 5: Madsim Simulation Infrastructure - Phase 1 ✅ COMPLETE (2025-12-04)
 
 **Goal**: Build foundation for deterministic distributed systems testing using madsim
