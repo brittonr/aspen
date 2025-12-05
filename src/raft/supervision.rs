@@ -1,3 +1,195 @@
+//! RaftActor supervision with automatic restart, health monitoring, and meltdown detection.
+//!
+//! # Overview
+//!
+//! The RaftSupervisor implements OneForOne supervision with exponential backoff,
+//! automatic restart on failure, storage validation before restart, and health
+//! monitoring to prevent infinite restart loops.
+//!
+//! # Operational Guide
+//!
+//! ## Monitoring Supervision Health
+//!
+//! Query the `/health` HTTP endpoint to check supervision status:
+//!
+//! ```bash
+//! curl http://localhost:8080/health | jq .supervision
+//! ```
+//!
+//! Response fields:
+//! - `status`: "healthy", "degraded", or "unhealthy"
+//! - `consecutive_failures`: Number of failed health checks since last success
+//! - `enabled`: Whether supervision is active
+//!
+//! ### Health Status Interpretation
+//!
+//! **Healthy** (`consecutive_failures: 0`):
+//! - RaftActor responding to health checks within 25ms
+//! - Normal operation, no action required
+//!
+//! **Degraded** (`consecutive_failures: 1-2`):
+//! - RaftActor experiencing intermittent delays or timeouts
+//! - May indicate high load, slow disk I/O, or network issues
+//! - Monitor closely, review metrics for bottlenecks
+//!
+//! **Unhealthy** (`consecutive_failures: >= 3`):
+//! - RaftActor consistently unresponsive
+//! - Supervisor will attempt automatic restart
+//! - Review logs for crash/panic messages
+//! - Check disk space and storage health
+//!
+//! ## Restart Behavior
+//!
+//! ### Exponential Backoff
+//!
+//! Delays between restart attempts:
+//! - Restart 0: 1 second
+//! - Restart 1: 2 seconds
+//! - Restart 2: 4 seconds
+//! - Restart 3: 8 seconds
+//! - Restart 4+: 16 seconds (capped)
+//!
+//! ### Meltdown Detection
+//!
+//! Default configuration:
+//! - `max_restarts_per_window: 3` - Maximum 3 restarts
+//! - `restart_window_secs: 600` - Within 10-minute window
+//! - `actor_stability_duration_secs: 300` - 5 minutes uptime required
+//!
+//! When meltdown detected:
+//! - Supervisor stops restarting actor
+//! - Logs "meltdown detected" error message
+//! - Manual intervention required
+//!
+//! ## Troubleshooting Common Issues
+//!
+//! ### Issue: Repeated Rapid Restarts
+//!
+//! **Symptoms**: `consecutive_failures` incrementing quickly, frequent restart logs
+//!
+//! **Possible Causes**:
+//! 1. Storage corruption - Check with `validate_raft_storage()`
+//! 2. Resource exhaustion - Check disk space, memory, file descriptors
+//! 3. Configuration errors - Review Raft config (election timeout, etc.)
+//!
+//! **Actions**:
+//! ```bash
+//! # Check disk space
+//! df -h /path/to/data
+//!
+//! # Check open file descriptors
+//! lsof -p <pid> | wc -l
+//!
+//! # Review recent logs
+//! journalctl -u aspen -n 100 --no-pager | grep -E "(panic|ERROR|WARN)"
+//! ```
+//!
+//! ### Issue: Meltdown Detected
+//!
+//! **Symptoms**: Log message "exceeded max_restarts_per_window, entering meltdown"
+//!
+//! **Immediate Actions**:
+//! 1. Check storage integrity:
+//!    ```bash
+//!    # If using redb backend
+//!    ls -lh /path/to/data/*.redb
+//!    # Check for 0-byte files or permission issues
+//!    ```
+//!
+//! 2. Review crash logs:
+//!    ```bash
+//!    journalctl -u aspen -p err -n 50 --no-pager
+//!    ```
+//!
+//! 3. Attempt manual recovery:
+//!    - Stop node
+//!    - Restore from backup if storage corrupted
+//!    - Adjust configuration if config error identified
+//!    - Restart node
+//!
+//! ### Issue: Degraded Health Persists
+//!
+//! **Symptoms**: `status: "degraded"` for extended period (> 5 minutes)
+//!
+//! **Investigation**:
+//! 1. Check system resources:
+//!    ```bash
+//!    top -H -p <pid>  # CPU/memory per thread
+//!    iostat -x 1 10   # Disk I/O latency
+//!    ```
+//!
+//! 2. Review Raft metrics via `/metrics`:
+//!    - `last_log_index` - Should be incrementing
+//!    - `current_term` - Should be stable
+//!    - `last_applied` - Should track last_log_index
+//!
+//! 3. Check network connectivity:
+//!    ```bash
+//!    # Test peer connectivity
+//!    curl http://<peer>:8080/health
+//!    ```
+//!
+//! ## Configuration Tuning
+//!
+//! ### Aggressive Restart (Development/Testing)
+//!
+//! ```rust
+//! SupervisionConfig {
+//!     enable_auto_restart: true,
+//!     actor_stability_duration_secs: 30,     // 30 seconds
+//!     max_restarts_per_window: 10,          // Allow 10 restarts
+//!     restart_window_secs: 300,             // Within 5 minutes
+//!     restart_history_size: 50,
+//! }
+//! ```
+//!
+//! ### Conservative Restart (Production)
+//!
+//! ```rust
+//! SupervisionConfig {
+//!     enable_auto_restart: true,
+//!     actor_stability_duration_secs: 600,    // 10 minutes
+//!     max_restarts_per_window: 3,           // Only 3 restarts
+//!     restart_window_secs: 1800,            // Within 30 minutes
+//!     restart_history_size: 100,
+//! }
+//! ```
+//!
+//! ### Disable Auto-Restart (Manual Control)
+//!
+//! ```rust
+//! SupervisionConfig {
+//!     enable_auto_restart: false,
+//!     ..Default::default()
+//! }
+//! ```
+//!
+//! ## Manual Restart
+//!
+//! Trigger restart via SupervisorMessage:
+//! ```rust
+//! supervisor_ref.cast(SupervisorMessage::ManualRestart);
+//! ```
+//!
+//! Or via HTTP (if admin endpoint enabled):
+//! ```bash
+//! curl -X POST http://localhost:8080/admin/restart-actor
+//! ```
+//!
+//! ## Storage Validation
+//!
+//! Before each restart, supervisor validates redb storage:
+//! - Log monotonicity (no gaps/duplicates)
+//! - Snapshot metadata integrity
+//! - Vote state consistency
+//! - Committed index bounds
+//!
+//! Validation failure prevents restart to avoid corruption propagation.
+//! Check logs for specific validation error:
+//! ```bash
+//! journalctl -u aspen | grep "storage validation failed"
+//! ```
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
