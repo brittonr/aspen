@@ -19,6 +19,7 @@ use crate::raft::server::RaftRpcServer;
 use crate::raft::storage::{
     InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
 };
+use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervision::{HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage};
 use crate::raft::types::{AppTypeConfig, NodeId};
 use crate::raft::{RaftActorConfig, RaftActorMessage, StateMachineVariant};
@@ -329,6 +330,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
                 (raft, StateMachineVariant::InMemory(state_machine_store))
             }
+            #[allow(deprecated)]
             StorageBackend::Redb => {
                 info!("Using redb persistent storage backend");
 
@@ -365,6 +367,45 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .context("failed to initialize raft with redb storage")?;
 
                 (raft, StateMachineVariant::Redb(state_machine))
+            }
+            StorageBackend::Sqlite => {
+                info!("Using sqlite persistent storage backend");
+
+                // Determine paths for sqlite files
+                let data_dir = config.data_dir();
+                let log_path = config
+                    .sqlite_log_path
+                    .clone()
+                    .unwrap_or_else(|| data_dir.join("raft-log.db"));
+                let sm_path = config
+                    .sqlite_sm_path
+                    .clone()
+                    .unwrap_or_else(|| data_dir.join("state-machine.db"));
+
+                info!(
+                    log_path = %log_path.display(),
+                    sm_path = %sm_path.display(),
+                    "Initializing sqlite storage"
+                );
+
+                // For now, we're only migrating the state machine to SQLite
+                // The log store still uses redb (will be migrated later if needed)
+                let log_store =
+                    RedbLogStore::new(&log_path).context("failed to create redb log store")?;
+                let state_machine = SqliteStateMachine::new(&sm_path)
+                    .context("failed to create sqlite state machine")?;
+
+                let raft = openraft::Raft::new(
+                    config.node_id,
+                    validated_config,
+                    (*network_factory).clone(),
+                    log_store,
+                    state_machine.clone(),
+                )
+                .await
+                .context("failed to initialize raft with sqlite storage")?;
+
+                (raft, StateMachineVariant::Sqlite(state_machine))
             }
         }
     };
@@ -524,6 +565,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
             supervision_config: crate::raft::supervision::SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };

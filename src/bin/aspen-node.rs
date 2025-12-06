@@ -375,6 +375,8 @@ fn build_cluster_config(args: &Args) -> ClusterBootstrapConfig {
             .unwrap_or_default(),
         redb_log_path: args.redb_log_path.clone(),
         redb_sm_path: args.redb_sm_path.clone(),
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         host: args.host.clone().unwrap_or_else(|| "127.0.0.1".into()),
         ractor_port: args.port.unwrap_or(26000),
         cookie: args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into()),

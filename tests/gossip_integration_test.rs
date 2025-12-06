@@ -45,6 +45,8 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> ClusterBootstrapConf
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     }
@@ -311,6 +313,8 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
@@ -341,6 +345,8 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };

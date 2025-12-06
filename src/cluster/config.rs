@@ -43,6 +43,16 @@ pub struct ClusterBootstrapConfig {
     /// Defaults to "{data_dir}/state-machine.redb" if not specified.
     pub redb_sm_path: Option<PathBuf>,
 
+    /// Path for sqlite-backed Raft log database.
+    /// Only used when storage_backend = Sqlite.
+    /// Defaults to "{data_dir}/raft-log.db" if not specified.
+    pub sqlite_log_path: Option<PathBuf>,
+
+    /// Path for sqlite-backed state machine database.
+    /// Only used when storage_backend = Sqlite.
+    /// Defaults to "{data_dir}/state-machine.db" if not specified.
+    pub sqlite_sm_path: Option<PathBuf>,
+
     /// Hostname recorded in the NodeServer's identity (informational).
     #[serde(default = "default_host")]
     pub host: String,
@@ -228,6 +238,8 @@ impl ClusterBootstrapConfig {
                 .unwrap_or_else(StorageBackend::default),
             redb_log_path: parse_env("ASPEN_REDB_LOG_PATH"),
             redb_sm_path: parse_env("ASPEN_REDB_SM_PATH"),
+            sqlite_log_path: parse_env("ASPEN_SQLITE_LOG_PATH"),
+            sqlite_sm_path: parse_env("ASPEN_SQLITE_SM_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             ractor_port: parse_env("ASPEN_RACTOR_PORT").unwrap_or_else(default_ractor_port),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
@@ -573,6 +585,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
             supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
@@ -601,6 +615,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
         };
 
         assert!(config.validate().is_err());
@@ -624,6 +640,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
             supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
@@ -649,6 +667,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
             supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
@@ -679,6 +699,8 @@ mod tests {
             storage_backend: crate::raft::storage::StorageBackend::Redb,
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
             supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };

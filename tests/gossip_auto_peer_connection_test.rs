@@ -39,6 +39,8 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     }
@@ -208,6 +210,8 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
@@ -244,6 +248,8 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };

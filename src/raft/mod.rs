@@ -6,6 +6,7 @@ pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
 pub mod storage;
+pub mod storage_sqlite;
 pub mod storage_validation;
 pub mod supervision;
 pub mod types;
@@ -25,9 +26,10 @@ use crate::api::{
     WriteCommand, WriteRequest, WriteResult,
 };
 use crate::raft::storage::{RedbStateMachine, StateMachineStore};
+use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig};
 
-/// State machine variant that can hold either in-memory or redb-backed storage.
+/// State machine variant that can hold either in-memory, redb-backed, or sqlite-backed storage.
 ///
 /// This enum allows the RaftActor to read from the same state machine that
 /// receives writes through the Raft core, fixing the NotFound bug where reads
@@ -36,6 +38,7 @@ use crate::raft::types::{AppRequest, AppTypeConfig};
 pub enum StateMachineVariant {
     InMemory(Arc<StateMachineStore>),
     Redb(Arc<RedbStateMachine>),
+    Sqlite(Arc<SqliteStateMachine>),
 }
 
 impl StateMachineVariant {
@@ -44,6 +47,7 @@ impl StateMachineVariant {
         match self {
             Self::InMemory(sm) => sm.get(key).await,
             Self::Redb(sm) => sm.get(key).await.ok().flatten(),
+            Self::Sqlite(sm) => sm.get(key).await.ok().flatten(),
         }
     }
 }

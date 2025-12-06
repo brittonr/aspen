@@ -486,6 +486,7 @@ impl RaftSupervisor {
                 debug!(node_id = node_id, "skipping storage validation for in-memory backend");
                 Ok(())
             }
+            #[allow(deprecated)]
             StateMachineVariant::Redb(state_machine) => {
                 let storage_path = state_machine.path();
 
@@ -513,6 +514,35 @@ impl RaftSupervisor {
                             "storage validation failed"
                         );
                         Err(format!("storage validation failed: {}", err))
+                    }
+                }
+            }
+            StateMachineVariant::Sqlite(state_machine) => {
+                let storage_path = state_machine.path();
+
+                debug!(
+                    node_id = node_id,
+                    path = %storage_path.display(),
+                    "validating sqlite storage before restart"
+                );
+
+                match state_machine.validate(node_id) {
+                    Ok(report) => {
+                        info!(
+                            node_id = node_id,
+                            checks_passed = report.checks_passed,
+                            validation_duration_ms = report.validation_duration.as_millis(),
+                            "sqlite storage validation passed"
+                        );
+                        Ok(())
+                    }
+                    Err(err) => {
+                        error!(
+                            node_id = node_id,
+                            error = %err,
+                            "sqlite storage validation failed"
+                        );
+                        Err(format!("sqlite storage validation failed: {}", err))
                     }
                 }
             }

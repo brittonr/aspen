@@ -29,6 +29,8 @@ fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> ClusterBootst
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     }

@@ -70,6 +70,8 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             storage_backend: aspen::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
         };
@@ -143,6 +145,8 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             storage_backend: aspen::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
         };
@@ -225,6 +229,8 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
         redb_sm_path: None,
+        sqlite_log_path: None,
+        sqlite_sm_path: None,
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
