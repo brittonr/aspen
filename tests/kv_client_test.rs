@@ -36,11 +36,11 @@ async fn test_single_node_write_read() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
         redb_log_path: None,
         redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        sqlite_log_path: Some(temp_dir.path().join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir.path().join("state-machine.db")),
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
@@ -105,11 +105,11 @@ async fn test_two_node_replication() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
         redb_log_path: None,
         redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        sqlite_log_path: Some(temp_dir1.path().join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir1.path().join("state-machine.db")),
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
@@ -127,11 +127,11 @@ async fn test_two_node_replication() {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
         redb_log_path: None,
         redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        sqlite_log_path: Some(temp_dir2.path().join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir2.path().join("state-machine.db")),
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     };
@@ -147,8 +147,14 @@ async fn test_two_node_replication() {
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
-    handle1.network_factory.add_peer(config2.node_id, addr2).await;
-    handle2.network_factory.add_peer(config1.node_id, addr1).await;
+    handle1
+        .network_factory
+        .add_peer(config2.node_id, addr2)
+        .await;
+    handle2
+        .network_factory
+        .add_peer(config1.node_id, addr1)
+        .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
@@ -402,8 +408,14 @@ async fn test_add_learner_and_replicate() {
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
-    handle1.network_factory.add_peer(config2.node_id, addr2).await;
-    handle2.network_factory.add_peer(config1.node_id, addr1).await;
+    handle1
+        .network_factory
+        .add_peer(config2.node_id, addr2)
+        .await;
+    handle2
+        .network_factory
+        .add_peer(config1.node_id, addr1)
+        .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());

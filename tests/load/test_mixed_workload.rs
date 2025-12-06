@@ -67,8 +67,8 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
-        raft_mailbox_capacity: 1000,
+            supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -330,6 +330,128 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
 
     println!(
         "Mixed workload (100 ops): {:.2}% success, {:.2} ops/sec",
+        success_rate, throughput
+    );
+
+    // Note: Some failures are expected in mixed workload since reads may target
+    // keys that haven't been written yet (random access pattern)
+    assert!(
+        success_rate >= 85.0,
+        "success rate should be >= 85%, got {:.2}%",
+        success_rate
+    );
+
+    // Cleanup
+    handle.shutdown().await?;
+
+    Ok(())
+}
+
+/// SQLite variant: Mixed workload test using SQLite storage backend.
+#[tokio::test]
+async fn test_mixed_workload_100_ops_sqlite() -> anyhow::Result<()> {
+    const TOTAL_OPS: usize = 100;
+    const READ_PERCENTAGE: usize = 70;
+    const KEY_SPACE: u64 = 20;
+
+    // Single-node cluster for faster test
+    let temp_dir = tempfile::tempdir()?;
+
+    let config = ClusterBootstrapConfig {
+        node_id: 1,
+        control_backend: ControlBackend::RaftActor,
+        host: "127.0.0.1".to_string(),
+        http_addr: "127.0.0.1:48001".parse()?,
+        ractor_port: 0, // OS-assigned
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        cookie: "mixed-workload-small-sqlite".to_string(),
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
+        redb_log_path: None,
+        redb_sm_path: None,
+        sqlite_log_path: Some(temp_dir.path().join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir.path().join("state-machine.db")),
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
+    };
+
+    let handle = bootstrap_node(config).await?;
+
+    // Initialize single-node cluster
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster.init(init_req).await?;
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Pre-populate keys (90% of key space to ensure >= 85% success rate)
+    // With 90% initial coverage and random write distribution, final coverage
+    // approaches ~98%, giving expected success: 30 writes + ~69 reads = ~99%
+    let kv = KvClient::with_timeout(handle.raft_actor.clone(), 5000);
+    for i in 0..((KEY_SPACE * 9) / 10) {
+        let write_req = WriteRequest {
+            command: WriteCommand::Set {
+                key: format!("key-{}", i),
+                value: format!("initial-{}", i),
+            },
+        };
+        kv.write(write_req).await?;
+    }
+
+    // Generate operations
+    let mut rng = rand::thread_rng();
+    let mut operations = Vec::with_capacity(TOTAL_OPS);
+
+    for _ in 0..TOTAL_OPS {
+        let is_read = rng.gen_range(0..100) < READ_PERCENTAGE;
+        let key_id = rng.gen_range(0..KEY_SPACE);
+        operations.push((is_read, key_id));
+    }
+
+    // Execute workload
+    let start = Instant::now();
+    let mut successful = 0u64;
+    let mut failed = 0u64;
+
+    for (is_read, key_id) in operations {
+        let key = format!("key-{}", key_id);
+
+        let result = if is_read {
+            kv.read(ReadRequest { key }).await.map(|_| ())
+        } else {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key,
+                    value: "updated".to_string(),
+                },
+            })
+            .await
+            .map(|_| ())
+        };
+
+        if result.is_ok() {
+            successful += 1;
+        } else {
+            failed += 1;
+        }
+    }
+
+    let duration = start.elapsed();
+    let success_rate = (successful as f64 / (successful + failed) as f64) * 100.0;
+    let throughput = successful as f64 / duration.as_secs_f64();
+
+    println!(
+        "Mixed workload SQLite (100 ops): {:.2}% success, {:.2} ops/sec",
         success_rate, throughput
     );
 

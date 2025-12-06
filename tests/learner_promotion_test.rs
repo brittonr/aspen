@@ -8,8 +8,8 @@ use std::time::Duration;
 use aspen::api::{ClusterController, ClusterNode, InitRequest};
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 use aspen::raft::RaftControlClient;
+use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 
 /// Helper to create a test config with minimal required fields.
 fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> ClusterBootstrapConfig {
@@ -26,11 +26,11 @@ fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> ClusterBootst
         election_timeout_max_ms: 3000,
         iroh: IrohConfig::default(),
         peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
         redb_log_path: None,
         redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        sqlite_log_path: Some(temp_dir.join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir.join("state-machine.db")),
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
         raft_mailbox_capacity: 1000,
     }
@@ -59,7 +59,10 @@ async fn test_promote_learner_basic() {
     }
 
     // Exchange peer addresses between all nodes
-    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    let addrs: Vec<_> = handles
+        .iter()
+        .map(|h| h.iroh_manager.node_addr().clone())
+        .collect();
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
@@ -74,9 +77,21 @@ async fn test_promote_learner_basic() {
 
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(NODE_ID_BASE + 1, "127.0.0.1:20001", Some("127.0.0.1:20001".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 2, "127.0.0.1:20002", Some("127.0.0.1:20002".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 3, "127.0.0.1:20003", Some("127.0.0.1:20003".to_string())),
+            ClusterNode::new(
+                NODE_ID_BASE + 1,
+                "127.0.0.1:20001",
+                Some("127.0.0.1:20001".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 2,
+                "127.0.0.1:20002",
+                Some("127.0.0.1:20002".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 3,
+                "127.0.0.1:20003",
+                Some("127.0.0.1:20003".to_string()),
+            ),
         ],
     };
 
@@ -121,13 +136,23 @@ async fn test_promote_learner_basic() {
     // Exchange peer addresses with the learner
     let learner_addr = learner_handle.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 4, "127.0.0.1:20004", Some("127.0.0.1:20004".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 4,
+            "127.0.0.1:20004",
+            Some("127.0.0.1:20004".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -150,12 +175,31 @@ async fn test_promote_learner_basic() {
 
     let promotion_result = result.unwrap();
     assert_eq!(promotion_result.learner_id, NODE_ID_BASE + 4);
-    assert_eq!(promotion_result.previous_voters, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]);
-    assert_eq!(promotion_result.new_voters, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3, NODE_ID_BASE + 4]);
+    assert_eq!(
+        promotion_result.previous_voters,
+        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]
+    );
+    assert_eq!(
+        promotion_result.new_voters,
+        vec![
+            NODE_ID_BASE + 1,
+            NODE_ID_BASE + 2,
+            NODE_ID_BASE + 3,
+            NODE_ID_BASE + 4
+        ]
+    );
 
     // Verify cluster state
     let state = controller_1.current_state().await.unwrap();
-    assert_eq!(state.members, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3, NODE_ID_BASE + 4]);
+    assert_eq!(
+        state.members,
+        vec![
+            NODE_ID_BASE + 1,
+            NODE_ID_BASE + 2,
+            NODE_ID_BASE + 3,
+            NODE_ID_BASE + 4
+        ]
+    );
 
     // Cleanup
     for handle in handles {
@@ -187,7 +231,10 @@ async fn test_promote_learner_replace_voter() {
     }
 
     // Exchange peer addresses between all nodes
-    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    let addrs: Vec<_> = handles
+        .iter()
+        .map(|h| h.iroh_manager.node_addr().clone())
+        .collect();
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
@@ -202,9 +249,21 @@ async fn test_promote_learner_replace_voter() {
 
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(NODE_ID_BASE + 1, "127.0.0.1:21001", Some("127.0.0.1:21001".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 2, "127.0.0.1:21002", Some("127.0.0.1:21002".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 3, "127.0.0.1:21003", Some("127.0.0.1:21003".to_string())),
+            ClusterNode::new(
+                NODE_ID_BASE + 1,
+                "127.0.0.1:21001",
+                Some("127.0.0.1:21001".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 2,
+                "127.0.0.1:21002",
+                Some("127.0.0.1:21002".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 3,
+                "127.0.0.1:21003",
+                Some("127.0.0.1:21003".to_string()),
+            ),
         ],
     };
 
@@ -249,13 +308,23 @@ async fn test_promote_learner_replace_voter() {
     // Exchange peer addresses with the learner
     let learner_addr = learner_handle.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 4, "127.0.0.1:21004", Some("127.0.0.1:21004".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 4,
+            "127.0.0.1:21004",
+            Some("127.0.0.1:21004".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -278,12 +347,21 @@ async fn test_promote_learner_replace_voter() {
 
     let promotion_result = result.unwrap();
     assert_eq!(promotion_result.learner_id, NODE_ID_BASE + 4);
-    assert_eq!(promotion_result.previous_voters, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]);
-    assert_eq!(promotion_result.new_voters, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 4]);
+    assert_eq!(
+        promotion_result.previous_voters,
+        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]
+    );
+    assert_eq!(
+        promotion_result.new_voters,
+        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 4]
+    );
 
     // Verify cluster state
     let state = controller_1.current_state().await.unwrap();
-    assert_eq!(state.members, vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 4]);
+    assert_eq!(
+        state.members,
+        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 4]
+    );
 
     // Cleanup
     for handle in handles {
@@ -315,7 +393,10 @@ async fn test_membership_cooldown_enforced() {
     }
 
     // Exchange peer addresses between all nodes
-    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    let addrs: Vec<_> = handles
+        .iter()
+        .map(|h| h.iroh_manager.node_addr().clone())
+        .collect();
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
@@ -330,9 +411,21 @@ async fn test_membership_cooldown_enforced() {
 
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(NODE_ID_BASE + 1, "127.0.0.1:22001", Some("127.0.0.1:22001".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 2, "127.0.0.1:22002", Some("127.0.0.1:22002".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 3, "127.0.0.1:22003", Some("127.0.0.1:22003".to_string())),
+            ClusterNode::new(
+                NODE_ID_BASE + 1,
+                "127.0.0.1:22001",
+                Some("127.0.0.1:22001".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 2,
+                "127.0.0.1:22002",
+                Some("127.0.0.1:22002".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 3,
+                "127.0.0.1:22003",
+                Some("127.0.0.1:22003".to_string()),
+            ),
         ],
     };
 
@@ -377,13 +470,23 @@ async fn test_membership_cooldown_enforced() {
     // Exchange peer addresses with the learner
     let learner_addr = learner_handle.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 4, "127.0.0.1:22004", Some("127.0.0.1:22004".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 4,
+            "127.0.0.1:22004",
+            Some("127.0.0.1:22004".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -402,7 +505,11 @@ async fn test_membership_cooldown_enforced() {
     };
 
     let result = coordinator.promote_learner(promotion_request).await;
-    assert!(result.is_ok(), "First promotion should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "First promotion should succeed: {:?}",
+        result
+    );
 
     // Add node 3005 as learner
     let temp_dir_5 = tempfile::tempdir().unwrap();
@@ -412,16 +519,32 @@ async fn test_membership_cooldown_enforced() {
     // Exchange peer addresses with node 5
     let learner_addr_5 = learner_handle_5.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 5, learner_addr_5.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle_5.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle_5
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
     // Also connect node 3004 and node 3005 to each other
-    learner_handle_5.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
-    learner_handle.network_factory.add_peer(NODE_ID_BASE + 5, learner_addr_5.clone()).await;
+    learner_handle_5
+        .network_factory
+        .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+        .await;
+    learner_handle
+        .network_factory
+        .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+        .await;
 
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 5, "127.0.0.1:22005", Some("127.0.0.1:22005".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 5,
+            "127.0.0.1:22005",
+            Some("127.0.0.1:22005".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req_5).await.unwrap();
@@ -486,7 +609,10 @@ async fn test_force_bypasses_cooldown() {
     }
 
     // Exchange peer addresses between all nodes
-    let addrs: Vec<_> = handles.iter().map(|h| h.iroh_manager.node_addr().clone()).collect();
+    let addrs: Vec<_> = handles
+        .iter()
+        .map(|h| h.iroh_manager.node_addr().clone())
+        .collect();
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
@@ -501,9 +627,21 @@ async fn test_force_bypasses_cooldown() {
 
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(NODE_ID_BASE + 1, "127.0.0.1:23001", Some("127.0.0.1:23001".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 2, "127.0.0.1:23002", Some("127.0.0.1:23002".to_string())),
-            ClusterNode::new(NODE_ID_BASE + 3, "127.0.0.1:23003", Some("127.0.0.1:23003".to_string())),
+            ClusterNode::new(
+                NODE_ID_BASE + 1,
+                "127.0.0.1:23001",
+                Some("127.0.0.1:23001".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 2,
+                "127.0.0.1:23002",
+                Some("127.0.0.1:23002".to_string()),
+            ),
+            ClusterNode::new(
+                NODE_ID_BASE + 3,
+                "127.0.0.1:23003",
+                Some("127.0.0.1:23003".to_string()),
+            ),
         ],
     };
 
@@ -548,13 +686,23 @@ async fn test_force_bypasses_cooldown() {
     // Exchange peer addresses with the learner
     let learner_addr = learner_handle.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
 
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 4, "127.0.0.1:23004", Some("127.0.0.1:23004".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 4,
+            "127.0.0.1:23004",
+            Some("127.0.0.1:23004".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -573,7 +721,11 @@ async fn test_force_bypasses_cooldown() {
     };
 
     let result = coordinator.promote_learner(promotion_request).await;
-    assert!(result.is_ok(), "First promotion should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "First promotion should succeed: {:?}",
+        result
+    );
 
     // Add node 4005 as learner
     let temp_dir_5 = tempfile::tempdir().unwrap();
@@ -583,16 +735,32 @@ async fn test_force_bypasses_cooldown() {
     // Exchange peer addresses with node 5
     let learner_addr_5 = learner_handle_5.iroh_manager.node_addr().clone();
     for (i, handle) in handles.iter().enumerate() {
-        handle.network_factory.add_peer(NODE_ID_BASE + 5, learner_addr_5.clone()).await;
+        handle
+            .network_factory
+            .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+            .await;
         let peer_id = NODE_ID_BASE + (i as u64) + 1;
-        learner_handle_5.network_factory.add_peer(peer_id, addrs[i].clone()).await;
+        learner_handle_5
+            .network_factory
+            .add_peer(peer_id, addrs[i].clone())
+            .await;
     }
     // Also connect node 4004 and node 4005 to each other
-    learner_handle_5.network_factory.add_peer(NODE_ID_BASE + 4, learner_addr.clone()).await;
-    learner_handle.network_factory.add_peer(NODE_ID_BASE + 5, learner_addr_5.clone()).await;
+    learner_handle_5
+        .network_factory
+        .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+        .await;
+    learner_handle
+        .network_factory
+        .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+        .await;
 
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(NODE_ID_BASE + 5, "127.0.0.1:23005", Some("127.0.0.1:23005".to_string())),
+        learner: ClusterNode::new(
+            NODE_ID_BASE + 5,
+            "127.0.0.1:23005",
+            Some("127.0.0.1:23005".to_string()),
+        ),
     };
 
     controller_1.add_learner(add_learner_req_5).await.unwrap();

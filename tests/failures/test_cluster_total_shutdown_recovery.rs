@@ -72,8 +72,8 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
-        raft_mailbox_capacity: 1000,
+            supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -147,8 +147,8 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
-        raft_mailbox_capacity: 1000,
+            supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -269,6 +269,102 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
     let new_handle = bootstrap_node(config).await?;
 
     // Re-initialize (in-memory storage lost state)
+    let cluster_new = RaftControlClient::new(new_handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster_new.init(init_req).await?;
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Verify node is operational
+    let kv_new = KvClient::new(new_handle.raft_actor.clone());
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "new-test".to_string(),
+            value: "new-value".to_string(),
+        },
+    };
+    kv_new.write(write_req).await?;
+
+    let read_req = ReadRequest {
+        key: "new-test".to_string(),
+    };
+    let result = kv_new.read(read_req).await?;
+    assert_eq!(result.value, "new-value".to_string());
+
+    // Cleanup
+    new_handle.shutdown().await?;
+
+    Ok(())
+}
+
+/// SQLite variant: Test that a single node can shutdown and restart with SQLite backend.
+#[tokio::test]
+async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+
+    // Start node
+    let config = ClusterBootstrapConfig {
+        node_id: 1,
+        control_backend: ControlBackend::RaftActor,
+        host: "127.0.0.1".to_string(),
+        http_addr: "127.0.0.1:0".parse()?,
+        ractor_port: 0,
+        data_dir: Some(temp_dir.path().to_path_buf()),
+        cookie: "single-node-restart-sqlite".to_string(),
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
+        iroh: IrohConfig::default(),
+        peers: vec![],
+        storage_backend: aspen::raft::storage::StorageBackend::Sqlite,
+        redb_log_path: None,
+        redb_sm_path: None,
+        sqlite_log_path: Some(temp_dir.path().join("raft-log.db")),
+        sqlite_sm_path: Some(temp_dir.path().join("state-machine.db")),
+        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        raft_mailbox_capacity: 1000,
+    };
+
+    let handle = bootstrap_node(config.clone()).await?;
+
+    // Initialize single-node cluster
+    let cluster = RaftControlClient::new(handle.raft_actor.clone());
+    let init_req = InitRequest {
+        initial_members: vec![ClusterNode::new(
+            1,
+            "127.0.0.1:26000",
+            Some("iroh://placeholder".into()),
+        )],
+    };
+    cluster.init(init_req).await?;
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Write data
+    let kv = KvClient::new(handle.raft_actor.clone());
+    let write_req = WriteRequest {
+        command: WriteCommand::Set {
+            key: "test".to_string(),
+            value: "value".to_string(),
+        },
+    };
+    kv.write(write_req).await?;
+
+    // Shutdown
+    handle.shutdown().await?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Restart
+    let new_handle = bootstrap_node(config).await?;
+
+    // Re-initialize (SQLite storage persists state)
     let cluster_new = RaftControlClient::new(new_handle.raft_actor.clone());
     let init_req = InitRequest {
         initial_members: vec![ClusterNode::new(
