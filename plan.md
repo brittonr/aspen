@@ -11,10 +11,14 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Next action: plug the upcoming Raft actor + storage bindings into `NodeServerHandle` so deterministic sims can drive message flow.
 
 ## Phase 2: Raft Integration
-1. **Storage backend** (in progress)
+1. **Storage backend** ✅
    - Created `storage::log` + `storage::state_machine` modules with deterministic in-memory backends and proptest seams so we can validate ordering/snapshot invariants.
    - Added `redb`-backed implementations plus `StoragePlan` wiring so nodes can flip between deterministic and persistent surfaces.
-   - Next action: **defer** running the OpenRaft storage suite until the external Raft/DB plan solidifies. Aspen will keep using the in-memory handles via the HTTP façade while the real log/state machine live in a sibling service.
+   - **Hybrid storage complete**: Added SQLite-backed state machine (`SqliteStateMachine`) alongside redb log storage, enabling hybrid architecture (redb for Raft log, SQLite for state machine).
+   - Fixed metadata persistence serialization bug (`applied_state()` now correctly deserializes `Option<LogId>` as `Option<Option<LogId>>` and flattens).
+   - Fixed snapshot building deadlock (refactored `build_snapshot()` to avoid nested mutex acquisition when reading metadata).
+   - **OpenRaft storage suite validated**: All 50+ tests passing (comprehensive validation of log storage, state machine, and snapshot building).
+   - All 238 tests passing including full hybrid storage integration.
 2. **Raft actor** (in progress)
    - Added a placeholder Raft actor/factory that already wires into the NodeServer handle + `StorageSurface`, keeping the transport seams deterministic for `madsim`.
    - Added the `aspen-node` bootstrap binary plus HTTP endpoints (`/health`, `/metrics`, `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`) so we can drive multi-node scripts similar to the OpenRaft example.
