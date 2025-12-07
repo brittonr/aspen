@@ -97,8 +97,3 @@ path = "tests/load/test_mixed_workload.rs"
 name = "storage_read_concurrency"
 path = "benches/storage_read_concurrency.rs"
 harness = false
-
-[[bench]]
-name = "storage_comparison"
-path = "benches/storage_comparison.rs"
-harness = false

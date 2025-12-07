@@ -3070,3 +3070,16 @@ All property test issues resolved:
 - **Commit**: 20e42ff
 
 **Final Test Status**: 328/328 tests passing (100% pass rate achieved)
+
+### 11.6 KvServiceBuilder Integration Tests ✅
+
+**Production API Test Suite**:
+
+- ✅ Created comprehensive integration tests: `tests/kv_service_builder_integration.rs`
+- ✅ 13 tests validating lifecycle, configuration, and multi-node scenarios
+- **Coverage**:
+  - Lifecycle: start/shutdown, restart, rapid cycles
+  - Configuration: storage backends, gossip/mDNS, custom timeouts, peers
+  - Access: client(), raft_core(), handle()
+  - Multi-node: concurrent services, unique endpoints
+- **Commit**: 2ca4a59

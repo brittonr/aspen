@@ -11,7 +11,8 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 ## Core Technologies
 
 - **openraft**: Raft consensus algorithm for cluster-wide linearizability and fault-tolerant replication
-- **redb**: Embedded ACID storage engine powering each node's Raft state machine
+- **redb**: Embedded ACID storage engine for Raft log storage (append-only, fast sequential writes)
+- **rusqlite**: SQLite-based state machine storage (ACID transactions, queryable)
 - **iroh**: Peer-to-peer networking and content-addressed communication
 - **ractor/ractor_cluster**: Actor-based concurrency and distributed computing primitives
 - **hiqlite**: SQLite-based distributed database with cache and distributed lock features
@@ -30,7 +31,8 @@ The project is structured into focused modules with narrow APIs:
 - **src/raft/**: Raft-based consensus implementation
   - `RaftActor`: Actor that drives the Raft state machine using ractor
   - `RaftControlClient`: Controller that proxies operations through the Raft actor
-  - `storage.rs`: State machine store backed by redb
+  - `storage.rs`: Log storage backed by redb, state machine storage backed by SQLite
+  - `storage_sqlite.rs`: SQLite state machine implementation (default, production-ready)
   - `network.rs`: Network layer for Raft RPC
   - `types.rs`: Type configurations for openraft
 - **src/kv/**: Key-value service builder and node management
@@ -38,8 +40,9 @@ The project is structured into focused modules with narrow APIs:
   - Generates Iroh endpoint IDs from node IDs for testing
 - **src/cluster/**: Cluster coordination and transport
   - `NodeServerHandle`: Manages ractor_cluster node server lifecycle
-  - `IrohClusterTransport`: Simulated Iroh-backed transport for testing
-  - `DeterministicClusterConfig`: Configuration for deterministic simulations
+  - `IrohEndpointManager`: Manages Iroh P2P endpoint and discovery services
+  - `bootstrap.rs`: Node bootstrap orchestration
+  - `config.rs`: Cluster configuration types
 - **src/bin/aspen-node.rs**: Node binary for cluster deployments
 
 ## Development Commands
