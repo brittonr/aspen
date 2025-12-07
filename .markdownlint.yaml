@@ -12,3 +12,15 @@ MD012: false
 
 # Allow bare URLs (common in technical documentation)
 MD034: false
+
+# Allow duplicate headings (common in large planning documents with sections)
+MD024: false
+
+# Allow fenced code blocks without language (mixed code types in docs)
+MD040: false
+
+# Allow inconsistent ordered list numbering (intentional section numbering)
+MD029: false
+
+# Allow emphasis as heading (useful for sub-subsections)
+MD036: false
