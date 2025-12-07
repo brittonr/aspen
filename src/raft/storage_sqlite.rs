@@ -119,10 +119,8 @@ impl<'a> TransactionGuard<'a> {
     /// Consumes the guard to prevent further use.
     /// If commit fails, the guard is dropped and transaction rolls back.
     fn commit(mut self) -> Result<(), SqliteStorageError> {
-        eprintln!("[DEBUG COMMIT] About to commit transaction");
         self.conn.execute("COMMIT", []).context(ExecuteSnafu)?;
         self.committed = true;
-        eprintln!("[DEBUG COMMIT] Transaction committed successfully");
         Ok(())
     }
 }
@@ -436,7 +434,6 @@ impl SqliteStateMachine {
             .optional()
             .context(QuerySnafu)?;
 
-        eprintln!("[DEBUG GET] key='{}', result={:?}", key, result);
         Ok(result)
     }
 
@@ -737,13 +734,11 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                 EntryPayload::Blank => AppResponse { value: None },
                 EntryPayload::Normal(ref req) => match req {
                     AppRequest::Set { key, value } => {
-                        eprintln!("[DEBUG APPLY] key='{}', value='{}'", key, value);
                         conn.execute(
                             "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
                             params![key, value],
                         )
                         .context(ExecuteSnafu)?;
-                        eprintln!("[DEBUG APPLY] Executed INSERT OR REPLACE for key='{}'", key);
                         AppResponse {
                             value: Some(value.clone()),
                         }
