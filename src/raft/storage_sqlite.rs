@@ -414,16 +414,15 @@ impl SqliteStateMachine {
     }
 
     /// Get a key-value pair from the state machine.
-    /// Uses write connection to ensure we see latest committed data.
+    /// Uses read pool for concurrent access. Calls `reset_read_connection` to ensure
+    /// we see the latest committed data.
     ///
-    /// Note: In WAL mode, read pooled connections can see stale snapshots even after
-    /// writes commit. To guarantee consistency, we use the write connection for reads
-    /// which always sees its own writes and the latest committed state.
+    /// Note: In WAL mode, pooled connections can hold onto stale snapshots.
+    /// We reset the connection before each read to force SQLite to update to the
+    /// latest WAL snapshot.
     pub async fn get(&self, key: &str) -> Result<Option<String>, SqliteStorageError> {
-        let conn = self
-            .write_conn
-            .lock()
-            .map_err(|_| SqliteStorageError::MutexPoisoned { operation: "get" })?;
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
 
         let result = conn
             .query_row(
