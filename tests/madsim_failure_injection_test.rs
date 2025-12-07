@@ -81,8 +81,17 @@ async fn test_leader_crash_and_reelection_seed_42() {
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
 
     artifact = artifact.add_event("metrics: identify initial leader");
-    let metrics1 = raft1.metrics().borrow().clone();
-    let initial_leader = metrics1.current_leader.expect("no initial leader");
+    // Check all nodes to find the initial leader (not just node 1)
+    let all_nodes = [(1, &raft1), (2, &raft2), (3, &raft3)];
+    let mut initial_leader = None;
+    for (_id, raft) in all_nodes.iter() {
+        let metrics = raft.metrics().borrow().clone();
+        if let Some(leader) = metrics.current_leader {
+            initial_leader = Some(leader);
+            break;
+        }
+    }
+    let initial_leader = initial_leader.expect("no initial leader elected after 5s");
     artifact = artifact.add_event(format!(
         "validation: initial leader is node {}",
         initial_leader

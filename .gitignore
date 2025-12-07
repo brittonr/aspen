@@ -195,6 +195,7 @@ flake.lock
 .envrc
 .direnv/
 docs/simulations/*.json
+result*
 
 # Vendored/nested git repositories
 kameo/
