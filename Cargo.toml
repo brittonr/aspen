@@ -63,6 +63,7 @@ cargo-nextest = "0.9.60"
 tempfile = "3.10"
 rand09 = { package = "rand", version = "0.9" }
 anyerror = { version = "0.1", features = ["anyhow"] }
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
@@ -97,4 +98,9 @@ path = "tests/load/test_mixed_workload.rs"
 [[bench]]
 name = "storage_read_concurrency"
 path = "benches/storage_read_concurrency.rs"
+harness = false
+
+[[bench]]
+name = "storage_comparison"
+path = "benches/storage_comparison.rs"
 harness = false
