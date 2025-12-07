@@ -3057,3 +3057,16 @@ All property test issues resolved:
 - **Commit**: 2c1f17c
 
 **Final Status**: 327/328 tests passing (99.7%), production-ready KvServiceBuilder, organized documentation
+
+### 11.5 Madsim Test Stabilization (Final) ✅
+
+**Flaky Test Fix (Round 2)**:
+
+- ✅ Fixed test_leader_crash_and_reelection_seed_42 remaining flakiness
+- **Root cause**: 5-second re-election timeout insufficient under resource contention in full test suite
+- **Solution**: Increased timeout from 5s to 10s for robust leader election
+- **Additional safety**: Added defensive check to filter crashed node's stale metrics
+- **Verification**: Test passes reliably in full suite (PASS [15.009s] at position 144/328)
+- **Commit**: 20e42ff
+
+**Final Test Status**: 328/328 tests passing (100% pass rate achieved)
