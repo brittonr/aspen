@@ -2994,12 +2994,14 @@ All property test issues resolved:
 **Decision**: Remove experimental kameo actor framework from project
 
 **Rationale**:
+
 - Ractor has proven production-ready through 9 phases
 - Dual actor framework created confusion and maintenance burden
 - Kameo was never integrated with core Raft/cluster infrastructure
 - Project now standardized on ractor/ractor_cluster
 
 **Changes**:
+
 - ✅ Removed `kameo` dependency from Cargo.toml
 - ✅ Removed `libp2p` dependency (only used by kameo)
 - ✅ Deleted `kameo/` vendored directory (3.3M)
@@ -3009,3 +3011,49 @@ All property test issues resolved:
 - ✅ Verified compilation: `cargo check` passes in 15.68s
 
 **Impact**: Clean architecture with single actor framework (ractor), reduced dependency count, simplified codebase
+
+## Phase 11: Code Quality and Documentation (2025-12-07) ✅ COMPLETE
+
+### 11.1 Test Suite Stabilization ✅
+
+**Madsim Test Fix**:
+
+- ✅ Fixed flaky test_leader_crash_and_reelection_seed_42
+- **Root cause**: Only checked raft1's metrics instead of all nodes
+- **Solution**: Iterate all nodes to find initial leader (consistent with new leader check)
+- **Verification**: 5/5 consecutive runs passing
+- **Commit**: 09bf13b
+
+### 11.2 Test Cleanup ✅
+
+**Disabled Tests Removal**:
+
+- ✅ Deleted tests/failures.disabled/ directory (610 lines, 3 files)
+- Working versions already exist in tests/failures/
+- **Commit**: fa57163
+
+### 11.3 KvServiceBuilder Production Implementation ✅
+
+**Real Bootstrap Integration**:
+
+- ✅ Replaced deterministic test builder with production KvServiceBuilder
+- ✅ Wired to bootstrap_node() infrastructure
+- ✅ ClusterBootstrapConfig with sensible defaults
+- ✅ Builder methods: storage, peers, gossip, mDNS, timeouts
+- ✅ KvService wrapper exposing: node_id(), data_dir(), endpoint_addr(), raft_core(), client(), shutdown()
+- ✅ Updated kv_service example to new API
+- **Commit**: ffae640
+
+### 11.4 Architecture Documentation ✅
+
+**ADR Organization**:
+
+- ✅ Consolidated all ADRs into docs/adr/ directory
+- ✅ Consistent numbering (001-009, 011)
+- ✅ Created comprehensive docs/adr/README.md:
+  - 10 ADRs grouped by category (Infrastructure, Storage, Discovery, Testing, Operations)
+  - ADR format guidelines and status definitions
+  - Links to related documentation
+- **Commit**: 2c1f17c
+
+**Final Status**: 327/328 tests passing (99.7%), production-ready KvServiceBuilder, organized documentation
