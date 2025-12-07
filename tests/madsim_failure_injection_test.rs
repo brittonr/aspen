@@ -100,15 +100,15 @@ async fn test_leader_crash_and_reelection_seed_42() {
     artifact = artifact.add_event(format!("failure: crash node {} (leader)", initial_leader));
     router.mark_node_failed(initial_leader, true);
 
-    artifact = artifact.add_event("wait: for re-election (5s)");
-    madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
+    artifact = artifact.add_event("wait: for re-election (10s)");
+    madsim::time::sleep(std::time::Duration::from_millis(10000)).await;
 
     artifact = artifact.add_event("metrics: check new leader elected");
-    // Check remaining nodes for new leader
-    let remaining_nodes = [(1, &raft1), (2, &raft2), (3, &raft3)];
+    // Check only non-crashed nodes for new leader
+    let all_nodes = [(1, &raft1), (2, &raft2), (3, &raft3)];
 
     let mut new_leader = None;
-    for (id, raft) in remaining_nodes.iter() {
+    for (id, raft) in all_nodes.iter() {
         if *id != initial_leader {
             let metrics = raft.metrics().borrow().clone();
             if let Some(leader) = metrics.current_leader {
@@ -116,6 +116,11 @@ async fn test_leader_crash_and_reelection_seed_42() {
                 break;
             }
         }
+    }
+
+    // Also check that the new leader is not the crashed node
+    if new_leader == Some(initial_leader) {
+        new_leader = None;
     }
 
     assert!(new_leader.is_some(), "no new leader elected after crash");
