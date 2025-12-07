@@ -14,7 +14,6 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 - **redb**: Embedded ACID storage engine powering each node's Raft state machine
 - **iroh**: Peer-to-peer networking and content-addressed communication
 - **ractor/ractor_cluster**: Actor-based concurrency and distributed computing primitives
-- **kameo**: Alternative actor framework with remote capabilities (experimental)
 - **hiqlite**: SQLite-based distributed database with cache and distributed lock features
 - **madsim**: Deterministic simulator for distributed systems testing
 - **snafu/anyhow**: Error handling (snafu for library errors, anyhow for application errors)
@@ -41,7 +40,6 @@ The project is structured into focused modules with narrow APIs:
   - `NodeServerHandle`: Manages ractor_cluster node server lifecycle
   - `IrohClusterTransport`: Simulated Iroh-backed transport for testing
   - `DeterministicClusterConfig`: Configuration for deterministic simulations
-- **src/main.rs**: Basic Kameo-based remote actor example (experimental)
 - **src/bin/aspen-node.rs**: Node binary for cluster deployments
 
 ## Development Commands
@@ -99,6 +97,7 @@ nix build .#<output>
 Aspen follows "Tiger Style" principles (see tigerstyle.md):
 
 ### Safety Principles
+
 - Use explicitly sized types (`u32`, `i64`) instead of `usize` for portability
 - Set fixed limits on loops, queues, and data structures to prevent unbounded resource use
 - Static memory allocation preferred; avoid dynamic allocation after initialization
@@ -109,12 +108,14 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 - Keep functions under 70 lines
 
 ### Performance Principles
+
 - Design for performance early; use "napkin math" for quick estimates
 - Optimize resources in order: network → disk → memory → CPU
 - Batch operations to amortize expensive operations
 - Write predictable code paths to optimize CPU cache and branch prediction
 
 ### Developer Experience Principles
+
 - Clear and consistent naming: use `snake_case`, avoid abbreviations
 - Include units or qualifiers in variable names in descending order (`latency_ms_max`)
 - Document the "why" with comments, not just the "what"
@@ -124,6 +125,7 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 - Pass large objects (>16 bytes) by reference
 
 ### Zero Technical Debt
+
 - Do it right the first time; avoid rushing features that create debt
 - Be proactive in problem-solving; anticipate and fix issues early
 
@@ -144,5 +146,4 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 - Keep Iroh P2P and Hiqlite database coupling as-is; these are core infrastructure services
 - Backwards compatibility is not a concern; prioritize clean, modern solutions
 - The project contains a vendored/embedded `openraft` directory with local modifications
-- A separate `kameo` directory exists for actor framework experiments
 - Edition is set to `2024` in Cargo.toml (Rust 2024 edition)

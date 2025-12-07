@@ -2986,3 +2986,26 @@ All property test issues resolved:
 - ✅ Storage backend: test_single_node_restart now uses correct InMemory backend
 - ✅ Code quality: 30 compilation errors fixed, pre-commit hooks installed
 - **Result**: 321/321 tests passing (100% pass rate achieved)
+
+## Phase 10: Dependency Cleanup ✅ COMPLETE
+
+### 10.1 Kameo Removal (2025-12-07) ✅
+
+**Decision**: Remove experimental kameo actor framework from project
+
+**Rationale**:
+- Ractor has proven production-ready through 9 phases
+- Dual actor framework created confusion and maintenance burden
+- Kameo was never integrated with core Raft/cluster infrastructure
+- Project now standardized on ractor/ractor_cluster
+
+**Changes**:
+- ✅ Removed `kameo` dependency from Cargo.toml
+- ✅ Removed `libp2p` dependency (only used by kameo)
+- ✅ Deleted `kameo/` vendored directory (3.3M)
+- ✅ Deleted `src/main.rs` (kameo remote actor example)
+- ✅ Updated `.claude/CLAUDE.md` - removed 3 kameo references
+- ✅ Updated `docs/adr-003-ractor-actor-framework.md` - added removal notice
+- ✅ Verified compilation: `cargo check` passes in 15.68s
+
+**Impact**: Clean architecture with single actor framework (ractor), reduced dependency count, simplified codebase

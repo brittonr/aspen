@@ -49,9 +49,7 @@ mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", branch = 
 ractor = { version = "0.15.9", features = ["cluster", "async-trait"] }
 ractor_cluster = { version = "0.15.9", features = ["async-trait"] }
 ractor_actors = { git = "https://github.com/slawlor/ractor_actors", branch = "main", default-features = false, features = ["async-trait"] }
-kameo = { version = "0.19.2", features = ["remote"] }
 futures = "0.3.31"
-libp2p = { version = "0.56.0", features = ["serde"] }
 toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"

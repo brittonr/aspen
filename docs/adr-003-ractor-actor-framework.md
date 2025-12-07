@@ -4,9 +4,12 @@
 **Date:** 2025-12-03
 **Authors:** Aspen Team
 
+**Update (2025-12-07):** Kameo has been removed from the project. The experimental kameo directory, src/main.rs example, and kameo dependency have been deleted. Ractor remains the sole actor framework in use. This ADR is retained for historical context about the evaluation process.
+
 ## Context
 
 Aspen is architected around distributed actor-based concurrency, drawing inspiration from Erlang/BEAM's process isolation and message-passing model. The system requires:
+
 - **Isolated Actors**: Independent units of computation with private state
 - **Message Passing**: Type-safe asynchronous communication between actors
 - **Distributed Computing**: Actors spanning multiple physical nodes in a cluster
@@ -14,6 +17,7 @@ Aspen is architected around distributed actor-based concurrency, drawing inspira
 - **Custom Transport**: BYO (Bring Your Own) networking layer for actor-to-actor communication
 
 The actor framework must integrate cleanly with:
+
 - OpenRaft consensus (wrapping Raft instances as actors)
 - Iroh P2P networking (custom transport for inter-node actor messages)
 - Tokio async runtime (all I/O operations)
@@ -26,12 +30,14 @@ Traditional approaches (raw tokio tasks, channels) lack the abstraction level ne
 We chose **ractor 0.15.9** with **ractor_cluster** for distributed actor capabilities as the primary actor framework for Aspen.
 
 Integration:
+
 ```rust
 ractor = { version = "0.15.9", features = ["cluster", "async-trait"] }
 ractor_cluster = { version = "0.15.9", features = ["async-trait"] }
 ```
 
 Core usage:
+
 - `RaftActor`: Wraps OpenRaft instance for message-based control (`src/raft/mod.rs:33-183`)
 - `NodeServer`: Manages cluster-wide actor communication (`src/cluster/mod.rs:156-367`)
 - `IrohClusterTransport`: Custom transport adapter (planned, not yet fully implemented)
@@ -81,24 +87,28 @@ Core usage:
 ### Ractor vs. Kameo Trade-offs
 
 **Ractor Strengths**:
+
 - **Mature distributed features**: `ractor_cluster` is battle-tested
 - **Custom transport support**: `ClusterBidiStream` trait enables Iroh integration
 - **Explicit lifecycle**: Clear pre_start/post_stop hooks
 - **Type-safe RPC**: `call_t!` macro with timeout enforcement
 
 **Ractor Weaknesses**:
+
 - **Higher boilerplate**: More ceremony for simple actors
 - **Less ergonomic**: No derive macros for actors (manual trait implementation)
 - **Performance overhead**: Additional abstraction layers vs. raw tokio tasks
 - **Documentation gaps**: Some advanced features lack comprehensive guides
 
 **Kameo Strengths** (experimental evaluation):
+
 - **Better ergonomics**: `#[derive(Actor)]` reduces boilerplate
 - **Lower latency**: Benchmarks show ~2x faster message passing
 - **Modern API design**: More intuitive for Rust developers
 - **Remote capabilities**: `kameo::remote` with libp2p integration (`src/main.rs:1-50`)
 
 **Kameo Weaknesses**:
+
 - **Less mature**: Newer project (v0.19) with faster-moving API
 - **Distributed features**: Remote actors still experimental
 - **Transport flexibility**: Less clear path for Iroh integration
@@ -115,7 +125,9 @@ Core usage:
 ## Alternatives Considered
 
 ### Alternative 1: Kameo (Primary Alternative)
+
 **Why deferred (not fully rejected):**
+
 - **Pros**: Better ergonomics, faster message passing, modern API design
 - **Cons**: Less mature distributed features, unclear Iroh transport integration path
 - **Current status**: Experimental in `kameo/` directory with remote actor example (`src/main.rs`)
@@ -124,14 +136,18 @@ Core usage:
 **Trade-off**: Performance/ergonomics vs. production stability/distributed maturity
 
 ### Alternative 2: actix (actix-ractor is archived)
+
 **Why rejected:**
+
 - Actix project moved to maintenance mode (no active development)
 - No built-in distributed actor support (would need custom protocol)
 - Tight coupling to actix-web ecosystem (not needed for Aspen)
 - Ractor was specifically created to address actix limitations
 
 ### Alternative 3: Raw Tokio Tasks + Channels
+
 **Why rejected:**
+
 - No supervision trees or lifecycle management
 - Manual actor pattern implementation (boilerplate)
 - Distributed communication requires custom protocol
@@ -141,7 +157,9 @@ Core usage:
 **Trade-off**: Maximum control vs. significant development effort
 
 ### Alternative 4: Erlang-style Elixir Interop (via NIFs)
+
 **Why rejected:**
+
 - FFI boundary overhead for message passing
 - Loss of Rust type safety guarantees
 - Deployment complexity (two runtimes)
@@ -151,6 +169,7 @@ Core usage:
 ## Consequences
 
 ### Positive
+
 - **Distributed-First**: `NodeServer` provides cluster coordination without custom protocol
 - **Clean Integration**: `RaftActor` wraps OpenRaft cleanly with message-based API
 - **Type Safety**: Compile-time guarantees on message types and handlers
@@ -159,6 +178,7 @@ Core usage:
 - **Custom Transport**: `ClusterBidiStream` abstraction enables Iroh QUIC integration
 
 ### Negative
+
 - **Boilerplate**: More code than raw tokio tasks for simple actors
 - **Performance Overhead**: Message passing adds latency vs. direct function calls (~200ns per message)
 - **Learning Curve**: Team must understand actor model concepts (supervision, lifecycle, RPC)
@@ -166,6 +186,7 @@ Core usage:
 - **Kameo FOMO**: Missing out on newer framework's ergonomics and performance
 
 ### Neutral
+
 - **Actor Granularity**: Must decide what deserves to be an actor vs. plain struct
 - **Message Design**: Requires careful enum design for actor messages (see `RaftActorMessage`)
 - **Timeout Configuration**: Need to choose appropriate timeouts for each RPC type
@@ -176,6 +197,7 @@ Core usage:
 ### Core Components
 
 **RaftActor** (`src/raft/mod.rs:33-183`):
+
 ```rust
 pub struct RaftActor;
 
@@ -197,12 +219,14 @@ impl Actor for RaftActor {
 ```
 
 **NodeServerHandle** (`src/cluster/mod.rs:223-367`):
+
 - Manages `ractor_cluster::NodeServer` lifecycle
 - Configures cluster connection mode (Transitive, Direct)
 - Supports event subscriptions for node join/leave events
 - Integrates with `IrohEndpointManager` for custom transport
 
 **Message-Based RPC** (`src/raft/mod.rs:359-433`):
+
 ```rust
 impl ClusterController for RaftControlClient {
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
@@ -212,6 +236,7 @@ impl ClusterController for RaftControlClient {
 ```
 
 Tiger Style principles applied:
+
 - **Explicit timeouts**: `call_t!` macro enforces bounded wait times (500ms standard, 5s snapshots)
 - **Fixed message size**: RPC messages bounded by serialization format
 - **Clean shutdown**: `shutdown()` method stops actors gracefully with `actor.stop()`
@@ -219,26 +244,31 @@ Tiger Style principles applied:
 ### NodeServer Configuration
 
 **Connection Modes**:
+
 - `Transitive`: Nodes gossip peer info, automatic mesh formation
 - `Direct`: Explicit peer connections only
 
 **Encryption**:
+
 - Optional `IncomingEncryptionMode` for TLS over TCP transport
 - Not needed when using Iroh (QUIC has built-in encryption)
 
 **Deterministic Testing**:
+
 - `DeterministicClusterConfig` supports madsim-based simulation
 - Fixed seed for reproducible distributed tests
 
 ### Integration with Iroh Transport
 
 **Planned Architecture** (partially implemented):
+
 1. Iroh QUIC connection provides bidirectional stream
 2. Wrap stream in `ClusterBidiStream` trait implementation
 3. Pass to `NodeServer` via `attach_external_stream()`
 4. NodeServer routes messages over Iroh instead of TCP
 
 **Current Status**:
+
 - IRPC layer implemented for Raft RPC (`src/raft/network.rs`)
 - NodeServer still uses default TCP transport
 - Iroh integration planned but not critical path (Raft RPC works independently)
@@ -248,6 +278,7 @@ Tiger Style principles applied:
 **Location**: `kameo/` directory + `src/main.rs`
 
 **Example** (`src/main.rs:1-50`):
+
 ```rust
 #[derive(Actor, RemoteActor)]
 pub struct MyActor { count: i64 }
@@ -263,12 +294,14 @@ impl Message<Inc> for MyActor {
 ```
 
 **Key Differences**:
+
 - Derive macros reduce boilerplate
 - `#[remote_message]` for distributed message handling
 - Uses libp2p for remote transport (not Iroh)
 - Simpler API but less control over lifecycle
 
 **Evaluation Criteria**:
+
 - Performance benchmarks (message throughput)
 - Distributed actor stability (multi-node testing)
 - Iroh transport integration feasibility
@@ -277,12 +310,14 @@ impl Message<Inc> for MyActor {
 ## Migration Considerations
 
 **If migrating to Kameo**:
+
 - `RaftActor` would become simpler with derive macros
 - Remote actor registration more ergonomic
 - Need to verify snapshot streaming compatibility
 - Transport layer requires libp2p-to-Iroh adapter or wait for kameo Iroh support
 
 **Gradual Migration Path**:
+
 1. Implement new actors in Kameo (compare performance)
 2. Benchmark message latency and throughput
 3. Test distributed actor coordination across nodes
@@ -290,6 +325,7 @@ impl Message<Inc> for MyActor {
 5. If successful, migrate existing actors incrementally
 
 **Risks**:
+
 - Breaking API changes in pre-1.0 Kameo
 - Distributed features may not reach parity
 - Time investment in porting existing actor patterns
