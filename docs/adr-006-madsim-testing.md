@@ -78,6 +78,7 @@ async fn hiqlite_flow_simulation_tracks_transport_metrics() {
    - Seed-based debugging: `SIMULATION_SEED=42 cargo test`
 
 2. **Time control**: Virtual clock enables time travel
+
    ```rust
    madsim::time::sleep(Duration::from_secs(10)).await;
    // Executes instantly in simulation time
@@ -105,6 +106,7 @@ Artifacts serve multiple purposes:
 Artifact naming: `{test_name}-seed{seed}-{timestamp}.json`
 
 Example:
+
 ```
 hiqlite_flow_simulation_tracks_transport_metrics-seed42-20251202-175136.json
 ```
@@ -123,6 +125,7 @@ router.deliver_messages();  // Process queued messages
 ```
 
 This allows testing:
+
 - Network partitions
 - Message reordering
 - Packet loss
@@ -133,11 +136,13 @@ This allows testing:
 ### 1. Jepsen
 
 **Pros:**
+
 - Industry standard for distributed systems testing
 - Rich failure injection (network partitions, crashes, clock skew)
 - Linearizability checking
 
 **Cons:**
+
 - Requires real nodes (VMs/containers)
 - Slow (minutes per test)
 - Not deterministic (can't replay with same seed)
@@ -148,11 +153,13 @@ This allows testing:
 ### 2. FoundationDB Simulation
 
 **Pros:**
+
 - Battle-tested (FoundationDB uses it extensively)
 - Deterministic and fast
 - Comprehensive fault injection
 
 **Cons:**
+
 - Not a standalone tool (deeply integrated with FDB codebase)
 - C++ implementation (not compatible with Rust async)
 - Would require building similar infrastructure from scratch
@@ -162,10 +169,12 @@ This allows testing:
 ### 3. Custom Chaos Testing Framework
 
 **Pros:**
+
 - Tailored to Aspen's exact needs
 - Full control over failure injection
 
 **Cons:**
+
 - High development cost
 - Easy to miss edge cases
 - Non-deterministic without significant engineering effort
@@ -175,10 +184,12 @@ This allows testing:
 ### 4. Traditional Integration Tests
 
 **Pros:**
+
 - Simple to understand
 - Tests real network behavior
 
 **Cons:**
+
 - Flaky (timing-dependent)
 - Slow (real network delays)
 - Limited failure coverage
@@ -230,6 +241,7 @@ From `tests/hiqlite_flow.rs`:
 ```
 
 Madsim uses virtual syscalls (`madsim::net::*`) incompatible with Iroh's real syscalls. We test:
+
 - **Madsim**: Control plane logic, Raft state machine, KV operations
 - **Integration tests**: Real Iroh networking, discovery, RPC
 
@@ -251,9 +263,11 @@ When a simulation fails:
 
 1. Note the seed from the failure message or artifact
 2. Re-run with the same seed:
+
    ```bash
    SIMULATION_SEED=42 cargo test test_name
    ```
+
 3. Add logging/breakpoints to debug
 4. Fix bug
 5. Verify fix with same seed
@@ -273,5 +287,5 @@ Planned for `AspenRouter`:
 - Simulation infrastructure: `src/simulation.rs`
 - Example test: `tests/hiqlite_flow.rs`
 - Artifact documentation: `docs/simulations/README.md`
-- madsim crate: https://docs.rs/madsim
+- madsim crate: <https://docs.rs/madsim>
 - Tiger Style: `tigerstyle.md`

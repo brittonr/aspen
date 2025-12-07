@@ -9,6 +9,7 @@
 Aspen requires a production-ready Raft consensus implementation to provide distributed coordination primitives and linearizable key-value storage. The consensus layer is foundational—it underpins cluster membership, fault-tolerant replication, and consistent distributed state across all nodes.
 
 The implementation must support:
+
 - Multi-Raft capabilities (multiple independent Raft groups per process)
 - High throughput (targeting 1M+ writes/sec with concurrent writers)
 - Custom network transport (Iroh P2P over QUIC)
@@ -22,6 +23,7 @@ The decision was made in the context of building a distributed orchestration lay
 We chose **OpenRaft 0.10.0-dev** (vendored from upstream) as our Raft consensus implementation.
 
 OpenRaft is vendored in the `openraft/` directory at the repository root and integrated via:
+
 ```rust
 openraft = { path = "openraft/openraft", features = ["serde", "type-alias"] }
 ```
@@ -67,11 +69,13 @@ openraft = { path = "openraft/openraft", features = ["serde", "type-alias"] }
 ### Why Vendored 0.10.0-dev
 
 OpenRaft 0.10 is not yet published to crates.io (as of 2025-12-03), but provides critical improvements:
+
 - Stream-oriented AppendEntries API (breaking change from 0.9)
 - Better async runtime integration with flexible `OptionalSend` trait bounds
 - Improved snapshot handling with `RaftSnapshotBuilder` trait
 
 Vendoring allows:
+
 - Access to cutting-edge features before stable release
 - Local customizations if needed (though none currently exist)
 - Protection against upstream breaking changes during active development
@@ -80,7 +84,9 @@ Vendoring allows:
 ## Alternatives Considered
 
 ### Alternative 1: tikv/raft-rs
+
 **Why rejected:**
+
 - Rust port of etcd's Raft implementation but less actively maintained
 - More opinionated about storage layer (expects RocksDB-like interface)
 - Synchronous API design less natural for async Rust ecosystem
@@ -88,7 +94,9 @@ Vendoring allows:
 - OpenRaft has superior documentation and community momentum
 
 ### Alternative 2: etcd Raft (Go)
+
 **Why rejected:**
+
 - Would require FFI bindings or separate process architecture
 - Defeats the purpose of Rust's type safety and zero-cost abstractions
 - Inter-process communication overhead for Raft operations
@@ -96,7 +104,9 @@ Vendoring allows:
 - Maintenance burden of managing Go/Rust boundary
 
 ### Alternative 3: Custom Raft Implementation
+
 **Why rejected:**
+
 - Raft correctness is notoriously difficult (joint consensus, log compaction edge cases)
 - Would require months/years to reach production quality
 - Reinventing well-tested consensus is an anti-pattern (violates Tiger Style: do it right the first time)
@@ -104,7 +114,9 @@ Vendoring allows:
 - Better to contribute improvements upstream than fork
 
 ### Alternative 4: async-raft (OpenRaft's predecessor)
+
 **Why rejected:**
+
 - Deprecated in favor of OpenRaft
 - Multiple critical bugs fixed in OpenRaft (see `openraft/derived-from-async-raft.md`)
 - No longer maintained
@@ -113,6 +125,7 @@ Vendoring allows:
 ## Consequences
 
 ### Positive
+
 - **Type-Safe Customization**: Full control over node IDs (u64), network layer (Iroh QUIC), storage (redb), without fighting the framework
 - **High Confidence**: 99/99 tests passing + comprehensive storage suite provides strong correctness guarantees
 - **Performance Headroom**: 1M writes/sec benchmark indicates capacity for high-throughput applications
@@ -120,12 +133,14 @@ Vendoring allows:
 - **Community Support**: Active Discord, GitHub discussions, and production users for troubleshooting
 
 ### Negative
+
 - **Vendoring Maintenance**: Must manually sync with upstream OpenRaft 0.10 branch until stable release
 - **API Stability Risk**: 0.10 is pre-release, potential for breaking changes (mitigated by vendoring)
 - **Documentation Gaps**: Some 0.10 features lack comprehensive guides (offset by excellent 0.9 docs + source code)
 - **Binary Size**: OpenRaft + dependencies add ~2MB to binary (acceptable for server-side application)
 
 ### Neutral
+
 - **Learning Curve**: OpenRaft's flexibility requires understanding Raft protocol concepts (leader election, log replication, snapshots)
 - **Storage Backend Coupling**: Must implement `RaftLogStorage` and `RaftStateMachine` traits for any custom storage (currently redb-based in `src/raft/storage.rs`)
 - **Network Integration**: Requires implementing `RaftNetworkFactory` and `RaftNetworkV2` traits for custom transport (IRPC over Iroh in `src/raft/network.rs`)

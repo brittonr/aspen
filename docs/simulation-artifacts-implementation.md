@@ -27,6 +27,7 @@ The simulation module provides:
 ### Key Features
 
 **Captured Data:**
+
 - Deterministic seed (for reproducibility)
 - Complete event trace (ordered list of operations)
 - Transport metrics snapshots
@@ -36,6 +37,7 @@ The simulation module provides:
 - Unique run ID and timestamp
 
 **Builder Pattern:**
+
 ```rust
 let artifact = SimulationArtifactBuilder::new("test_name", seed)
     .start()
@@ -51,6 +53,7 @@ artifact.persist("docs/simulations")?;
 
 **Test Integration:**
 The `tests/hiqlite_flow.rs` test demonstrates the pattern:
+
 - Create builder at test start
 - Add events as operations complete
 - Capture metrics from transport layer
@@ -59,6 +62,7 @@ The `tests/hiqlite_flow.rs` test demonstrates the pattern:
 
 **CI Integration:**
 The `flake.nix` nextest check includes:
+
 ```nix
 postInstall = ''
   if [ -d docs/simulations ]; then
@@ -85,6 +89,7 @@ docs/simulations/
 ```
 
 Example:
+
 ```
 hiqlite_flow_simulation_tracks_transport_metrics-seed42-20251202-175136.json
 ```
@@ -120,6 +125,7 @@ hiqlite_flow_simulation_tracks_transport_metrics-seed42-20251202-175136.json
 ### When to Create Artifacts
 
 Create artifacts for:
+
 - All deterministic `madsim` tests
 - Tests that involve multiple nodes or complex coordination
 - Tests that include failure injection or network partitions
@@ -128,6 +134,7 @@ Create artifacts for:
 ### What to Capture
 
 **Event Traces:**
+
 - Cluster membership changes (init, add learner, change membership)
 - Write/read operations
 - Leader elections and failovers
@@ -135,6 +142,7 @@ Create artifacts for:
 - Failure injections (partition, crash, delay)
 
 **Metrics:**
+
 - Transport counters (packets sent/received)
 - Raft metrics (term, commit index, applied index)
 - Performance counters (latency, throughput)
@@ -151,6 +159,7 @@ Create artifacts for:
 ## Future Enhancements
 
 Potential improvements:
+
 - Automatic seed sweep for discovering edge cases
 - Artifact comparison tools for regression detection
 - Web UI for browsing artifact history

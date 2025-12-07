@@ -64,10 +64,12 @@ test orchestration.
 ### Peer Specification Format
 
 **Current format:** `"node_id@endpoint_id"`
+
 - Example: `"2@abc123def456...,3@xyz789..."`
 - The endpoint_id is the Iroh node's public key (hex encoded)
 
 **Legacy format (deprecated):** `"id=endpoint_addr"`
+
 - Example: `"2=default/ipv4/127.0.0.1/4002/quic"`
 - No longer supported; use discovery or new format
 

@@ -41,6 +41,7 @@ cargo run --example kv_operations
 ```
 
 **Expected output:**
+
 ```
 🚀 Starting Aspen Basic Cluster Example
 📁 Data directory: /tmp/.tmpXXXXXX
@@ -96,6 +97,7 @@ curl http://127.0.0.1:8080/metrics
 ```
 
 **Expected output from read:**
+
 ```json
 {
   "key": "greeting",
@@ -117,6 +119,7 @@ cargo run --example multi_node_cluster
 ```
 
 This example:
+
 - Bootstraps 3 nodes concurrently
 - Automatically exchanges peer addresses (required for localhost testing)
 - Initializes the Raft cluster
@@ -124,6 +127,7 @@ This example:
 - Writes data and verifies replication
 
 **What you'll learn:**
+
 - How to bootstrap multiple nodes
 - How to establish peer connectivity
 - How to add learners and promote to voters
@@ -134,6 +138,7 @@ This example:
 For a more realistic multi-process setup:
 
 **Terminal 1 - Start Node 1:**
+
 ```bash
 ./target/debug/aspen-node \
   --node-id 1 \
@@ -145,6 +150,7 @@ For a more realistic multi-process setup:
 ```
 
 **Terminal 2 - Start Node 2:**
+
 ```bash
 ./target/debug/aspen-node \
   --node-id 2 \
@@ -156,6 +162,7 @@ For a more realistic multi-process setup:
 ```
 
 **Terminal 3 - Start Node 3:**
+
 ```bash
 ./target/debug/aspen-node \
   --node-id 3 \
@@ -231,6 +238,7 @@ The fastest way to test a full cluster end-to-end:
 ```
 
 This script:
+
 - Starts 5 nodes
 - Initializes a 3-node cluster
 - Adds 2 learners and promotes them
@@ -253,6 +261,7 @@ curl -X POST http://127.0.0.1:8080/init \
 ### Write Data
 
 **Single key-value:**
+
 ```bash
 curl -X POST http://127.0.0.1:8080/write \
   -H "Content-Type: application/json" \
@@ -260,6 +269,7 @@ curl -X POST http://127.0.0.1:8080/write \
 ```
 
 **Multiple key-values (atomic):**
+
 ```bash
 curl -X POST http://127.0.0.1:8080/write \
   -H "Content-Type: application/json" \
@@ -275,6 +285,7 @@ curl -X POST http://127.0.0.1:8080/read \
 ```
 
 **Expected response:**
+
 ```json
 {
   "key": "app:version",
@@ -336,16 +347,19 @@ aspen-node --node-id 2 --cookie "shared-secret"
 **Solutions:**
 
 **If using gossip (default):**
+
 - Ensure all nodes use the **same cluster cookie** (used for gossip topic ID)
 - Wait ~12 seconds for gossip announcements to propagate
 - Verify underlying Iroh connectivity is established
 
 **If using mDNS:**
+
 - Check nodes are on the same subnet/VLAN
 - Verify firewall allows UDP port 5353 (multicast)
 - Remember: mDNS doesn't work on localhost
 
 **If using manual peers:**
+
 - Verify peer specs are correct: `"node_id@endpoint_id"`
 - Ensure `network_factory.add_peer()` is called before Raft operations
 - Check endpoint IDs match actual node identities
@@ -445,6 +459,7 @@ RUST_LOG=debug cargo run --example basic_cluster
 ### Configuration Files
 
 Aspen supports configuration via:
+
 1. **Environment variables** (`ASPEN_*`)
 2. **TOML configuration file** (`--config config.toml`)
 3. **CLI arguments** (highest precedence)
@@ -489,6 +504,7 @@ All endpoints return JSON (except `/metrics` which returns Prometheus format):
 ### Troubleshooting
 
 **Check logs:**
+
 ```bash
 # Set log level
 RUST_LOG=debug cargo run --example basic_cluster
@@ -498,6 +514,7 @@ tail -f n1.log
 ```
 
 **Common debug steps:**
+
 1. Verify all nodes have the same `cookie`
 2. Check Iroh connectivity with `/node-info`
 3. Wait 12+ seconds for gossip discovery
@@ -505,6 +522,7 @@ tail -f n1.log
 5. Check Raft metrics at `/raft-metrics` for leader and state
 
 **Still having issues?** Check:
+
 - [docs/discovery-testing.md](discovery-testing.md) for discovery troubleshooting
 - [examples/README.md](../examples/README.md) for detailed configuration examples
 - [docs/raft-consensus-testing.md](raft-consensus-testing.md) for Raft-specific issues

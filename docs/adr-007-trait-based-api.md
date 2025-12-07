@@ -77,6 +77,7 @@ async fn get_leader(&self)
 ```
 
 These provide:
+
 - Raft state (Leader/Follower/Candidate/Learner)
 - Current leader ID and term
 - Log indices (last_log, last_applied, snapshot, purged)
@@ -112,6 +113,7 @@ This decouples HTTP layer from Raft implementation details.
 ### Why Two Traits?
 
 Separate concerns:
+
 - **ClusterController**: Cluster membership, consensus operations
 - **KeyValueStore**: Data plane operations
 
@@ -144,10 +146,12 @@ pub struct ClusterNode {
 **Approach:** HTTP endpoints call openraft's `Raft` struct directly
 
 **Pros:**
+
 - Fewer abstraction layers
 - Direct access to all Raft features
 
 **Cons:**
+
 - Tight coupling to openraft API
 - Hard to test (requires real Raft instances)
 - Leaky abstraction (exposes Raft internals)
@@ -170,10 +174,12 @@ trait AspenAPI {
 ```
 
 **Pros:**
+
 - Single trait to implement
 - Simple for small implementations
 
 **Cons:**
+
 - Violates single responsibility principle
 - Forces implementations to support everything
 - Hard to extend (trait evolution problem)
@@ -186,11 +192,13 @@ trait AspenAPI {
 **Approach:** Define API in `.proto` files, generate Rust code
 
 **Pros:**
+
 - Language-agnostic interface
 - Built-in versioning story
 - Code generation
 
 **Cons:**
+
 - Over-engineered for in-process Rust APIs
 - Serialization overhead
 - Code generation complexity
@@ -210,10 +218,12 @@ cluster.init()
 ```
 
 **Pros:**
+
 - Ergonomic API
 - Type-safe construction
 
 **Cons:**
+
 - Doesn't solve polymorphism problem
 - More complex than simple traits
 - Harder to mock/test

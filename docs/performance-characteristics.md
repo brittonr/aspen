@@ -15,6 +15,7 @@ This document analyzes the performance characteristics of Aspen's hybrid storage
 ## Benchmark Results
 
 All benchmarks run on:
+
 - CPU: AMD Ryzen 9 5950X (16-core, 3.4GHz base)
 - RAM: 64GB DDR4-3200
 - Storage: Samsung 980 PRO NVMe SSD (7000 MB/s read, 5000 MB/s write)
@@ -56,6 +57,7 @@ Benchmark Complete
 ```
 
 **Key Findings**:
+
 - **2.6x speedup** with connection pooling (pool size 10 vs 1)
 - Sequential reads: ~45,000 ops/sec (baseline)
 - Concurrent reads (pool=1): ~38,000 ops/sec (contention on single connection)
@@ -77,6 +79,7 @@ Batched writes (SetMulti with 100 keys):
 ```
 
 **Limiting Factors**:
+
 1. SQLite single-writer constraint
 2. FULL synchronous mode (fsync before commit)
 3. WAL mode overhead (additional write to WAL file)
@@ -98,6 +101,7 @@ State Machine Size | Build Time | Throughput
 ```
 
 **Key Findings**:
+
 - Linear scaling (O(n) complexity)
 - Consistent throughput (~70,000 keys/sec)
 - Snapshots use read pool (non-blocking for writes)
@@ -117,6 +121,7 @@ WAL Size | Checkpoint Time | Throughput
 ```
 
 **Key Findings**:
+
 - Linear scaling with WAL size
 - Consistent throughput (~200 MB/sec)
 - TRUNCATE mode reclaims disk space
@@ -140,6 +145,7 @@ Pool Size | Throughput    | Improvement
 ```
 
 **Optimal Pool Size**: 10 connections
+
 - Balances concurrency with resource usage
 - Further increases show diminishing returns
 - Pool size > 20 provides < 5% additional throughput
@@ -156,6 +162,7 @@ Concurrent read | 0.3ms | 0.9ms | 2.1ms
 ```
 
 **Key Findings**:
+
 - Sub-millisecond median latency
 - p99 latency < 3ms (acceptable for most applications)
 - Connection pooling increases p95/p99 due to queueing
@@ -173,6 +180,7 @@ Hot cache      | 98,000 ops/s  | 0.1ms (pool=10)
 ```
 
 **Implications**:
+
 - First access after restart is slower (cold cache)
 - Repeated reads benefit from OS page cache
 - Pool size matters more for hot cache workloads
@@ -192,6 +200,7 @@ FULL             | 5,000 ops/s   | Safe (Tiger Style)
 ```
 
 **Tiger Style Recommendation**: Always use FULL mode
+
 - Ensures fsync before commit returns
 - Prevents data loss on OS crash or power failure
 - Performance cost is acceptable for correctness
@@ -210,6 +219,7 @@ Batch Size | Individual Set | SetMulti     | Speedup
 ```
 
 **Key Findings**:
+
 - Batching amortizes transaction overhead
 - Optimal batch size: 100-1000 keys
 - 10x throughput improvement with batching
@@ -228,6 +238,7 @@ Snapshot       | 100 MB        | 105 MB         | 1.05x
 ```
 
 **Factors**:
+
 1. SQLite page size (4KB default)
 2. WAL mode overhead (WAL + database file)
 3. B-tree node updates (internal pages)
@@ -252,6 +263,7 @@ Total (worst case)  | 212 MB | 212% (before checkpoint)
 ```
 
 **Implications**:
+
 - 12% overhead from SQLite B-tree structure
 - WAL file adds 15-100% overhead (depends on checkpoint frequency)
 - Total overhead: 27-112% vs raw data
@@ -271,6 +283,7 @@ Hybrid       | 112 MB (SM)   | 15 MB + 8 MB | 135 MB
 ```
 
 **Key Findings**:
+
 - SQLite state machine: ~7% larger than redb
 - Hybrid architecture: ~29% more space than pure redb
 - Trade-off: Operability (SQL tools) vs disk space
@@ -293,6 +306,7 @@ Keys          | Database Size | Read Perf  | Write Perf | Snapshot Time
 ```
 
 **Recommended Limits**:
+
 - **Soft limit**: 10M keys (10 GB database)
 - **Hard limit**: 100M keys (100 GB database)
 - **Practical limit**: 1M keys for < 1s snapshot builds
@@ -312,6 +326,7 @@ Time    | WAL Size | Database Size | Overhead
 ```
 
 **Mitigation**:
+
 - Auto-checkpoint at 100 MB (default)
 - Manual checkpoint during low traffic
 - Monitor WAL size via `/health` endpoint
@@ -331,6 +346,7 @@ Pool Size | Memory (Idle) | Memory (Active) | CPU Usage
 ```
 
 **Recommendation**: Pool size = 10 (default)
+
 - Low memory footprint (< 25 MB)
 - Optimal read concurrency (2.6x improvement)
 - Minimal CPU overhead (< 5%)
@@ -340,12 +356,14 @@ Pool Size | Memory (Idle) | Memory (Active) | CPU Usage
 ### Hardware Recommendations
 
 **Production Environment**:
+
 - **CPU**: 4+ cores (Raft benefits from parallelism)
 - **RAM**: 8+ GB (OS page cache improves read performance)
 - **Storage**: NVMe SSD (10-100x faster fsync than HDD)
 - **Network**: 1 Gbps+ (Raft replication and snapshots)
 
 **Development Environment**:
+
 - **CPU**: 2+ cores (sufficient for testing)
 - **RAM**: 4+ GB (minimal for development)
 - **Storage**: SATA SSD (acceptable for dev/test)
@@ -354,11 +372,13 @@ Pool Size | Memory (Idle) | Memory (Active) | CPU Usage
 ### Filesystem Recommendations
 
 **Recommended**:
+
 - ext4 (default, well-tested)
 - xfs (good for large files)
 - btrfs (copy-on-write, snapshots)
 
 **Not Recommended**:
+
 - NFS (unreliable file locking)
 - CIFS/SMB (poor performance)
 - FUSE (high overhead)
@@ -385,6 +405,7 @@ ulimit -n 65536
 ### SQLite Tuning
 
 SQLite is already optimized with:
+
 ```sql
 PRAGMA journal_mode = WAL;        -- Concurrent reads
 PRAGMA synchronous = FULL;        -- Durability (Tiger Style)
@@ -454,6 +475,7 @@ Debuggability       | SQL queries      | custom debug  | Hybrid
 ### Performance vs Operability
 
 The hybrid architecture trades 4-7% performance for:
+
 - Standard SQL tooling (sqlite3, DB Browser)
 - Easier production debugging
 - Familiar technology for operators

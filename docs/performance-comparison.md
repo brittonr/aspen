@@ -29,16 +29,19 @@ Tests single-threaded write performance by applying 1000 consecutive Set operati
 *SQLite benchmark incomplete - estimated from partial results. The current implementation applies each write in a separate transaction, which is suboptimal.
 
 **Key Findings**:
+
 - InMemory storage provides excellent write throughput as expected (no I/O)
 - Redb provides reasonable persistent write performance (~800 ops/sec)
 - SQLite is significantly slower due to one-transaction-per-write overhead
 
 **Performance Analysis**:
+
 - InMemory: Pure memory operations, no fsync overhead
 - Redb: MVCC with page-level locking, efficient for sequential writes
 - SQLite: Transaction overhead dominates (BEGIN IMMEDIATE, COMMIT, WAL sync per write)
 
 **Recommendations**:
+
 - Use InMemory for: simulations, unit tests, non-persistent workloads
 - Use Redb for: moderate write workloads (< 1000 ops/sec persistent)
 - Use SQLite for: read-heavy workloads, production deployments with batching
@@ -48,6 +51,7 @@ Tests single-threaded write performance by applying 1000 consecutive Set operati
 *Status: Benchmark incomplete - results pending*
 
 Expected results:
+
 - InMemory: < 1 µs per read (hash table lookup)
 - Redb: 5-20 µs per read (B-tree lookup with page cache)
 - SQLite: 10-50 µs per read (B-tree lookup with connection pooling)
@@ -59,6 +63,7 @@ Expected results:
 Dataset sizes tested: 100, 1000, 10000 entries
 
 Expected results:
+
 - InMemory: Fastest (serialize from memory)
 - Redb: Moderate (single read transaction scan)
 - SQLite: Moderate (single read transaction with pooling)
@@ -70,6 +75,7 @@ Expected results:
 Simulates realistic Raft workload patterns.
 
 Expected results:
+
 - InMemory: Excellent performance on both reads and writes
 - SQLite: Better than pure write workload due to read optimization
 
@@ -78,6 +84,7 @@ Expected results:
 *Status: Benchmark incomplete - results pending*
 
 Tests batching effectiveness:
+
 - 1 write per transaction (current approach)
 - 10 writes per transaction (via SetMulti)
 - 100 writes per transaction (via SetMulti)
@@ -89,17 +96,20 @@ Expected results: 10-100x improvement when batching writes in single transaction
 ### InMemory Storage
 
 **Strengths**:
+
 - Lowest latency for all operations
 - Predictable performance
 - No I/O bottlenecks
 - Excellent for testing and simulations
 
 **Weaknesses**:
+
 - Data loss on process crash
 - Memory usage scales linearly with dataset size
 - No persistence guarantees
 
 **Use Cases**:
+
 - madsim deterministic simulations
 - Unit and integration tests
 - Development environments
@@ -108,23 +118,27 @@ Expected results: 10-100x improvement when batching writes in single transaction
 ### Redb Storage (Deprecated)
 
 **Strengths**:
+
 - ACID guarantees with crash recovery
 - MVCC allows concurrent reads during writes
 - Embedded (no separate process)
 - Reasonable write performance (~800 ops/sec)
 
 **Weaknesses**:
+
 - Single-writer constraint (OpenRaft applies sequentially anyway)
 - Less mature than SQLite
 - Marked as deprecated in favor of SQLite
 
 **Use Cases**:
+
 - Legacy deployments
 - Migration path to SQLite
 
 ### SQLite Storage (Recommended)
 
 **Strengths**:
+
 - Industry-standard reliability
 - WAL mode enables concurrent readers
 - FULL synchronous mode guarantees durability
@@ -132,17 +146,20 @@ Expected results: 10-100x improvement when batching writes in single transaction
 - Excellent tooling and ecosystem
 
 **Weaknesses**:
+
 - Transaction overhead for individual writes
 - Requires batching for high write throughput
 - Larger storage footprint than Redb
 
 **Use Cases**:
+
 - Production deployments
 - Read-heavy workloads
 - Integration with existing SQLite tooling
 - Clusters requiring durability guarantees
 
 **Optimization Opportunities**:
+
 1. **Write Batching**: Group multiple Raft log entries into single transaction
 2. **WAL Checkpointing**: Auto-checkpoint at configurable thresholds
 3. **Connection Pool Tuning**: Adjust pool size based on read concurrency
@@ -153,6 +170,7 @@ Expected results: 10-100x improvement when batching writes in single transaction
 ### Test Setup
 
 Each benchmark:
+
 1. Creates a fresh storage backend (temp directory for persistent backends)
 2. Pre-populates with test data where needed
 3. Measures operation latency using Criterion's statistical analysis
@@ -170,6 +188,7 @@ Each benchmark:
 ### Hardware Environment
 
 Benchmarks run on NixOS with:
+
 - Rust 1.91.1
 - tokio async runtime
 - Default OS I/O scheduler
@@ -182,15 +201,18 @@ Benchmarks run on NixOS with:
 **Winner**: InMemory (if persistence not required), Redb (if persistence required)
 
 Use InMemory for:
+
 - Simulations (madsim)
 - Ephemeral test clusters
 - Non-critical workloads
 
 Use Redb for:
+
 - Moderate persistent write workloads
 - Legacy deployments
 
 Avoid SQLite for:
+
 - High-frequency single-entry writes without batching
 
 ### High Read Throughput (> 5000 ops/sec)
@@ -198,6 +220,7 @@ Avoid SQLite for:
 **Winner**: InMemory > SQLite ≈ Redb
 
 Use SQLite with connection pooling for:
+
 - Read-heavy production workloads
 - Concurrent read requests
 - Point lookups and range scans
@@ -207,6 +230,7 @@ Use SQLite with connection pooling for:
 **Winner**: SQLite (with batched writes)
 
 Recommendations:
+
 - Batch Raft log entries into single transactions
 - Use connection pool (10+ connections) for reads
 - Monitor WAL file size and checkpoint periodically
@@ -218,6 +242,7 @@ Recommendations:
 Expected: InMemory > SQLite ≈ Redb
 
 All backends serialize to JSON, so snapshot speed depends on:
+
 - Read transaction overhead (Redb/SQLite)
 - Memory copy speed (InMemory)
 
@@ -226,6 +251,7 @@ All backends serialize to JSON, so snapshot speed depends on:
 **Winner**: InMemory
 
 Benefits:
+
 - Deterministic behavior in madsim
 - Fast test execution
 - No cleanup required
@@ -263,6 +289,7 @@ For production deployments, **SQLite** is the recommended storage backend becaus
 ### When to Use InMemory
 
 Use **InMemory** for:
+
 - madsim deterministic testing
 - Unit and integration tests
 - Development environments
@@ -271,6 +298,7 @@ Use **InMemory** for:
 ### When to Use Redb (Deprecated)
 
 Use **Redb** only for:
+
 - Existing deployments (migration path to SQLite available)
 - Specific use cases requiring MVCC semantics
 
@@ -301,6 +329,7 @@ firefox target/criterion/report/index.html
 ### Interpreting Results
 
 Criterion reports:
+
 - **Mean**: Average operation time
 - **Std Dev**: Variability in measurements
 - **Outliers**: Unusual measurements (may indicate GC, I/O hiccups)

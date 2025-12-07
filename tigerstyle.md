@@ -9,12 +9,15 @@ Tiger Style is a coding philosophy focused on safety, performance, and developer
 Tiger Style is not just a set of coding standards; it's a practical approach to software development. By prioritizing safety, performance, and developer experience, you create code that is reliable, efficient, and enjoyable to work with.
 
 ### Safety
+
 Safety is the foundation of Tiger Style. It means writing code that works in all situations and reduces the risk of errors. Focusing on safety makes your software reliable and trustworthy.
 
 ### Performance
+
 Performance is about using resources efficiently to deliver fast, responsive software. Prioritizing performance early helps you design systems that meet or exceed user expectations.
 
 ### Developer experience
+
 A good developer experience improves code quality and maintainability. Readable and easy-to-work-with code encourages collaboration and reduces errors, leading to a healthier codebase that stands the test of time.
 
 ---
@@ -28,6 +31,7 @@ The design goals focus on building software that is safe, fast, and easy to main
 Safety in coding relies on clear, structured practices that prevent errors and strengthen the codebase. It's about writing code that works in all situations and catches problems early. By focusing on safety, you create reliable software that behaves predictably no matter where it runs.
 
 #### Control and limits
+
 Predictable control flow and bounded system resources are essential for safe execution.
 
 * **Simple and explicit control flow:** Favor straightforward control structures over complex logic. Simple control flow makes code easier to understand and reduces the risk of bugs. Avoid recursion if possible to keep execution bounded and predictable, preventing stack overflows and uncontrolled resource use.
@@ -36,6 +40,7 @@ Predictable control flow and bounded system resources are essential for safe exe
 * **Centralize control flow:** Keep switch or if statements in the main parent function, and move non-branching logic to helper functions. Let the parent function manage state, using helpers to calculate changes without directly applying them. Keep leaf functions pure and focused on specific computations. This divides responsibility: one function controls flow, others handle specific logic.
 
 #### Memory and types
+
 Clear and consistent handling of memory and types is key to writing safe, portable code.
 
 * **Use explicitly sized types:** Use data types with explicit sizes, like `u32` or `i64`, instead of architecture-dependent types like `usize`. This keeps behavior consistent across platforms and avoids size-related errors, improving portability and reliability.
@@ -43,6 +48,7 @@ Clear and consistent handling of memory and types is key to writing safe, portab
 * **Minimize variable scope:** Declare variables in the smallest possible scope. Limiting scope reduces the risk of unintended interactions and misuse. It also makes the code more readable and easier to maintain by keeping variables within their relevant context.
 
 #### Error handling
+
 Correct error handling keeps the system robust and reliable in all conditions.
 
 * **Use assertions:** Use assertions to verify that conditions hold true at specific points in the code. Assertions work as internal checks, increase robustness, and simplify debugging.
@@ -59,6 +65,7 @@ Correct error handling keeps the system robust and reliable in all conditions.
 Performance is about using resources efficiently to deliver fast, responsive software. Prioritizing performance early helps design systems that meet or exceed user expectations without unnecessary overhead.
 
 #### Design for performance
+
 Early design decisions have a significant impact on performance. Thoughtful planning helps avoid bottlenecks later.
 
 * **Design for performance early:** Consider performance during the initial design phase. Early architectural decisions have a big impact on overall performance, and planning ahead ensures you can avoid bottlenecks and improve resource efficiency.
@@ -66,14 +73,16 @@ Early design decisions have a significant impact on performance. Thoughtful plan
 * **Batch operations:** Amortize expensive operations by processing multiple items together. Batching reduces overhead per item, increases throughput, and is especially useful for I/O-bound operations.
 
 #### Efficient resource use
+
 Focus on optimizing the slowest resources, typically in this order:
 
-1.  **Network:** Optimize data transfer and reduce latency.
-2.  **Disk:** Improve I/O operations and manage storage efficiently.
-3.  **Memory:** Use memory effectively to prevent leaks and overuse.
-4.  **CPU:** Increase computational efficiency and reduce processing time.
+1. **Network:** Optimize data transfer and reduce latency.
+2. **Disk:** Improve I/O operations and manage storage efficiently.
+3. **Memory:** Use memory effectively to prevent leaks and overuse.
+4. **CPU:** Increase computational efficiency and reduce processing time.
 
 #### Predictability
+
 Writing predictable code improves performance by reducing CPU cache misses and optimizing branch prediction.
 
 * **Ensure predictability:** Write code with predictable execution paths. Predictable code uses CPU caching and branch prediction better, leading to improved performance. Avoid patterns that cause frequent cache misses or unpredictable branching, as they degrade performance.
@@ -84,6 +93,7 @@ Writing predictable code improves performance by reducing CPU cache misses and o
 Improving the developer experience creates a more maintainable and collaborative codebase.
 
 #### Name things
+
 Get the nouns and verbs right. Great names capture what something is or does and create a clear, intuitive model. They show you understand the domain. Take time to find good names, where nouns and verbs fit together, making the whole greater than the sum of its parts.
 
 * **Clear and consistent naming:** Use descriptive and meaningful names for variables, functions, and files. Good naming improves code readability and helps others understand each component's purpose. Stick to a consistent style, like `snake_case`, throughout the codebase.
@@ -93,6 +103,7 @@ Get the nouns and verbs right. Great names capture what something is or does and
 * **Use proper comment style:** Write comments as complete sentences with correct punctuation and grammar. Clear, professional comments improve readability and show attention to detail. They help create a cleaner, more maintainable codebase.
 
 #### Organize things
+
 Organizing code well makes it easy to navigate, maintain, and extend. A logical structure reduces cognitive load, letting developers focus on solving problems instead of figuring out the code. Group related elements, and simplify interfaces to keep the codebase clean, scalable, and manageable as complexity grows.
 
 * **Organize code logically:** Structure your code logically. Group related functions and classes together. Order code naturally, placing high-level abstractions before low-level details. Logical organization makes code easier to navigate and understand.
@@ -101,6 +112,7 @@ Organizing code well makes it easy to navigate, maintain, and extend. A logical 
 * **Minimize variable scope:** Declare variables close to their usage and within the smallest necessary scope. This reduces the risk of misuse and makes code easier to read and maintain.
 
 #### Ensure consistency
+
 Maintaining consistency in your code helps reduce errors and creates a stable foundation for the rest of the system.
 
 * **Avoid duplicates and aliases:** Prevent inconsistencies by avoiding duplicated variables or unnecessary aliases. When two variables represent the same data, there's a higher chance they fall out of sync. Use references or pointers to maintain a single source of truth.
@@ -109,12 +121,14 @@ Maintaining consistency in your code helps reduce errors and creates a stable fo
 * **Handle buffer allocation cleanly:** When working with buffers, allocate them close to where they are used and ensure all corresponding cleanup happens in the same logical block. Group resource allocation and deallocation with clear newlines to make leaks easier to identify.
 
 #### Avoid off-by-one errors
+
 Off-by-one errors often result from casual interactions between an `index`, a `count`, or a `size`. Treat these as distinct types, and apply clear rules when converting between them.
 
 * **Indexes, counts, and sizes:** Indexes are 0-based, counts are 1-based, and sizes represent total memory usage. When converting between them, add or multiply accordingly. Use meaningful names with units or qualifiers to avoid confusion.
 * **Handle division intentionally:** When dividing, make your intent clear by specifying how rounding should be handled in edge cases. Use functions or operators designed for exact division, floor division, or ceiling division. This avoids ambiguity and ensures the result behaves as expected.
 
 #### Code consistency and tooling
+
 Consistency in code style and tools improves readability, reduces mental load, and makes working together easier.
 
 * **Maintain consistent indentation:** Use a uniform indentation style across the codebase. For example, using 4 spaces for indentation provides better visual clarity, especially in complex structures.
@@ -151,12 +165,12 @@ Napkin math uses simple calculations and rounded numbers to quickly estimate sys
 
 For example, if you're designing a system to store logs, you can estimate storage costs like this:
 
-1.  **Estimate log volume:** Assume 1,000 requests per second (RPS). Each log entry is about 1 KB.
-2.  **Calculate daily log volume:**
+1. **Estimate log volume:** Assume 1,000 requests per second (RPS). Each log entry is about 1 KB.
+2. **Calculate daily log volume:**
     `1,000 RPS * 86,400 seconds/day * 1 KB ≈ 86,400,000 KB/day ≈ 86.4 GB/day`
-3.  **Estimate monthly storage:**
+3. **Estimate monthly storage:**
     `86.4 GB/day * 30 days ≈ 2,592 GB/month`
-4.  **Estimate cost** (using $0.02 per GB for blob storage):
+4. **Estimate cost** (using $0.02 per GB for blob storage):
     `2,592 GB * 1000 GB/TB * $0.02/GB ≈ $51 per month`
 
 This gives you a rough idea of monthly storage costs. It helps you check if your logging plan works. The idea is to get within 10x of the right answer.

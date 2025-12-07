@@ -5,6 +5,7 @@ This guide explains how to migrate Aspen Raft state machine data from redb to SQ
 ## Overview
 
 Aspen supports two persistent storage backends for the Raft state machine:
+
 - **redb**: Legacy embedded ACID storage (deprecated)
 - **SQLite**: Current recommended storage with WAL mode and connection pooling
 
@@ -281,6 +282,7 @@ This is expensive for large databases but provides maximum confidence.
 **Cause**: Invalid path to redb database
 
 **Solution**:
+
 ```bash
 # Verify path
 ls -l data/node-1/state-machine.redb
@@ -294,6 +296,7 @@ aspen-migrate --source /absolute/path/to/state-machine.redb ...
 **Cause**: SQLite database file already exists (prevents accidental overwrites)
 
 **Solution**:
+
 ```bash
 # Remove existing target or choose different path
 rm data/node-1/state-machine.db
@@ -307,6 +310,7 @@ aspen-migrate --target data/node-1/state-machine-new.db ...
 **Cause**: Migration failed to copy all keys
 
 **Solution**:
+
 1. Check disk space: `df -h`
 2. Check redb database integrity
 3. Review migration tool logs for errors
@@ -317,6 +321,7 @@ aspen-migrate --target data/node-1/state-machine-new.db ...
 **Cause**: Data corruption during migration
 
 **Solution**:
+
 1. Remove target database
 2. Verify source database integrity
 3. Retry migration
@@ -329,6 +334,7 @@ aspen-migrate --target data/node-1/state-machine-new.db ...
 **Cause**: Permissions issue or corrupted database
 
 **Solution**:
+
 ```bash
 # Check file permissions
 ls -l data/node-1/state-machine.db
@@ -343,6 +349,7 @@ chmod 600 data/node-1/state-machine.db
 **Cause**: Inconsistent state between log and state machine
 
 **Solution**:
+
 1. Stop the node
 2. Rollback to redb backup
 3. Verify redb database is healthy
@@ -355,6 +362,7 @@ chmod 600 data/node-1/state-machine.db
 **Cause**: SQLite needs to build page cache
 
 **Solution**:
+
 - Allow warm-up period (5-10 minutes)
 - SQLite WAL mode optimizes over time
 - Monitor with `PRAGMA wal_checkpoint` status
@@ -364,6 +372,7 @@ chmod 600 data/node-1/state-machine.db
 **Cause**: Checkpoint not running frequently enough
 
 **Solution**:
+
 ```bash
 # Manual checkpoint
 sqlite3 data/node-1/state-machine.db "PRAGMA wal_checkpoint(TRUNCATE);"
@@ -406,6 +415,7 @@ Migrate nodes one at a time while maintaining quorum:
 ```
 
 **Requirements**:
+
 - Cluster must have at least 3 nodes
 - Quorum must be maintained (n/2 + 1 nodes up)
 - Leader may change during migration
@@ -450,6 +460,7 @@ curl http://node-1:8080/health
 ### Q: Can I migrate back from SQLite to redb?
 
 A: Not directly with the migration tool. You would need to:
+
 1. Export data from SQLite
 2. Create new redb database
 3. Import data into redb
@@ -460,6 +471,7 @@ However, this is not recommended. SQLite is the recommended storage backend.
 ### Q: How long does migration take?
 
 A: Migration time depends on database size:
+
 - Small (< 1 GB): 1-10 seconds
 - Medium (1-10 GB): 10-60 seconds
 - Large (10-100 GB): 1-5 minutes
@@ -469,6 +481,7 @@ Verification adds ~20% overhead.
 ### Q: Can I run migration on a live node?
 
 A: **No**. Always stop the node before migration to prevent:
+
 - Data inconsistency
 - File locking conflicts
 - Partial writes during migration
@@ -476,6 +489,7 @@ A: **No**. Always stop the node before migration to prevent:
 ### Q: What if migration fails halfway?
 
 A: The migration tool uses a transaction to ensure atomicity:
+
 - If migration fails, target database is not created
 - Source database remains untouched
 - Safe to retry after fixing the issue
@@ -503,6 +517,7 @@ A: Keep backups for at least 7 days or until you're confident the migration was 
 ## Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/your-org/aspen/issues
-- Documentation: https://docs.aspen.io
-- Community Chat: https://discord.gg/aspen
+
+- GitHub Issues: <https://github.com/your-org/aspen/issues>
+- Documentation: <https://docs.aspen.io>
+- Community Chat: <https://discord.gg/aspen>

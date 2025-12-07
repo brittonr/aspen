@@ -11,15 +11,18 @@
 ### Files Created
 
 #### `src/raft/madsim_network.rs` (435 lines)
+
 Madsim-compatible Raft network layer providing deterministic simulation infrastructure.
 
 **Components:**
+
 - `MadsimRaftNetwork`: Implements OpenRaft's `RaftNetworkV2` trait for deterministic RPC
 - `MadsimNetworkFactory`: Factory for creating network clients per target node
 - `MadsimRaftRouter`: Coordinates message passing between Raft nodes in simulation
 - `FailureInjector`: Chaos testing with deterministic network delays and message drops
 
 **Key Design:**
+
 - Replaces Iroh P2P transport with madsim::net::TcpStream (Phase 2)
 - Tiger Style compliant:
   - Bounded resources: `MAX_RPC_MESSAGE_SIZE` (10MB), `MAX_CONNECTIONS_PER_NODE` (100)
@@ -28,9 +31,11 @@ Madsim-compatible Raft network layer providing deterministic simulation infrastr
 - Uses `parking_lot::Mutex` for non-poisoning concurrency
 
 #### `tests/madsim_smoke_test.rs` (167 lines)
+
 Smoke tests validating madsim infrastructure before RaftActor integration.
 
 **Tests (all passing):**
+
 1. `test_router_initialization` - Node registration (3 nodes)
 2. `test_failure_injector` - Network delay/drop configuration
 3. `test_network_factory` - Factory creation for multiple nodes
@@ -38,6 +43,7 @@ Smoke tests validating madsim infrastructure before RaftActor integration.
 5. `test_max_nodes_limit` - Bounded resource limit enforcement (100 node max)
 
 **Validation:**
+
 - All tests run with different seeds (42, 123, 456, 789, 1024)
 - Deterministic execution: Same seed = same result
 - Simulation artifacts persisted to `docs/simulations/madsim_*.json`
@@ -45,6 +51,7 @@ Smoke tests validating madsim infrastructure before RaftActor integration.
 ### Files Modified
 
 #### `src/raft/mod.rs`
+
 - Added `pub mod madsim_network;` after `learner_promotion`
 
 ---
@@ -56,18 +63,21 @@ Summary [ 261.354s] 202 tests run: 202 passed (1 flaky), 13 skipped
 ```
 
 **Breakdown:**
+
 - 197 existing tests: ✅ All passing
 - 5 new madsim tests: ✅ All passing
 - 1 flaky test: Pre-existing `test_flapping_node_detection` (unrelated)
 - 13 skipped: Hiqlite integration tests (external dependency)
 
 **Simulation Artifacts:**
+
 ```bash
 $ ls docs/simulations/madsim*.json | wc -l
 25
 ```
 
 Example artifact:
+
 ```json
 {
   "name": "madsim_router_init",
@@ -138,21 +148,25 @@ MadsimRaftRouter
 ## Tiger Style Compliance
 
 ### Bounded Resources ✅
+
 - `MAX_RPC_MESSAGE_SIZE = 10 * 1024 * 1024` (10MB)
 - `MAX_CONNECTIONS_PER_NODE = 100`
 - Fixed limits on loops, queues, node counts
 
 ### Explicit Types ✅
+
 - `NodeId = u64` (never usize)
 - `delay_ms: u64` (explicit milliseconds)
 - `MAX_*` constants: u32/u64
 
 ### Fail-Fast ✅
+
 - No `.expect()` in production paths
 - All errors propagated via `Result<T, E>`
 - `parking_lot::Mutex` (non-poisoning)
 
 ### Function Size ✅
+
 - All functions < 70 lines
 - Single-purpose, composable helpers
 - Clear high-level → low-level organization
@@ -164,6 +178,7 @@ MadsimRaftRouter
 **Timeline**: 3-4 days
 
 **Tasks:**
+
 1. Implement RPC dispatch in `MadsimRaftRouter`:
    - `send_append_entries()` - Serialize + send over madsim TCP
    - `send_vote()` - Serialize + send over madsim TCP
@@ -173,6 +188,7 @@ MadsimRaftRouter
 4. Validate vote/append_entries work with real `RaftActor`
 
 **Success Criteria:**
+
 - Single madsim node can initialize Raft cluster
 - Vote RPC completes successfully
 - AppendEntries RPC completes successfully
@@ -207,17 +223,20 @@ Total:                          603 lines
 ## Impact
 
 **Before Phase 1:**
+
 - 0% real distributed systems testing (DeterministicHiqlite mock = HashMap)
 - No automated bug detection for network-level issues
 - Manual reproduction of distributed systems bugs
 
 **After Phase 1:**
+
 - Network infrastructure foundation complete ✅
 - Deterministic execution with seed control ✅
 - Simulation artifacts for debugging ✅
 - Ready for Phase 2 (RPC dispatch + RaftActor integration)
 
 **After Phase 5 (future):**
+
 - 14+ bug classes auto-detectable
 - 50+ deterministic failure scenarios
 - Real Raft consensus under madsim simulation

@@ -22,6 +22,7 @@ curl http://localhost:8080/health
 ```
 
 **Healthy Response**:
+
 ```json
 {
   "status": "healthy",
@@ -37,6 +38,7 @@ curl http://localhost:8080/health
 ```
 
 **Warning Response** (WAL file growing):
+
 ```json
 {
   "status": "degraded",
@@ -55,6 +57,7 @@ curl http://localhost:8080/health
 ```
 
 **Critical Response** (WAL file very large):
+
 ```json
 {
   "status": "unhealthy",
@@ -87,6 +90,7 @@ curl http://localhost:8080/metrics | grep sqlite
 ```
 
 **Available Metrics** (future):
+
 ```
 # HELP sqlite_wal_size_bytes Current WAL file size in bytes
 # TYPE sqlite_wal_size_bytes gauge
@@ -118,6 +122,7 @@ RUST_LOG=aspen::raft::storage_sqlite=debug ./aspen-node --config config.toml
 ```
 
 **Key log events**:
+
 ```
 DEBUG aspen::raft::storage_sqlite: WAL checkpoint completed pages=1024 duration_ms=150
 DEBUG aspen::raft::storage_sqlite: Snapshot built entries=1000 size_kb=256
@@ -136,6 +141,7 @@ curl -X POST http://localhost:8080/admin/checkpoint-wal
 ```
 
 **Success Response**:
+
 ```json
 {
   "status": "success",
@@ -146,6 +152,7 @@ curl -X POST http://localhost:8080/admin/checkpoint-wal
 ```
 
 **When to Checkpoint**:
+
 - WAL file exceeds 100MB (warning threshold)
 - Before backup operations
 - After large batch writes (e.g., snapshot installation)
@@ -163,6 +170,7 @@ sqlite3 /var/lib/aspen/node-1/state-machine.db "PRAGMA integrity_check;"
 **Expected Output**: `ok`
 
 **On Corruption**:
+
 ```
 *** in database main ***
 Page 42: btreeInitPage() returns error code 11
@@ -250,6 +258,7 @@ systemctl start aspen-node
 ```
 
 **When to Vacuum**:
+
 - Database file significantly larger than actual data
 - After deleting large amounts of data
 - During scheduled maintenance windows
@@ -260,11 +269,13 @@ systemctl start aspen-node
 ### Issue: WAL File Growing Unbounded
 
 **Symptoms**:
+
 - `/health` endpoint shows `critical` WAL status
 - Disk space decreasing rapidly
 - WAL file size > 500MB
 
 **Root Causes**:
+
 1. High write load without checkpoints
 2. Long-running read transactions blocking checkpoints
 3. Auto-checkpoint disabled or threshold too high
@@ -272,16 +283,19 @@ systemctl start aspen-node
 **Resolution**:
 
 1. **Immediate**: Manual checkpoint
+
    ```bash
    curl -X POST http://localhost:8080/admin/checkpoint-wal
    ```
 
 2. **Check disk space**:
+
    ```bash
    df -h /var/lib/aspen
    ```
 
 3. **If disk full**: Free space then checkpoint
+
    ```bash
    # Find and remove old logs/backups
    find /var/log -name "*.gz" -mtime +30 -delete
@@ -291,6 +305,7 @@ systemctl start aspen-node
    ```
 
 4. **If checkpoint fails**: Check write load
+
    ```bash
    # Monitor write rate
    curl http://localhost:8080/metrics | grep sqlite_write
@@ -300,6 +315,7 @@ systemctl start aspen-node
    ```
 
 5. **Long-term fix**: Adjust auto-checkpoint threshold
+
    ```toml
    [cluster]
    storage_backend = "sqlite"
@@ -310,6 +326,7 @@ systemctl start aspen-node
 ### Issue: Database Corruption Detected
 
 **Symptoms**:
+
 - Node fails to start
 - `/health` endpoint shows `storage: failed`
 - Logs show "integrity_check failed"
@@ -317,11 +334,13 @@ systemctl start aspen-node
 **Resolution**:
 
 1. **Verify corruption**:
+
    ```bash
    sqlite3 /var/lib/aspen/node-1/state-machine.db "PRAGMA integrity_check;"
    ```
 
 2. **If corrupted**: Restore from backup
+
    ```bash
    # Stop node
    systemctl stop aspen-node
@@ -339,6 +358,7 @@ systemctl start aspen-node
    ```
 
 3. **If no backup**: Re-sync from Raft cluster
+
    ```bash
    # Remove corrupted database
    rm /var/lib/aspen/node-1/state-machine.db
@@ -358,6 +378,7 @@ systemctl start aspen-node
 ### Issue: Cross-Storage Validation Failed
 
 **Symptoms**:
+
 - Supervisor prevents node restart
 - Logs show "State machine corruption detected: last_applied (N) exceeds committed (M)"
 
@@ -369,6 +390,7 @@ This indicates a serious consistency violation. The state machine claims to have
 **DO NOT bypass this check.** This error indicates potential data corruption.
 
 1. **Investigate root cause**:
+
    ```bash
    # Check for disk corruption
    dmesg | grep -i error
@@ -381,6 +403,7 @@ This indicates a serious consistency violation. The state machine claims to have
    ```
 
 2. **Check both databases**:
+
    ```bash
    # State machine last_applied
    sqlite3 /var/lib/aspen/node-1/state-machine.db \
@@ -393,6 +416,7 @@ This indicates a serious consistency violation. The state machine claims to have
    ```
 
 3. **Restore from known-good backup**:
+
    ```bash
    systemctl stop aspen-node
 
@@ -411,11 +435,13 @@ This indicates a serious consistency violation. The state machine claims to have
 ### Issue: Slow Write Performance
 
 **Symptoms**:
+
 - High write latency (> 100ms per write)
 - Raft leader falling behind
 - Clients timing out on writes
 
 **Root Causes**:
+
 1. Disk I/O saturation
 2. Large WAL file (not checkpointed)
 3. Slow fsync (USB drives, network storage)
@@ -423,17 +449,20 @@ This indicates a serious consistency violation. The state machine claims to have
 **Resolution**:
 
 1. **Check disk I/O**:
+
    ```bash
    iostat -x 5
    # Look for high %util on storage device
    ```
 
 2. **Checkpoint WAL**:
+
    ```bash
    curl -X POST http://localhost:8080/admin/checkpoint-wal
    ```
 
 3. **Check storage type**:
+
    ```bash
    # Is it on SSD or HDD?
    lsblk -d -o name,rota
@@ -446,6 +475,7 @@ This indicates a serious consistency violation. The state machine claims to have
    - Avoid USB drives (unreliable fsync)
 
 5. **Monitor fsync latency**:
+
    ```bash
    strace -c -p $(pidof aspen-node)
    # Look for slow fsync/fdatasync calls
@@ -454,10 +484,12 @@ This indicates a serious consistency violation. The state machine claims to have
 ### Issue: "Database is Locked" Errors
 
 **Symptoms**:
+
 - Logs show "database is locked"
 - Writes failing intermittently
 
 **Root Causes**:
+
 1. Write connection deadlock
 2. External process holding lock (sqlite3 CLI)
 3. File system locking issues (NFS)
@@ -465,12 +497,14 @@ This indicates a serious consistency violation. The state machine claims to have
 **Resolution**:
 
 1. **Check for external locks**:
+
    ```bash
    lsof | grep state-machine.db
    # Kill any sqlite3 CLI sessions
    ```
 
 2. **Verify WAL mode**:
+
    ```bash
    sqlite3 /var/lib/aspen/node-1/state-machine.db \
      "PRAGMA journal_mode;"
@@ -478,6 +512,7 @@ This indicates a serious consistency violation. The state machine claims to have
    ```
 
 3. **Restart node**:
+
    ```bash
    systemctl restart aspen-node
    ```
@@ -493,12 +528,14 @@ This indicates a serious consistency violation. The state machine claims to have
 If you have high read concurrency (many simultaneous readers):
 
 1. **Increase connection pool size**:
+
    ```rust
    // In code (requires recompile)
    let sm = SqliteStateMachine::with_pool_size(&path, 20)?;
    ```
 
 2. **Monitor pool contention**:
+
    ```bash
    # Future: metrics will show pool utilization
    curl http://localhost:8080/metrics | grep sqlite_pool
@@ -514,6 +551,7 @@ If you have high read concurrency (many simultaneous readers):
 SQLite single-writer is an inherent limitation. For write-heavy workloads:
 
 1. **Monitor write latency**:
+
    ```bash
    curl http://localhost:8080/metrics | grep sqlite_write_latency
    ```
@@ -524,6 +562,7 @@ SQLite single-writer is an inherent limitation. For write-heavy workloads:
    - SSDs: ~0.1ms fsync latency
 
 3. **Checkpoint during low traffic**:
+
    ```bash
    # Schedule checkpoints during low-traffic periods
    0 2 * * * curl -X POST http://localhost:8080/admin/checkpoint-wal
@@ -538,6 +577,7 @@ SQLite single-writer is an inherent limitation. For write-heavy workloads:
 For state machines with millions of keys:
 
 1. **Monitor snapshot build time**:
+
    ```bash
    tail -f /var/log/aspen/node-1.log | grep "snapshot built"
    ```
@@ -548,6 +588,7 @@ For state machines with millions of keys:
    - Schedule manual snapshots during maintenance windows
 
 3. **Tune checkpoint frequency**:
+
    ```toml
    [cluster]
    # For large databases, checkpoint more frequently
@@ -605,11 +646,13 @@ PRAGMA synchronous = FULL;
 ### 1. Always Use FULL Synchronous Mode
 
 **Do**: Use default FULL synchronous mode (already configured)
+
 ```rust
 conn.pragma_update(None, "synchronous", "FULL")?;
 ```
 
 **Don't**: Never disable for performance gains
+
 ```rust
 // NEVER DO THIS - risk of data loss
 conn.pragma_update(None, "synchronous", "OFF")?;
@@ -620,6 +663,7 @@ conn.pragma_update(None, "synchronous", "OFF")?;
 ### 2. Monitor WAL Size
 
 **Do**: Set up alerts for WAL file size
+
 ```bash
 # Prometheus alert rule
 - alert: SqliteWALFileLarge
@@ -632,6 +676,7 @@ conn.pragma_update(None, "synchronous", "OFF")?;
 ```
 
 **Don't**: Ignore WAL growth
+
 - WAL can grow unbounded without checkpoints
 - Large WAL files slow down database operations
 - Can cause disk space exhaustion
@@ -639,12 +684,14 @@ conn.pragma_update(None, "synchronous", "OFF")?;
 ### 3. Regular Backups
 
 **Do**: Implement automated daily backups
+
 ```bash
 # Cron job
 0 3 * * * /usr/local/bin/aspen-backup-daily.sh
 ```
 
 **Don't**: Rely on Raft replication alone
+
 - Raft provides fault tolerance, not backup
 - Correlated failures can affect all replicas
 - Backups enable point-in-time recovery
@@ -652,58 +699,68 @@ conn.pragma_update(None, "synchronous", "OFF")?;
 ### 4. Test Restore Procedures
 
 **Do**: Regularly test backup restoration
+
 ```bash
 # Monthly restore test
 ./scripts/test-backup-restore.sh
 ```
 
 **Don't**: Assume backups work without testing
+
 - Untested backups are as good as no backups
 - Restoration may reveal corruption or configuration issues
 
 ### 5. Cross-Storage Validation
 
 **Do**: Never bypass validation errors
+
 ```bash
 # If validation fails, investigate root cause
 journalctl -u aspen-node | grep "validation failed"
 ```
 
 **Don't**: Disable validation to "fix" startup issues
+
 - Validation errors indicate real corruption
 - Bypassing can lead to data loss or inconsistency
 
 ### 6. Checkpoint During Low Traffic
 
 **Do**: Schedule checkpoints during maintenance windows
+
 ```bash
 # 2 AM checkpoint (low traffic)
 0 2 * * * curl -X POST http://localhost:8080/admin/checkpoint-wal
 ```
 
 **Don't**: Checkpoint during peak traffic
+
 - Checkpoints can briefly block writes
 - May increase latency during busy periods
 
 ### 7. Use SSD Storage
 
 **Do**: Deploy on SSD-backed storage
+
 - 10-100x faster fsync than HDDs
 - Lower write latency (< 1ms vs 10ms)
 
 **Don't**: Use HDDs for production
+
 - SQLite's FULL synchronous mode requires fast fsync
 - HDDs will bottleneck write throughput
 
 ### 8. Local File Systems Only
 
 **Do**: Use local ext4, xfs, or btrfs file systems
+
 ```bash
 # Check file system type
 df -T /var/lib/aspen
 ```
 
 **Don't**: Use network file systems (NFS, CIFS)
+
 - SQLite requires working file locks
 - Network file systems have unreliable locking
 - Risk of database corruption
@@ -711,6 +768,7 @@ df -T /var/lib/aspen
 ### 9. Monitor Disk Space
 
 **Do**: Set up disk space alerts
+
 ```bash
 # Alert when disk > 80% full
 - alert: DiskSpaceHigh
@@ -718,30 +776,35 @@ df -T /var/lib/aspen
 ```
 
 **Don't**: Let disk fill up
+
 - SQLite needs space for WAL file growth
 - Out-of-space errors can corrupt database
 
 ### 10. Keep SQLite Updated
 
 **Do**: Use recent SQLite versions (3.38+)
+
 ```bash
 # Check SQLite version
 sqlite3 --version
 ```
 
 **Don't**: Use ancient SQLite versions
+
 - Older versions have bugs and performance issues
 - WAL mode has improved significantly in recent versions
 
 ## Summary
 
 SQLite storage in Aspen provides:
+
 - **Durability**: ACID transactions with FULL synchronous mode
 - **Debuggability**: Standard SQL tools (sqlite3, DB Browser)
 - **Performance**: 2.6x read throughput with connection pooling
 - **Operability**: Health checks, metrics, and checkpoint management
 
 Key operational tasks:
+
 1. Monitor WAL file size via `/health` endpoint
 2. Checkpoint when WAL exceeds 100MB
 3. Daily backups with restoration testing
@@ -749,6 +812,7 @@ Key operational tasks:
 5. Disk space monitoring and alerts
 
 For questions or issues, refer to:
+
 - [ADR-011: Hybrid SQLite Storage](../adr/011-hybrid-sqlite-storage.md)
 - [GitHub Issues](https://github.com/your-org/aspen/issues)
-- Production oncall: oncall@example.com
+- Production oncall: <oncall@example.com>

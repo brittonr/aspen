@@ -12,11 +12,13 @@ This directory contains artifacts from deterministic simulation runs using `mads
 ## Artifact Format
 
 Each artifact is stored as a JSON file with the naming pattern:
+
 ```
 {test_name}-seed{seed}-{timestamp}.json
 ```
 
 Example:
+
 ```
 hiqlite_flow_simulation_tracks_transport_metrics-seed42-20251202-175136.json
 ```

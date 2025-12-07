@@ -1,4 +1,5 @@
 # Chaos Engineering Strategy for Aspen
+
 **Date**: 2025-12-03
 **Phase**: 6 Week 2
 
@@ -38,6 +39,7 @@ Implemented comprehensive chaos engineering test suite for Aspen's distributed R
 ## Key API Fixes Applied
 
 ### AspenRouter API Corrections
+
 - Replaced non-existent `builder()` pattern with `AspenRouter::new(config)`
 - Fixed `wait()` API usage with proper OpenRaft Wait methods
 - Corrected `write()` error handling (Box<dyn Error> → anyhow::Result)
@@ -46,6 +48,7 @@ Implemented comprehensive chaos engineering test suite for Aspen's distributed R
 - Fixed membership access (use `membership_config.voter_ids()`)
 
 ### Test Pattern Established
+
 ```rust
 // Correct initialization pattern
 let config = Arc::new(Config::default().validate()?);
@@ -66,16 +69,19 @@ router.wait(&node_id, Some(Duration::from_millis(timeout)))
 ## Critical Findings
 
 ### 1. Membership Changes Are Most Dangerous
+
 - Joint consensus phase (C-old → C-old,new → C-new) is vulnerable
 - Leader crash during this phase can cause split-brain if mishandled
 - Test validates safety but shows timing sensitivities
 
 ### 2. Message Drop Simulation Challenges
+
 - AspenRouter lacks native message drop support
 - Simulated via rapid fail/recover patterns
 - May be too aggressive causing timeouts
 
 ### 3. Timing Sensitivities
+
 - Fixed timeouts per Tiger Style principles
 - Election timeouts need careful tuning (3s used)
 - Log index calculations must account for initialization
@@ -91,16 +97,19 @@ router.wait(&node_id, Some(Duration::from_millis(timeout)))
 ## Recommendations
 
 ### Short Term (Fix Test Issues)
+
 1. Adjust timing in leader_crash test - may need to ensure different node becomes leader
 2. Increase timeouts for slow_network and message_drops tests
 3. Consider less aggressive message drop simulation
 
 ### Medium Term (Router Enhancements)
+
 1. Add native message drop API to AspenRouter
 2. Add asymmetric partition support
 3. Add network jitter simulation
 
 ### Long Term (Framework Evolution)
+
 1. Consider madsim integration for deterministic scheduling
 2. Add property-based testing with proptest
 3. Create chaos test harness for automated parameter exploration

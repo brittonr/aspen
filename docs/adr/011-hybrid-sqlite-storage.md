@@ -1,6 +1,7 @@
 # ADR-011: Hybrid SQLite Storage Architecture
 
 ## Status
+
 Accepted (2025-12-06)
 
 ## Context
@@ -18,6 +19,7 @@ While redb has proven reliable for the append-optimized Raft log workload, the s
 ## Decision
 
 Implement a **hybrid storage architecture**:
+
 - **Raft Log**: Continue using redb (append-optimized, well-tested for this use case)
 - **State Machine**: Migrate to SQLite (mature, debuggable, standard tooling)
 
@@ -74,6 +76,7 @@ pub enum StorageBackend {
 ### Trade-offs
 
 **Pros**:
+
 - ✅ Better operational visibility (SQL debugging with sqlite3 CLI)
 - ✅ Mature, battle-tested database (1+ trillion deployments)
 - ✅ Standard tooling ecosystem (DB Browser, sqlitebrowser, VS Code extensions)
@@ -83,6 +86,7 @@ pub enum StorageBackend {
 - ✅ WAL mode checkpoint management for space reclamation
 
 **Cons**:
+
 - ❌ Two database systems (redb + SQLite) - added operational complexity
 - ❌ Different tuning/monitoring requirements for each storage backend
 - ❌ WAL file growth requires monitoring and checkpoint management
@@ -114,6 +118,7 @@ pub struct SqliteStateMachine {
 ```
 
 **Rationale**:
+
 - WAL mode supports multiple concurrent readers without blocking writes
 - Connection pooling improves read throughput by 159% (2.6x speedup measured in benchmarks)
 - Single write connection matches SQLite's single-writer design and Raft's sequential write pattern
@@ -142,6 +147,7 @@ CREATE TABLE snapshots (
 ```
 
 **Rationale**:
+
 - Simple schema matches Raft state machine requirements without over-engineering
 - BLOB for metadata allows bincode serialization of complex Rust types
 - TEXT PRIMARY KEY for KV data matches typical key-value access patterns
@@ -171,6 +177,7 @@ pub async fn validate_consistency_with_log(
 ```
 
 **Rationale**:
+
 - Prevents subtle corruption where state machine gets ahead of log (violates Raft invariants)
 - Tiger Style: Fail-fast on invariant violations
 - Used by actor supervision system to prevent restart loops on corrupted storage
@@ -203,6 +210,7 @@ pub fn checkpoint_wal(&self) -> Result<u32, SqliteStorageError> {
 ```
 
 **Rationale**:
+
 - WAL mode can accumulate unbounded write-ahead log if not checkpointed
 - Auto-checkpoint at 100MB threshold prevents unbounded growth
 - Manual checkpoint endpoint allows operator control during maintenance windows
@@ -283,6 +291,7 @@ Concurrent Reads (10 readers, pool size 10):
 ### Write Throughput
 
 SQLite single-writer matches Raft's sequential write pattern:
+
 - No performance degradation vs redb for sequential writes
 - FULL synchronous mode ensures durability (Tiger Style: fail-safe over fast)
 
@@ -302,6 +311,7 @@ storage_backend = "sqlite"
 ```
 
 Default paths:
+
 - Log: `{data_dir}/raft-log.redb` (still redb)
 - State machine: `{data_dir}/state-machine.db` (SQLite)
 
@@ -314,6 +324,7 @@ aspen-migrate --from redb --to sqlite --data-dir /var/lib/aspen/node-1
 ```
 
 Steps:
+
 1. Stop node gracefully
 2. Export redb state machine to JSON
 3. Import JSON into SQLite

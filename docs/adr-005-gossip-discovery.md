@@ -34,6 +34,7 @@ impl GossipPeerDiscovery {
 Each node runs two background tasks:
 
 1. **Announcer Task**: Broadcasts `PeerAnnouncement` every 10 seconds
+
    ```rust
    #[derive(Debug, Clone, Serialize, Deserialize)]
    struct PeerAnnouncement {
@@ -44,6 +45,7 @@ Each node runs two background tasks:
    ```
 
 2. **Receiver Task**: Listens for peer announcements and automatically adds them to the Raft network factory:
+
    ```rust
    if let Some(ref factory) = receiver_network_factory {
        factory.add_peer(
@@ -64,6 +66,7 @@ TopicId::from_bytes(*hash.as_bytes())
 ```
 
 This ensures:
+
 - Nodes with the same cookie join the same gossip swarm
 - Different clusters remain isolated (no cross-talk)
 - No need to manually configure topic IDs
@@ -92,9 +95,11 @@ When a peer announcement is received:
 1. Parse the `PeerAnnouncement` message
 2. Filter out self-announcements (avoid connecting to own node)
 3. Add peer to `IrpcRaftNetworkFactory`:
+
    ```rust
    factory.add_peer(announcement.node_id, announcement.endpoint_addr);
    ```
+
 4. Iroh establishes a QUIC connection on-demand when Raft needs to communicate
 
 This enables **zero-configuration peer connectivity**: nodes discover each other and connect automatically without manual peer lists.
@@ -111,6 +116,7 @@ Gossip works in conjunction with Iroh's discovery mechanisms:
 | **Gossip** | Announce Raft metadata | ~10 sec | Cluster |
 
 Workflow:
+
 1. Node boots, Iroh establishes endpoint (mDNS/DNS/Pkarr find initial peers)
 2. Node subscribes to cluster gossip topic
 3. Node broadcasts its Raft node ID + endpoint address every 10 seconds
@@ -165,6 +171,7 @@ Based on "napkin math" from Tiger Style:
 - **Chattiness**: Low enough to avoid noise, high enough for prompt discovery
 
 Trade-offs:
+
 - Shorter interval (e.g., 1 sec) → faster discovery but more network traffic
 - Longer interval (e.g., 60 sec) → less overhead but slower discovery
 
@@ -175,11 +182,13 @@ Trade-offs:
 ### 1. Manual Peer Configuration Only
 
 **Pros:**
+
 - Simple and explicit
 - No discovery overhead
 - Predictable behavior
 
 **Cons:**
+
 - Operational burden (managing peer lists)
 - Manual reconfiguration on topology changes
 - Doesn't scale to dynamic environments
@@ -189,11 +198,13 @@ Trade-offs:
 ### 2. DNS Service Discovery (DNS-SD)
 
 **Pros:**
+
 - Industry standard (RFC 6763)
 - Well-understood operational model
 - Works in Kubernetes/cloud environments
 
 **Cons:**
+
 - Requires external DNS infrastructure
 - Centralized single point of failure
 - Stale records if nodes crash
@@ -204,11 +215,13 @@ Trade-offs:
 ### 3. Consul/etcd Registry
 
 **Pros:**
+
 - Centralized service registry
 - Health checking
 - Rich query capabilities
 
 **Cons:**
+
 - Additional infrastructure dependency
 - Operationally complex
 - Single point of failure
@@ -219,10 +232,12 @@ Trade-offs:
 ### 4. Custom Discovery Protocol
 
 **Pros:**
+
 - Tailored to exact requirements
 - Full control over behavior
 
 **Cons:**
+
 - Reinventing the wheel
 - Complex to get right (NAT traversal, security, etc.)
 - Maintenance burden
@@ -248,17 +263,20 @@ Trade-offs:
 ### Operational Considerations
 
 **Cluster Cookie Management**: The cluster cookie is security-critical:
+
 - Acts as shared secret for cluster membership
 - Should be randomly generated per cluster
 - Must be distributed securely to all nodes
 - Rotation requires cluster-wide coordination
 
 **Testing Strategy** (see `docs/discovery-testing.md`):
+
 - **CI tests**: Disable gossip, use manual peers (deterministic)
 - **LAN tests**: Enable mDNS + gossip (real network)
 - **Production tests**: Enable all discovery methods (DNS, Pkarr, gossip)
 
 **Monitoring Metrics**:
+
 - `gossip_announcements_sent`: Number of announcements broadcast
 - `gossip_announcements_received`: Number of peer announcements processed
 - `gossip_peers_discovered`: Unique peers discovered via gossip
@@ -294,5 +312,5 @@ Trade-offs:
 - Implementation: `src/cluster/gossip_discovery.rs`
 - Testing guide: `docs/discovery-testing.md`
 - Integration test: `tests/gossip_auto_peer_connection_test.rs`
-- Iroh gossip: https://docs.rs/iroh-gossip
+- Iroh gossip: <https://docs.rs/iroh-gossip>
 - Tiger Style: `tigerstyle.md`

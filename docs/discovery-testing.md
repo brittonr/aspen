@@ -40,11 +40,13 @@ async fn test_gossip_with_manual_peers() {
 ```
 
 **Pros:**
+
 - ✅ Runs in CI without external services
 - ✅ Deterministic and fast
 - ✅ Tests gossip protocol logic
 
 **Cons:**
+
 - ❌ Doesn't test mDNS/DNS/Pkarr discovery
 - ❌ Doesn't validate NAT traversal
 
@@ -83,16 +85,19 @@ curl http://192.168.1.10:8080/state | jq .
 ```
 
 **Expected behavior:**
+
 1. Within 5 seconds: mDNS discovers peers on the LAN
 2. Within 12 seconds: Gossip announces Raft node IDs
 3. Nodes can be added to Raft cluster without manual configuration
 
 **Pros:**
+
 - ✅ Tests real mDNS multicast discovery
 - ✅ Validates zero-config experience
 - ✅ Proves Iroh connectivity establishment
 
 **Cons:**
+
 - ❌ Requires physical/VM infrastructure
 - ❌ Not automatable in CI
 - ❌ Sensitive to firewall/network config
@@ -106,6 +111,7 @@ curl http://192.168.1.10:8080/state | jq .
 **How:** Deploy test infrastructure mimicking production
 
 **Required infrastructure:**
+
 1. Iroh relay server (or use n0's public relay: `https://relay.iroh.link`)
 2. DNS discovery service (or use n0's public DNS: `https://dns.iroh.link`)
 3. Pkarr relay (or use n0's public Pkarr: `https://pkarr.iroh.link`)
@@ -157,17 +163,20 @@ curl http://node1:8080/state | jq '.nodes | length'  # Should be 3
 ```
 
 **Expected behavior:**
+
 1. Within 5 seconds: DNS discovery finds initial peers
 2. Within 30-60 seconds: Pkarr DHT propagation completes
 3. Within 12 seconds: Gossip announces Raft metadata
 4. Relay facilitates NAT traversal for direct QUIC connections
 
 **Pros:**
+
 - ✅ Tests production configuration
 - ✅ Validates cross-region connectivity
 - ✅ Proves relay, DNS, Pkarr integration
 
 **Cons:**
+
 - ❌ Requires external services (or self-hosted infrastructure)
 - ❌ Higher latency (DNS/DHT propagation)
 - ❌ Complex to automate in CI
@@ -255,11 +264,13 @@ async fn test_manual_peers_only() {
 ```
 
 **Pros:**
+
 - ✅ Can run in CI (mocked failures)
 - ✅ Validates error handling
 - ✅ Ensures graceful degradation
 
 **Cons:**
+
 - ❌ Doesn't test real service failures
 - ❌ May not catch all edge cases
 
@@ -416,6 +427,7 @@ During discovery testing, monitor these metrics:
 **Symptoms:** Nodes on same network don't discover each other
 
 **Checks:**
+
 1. Nodes on same subnet? `ip addr show | grep inet`
 2. Multicast enabled? `ip link show | grep MULTICAST`
 3. Firewall allows UDP 5353? `iptables -L | grep 5353`
@@ -428,6 +440,7 @@ During discovery testing, monitor these metrics:
 **Symptoms:** Bootstrap hangs, DNS query logs show timeouts
 
 **Checks:**
+
 1. DNS service reachable? `curl -v https://dns.iroh.link`
 2. Network connectivity? `ping dns.iroh.link`
 3. Correct URL? Check for typos in `dns_discovery_url`
@@ -439,6 +452,7 @@ During discovery testing, monitor these metrics:
 **Symptoms:** Nodes don't appear in DHT, Pkarr logs show errors
 
 **Checks:**
+
 1. Pkarr relay reachable? `curl https://pkarr.iroh.link`
 2. Relay requires auth? Check relay documentation
 3. DHT propagation time? Wait 60+ seconds
@@ -448,6 +462,7 @@ During discovery testing, monitor these metrics:
 ## Example Test Implementation
 
 See `tests/discovery_integration_test.rs` for a complete integration test template demonstrating:
+
 - Manual peer fallback testing
 - Failure scenario simulation
 - Discovery timing validation

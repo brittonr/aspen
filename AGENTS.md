@@ -1,34 +1,43 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
+
 Per `GEMINI.md`, Aspen centers on four Rust modules: `orchestration` (control plane flows), `distributed` (iroh + hiqlite primitives), `traits` (service contracts), and `types` (shared data). Keep Raft experiments in `openraft/`, architecture notes plus the `docs/iroh-examples` reference tree under `docs/`, and place integration scenarios in `tests/` named for the subsystem they cover.
 
 ## Build, Test, and Development Commands
+
 - `nix develop` (or `nix-shell -p <package>`) enters the pinned dev shell from `flake.nix`.
 - `cargo build` compiles the crate, while `cargo check` catches regressions quickly between edits.
 - `cargo nextest run` is the primary runner; use `cargo test` only for fast spot checks.
 - Keep `context7 mcp serve` running when working with the MCP integrations mentioned in GEMINI.
 
 ## Coding Style & Naming Conventions
+
 Tiger Style governs every change: favor simple, explicit control flow, avoid recursion, and set fixed limits on loops or queues. Keep functions under ~70 lines, use explicitly sized integers, and statically allocate long-lived data where possible. Treat compiler warnings as errors, assert arguments and invariants aggressively, and document tricky constraints with concise comments. Stick to idiomatic Rust naming (`snake_case` functions/modules, `PascalCase` types) and format through `cargo fmt`.
 
 ## Testing Guidelines
+
 GEMINI emphasizes property-based testing via `proptest`, so each module should surface generative tests that encode invariants. Distributed code must run inside deterministic simulation (`madsim`) to expose race conditions faster than Jepsen-style suites, and tests should assert both success and failure paths (e.g., `test_actor_respects_lease_limit`). Capture simulator seeds or failure traces in accompanying docs when relevant.
 
 ## Commit & Pull Request Guidelines
+
 Zero technical debt is part of Tiger Style, so commits should be small, intentional, and reversible. Use descriptive Conventional-Commit-style subjects (`feat(distributed): add dag sync hooks`) and explain how the change defends the stated safety/performance goals. PRs need links to roadmap work, `cargo check`/`cargo nextest` evidence, simulator runs when applicable, and explicit notes about operator actions or config shifts.
 
 - Treat each milestone as a distinct, minimal commit; land incremental progress frequently rather than batching unrelated work.
 - After completing a milestone, immediately update `plan.md` to reflect the new progress and remaining steps.
 
 ## Environment & Security Notes
+
 GEMINI assumes the Nix dev shell plus the pinned Rust channel, so add tools via `nix-shell -p` instead of ad-hoc installs. Keep secrets out of the repo by leaning on local environment overlays. When adjusting dependencies such as `iroh` or `hiqlite`, record rationale in `docs/` and cross-check the upstream resources referenced at the end of GEMINI.
 
 ## Ractor Cluster Notes
+
 We're adopting `ractor` with the `cluster` feature plus `ractor_cluster`/`ractor_actors` so we can host distributed actors. Key reminders:
+
 - `NodeServer` owns the listener plus the per-peer `NodeSession` actors and is the single entry point to bring a node online. Every host must run one.
 - Nodes authenticate via Erlang-style “magic cookies”; make sure peers share the same cookie before calling `client_connect`/`client_connect_enc`.
 - **Bring Your Own Transport:** implement `ractor_cluster::ClusterBidiStream` for your connected stream (just split into `AsyncRead`/`AsyncWrite` halves) and feed it to the node server with `NodeServerMessage::ConnectionOpenedExternal`/`client_connect_external`. The on-wire protocol stays the same (len-prefixed, prost-encoded frames), so you don’t touch auth or PG sync logic. This makes QUIC/WebSocket/in-memory transports possible alongside the default TCP/TLS paths. For example:
+
   ```rust
   use ractor_cluster::{ClusterBidiStream, BoxRead, BoxWrite};
   use tokio::io::DuplexStream;
@@ -50,10 +59,12 @@ We're adopting `ractor` with the `cluster` feature plus `ractor_cluster`/`ractor
   //     is_server: false,
   // })?;
   ```
+
 - Message enums for actors that can be remoted must derive `RactorClusterMessage` (or implement `ractor::Message` + `BytesConvertable` manually) so they serialize across the wire. Use `#[rpc]` on variants that expect replies.
 - `ractor_actors` ships a set of helper actors (watchdog, broadcaster, filewatcher, etc.)—enable only the features you need to keep the dependency surface minimal.
 
 ## External Raft / DB Plan
+
 Aspen currently serves as the control-plane and transport façade. The actual Raft/DB implementation will live outside this crate in the near term, so keep the HTTP/API layer and actor interfaces cleanly separated behind traits. The goal is for `aspen-node` to expose `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`, and `/metrics` regardless of whether the storage/consensus engine is the in-memory stub or an out-of-process service. Document request/response formats and avoid baking storage assumptions into the HTTP handlers so the external Raft backend can slot in later without refactoring the API.
 
 ## Component Integration Architecture
@@ -65,11 +76,13 @@ This section explains how Ractor, Iroh, IRPC, and OpenRaft integrate together to
 Aspen is structured in distinct layers, each with clear responsibilities:
 
 #### Application Layer (HTTP API + KvClient)
+
 - **HTTP Control Plane**: REST endpoints for cluster operations (`/init`, `/add-learner`, `/change-membership`, `/write`, `/read`, `/metrics`)
 - **KvClient**: High-level client library for interacting with the cluster
 - **Location**: `src/bin/aspen-node.rs` (HTTP), `src/kv/mod.rs` (client)
 
 #### Control Layer (RaftActor + Trait Contracts)
+
 - **RaftActor**: Ractor-based actor that owns the Raft instance lifecycle
 - **ClusterController**: Trait for cluster membership operations (init, add learner, change membership)
 - **KeyValueStore**: Trait for distributed KV operations (read, write)
@@ -77,17 +90,20 @@ Aspen is structured in distinct layers, each with clear responsibilities:
 - **Location**: `src/raft/mod.rs` (actor), `src/api/mod.rs` (traits)
 
 #### Network Layer (IRPC + IrohEndpoint + Gossip)
+
 - **IrpcRaftNetworkFactory**: Implements OpenRaft's `RaftNetworkFactory` trait for peer-to-peer RPC
 - **RaftRpcServer**: IRPC server that accepts incoming Raft RPCs over Iroh QUIC streams
 - **GossipPeerDiscovery**: Broadcasts node metadata for automatic peer discovery
 - **Location**: `src/raft/network.rs` (factory), `src/raft/server.rs` (server), `src/cluster/gossip_discovery.rs` (gossip)
 
 #### Storage Layer (InMemoryLogStore + StateMachineStore)
+
 - **InMemoryLogStore**: In-memory Raft log storage (currently volatile, redb-backed version planned)
 - **StateMachineStore**: ACID state machine using redb for key-value storage
 - **Location**: `src/raft/storage.rs`
 
 #### Transport Layer (Iroh QUIC + Discovery Services)
+
 - **IrohEndpoint**: P2P QUIC transport with NAT traversal and relay support
 - **mDNS Discovery**: Local network peer discovery (LAN environments)
 - **DNS Discovery**: Production peer discovery via DNS service queries
@@ -178,6 +194,7 @@ See `src/cluster/bootstrap.rs:bootstrap_node()` (lines 150-377) for the complete
 #### Write Operation Flow (HTTP → Raft → Network → Peers → State Machine)
 
 Client Request Path:
+
 ```text
 HTTP POST /write {"command": {"Set": {"key": "foo", "value": "bar"}}}
     ↓ (src/bin/aspen-node.rs:handle_write)
@@ -195,6 +212,7 @@ Iroh QUIC: endpoint.connect() → open_bi() → write_all(serialized_request)
 ```
 
 Peer Response Path:
+
 ```text
 Iroh QUIC: endpoint.accept() → accept_bi()
     ↓ (src/raft/server.rs:run_server, lines 80-112)
@@ -231,6 +249,7 @@ This ensures linearizable reads without contacting peers for the read operation 
 See `src/cluster/gossip_discovery.rs` and `src/cluster/bootstrap.rs:bootstrap_node()` (lines 236-276):
 
 **Automatic Discovery with Gossip** (default):
+
 1. **Derive Gossip Topic**: Blake3 hash of cluster cookie → TopicId (line 253)
    - Or parse from cluster ticket if provided (lines 240-249)
 2. **Spawn Gossip Task**: Subscribe to topic and spawn announcement task (lines 263-271)
@@ -241,11 +260,13 @@ See `src/cluster/gossip_discovery.rs` and `src/cluster/bootstrap.rs:bootstrap_no
 6. **Raft RPCs Flow**: When Raft needs to contact a peer, factory looks up EndpointAddr in peer map
 
 **Manual Discovery** (fallback when gossip disabled):
+
 1. **Parse CLI Peers**: Convert `--peers "node_id@endpoint_id"` to HashMap (bootstrap.rs:110-136)
 2. **Initialize Network Factory**: Pre-populate peer map at startup (bootstrap.rs:230-233)
 3. **Static Peer Map**: Raft RPCs only flow to explicitly configured peers
 
 **Iroh Discovery Services** (establish connectivity before gossip):
+
 - **mDNS**: Discovers peers on LAN via multicast (enabled by default, lines 543-546)
 - **DNS Discovery**: Queries DNS service for bootstrap peers (opt-in, lines 549-560)
 - **Pkarr Publisher**: Publishes to DHT relay for distributed discovery (opt-in, lines 563-574)
@@ -266,6 +287,7 @@ From `src/cluster/bootstrap.rs:bootstrap_node()` (lines 150-377), components mus
 8. **HTTP API** (src/bin/aspen-node.rs): REST control plane (depends on all above)
 
 **Shutdown order is reversed** (see `BootstrapHandle::shutdown()`, lines 60-93):
+
 1. Gossip Discovery → 2. IRPC Server → 3. Iroh Endpoint → 4. NodeServer → 5. RaftActor → 6. Metadata Update
 
 ### Common Workflows
@@ -352,11 +374,13 @@ curl http://127.0.0.1:8001/health
 **Symptoms**: Writes fail with "no leader available", metrics show `current_leader: None`
 
 **Common Causes**:
+
 - Election timeout too aggressive for network latency
 - Quorum not reachable (need majority of nodes online)
 - Clock skew between nodes exceeding heartbeat interval
 
 **Solutions**:
+
 ```sh
 # Increase election timeout
 --election-timeout-min-ms 2000 --election-timeout-max-ms 4000
@@ -369,6 +393,7 @@ curl http://127.0.0.1:8001/metrics
 ```
 
 **Code References**:
+
 - `src/raft/mod.rs:handle_write()` returns error if no leader (line 310-317)
 - `src/cluster/bootstrap.rs` election timeout config (lines 297-299)
 
@@ -377,6 +402,7 @@ curl http://127.0.0.1:8001/metrics
 **Symptoms**: Raft metrics show no replication to peers, `network.replication` map empty
 
 **Common Causes**:
+
 - Gossip disabled but no manual peers configured
 - Incorrect EndpointAddr format in `--peers` flag
 - mDNS doesn't work on localhost/127.0.0.1 (multicast limitation)
@@ -384,6 +410,7 @@ curl http://127.0.0.1:8001/metrics
 - Mismatched cluster cookies (gossip topic mismatch)
 
 **Solutions**:
+
 ```sh
 # Enable gossip for automatic discovery
 # (default, no flag needed)
@@ -402,6 +429,7 @@ RUST_LOG=aspen::raft::network=debug aspen-node ...
 ```
 
 **Code References**:
+
 - `src/cluster/gossip_discovery.rs`: Automatic peer discovery via gossip
 - `src/cluster/bootstrap.rs:parse_peer_addresses()` (lines 110-136): Manual peer parsing
 - `src/raft/network.rs:IrpcRaftNetworkFactory` (lines 36-86): Peer address map management
@@ -411,12 +439,14 @@ RUST_LOG=aspen::raft::network=debug aspen-node ...
 **Symptoms**: POST `/write` returns 500 error, "failed to commit" messages in logs
 
 **Common Causes**:
+
 - Not enough nodes online to form quorum (need N/2 + 1)
 - Leader deposed mid-write (term change)
 - Network partition separating leader from followers
 - Cluster not initialized (must call `/init` first)
 
 **Solutions**:
+
 ```sh
 # Verify cluster is initialized
 curl http://127.0.0.1:8001/state
@@ -435,6 +465,7 @@ done
 ```
 
 **Code References**:
+
 - `src/raft/mod.rs:handle_write()` (lines 296-318): Write operation flow
 - `src/raft/mod.rs:ensure_initialized_kv()` (lines 193-207): Initialization check
 - `src/api/mod.rs`: ClusterController and KeyValueStore trait definitions

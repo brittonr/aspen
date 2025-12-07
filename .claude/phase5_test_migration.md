@@ -36,16 +36,19 @@ Successfully ported 6 OpenRaft test scenarios to Aspen's test suite, expanding c
 ## Key Migration Decisions
 
 ### 1. Testing Infrastructure
+
 - **Used AspenRouter** - Maintained consistency with existing test infrastructure
 - **No madsim yet** - Tests use tokio runtime (non-deterministic timing) as per existing patterns
 - **No SimulationArtifactBuilder** - Deferred to future madsim migration
 
 ### 2. API Adaptations
+
 - **Write error handling** - AspenRouter::write() returns `Result<(), Box<dyn Error>>` requiring explicit error conversion
 - **Wait API deprecations** - Used `applied_index()` instead of deprecated `log_at_least()`
 - **Metrics field access** - Some RaftMetrics fields differ from OpenRaft reference tests
 
 ### 3. Import Patterns
+
 - **Storage traits** - Required explicit imports: `RaftLogStorage`, `RaftLogStorageExt`, `RaftLogReader`
 - **Type parameters** - All test helpers require explicit type params: `blank_ent::<AppTypeConfig>()`
 - **Leader IDs** - Use `openraft::vote::leader_id_std::CommittedLeaderId` for log IDs
@@ -53,12 +56,14 @@ Successfully ported 6 OpenRaft test scenarios to Aspen's test suite, expanding c
 ### 4. Compilation Issues Encountered
 
 #### Fixed Issues
+
 - Missing storage trait imports for `save_vote()`, `blocking_append()`, `get_log_reader()`
 - Type parameter requirements for test helpers
 - Error handling for AspenRouter::write() calls
 - Metrics field name differences
 
 #### Known Limitations
+
 - Some RaftMetrics fields not directly accessible (e.g., `applied_index` field)
 - Type mismatches with CommittedLeaderId in some contexts
 - Current leader expectations in Wait API require NodeId not Option<NodeId>
@@ -66,6 +71,7 @@ Successfully ported 6 OpenRaft test scenarios to Aspen's test suite, expanding c
 ## Test Coverage Impact
 
 These tests significantly expand Aspen's resilience testing:
+
 - **Election safety** - Prevents split-brain scenarios
 - **Snapshot streaming** - Enables log compaction without data loss
 - **Network partitions** - Handles temporary failures gracefully
@@ -84,12 +90,14 @@ These tests significantly expand Aspen's resilience testing:
 ## Test Patterns Established
 
 ### Error Handling Pattern
+
 ```rust
 router.write(&node_id, key, value).await
     .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
 ```
 
 ### Storage Manipulation Pattern
+
 ```rust
 let (mut sto, sm) = router.new_store();
 sto.save_vote(&Vote::new(term, node_id)).await?;
@@ -98,6 +106,7 @@ router.new_raft_node_with_storage(id, sto, sm).await?;
 ```
 
 ### Network Failure Pattern
+
 ```rust
 router.fail_node(node_id);       // Simulate partition
 // ... operations while partitioned ...
@@ -105,6 +114,7 @@ router.recover_node(node_id);    // Heal partition
 ```
 
 ### Direct API Testing Pattern
+
 ```rust
 let (raft, log_store, state_machine) = router.remove_node(id).unwrap();
 let response = raft.append_entries(request).await?;

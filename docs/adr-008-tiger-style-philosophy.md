@@ -221,6 +221,7 @@ From `tigerstyle.md`:
 > **Do it right the first time:** Take the time to design and implement solutions correctly from the start. Rushed features lead to technical debt that requires costly refactoring later.
 
 Aspen's approach:
+
 - Use proven libraries (openraft, redb, iroh) instead of building from scratch
 - Write tests alongside implementation
 - Document decisions in ADRs

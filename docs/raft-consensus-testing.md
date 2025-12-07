@@ -11,18 +11,21 @@ Aspen supports two control backend modes for different testing purposes. This do
 **Purpose**: Fast API shape validation
 
 **Implementation**:
+
 - In-memory HashMap-based storage
 - No network communication
 - Single-node operation
 - Immediate responses
 
 **What it tests**:
+
 - HTTP endpoint availability
 - Request/response format validation
 - API contract correctness
 - Basic key-value operations
 
 **What it does NOT test**:
+
 - Leader election
 - Log replication
 - Consensus conflicts
@@ -30,6 +33,7 @@ Aspen supports two control backend modes for different testing purposes. This do
 - Membership changes affecting actual Raft state
 
 **Use cases**:
+
 - CI fast checks (completes in ~5 seconds)
 - API contract testing
 - Development iteration
@@ -42,12 +46,14 @@ Aspen supports two control backend modes for different testing purposes. This do
 **Purpose**: Real distributed consensus validation
 
 **Implementation**:
+
 - OpenRaft consensus engine
 - redb persistent storage
 - IRPC network communication
 - Multi-node Raft cluster
 
 **What it tests**:
+
 - Leader election (1500-3000ms timeout)
 - Log replication to followers
 - Membership changes via Raft
@@ -55,12 +61,14 @@ Aspen supports two control backend modes for different testing purposes. This do
 - Multi-node coordination
 
 **Slower execution**:
+
 - Leader election: 1500-3000ms
 - Log replication: 1-2s per write
 - Membership changes: 2-3s
 - Total test time: ~30-60 seconds
 
 **Use cases**:
+
 - Integration testing
 - Production-like validation
 - Consensus bug detection
@@ -145,11 +153,13 @@ curl http://127.0.0.1:21001/metrics
 **Symptom**: `wait_for_leader()` times out after 20 seconds
 
 **Possible causes**:
+
 - Nodes not receiving each other's messages (check Iroh connectivity)
 - Election timeout too short (increase to 3000ms)
 - Nodes not discovering peers (check gossip/manual peer configuration)
 
 **Fix**:
+
 ```bash
 # Check if nodes can connect
 grep -i "iroh\|peer" n*.log
@@ -163,11 +173,13 @@ netstat -an | grep 26001
 **Symptom**: `verify_replication()` fails - write succeeds but read returns empty
 
 **Possible causes**:
+
 - Reading from non-voter (learners can't serve linearizable reads)
 - Replication lag (follower behind leader)
 - Leader not achieving quorum
 
 **Fix**:
+
 ```bash
 # Increase sleep time in verify_replication() to 3 seconds
 # Check follower logs for replication messages
@@ -179,11 +191,13 @@ grep -i "append_entries\|replicate" n*.log
 **Symptom**: `add_learner()` or `change_membership()` returns error
 
 **Possible causes**:
+
 - Calling on non-leader node
 - Missing `raft_addr` field in request
 - Learner not reachable
 
 **Fix**:
+
 ```bash
 # Always call membership changes on leader
 leader=$(curl -s http://127.0.0.1:21001/metrics | grep current_leader | grep -oE '[0-9]+$')

@@ -177,6 +177,7 @@ Aspen supports multiple automatic peer discovery mechanisms (see `examples/READM
 ### Launch Patterns
 
 **Local testing (same LAN):**
+
 ```bash
 # Zero-config discovery with mDNS + gossip (default)
 aspen-node --node-id 1 --cookie "cluster-secret"
@@ -184,6 +185,7 @@ aspen-node --node-id 2 --cookie "cluster-secret"  # Separate machine, same LAN
 ```
 
 **Production deployment (DNS + Pkarr + relay):**
+
 ```bash
 aspen-node \
   --node-id 1 \
@@ -196,6 +198,7 @@ aspen-node \
 ```
 
 **Manual peer configuration (testing/airgapped):**
+
 ```bash
 aspen-node \
   --node-id 1 \

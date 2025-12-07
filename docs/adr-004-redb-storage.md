@@ -54,6 +54,7 @@ struct StateMachineData {
    - Copy-on-write design minimizes write amplification
 
 4. **Type Safety**: Strongly-typed tables prevent serialization errors at compile time:
+
    ```rust
    // Example (planned):
    const LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
@@ -76,10 +77,12 @@ From `tigerstyle.md`:
 ### 1. sled
 
 **Pros:**
+
 - Pure Rust embedded database
 - Good write performance
 
 **Cons:**
+
 - Less mature (beta quality)
 - Higher memory usage due to in-memory index
 - Complex crash recovery model
@@ -90,11 +93,13 @@ From `tigerstyle.md`:
 ### 2. RocksDB
 
 **Pros:**
+
 - Battle-tested (used in TiKV, CockroachDB, etcd)
 - Excellent write throughput via LSM-tree
 - Rich tuning options
 
 **Cons:**
+
 - C++ dependency (FFI overhead, build complexity)
 - Complex tuning required for optimal performance
 - Write amplification from compaction
@@ -105,11 +110,13 @@ From `tigerstyle.md`:
 ### 3. LMDB
 
 **Pros:**
+
 - Extremely stable and mature
 - Zero-copy reads via memory mapping
 - Used in production databases (OpenLDAP)
 
 **Cons:**
+
 - C dependency (similar to RocksDB issues)
 - Copy-on-write can cause large file growth
 - Limited documentation for Rust bindings
@@ -119,10 +126,12 @@ From `tigerstyle.md`:
 ### 4. Custom Implementation
 
 **Pros:**
+
 - Full control over design
 - Tailored specifically to Raft's access patterns
 
 **Cons:**
+
 - High development cost
 - Database engines are notoriously complex
 - Risk of subtle correctness bugs
@@ -146,6 +155,7 @@ From `tigerstyle.md`:
 ### Migration Path
 
 The current in-memory implementation will remain for:
+
 - Unit tests (faster, deterministic)
 - Madsim simulations (no file I/O in simulations)
 
@@ -173,6 +183,7 @@ const STATE_MACHINE_KV: TableDefinition<&str, &str> = TableDefinition::new("kv")
 **Status: 70% Complete**
 
 ### ✅ Completed
+
 - `StorageBackend` enum for InMemory/Redb selection
 - `RedbLogStore` (~270 lines) fully implementing `RaftLogStorage`:
   - Vote persistence (`save_vote`, `read_vote`)
@@ -188,11 +199,13 @@ const STATE_MACHINE_KV: TableDefinition<&str, &str> = TableDefinition::new("kv")
 - Tiger Style compliance: explicit u64 types, bounded operations, fail-fast semantics
 
 ### ⏸️ In Progress
+
 - OpenRaft comprehensive test suite: 1 failure in `test_redb_storage_suite` (last_applied_log state sync issue)
 - Bootstrap integration: need to wire Redb storage into `bootstrap_node()`
 - Configuration: add backend selection to `ClusterBootstrapConfig`
 
 ### 📊 Test Results
+
 ```
 test_redb_log_persistence            PASS ✅ (0.167s)
 test_redb_state_machine_persistence  PASS ✅
@@ -203,6 +216,6 @@ test_redb_storage_suite              FAIL ❌ (assertion failure - investigating
 
 ## References
 
-- redb documentation: https://docs.rs/redb
+- redb documentation: <https://docs.rs/redb>
 - OpenRaft storage traits: `src/raft/storage.rs`
 - Tiger Style philosophy: `tigerstyle.md`

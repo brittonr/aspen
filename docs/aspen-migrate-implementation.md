@@ -87,12 +87,14 @@ When `--verify` is enabled:
 ## Files Created
 
 ### Binary
+
 - **`src/bin/aspen-migrate.rs`** (402 lines)
   - CLI tool implementation
   - Migration logic
   - Verification logic
 
 ### Documentation
+
 - **`docs/migration-guide.md`** (450+ lines)
   - Step-by-step migration procedure
   - Rollback instructions
@@ -106,6 +108,7 @@ When `--verify` is enabled:
   - Testing results
 
 ### Tests
+
 - **`tests/migration_test.rs`** (330 lines)
   - 8 integration tests
   - Covers basic migration, metadata preservation, large datasets
@@ -174,6 +177,7 @@ Based on test results:
 - **Verification overhead**: ~20% additional time
 
 Actual performance depends on:
+
 - Disk I/O speed
 - Database size
 - Key/value sizes
@@ -194,6 +198,7 @@ The migration tool uses existing dependencies (no new additions required):
 ## Configuration Changes
 
 Modified `src/raft/storage_sqlite.rs`:
+
 - Made `write_conn` field public for migration tool access
 - Added documentation: "Public for migration tool access"
 
@@ -228,17 +233,20 @@ The implementation is production-ready:
 ## Operational Considerations
 
 ### Before Migration
+
 1. Stop Aspen node
 2. Backup redb database
 3. Verify sufficient disk space
 4. Plan maintenance window
 
 ### During Migration
+
 1. Run tool with `--verify` flag
 2. Monitor output for errors
 3. Check verification passes
 
 ### After Migration
+
 1. Keep redb backup for 7+ days
 2. Update configuration to use SQLite
 3. Restart node
@@ -246,6 +254,7 @@ The implementation is production-ready:
 5. Verify cluster health
 
 ### Multi-Node Clusters
+
 - **Rolling migration**: Migrate nodes one at a time (zero downtime)
 - **Full shutdown**: Migrate all nodes during maintenance window
 - See `docs/migration-guide.md` for detailed procedures
@@ -253,17 +262,20 @@ The implementation is production-ready:
 ## Maintenance
 
 ### Code Ownership
+
 - **Primary**: Storage team
 - **Reviewer**: Raft team
 - **Documentation**: Platform team
 
 ### Known Limitations
+
 1. Only migrates state machine (not Raft log)
 2. No reverse migration (SQLite → redb)
 3. Requires node shutdown during migration
 4. Maximum 10,000 verification iterations (Tiger Style bound)
 
 ### Monitoring
+
 - Track migration success/failure rates
 - Monitor migration duration trends
 - Alert on verification failures
@@ -280,6 +292,7 @@ The implementation is production-ready:
 ## Changelog
 
 ### 2025-12-06 - Initial Implementation
+
 - Created `aspen-migrate` binary
 - Implemented 6-step migration process
 - Added verification logic (count, data, metadata, checksum)
