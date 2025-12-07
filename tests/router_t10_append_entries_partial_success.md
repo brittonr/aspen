@@ -1,6 +1,7 @@
 # Test Port Status: t10_append_entries_partial_success
 
 ## Status
+
 The test has been ported to `/home/brittonr/git/aspen/tests/router_t10_append_entries_partial_success.rs` but **cannot compile** yet due to missing AspenRouter methods.
 
 ## Missing AspenRouter Methods
@@ -12,6 +13,7 @@ To complete this port, the following methods need to be added to `AspenRouter` i
 Sets a quota for append_entries RPCs to simulate partial success. When quota is set to `Some(n)`, at most `n` entries will be sent per RPC.
 
 **Implementation requirements:**
+
 - Add `append_entries_quota: StdMutex<Option<u64>>` field to `InnerRouter`
 - Initialize it in `InnerRouter::new()` as `StdMutex::new(None)`
 - Add import: `use openraft::RPCTypes;`
@@ -28,6 +30,7 @@ Sets a quota for append_entries RPCs to simulate partial success. When quota is 
 Sends `count` client write requests to the specified node.
 
 **Implementation:**
+
 ```rust
 pub async fn client_request_many(
     &self,
@@ -49,6 +52,7 @@ pub async fn client_request_many(
 The test spawns a task that needs to clone the router. Add `#[derive(Clone)]` to `AspenRouter`.
 
 **Implementation:**
+
 ```rust
 #[derive(Clone)]
 pub struct AspenRouter {
@@ -60,6 +64,7 @@ pub struct AspenRouter {
 ## Test Overview
 
 The test validates that:
+
 1. With a quota of 2, only 2 log entries are replicated per append_entries RPC
 2. Client writes block when quota is exhausted
 3. Increasing the quota allows more entries to be replicated

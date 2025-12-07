@@ -289,9 +289,7 @@ pub enum MetadataError {
     NodeNotFound { node_id: u64 },
 
     #[snafu(display("system time is before Unix epoch (clock misconfigured)"))]
-    SystemTime {
-        source: std::time::SystemTimeError,
-    },
+    SystemTime { source: std::time::SystemTimeError },
 }
 
 #[cfg(test)]

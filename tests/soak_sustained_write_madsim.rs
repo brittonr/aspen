@@ -26,7 +26,6 @@
 /// - 50,000 ops over 300s virtual time = ~166 ops/sec target rate
 /// - With madsim compression: ~50,000:1 ratio
 /// - Real execution time: ~5-10 seconds
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -153,13 +152,13 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
     use soak::SoakTestStatus;
 
     let config = SoakTestConfig {
-        duration_seconds: 60,          // 60s virtual time
+        duration_seconds: 60,            // 60s virtual time
         checkpoint_interval_seconds: 10, // Checkpoint every 10s
-        max_total_operations: 1000,    // 1000 total ops
-        num_workers: 1,                // Single-threaded for determinism
-        read_percentage: 70,           // 70% reads, 30% writes
-        key_space_size: 100,           // 100 unique keys
-        value_size_bytes: 100,         // 100 byte values
+        max_total_operations: 1000,      // 1000 total ops
+        num_workers: 1,                  // Single-threaded for determinism
+        read_percentage: 70,             // 70% reads, 30% writes
+        key_space_size: 100,             // 100 unique keys
+        value_size_bytes: 100,           // 100 byte values
     };
 
     let start = std::time::Instant::now();
@@ -189,7 +188,10 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
     println!("Writes failed:      {}", final_metrics.writes_failed);
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Reads failed:       {}", final_metrics.reads_failed);
-    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!(
+        "Success rate:       {:.2}%",
+        final_metrics.success_rate_percent()
+    );
     println!(
         "Avg write latency:  {:.2}ms",
         final_metrics.avg_write_latency_ms()
@@ -287,7 +289,10 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
     println!("Writes failed:      {}", final_metrics.writes_failed);
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Reads failed:       {}", final_metrics.reads_failed);
-    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!(
+        "Success rate:       {:.2}%",
+        final_metrics.success_rate_percent()
+    );
     println!(
         "Avg write latency:  {:.2}ms",
         final_metrics.avg_write_latency_ms()
@@ -303,12 +308,30 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
 
     // Print latency distribution
     println!("\nWrite latency distribution:");
-    println!("  < 1ms:      {}", final_metrics.write_latency_buckets_us[0]);
-    println!("  1-10ms:     {}", final_metrics.write_latency_buckets_us[1]);
-    println!("  10-100ms:   {}", final_metrics.write_latency_buckets_us[2]);
-    println!("  100ms-1s:   {}", final_metrics.write_latency_buckets_us[3]);
-    println!("  1s-10s:     {}", final_metrics.write_latency_buckets_us[4]);
-    println!("  10s+:       {}", final_metrics.write_latency_buckets_us[5]);
+    println!(
+        "  < 1ms:      {}",
+        final_metrics.write_latency_buckets_us[0]
+    );
+    println!(
+        "  1-10ms:     {}",
+        final_metrics.write_latency_buckets_us[1]
+    );
+    println!(
+        "  10-100ms:   {}",
+        final_metrics.write_latency_buckets_us[2]
+    );
+    println!(
+        "  100ms-1s:   {}",
+        final_metrics.write_latency_buckets_us[3]
+    );
+    println!(
+        "  1s-10s:     {}",
+        final_metrics.write_latency_buckets_us[4]
+    );
+    println!(
+        "  10s+:       {}",
+        final_metrics.write_latency_buckets_us[5]
+    );
 
     // Assertions
     assert!(
@@ -394,7 +417,10 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     println!("Duration:           {:.2}s", duration.as_secs_f64());
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Writes successful:  {}", final_metrics.writes_successful);
-    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!(
+        "Success rate:       {:.2}%",
+        final_metrics.success_rate_percent()
+    );
     println!(
         "Avg read latency:   {:.2}ms",
         final_metrics.avg_read_latency_ms()
@@ -408,11 +434,10 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     );
 
     // Verify read:write ratio is approximately 90:10
-    let read_ratio = (final_metrics.reads_successful as f64
-        / final_metrics.total_operations() as f64)
-        * 100.0;
+    let read_ratio =
+        (final_metrics.reads_successful as f64 / final_metrics.total_operations() as f64) * 100.0;
     assert!(
-        read_ratio >= 85.0 && read_ratio <= 95.0,
+        (85.0..=95.0).contains(&read_ratio),
         "read ratio should be ~90%, got {:.2}%",
         read_ratio
     );

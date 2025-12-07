@@ -574,14 +574,19 @@ async fn test_transaction_guard_rollback_on_error() {
 
     let entry2 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, 1, 1),
-        AppRequest::SetMulti { pairs: too_many_pairs },
+        AppRequest::SetMulti {
+            pairs: too_many_pairs,
+        },
     );
 
     let entries = Box::pin(stream::once(async move { Ok((entry2, None)) }));
     let result = sm.apply(entries).await;
 
     // Apply should fail due to exceeding limit
-    assert!(result.is_err(), "apply should fail when exceeding MAX_SETMULTI_KEYS");
+    assert!(
+        result.is_err(),
+        "apply should fail when exceeding MAX_SETMULTI_KEYS"
+    );
 
     // Verify TransactionGuard rolled back - only the first entry should remain
     assert_eq!(
@@ -877,8 +882,7 @@ async fn test_manual_checkpoint_succeeds() {
     let result = sm.checkpoint_wal();
     assert!(result.is_ok(), "manual checkpoint should succeed");
 
-    let pages = result.unwrap();
-    assert!(pages >= 0, "checkpointed pages should be >= 0");
+    let _pages = result.unwrap();
 }
 
 #[tokio::test]
@@ -907,8 +911,7 @@ async fn test_checkpoint_reduces_wal_size() {
         .expect("failed to get WAL size before checkpoint");
 
     // Perform checkpoint
-    sm.checkpoint_wal()
-        .expect("checkpoint should succeed");
+    sm.checkpoint_wal().expect("checkpoint should succeed");
 
     let wal_size_after = sm
         .wal_file_size()
@@ -950,8 +953,8 @@ async fn test_auto_checkpoint_triggers_at_threshold() {
     // Result may be Some(pages) if WAL exists, or None if no WAL
     let checkpoint_result = result.unwrap();
     match checkpoint_result {
-        Some(pages) => {
-            assert!(pages >= 0, "checkpointed pages should be >= 0");
+        Some(_pages) => {
+            // WAL was checkpointed successfully
         }
         None => {
             // No WAL file existed (already checkpointed)
@@ -1013,8 +1016,7 @@ async fn test_checkpoint_preserves_data_integrity() {
     }
 
     // Perform checkpoint
-    sm.checkpoint_wal()
-        .expect("checkpoint should succeed");
+    sm.checkpoint_wal().expect("checkpoint should succeed");
 
     // Verify all data is still readable after checkpoint
     assert_eq!(

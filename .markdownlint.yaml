@@ -1,0 +1,14 @@
+# Markdownlint configuration for Aspen project
+# See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Disable line length restriction for technical documentation
+MD013: false
+
+# Allow inline HTML (useful for technical docs)
+MD033: false
+
+# Allow multiple consecutive blank lines (useful for document structure)
+MD012: false
+
+# Allow bare URLs (common in technical documentation)
+MD034: false

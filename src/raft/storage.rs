@@ -28,23 +28,23 @@ use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 /// Storage backend selection for Raft log and state machine.
 ///
 /// Aspen supports three storage backends:
+/// - **Sqlite**: Persistent ACID storage using SQLite (default, recommended for production)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
 /// - **Redb**: Persistent ACID storage using embedded redb (deprecated, use Sqlite)
-/// - **Sqlite**: Persistent ACID storage using SQLite (recommended for production)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum StorageBackend {
     /// In-memory storage using BTreeMap. Data is lost on restart.
     /// Use for: unit tests, madsim simulations, development.
-    #[default]
     InMemory,
     /// Persistent storage using redb. Data survives restarts.
     /// Deprecated: Use Sqlite instead for new deployments.
     #[deprecated(note = "Use Sqlite instead for new deployments")]
     Redb,
     /// Persistent storage using SQLite. Data survives restarts.
-    /// Use for: production deployments, integration tests.
+    /// Default storage backend for production deployments and integration tests.
+    #[default]
     Sqlite,
 }
 
@@ -685,9 +685,8 @@ impl RedbLogStore {
     /// Used for cross-storage validation to ensure state machine consistency.
     /// Returns the committed log index if it exists, None otherwise.
     pub async fn read_committed_sync(&self) -> Result<Option<u64>, io::Error> {
-        let committed: Option<LogIdOf<AppTypeConfig>> = self
-            .read_meta("committed")
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let committed: Option<LogIdOf<AppTypeConfig>> =
+            self.read_meta("committed").map_err(io::Error::other)?;
         Ok(committed.map(|log_id| log_id.index))
     }
 }
@@ -892,6 +891,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
 /// - Bounded snapshot operations
 /// - Fail-fast on corruption
 #[deprecated(note = "Use SqliteStateMachine instead for new deployments")]
+#[allow(deprecated)]
 #[derive(Clone, Debug)]
 pub struct RedbStateMachine {
     db: Arc<Database>,
@@ -899,6 +899,7 @@ pub struct RedbStateMachine {
     snapshot_idx: Arc<AtomicU64>,
 }
 
+#[allow(deprecated)]
 impl RedbStateMachine {
     /// Create or open a redb-backed state machine at the given path.
     pub fn new(path: impl AsRef<Path>) -> Result<Arc<Self>, StorageError> {
@@ -1012,6 +1013,7 @@ impl RedbStateMachine {
     }
 }
 
+#[allow(deprecated)]
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<RedbStateMachine> {
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
@@ -1078,6 +1080,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<RedbStateMachine> {
     }
 }
 
+#[allow(deprecated)]
 impl RaftStateMachine<AppTypeConfig> for Arc<RedbStateMachine> {
     type SnapshotBuilder = Self;
 
@@ -1364,6 +1367,7 @@ mod tests {
     /// persistent storage (data survives process restarts).
     struct RedbStoreBuilder;
 
+    #[allow(deprecated)]
     impl StoreBuilder<AppTypeConfig, RedbLogStore, Arc<RedbStateMachine>, Box<tempfile::TempDir>>
         for RedbStoreBuilder
     {
@@ -1495,6 +1499,7 @@ mod tests {
 
     /// Tests that redb state machine persists data across database reopens.
     #[tokio::test]
+    #[allow(deprecated)]
     async fn test_redb_state_machine_persistence() -> Result<(), super::StorageError> {
         use futures::stream;
         use openraft::entry::RaftEntry;

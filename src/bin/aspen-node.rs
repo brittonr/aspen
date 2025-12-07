@@ -766,9 +766,7 @@ fn build_health_response(
         .as_ref()
         .is_some_and(|s| s.status == "degraded");
 
-    let wal_critical = wal_file_check
-        .as_ref()
-        .is_some_and(|w| w.status == "error");
+    let wal_critical = wal_file_check.as_ref().is_some_and(|w| w.status == "error");
     let wal_warning = wal_file_check
         .as_ref()
         .is_some_and(|w| w.status == "warning");
@@ -1282,15 +1280,15 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     }
 
     // WAL size metrics (SQLite only)
-    if let aspen::raft::StateMachineVariant::Sqlite(sm) = &ctx.state_machine {
-        if let Ok(Some(wal_size)) = sm.wal_file_size() {
-            body.push_str("# TYPE sqlite_wal_size_bytes gauge\n");
-            body.push_str("# HELP sqlite_wal_size_bytes Size of SQLite WAL file in bytes\n");
-            body.push_str(&format!(
-                "sqlite_wal_size_bytes{{node_id=\"{}\"}} {}\n",
-                ctx.node_id, wal_size
-            ));
-        }
+    if let aspen::raft::StateMachineVariant::Sqlite(sm) = &ctx.state_machine
+        && let Ok(Some(wal_size)) = sm.wal_file_size()
+    {
+        body.push_str("# TYPE sqlite_wal_size_bytes gauge\n");
+        body.push_str("# HELP sqlite_wal_size_bytes Size of SQLite WAL file in bytes\n");
+        body.push_str(&format!(
+            "sqlite_wal_size_bytes{{node_id=\"{}\"}} {}\n",
+            ctx.node_id, wal_size
+        ));
     }
 
     (StatusCode::OK, body)

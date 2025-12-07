@@ -66,8 +66,8 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
-        raft_mailbox_capacity: 1000,
+            supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;

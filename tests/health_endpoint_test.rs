@@ -52,7 +52,7 @@ async fn start_test_server(
 
     // Import the health handler directly from aspen-node binary
     // Since we can't import from a binary, we need to inline the health check logic here
-    use axum::{extract::State, response::IntoResponse, Json};
+    use axum::{Json, extract::State, response::IntoResponse};
     use ractor::call_t;
     use serde::Serialize;
 
@@ -81,22 +81,23 @@ async fn start_test_server(
 
     async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
         // Check 1: Raft actor responsiveness
-        let (raft_actor_check, raft_node_id) = match call_t!(ctx.raft_actor, RaftActorMessage::GetNodeId, 25) {
-            Ok(id) => (
-                HealthCheckStatus {
-                    status: "ok".to_string(),
-                    message: None,
-                },
-                Some(id),
-            ),
-            Err(err) => (
-                HealthCheckStatus {
-                    status: "error".to_string(),
-                    message: Some(format!("Raft actor not responding: {}", err)),
-                },
-                None,
-            ),
-        };
+        let (raft_actor_check, raft_node_id) =
+            match call_t!(ctx.raft_actor, RaftActorMessage::GetNodeId, 25) {
+                Ok(id) => (
+                    HealthCheckStatus {
+                        status: "ok".to_string(),
+                        message: None,
+                    },
+                    Some(id),
+                ),
+                Err(err) => (
+                    HealthCheckStatus {
+                        status: "error".to_string(),
+                        message: Some(format!("Raft actor not responding: {}", err)),
+                    },
+                    None,
+                ),
+            };
 
         // Check 2: Raft cluster has leader
         let raft_cluster_check = match ctx.controller.get_metrics().await {
@@ -135,7 +136,10 @@ async fn start_test_server(
                     } else if disk_space.usage_percent >= 80 {
                         HealthCheckStatus {
                             status: "warning".to_string(),
-                            message: Some(format!("Disk usage high: {}%", disk_space.usage_percent)),
+                            message: Some(format!(
+                                "Disk usage high: {}%",
+                                disk_space.usage_percent
+                            )),
                         }
                     } else {
                         HealthCheckStatus {
@@ -169,7 +173,8 @@ async fn start_test_server(
         };
 
         // Determine overall health status
-        let is_critical_failure = raft_actor_check.status == "error" || disk_space_check.status == "error";
+        let is_critical_failure =
+            raft_actor_check.status == "error" || disk_space_check.status == "error";
         let has_warnings = raft_cluster_check.status == "warning"
             || disk_space_check.status == "warning"
             || storage_check.status == "warning";
@@ -242,7 +247,9 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
     let handle = bootstrap_node(config.clone()).await?;
 
     // Build controller and KV store
-    let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(handle.raft_actor.clone()));
+    let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(
+        handle.raft_actor.clone(),
+    ));
     let kv: Arc<dyn KeyValueStore> = Arc::new(aspen::kv::KvClient::new(handle.raft_actor.clone()));
 
     // Start HTTP server
@@ -256,7 +263,8 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
         handle.network_factory.clone(),
         handle.iroh_manager.clone(),
         config.data_dir.clone(),
-    ).await?;
+    )
+    .await?;
 
     // Health endpoint URL
     let health_url = "http://127.0.0.1:49000/health";
@@ -270,8 +278,7 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
 
     // Should return 200 or 503 (depending on cluster state)
     assert!(
-        response.status() == StatusCode::OK
-            || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+        response.status() == StatusCode::OK || response.status() == StatusCode::SERVICE_UNAVAILABLE,
         "health endpoint should return 200 or 503, got {}",
         response.status()
     );
@@ -329,7 +336,10 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
         status
     );
 
-    println!("Health endpoint response: {}", serde_json::to_string_pretty(&json)?);
+    println!(
+        "Health endpoint response: {}",
+        serde_json::to_string_pretty(&json)?
+    );
 
     // Cleanup
     handle.shutdown().await?;
@@ -367,7 +377,9 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
     let handle = bootstrap_node(config.clone()).await?;
 
     // Build controller and KV store
-    let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(handle.raft_actor.clone()));
+    let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(
+        handle.raft_actor.clone(),
+    ));
     let kv: Arc<dyn KeyValueStore> = Arc::new(aspen::kv::KvClient::new(handle.raft_actor.clone()));
 
     // Start HTTP server
@@ -381,7 +393,8 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
         handle.network_factory.clone(),
         handle.iroh_manager.clone(),
         config.data_dir.clone(),
-    ).await?;
+    )
+    .await?;
 
     let health_url = "http://127.0.0.1:49001/health";
 
@@ -411,7 +424,10 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
         "disk space message should contain percentage"
     );
 
-    println!("Disk space check: {}", serde_json::to_string_pretty(&disk_check)?);
+    println!(
+        "Disk space check: {}",
+        serde_json::to_string_pretty(&disk_check)?
+    );
 
     // Cleanup
     handle.shutdown().await?;

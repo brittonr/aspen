@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 4054e996bb45b0f782623f9ef759c388281a961a6fc975f10202eadffa4304ff # shrinks to writes = [("scyi", "17 ID63 CSIb jr68BdjNa  "), ("o95xm_b_", "wTh1"), ("kgn_9j3_676q5_", "2 F3 SeUXgQwn ORJ2bvE L4O7H5")]
+cc f18331874c6e42e1fe8b2b956e6e1a1d0a09802c023f54285eb223e17135ca04 # shrinks to writes = [("biby_", " Q zjT "), ("a7958i", "  AbagO3VM I MaKV0"), ("y7x", "  Q X0g3vaApVb T7  "), ("du__n1e", "mYCzijo  U22 3M9Q0BNg159"), ("y9yt34_2_c_j", "kDu0CI2miQ 4u3T0"), ("nghg9ne86_qt_u_", "j qavLUtGwsj43JBwdMXTZiiT2GD1VfNlTn E"), ("z0274g", "g2orsM r 5ZFv1 Sd3oB035J6  M ")]
+cc 7618497564e7bcb9be5c3e73c05772bebab58d0c1c1b88774251e4f6c0b178d9 # shrinks to writes = [("wi_", "kZp3mntmk 971UMRFAC H3l4 1bCF l37ma5A 2 1 sYDMh4t4"), ("f6um9_u82wk_1q89", " ztBt 13h 7 ljR3 AO7Yf XB   G y XE8 "), ("j_55", "TZ OPM9E63 d7e LRRs4Rrzh9 8uTkR 761Tf1T RjiFa 3")]
+cc 12b766e23972bd958d15f56bd3fb90d17fccf699fc21e4171fb197bccc2966df # shrinks to writes = [("a", "TgBj3h  5 hc7T38 i2exeV 60U56YSHc4  1nB"), ("jk", "32 5E7o7 "), ("oqtli4_l26", "O4 z5eft97 rTZ"), ("n_0_d_0c7e9l01rv", " q 3 JW 0f"), ("a2_i", "Zh9uG9 FXMx9iXqMd5mSH1MG2  T")]

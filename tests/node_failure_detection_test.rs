@@ -135,7 +135,11 @@ fn test_recovery_clears_unreachable_state() {
         FailureType::Healthy,
         "Should clear failure state on recovery"
     );
-    assert_eq!(detector.unreachable_count(), 0, "Should remove from tracking");
+    assert_eq!(
+        detector.unreachable_count(),
+        0,
+        "Should remove from tracking"
+    );
     assert!(
         detector.get_unreachable_duration(node_id).is_none(),
         "Should clear unreachable duration"
@@ -372,11 +376,7 @@ fn test_alert_manager_multiple_nodes() {
     );
 
     // One node recovers
-    detector.update_node_status(
-        30,
-        ConnectionStatus::Connected,
-        ConnectionStatus::Connected,
-    );
+    detector.update_node_status(30, ConnectionStatus::Connected, ConnectionStatus::Connected);
 
     // Should have 2 active alerts remaining
     alert_mgr.check_and_alert(&detector);

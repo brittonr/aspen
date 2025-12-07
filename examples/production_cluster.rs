@@ -271,12 +271,12 @@ async fn main() -> Result<()> {
     info!("\n🔄 Fallback: Manual peer exchange for example purposes");
     info!("   (In production with working discovery, this wouldn't be needed)");
 
-    handle1.network_factory.add_peer(2, addr2.clone());
-    handle1.network_factory.add_peer(3, addr3.clone());
-    handle2.network_factory.add_peer(1, addr1.clone());
-    handle2.network_factory.add_peer(3, addr3.clone());
-    handle3.network_factory.add_peer(1, addr1.clone());
-    handle3.network_factory.add_peer(2, addr2.clone());
+    handle1.network_factory.add_peer(2, addr2.clone()).await;
+    handle1.network_factory.add_peer(3, addr3.clone()).await;
+    handle2.network_factory.add_peer(1, addr1.clone()).await;
+    handle2.network_factory.add_peer(3, addr3.clone()).await;
+    handle3.network_factory.add_peer(1, addr1.clone()).await;
+    handle3.network_factory.add_peer(2, addr2.clone()).await;
 
     info!("✅ Peer connectivity established");
 

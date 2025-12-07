@@ -44,7 +44,11 @@ pub enum StorageValidationError {
         source: Box<redb::StorageError>,
     },
 
-    #[snafu(display("log entries are not monotonic: gap between index {} and {}", prev, current))]
+    #[snafu(display(
+        "log entries are not monotonic: gap between index {} and {}",
+        prev,
+        current
+    ))]
     LogNotMonotonic { prev: u64, current: u64 },
 
     #[snafu(display(
@@ -349,14 +353,15 @@ fn validate_committed_index(
 
     // Validate committed index is <= last_log_index
     if let Some(last_index) = last_log_index
-        && committed_index > last_index {
-            return Err(StorageValidationError::CommittedInconsistent {
-                reason: format!(
-                    "committed index {} > last log index {}",
-                    committed_index, last_index
-                ),
-            });
-        }
+        && committed_index > last_index
+    {
+        return Err(StorageValidationError::CommittedInconsistent {
+            reason: format!(
+                "committed index {} > last log index {}",
+                committed_index, last_index
+            ),
+        });
+    }
 
     Ok(Some(committed_index))
 }
@@ -376,8 +381,8 @@ mod tests {
 
     /// Helper: Creates a database with sequential log entries.
     fn create_db_with_log_entries(db_path: &Path, num_entries: u32) -> Database {
-        use openraft::entry::RaftEntry;
         use crate::raft::types::AppRequest;
+        use openraft::entry::RaftEntry;
 
         let db = Database::create(db_path).expect("failed to create db");
         let write_txn = db.begin_write().expect("failed to begin write");

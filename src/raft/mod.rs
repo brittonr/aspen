@@ -25,7 +25,7 @@ use crate::api::{
     ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
     WriteCommand, WriteRequest, WriteResult,
 };
-use crate::raft::storage::{RedbStateMachine, StateMachineStore};
+use crate::raft::storage::StateMachineStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig};
 
@@ -37,7 +37,7 @@ use crate::raft::types::{AppRequest, AppTypeConfig};
 #[derive(Clone, Debug)]
 pub enum StateMachineVariant {
     InMemory(Arc<StateMachineStore>),
-    Redb(Arc<RedbStateMachine>),
+    Redb(Arc<SqliteStateMachine>),
     Sqlite(Arc<SqliteStateMachine>),
 }
 

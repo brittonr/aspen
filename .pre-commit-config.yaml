@@ -1,0 +1,126 @@
+# Pre-commit hooks for Aspen distributed systems project
+# See https://pre-commit.com for more information
+
+repos:
+  # Standard pre-commit hooks for file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '^vendor/|\.patch$'
+      - id: end-of-file-fixer
+        exclude: '^vendor/|\.patch$'
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: detect-private-key
+        exclude: '^tests/.*\.pem$'  # Allow test keys
+
+  # Nix formatting with alejandra (project uses it per flake.nix)
+  - repo: https://github.com/kamadorueda/alejandra
+    rev: 3.1.0
+    hooks:
+      - id: alejandra-nix
+        name: alejandra (nix formatter)
+        files: \.nix$
+
+  # Rust formatting
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Format Rust code with rustfmt
+        entry: nix
+        args:
+          - develop
+          - -c
+          - cargo
+          - fmt
+          - --
+          - --check
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      # Clippy for Rust linting
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Lint Rust code with clippy
+        entry: nix
+        args:
+          - develop
+          - -c
+          - cargo
+          - clippy
+          - --all-targets
+          - --
+          - -D
+          - warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      # Check that Cargo.toml dependencies are sorted
+      - id: cargo-toml-sorted
+        name: cargo sort --check
+        description: Check Cargo.toml dependencies are sorted
+        entry: sh
+        args:
+          - -c
+          - |
+            if command -v cargo-sort >/dev/null 2>&1; then
+              nix develop -c cargo sort --check --workspace 2>/dev/null || echo "cargo-sort not available, skipping"
+            else
+              echo "cargo-sort not installed, skipping"
+            fi
+        language: system
+        files: ^Cargo\.toml$
+        pass_filenames: false
+
+      # Deny check for security advisories and banned deps
+      - id: cargo-deny
+        name: cargo deny check
+        description: Check dependencies for security advisories
+        entry: sh
+        args:
+          - -c
+          - |
+            if command -v cargo-deny >/dev/null 2>&1; then
+              nix develop -c cargo deny check advisories bans 2>/dev/null || echo "cargo-deny not available, skipping"
+            else
+              echo "cargo-deny not installed, skipping"
+            fi
+        language: system
+        files: ^Cargo\.(toml|lock)$
+        pass_filenames: false
+
+  # Markdown linting (using system markdownlint from nixpkgs)
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        description: Lint markdown files
+        entry: markdownlint
+        args: ['--fix']
+        language: system
+        files: \.md$
+        exclude: '^vendor/|^CHANGELOG\.md$'
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+        exclude: '^vendor/'
+
+# Global settings
+fail_fast: false
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]

@@ -136,7 +136,7 @@ async fn test_network_delay() -> Result<()> {
 
     tracing::info!("--- set network delay to 50ms");
     {
-        router.set_network_delay(50);
+        router.set_global_network_delay(50);
 
         // Write should still work but be slower
         let start = std::time::Instant::now();
@@ -155,7 +155,7 @@ async fn test_network_delay() -> Result<()> {
 
     tracing::info!("--- reset network delay");
     {
-        router.set_network_delay(0);
+        router.clear_network_delays();
 
         // Write should be fast again
         router

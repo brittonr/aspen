@@ -41,7 +41,7 @@ async fn test_disk_full_error_handling() -> anyhow::Result<()> {
         node_id: 1,
         control_backend: ControlBackend::Deterministic,
         host: "127.0.0.1".to_string(),
-        
+
         ractor_port: 36000,
         data_dir: Some(data_dir.clone()),
         cookie: "disk-full-test".to_string(),

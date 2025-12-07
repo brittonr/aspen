@@ -5,6 +5,7 @@ This directory contains practical examples demonstrating how to use Aspen, a fou
 ## Overview
 
 The examples showcase Aspen's key capabilities:
+
 - **Cluster management**: Initializing clusters, adding nodes, and managing membership
 - **Distributed key-value operations**: Writing and reading data with Raft consensus
 - **Fault tolerance**: Multi-node replication and distributed consensus
@@ -12,6 +13,7 @@ The examples showcase Aspen's key capabilities:
 ## Prerequisites
 
 These examples require:
+
 - Rust 2024 edition
 - Nix (recommended for reproducible builds)
 - All dependencies from `Cargo.toml`
@@ -44,6 +46,7 @@ cargo run --example multi_node_cluster
 ### 1. Basic Cluster (`basic_cluster.rs`)
 
 **Demonstrates:**
+
 - Bootstrapping a single Aspen node
 - Initializing a cluster with one member
 - Querying cluster state
@@ -51,12 +54,14 @@ cargo run --example multi_node_cluster
 - Graceful shutdown
 
 **Key Concepts:**
+
 - `ClusterBootstrapConfig`: Configuration for node initialization
 - `bootstrap_node()`: Main entry point for starting a node
 - `RaftControlClient`: Client for cluster management operations
 - `ClusterController` trait: API for cluster membership operations
 
 **Output:**
+
 ```
 🚀 Starting Aspen Basic Cluster Example
 📁 Data directory: /tmp/.tmpXXXXXX
@@ -71,6 +76,7 @@ cargo run --example multi_node_cluster
 ```
 
 **What you'll learn:**
+
 - How to configure and bootstrap an Aspen node
 - How to initialize a single-node cluster
 - How to query cluster state and Raft metrics
@@ -81,6 +87,7 @@ cargo run --example multi_node_cluster
 ### 2. Key-Value Operations (`kv_operations.rs`)
 
 **Demonstrates:**
+
 - Writing key-value pairs using `Set` and `SetMulti` commands
 - Reading values with linearizable consistency
 - Handling `NotFound` errors gracefully
@@ -88,6 +95,7 @@ cargo run --example multi_node_cluster
 - Atomic multi-key writes
 
 **Key Concepts:**
+
 - `KvClient`: Client for key-value operations
 - `WriteCommand::Set`: Single key-value write
 - `WriteCommand::SetMulti`: Atomic multi-key write
@@ -95,6 +103,7 @@ cargo run --example multi_node_cluster
 - Linearizable reads through Raft consensus
 
 **Output:**
+
 ```
 🚀 Starting Aspen Key-Value Operations Example
 ✅ Node bootstrapped successfully
@@ -122,6 +131,7 @@ cargo run --example multi_node_cluster
 ```
 
 **What you'll learn:**
+
 - How to write single and multiple key-value pairs
 - How to read values with linearizable consistency
 - How to handle errors (NotFound, Failed)
@@ -133,6 +143,7 @@ cargo run --example multi_node_cluster
 ### 3. Multi-Node Cluster (`multi_node_cluster.rs`)
 
 **Demonstrates:**
+
 - Bootstrapping a 3-node cluster concurrently
 - Manual peer address exchange (for local testing without relay servers)
 - Automatic peer discovery via gossip (enabled by default)
@@ -143,6 +154,7 @@ cargo run --example multi_node_cluster
 - Distributed Raft consensus
 
 **Key Concepts:**
+
 - `tokio::try_join!`: Concurrent node bootstrapping
 - `IrohEndpointManager`: Peer-to-peer networking
 - `IrpcRaftNetworkFactory`: IRPC-based Raft RPC
@@ -151,6 +163,7 @@ cargo run --example multi_node_cluster
 - Raft leadership election and log replication
 
 **Output:**
+
 ```
 🚀 Starting Aspen Multi-Node Cluster Example
 📁 Data directories:
@@ -190,6 +203,7 @@ cargo run --example multi_node_cluster
 ```
 
 **What you'll learn:**
+
 - How to bootstrap multiple nodes concurrently
 - How to establish peer connectivity with Iroh IRPC
 - How to add learners and promote them to voters
@@ -237,12 +251,14 @@ cargo run --example multi_node_cluster
 ### Key Traits
 
 **ClusterController** - Control plane for cluster membership:
+
 - `init(members)` - Initialize cluster with voting members
 - `add_learner(node)` - Add non-voting learner
 - `change_membership(members)` - Change voting membership
 - `current_state()` - Query cluster state
 
 **KeyValueStore** - Data plane for key-value operations:
+
 - `write(command)` - Write data (Set or SetMulti)
 - `read(key)` - Read data (linearizable)
 
@@ -310,11 +326,13 @@ Aspen uses Iroh's peer discovery services to automatically find and connect to c
 **Perfect for:** Development, testing, and same-LAN deployments
 
 **How it works:**
+
 - **mDNS** automatically discovers nodes on the same local network
 - **Gossip** broadcasts Raft metadata once Iroh connections are established
 - No relay servers, DNS, or manual configuration required
 
 **Configuration (default):**
+
 ```rust
 IrohConfig {
     enable_mdns: true,    // Default: discovers peers on LAN
@@ -324,6 +342,7 @@ IrohConfig {
 ```
 
 **Just works:**
+
 ```rust
 // Node 1
 let config1 = ClusterBootstrapConfig {
@@ -348,6 +367,7 @@ sleep(Duration::from_secs(12)).await;
 ```
 
 **Key benefits:**
+
 - ✅ Zero configuration required
 - ✅ Works across separate processes on same LAN
 - ✅ No relay server or internet connectivity needed
@@ -361,12 +381,14 @@ sleep(Duration::from_secs(12)).await;
 **Perfect for:** Multi-region deployments, cloud environments, production clusters
 
 **How it works:**
+
 - **DNS discovery**: Nodes query a DNS service to find initial peers
 - **Pkarr**: Nodes publish their addresses to a DHT-based relay
 - **Relay server**: Facilitates connectivity through NAT/firewalls
 - **Gossip**: Broadcasts Raft metadata to all connected peers
 
 **Configuration:**
+
 ```rust
 IrohConfig {
     relay_url: Some("https://relay.example.com".into()),
@@ -381,6 +403,7 @@ IrohConfig {
 ```
 
 **Deployment pattern:**
+
 ```bash
 # All nodes use same discovery configuration
 aspen-node \
@@ -399,6 +422,7 @@ aspen-node \
 ```
 
 **Key benefits:**
+
 - ✅ Works across regions, clouds, and NAT boundaries
 - ✅ Robust peer discovery with multiple fallback mechanisms
 - ✅ DHT-based discovery survives node churn
@@ -412,11 +436,13 @@ aspen-node \
 **Perfect for:** Testing without discovery, custom discovery logic, gossip-disabled deployments
 
 **How it works:**
+
 - Explicitly provide peer addresses via `--peers` CLI flag or `peers` config field
 - Network factory populated with known peers at bootstrap
 - No automatic discovery; all peers must be configured upfront
 
 **Configuration:**
+
 ```rust
 ClusterBootstrapConfig {
     node_id: 1,
@@ -436,6 +462,7 @@ ClusterBootstrapConfig {
 **See:** `examples/multi_node_cluster.rs` for in-process manual peer exchange pattern.
 
 **Key benefits:**
+
 - ✅ Full control over connectivity graph
 - ✅ Works without external services
 - ✅ Deterministic for testing
@@ -541,11 +568,13 @@ let handle = bootstrap_node(config).await?;
 ```
 
 **How it works:**
+
 - Nodes broadcast their `node_id` + `EndpointAddr` every 10 seconds via gossip
 - Discovered peers are automatically added to the Raft network factory
 - Requires initial Iroh connectivity (via tickets, relay servers, or bootstrap peers)
 
 **Production deployment:**
+
 ```bash
 # First node
 aspen-node --node-id 1 --relay-url https://relay.example.com
@@ -584,6 +613,7 @@ h3.network_factory.add_peer(2, addr2.clone());
 ```
 
 **When to use:**
+
 - Local testing without relay infrastructure
 - Custom peer discovery mechanisms
 - Gossip disabled (`enable_gossip: false`)
@@ -755,6 +785,7 @@ done
 **Solutions by discovery method:**
 
 **mDNS (local testing):**
+
 - ✅ Verify `enable_mdns: true` in `IrohConfig`
 - ✅ Ensure nodes are on the same subnet/VLAN
 - ✅ Check firewall allows multicast traffic (UDP 5353)
@@ -762,24 +793,28 @@ done
 - ✅ Wait 12+ seconds for mDNS announcements to propagate
 
 **Gossip (all deployments):**
+
 - ✅ Verify `enable_gossip: true` (default)
 - ✅ Ensure nodes share the same cluster `cookie` (used for gossip topic ID)
 - ✅ Verify underlying Iroh connectivity is established (mDNS, DNS, Pkarr, or manual)
 - ✅ Wait ~12 seconds for gossip announcements to broadcast
 
 **DNS (production):**
+
 - ✅ Verify `enable_dns_discovery: true`
 - ✅ Check `dns_discovery_url` is reachable (default: `https://dns.iroh.link`)
 - ✅ Ensure DNS service has peer records published
 - ✅ Check network connectivity to DNS service
 
 **Pkarr (production DHT):**
+
 - ✅ Verify `enable_pkarr: true`
 - ✅ Check `pkarr_relay_url` is reachable (default: `https://pkarr.iroh.link`)
 - ✅ Allow time for DHT propagation (~30-60 seconds)
 - ✅ Ensure relay service is operational
 
 **Manual peers (fallback):**
+
 - ✅ Verify `peers` configuration is correct: `"node_id@endpoint_id"`
 - ✅ Ensure endpoint IDs match the actual node identities
 - ✅ Confirm `network_factory.add_peer()` is called before Raft operations
@@ -793,6 +828,7 @@ done
 **Root cause:** mDNS uses multicast which doesn't work on loopback interfaces.
 
 **Solution:**
+
 1. **For single-host testing:** Use manual peer configuration (see `examples/multi_node_cluster.rs`)
 2. **For multi-host testing:** Use actual LAN IP addresses, not localhost
 3. **Alternative:** Use DNS + relay for testing production-like discovery
@@ -814,6 +850,7 @@ h2.network_factory.add_peer(1, addr1);
 **Root cause:** Gossip announcements haven't propagated Raft metadata yet.
 
 **Solution:**
+
 ```rust
 // After bootstrap, wait for gossip to announce Raft metadata
 sleep(Duration::from_secs(12)).await;
@@ -831,11 +868,13 @@ cluster.add_learner(...).await?;
 **Symptom:** Nodes hang during bootstrap with DNS discovery enabled.
 
 **Possible causes:**
+
 - DNS service URL is unreachable (firewall, network issue)
 - DNS service is down or misconfigured
 - Slow network causing timeouts
 
 **Solutions:**
+
 1. Verify DNS service health: `curl https://dns.iroh.link` (or your custom URL)
 2. Check network connectivity: `ping dns.iroh.link`
 3. Disable DNS discovery temporarily: `enable_dns_discovery: false`
@@ -850,6 +889,7 @@ cluster.add_learner(...).await?;
 **Impact:** Non-critical; other discovery methods can still work.
 
 **Solutions:**
+
 1. Verify relay URL: `curl https://pkarr.iroh.link` (or your custom URL)
 2. Check if relay requires authentication or special configuration
 3. Disable Pkarr if not needed: `enable_pkarr: false`
@@ -860,24 +900,31 @@ cluster.add_learner(...).await?;
 ### Cluster Operations Issues
 
 #### "Port already in use"
+
 Set `ractor_port: 0` to use OS-assigned ports.
 
 #### "Peer not found"
+
 **With discovery enabled:**
+
 - Wait ~12 seconds for discovery to complete
 - Check discovery troubleshooting section above
 
 **With manual peers:**
+
 - Ensure peer addresses are exchanged via `network_factory.add_peer()` before operations
 - Verify endpoint IDs are correct
 
 #### "Not initialized"
+
 Call `cluster_client.init()` before any KV operations.
 
 #### "Election timeout"
+
 Increase `election_timeout_min_ms` and `election_timeout_max_ms` for slower networks.
 
 #### "State machine error"
+
 Check data directory permissions and disk space.
 
 ---
@@ -926,6 +973,7 @@ curl https://pkarr.iroh.link # For Pkarr
 ## Contributing
 
 When adding new examples:
+
 1. Follow Tiger Style principles (see `tigerstyle.md`)
 2. Use clear, descriptive logging with info level
 3. Include comprehensive error handling

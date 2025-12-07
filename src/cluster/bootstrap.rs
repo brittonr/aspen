@@ -16,9 +16,7 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::server::RaftRpcServer;
-use crate::raft::storage::{
-    InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
-};
+use crate::raft::storage::{InMemoryLogStore, RedbLogStore, StateMachineStore, StorageBackend};
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervision::{
     HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage,
@@ -329,7 +327,11 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .await
                 .context("failed to initialize raft with in-memory storage")?;
 
-                (raft, StateMachineVariant::InMemory(state_machine_store), None)
+                (
+                    raft,
+                    StateMachineVariant::InMemory(state_machine_store),
+                    None,
+                )
             }
             #[allow(deprecated)]
             StorageBackend::Redb => {
@@ -354,8 +356,8 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 
                 let log_store =
                     RedbLogStore::new(&log_path).context("failed to create redb log store")?;
-                let state_machine = RedbStateMachine::new(&sm_path)
-                    .context("failed to create redb state machine")?;
+                let state_machine = SqliteStateMachine::new(&sm_path)
+                    .context("failed to create sqlite state machine")?;
 
                 let raft = openraft::Raft::new(
                     config.node_id,
@@ -406,7 +408,11 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .await
                 .context("failed to initialize raft with sqlite storage")?;
 
-                (raft, StateMachineVariant::Sqlite(state_machine), Some(log_store))
+                (
+                    raft,
+                    StateMachineVariant::Sqlite(state_machine),
+                    Some(log_store),
+                )
             }
         }
     };

@@ -26,10 +26,11 @@ pub struct ClusterBootstrapConfig {
     pub data_dir: Option<PathBuf>,
 
     /// Storage backend for Raft log and state machine.
+    /// - Sqlite: ACID-compliant SQLite storage (recommended for production)
     /// - InMemory: Fast, non-durable (data lost on restart), good for testing
-    /// - Redb: ACID-compliant persistent storage (data survives restarts)
+    /// - Redb: ACID-compliant redb storage (deprecated, use Sqlite)
     ///
-    /// Default: InMemory
+    /// Default: Sqlite
     #[serde(default)]
     pub storage_backend: StorageBackend,
 
@@ -415,44 +416,45 @@ impl ClusterBootstrapConfig {
 
         // File path validation
         if let Some(ref data_dir) = self.data_dir
-            && let Some(parent) = data_dir.parent() {
-                if !parent.exists() {
-                    return Err(ConfigError::Validation {
-                        message: format!(
-                            "data_dir parent directory does not exist: {}",
-                            parent.display()
-                        ),
-                    });
-                }
+            && let Some(parent) = data_dir.parent()
+        {
+            if !parent.exists() {
+                return Err(ConfigError::Validation {
+                    message: format!(
+                        "data_dir parent directory does not exist: {}",
+                        parent.display()
+                    ),
+                });
+            }
 
-                // Check if data_dir exists or can be created
-                if !data_dir.exists() {
-                    std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
-                        message: format!("cannot create data_dir {}: {}", data_dir.display(), e),
-                    })?;
-                }
+            // Check if data_dir exists or can be created
+            if !data_dir.exists() {
+                std::fs::create_dir_all(data_dir).map_err(|e| ConfigError::Validation {
+                    message: format!("cannot create data_dir {}: {}", data_dir.display(), e),
+                })?;
+            }
 
-                // Check disk space (warning only, not error)
-                match crate::utils::check_disk_space(data_dir) {
-                    Ok(disk_space) => {
-                        if disk_space.usage_percent > 80 {
-                            warn!(
-                                data_dir = %data_dir.display(),
-                                usage_percent = disk_space.usage_percent,
-                                available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
-                                "disk space usage high (>80%)"
-                            );
-                        }
-                    }
-                    Err(e) => {
+            // Check disk space (warning only, not error)
+            match crate::utils::check_disk_space(data_dir) {
+                Ok(disk_space) => {
+                    if disk_space.usage_percent > 80 {
                         warn!(
                             data_dir = %data_dir.display(),
-                            error = %e,
-                            "could not check disk space (non-fatal)"
+                            usage_percent = disk_space.usage_percent,
+                            available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
+                            "disk space usage high (>80%)"
                         );
                     }
                 }
+                Err(e) => {
+                    warn!(
+                        data_dir = %data_dir.display(),
+                        error = %e,
+                        "could not check disk space (non-fatal)"
+                    );
+                }
             }
+        }
 
         // Network port validation (warn if using default ports)
         if self.http_addr.port() == 8080 {
@@ -509,7 +511,10 @@ fn default_cookie() -> String {
 
 fn default_http_addr() -> SocketAddr {
     // Tiger Style: Compile-time constant instead of runtime parsing
-    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080)
+    SocketAddr::new(
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+        8080,
+    )
 }
 
 fn default_heartbeat_interval_ms() -> u64 {
@@ -650,6 +655,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_merge() {
         let mut base = ClusterBootstrapConfig {
             node_id: 1,

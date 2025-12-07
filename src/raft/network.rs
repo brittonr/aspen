@@ -239,9 +239,9 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                 warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
                 self.update_failure_on_rpc_error(&err).await;
                 let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                    err_str,
-                ))));
+                return Err(RPCError::Unreachable(Unreachable::new(
+                    &std::io::Error::other(err_str),
+                )));
             }
         };
 
@@ -271,9 +271,9 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                 warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
                 self.update_failure_on_rpc_error(&err).await;
                 let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                    err_str,
-                ))));
+                return Err(RPCError::Unreachable(Unreachable::new(
+                    &std::io::Error::other(err_str),
+                )));
             }
         };
 

@@ -37,13 +37,15 @@ async fn main() {
                 value TEXT NOT NULL
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         for i in 0..1000 {
             conn.execute(
                 "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
                 params![format!("key_{}", i), format!("value_{}", i)],
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 

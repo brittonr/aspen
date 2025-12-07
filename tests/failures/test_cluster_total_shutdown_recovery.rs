@@ -304,6 +304,12 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
 }
 
 /// SQLite variant: Test that a single node can shutdown and restart with SQLite backend.
+///
+/// This test validates that SQLite storage properly persists Raft state and data across
+/// restarts. Unlike the in-memory variant which loses state, this test:
+/// 1. Verifies old data is still accessible after restart (persistence works)
+/// 2. Verifies the node doesn't need re-initialization (Raft state persists)
+/// 3. Verifies new writes still work after restart
 #[tokio::test]
 async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
@@ -361,24 +367,25 @@ async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Restart
+    // Restart (SQLite storage persists state, no re-initialization needed)
     let new_handle = bootstrap_node(config).await?;
 
-    // Re-initialize (SQLite storage persists state)
-    let cluster_new = RaftControlClient::new(new_handle.raft_actor.clone());
-    let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
-            1,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
-        )],
-    };
-    cluster_new.init(init_req).await?;
+    // Wait for node to come back online
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // Verify node is operational
+    // Verify old data is still accessible (SQLite persisted it)
     let kv_new = KvClient::new(new_handle.raft_actor.clone());
+    let read_req = ReadRequest {
+        key: "test".to_string(),
+    };
+    let result = kv_new.read(read_req).await?;
+    assert_eq!(
+        result.value,
+        "value".to_string(),
+        "SQLite storage should persist data across restarts"
+    );
+
+    // Verify we can still write new data
     let write_req = WriteRequest {
         command: WriteCommand::Set {
             key: "new-test".to_string(),
@@ -386,6 +393,8 @@ async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
         },
     };
     kv_new.write(write_req).await?;
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let read_req = ReadRequest {
         key: "new-test".to_string(),

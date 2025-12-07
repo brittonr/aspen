@@ -29,24 +29,22 @@
     builders = "";
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      crane,
-      flake-utils,
-      advisory-db,
-      rust-overlay,
-      ...
-    }:
+  outputs = {
+    self,
+    nixpkgs,
+    crane,
+    flake-utils,
+    advisory-db,
+    rust-overlay,
+    ...
+  }:
     flake-utils.lib.eachDefaultSystem (
-      system:
-      let
+      system: let
         pname = "mvm-ci";
         lib = nixpkgs.lib;
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [(import rust-overlay)];
         };
 
         rustToolChain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
@@ -140,8 +138,7 @@
           }
         );
 
-        srcFilters =
-          path: type:
+        srcFilters = path: type:
           builtins.any (suffix: lib.hasSuffix suffix path) [
             ".subplot" # build and documentation
             ".md"
@@ -150,14 +147,14 @@
             ".html" # Include askama templates
           ]
           ||
-            # Include vendor directory for h3-iroh and snix proto files
-            (lib.hasInfix "/vendor/" path)
+          # Include vendor directory for h3-iroh and snix proto files
+          (lib.hasInfix "/vendor/" path)
           ||
-            # Include templates directory for askama
-            (lib.hasInfix "/templates/" path)
+          # Include templates directory for askama
+          (lib.hasInfix "/templates/" path)
           ||
-            # Default filter from crane (allow .rs files)
-            (craneLib.filterCargoSources path type);
+          # Default filter from crane (allow .rs files)
+          (craneLib.filterCargoSources path type);
 
         src = lib.cleanSourceWith {
           src = ./.;
@@ -195,67 +192,64 @@
         cargoArtifacts = craneLib.buildDepsOnly basicArgs;
 
         # Common arguments can be set here to avoid repeating them later
-        commonArgs = basicArgs // {
-          inherit cargoArtifacts;
+        commonArgs =
+          basicArgs
+          // {
+            inherit cargoArtifacts;
 
-          nativeBuildInputs =
-            basicArgs.nativeBuildInputs
-            ++ (with pkgs; [
-              autoPatchelfHook
-            ]);
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [
+                autoPatchelfHook
+              ]);
 
-          buildInputs =
-            basicArgs.buildInputs
-            ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
-              with pkgs;
-              [
-                darwin.apple_sdk.frameworks.Security
-              ]
-            ));
-        };
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [
+                  darwin.apple_sdk.frameworks.Security
+                ]
+              ));
+          };
 
         mvm-ci = craneLib.buildPackage (
           commonArgs
           // {
-            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
+            inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
             doCheck = false;
           }
         );
 
-        bins =
-          let
-            bin =
-              {
-                name,
-              }:
-              craneLib.buildPackage (
-                commonArgs
-                // {
-                  inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
-                  cargoExtraArgs = "--bin ${name}";
-                  doCheck = false;
-                }
-              );
-            bins = builtins.listToAttrs (
-              map ({ name, ... }@package: lib.nameValuePair name (bin package)) [
-                {
-                  name = "cibtool";
-                }
-                {
-                  name = "cib";
-                }
-                {
-                  name = "synthetic-events";
-                }
-                {
-                  name = "mvm-ci";
-                }
-                {
-                  name = "worker";
-                }
-              ]
+        bins = let
+          bin = {name}:
+            craneLib.buildPackage (
+              commonArgs
+              // {
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                cargoExtraArgs = "--bin ${name}";
+                doCheck = false;
+              }
             );
-          in
+          bins = builtins.listToAttrs (
+            map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
+              {
+                name = "cibtool";
+              }
+              {
+                name = "cib";
+              }
+              {
+                name = "synthetic-events";
+              }
+              {
+                name = "mvm-ci";
+              }
+              {
+                name = "worker";
+              }
+            ]
+          );
+        in
           bins
           // rec {
             default = mvm-ci;
@@ -268,8 +262,7 @@
               ];
             };
           };
-      in
-      {
+      in {
         # Formatter
         formatter = pkgs.alejandra;
 
@@ -401,7 +394,7 @@
             pkgs.gettext # for envsubst
             pkgs.cacert
             # Add entrypoint scripts and config template
-            (pkgs.runCommand "mvm-ci-extras" { } ''
+            (pkgs.runCommand "mvm-ci-extras" {} ''
               mkdir -p $out/bin $out/etc
               cp ${./docker-entrypoint.sh} $out/bin/docker-entrypoint.sh
               cp ${./worker-entrypoint.sh} $out/bin/worker-entrypoint.sh
@@ -421,10 +414,10 @@
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
             ExposedPorts = {
-              "3020/tcp" = { };
-              "9000/tcp" = { };
-              "9001/tcp" = { };
-              "27288/tcp" = { };
+              "3020/tcp" = {};
+              "9000/tcp" = {};
+              "9001/tcp" = {};
+              "27288/tcp" = {};
             };
             WorkingDir = "/";
           };
@@ -483,6 +476,10 @@
             codex
             lld # Linker for WASM targets
             protobuf # Protocol Buffers compiler for snix crates
+            # Pre-commit and quality tools
+            pre-commit
+            shellcheck
+            nodePackages.markdownlint-cli
           ];
 
           env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";

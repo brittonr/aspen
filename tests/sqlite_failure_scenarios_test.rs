@@ -23,6 +23,7 @@ fn create_db_path(temp_dir: &TempDir, name: &str) -> PathBuf {
 
 /// Strategy for corrupting database files
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 enum CorruptionStrategy {
     /// Truncate file to specified percentage of original size
     Truncate(u32),
@@ -40,16 +41,12 @@ fn corrupt_file(path: &Path, strategy: CorruptionStrategy) -> std::io::Result<()
             let original_size = metadata.len();
             let new_size = (original_size * percent as u64) / 100;
 
-            let file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(path)?;
+            let file = std::fs::OpenOptions::new().write(true).open(path)?;
             file.set_len(new_size)?;
             Ok(())
         }
         CorruptionStrategy::RandomBytes(offset) => {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(path)?;
+            let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
 
             // Seek to offset and write random bytes
             use std::io::Seek;
@@ -73,9 +70,7 @@ fn corrupt_file(path: &Path, strategy: CorruptionStrategy) -> std::io::Result<()
 fn verify_database_integrity(path: &Path) -> bool {
     match Connection::open(path) {
         Ok(conn) => {
-            match conn.query_row("PRAGMA integrity_check", [], |row| {
-                row.get::<_, String>(0)
-            }) {
+            match conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0)) {
                 Ok(result) => result == "ok",
                 Err(_) => false,
             }
@@ -238,7 +233,9 @@ async fn test_sqlite_recovers_from_partial_write() {
     );
 
     let entries = Box::pin(stream::once(async move { Ok((recovery_entry, None)) }));
-    sm.apply(entries).await.expect("should be able to write after failed operation");
+    sm.apply(entries)
+        .await
+        .expect("should be able to write after failed operation");
 
     assert_eq!(
         sm.count_kv_pairs().unwrap(),
@@ -491,7 +488,10 @@ async fn test_sqlite_handles_concurrent_write_conflict() {
     );
 
     let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
-    sm1_mut.apply(entries).await.expect("node1 should be able to write");
+    sm1_mut
+        .apply(entries)
+        .await
+        .expect("node1 should be able to write");
 
     // Phase 2: Attempt to start second node sharing same database
     // Note: SQLite in WAL mode allows multiple readers and one writer,
@@ -547,7 +547,10 @@ async fn test_snapshot_install_rollback_on_error() {
 
     // Phase 2: Create a valid snapshot first
     let mut sm_builder = Arc::clone(&sm);
-    let snapshot = sm_builder.build_snapshot().await.expect("failed to build snapshot");
+    let snapshot = sm_builder
+        .build_snapshot()
+        .await
+        .expect("failed to build snapshot");
 
     // Phase 3: Corrupt snapshot data (invalid JSON)
     let corrupted_data = create_corrupted_snapshot();
@@ -555,7 +558,9 @@ async fn test_snapshot_install_rollback_on_error() {
 
     // Phase 4: Attempt to install corrupted snapshot
     let mut sm_installer = Arc::clone(&sm);
-    let result = sm_installer.install_snapshot(&snapshot.meta, corrupted_cursor).await;
+    let result = sm_installer
+        .install_snapshot(&snapshot.meta, corrupted_cursor)
+        .await;
 
     // Phase 5: Verify TransactionGuard rolls back
     assert!(
@@ -609,7 +614,9 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
         .collect();
 
     let entry_stream = Box::pin(stream::iter(entries_999.into_iter().map(|e| Ok((e, None)))));
-    sm.apply(entry_stream).await.expect("999 entries should succeed");
+    sm.apply(entry_stream)
+        .await
+        .expect("999 entries should succeed");
 
     assert_eq!(sm.count_kv_pairs().unwrap(), 999);
 
@@ -626,7 +633,9 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
         })
         .collect();
 
-    let entry_stream = Box::pin(stream::iter(entries_1001.into_iter().map(|e| Ok((e, None)))));
+    let entry_stream = Box::pin(stream::iter(
+        entries_1001.into_iter().map(|e| Ok((e, None))),
+    ));
     let result = sm.apply(entry_stream).await;
 
     // Phase 4: Verify error returned
@@ -646,7 +655,7 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
     // before the 1001st entry fails the batch limit check
     assert_eq!(
         sm.count_kv_pairs().unwrap(),
-        1999,  // 999 original + 1000 from second batch
+        1999, // 999 original + 1000 from second batch
         "should have original 999 entries plus 1000 from second batch before hitting limit"
     );
 
@@ -673,7 +682,9 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
     );
 
     let entries = Box::pin(stream::once(async move { Ok((recovery_entry, None)) }));
-    sm.apply(entries).await.expect("should be able to write after batch limit error");
+    sm.apply(entries)
+        .await
+        .expect("should be able to write after batch limit error");
 
-    assert_eq!(sm.count_kv_pairs().unwrap(), 2000);  // 999 + 1000 + 1 recovery entry
+    assert_eq!(sm.count_kv_pairs().unwrap(), 2000); // 999 + 1000 + 1 recovery entry
 }

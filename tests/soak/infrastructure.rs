@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+
+use std::sync::Arc;
 /// Soak test infrastructure for long-running stress tests.
 ///
 /// This module provides reusable components for soak testing:
@@ -11,9 +14,7 @@
 /// - No unbounded collections (Vec growth limited)
 /// - Fixed checkpoint limits
 /// - Explicit error handling
-
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Instant;
 
 use parking_lot::Mutex;
@@ -246,13 +247,13 @@ pub struct SoakTestConfig {
 impl Default for SoakTestConfig {
     fn default() -> Self {
         Self {
-            duration_seconds: 60,           // 1 minute default
+            duration_seconds: 60,            // 1 minute default
             checkpoint_interval_seconds: 10, // Every 10 seconds
-            max_total_operations: 10_000,   // 10k ops max
-            num_workers: 4,                 // 4 concurrent workers
-            read_percentage: 70,            // 70% reads, 30% writes
-            key_space_size: 1000,           // 1000 unique keys
-            value_size_bytes: 100,          // 100 byte values
+            max_total_operations: 10_000,    // 10k ops max
+            num_workers: 4,                  // 4 concurrent workers
+            read_percentage: 70,             // 70% reads, 30% writes
+            key_space_size: 1000,            // 1000 unique keys
+            value_size_bytes: 100,           // 100 byte values
         }
     }
 }
@@ -302,11 +303,7 @@ pub struct Workload {
 impl Workload {
     /// Generate a deterministic workload.
     /// Tiger Style: Bounded operation count.
-    pub fn generate(
-        total_operations: u64,
-        read_percentage: u32,
-        key_space_size: u64,
-    ) -> Self {
+    pub fn generate(total_operations: u64, read_percentage: u32, key_space_size: u64) -> Self {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
@@ -394,10 +391,10 @@ mod tests {
         let mut metrics = SoakMetrics::default();
 
         // Test bucket boundaries
-        metrics.record_write_success(500);      // Bucket 0: < 1ms
-        metrics.record_write_success(5_000);    // Bucket 1: 1-10ms
-        metrics.record_write_success(50_000);   // Bucket 2: 10-100ms
-        metrics.record_write_success(500_000);  // Bucket 3: 100ms-1s
+        metrics.record_write_success(500); // Bucket 0: < 1ms
+        metrics.record_write_success(5_000); // Bucket 1: 1-10ms
+        metrics.record_write_success(50_000); // Bucket 2: 10-100ms
+        metrics.record_write_success(500_000); // Bucket 3: 100ms-1s
         metrics.record_write_success(5_000_000); // Bucket 4: 1s-10s
         metrics.record_write_success(15_000_000); // Bucket 5: 10s+
 
@@ -414,9 +411,9 @@ mod tests {
     fn test_soak_metrics_averages() {
         let mut metrics = SoakMetrics::default();
 
-        metrics.record_write_success(1_000);  // 1ms
-        metrics.record_write_success(2_000);  // 2ms
-        metrics.record_write_success(3_000);  // 3ms
+        metrics.record_write_success(1_000); // 1ms
+        metrics.record_write_success(2_000); // 2ms
+        metrics.record_write_success(3_000); // 3ms
 
         // Average: (1 + 2 + 3) / 3 = 2ms
         assert!((metrics.avg_write_latency_ms() - 2.0).abs() < 0.01);
@@ -443,7 +440,15 @@ mod tests {
 
         // With 70% reads, expect roughly 70 reads, 30 writes
         // Allow some variance due to randomness
-        assert!(read_count >= 55 && read_count <= 85, "read_count: {}", read_count);
-        assert!(write_count >= 15 && write_count <= 45, "write_count: {}", write_count);
+        assert!(
+            (55..=85).contains(&read_count),
+            "read_count: {}",
+            read_count
+        );
+        assert!(
+            (15..=45).contains(&write_count),
+            "write_count: {}",
+            write_count
+        );
     }
 }

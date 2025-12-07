@@ -1,7 +1,9 @@
+#![allow(deprecated)]
+
 use std::path::PathBuf;
 
 use aspen::raft::storage::{RedbLogStore, RedbStateMachine};
-use aspen::raft::storage_validation::{validate_raft_storage, StorageValidationError};
+use aspen::raft::storage_validation::{StorageValidationError, validate_raft_storage};
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
 use openraft::entry::RaftEntry;
@@ -63,14 +65,17 @@ fn test_validation_passes_on_healthy_storage() {
     let db_path = create_db_path(&temp_dir, "healthy");
     {
         let _db = create_db_with_log_entries(&db_path, 10);
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok(), "validation should pass on healthy storage");
 
     let report = result.unwrap();
     assert_eq!(report.node_id, 1);
-    assert_eq!(report.checks_passed, 5, "all 5 validation checks should pass");
+    assert_eq!(
+        report.checks_passed, 5,
+        "all 5 validation checks should pass"
+    );
     assert_eq!(report.last_log_index, Some(9));
     assert!(
         report.validation_duration.as_millis() < 100,
@@ -85,7 +90,10 @@ fn test_validation_fails_on_missing_database() {
     // Don't create the database file
 
     let result = validate_raft_storage(1, &db_path);
-    assert!(result.is_err(), "validation should fail on missing database");
+    assert!(
+        result.is_err(),
+        "validation should fail on missing database"
+    );
 
     match result.unwrap_err() {
         StorageValidationError::DatabaseNotFound { path } => {
@@ -130,7 +138,7 @@ fn test_validation_report_contains_metrics() {
     let db_path = create_db_path(&temp_dir, "metrics");
     {
         let _db = create_db_with_log_entries(&db_path, 100);
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(42, &db_path);
     assert!(result.is_ok());
@@ -191,7 +199,7 @@ fn test_validation_with_vote_state() {
                 .expect("failed to insert vote");
         }
         write_txn.commit().expect("failed to commit");
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -220,7 +228,7 @@ fn test_validation_with_committed_index() {
                 .expect("failed to insert committed");
         }
         write_txn.commit().expect("failed to commit");
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -249,7 +257,7 @@ fn test_validation_fails_on_committed_beyond_log() {
                 .expect("failed to insert committed");
         }
         write_txn.commit().expect("failed to commit");
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_err());
@@ -298,7 +306,9 @@ async fn test_integration_with_redb_log_store() {
         .expect("failed to append entries");
 
     // Wait for IO to complete
-    rx.await.expect("failed to receive callback").expect("IO failed");
+    rx.await
+        .expect("failed to receive callback")
+        .expect("IO failed");
 
     // Drop log store before validation
     let log_path = log_store.path().to_path_buf();
@@ -348,7 +358,7 @@ fn test_validation_performance() {
     // Create a large log (1000 entries)
     {
         let _db = create_db_with_log_entries(&db_path, 1000);
-    }  // Database dropped here
+    } // Database dropped here
 
     // Measure validation time
     let start = std::time::Instant::now();
@@ -374,7 +384,7 @@ fn test_validation_with_large_log() {
     // Create a very large log (10000 entries)
     {
         let _db = create_db_with_log_entries(&db_path, 10000);
-    }  // Database dropped here
+    } // Database dropped here
 
     let result = validate_raft_storage(1, &db_path);
     assert!(result.is_ok());
@@ -390,7 +400,7 @@ fn test_validation_multiple_times() {
     let db_path = create_db_path(&temp_dir, "multiple");
     {
         let _db = create_db_with_log_entries(&db_path, 10);
-    }  // Database dropped here
+    } // Database dropped here
 
     // Run validation multiple times (should be idempotent)
     for i in 0..5 {

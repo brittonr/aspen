@@ -196,9 +196,7 @@ impl NodeFailureDetector {
         self.unreachable_nodes
             .iter()
             .filter(|(_, info)| info.first_failed_at.elapsed() >= self.alert_threshold)
-            .map(|(node_id, info)| {
-                (*node_id, info.failure_type, info.first_failed_at.elapsed())
-            })
+            .map(|(node_id, info)| (*node_id, info.failure_type, info.first_failed_at.elapsed()))
             .collect()
     }
 
@@ -286,9 +284,8 @@ impl AlertManager {
         }
 
         // Clear alerts for recovered nodes
-        self.alerted_nodes.retain(|node_id| {
-            detector.get_failure_type(*node_id) != FailureType::Healthy
-        });
+        self.alerted_nodes
+            .retain(|node_id| detector.get_failure_type(*node_id) != FailureType::Healthy);
     }
 
     /// Get count of currently active alerts.
@@ -325,10 +322,7 @@ mod tests {
 
         // Raft connected, Iroh disconnected → Healthy (Raft takes precedence)
         assert_eq!(
-            detector.classify_failure(
-                ConnectionStatus::Connected,
-                ConnectionStatus::Disconnected
-            ),
+            detector.classify_failure(ConnectionStatus::Connected, ConnectionStatus::Disconnected),
             FailureType::Healthy
         );
     }
@@ -339,10 +333,7 @@ mod tests {
 
         // Raft disconnected, Iroh connected → ActorCrash
         assert_eq!(
-            detector.classify_failure(
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Connected
-            ),
+            detector.classify_failure(ConnectionStatus::Disconnected, ConnectionStatus::Connected),
             FailureType::ActorCrash
         );
     }
@@ -378,10 +369,7 @@ mod tests {
         );
 
         // Should be classified as ActorCrash
-        assert_eq!(
-            detector.get_failure_type(node_id),
-            FailureType::ActorCrash
-        );
+        assert_eq!(detector.get_failure_type(node_id), FailureType::ActorCrash);
         assert_eq!(detector.unreachable_count(), 1);
 
         // Should have unreachable duration
@@ -503,10 +491,7 @@ mod tests {
         assert!(updated_duration > initial_duration);
 
         // Failure type should have changed
-        assert_eq!(
-            detector.get_failure_type(node_id),
-            FailureType::ActorCrash
-        );
+        assert_eq!(detector.get_failure_type(node_id), FailureType::ActorCrash);
     }
 
     #[test]
@@ -587,11 +572,7 @@ mod tests {
         assert_eq!(alert_mgr.active_alert_count(), 3);
 
         // One node recovers
-        detector.update_node_status(
-            30,
-            ConnectionStatus::Connected,
-            ConnectionStatus::Connected,
-        );
+        detector.update_node_status(30, ConnectionStatus::Connected, ConnectionStatus::Connected);
 
         // Should have 2 active alerts
         alert_mgr.check_and_alert(&detector);

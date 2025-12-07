@@ -149,16 +149,16 @@ async fn main() -> Result<()> {
     let addr3 = handle3.iroh_manager.node_addr().clone();
 
     // Node 1 knows about nodes 2 and 3
-    handle1.network_factory.add_peer(2, addr2.clone());
-    handle1.network_factory.add_peer(3, addr3.clone());
+    handle1.network_factory.add_peer(2, addr2.clone()).await;
+    handle1.network_factory.add_peer(3, addr3.clone()).await;
 
     // Node 2 knows about nodes 1 and 3
-    handle2.network_factory.add_peer(1, addr1.clone());
-    handle2.network_factory.add_peer(3, addr3.clone());
+    handle2.network_factory.add_peer(1, addr1.clone()).await;
+    handle2.network_factory.add_peer(3, addr3.clone()).await;
 
     // Node 3 knows about nodes 1 and 2
-    handle3.network_factory.add_peer(1, addr1.clone());
-    handle3.network_factory.add_peer(2, addr2.clone());
+    handle3.network_factory.add_peer(1, addr1.clone()).await;
+    handle3.network_factory.add_peer(2, addr2.clone()).await;
 
     info!("✅ Peer addresses exchanged (manual configuration for single-host testing)");
     info!("   💡 For multi-host LAN: mDNS + gossip provide zero-config discovery");

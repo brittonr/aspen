@@ -14,7 +14,6 @@
 ///
 /// Note: Since AspenRouter doesn't have native message drop support, we simulate
 /// this by rapidly failing/recovering nodes to create intermittent connectivity.
-use aspen::raft::types::*;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
@@ -23,7 +22,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
-#[ignore] // TODO: Router lacks native message drop support. Needs probabilistic RPC dropping instead of fail/recover simulation
 async fn test_message_drops_append_entries() {
     let start = Instant::now();
     let seed = 56789u64;
@@ -90,121 +88,45 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
         .await?;
     events.push("baseline-committed: 5 writes with reliable network".into());
 
-    // Phase 1: Simulate 10% message drops by intermittent failures
-    // We'll rapidly fail/recover follower nodes to simulate dropped AppendEntries
-    events.push("phase1-started: simulating 10% message drops".into());
+    // Phase 1: Configure 10% message drop rate
+    events.push("phase1-started: configuring 10% message drops".into());
+    router.set_global_message_drop_rate(10);
 
-    // Simulate message drops in the foreground while writing
-    // We'll interleave drops with writes
-
-    // Perform writes during message drops
+    // Perform writes with 10% packet loss
     for i in 0..10 {
-        // Simulate drops on some iterations
-        if i % 3 == 0 {
-            let target_node = ((i % 4) + 1) as NodeId;
-            router.fail_node(target_node);
-            events.push(format!("node-failed: {} (simulating drops)", target_node));
-        }
-
         let key = format!("with-drops-{}", i);
         let value = format!("unreliable-{}", i);
-
-        // Retry logic: writes may fail due to message drops
-        let mut retries = 0;
-        loop {
-            match router
-                .write(&leader, key.clone(), value.clone())
-                .await
-                .map_err(|e| anyhow::anyhow!("write error: {}", e))
-            {
-                Ok(_) => {
-                    events.push(format!(
-                        "drop-phase-write: {}={} (retries: {})",
-                        key, value, retries
-                    ));
-                    break;
-                }
-                Err(_e) if retries < 3 => {
-                    retries += 1;
-                    events.push(format!("write-retry: {} attempt {}", key, retries));
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Err(e) => {
-                    anyhow::bail!("write failed after {} retries: {}", retries, e);
-                }
-            }
-        }
-
-        // Recover failed nodes periodically
-        if i % 3 == 2 {
-            for node_id in 1..5 {
-                router.recover_node(node_id);
-            }
-            events.push("nodes-recovered: all nodes back online".into());
-        }
+        router
+            .write(&leader, key.clone(), value.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
+        events.push(format!("drop-phase-write: {}={}", key, value));
     }
 
-    events.push("phase1-completed: 10 writes with simulated drops".into());
+    events.push("phase1-completed: 10 writes with 10% drops".into());
 
     // Let the cluster stabilize
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // Phase 2: Heavier message drops (20% loss rate)
-    events.push("phase2-started: simulating 20% message drops".into());
+    events.push("phase2-started: configuring 20% message drops".into());
+    router.set_global_message_drop_rate(20);
 
     // Perform writes during heavy message drops
     for i in 0..5 {
-        // Fail multiple nodes for heavier drops
-        if i % 2 == 0 {
-            let target1 = ((i % 4) + 1) as NodeId;
-            let target2 = (((i + 1) % 4) + 1) as NodeId;
-            router.fail_node(target1);
-            router.fail_node(target2);
-            events.push(format!(
-                "nodes-failed: {}, {} (heavy drops)",
-                target1, target2
-            ));
-        }
-
         let key = format!("heavy-drops-{}", i);
         let value = format!("very-unreliable-{}", i);
-
-        // More retries needed with heavier drops
-        let mut retries = 0;
-        loop {
-            match router
-                .write(&leader, key.clone(), value.clone())
-                .await
-                .map_err(|e| anyhow::anyhow!("write error: {}", e))
-            {
-                Ok(_) => {
-                    events.push(format!(
-                        "heavy-drop-write: {}={} (retries: {})",
-                        key, value, retries
-                    ));
-                    break;
-                }
-                Err(_e) if retries < 5 => {
-                    retries += 1;
-                    events.push(format!("heavy-retry: {} attempt {}", key, retries));
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
-                Err(e) => {
-                    anyhow::bail!("write failed after {} retries: {}", retries, e);
-                }
-            }
-        }
-
-        // Recover all nodes at the end
-        if i == 4 {
-            for node_id in 1..5 {
-                router.recover_node(node_id);
-            }
-            events.push("all-nodes-recovered: heavy drop phase complete".into());
-        }
+        router
+            .write(&leader, key.clone(), value.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
+        events.push(format!("heavy-drop-write: {}={}", key, value));
     }
 
     events.push("phase2-completed: 5 writes with 20% drops".into());
+
+    // Clear drop rates for final phase
+    router.clear_message_drop_rates();
 
     // Let cluster fully stabilize after heavy message drops
     // Increased to 3000ms for better convergence

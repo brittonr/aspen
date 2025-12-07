@@ -135,7 +135,9 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).current_state().await
     }
 
-    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(
+        &self,
+    ) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
         (**self).get_metrics().await
     }
 

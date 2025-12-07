@@ -560,10 +560,7 @@ impl RaftSupervisor {
 
                     match state_machine.validate_consistency_with_log(log_store).await {
                         Ok(()) => {
-                            info!(
-                                node_id = node_id,
-                                "cross-storage validation passed"
-                            );
+                            info!(node_id = node_id, "cross-storage validation passed");
                             Ok(())
                         }
                         Err(err) => {

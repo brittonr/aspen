@@ -11,7 +11,6 @@
 /// - Bounded values and fixed limits
 /// - No unbounded growth
 /// - Clear error handling
-
 pub mod infrastructure;
 
 pub use infrastructure::*;

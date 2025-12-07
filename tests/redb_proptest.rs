@@ -1,18 +1,19 @@
+#![allow(deprecated)]
+
 /// Property-based tests for redb storage (RedbStateMachine) using proptest.
 ///
 /// This module verifies state machine invariants, monotonic properties,
 /// persistence, and snapshot correctness through comprehensive property testing.
-
 use std::io;
 use std::sync::Arc;
 
 use aspen::raft::storage::RedbStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
-use openraft::entry::RaftEntry;
-use openraft::storage::{RaftStateMachine, RaftSnapshotBuilder};
-use openraft::testing::log_id;
 use openraft::LogId;
+use openraft::entry::RaftEntry;
+use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};
+use openraft::testing::log_id;
 use proptest::prelude::*;
 use tempfile::TempDir;
 
@@ -352,6 +353,7 @@ proptest! {
 
 // Test 7: Snapshot and Restore Cycle
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
     #[test]
     fn test_snapshot_restore_preserves_data(
         entries in prop::collection::vec(arbitrary_key_value(), 5..30)

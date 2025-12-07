@@ -9,7 +9,6 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
-use rand::Rng;
 use openraft::alias::VoteOf;
 use openraft::error::NetworkError;
 use openraft::error::RPCError;
@@ -23,6 +22,7 @@ use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::{BasicNode, Config, Raft};
+use rand::Rng;
 use tokio::time::sleep;
 
 use crate::raft::storage::{InMemoryLogStore, StateMachineStore};
@@ -131,10 +131,10 @@ impl InnerRouter {
             delays.get(&(source, target)).copied()
         }; // Lock is dropped here
 
-        if let Some(ms) = delay_ms {
-            if ms > 0 {
-                sleep(Duration::from_millis(ms)).await;
-            }
+        if let Some(ms) = delay_ms
+            && ms > 0
+        {
+            sleep(Duration::from_millis(ms)).await;
         }
     }
 
@@ -146,21 +146,14 @@ impl InnerRouter {
             drop_rates.get(&(source, target)).copied()
         }; // Lock is dropped here
 
-        if let Some(rate) = drop_rate {
-            if rate > 0 && rate <= 100 {
-                let random_value = rand::thread_rng().gen_range(0..100);
-                return random_value < rate;
-            }
+        if let Some(rate) = drop_rate
+            && rate > 0
+            && rate <= 100
+        {
+            let random_value = rand::thread_rng().gen_range(0..100);
+            return random_value < rate;
         }
         false
-    }
-
-    /// Get the configured network delay for a source-target pair.
-    fn get_network_delay(&self, source: NodeId, target: NodeId) -> Option<Duration> {
-        let delays = self.delays.lock().unwrap();
-        delays
-            .get(&(source, target))
-            .map(|&ms| Duration::from_millis(ms))
     }
 
     /// Check if a node is marked as failed.

@@ -155,7 +155,7 @@ impl Ticket for AspenClusterTicket {
         // If this panics, it indicates a serious system issue requiring investigation.
         postcard::to_stdvec(&self).expect(
             "AspenClusterTicket postcard serialization failed - \
-             indicates library bug or memory corruption"
+             indicates library bug or memory corruption",
         )
     }
 

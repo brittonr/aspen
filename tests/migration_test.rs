@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 /// Integration test for aspen-migrate tool
 ///
 /// Tests the redb to SQLite state machine migration with verification.
@@ -6,8 +8,6 @@
 /// - Bounded test data (fixed number of entries)
 /// - Explicit verification steps
 /// - Clean setup/teardown with tempdir
-use std::sync::Arc;
-
 use aspen::raft::storage::RedbStateMachine;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
@@ -18,7 +18,10 @@ use openraft::testing::log_id;
 use tempfile::TempDir;
 
 /// Create a test redb database with sample data
-async fn create_test_redb_db(path: &std::path::Path, num_entries: u32) -> Result<(), Box<dyn std::error::Error>> {
+async fn create_test_redb_db(
+    path: &std::path::Path,
+    num_entries: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
     #[allow(deprecated)]
     let mut sm = RedbStateMachine::new(path)?;
 
@@ -66,7 +69,10 @@ async fn test_migration_basic() -> Result<(), Box<dyn std::error::Error>> {
     let count = target.count_kv_pairs()?;
     assert_eq!(count, 0, "Target should be empty before migration");
 
-    println!("Basic migration test passed: {} entries verified", kv_pairs.len());
+    println!(
+        "Basic migration test passed: {} entries verified",
+        kv_pairs.len()
+    );
     Ok(())
 }
 
@@ -83,7 +89,7 @@ async fn test_migration_metadata_preservation() -> Result<(), Box<dyn std::error
     #[allow(deprecated)]
     let source = RedbStateMachine::new(&source_path)?;
     let mut source_clone = source.clone();
-    let (last_applied, last_membership) = source_clone.applied_state().await?;
+    let (last_applied, _last_membership) = source_clone.applied_state().await?;
 
     // Verify metadata was written
     assert!(last_applied.is_some(), "last_applied should be set");
@@ -93,7 +99,10 @@ async fn test_migration_metadata_preservation() -> Result<(), Box<dyn std::error
         "last_applied should be index 5"
     );
 
-    println!("Metadata preservation test passed: last_applied={:?}", last_applied);
+    println!(
+        "Metadata preservation test passed: last_applied={:?}",
+        last_applied
+    );
     Ok(())
 }
 
@@ -111,7 +120,10 @@ async fn test_migration_empty_database() -> Result<(), Box<dyn std::error::Error
 
     // Verify both are empty
     let target_count = target.count_kv_pairs()?;
-    assert_eq!(target_count, 0, "Empty database migration should result in empty target");
+    assert_eq!(
+        target_count, 0,
+        "Empty database migration should result in empty target"
+    );
 
     println!("Empty database migration test passed");
     Ok(())
@@ -134,7 +146,10 @@ async fn test_migration_large_dataset() -> Result<(), Box<dyn std::error::Error>
     let value = source.get(sample_key).await?;
     assert_eq!(value, Some("value_500".to_string()));
 
-    println!("Large dataset migration test passed: {} entries", MAX_TEST_ENTRIES);
+    println!(
+        "Large dataset migration test passed: {} entries",
+        MAX_TEST_ENTRIES
+    );
     Ok(())
 }
 
@@ -187,22 +202,30 @@ async fn test_migration_sqlite_persistence() -> Result<(), Box<dyn std::error::E
     let target = SqliteStateMachine::new(&target_path)?;
 
     // Read from source and write to target
-    let conn = target.write_conn.lock().unwrap();
-    conn.execute("BEGIN IMMEDIATE", [])?;
-
+    // Collect all data first to avoid holding lock across await
+    let mut data_to_migrate = Vec::new();
     for i in 1..=5 {
         let key = format!("key_{}", i);
         let value = source.get(&key).await?;
         if let Some(val) = value {
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                rusqlite::params![&key, &val],
-            )?;
+            data_to_migrate.push((key, val));
         }
     }
 
-    conn.execute("COMMIT", [])?;
-    drop(conn);
+    // Now write to target without holding lock across await
+    {
+        let conn = target.write_conn.lock().unwrap();
+        conn.execute("BEGIN IMMEDIATE", [])?;
+
+        for (key, val) in &data_to_migrate {
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                rusqlite::params![key, val],
+            )?;
+        }
+
+        conn.execute("COMMIT", [])?;
+    }
 
     // Verify data persisted
     let persisted_value = target.get("key_3").await?;

@@ -5,7 +5,6 @@
 /// - Log index monotonicity across nodes
 /// - Leader election safety properties
 /// - Data consistency after concurrent writes
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;

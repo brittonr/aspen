@@ -51,7 +51,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             node_id,
             control_backend: ControlBackend::Deterministic,
             host: "127.0.0.1".to_string(),
-            
+
             ractor_port: 46000 + node_id as u16,
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "shutdown-recovery-test".to_string(),
@@ -105,7 +105,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
             node_id,
             control_backend: ControlBackend::Deterministic,
             host: "127.0.0.1".to_string(),
-            
+
             ractor_port: 46000 + node_id as u16,
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "shutdown-recovery-test".to_string(),
@@ -175,7 +175,7 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
         node_id: 1,
         control_backend: ControlBackend::Deterministic,
         host: "127.0.0.1".to_string(),
-        
+
         ractor_port: 56000,
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "single-node-restart".to_string(),

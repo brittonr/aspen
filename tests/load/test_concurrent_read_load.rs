@@ -36,7 +36,7 @@ use tokio::task::JoinSet;
 #[ignore] // Resource-intensive test, run explicitly with --ignored
 async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     const NUM_KEYS: u64 = 100;
-    const NUM_READERS: usize = 100;
+    const NUM_READERS: u32 = 100;
 
     // Start 3-node cluster
     let temp_dir1 = tempfile::tempdir()?;
@@ -68,8 +68,8 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
-        raft_mailbox_capacity: 1000,
+            supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+            raft_mailbox_capacity: 1000,
         };
 
         let handle = bootstrap_node(config).await?;
@@ -205,7 +205,7 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     const NUM_KEYS: u64 = 10;
-    const NUM_READERS: usize = 10;
+    const NUM_READERS: u32 = 10;
 
     // Single-node cluster for faster test
     let temp_dir = tempfile::tempdir()?;

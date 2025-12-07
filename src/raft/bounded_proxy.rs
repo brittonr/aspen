@@ -1,3 +1,4 @@
+use std::sync::Arc;
 /// Bounded mailbox proxy for RaftActor using semaphore-based backpressure.
 ///
 /// This module provides a wrapper around RaftActor's ActorRef that enforces a bounded
@@ -29,14 +30,13 @@
 /// proxy.send(msg).await?;
 /// ```
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use ractor::{ActorRef, MessagingErr};
 use snafu::Snafu;
 use tokio::sync::Semaphore;
 
-use crate::raft::types::NodeId;
 use crate::raft::RaftActorMessage;
+use crate::raft::types::NodeId;
 
 /// Default mailbox capacity (1000 messages).
 ///
@@ -315,11 +315,13 @@ impl BoundedRaftActorProxy {
     /// ```
     pub async fn send(&self, msg: RaftActorMessage) -> Result<(), BoundedMailboxError> {
         // Acquire permit (blocks if mailbox full)
-        let permit = self.semaphore.acquire().await.map_err(|_| {
-            BoundedMailboxError::Internal {
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| BoundedMailboxError::Internal {
                 message: "semaphore closed unexpectedly".to_string(),
-            }
-        })?;
+            })?;
 
         // Send message
         match self.inner.send_message(msg) {

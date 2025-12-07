@@ -283,10 +283,7 @@ impl NodeServerHandle {
                 id: sub_id.clone(),
                 subscription,
             })?;
-        self.inner
-            .subscriptions
-            .lock()
-            .push(sub_id);
+        self.inner.subscriptions.lock().push(sub_id);
         Ok(())
     }
 
@@ -294,10 +291,7 @@ impl NodeServerHandle {
         self.inner
             .actor
             .cast(NodeServerMessage::UnsubscribeToEvents(id.to_string()))?;
-        let mut guard = self
-            .inner
-            .subscriptions
-            .lock();
+        let mut guard = self.inner.subscriptions.lock();
         if let Some(pos) = guard.iter().position(|existing| existing == id) {
             guard.remove(pos);
         }
@@ -337,10 +331,7 @@ impl NodeServerHandle {
 
         // best-effort removal of outstanding subscriptions
         let subs = {
-            let mut guard = self
-                .inner
-                .subscriptions
-                .lock();
+            let mut guard = self.inner.subscriptions.lock();
             mem::take(&mut *guard)
         };
         for id in subs {

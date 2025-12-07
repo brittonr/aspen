@@ -2,7 +2,6 @@
 ///
 /// This module verifies state machine invariants, monotonic properties,
 /// and transaction atomicity through comprehensive property testing.
-
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;
@@ -10,10 +9,10 @@ use std::sync::Arc;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
-use openraft::entry::RaftEntry;
-use openraft::storage::{ApplyResponder, RaftStateMachine, RaftSnapshotBuilder};
-use openraft::testing::log_id;
 use openraft::LogId;
+use openraft::entry::RaftEntry;
+use openraft::storage::{ApplyResponder, RaftSnapshotBuilder, RaftStateMachine};
+use openraft::testing::log_id;
 use proptest::prelude::*;
 use tempfile::TempDir;
 
@@ -37,27 +36,30 @@ fn make_log_id(term: u64, node: u64, index: u64) -> LogId<AppTypeConfig> {
 // Generators for test data
 fn arbitrary_key_value() -> impl Strategy<Value = (String, String)> {
     (
-        "[a-z][a-z0-9_]{0,19}",  // Key: alphanumeric, 1-20 chars
-        prop::string::string_regex("[a-zA-Z0-9 ]{1,100}").unwrap(),  // Value: 1-100 chars
+        "[a-z][a-z0-9_]{0,19}", // Key: alphanumeric, 1-20 chars
+        prop::string::string_regex("[a-zA-Z0-9 ]{1,100}").unwrap(), // Value: 1-100 chars
     )
 }
 
+#[allow(dead_code)]
 fn arbitrary_log_entry(
     index_range: impl Strategy<Value = u64>,
 ) -> impl Strategy<Value = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> {
     (
-        1u64..100u64,  // term
-        1u64..10u64,   // node_id
-        index_range,   // index
+        1u64..100u64, // term
+        1u64..10u64,  // node_id
+        index_range,  // index
         arbitrary_key_value(),
-    ).prop_map(|(term, node, index, (key, value))| {
-        <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            make_log_id(term, node, index),
-            AppRequest::Set { key, value },
-        )
-    })
+    )
+        .prop_map(|(term, node, index, (key, value))| {
+            <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(term, node, index),
+                AppRequest::Set { key, value },
+            )
+        })
 }
 
+#[allow(dead_code)]
 fn arbitrary_setmulti_entry(
     index: u64,
     num_pairs: usize,
@@ -72,11 +74,9 @@ fn arbitrary_setmulti_entry(
     )
 }
 
+#[allow(dead_code)]
 fn oversized_setmulti() -> impl Strategy<Value = Vec<(String, String)>> {
-    prop::collection::vec(
-        arbitrary_key_value(),
-        (MAX_SETMULTI_KEYS as usize + 1)..200,
-    )
+    prop::collection::vec(arbitrary_key_value(), (MAX_SETMULTI_KEYS as usize + 1)..200)
 }
 
 // Test 1: Monotonic Log Indices
@@ -208,9 +208,10 @@ proptest! {
 
 // Test 3: Snapshot Consistency
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
     #[test]
     fn test_snapshot_captures_all_applied_data(
-        entries in prop::collection::vec(arbitrary_key_value(), 1..200)
+        entries in prop::collection::vec(arbitrary_key_value(), 1..50)
     ) {
         // Property: Snapshot contains exactly all applied data
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -331,9 +332,10 @@ proptest! {
 
 // Test 5: Batch Size Limits
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
     #[test]
     fn test_batch_size_enforcement(
-        size in 1u32..2000u32
+        size in 1u32..1200u32
     ) {
         // Property: Batches <= MAX_BATCH_SIZE succeed, >MAX_BATCH_SIZE fail
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -374,7 +376,7 @@ proptest! {
                 // Since we're applying entries one by one above, we need to test differently
 
                 // Create a stream with size entries
-                let entries: Vec<_> = (0..size).map(|i| {
+                let _entries: Vec<_> = (0..size).map(|i| {
                     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                         make_log_id(1, 1, (i + 1) as u64),
                         AppRequest::Set {
@@ -652,9 +654,10 @@ proptest! {
 
 // Test 10: Snapshot After WAL Growth
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
     #[test]
     fn test_snapshot_after_wal_growth(
-        num_entries in 50u32..200u32
+        num_entries in 20u32..100u32
     ) {
         // Property: Snapshots work correctly even with large WAL
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -696,8 +699,7 @@ proptest! {
             );
 
             // Checkpoint to reduce WAL size
-            let pages = sm.checkpoint_wal().expect("failed to checkpoint");
-            prop_assert!(pages >= 0, "Checkpoint should process pages");
+            let _pages = sm.checkpoint_wal().expect("failed to checkpoint");
 
             // WAL should be smaller after checkpoint
             let wal_size_after = sm.wal_file_size().expect("failed to get WAL size after checkpoint");

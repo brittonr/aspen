@@ -194,16 +194,19 @@ where
         }
 
         // Get current membership state
-        let metrics = self
-            .cluster_controller
-            .get_metrics()
-            .await
-            .map_err(|e| PromotionError::MetricsError {
+        let metrics = self.cluster_controller.get_metrics().await.map_err(|e| {
+            PromotionError::MetricsError {
                 source: Box::new(e),
-            })?;
+            }
+        })?;
 
-        let current_voters: Vec<NodeId> = metrics.membership_config.membership().voter_ids().collect();
-        let current_learners: Vec<NodeId> = metrics.membership_config.membership().learner_ids().collect();
+        let current_voters: Vec<NodeId> =
+            metrics.membership_config.membership().voter_ids().collect();
+        let current_learners: Vec<NodeId> = metrics
+            .membership_config
+            .membership()
+            .learner_ids()
+            .collect();
 
         // Verify learner exists and is actually a learner
         if current_voters.contains(&request.learner_id) {
@@ -235,11 +238,8 @@ where
         }
 
         // Build new membership set
-        let new_voters = self.build_new_membership(
-            &current_voters,
-            request.learner_id,
-            request.replace_node,
-        )?;
+        let new_voters =
+            self.build_new_membership(&current_voters, request.learner_id, request.replace_node)?;
 
         // Execute membership change
         let change_request = ChangeMembershipRequest {
@@ -407,9 +407,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         let current = vec![1, 2, 3];
-        let new = coordinator
-            .build_new_membership(&current, 4, None)
-            .unwrap();
+        let new = coordinator.build_new_membership(&current, 4, None).unwrap();
 
         assert_eq!(new, vec![1, 2, 3, 4]);
     }
@@ -434,9 +432,7 @@ mod tests {
 
         // Learner is already in voter set (edge case)
         let current = vec![1, 2, 3, 4];
-        let new = coordinator
-            .build_new_membership(&current, 4, None)
-            .unwrap();
+        let new = coordinator.build_new_membership(&current, 4, None).unwrap();
 
         // Should not add duplicate
         assert_eq!(new, vec![1, 2, 3, 4]);
@@ -559,6 +555,9 @@ mod tests {
         }
 
         let result = coordinator.verify_learner_healthy(learner_id).await;
-        assert!(matches!(result, Err(PromotionError::LearnerUnhealthy { .. })));
+        assert!(matches!(
+            result,
+            Err(PromotionError::LearnerUnhealthy { .. })
+        ));
     }
 }

@@ -10,9 +10,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{
-    FailureInjector, MadsimNetworkFactory, MadsimRaftRouter,
-};
+use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
@@ -95,7 +93,10 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let initial_leader = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(format!("validation: initial leader is node {}", initial_leader));
+    artifact = artifact.add_event(format!(
+        "validation: initial leader is node {}",
+        initial_leader
+    ));
 
     artifact = artifact.add_event("write: first write before failures");
     let leader_raft = match initial_leader {
@@ -223,7 +224,10 @@ async fn test_rolling_failures_seed_123() {
         || metrics2.current_leader.is_some()
         || metrics3.current_leader.is_some();
 
-    assert!(has_leader, "cluster should have leader after rolling failures");
+    assert!(
+        has_leader,
+        "cluster should have leader after rolling failures"
+    );
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -297,7 +301,8 @@ async fn test_asymmetric_partition_seed_456() {
             .await;
 
         if write_result.is_ok() {
-            artifact = artifact.add_event("validation: write succeeded despite asymmetric partition");
+            artifact =
+                artifact.add_event("validation: write succeeded despite asymmetric partition");
         } else {
             artifact = artifact.add_event("validation: write failed due to asymmetric partition");
         }

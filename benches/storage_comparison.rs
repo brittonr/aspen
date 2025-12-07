@@ -1,6 +1,8 @@
+#![allow(deprecated)]
+
 use std::sync::Arc;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use futures::stream;
 use openraft::entry::RaftEntry;
 use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};

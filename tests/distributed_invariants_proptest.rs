@@ -7,7 +7,6 @@
 /// - Log replication correctness
 /// - State machine safety (all nodes apply same commands in same order)
 /// - Partition tolerance and recovery
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -316,10 +315,8 @@ proptest! {
             for (key, expected_value) in &expected {
                 let mut replica_count = 0u32;
                 for node_id in 0..3 {
-                    if let Some(value) = router.read(&node_id, key).await {
-                        if value == *expected_value {
-                            replica_count += 1;
-                        }
+                    if let Some(value) = router.read(&node_id, key).await && value == *expected_value {
+                        replica_count += 1;
                     }
                 }
 

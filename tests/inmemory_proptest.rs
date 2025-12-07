@@ -2,16 +2,15 @@
 ///
 /// This module verifies state machine invariants, monotonic properties,
 /// and snapshot correctness through comprehensive property testing.
-
 use std::io;
 
 use aspen::raft::storage::StateMachineStore;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
-use openraft::entry::RaftEntry;
-use openraft::storage::{RaftStateMachine, RaftSnapshotBuilder};
-use openraft::testing::log_id;
 use openraft::LogId;
+use openraft::entry::RaftEntry;
+use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};
+use openraft::testing::log_id;
 use proptest::prelude::*;
 
 // Helper function to create a log ID with given term, node, and index

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
-#[ignore] // TODO: Test times out due to cumulative delays. Needs per-RPC latency instead of global delay
+#[ignore] // TODO: Needs enable_tick: false or longer timeouts - 200ms latency causes heartbeat timeouts
 async fn test_slow_network_high_latency() {
     let start = Instant::now();
     let seed = 34567u64;
@@ -74,7 +74,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Introduce high network latency
     // Tiger Style: Fixed 200ms delay to simulate slow WAN
-    router.set_network_delay(200);
+    router.set_global_network_delay(200);
     events.push("network-degraded: 200ms latency added".into());
 
     // Wait for cluster to adapt to slow network (longer wait for CI)
@@ -119,7 +119,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     events.push("slow-writes-committed: 3 writes with 200ms latency".into());
 
     // Return network to normal
-    router.set_network_delay(0);
+    router.clear_network_delays();
     events.push("network-restored: latency removed".into());
 
     // Wait for cluster to stabilize at normal speed

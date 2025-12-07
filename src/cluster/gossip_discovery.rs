@@ -168,13 +168,14 @@ impl GossipPeerDiscovery {
 
                 ticker.tick().await;
 
-                let announcement = match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
-                    Ok(ann) => ann,
-                    Err(e) => {
-                        tracing::error!("failed to create peer announcement: {}", e);
-                        continue;
-                    }
-                };
+                let announcement =
+                    match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
+                        Ok(ann) => ann,
+                        Err(e) => {
+                            tracing::error!("failed to create peer announcement: {}", e);
+                            continue;
+                        }
+                    };
                 match announcement.to_bytes() {
                     Ok(bytes) => {
                         if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
@@ -222,10 +223,12 @@ impl GossipPeerDiscovery {
 
                                 // Add peer to network factory if available
                                 if let Some(ref factory) = receiver_network_factory {
-                                    factory.add_peer(
-                                        announcement.node_id,
-                                        announcement.endpoint_addr.clone(),
-                                    ).await;
+                                    factory
+                                        .add_peer(
+                                            announcement.node_id,
+                                            announcement.endpoint_addr.clone(),
+                                        )
+                                        .await;
 
                                     tracing::info!(
                                         "added peer to network factory: node_id={}, endpoint_id={:?}",

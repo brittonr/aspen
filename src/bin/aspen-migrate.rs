@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 /// Aspen Storage Migration Tool
 ///
 /// Migrates Raft state machine data from redb to SQLite format with verification.
@@ -14,11 +16,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use aspen::raft::storage::{RedbStateMachine, StorageError};
+use aspen::raft::storage::RedbStateMachine;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use clap::Parser;
-use openraft::storage::RaftStateMachine;
 use openraft::StoredMembership;
+use openraft::storage::RaftStateMachine;
 
 /// Command-line arguments for the migration tool
 #[derive(Parser, Debug)]
@@ -76,10 +78,7 @@ async fn main() -> Result<()> {
 
     // Step 1: Validate inputs
     if !args.source.exists() {
-        anyhow::bail!(
-            "Source database does not exist: {}",
-            args.source.display()
-        );
+        anyhow::bail!("Source database does not exist: {}", args.source.display());
     }
 
     if args.target.exists() {
@@ -156,9 +155,7 @@ fn create_target_sqlite(path: &PathBuf) -> Result<std::sync::Arc<SqliteStateMach
 }
 
 /// Read all key-value pairs from the redb state machine
-async fn read_all_kv_pairs(
-    source: &std::sync::Arc<RedbStateMachine>,
-) -> Result<Vec<KvPair>> {
+async fn read_all_kv_pairs(source: &std::sync::Arc<RedbStateMachine>) -> Result<Vec<KvPair>> {
     use redb::{ReadableTable, TableDefinition};
 
     const STATE_MACHINE_KV_TABLE: TableDefinition<&str, &str> = TableDefinition::new("sm_kv");
@@ -172,8 +169,7 @@ async fn read_all_kv_pairs(
     // the database file directly using redb's public API.
 
     let db_path = source.path();
-    let db = redb::Database::open(db_path)
-        .context("Failed to open redb database for reading")?;
+    let db = redb::Database::open(db_path).context("Failed to open redb database for reading")?;
 
     let read_txn = db
         .begin_read()
@@ -197,9 +193,7 @@ async fn read_all_kv_pairs(
 }
 
 /// Read metadata from the redb state machine
-async fn read_metadata(
-    source: &std::sync::Arc<RedbStateMachine>,
-) -> Result<StateMachineMetadata> {
+async fn read_metadata(source: &std::sync::Arc<RedbStateMachine>) -> Result<StateMachineMetadata> {
     use redb::TableDefinition;
 
     const STATE_MACHINE_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_meta");

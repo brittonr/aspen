@@ -140,7 +140,10 @@ impl MadsimRaftNetwork {
     /// Returns Err(RPCError::Unreachable) if the message should be dropped,
     /// otherwise Ok(()).
     async fn check_failure_injection(&self) -> Result<(), RPCError<AppTypeConfig>> {
-        if self.failure_injector.should_drop_message(self.source, self.target) {
+        if self
+            .failure_injector
+            .should_drop_message(self.source, self.target)
+        {
             return Err(RPCError::Unreachable(Unreachable::new(
                 &std::io::Error::new(
                     std::io::ErrorKind::ConnectionRefused,
@@ -153,7 +156,10 @@ impl MadsimRaftNetwork {
 
     /// Apply network delay if configured by the failure injector.
     async fn apply_network_delay(&self) {
-        if let Some(delay) = self.failure_injector.get_network_delay(self.source, self.target) {
+        if let Some(delay) = self
+            .failure_injector
+            .get_network_delay(self.source, self.target)
+        {
             madsim::time::sleep(delay).await;
         }
     }
@@ -321,10 +327,12 @@ impl MadsimRaftRouter {
         let raft = {
             let nodes = self.nodes.lock();
             let Some(node) = nodes.get(&target) else {
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("target node {target} not registered"),
-                ))));
+                return Err(RPCError::Unreachable(Unreachable::new(
+                    &std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("target node {target} not registered"),
+                    ),
+                )));
             };
             node.raft.clone()
         };
@@ -368,10 +376,12 @@ impl MadsimRaftRouter {
         let raft = {
             let nodes = self.nodes.lock();
             let Some(node) = nodes.get(&target) else {
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("target node {target} not registered"),
-                ))));
+                return Err(RPCError::Unreachable(Unreachable::new(
+                    &std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("target node {target} not registered"),
+                    ),
+                )));
             };
             node.raft.clone()
         };
