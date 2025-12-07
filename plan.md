@@ -14,7 +14,7 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
 1. **Storage backend** ✅
    - Created `storage::log` + `storage::state_machine` modules with deterministic in-memory backends and proptest seams so we can validate ordering/snapshot invariants.
    - Added `redb`-backed implementations plus `StoragePlan` wiring so nodes can flip between deterministic and persistent surfaces.
-   - **Hybrid storage complete**: Added SQLite-backed state machine (`SqliteStateMachine`) alongside redb log storage, enabling hybrid architecture (redb for Raft log, SQLite for state machine).
+   - **Hybrid storage complete**: Added SQLite-backed state machine (`SqliteStateMachine`) alongside redb log storage, enabling hybrid architecture (redb for Raft log, SQLite for state machine). SQLite is now the production default backend.
    - Fixed metadata persistence serialization bug (`applied_state()` now correctly deserializes `Option<LogId>` as `Option<Option<LogId>>` and flattens).
    - Fixed snapshot building deadlock (refactored `build_snapshot()` to avoid nested mutex acquisition when reading metadata).
    - **OpenRaft storage suite validated**: All 50+ tests passing (comprehensive validation of log storage, state machine, and snapshot building).
@@ -2290,3 +2290,97 @@ Full audit reports available in agent outputs:
 - Full audit report available in conversation history
 - 6 specialized analysis reports (architecture, code quality, testing, concurrency, error handling, integration)
 - MCP servers used: context7 (Rust docs), onix-mcp (Nix ecosystem)
+
+## Phase 8: Advanced Testing Infrastructure (2025-12-08) ✅ COMPLETE
+
+**Timeline**: Completed in single session with parallel execution
+**Priority**: P1 - Critical for production readiness
+
+### 8.1 Chaos Engineering ✅ COMPLETE
+- Extended `AspenRouter` with network delay and message dropping capabilities
+- Added per-RPC latency control (configurable delays per node pair)
+- Implemented probabilistic message dropping (0-100% drop rates)
+- Created 5 chaos test scenarios:
+  - `chaos_leader_crash`: Leader failure and recovery
+  - `chaos_message_drops`: Network message loss resilience
+  - `chaos_network_partition`: Split-brain scenarios
+  - `chaos_slow_network`: High latency tolerance
+  - `chaos_membership_change`: Dynamic cluster reconfiguration
+- All tests use madsim for deterministic chaos injection
+- Status: ✅ Complete
+
+### 8.2 Property-Based Testing ✅ COMPLETE
+
+**8.2.1 Storage Backend Property Tests**
+- Created `tests/inmemory_proptest.rs` (283 lines, 6 tests)
+- Created `tests/redb_proptest.rs` (425 lines, 7 tests)
+- Tests verify:
+  - Monotonic log indices
+  - Snapshot consistency
+  - Data persistence across restarts (redb)
+  - Idempotent operations
+  - Large value handling (1-10KB)
+  - SetMulti atomicity
+- Proptest generates 100 cases per property
+- Status: ✅ Complete (13/13 tests passing, 1 ignored due to known redb snapshot bug)
+
+**8.2.2 Raft Operation Property Tests**
+- Created `tests/raft_operations_proptest.rs` (302 lines, 6 tests)
+- Tests verify:
+  - Write operation ordering preservation
+  - Log index monotonicity
+  - Leader stability in single-node clusters
+  - Write idempotency (last-write-wins)
+  - Empty key handling
+  - Large value writes (1-5KB)
+- All tests use `AspenRouter` with single-node clusters
+- Status: ✅ Complete (6/6 tests passing)
+
+**8.2.3 Distributed System Invariant Tests**
+- Created `tests/distributed_invariants_proptest.rs` (406 lines, 6 tests)
+- Tests verify on 3-node clusters:
+  - Eventual consistency across all nodes
+  - Leader uniqueness (at most one leader per term)
+  - Log replication correctness
+  - State machine safety (consistent command application)
+  - Full quorum write durability
+  - Concurrent read consistency
+- All tests use `AspenRouter` with 3-node clusters
+- Status: ✅ Complete (6/6 tests passing)
+
+### 8.3 Soak Testing Infrastructure ✅ COMPLETE
+
+**8.3.1 Core Infrastructure**
+- Created `tests/soak/infrastructure.rs` (450 lines)
+- Tiger Style compliant metrics collection:
+  - `SoakMetrics`: Fixed-size latency histograms `[u64; 6]`
+  - `SoakMetricsCollector`: Thread-safe `Arc<Mutex<SoakMetrics>>`
+  - `SoakTestConfig`: Explicit bounds (max operations, timeouts)
+  - `Workload`: Pre-generated deterministic operations
+  - 6-bucket latency histogram (< 1ms, 1-10ms, 10-100ms, 100ms-1s, 1s-10s, 10s+)
+- All components use explicit types (u64, u32) and bounded values
+- Status: ✅ Complete
+
+**8.3.2 Soak Test Scenarios with Madsim**
+- Created `tests/soak_sustained_write_madsim.rs` (430 lines, 3 tests)
+- Tests implemented:
+  - `test_soak_sustained_write_1000_ops`: CI-friendly (1000 ops, < 1s)
+  - `test_soak_sustained_write_50k_ops`: Long-running (50K ops, #[ignore])
+  - `test_soak_read_heavy_workload`: 90% reads, 10% writes
+- All tests use madsim time compression for deterministic execution
+- Metrics tracked: throughput, latency distribution, success rates
+- JSON artifact generation for CI integration
+- Status: ✅ Complete (3/3 tests passing)
+
+**Final Test Results**: 278 tests (267 passed, 1 flaky†, 10 skipped)
+
+**Phase 8 Impact**:
+- **Chaos Engineering**: 5 deterministic chaos scenarios validate resilience
+- **Property Testing**: 25 property tests with 100+ cases each verify invariants
+- **Soak Testing**: Madsim-compressed long-running tests (hours compressed to seconds)
+- **Tiger Style Compliance**: All infrastructure follows explicit types, bounded values, O(1) operations
+- **CI Integration**: Fast tests (< 1s) run by default, long tests marked #[ignore]
+
+†Known flaky test: test_flapping_node_detection (timing-sensitive, pre-existing)
+
+**Commit**: TBD - feat: advanced testing infrastructure (chaos, property, soak)

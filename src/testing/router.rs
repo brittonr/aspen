@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
+use rand::Rng;
 use openraft::alias::VoteOf;
 use openraft::error::NetworkError;
 use openraft::error::RPCError;
@@ -104,8 +104,12 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
 /// Inner router state shared across network factories.
 struct InnerRouter {
     nodes: StdMutex<BTreeMap<NodeId, AspenNode>>,
-    /// Network send delay in milliseconds
-    send_delay_ms: AtomicU64,
+    /// Per-pair network delays in milliseconds: (source, target) -> delay_ms
+    /// Enables simulating asymmetric network latencies between specific node pairs
+    delays: StdMutex<HashMap<(NodeId, NodeId), u64>>,
+    /// Per-pair message drop rates: (source, target) -> drop_rate (0-100)
+    /// Enables probabilistic message dropping to simulate packet loss
+    drop_rates: StdMutex<HashMap<(NodeId, NodeId), u32>>,
     /// Failed nodes that should return Unreachable errors
     failed_nodes: StdMutex<HashMap<NodeId, bool>>,
 }
@@ -114,17 +118,49 @@ impl InnerRouter {
     fn new() -> Self {
         Self {
             nodes: StdMutex::new(BTreeMap::new()),
-            send_delay_ms: AtomicU64::new(0),
+            delays: StdMutex::new(HashMap::new()),
+            drop_rates: StdMutex::new(HashMap::new()),
             failed_nodes: StdMutex::new(HashMap::new()),
         }
     }
 
-    /// Simulate network delay if configured.
-    async fn apply_network_delay(&self) {
-        let delay_ms = self.send_delay_ms.load(Ordering::Relaxed);
-        if delay_ms > 0 {
-            sleep(Duration::from_millis(delay_ms)).await;
+    /// Simulate network delay if configured for this source-target pair.
+    async fn apply_network_delay(&self, source: NodeId, target: NodeId) {
+        let delay_ms: Option<u64> = {
+            let delays = self.delays.lock().unwrap();
+            delays.get(&(source, target)).copied()
+        }; // Lock is dropped here
+
+        if let Some(ms) = delay_ms {
+            if ms > 0 {
+                sleep(Duration::from_millis(ms)).await;
+            }
         }
+    }
+
+    /// Check if a message should be dropped based on configured drop rate.
+    /// Returns true if the message should be dropped (simulating packet loss).
+    fn should_drop_message(&self, source: NodeId, target: NodeId) -> bool {
+        let drop_rate: Option<u32> = {
+            let drop_rates = self.drop_rates.lock().unwrap();
+            drop_rates.get(&(source, target)).copied()
+        }; // Lock is dropped here
+
+        if let Some(rate) = drop_rate {
+            if rate > 0 && rate <= 100 {
+                let random_value = rand::thread_rng().gen_range(0..100);
+                return random_value < rate;
+            }
+        }
+        false
+    }
+
+    /// Get the configured network delay for a source-target pair.
+    fn get_network_delay(&self, source: NodeId, target: NodeId) -> Option<Duration> {
+        let delays = self.delays.lock().unwrap();
+        delays
+            .get(&(source, target))
+            .map(|&ms| Duration::from_millis(ms))
     }
 
     /// Check if a node is marked as failed.
@@ -139,7 +175,17 @@ impl InnerRouter {
         target: NodeId,
         rpc: AppendEntriesRequest<AppTypeConfig>,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.apply_network_delay().await;
+        self.apply_network_delay(source, target).await;
+
+        // Check if message should be dropped (simulating packet loss)
+        if self.should_drop_message(source, target) {
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "message dropped (simulated packet loss)",
+                ),
+            )));
+        }
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
@@ -183,7 +229,17 @@ impl InnerRouter {
         target: NodeId,
         rpc: VoteRequest<AppTypeConfig>,
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.apply_network_delay().await;
+        self.apply_network_delay(source, target).await;
+
+        // Check if message should be dropped (simulating packet loss)
+        if self.should_drop_message(source, target) {
+            return Err(RPCError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "message dropped (simulated packet loss)",
+                ),
+            )));
+        }
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
@@ -228,7 +284,17 @@ impl InnerRouter {
         vote: VoteOf<AppTypeConfig>,
         snapshot: openraft::Snapshot<AppTypeConfig>,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        self.apply_network_delay().await;
+        self.apply_network_delay(source, target).await;
+
+        // Check if message should be dropped (simulating packet loss)
+        if self.should_drop_message(source, target) {
+            return Err(StreamingError::Unreachable(Unreachable::new(
+                &std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "message dropped (simulated packet loss)",
+                ),
+            )));
+        }
 
         // Check if SOURCE node is failed (can't send if you're dead)
         if self.is_node_failed(source) {
@@ -402,11 +468,109 @@ impl AspenRouter {
         node.raft.wait(timeout)
     }
 
-    /// Set network send delay in milliseconds. 0 means no delay.
+    /// Set network send delay in milliseconds for a specific source-target node pair.
     ///
-    /// Useful for testing timeouts and slow network scenarios.
-    pub fn set_network_delay(&mut self, delay_ms: u64) {
-        self.inner.send_delay_ms.store(delay_ms, Ordering::Relaxed);
+    /// Enables asymmetric network latency testing. Delay of 0 means no delay.
+    ///
+    /// # Arguments
+    /// * `source` - The node ID sending the RPC
+    /// * `target` - The node ID receiving the RPC
+    /// * `delay_ms` - Latency in milliseconds for this specific path
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Node 1 → Node 2: 200ms latency
+    /// router.set_network_delay(1, 2, 200);
+    /// // Node 2 → Node 1: 50ms latency (asymmetric)
+    /// router.set_network_delay(2, 1, 50);
+    /// ```
+    pub fn set_network_delay(&mut self, source: NodeId, target: NodeId, delay_ms: u64) {
+        let mut delays = self.inner.delays.lock().unwrap();
+        delays.insert((source, target), delay_ms);
+    }
+
+    /// Set global network delay for all node pairs. Convenience method.
+    ///
+    /// Applies the same latency to all source-target pairs in the cluster.
+    /// Useful for testing uniform network degradation.
+    ///
+    /// # Arguments
+    /// * `delay_ms` - Latency in milliseconds applied to all RPCs
+    pub fn set_global_network_delay(&mut self, delay_ms: u64) {
+        let nodes: Vec<NodeId> = {
+            let nodes = self.inner.nodes.lock().unwrap();
+            nodes.keys().copied().collect()
+        };
+
+        let mut delays = self.inner.delays.lock().unwrap();
+        for &source in &nodes {
+            for &target in &nodes {
+                if source != target {
+                    delays.insert((source, target), delay_ms);
+                }
+            }
+        }
+    }
+
+    /// Clear all network delays.
+    pub fn clear_network_delays(&mut self) {
+        let mut delays = self.inner.delays.lock().unwrap();
+        delays.clear();
+    }
+
+    /// Set probabilistic message drop rate for a specific source-target pair.
+    ///
+    /// Simulates packet loss by randomly dropping messages between two nodes.
+    /// Real networks typically have 0.1-5% packet loss; tests often use 10-20%
+    /// to stress Raft's retry mechanisms.
+    ///
+    /// # Arguments
+    /// * `source` - Source node ID
+    /// * `target` - Target node ID
+    /// * `drop_rate` - Drop probability as percentage (0-100)
+    ///   - 0 = no drops
+    ///   - 10 = 10% of messages dropped
+    ///   - 100 = all messages dropped
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Simulate 20% packet loss from node 1 to node 2
+    /// router.set_message_drop_rate(1, 2, 20);
+    /// ```
+    pub fn set_message_drop_rate(&mut self, source: NodeId, target: NodeId, drop_rate: u32) {
+        let clamped_rate = drop_rate.min(100);
+        let mut drop_rates = self.inner.drop_rates.lock().unwrap();
+        drop_rates.insert((source, target), clamped_rate);
+    }
+
+    /// Set global message drop rate for all node pairs. Convenience method.
+    ///
+    /// Applies the same packet loss probability to all source-target pairs.
+    /// Useful for testing uniform network unreliability.
+    ///
+    /// # Arguments
+    /// * `drop_rate` - Drop probability as percentage (0-100)
+    pub fn set_global_message_drop_rate(&mut self, drop_rate: u32) {
+        let clamped_rate = drop_rate.min(100);
+        let nodes: Vec<NodeId> = {
+            let nodes = self.inner.nodes.lock().unwrap();
+            nodes.keys().copied().collect()
+        };
+
+        let mut drop_rates = self.inner.drop_rates.lock().unwrap();
+        for &source in &nodes {
+            for &target in &nodes {
+                if source != target {
+                    drop_rates.insert((source, target), clamped_rate);
+                }
+            }
+        }
+    }
+
+    /// Clear all message drop rates.
+    pub fn clear_message_drop_rates(&mut self) {
+        let mut drop_rates = self.inner.drop_rates.lock().unwrap();
+        drop_rates.clear();
     }
 
     /// Mark a node as failed. All RPCs to this node will return Unreachable errors.
@@ -647,11 +811,11 @@ mod tests {
         let config = Arc::new(Config::default().validate()?);
         let mut router = AspenRouter::new(config);
 
-        // Test that setting network delay doesn't break functionality
-        router.set_network_delay(10); // Small delay to avoid test flakiness
-
         router.new_raft_node(0).await?;
         router.new_raft_node(1).await?;
+
+        // Test that setting network delay doesn't break functionality
+        router.set_global_network_delay(10); // Small delay to avoid test flakiness
 
         // Verify nodes still work with delay configured
         assert!(router.get_raft_handle(&0).is_ok());
