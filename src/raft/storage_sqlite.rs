@@ -102,6 +102,11 @@ impl<'a> TransactionGuard<'a> {
     /// Returns error if transaction cannot be started.
     /// Transaction will automatically roll back if not committed.
     fn new(conn: &'a Connection) -> Result<Self, SqliteStorageError> {
+        // End any lingering transaction first (Tiger Style: fail-fast on unexpected state)
+        // In SQLite, BEGIN when already in a transaction is a no-op, which can cause
+        // commits to commit the WRONG transaction. We must ensure we start fresh.
+        let _ = conn.execute("ROLLBACK", []);
+
         conn.execute("BEGIN IMMEDIATE", []).context(ExecuteSnafu)?;
         Ok(Self {
             conn,
@@ -114,8 +119,10 @@ impl<'a> TransactionGuard<'a> {
     /// Consumes the guard to prevent further use.
     /// If commit fails, the guard is dropped and transaction rolls back.
     fn commit(mut self) -> Result<(), SqliteStorageError> {
+        eprintln!("[DEBUG COMMIT] About to commit transaction");
         self.conn.execute("COMMIT", []).context(ExecuteSnafu)?;
         self.committed = true;
+        eprintln!("[DEBUG COMMIT] Transaction committed successfully");
         Ok(())
     }
 }
@@ -288,7 +295,7 @@ impl SqliteStateMachine {
     ///
     /// In SQLite WAL mode, pooled connections may reuse read snapshots from previous queries,
     /// causing reads to return stale data even after writes have committed.
-    /// This function forces a fresh read snapshot by ending any transaction and starting a new one.
+    /// This function forces a fresh read snapshot by executing a dummy query in auto-commit mode.
     ///
     /// # Tiger Style compliance
     /// - Fail-fast: Returns error if transaction commands fail (indicates DB corruption)
@@ -296,12 +303,13 @@ impl SqliteStateMachine {
     /// - Safe: Only affects read snapshot, never modifies data
     fn reset_read_connection(conn: &Connection) -> Result<(), SqliteStorageError> {
         // End any lingering transaction (even if none exists, this is safe)
-        let _ = conn.execute("END", []);
+        let _ = conn.execute("ROLLBACK", []);
 
-        // Start a new deferred read transaction to get a fresh snapshot of the latest commits
-        // DEFERRED means the transaction starts in unlocked mode and upgrades to a read lock
-        // when the first SELECT is executed, ensuring we see the latest committed data
-        conn.execute("BEGIN DEFERRED", []).context(ExecuteSnafu)?;
+        // Execute a dummy query to force SQLite to update to the latest WAL snapshot
+        // This is necessary because WAL readers can hold onto old snapshots
+        let _: i32 = conn
+            .query_row("SELECT 1", [], |row| row.get(0))
+            .context(QuerySnafu)?;
 
         Ok(())
     }
@@ -408,17 +416,28 @@ impl SqliteStateMachine {
     }
 
     /// Get a key-value pair from the state machine.
-    /// Uses read pool for concurrent reads.
+    /// Uses write connection to ensure we see latest committed data.
+    ///
+    /// Note: In WAL mode, read pooled connections can see stale snapshots even after
+    /// writes commit. To guarantee consistency, we use the write connection for reads
+    /// which always sees its own writes and the latest committed state.
     pub async fn get(&self, key: &str) -> Result<Option<String>, SqliteStorageError> {
-        let conn = self.read_pool.get().context(PoolSnafu)?;
-        Self::reset_read_connection(&conn)?;
-        conn.query_row(
-            "SELECT value FROM state_machine_kv WHERE key = ?1",
-            params![key],
-            |row| row.get(0),
-        )
-        .optional()
-        .context(QuerySnafu)
+        let conn = self
+            .write_conn
+            .lock()
+            .map_err(|_| SqliteStorageError::MutexPoisoned { operation: "get" })?;
+
+        let result = conn
+            .query_row(
+                "SELECT value FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        eprintln!("[DEBUG GET] key='{}', result={:?}", key, result);
+        Ok(result)
     }
 
     /// Validates that the SQLite state machine is consistent with the redb log.
@@ -718,11 +737,13 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                 EntryPayload::Blank => AppResponse { value: None },
                 EntryPayload::Normal(ref req) => match req {
                     AppRequest::Set { key, value } => {
+                        eprintln!("[DEBUG APPLY] key='{}', value='{}'", key, value);
                         conn.execute(
                             "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
                             params![key, value],
                         )
                         .context(ExecuteSnafu)?;
+                        eprintln!("[DEBUG APPLY] Executed INSERT OR REPLACE for key='{}'", key);
                         AppResponse {
                             value: Some(value.clone()),
                         }
@@ -765,6 +786,12 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
 
             // Commit transaction - guard is consumed and dropped after commit
             guard.commit()?;
+
+            // Force a WAL checkpoint to ensure data is visible to other connections
+            // This is necessary because in WAL mode, readers can see stale snapshots
+            // until the WAL is checkpointed or they explicitly refresh.
+            // Use PASSIVE mode which doesn't block writers.
+            let _ = conn.pragma_update(None, "wal_checkpoint", "PASSIVE");
 
             if let Some(responder) = responder {
                 responder.send(response);

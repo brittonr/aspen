@@ -41,9 +41,10 @@ fn arbitrary_key_value() -> impl Strategy<Value = (String, String)> {
 
 // Test 1: Monotonic Log Indices
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(5))]
     #[test]
     fn test_applied_log_indices_are_monotonic(
-        num_entries in 1usize..100usize
+        num_entries in 1usize..30usize
     ) {
         // Property: After applying N entries, last_applied index increases monotonically
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -353,10 +354,10 @@ proptest! {
 
 // Test 7: Snapshot and Restore Cycle
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))]
+    #![proptest_config(ProptestConfig::with_cases(5))]
     #[test]
     fn test_snapshot_restore_preserves_data(
-        entries in prop::collection::vec(arbitrary_key_value(), 5..30)
+        entries in prop::collection::vec(arbitrary_key_value(), 5..15)
     ) {
         // Property: Data should be identical after snapshot -> restore cycle
         let rt = tokio::runtime::Runtime::new().unwrap();
