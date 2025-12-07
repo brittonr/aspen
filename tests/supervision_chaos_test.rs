@@ -11,15 +11,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen::raft::madsim_network::{
-    FailureInjector, MadsimNetworkFactory, MadsimRaftRouter,
-};
+use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
-use aspen::raft::{RaftActorConfig, StateMachineVariant};
 use aspen::raft::types::NodeId;
+use aspen::raft::{RaftActorConfig, StateMachineVariant};
 use aspen::simulation::SimulationArtifactBuilder;
 use openraft::{Config as RaftConfig, Raft};
 use ractor::Actor;
@@ -59,6 +57,7 @@ async fn create_supervised_raft_config(
         node_id,
         raft,
         state_machine: StateMachineVariant::InMemory(state_machine),
+        log_store: None,
     }
 }
 
@@ -68,11 +67,8 @@ async fn create_supervised_raft_config(
 #[madsim::test]
 async fn test_supervised_restart_during_network_partition_seed_1000() {
     let seed = 1000_u64;
-    let mut artifact = SimulationArtifactBuilder::new(
-        "supervision_restart_during_partition",
-        seed,
-    )
-    .start();
+    let mut artifact =
+        SimulationArtifactBuilder::new("supervision_restart_during_partition", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -119,8 +115,7 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
     artifact = artifact.add_event("cleanup: clear partition");
     injector.set_message_drop(1, 1, false);
 
-    artifact =
-        artifact.add_event("validation: supervisor handles restart during partition");
+    artifact = artifact.add_event("validation: supervisor handles restart during partition");
 
     artifact = artifact.add_event("cleanup: stop supervisor");
     supervisor_ref.stop(Some("test-complete".into()));
@@ -138,8 +133,7 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
 #[madsim::test]
 async fn test_meltdown_detection_with_chaos_seed_2000() {
     let seed = 2000_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("supervision_chaos_meltdown", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("supervision_chaos_meltdown", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -208,8 +202,7 @@ async fn test_meltdown_detection_with_chaos_seed_2000() {
 #[madsim::test]
 async fn test_supervised_restart_with_message_delays_seed_3000() {
     let seed = 3000_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("supervision_message_delays", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("supervision_message_delays", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -267,20 +260,16 @@ async fn test_supervised_restart_with_message_delays_seed_3000() {
 #[madsim::test]
 async fn test_multiple_supervised_actors_chaos_seed_4000() {
     let seed = 4000_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("supervision_multiple_chaos", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("supervision_multiple_chaos", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 supervised raft nodes");
-    let raft_config_1 =
-        create_supervised_raft_config(10, router.clone(), injector.clone()).await;
-    let raft_config_2 =
-        create_supervised_raft_config(11, router.clone(), injector.clone()).await;
-    let raft_config_3 =
-        create_supervised_raft_config(12, router.clone(), injector.clone()).await;
+    let raft_config_1 = create_supervised_raft_config(10, router.clone(), injector.clone()).await;
+    let raft_config_2 = create_supervised_raft_config(11, router.clone(), injector.clone()).await;
+    let raft_config_3 = create_supervised_raft_config(12, router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
@@ -341,9 +330,8 @@ async fn test_multiple_supervised_actors_chaos_seed_4000() {
     artifact = artifact.add_event("wait: for all restarts to process (3s)");
     madsim::time::sleep(Duration::from_secs(3)).await;
 
-    artifact = artifact.add_event(
-        "validation: all supervisors handle restarts despite isolated chaos",
-    );
+    artifact =
+        artifact.add_event("validation: all supervisors handle restarts despite isolated chaos");
 
     artifact = artifact.add_event("cleanup: stop all supervisors");
     sup1_ref.stop(Some("test-complete".into()));
@@ -363,11 +351,8 @@ async fn test_multiple_supervised_actors_chaos_seed_4000() {
 #[madsim::test]
 async fn test_backoff_under_network_instability_seed_5000() {
     let seed = 5000_u64;
-    let mut artifact = SimulationArtifactBuilder::new(
-        "supervision_backoff_network_instability",
-        seed,
-    )
-    .start();
+    let mut artifact =
+        SimulationArtifactBuilder::new("supervision_backoff_network_instability", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());

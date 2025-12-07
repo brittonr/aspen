@@ -1,18 +1,18 @@
+use std::io;
 use std::sync::Arc;
 use std::time::Duration;
-use std::io;
 
 use openraft::Config as RaftConfig;
-use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
 use openraft::error::{RPCError, Unreachable};
+use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
 use ractor::Actor;
 
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
-use aspen::raft::{RaftActorConfig, StateMachineVariant};
 use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::{RaftActorConfig, StateMachineVariant};
 
 /// Mock network factory for testing that doesn't actually send messages.
 #[derive(Debug, Clone, Default)]
@@ -34,10 +34,7 @@ impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
         &mut self,
         _req: openraft::raft::AppendEntriesRequest<AppTypeConfig>,
         _option: openraft::network::RPCOption,
-    ) -> Result<
-        openraft::raft::AppendEntriesResponse<AppTypeConfig>,
-        RPCError<AppTypeConfig>,
-    > {
+    ) -> Result<openraft::raft::AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         let err = io::Error::new(io::ErrorKind::NotConnected, "mock network");
         Err(RPCError::Unreachable(Unreachable::new(&err)))
     }
@@ -46,30 +43,31 @@ impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
         &mut self,
         _vote: openraft::type_config::alias::VoteOf<AppTypeConfig>,
         _snapshot: openraft::Snapshot<AppTypeConfig>,
-        _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed> + openraft::OptionalSend,
+        _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed>
+        + openraft::OptionalSend,
         _option: openraft::network::RPCOption,
-    ) -> Result<openraft::raft::SnapshotResponse<AppTypeConfig>, openraft::error::StreamingError<AppTypeConfig>> {
+    ) -> Result<
+        openraft::raft::SnapshotResponse<AppTypeConfig>,
+        openraft::error::StreamingError<AppTypeConfig>,
+    > {
         let err = io::Error::new(io::ErrorKind::NotConnected, "mock network");
-        Err(openraft::error::StreamingError::Unreachable(Unreachable::new(&err)))
+        Err(openraft::error::StreamingError::Unreachable(
+            Unreachable::new(&err),
+        ))
     }
 
     async fn vote(
         &mut self,
         _req: openraft::raft::VoteRequest<AppTypeConfig>,
         _option: openraft::network::RPCOption,
-    ) -> Result<
-        openraft::raft::VoteResponse<AppTypeConfig>,
-        RPCError<AppTypeConfig>,
-    > {
+    ) -> Result<openraft::raft::VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         let err = io::Error::new(io::ErrorKind::NotConnected, "mock network");
         Err(RPCError::Unreachable(Unreachable::new(&err)))
     }
 }
 
 /// Helper to create a minimal RaftActorConfig for testing.
-async fn create_test_raft_config(
-    node_id: u64,
-) -> RaftActorConfig {
+async fn create_test_raft_config(node_id: u64) -> RaftActorConfig {
     let raft_config = Arc::new(RaftConfig::default());
     let log_store = InMemoryLogStore::default();
     let state_machine = StateMachineStore::default();
@@ -91,6 +89,7 @@ async fn create_test_raft_config(
         node_id,
         raft,
         state_machine: StateMachineVariant::InMemory(state_machine_arc),
+        log_store: None,
     }
 }
 

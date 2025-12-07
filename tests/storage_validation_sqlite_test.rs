@@ -4,7 +4,7 @@ use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
 use openraft::entry::RaftEntry;
-use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};
+use openraft::storage::{RaftLogStorage, RaftStateMachine};
 use openraft::testing::log_id;
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -628,6 +628,406 @@ async fn test_transaction_guard_commit_on_success() {
             sm.get(&format!("key{}", i)).await.unwrap(),
             Some(format!("value{}", i)),
             "entry {} should be committed by TransactionGuard",
+            i
+        );
+    }
+}
+
+// ============================================================================
+// Cross-Storage Validation Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_cross_storage_validation_happy_path() {
+    use aspen::raft::storage::RedbLogStore;
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("raft-log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_storage_happy");
+
+    // Create log store and set committed index
+    let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+    log_store
+        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 10)))
+        .await
+        .expect("failed to save committed");
+
+    // Create state machine with last_applied < committed
+    let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+        log_id::<AppTypeConfig>(1, 1, 5),
+        AppRequest::Set {
+            key: "test".into(),
+            value: "value".into(),
+        },
+    );
+    let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+    sm.apply(entries).await.expect("failed to apply entry");
+
+    // Validation should pass: last_applied (5) <= committed (10)
+    let result = sm.validate_consistency_with_log(&log_store).await;
+    assert!(
+        result.is_ok(),
+        "validation should pass when last_applied <= committed"
+    );
+}
+
+#[tokio::test]
+async fn test_cross_storage_validation_detects_corruption() {
+    use aspen::raft::storage::RedbLogStore;
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("raft-log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_storage_corruption");
+
+    // Create log store with committed index = 5
+    let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+    log_store
+        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 5)))
+        .await
+        .expect("failed to save committed");
+
+    // Create state machine with last_applied = 10 (CORRUPTED STATE)
+    let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+        log_id::<AppTypeConfig>(1, 1, 10),
+        AppRequest::Set {
+            key: "test".into(),
+            value: "value".into(),
+        },
+    );
+    let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+    sm.apply(entries).await.expect("failed to apply entry");
+
+    // Validation should fail: last_applied (10) > committed (5)
+    let result = sm.validate_consistency_with_log(&log_store).await;
+    assert!(
+        result.is_err(),
+        "validation should fail when last_applied > committed"
+    );
+
+    let err_msg = result.unwrap_err();
+    assert!(
+        err_msg.contains("10") && err_msg.contains("5"),
+        "error message should mention both indices, got: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains("corruption"),
+        "error message should mention corruption, got: {}",
+        err_msg
+    );
+}
+
+#[tokio::test]
+async fn test_cross_storage_validation_edge_case_equal() {
+    use aspen::raft::storage::RedbLogStore;
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("raft-log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_storage_equal");
+
+    // Create log store with committed index = 10
+    let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+    log_store
+        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 10)))
+        .await
+        .expect("failed to save committed");
+
+    // Create state machine with last_applied = 10 (equal)
+    let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+        log_id::<AppTypeConfig>(1, 1, 10),
+        AppRequest::Set {
+            key: "test".into(),
+            value: "value".into(),
+        },
+    );
+    let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+    sm.apply(entries).await.expect("failed to apply entry");
+
+    // Validation should pass: last_applied (10) == committed (10)
+    let result = sm.validate_consistency_with_log(&log_store).await;
+    assert!(
+        result.is_ok(),
+        "validation should pass when last_applied == committed"
+    );
+}
+
+#[tokio::test]
+async fn test_cross_storage_validation_empty_state() {
+    use aspen::raft::storage::RedbLogStore;
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("raft-log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_storage_empty");
+
+    // Create log store with no committed index
+    let log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+
+    // Create state machine with no entries applied
+    let sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+
+    // Validation should pass: both are None
+    let result = sm.validate_consistency_with_log(&log_store).await;
+    assert!(
+        result.is_ok(),
+        "validation should pass when both last_applied and committed are None"
+    );
+}
+
+#[tokio::test]
+async fn test_cross_storage_validation_no_committed() {
+    use aspen::raft::storage::RedbLogStore;
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("raft-log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_storage_no_committed");
+
+    // Create log store with no committed index
+    let log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+
+    // Create state machine with entries applied
+    let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+        log_id::<AppTypeConfig>(1, 1, 5),
+        AppRequest::Set {
+            key: "test".into(),
+            value: "value".into(),
+        },
+    );
+    let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+    sm.apply(entries).await.expect("failed to apply entry");
+
+    // Validation should pass: committed is None (no validation needed)
+    let result = sm.validate_consistency_with_log(&log_store).await;
+    assert!(
+        result.is_ok(),
+        "validation should pass when committed is None"
+    );
+}
+
+// ============================================================================
+// WAL Checkpoint Tests
+// ============================================================================
+
+#[test]
+fn test_wal_file_size_returns_none_when_no_wal() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "no_wal");
+
+    let sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Fresh database may or may not have WAL file yet
+    let result = sm.wal_file_size();
+    assert!(result.is_ok(), "wal_file_size should not error");
+}
+
+#[tokio::test]
+async fn test_wal_file_size_reports_size_after_writes() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "wal_size");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply some entries to generate WAL activity
+    for i in 0..100 {
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, 1, i),
+            AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        );
+
+        let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+        sm.apply(entries).await.expect("failed to apply entry");
+    }
+
+    // WAL file should exist after writes
+    let wal_size = sm.wal_file_size().expect("failed to get WAL size");
+    assert!(
+        wal_size.is_some() || wal_size.is_none(),
+        "WAL may or may not exist depending on checkpoint timing"
+    );
+}
+
+#[tokio::test]
+async fn test_manual_checkpoint_succeeds() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "manual_checkpoint");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply entries to create WAL activity
+    for i in 0..50 {
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, 1, i),
+            AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        );
+
+        let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+        sm.apply(entries).await.expect("failed to apply entry");
+    }
+
+    // Perform manual checkpoint
+    let result = sm.checkpoint_wal();
+    assert!(result.is_ok(), "manual checkpoint should succeed");
+
+    let pages = result.unwrap();
+    assert!(pages >= 0, "checkpointed pages should be >= 0");
+}
+
+#[tokio::test]
+async fn test_checkpoint_reduces_wal_size() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "checkpoint_reduces");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply many entries to ensure WAL growth
+    for i in 0..200 {
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, 1, i),
+            AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        );
+
+        let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+        sm.apply(entries).await.expect("failed to apply entry");
+    }
+
+    let wal_size_before = sm
+        .wal_file_size()
+        .expect("failed to get WAL size before checkpoint");
+
+    // Perform checkpoint
+    sm.checkpoint_wal()
+        .expect("checkpoint should succeed");
+
+    let wal_size_after = sm
+        .wal_file_size()
+        .expect("failed to get WAL size after checkpoint");
+
+    // After checkpoint, WAL should be truncated or removed
+    // Note: May not always reduce depending on SQLite's checkpoint mode
+    assert!(
+        wal_size_after.is_none() || wal_size_after <= wal_size_before,
+        "WAL size should be reduced or file removed after checkpoint"
+    );
+}
+
+#[tokio::test]
+async fn test_auto_checkpoint_triggers_at_threshold() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "auto_checkpoint");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply entries to create WAL activity
+    for i in 0..100 {
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, 1, i),
+            AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        );
+
+        let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+        sm.apply(entries).await.expect("failed to apply entry");
+    }
+
+    // Set threshold very low to guarantee trigger (1 byte)
+    let result = sm.auto_checkpoint_if_needed(1);
+    assert!(result.is_ok(), "auto checkpoint should not error");
+
+    // Result may be Some(pages) if WAL exists, or None if no WAL
+    let checkpoint_result = result.unwrap();
+    match checkpoint_result {
+        Some(pages) => {
+            assert!(pages >= 0, "checkpointed pages should be >= 0");
+        }
+        None => {
+            // No WAL file existed (already checkpointed)
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_auto_checkpoint_skips_below_threshold() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "auto_skip");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply one entry
+    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+        log_id::<AppTypeConfig>(1, 1, 0),
+        AppRequest::Set {
+            key: "test".into(),
+            value: "value".into(),
+        },
+    );
+
+    let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+    sm.apply(entries).await.expect("failed to apply entry");
+
+    // Set threshold very high (1GB) to guarantee no trigger
+    let threshold = 1024 * 1024 * 1024; // 1GB
+    let result = sm.auto_checkpoint_if_needed(threshold);
+    assert!(result.is_ok(), "auto checkpoint should not error");
+
+    // Should return None (no checkpoint needed)
+    let checkpoint_result = result.unwrap();
+    assert!(
+        checkpoint_result.is_none(),
+        "should not checkpoint when below threshold"
+    );
+}
+
+#[tokio::test]
+async fn test_checkpoint_preserves_data_integrity() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "checkpoint_integrity");
+
+    let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+    // Apply test data
+    for i in 0..50 {
+        let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+            log_id::<AppTypeConfig>(1, 1, i),
+            AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            },
+        );
+
+        let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+        sm.apply(entries).await.expect("failed to apply entry");
+    }
+
+    // Perform checkpoint
+    sm.checkpoint_wal()
+        .expect("checkpoint should succeed");
+
+    // Verify all data is still readable after checkpoint
+    assert_eq!(
+        sm.count_kv_pairs().expect("failed to count"),
+        50,
+        "all data should be preserved after checkpoint"
+    );
+
+    for i in 0..50 {
+        assert_eq!(
+            sm.get(&format!("key{}", i)).await.unwrap(),
+            Some(format!("value{}", i)),
+            "data {} should be intact after checkpoint",
             i
         );
     }

@@ -12,16 +12,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use openraft::Config as RaftConfig;
-use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
 use openraft::error::{RPCError, Unreachable};
+use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
 use ractor::Actor;
 
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
-use aspen::raft::{RaftActorConfig, StateMachineVariant};
 use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::{RaftActorConfig, StateMachineVariant};
 
 /// Mock network factory that returns unreachable errors.
 #[derive(Debug, Clone, Default)]
@@ -43,10 +43,7 @@ impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
         &mut self,
         _req: openraft::raft::AppendEntriesRequest<AppTypeConfig>,
         _option: openraft::network::RPCOption,
-    ) -> Result<
-        openraft::raft::AppendEntriesResponse<AppTypeConfig>,
-        RPCError<AppTypeConfig>,
-    > {
+    ) -> Result<openraft::raft::AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock");
         Err(RPCError::Unreachable(Unreachable::new(&err)))
     }
@@ -55,21 +52,24 @@ impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
         &mut self,
         _vote: openraft::type_config::alias::VoteOf<AppTypeConfig>,
         _snapshot: openraft::Snapshot<AppTypeConfig>,
-        _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed> + openraft::OptionalSend,
+        _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed>
+        + openraft::OptionalSend,
         _option: openraft::network::RPCOption,
-    ) -> Result<openraft::raft::SnapshotResponse<AppTypeConfig>, openraft::error::StreamingError<AppTypeConfig>> {
+    ) -> Result<
+        openraft::raft::SnapshotResponse<AppTypeConfig>,
+        openraft::error::StreamingError<AppTypeConfig>,
+    > {
         let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock");
-        Err(openraft::error::StreamingError::Unreachable(Unreachable::new(&err)))
+        Err(openraft::error::StreamingError::Unreachable(
+            Unreachable::new(&err),
+        ))
     }
 
     async fn vote(
         &mut self,
         _req: openraft::raft::VoteRequest<AppTypeConfig>,
         _option: openraft::network::RPCOption,
-    ) -> Result<
-        openraft::raft::VoteResponse<AppTypeConfig>,
-        RPCError<AppTypeConfig>,
-    > {
+    ) -> Result<openraft::raft::VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock");
         Err(RPCError::Unreachable(Unreachable::new(&err)))
     }
@@ -98,6 +98,7 @@ async fn create_test_raft_config(node_id: u64) -> RaftActorConfig {
         node_id,
         raft,
         state_machine: StateMachineVariant::InMemory(state_machine_arc),
+        log_store: None,
     }
 }
 
@@ -148,7 +149,7 @@ async fn test_exponential_backoff_timing() {
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
         actor_stability_duration_secs: 1, // Short stability window for testing
-        max_restarts_per_window: 10, // Allow multiple restarts
+        max_restarts_per_window: 10,      // Allow multiple restarts
         restart_window_secs: 120,
         restart_history_size: 100,
     };
@@ -199,8 +200,8 @@ async fn test_meltdown_detection_stops_restarts() {
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
         actor_stability_duration_secs: 1, // Very short stability
-        max_restarts_per_window: 3, // Allow only 3 restarts
-        restart_window_secs: 30, // Within 30 seconds
+        max_restarts_per_window: 3,       // Allow only 3 restarts
+        restart_window_secs: 30,          // Within 30 seconds
         restart_history_size: 100,
     };
 
@@ -249,7 +250,7 @@ async fn test_restart_counter_resets_after_stability() {
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
         actor_stability_duration_secs: 2, // 2 second stability window
-        max_restarts_per_window: 2, // Only 2 restarts allowed
+        max_restarts_per_window: 2,       // Only 2 restarts allowed
         restart_window_secs: 60,
         restart_history_size: 100,
     };
@@ -297,7 +298,10 @@ async fn test_restart_with_in_memory_storage() {
 
     // Verify we're using in-memory storage
     assert!(
-        matches!(raft_actor_config.state_machine, StateMachineVariant::InMemory(_)),
+        matches!(
+            raft_actor_config.state_machine,
+            StateMachineVariant::InMemory(_)
+        ),
         "expected in-memory storage variant"
     );
 

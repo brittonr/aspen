@@ -20,7 +20,9 @@ use crate::raft::storage::{
     InMemoryLogStore, RedbLogStore, RedbStateMachine, StateMachineStore, StorageBackend,
 };
 use crate::raft::storage_sqlite::SqliteStateMachine;
-use crate::raft::supervision::{HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage};
+use crate::raft::supervision::{
+    HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage,
+};
 use crate::raft::types::{AppTypeConfig, NodeId};
 use crate::raft::{RaftActorConfig, RaftActorMessage, StateMachineVariant};
 
@@ -82,8 +84,7 @@ impl BootstrapHandle {
         self.node_server.shutdown().await?;
 
         info!("shutting down Raft supervisor");
-        self.raft_supervisor
-            .stop(Some("bootstrap-shutdown".into()));
+        self.raft_supervisor.stop(Some("bootstrap-shutdown".into()));
         self.supervisor_task.await?;
 
         // Update node status to offline
@@ -298,7 +299,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     );
 
     // Create Raft core and capture the actual state machine
-    let (raft_core, state_machine_variant) = {
+    let (raft_core, state_machine_variant, log_store_opt) = {
         let raft_config = RaftConfig {
             heartbeat_interval: config.heartbeat_interval_ms,
             election_timeout_min: config.election_timeout_min_ms,
@@ -328,7 +329,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .await
                 .context("failed to initialize raft with in-memory storage")?;
 
-                (raft, StateMachineVariant::InMemory(state_machine_store))
+                (raft, StateMachineVariant::InMemory(state_machine_store), None)
             }
             #[allow(deprecated)]
             StorageBackend::Redb => {
@@ -366,7 +367,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                 .await
                 .context("failed to initialize raft with redb storage")?;
 
-                (raft, StateMachineVariant::Redb(state_machine))
+                (raft, StateMachineVariant::Redb(state_machine), None)
             }
             StorageBackend::Sqlite => {
                 info!("Using sqlite persistent storage backend");
@@ -399,13 +400,13 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
                     config.node_id,
                     validated_config,
                     (*network_factory).clone(),
-                    log_store,
+                    log_store.clone(),
                     state_machine.clone(),
                 )
                 .await
                 .context("failed to initialize raft with sqlite storage")?;
 
-                (raft, StateMachineVariant::Sqlite(state_machine))
+                (raft, StateMachineVariant::Sqlite(state_machine), Some(log_store))
             }
         }
     };
@@ -415,6 +416,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         node_id: config.node_id,
         raft: raft_core.clone(),
         state_machine: state_machine_variant.clone(),
+        log_store: log_store_opt,
     };
 
     let supervisor_args = SupervisorArguments {

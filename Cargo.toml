@@ -40,6 +40,8 @@ postcard = { version = "1.0", features = ["alloc"] }
 openraft = { path = "openraft/openraft", features = ["serde", "type-alias"] }
 redb = "2.0.0"
 rusqlite = { version = "0.37", features = ["bundled"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.31"
 snafu = "0.8.9"
 irpc = { version = "0.11.0", features = ["derive"] }
 madsim = { version = "0.2.34", features = ["macros"] }
@@ -90,3 +92,9 @@ path = "tests/load/test_concurrent_read_load.rs"
 [[test]]
 name = "test_mixed_workload"
 path = "tests/load/test_mixed_workload.rs"
+
+# Benchmarks
+[[bench]]
+name = "storage_read_concurrency"
+path = "benches/storage_read_concurrency.rs"
+harness = false

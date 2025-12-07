@@ -196,7 +196,9 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use ractor::{Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call_t};
+use ractor::{
+    Actor, ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call_t,
+};
 use snafu::{ResultExt, Snafu};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
@@ -279,9 +281,9 @@ impl Default for SupervisionConfig {
     fn default() -> Self {
         Self {
             enable_auto_restart: true,
-            actor_stability_duration_secs: 300,  // 5 minutes
+            actor_stability_duration_secs: 300, // 5 minutes
             max_restarts_per_window: 3,
-            restart_window_secs: 600,             // 10 minutes
+            restart_window_secs: 600, // 10 minutes
             restart_history_size: MAX_RESTART_HISTORY_SIZE,
         }
     }
@@ -475,15 +477,18 @@ impl RaftSupervisor {
     ///
     /// Tiger Style: Fail-fast on validation errors to prevent restarting with corrupt state.
     async fn validate_storage(&self, state: &RaftSupervisorState) -> Result<(), String> {
-        use crate::raft::storage_validation::validate_raft_storage;
         use crate::raft::StateMachineVariant;
+        use crate::raft::storage_validation::validate_raft_storage;
 
         let node_id = state.raft_actor_config.node_id;
 
         match &state.raft_actor_config.state_machine {
             StateMachineVariant::InMemory(_) => {
                 // In-memory storage cannot be corrupted on disk
-                debug!(node_id = node_id, "skipping storage validation for in-memory backend");
+                debug!(
+                    node_id = node_id,
+                    "skipping storage validation for in-memory backend"
+                );
                 Ok(())
             }
             #[allow(deprecated)]
@@ -526,6 +531,7 @@ impl RaftSupervisor {
                     "validating sqlite storage before restart"
                 );
 
+                // First, validate SQLite database integrity
                 match state_machine.validate(node_id) {
                     Ok(report) => {
                         info!(
@@ -534,7 +540,6 @@ impl RaftSupervisor {
                             validation_duration_ms = report.validation_duration.as_millis(),
                             "sqlite storage validation passed"
                         );
-                        Ok(())
                     }
                     Err(err) => {
                         error!(
@@ -542,8 +547,40 @@ impl RaftSupervisor {
                             error = %err,
                             "sqlite storage validation failed"
                         );
-                        Err(format!("sqlite storage validation failed: {}", err))
+                        return Err(format!("sqlite storage validation failed: {}", err));
                     }
+                }
+
+                // Second, validate cross-storage consistency (last_applied <= committed)
+                if let Some(log_store) = &state.raft_actor_config.log_store {
+                    debug!(
+                        node_id = node_id,
+                        "validating cross-storage consistency (sqlite state machine vs redb log)"
+                    );
+
+                    match state_machine.validate_consistency_with_log(log_store).await {
+                        Ok(()) => {
+                            info!(
+                                node_id = node_id,
+                                "cross-storage validation passed"
+                            );
+                            Ok(())
+                        }
+                        Err(err) => {
+                            error!(
+                                node_id = node_id,
+                                error = %err,
+                                "cross-storage validation failed"
+                            );
+                            Err(format!("cross-storage validation failed: {}", err))
+                        }
+                    }
+                } else {
+                    warn!(
+                        node_id = node_id,
+                        "no log store available for cross-storage validation"
+                    );
+                    Ok(())
                 }
             }
         }
@@ -710,10 +747,7 @@ impl Actor for RaftSupervisor {
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let node_id = args.raft_actor_config.node_id;
-        info!(
-            node_id = node_id,
-            "raft supervisor starting"
-        );
+        info!(node_id = node_id, "raft supervisor starting");
 
         // Spawn initial RaftActor using spawn_linked
         let (raft_actor, _task) = self
@@ -733,13 +767,12 @@ impl Actor for RaftSupervisor {
         ));
         let health_monitor_task = health_monitor.clone().start();
 
-        info!(
-            node_id = node_id,
-            "health monitor started for raft actor"
-        );
+        info!(node_id = node_id, "health monitor started for raft actor");
 
         Ok(RaftSupervisorState {
-            restart_history: VecDeque::with_capacity(args.supervision_config.restart_history_size as usize),
+            restart_history: VecDeque::with_capacity(
+                args.supervision_config.restart_history_size as usize,
+            ),
             config: args.supervision_config,
             raft_actor_config: args.raft_actor_config,
             current_raft_actor: Some(raft_actor),
@@ -822,7 +855,8 @@ impl Actor for RaftSupervisor {
     ) -> Result<(), ActorProcessingErr> {
         match evt {
             SupervisionEvent::ActorFailed(cell, err) => {
-                self.handle_actor_failed(myself, state, cell, err.to_string()).await
+                self.handle_actor_failed(myself, state, cell, err.to_string())
+                    .await
             }
             SupervisionEvent::ActorTerminated(_cell, _, reason) => {
                 let node_id = state.raft_actor_config.node_id;
@@ -986,8 +1020,11 @@ impl HealthMonitor {
                     }
                     Err(err) => {
                         // Increment failure counters
-                        metrics.health_check_failures_total.fetch_add(1, Ordering::Relaxed);
-                        let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+                        metrics
+                            .health_check_failures_total
+                            .fetch_add(1, Ordering::Relaxed);
+                        let failures =
+                            self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
 
                         // Update health status based on threshold
                         let status = if failures >= self.config.consecutive_failure_threshold {
@@ -1006,7 +1043,9 @@ impl HealthMonitor {
                             HealthStatus::Unhealthy => 0,
                         };
                         metrics.health_status.store(status_value, Ordering::Relaxed);
-                        metrics.consecutive_failures.store(failures, Ordering::Relaxed);
+                        metrics
+                            .consecutive_failures
+                            .store(failures, Ordering::Relaxed);
 
                         warn!(
                             consecutive_failures = failures,
@@ -1033,13 +1072,10 @@ impl HealthMonitor {
         let timeout_ms = self.config.check_timeout.as_millis() as u64;
 
         // Send Ping message with timeout
-        call_t!(
-            self.raft_actor_ref,
-            RaftActorMessage::Ping,
-            timeout_ms
-        )
-        .map_err(|err| HealthCheckError::ActorNotResponding {
-            reason: err.to_string(),
+        call_t!(self.raft_actor_ref, RaftActorMessage::Ping, timeout_ms).map_err(|err| {
+            HealthCheckError::ActorNotResponding {
+                reason: err.to_string(),
+            }
         })?;
 
         debug!("liveness check succeeded");
@@ -1109,13 +1145,13 @@ pub enum HealthCheckError {
 #[cfg(test)]
 mod health_monitor_tests {
     use super::*;
-    use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
     use crate::raft::storage::StateMachineStore;
     use crate::raft::types::{AppTypeConfig, NodeId};
-    use openraft::Config as RaftConfig;
-    use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
-    use openraft::error::{RPCError, Unreachable};
+    use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
     use openraft::BasicNode;
+    use openraft::Config as RaftConfig;
+    use openraft::error::{RPCError, Unreachable};
+    use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
     use std::sync::Arc;
 
     /// Mock network factory for testing that doesn't actually send messages.
@@ -1138,10 +1174,8 @@ mod health_monitor_tests {
             &mut self,
             _req: openraft::raft::AppendEntriesRequest<AppTypeConfig>,
             _option: openraft::network::RPCOption,
-        ) -> Result<
-            openraft::raft::AppendEntriesResponse<AppTypeConfig>,
-            RPCError<AppTypeConfig>,
-        > {
+        ) -> Result<openraft::raft::AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>>
+        {
             let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
             Err(RPCError::Unreachable(Unreachable::new(&err)))
         }
@@ -1150,28 +1184,32 @@ mod health_monitor_tests {
             &mut self,
             _vote: openraft::type_config::alias::VoteOf<AppTypeConfig>,
             _snapshot: openraft::Snapshot<AppTypeConfig>,
-            _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed> + openraft::OptionalSend,
+            _cancel: impl std::future::Future<Output = openraft::error::ReplicationClosed>
+            + openraft::OptionalSend,
             _option: openraft::network::RPCOption,
-        ) -> Result<openraft::raft::SnapshotResponse<AppTypeConfig>, openraft::error::StreamingError<AppTypeConfig>> {
+        ) -> Result<
+            openraft::raft::SnapshotResponse<AppTypeConfig>,
+            openraft::error::StreamingError<AppTypeConfig>,
+        > {
             let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
-            Err(openraft::error::StreamingError::Unreachable(Unreachable::new(&err)))
+            Err(openraft::error::StreamingError::Unreachable(
+                Unreachable::new(&err),
+            ))
         }
 
         async fn vote(
             &mut self,
             _req: openraft::raft::VoteRequest<AppTypeConfig>,
             _option: openraft::network::RPCOption,
-        ) -> Result<
-            openraft::raft::VoteResponse<AppTypeConfig>,
-            RPCError<AppTypeConfig>,
-        > {
+        ) -> Result<openraft::raft::VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
             let err = std::io::Error::new(std::io::ErrorKind::NotConnected, "mock network");
             Err(RPCError::Unreachable(Unreachable::new(&err)))
         }
     }
 
     /// Create a test RaftActor for health monitoring tests.
-    async fn create_test_raft_actor() -> (ActorRef<RaftActorMessage>, openraft::Raft<AppTypeConfig>) {
+    async fn create_test_raft_actor() -> (ActorRef<RaftActorMessage>, openraft::Raft<AppTypeConfig>)
+    {
         use crate::raft::storage::InMemoryLogStore;
         use openraft::Raft;
 
@@ -1197,15 +1235,12 @@ mod health_monitor_tests {
             node_id,
             raft: raft.clone(),
             state_machine: StateMachineVariant::InMemory(state_machine_arc),
+            log_store: None,
         };
 
-        let (actor_ref, _) = ractor::Actor::spawn(
-            None,
-            RaftActor,
-            raft_config,
-        )
-        .await
-        .expect("failed to spawn raft actor");
+        let (actor_ref, _) = ractor::Actor::spawn(None, RaftActor, raft_config)
+            .await
+            .expect("failed to spawn raft actor");
 
         (actor_ref, raft)
     }
@@ -1228,7 +1263,11 @@ mod health_monitor_tests {
         assert_eq!(status, HealthStatus::Healthy, "status should be Healthy");
 
         // Verify no failures
-        assert_eq!(monitor.get_consecutive_failures(), 0, "should have 0 failures");
+        assert_eq!(
+            monitor.get_consecutive_failures(),
+            0,
+            "should have 0 failures"
+        );
     }
 
     #[tokio::test]
@@ -1252,10 +1291,18 @@ mod health_monitor_tests {
 
         // Verify status is still Healthy
         let status = monitor.get_status().await;
-        assert_eq!(status, HealthStatus::Healthy, "status should remain Healthy");
+        assert_eq!(
+            status,
+            HealthStatus::Healthy,
+            "status should remain Healthy"
+        );
 
         // Verify no failures
-        assert_eq!(monitor.get_consecutive_failures(), 0, "should have 0 failures");
+        assert_eq!(
+            monitor.get_consecutive_failures(),
+            0,
+            "should have 0 failures"
+        );
     }
 
     #[tokio::test]

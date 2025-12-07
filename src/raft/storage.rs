@@ -76,7 +76,6 @@ impl std::fmt::Display for StorageBackend {
     }
 }
 
-
 // ====================================================================================
 // Redb Table Definitions (Tiger Style: explicitly named, typed tables)
 // ====================================================================================
@@ -214,11 +213,7 @@ impl LogStoreInner {
     }
 
     async fn get_log_state(&mut self) -> Result<LogState<AppTypeConfig>, io::Error> {
-        let last_log_id = self
-            .log
-            .iter()
-            .next_back()
-            .map(|(_, entry)| entry.log_id());
+        let last_log_id = self.log.iter().next_back().map(|(_, entry)| entry.log_id());
         let last_purged = self.last_purged_log_id;
         let last = last_log_id.or(last_purged);
         Ok(LogState {
@@ -681,6 +676,19 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
     async fn get_log_reader(&mut self) -> Self::LogReader {
         self.clone()
+    }
+}
+
+impl RedbLogStore {
+    /// Reads the committed log index from metadata.
+    ///
+    /// Used for cross-storage validation to ensure state machine consistency.
+    /// Returns the committed log index if it exists, None otherwise.
+    pub async fn read_committed_sync(&self) -> Result<Option<u64>, io::Error> {
+        let committed: Option<LogIdOf<AppTypeConfig>> = self
+            .read_meta("committed")
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        Ok(committed.map(|log_id| log_id.index))
     }
 }
 
@@ -1406,13 +1414,22 @@ mod tests {
     /// implementation against OpenRaft's comprehensive test suite.
     struct SqliteStoreBuilder;
 
-    impl StoreBuilder<AppTypeConfig, RedbLogStore, Arc<crate::raft::storage_sqlite::SqliteStateMachine>, Box<tempfile::TempDir>>
-        for SqliteStoreBuilder
+    impl
+        StoreBuilder<
+            AppTypeConfig,
+            RedbLogStore,
+            Arc<crate::raft::storage_sqlite::SqliteStateMachine>,
+            Box<tempfile::TempDir>,
+        > for SqliteStoreBuilder
     {
         async fn build(
             &self,
         ) -> Result<
-            (Box<tempfile::TempDir>, RedbLogStore, Arc<crate::raft::storage_sqlite::SqliteStateMachine>),
+            (
+                Box<tempfile::TempDir>,
+                RedbLogStore,
+                Arc<crate::raft::storage_sqlite::SqliteStateMachine>,
+            ),
             StorageError<AppTypeConfig>,
         > {
             use tempfile::TempDir;
@@ -1522,7 +1539,8 @@ mod tests {
 
     /// Tests that SQLite state machine persists data across database reopens.
     #[tokio::test]
-    async fn test_sqlite_state_machine_persistence() -> Result<(), crate::raft::storage_sqlite::SqliteStorageError> {
+    async fn test_sqlite_state_machine_persistence()
+    -> Result<(), crate::raft::storage_sqlite::SqliteStorageError> {
         use futures::stream;
         use openraft::entry::RaftEntry;
         use openraft::testing::log_id;
@@ -1566,7 +1584,8 @@ mod tests {
 
     /// Tests SQLite state machine snapshot persistence across database reopens.
     #[tokio::test]
-    async fn test_sqlite_snapshot_persistence() -> Result<(), crate::raft::storage_sqlite::SqliteStorageError> {
+    async fn test_sqlite_snapshot_persistence()
+    -> Result<(), crate::raft::storage_sqlite::SqliteStorageError> {
         use futures::stream;
         use openraft::entry::RaftEntry;
         use openraft::testing::log_id;
@@ -1599,11 +1618,20 @@ mod tests {
         // Reopen and verify snapshot exists
         {
             let mut sm = crate::raft::storage_sqlite::SqliteStateMachine::new(&sm_path)?;
-            let snapshot = sm.get_current_snapshot().await.expect("failed to get snapshot");
-            assert!(snapshot.is_some(), "snapshot should exist after persistence");
+            let snapshot = sm
+                .get_current_snapshot()
+                .await
+                .expect("failed to get snapshot");
+            assert!(
+                snapshot.is_some(),
+                "snapshot should exist after persistence"
+            );
 
             let snapshot = snapshot.unwrap();
-            assert_eq!(snapshot.meta.last_log_id, Some(log_id::<AppTypeConfig>(1, 1, 5)));
+            assert_eq!(
+                snapshot.meta.last_log_id,
+                Some(log_id::<AppTypeConfig>(1, 1, 5))
+            );
 
             // Verify all keys are still accessible
             for i in 1..=5 {

@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use futures::{Stream, TryStreamExt};
 use openraft::storage::{EntryResponder, RaftSnapshotBuilder, RaftStateMachine, Snapshot};
 use openraft::{EntryPayload, OptionalSend, StoredMembership};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
@@ -20,6 +22,10 @@ const MAX_BATCH_SIZE: u32 = 1000;
 /// Maximum number of key-value pairs in a single SetMulti operation.
 /// Tiger Style: Fixed limits prevent unbounded resource usage.
 const MAX_SETMULTI_KEYS: u32 = 100;
+
+/// Default size of read connection pool.
+/// Tiger Style: Fixed limit on concurrent readers.
+const DEFAULT_READ_POOL_SIZE: u32 = 10;
 
 /// Errors that can occur when using SQLite storage
 #[derive(Debug, Snafu)]
@@ -53,6 +59,18 @@ pub enum SqliteStorageError {
         path: PathBuf,
         source: std::io::Error,
     },
+
+    #[snafu(display("I/O error on path {}: {source}", path.display()))]
+    IoError {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[snafu(display("connection pool error: {source}"))]
+    PoolError { source: r2d2::Error },
+
+    #[snafu(display("failed to build connection pool: {source}"))]
+    PoolBuild { source: r2d2::Error },
 }
 
 impl From<SqliteStorageError> for io::Error {
@@ -114,7 +132,7 @@ struct StoredSnapshot {
     pub data: Vec<u8>,
 }
 
-/// SQLite-backed Raft state machine.
+/// SQLite-backed Raft state machine with connection pooling.
 ///
 /// Stores key-value data, last applied log, and membership config in SQLite.
 /// Provides ACID guarantees via SQLite transactions.
@@ -123,18 +141,25 @@ struct StoredSnapshot {
 /// - WAL mode for performance and durability
 /// - FULL synchronous mode for safety
 /// - Explicitly sized types (u64 for indices)
-/// - Bounded operations
+/// - Bounded operations (fixed pool size)
 /// - Fail-fast on corruption
+/// - Connection pooling for concurrent reads
 ///
 /// Schema:
 /// - state_machine_kv: (key TEXT PRIMARY KEY, value TEXT)
 /// - state_machine_meta: (key TEXT PRIMARY KEY, value BLOB)
 /// - snapshots: (id TEXT PRIMARY KEY, data BLOB)
+///
+/// WAL Checkpoint Management:
+/// - WAL file size monitoring via wal_file_size()
+/// - Manual checkpoint via checkpoint_wal()
+/// - Auto-checkpoint at threshold via auto_checkpoint_if_needed()
 #[derive(Clone, Debug)]
 pub struct SqliteStateMachine {
-    /// SQLite connection (wrapped in Arc<Mutex> for interior mutability)
-    /// Note: SQLite has internal locking, but we use Mutex for Rust's type system
-    conn: Arc<Mutex<Connection>>,
+    /// Connection pool for read operations (allows concurrent reads via WAL mode)
+    read_pool: Pool<SqliteConnectionManager>,
+    /// Single connection for write operations (SQLite single-writer constraint)
+    write_conn: Arc<Mutex<Connection>>,
     /// Path to the database file
     path: PathBuf,
     /// Snapshot index counter (for generating unique snapshot IDs)
@@ -146,7 +171,19 @@ impl SqliteStateMachine {
     ///
     /// Initializes the database schema if it doesn't exist.
     /// Configures WAL mode and FULL synchronous for durability.
+    /// Creates a connection pool with DEFAULT_READ_POOL_SIZE connections.
     pub fn new(path: impl AsRef<Path>) -> Result<Arc<Self>, SqliteStorageError> {
+        Self::with_pool_size(path, DEFAULT_READ_POOL_SIZE)
+    }
+
+    /// Create or open a SQLite-backed state machine with a custom pool size.
+    ///
+    /// Allows configuring the number of read connections in the pool.
+    /// Tiger Style: Explicit pool size parameter, bounded by caller.
+    pub fn with_pool_size(
+        path: impl AsRef<Path>,
+        pool_size: u32,
+    ) -> Result<Arc<Self>, SqliteStorageError> {
         let path = path.as_ref().to_path_buf();
 
         // Ensure parent directory exists
@@ -154,46 +191,60 @@ impl SqliteStateMachine {
             std::fs::create_dir_all(parent).context(CreateDirectorySnafu { path: parent })?;
         }
 
-        let conn = Connection::open(&path).context(OpenDatabaseSnafu { path: &path })?;
+        // Create write connection
+        let write_conn = Connection::open(&path).context(OpenDatabaseSnafu { path: &path })?;
 
         // Configure SQLite for durability and performance (Tiger Style)
         // WAL mode: Better concurrency, crash-safe
         // FULL synchronous: Ensure data is on disk before commit returns
-        conn.pragma_update(None, "journal_mode", "WAL")
+        write_conn
+            .pragma_update(None, "journal_mode", "WAL")
             .context(ExecuteSnafu)?;
-        conn.pragma_update(None, "synchronous", "FULL")
+        write_conn
+            .pragma_update(None, "synchronous", "FULL")
             .context(ExecuteSnafu)?;
 
         // Create tables if they don't exist
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS state_machine_kv (
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS state_machine_kv (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )",
-            [],
-        )
-        .context(ExecuteSnafu)?;
+                [],
+            )
+            .context(ExecuteSnafu)?;
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS state_machine_meta (
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS state_machine_meta (
                 key TEXT PRIMARY KEY,
                 value BLOB NOT NULL
             )",
-            [],
-        )
-        .context(ExecuteSnafu)?;
+                [],
+            )
+            .context(ExecuteSnafu)?;
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS snapshots (
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS snapshots (
                 id TEXT PRIMARY KEY,
                 data BLOB NOT NULL
             )",
-            [],
-        )
-        .context(ExecuteSnafu)?;
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Create read connection pool
+        let manager = SqliteConnectionManager::file(&path);
+        let read_pool = Pool::builder()
+            .max_size(pool_size)
+            .build(manager)
+            .context(PoolBuildSnafu)?;
 
         Ok(Arc::new(Self {
-            conn: Arc::new(Mutex::new(conn)),
+            read_pool,
+            write_conn: Arc::new(Mutex::new(write_conn)),
             path,
             snapshot_idx: Arc::new(AtomicU64::new(0)),
         }))
@@ -205,12 +256,9 @@ impl SqliteStateMachine {
     }
 
     /// Count the number of key-value pairs in the state machine.
-    /// Used for testing and validation.
+    /// Uses read pool for concurrent reads.
     pub fn count_kv_pairs(&self) -> Result<i64, SqliteStorageError> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during count operation - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM state_machine_kv", [], |row| {
                 row.get(0)
@@ -220,12 +268,9 @@ impl SqliteStateMachine {
     }
 
     /// Count key-value pairs matching a LIKE pattern.
-    /// Used for testing and validation.
+    /// Uses read pool for concurrent reads.
     pub fn count_kv_pairs_like(&self, pattern: &str) -> Result<i64, SqliteStorageError> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during count operation - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM state_machine_kv WHERE key LIKE ?1",
@@ -239,6 +284,7 @@ impl SqliteStateMachine {
     /// Validates storage integrity (used by supervisor before restart).
     ///
     /// Performs basic SQLite database health checks.
+    /// Uses read pool for concurrent reads.
     pub fn validate(
         &self,
         node_id: u64,
@@ -251,10 +297,11 @@ impl SqliteStateMachine {
         let start = Instant::now();
 
         // Basic validation: Check that we can access the database
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned - indicates panic in previous operation. \
-             Database may be in inconsistent state. Restart required."
-        );
+        let conn = self.read_pool.get().map_err(|_e| {
+            crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
+                path: self.path.clone(),
+            }
+        })?;
 
         // Run SQLite integrity check
         let integrity: String = conn
@@ -294,7 +341,7 @@ impl SqliteStateMachine {
             );
         }
 
-        drop(conn); // Release lock before duration calculation
+        drop(conn); // Release connection to pool
 
         Ok(crate::raft::storage_validation::ValidationReport {
             node_id,
@@ -308,11 +355,9 @@ impl SqliteStateMachine {
     }
 
     /// Get a key-value pair from the state machine.
+    /// Uses read pool for concurrent reads.
     pub async fn get(&self, key: &str) -> Result<Option<String>, SqliteStorageError> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during get operation - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         conn.query_row(
             "SELECT value FROM state_machine_kv WHERE key = ?1",
             params![key],
@@ -322,15 +367,52 @@ impl SqliteStateMachine {
         .context(QuerySnafu)
     }
 
-    /// Read metadata from the database
+    /// Validates that the SQLite state machine is consistent with the redb log.
+    ///
+    /// Returns error if last_applied exceeds the log's committed index, which
+    /// violates Raft invariants and indicates corruption.
+    ///
+    /// # Tiger Style compliance
+    /// - Fail-fast: Returns immediately on inconsistency detection
+    /// - Explicit bounds: Checks last_applied <= committed
+    /// - Clear error messages: Operator knows exactly what's wrong
+    pub async fn validate_consistency_with_log(
+        &self,
+        log_store: &crate::raft::storage::RedbLogStore,
+    ) -> Result<(), String> {
+        // Read last_applied directly (cannot use applied_state() which requires &mut self)
+        let last_applied: Option<openraft::LogId<AppTypeConfig>> = self
+            .read_meta::<Option<openraft::LogId<AppTypeConfig>>>("last_applied_log")
+            .map_err(|e| format!("Failed to read applied state: {}", e))?
+            .flatten();
+
+        let committed = log_store
+            .read_committed_sync()
+            .await
+            .map_err(|e| format!("Failed to read committed index: {}", e))?;
+
+        match (last_applied, committed) {
+            (Some(applied), Some(committed_idx)) => {
+                if applied.index > committed_idx {
+                    return Err(format!(
+                        "State machine corruption detected: last_applied ({}) exceeds committed ({})",
+                        applied.index, committed_idx
+                    ));
+                }
+            }
+            _ => {} // No validation needed if either is None
+        }
+
+        Ok(())
+    }
+
+    /// Read metadata from the database.
+    /// Uses read pool for concurrent reads.
     fn read_meta<T: for<'de> Deserialize<'de>>(
         &self,
         key: &str,
     ) -> Result<Option<T>, SqliteStorageError> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during metadata read - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         let bytes: Option<Vec<u8>> = conn
             .query_row(
                 "SELECT value FROM state_machine_meta WHERE key = ?1",
@@ -348,14 +430,69 @@ impl SqliteStateMachine {
             None => Ok(None),
         }
     }
+
+    /// Returns the size of the WAL file in bytes, or None if WAL file doesn't exist.
+    ///
+    /// Tiger Style: Fail-fast on I/O errors accessing WAL file.
+    pub fn wal_file_size(&self) -> Result<Option<u64>, SqliteStorageError> {
+        let wal_path = self.path.with_extension("db-wal");
+
+        if !wal_path.exists() {
+            return Ok(None);
+        }
+
+        let metadata = std::fs::metadata(&wal_path).map_err(|e| SqliteStorageError::IoError { path: wal_path.clone(), source: e })?;
+
+        Ok(Some(metadata.len()))
+    }
+
+    /// Performs a WAL checkpoint to reclaim space.
+    ///
+    /// Uses TRUNCATE mode to checkpoint and truncate the WAL file.
+    /// Returns the number of pages checkpointed.
+    ///
+    /// Tiger Style: Explicit return type, fail-fast on checkpoint errors.
+    pub fn checkpoint_wal(&self) -> Result<u32, SqliteStorageError> {
+        let conn = self.write_conn.lock().expect(
+            "SQLite connection mutex poisoned during checkpoint - indicates panic in concurrent access. \
+             Database may be in inconsistent state. Restart required."
+        );
+
+        // TRUNCATE mode: checkpoint and truncate WAL file
+        let mut checkpointed: i32 = 0;
+        conn.pragma_update_and_check(None, "wal_checkpoint", "TRUNCATE", |row| {
+            checkpointed = row.get(0)?;
+            Ok(())
+        })
+        .context(ExecuteSnafu)?;
+
+        Ok(checkpointed as u32)
+    }
+
+    /// Checks if WAL file exceeds threshold and auto-checkpoints if needed.
+    ///
+    /// Returns Some(pages_checkpointed) if checkpoint was performed.
+    /// Returns None if checkpoint was not needed.
+    ///
+    /// Tiger Style: Explicit threshold parameter, bounded operation.
+    pub fn auto_checkpoint_if_needed(
+        &self,
+        threshold_bytes: u64,
+    ) -> Result<Option<u32>, SqliteStorageError> {
+        match self.wal_file_size()? {
+            Some(size) if size > threshold_bytes => {
+                let pages = self.checkpoint_wal()?;
+                Ok(Some(pages))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during snapshot build - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        // Use read pool connection for snapshot build (non-blocking for writes)
+        let conn = self.read_pool.get().context(PoolSnafu)?;
 
         // Read all KV data
         let mut stmt = conn
@@ -373,10 +510,9 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             data.insert(key, value);
         }
 
-        // Read metadata (using the already-locked connection to avoid deadlock)
-        drop(stmt); // Release statement before reading meta
+        drop(stmt); // Release statement
 
-        // Read last_applied_log directly from conn (avoid calling read_meta which would deadlock)
+        // Read metadata
         let last_applied_log: Option<openraft::LogId<AppTypeConfig>> = {
             let bytes: Option<Vec<u8>> = conn
                 .query_row(
@@ -397,7 +533,6 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             }
         };
 
-        // Read last_membership directly from conn (avoid calling read_meta which would deadlock)
         let last_membership: StoredMembership<AppTypeConfig> = {
             let bytes: Option<Vec<u8>> = conn
                 .query_row(
@@ -413,6 +548,8 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
                 None => StoredMembership::default(),
             }
         };
+
+        drop(conn); // Release connection to pool
 
         // Serialize snapshot data
         let snapshot_data = serde_json::to_vec(&data).context(JsonSerializeSnafu)?;
@@ -435,18 +572,24 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             snapshot_id: snapshot_id.clone(),
         };
 
-        // Store snapshot in database
+        // Store snapshot in database (write operation)
         let snapshot_blob = bincode::serialize(&StoredSnapshot {
             meta: meta.clone(),
             data: snapshot_data.clone(),
         })
         .context(SerializeSnafu)?;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
-            params![snapshot_blob],
-        )
-        .context(ExecuteSnafu)?;
+        let write_conn = self.write_conn.lock().expect(
+            "SQLite connection mutex poisoned during snapshot build - indicates panic in concurrent access. \
+             Database may be in inconsistent state. Restart required."
+        );
+
+        write_conn
+            .execute(
+                "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
+                params![snapshot_blob],
+            )
+            .context(ExecuteSnafu)?;
 
         Ok(Snapshot {
             meta,
@@ -467,7 +610,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         ),
         io::Error,
     > {
-        // Note: We serialize Option<LogId> (see apply() method line 362),
+        // Note: We serialize Option<LogId> (see apply() method),
         // so we must deserialize as Option<Option<LogId>> then flatten
         let last_applied_log: Option<openraft::LogId<AppTypeConfig>> = self
             .read_meta::<Option<openraft::LogId<AppTypeConfig>>>("last_applied_log")?
@@ -496,7 +639,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                     ),
                 ));
             }
-            let conn = self.conn.lock().expect(
+            let conn = self.write_conn.lock().expect(
                 "SQLite connection mutex poisoned during apply operation - indicates panic in concurrent access. \
                  Database may be in inconsistent state. Restart required."
             );
@@ -575,10 +718,8 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
     }
 
     async fn begin_receiving_snapshot(&mut self) -> Result<Cursor<Vec<u8>>, io::Error> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during snapshot receive - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        // Use read pool for non-blocking read
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         let bytes: Option<Vec<u8>> = conn
             .query_row(
                 "SELECT data FROM snapshots WHERE id = 'current'",
@@ -611,7 +752,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         let new_data: BTreeMap<String, String> =
             serde_json::from_slice(&snapshot_data).context(JsonDeserializeSnafu)?;
 
-        let conn = self.conn.lock().expect(
+        let conn = self.write_conn.lock().expect(
             "SQLite connection mutex poisoned during snapshot install - indicates panic in concurrent access. \
              Database may be in inconsistent state. Restart required."
         );
@@ -666,10 +807,8 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
     }
 
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {
-        let conn = self.conn.lock().expect(
-            "SQLite connection mutex poisoned during snapshot retrieval - indicates panic in concurrent access. \
-             Database may be in inconsistent state. Restart required."
-        );
+        // Use read pool for non-blocking read
+        let conn = self.read_pool.get().context(PoolSnafu)?;
         let bytes: Option<Vec<u8>> = conn
             .query_row(
                 "SELECT data FROM snapshots WHERE id = 'current'",

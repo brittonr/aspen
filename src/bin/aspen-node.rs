@@ -10,7 +10,7 @@ use aspen::api::{
     DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
     KeyValueStoreError, ReadRequest, WriteRequest,
 };
-use aspen::cluster::bootstrap::{bootstrap_node, load_config, BootstrapHandle};
+use aspen::cluster::bootstrap::{BootstrapHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
@@ -235,19 +235,24 @@ impl MetricsCollector {
         // Bucket the latency (Tiger Style: fixed buckets)
         if latency_us < 1_000 {
             // < 1ms
-            self.write_latency_us_bucket_1ms.fetch_add(1, Ordering::Relaxed);
+            self.write_latency_us_bucket_1ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 10_000 {
             // < 10ms
-            self.write_latency_us_bucket_10ms.fetch_add(1, Ordering::Relaxed);
+            self.write_latency_us_bucket_10ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 100_000 {
             // < 100ms
-            self.write_latency_us_bucket_100ms.fetch_add(1, Ordering::Relaxed);
+            self.write_latency_us_bucket_100ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 1_000_000 {
             // < 1s
-            self.write_latency_us_bucket_1s.fetch_add(1, Ordering::Relaxed);
+            self.write_latency_us_bucket_1s
+                .fetch_add(1, Ordering::Relaxed);
         } else {
             // >= 1s
-            self.write_latency_us_bucket_inf.fetch_add(1, Ordering::Relaxed);
+            self.write_latency_us_bucket_inf
+                .fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -258,19 +263,24 @@ impl MetricsCollector {
         // Bucket the latency (Tiger Style: fixed buckets)
         if latency_us < 1_000 {
             // < 1ms
-            self.read_latency_us_bucket_1ms.fetch_add(1, Ordering::Relaxed);
+            self.read_latency_us_bucket_1ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 10_000 {
             // < 10ms
-            self.read_latency_us_bucket_10ms.fetch_add(1, Ordering::Relaxed);
+            self.read_latency_us_bucket_10ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 100_000 {
             // < 100ms
-            self.read_latency_us_bucket_100ms.fetch_add(1, Ordering::Relaxed);
+            self.read_latency_us_bucket_100ms
+                .fetch_add(1, Ordering::Relaxed);
         } else if latency_us < 1_000_000 {
             // < 1s
-            self.read_latency_us_bucket_1s.fetch_add(1, Ordering::Relaxed);
+            self.read_latency_us_bucket_1s
+                .fetch_add(1, Ordering::Relaxed);
         } else {
             // >= 1s
-            self.read_latency_us_bucket_inf.fetch_add(1, Ordering::Relaxed);
+            self.read_latency_us_bucket_inf
+                .fetch_add(1, Ordering::Relaxed);
         }
     }
 }
@@ -321,6 +331,9 @@ struct HealthChecks {
     disk_space: HealthCheckStatus,
     /// Storage is writable
     storage: HealthCheckStatus,
+    /// SQLite WAL file size (if applicable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wal_file: Option<HealthCheckStatus>,
 }
 
 #[derive(Serialize)]
@@ -347,6 +360,7 @@ struct AppState {
     promotion_coordinator: Option<Arc<LearnerPromotionCoordinator<RaftControlClient>>>,
     health_monitor: Option<Arc<HealthMonitor>>,
     start_time: Instant,
+    state_machine: aspen::raft::StateMachineVariant,
 }
 
 /// Initialize tracing subscriber with environment-based filtering.
@@ -460,6 +474,7 @@ fn create_app_state(
         promotion_coordinator,
         health_monitor: handle.health_monitor.clone(),
         start_time: Instant::now(),
+        state_machine: handle.state_machine.clone(),
     }
 }
 
@@ -483,6 +498,7 @@ fn build_router(app_state: AppState) -> Router {
         .route("/leader", get(get_leader))
         .route("/trigger-snapshot", post(trigger_snapshot))
         .route("/admin/promote-learner", post(promote_learner))
+        .route("/admin/checkpoint-wal", post(checkpoint_wal))
         .with_state(app_state)
 }
 
@@ -513,7 +529,13 @@ async fn main() -> Result<()> {
     let (controller, kv_store, promotion_coordinator) = setup_controllers(&config, &handle);
 
     // Create application state
-    let app_state = create_app_state(&config, &handle, controller, kv_store, promotion_coordinator);
+    let app_state = create_app_state(
+        &config,
+        &handle,
+        controller,
+        kv_store,
+        promotion_coordinator,
+    );
 
     // Build router with all API endpoints
     let app = build_router(app_state);
@@ -673,6 +695,55 @@ async fn check_supervision_health(
     }
 }
 
+/// Check SQLite WAL file size health.
+///
+/// Tiger Style: Focused function for WAL monitoring.
+fn check_wal_file_health(
+    state_machine: &aspen::raft::StateMachineVariant,
+) -> Option<HealthCheckStatus> {
+    if let aspen::raft::StateMachineVariant::Sqlite(sm) = state_machine {
+        match sm.wal_file_size() {
+            Ok(Some(wal_size)) => {
+                const WAL_WARNING_THRESHOLD: u64 = 100 * 1024 * 1024; // 100MB
+                const WAL_CRITICAL_THRESHOLD: u64 = 500 * 1024 * 1024; // 500MB
+
+                if wal_size > WAL_CRITICAL_THRESHOLD {
+                    Some(HealthCheckStatus {
+                        status: "error".to_string(),
+                        message: Some(format!(
+                            "WAL file size: {}MB (exceeds 500MB critical threshold)",
+                            wal_size / 1024 / 1024
+                        )),
+                    })
+                } else if wal_size > WAL_WARNING_THRESHOLD {
+                    Some(HealthCheckStatus {
+                        status: "warning".to_string(),
+                        message: Some(format!(
+                            "WAL file size: {}MB (exceeds 100MB warning threshold)",
+                            wal_size / 1024 / 1024
+                        )),
+                    })
+                } else {
+                    Some(HealthCheckStatus {
+                        status: "ok".to_string(),
+                        message: Some(format!("WAL file size: {}MB", wal_size / 1024 / 1024)),
+                    })
+                }
+            }
+            Ok(None) => Some(HealthCheckStatus {
+                status: "ok".to_string(),
+                message: Some("No WAL file present".to_string()),
+            }),
+            Err(e) => Some(HealthCheckStatus {
+                status: "warning".to_string(),
+                message: Some(format!("Unable to check WAL size: {}", e)),
+            }),
+        }
+    } else {
+        None // Not using SQLite
+    }
+}
+
 /// Build health response from individual check results.
 ///
 /// Tiger Style: Focused function for response construction.
@@ -682,6 +753,7 @@ fn build_health_response(
     raft_cluster_check: HealthCheckStatus,
     disk_space_check: HealthCheckStatus,
     storage_check: HealthCheckStatus,
+    wal_file_check: Option<HealthCheckStatus>,
     supervision_health: Option<SupervisionHealth>,
     node_id: u64,
     raft_node_id: Option<u64>,
@@ -694,13 +766,22 @@ fn build_health_response(
         .as_ref()
         .is_some_and(|s| s.status == "degraded");
 
+    let wal_critical = wal_file_check
+        .as_ref()
+        .is_some_and(|w| w.status == "error");
+    let wal_warning = wal_file_check
+        .as_ref()
+        .is_some_and(|w| w.status == "warning");
+
     let is_critical_failure = raft_actor_check.status == "error"
         || disk_space_check.status == "error"
-        || supervision_unhealthy;
+        || supervision_unhealthy
+        || wal_critical;
     let has_warnings = raft_cluster_check.status == "warning"
         || disk_space_check.status == "warning"
         || storage_check.status == "warning"
-        || supervision_degraded;
+        || supervision_degraded
+        || wal_warning;
 
     let (overall_status, http_status) = if is_critical_failure {
         ("unhealthy".to_string(), StatusCode::SERVICE_UNAVAILABLE)
@@ -717,6 +798,7 @@ fn build_health_response(
             raft_cluster: raft_cluster_check,
             disk_space: disk_space_check,
             storage: storage_check,
+            wal_file: wal_file_check,
         },
         node_id,
         raft_node_id,
@@ -744,6 +826,7 @@ async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
     let raft_cluster_check = check_raft_cluster_health(&ctx.controller).await;
     let disk_space_check = check_disk_space_health(&ctx.data_dir);
     let storage_check = check_storage_health(&ctx.controller).await;
+    let wal_file_check = check_wal_file_health(&ctx.state_machine);
     let supervision_health = check_supervision_health(&ctx.health_monitor).await;
 
     // Build and return response
@@ -752,6 +835,7 @@ async fn health(State(ctx): State<AppState>) -> impl IntoResponse {
         raft_cluster_check,
         disk_space_check,
         storage_check,
+        wal_file_check,
         supervision_health,
         ctx.node_id,
         raft_node_id,
@@ -825,7 +909,9 @@ fn append_raft_state_metrics(
         (raft_metrics.last_log_index, &raft_metrics.last_applied)
     {
         body.push_str("# TYPE aspen_apply_lag gauge\n");
-        body.push_str("# HELP aspen_apply_lag Number of log entries not yet applied to state machine\n");
+        body.push_str(
+            "# HELP aspen_apply_lag Number of log entries not yet applied to state machine\n",
+        );
         let apply_lag = last_log.saturating_sub(last_applied.index);
         body.push_str(&format!(
             "aspen_apply_lag{{node_id=\"{}\"}} {}\n",
@@ -844,25 +930,26 @@ fn append_raft_leader_metrics(
 ) {
     // Replication lag (leader only)
     if let Some(ref replication) = raft_metrics.replication
-        && let Some(leader_last_log) = raft_metrics.last_log_index {
-            body.push_str("# TYPE aspen_replication_lag gauge\n");
-            body.push_str(
-                "# HELP aspen_replication_lag Number of log entries follower is behind leader\n",
-            );
+        && let Some(leader_last_log) = raft_metrics.last_log_index
+    {
+        body.push_str("# TYPE aspen_replication_lag gauge\n");
+        body.push_str(
+            "# HELP aspen_replication_lag Number of log entries follower is behind leader\n",
+        );
 
-            for (follower_id, matched_log_id) in replication.iter() {
-                let lag = if let Some(matched) = matched_log_id {
-                    leader_last_log.saturating_sub(matched.index)
-                } else {
-                    leader_last_log
-                };
+        for (follower_id, matched_log_id) in replication.iter() {
+            let lag = if let Some(matched) = matched_log_id {
+                leader_last_log.saturating_sub(matched.index)
+            } else {
+                leader_last_log
+            };
 
-                body.push_str(&format!(
-                    "aspen_replication_lag{{node_id=\"{}\",follower_id=\"{}\"}} {}\n",
-                    node_id, follower_id, lag
-                ));
-            }
+            body.push_str(&format!(
+                "aspen_replication_lag{{node_id=\"{}\",follower_id=\"{}\"}} {}\n",
+                node_id, follower_id, lag
+            ));
         }
+    }
 
     // Heartbeat metrics (leader only)
     if let Some(ref heartbeat) = raft_metrics.heartbeat {
@@ -903,17 +990,23 @@ fn append_error_metrics(body: &mut String, node_id: u64, metrics: &MetricsCollec
     body.push_str(&format!(
         "aspen_errors_total{{node_id=\"{}\",type=\"storage\"}} {}\n",
         node_id,
-        metrics.storage_errors.load(std::sync::atomic::Ordering::Relaxed)
+        metrics
+            .storage_errors
+            .load(std::sync::atomic::Ordering::Relaxed)
     ));
     body.push_str(&format!(
         "aspen_errors_total{{node_id=\"{}\",type=\"network\"}} {}\n",
         node_id,
-        metrics.network_errors.load(std::sync::atomic::Ordering::Relaxed)
+        metrics
+            .network_errors
+            .load(std::sync::atomic::Ordering::Relaxed)
     ));
     body.push_str(&format!(
         "aspen_errors_total{{node_id=\"{}\",type=\"rpc\"}} {}\n",
         node_id,
-        metrics.rpc_errors.load(std::sync::atomic::Ordering::Relaxed)
+        metrics
+            .rpc_errors
+            .load(std::sync::atomic::Ordering::Relaxed)
     ));
 }
 
@@ -921,7 +1014,9 @@ fn append_error_metrics(body: &mut String, node_id: u64, metrics: &MetricsCollec
 ///
 /// Tiger Style: Focused function for write performance metrics.
 fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &MetricsCollector) {
-    let write_count = metrics.write_count.load(std::sync::atomic::Ordering::Relaxed);
+    let write_count = metrics
+        .write_count
+        .load(std::sync::atomic::Ordering::Relaxed);
     if write_count == 0 {
         return;
     }
@@ -929,11 +1024,21 @@ fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &Met
     body.push_str("# TYPE aspen_write_latency_seconds histogram\n");
     body.push_str("# HELP aspen_write_latency_seconds Write operation latency histogram\n");
 
-    let bucket_1ms = metrics.write_latency_us_bucket_1ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_10ms = metrics.write_latency_us_bucket_10ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_100ms = metrics.write_latency_us_bucket_100ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_1s = metrics.write_latency_us_bucket_1s.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_inf = metrics.write_latency_us_bucket_inf.load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_1ms = metrics
+        .write_latency_us_bucket_1ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_10ms = metrics
+        .write_latency_us_bucket_10ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_100ms = metrics
+        .write_latency_us_bucket_100ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_1s = metrics
+        .write_latency_us_bucket_1s
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_inf = metrics
+        .write_latency_us_bucket_inf
+        .load(std::sync::atomic::Ordering::Relaxed);
 
     let mut cumulative = 0u64;
     cumulative += bucket_1ms;
@@ -971,7 +1076,9 @@ fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &Met
         node_id, write_count
     ));
 
-    let write_total_us = metrics.write_total_us.load(std::sync::atomic::Ordering::Relaxed);
+    let write_total_us = metrics
+        .write_total_us
+        .load(std::sync::atomic::Ordering::Relaxed);
     let write_sum_seconds = write_total_us as f64 / 1_000_000.0;
     body.push_str(&format!(
         "aspen_write_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
@@ -983,7 +1090,9 @@ fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &Met
 ///
 /// Tiger Style: Focused function for read performance metrics.
 fn append_read_latency_histogram(body: &mut String, node_id: u64, metrics: &MetricsCollector) {
-    let read_count = metrics.read_count.load(std::sync::atomic::Ordering::Relaxed);
+    let read_count = metrics
+        .read_count
+        .load(std::sync::atomic::Ordering::Relaxed);
     if read_count == 0 {
         return;
     }
@@ -991,11 +1100,21 @@ fn append_read_latency_histogram(body: &mut String, node_id: u64, metrics: &Metr
     body.push_str("# TYPE aspen_read_latency_seconds histogram\n");
     body.push_str("# HELP aspen_read_latency_seconds Read operation latency histogram\n");
 
-    let bucket_1ms = metrics.read_latency_us_bucket_1ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_10ms = metrics.read_latency_us_bucket_10ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_100ms = metrics.read_latency_us_bucket_100ms.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_1s = metrics.read_latency_us_bucket_1s.load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_inf = metrics.read_latency_us_bucket_inf.load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_1ms = metrics
+        .read_latency_us_bucket_1ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_10ms = metrics
+        .read_latency_us_bucket_10ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_100ms = metrics
+        .read_latency_us_bucket_100ms
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_1s = metrics
+        .read_latency_us_bucket_1s
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let bucket_inf = metrics
+        .read_latency_us_bucket_inf
+        .load(std::sync::atomic::Ordering::Relaxed);
 
     let mut cumulative = 0u64;
     cumulative += bucket_1ms;
@@ -1033,7 +1152,9 @@ fn append_read_latency_histogram(body: &mut String, node_id: u64, metrics: &Metr
         node_id, read_count
     ));
 
-    let read_total_us = metrics.read_total_us.load(std::sync::atomic::Ordering::Relaxed);
+    let read_total_us = metrics
+        .read_total_us
+        .load(std::sync::atomic::Ordering::Relaxed);
     let read_sum_seconds = read_total_us as f64 / 1_000_000.0;
     body.push_str(&format!(
         "aspen_read_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
@@ -1158,6 +1279,18 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     // Health monitoring metrics (if supervision is enabled)
     if ctx.health_monitor.is_some() {
         append_health_monitoring_metrics(&mut body, ctx.node_id);
+    }
+
+    // WAL size metrics (SQLite only)
+    if let aspen::raft::StateMachineVariant::Sqlite(sm) = &ctx.state_machine {
+        if let Ok(Some(wal_size)) = sm.wal_file_size() {
+            body.push_str("# TYPE sqlite_wal_size_bytes gauge\n");
+            body.push_str("# HELP sqlite_wal_size_bytes Size of SQLite WAL file in bytes\n");
+            body.push_str(&format!(
+                "sqlite_wal_size_bytes{{node_id=\"{}\"}} {}\n",
+                ctx.node_id, wal_size
+            ));
+        }
     }
 
     (StatusCode::OK, body)
@@ -1319,11 +1452,10 @@ async fn write_value(
 
     // Tiger Style: Check disk space before writes to fail fast on resource exhaustion
     if let Some(ref data_dir) = state.data_dir {
-        aspen::utils::ensure_disk_space_available(data_dir)
-            .map_err(|e| {
-                metrics_collector().record_storage_error();
-                anyhow::anyhow!("disk space check failed: {}", e)
-            })?;
+        aspen::utils::ensure_disk_space_available(data_dir).map_err(|e| {
+            metrics_collector().record_storage_error();
+            anyhow::anyhow!("disk space check failed: {}", e)
+        })?;
     }
 
     let result = state.kv.write(request).await.inspect_err(|_e| {
@@ -1367,7 +1499,9 @@ async fn add_peer(
     State(ctx): State<AppState>,
     Json(req): Json<AddPeerRequest>,
 ) -> impl IntoResponse {
-    ctx.network_factory.add_peer(req.node_id, req.endpoint_addr).await;
+    ctx.network_factory
+        .add_peer(req.node_id, req.endpoint_addr)
+        .await;
     StatusCode::OK
 }
 
@@ -1456,6 +1590,54 @@ async fn trigger_snapshot(State(ctx): State<AppState>) -> impl IntoResponse {
             )
                 .into_response()
         }
+    }
+}
+
+/// Manually checkpoint the SQLite WAL file.
+///
+/// POST /admin/checkpoint-wal
+///
+/// Returns the number of pages checkpointed and WAL size before/after.
+/// Only works with SQLite backend.
+async fn checkpoint_wal(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if let aspen::raft::StateMachineVariant::Sqlite(sm) = &state.state_machine {
+        // Get WAL size before checkpoint
+        let wal_size_before = sm.wal_file_size().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get WAL size before checkpoint: {}", e),
+            )
+        })?;
+
+        // Perform checkpoint
+        let pages = sm.checkpoint_wal().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Checkpoint failed: {}", e),
+            )
+        })?;
+
+        // Get WAL size after checkpoint
+        let wal_size_after = sm.wal_file_size().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get WAL size after checkpoint: {}", e),
+            )
+        })?;
+
+        Ok(Json(serde_json::json!({
+            "status": "success",
+            "pages_checkpointed": pages,
+            "wal_size_before_bytes": wal_size_before,
+            "wal_size_after_bytes": wal_size_after,
+        })))
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            "Checkpoint only supported for SQLite backend".to_string(),
+        ))
     }
 }
 

@@ -58,6 +58,8 @@ pub struct RaftActorConfig {
     pub node_id: u64,
     pub raft: Raft<AppTypeConfig>,
     pub state_machine: StateMachineVariant,
+    /// Log store reference for cross-storage validation (only set for SQLite backend)
+    pub log_store: Option<crate::raft::storage::RedbLogStore>,
 }
 
 /// Empty actor shell that will eventually drive the Raft state machine.
@@ -405,10 +407,7 @@ impl RaftControlClient {
     /// This creates an unbounded mailbox which can lead to memory exhaustion
     /// under high load. Consider using `new_bounded` instead.
     pub fn new(actor: ActorRef<RaftActorMessage>) -> Self {
-        Self {
-            actor,
-            proxy: None,
-        }
+        Self { actor, proxy: None }
     }
 
     /// Create a new RaftControlClient with bounded mailbox (recommended).
@@ -439,11 +438,8 @@ impl RaftControlClient {
         capacity: u32,
         node_id: u64,
     ) -> Self {
-        let proxy = bounded_proxy::BoundedRaftActorProxy::with_capacity(
-            actor.clone(),
-            capacity,
-            node_id,
-        );
+        let proxy =
+            bounded_proxy::BoundedRaftActorProxy::with_capacity(actor.clone(), capacity, node_id);
         Self {
             actor,
             proxy: Some(proxy),
