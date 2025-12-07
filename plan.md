@@ -21,6 +21,7 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
    - Fixed snapshot building deadlock (refactored `build_snapshot()` to avoid nested mutex acquisition when reading metadata).
    - **OpenRaft storage suite validated**: All 50+ tests passing (comprehensive validation of log storage, state machine, and snapshot building).
    - All 238 tests passing including full hybrid storage integration.
+   - **Deprecated code cleanup** (2025-12-07): Removed deprecated RedbStateMachine implementation (-1,268 lines including migration binary and related tests). Updated CLAUDE.md to accurately reflect hybrid architecture (redb for log, SQLite for state machine).
 2. **Raft actor** (in progress)
    - Added a placeholder Raft actor/factory that already wires into the NodeServer handle + `StorageSurface`, keeping the transport seams deterministic for `madsim`.
    - Added the `aspen-node` bootstrap binary plus HTTP endpoints (`/health`, `/metrics`, `/init`, `/add-learner`, `/change-membership`, `/write`, `/read`) so we can drive multi-node scripts similar to the OpenRaft example.
