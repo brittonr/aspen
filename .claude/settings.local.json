@@ -14,7 +14,11 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(cargo check:*)",
-      "mcp__context7__get-library-docs"
+      "mcp__context7__get-library-docs",
+      "Bash(find:*)",
+      "Bash(done)",
+      "WebFetch(domain:iroh.computer)",
+      "Bash(cargo nextest run:*)"
     ],
     "deny": [],
     "ask": []
