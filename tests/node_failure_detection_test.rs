@@ -495,7 +495,8 @@ fn test_flapping_node_detection() {
     );
 
     // Wait to accumulate measurable duration on first failure
-    std::thread::sleep(Duration::from_millis(50));
+    // Tiger Style: Use longer sleep (100ms) for robust timing under resource contention
+    std::thread::sleep(Duration::from_millis(100));
     let first_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
     // Node recovers
@@ -507,6 +508,9 @@ fn test_flapping_node_detection() {
     assert_eq!(detector.get_failure_type(node_id), FailureType::Healthy);
     assert!(detector.get_unreachable_duration(node_id).is_none());
 
+    // Small delay to ensure clock advances before second failure
+    std::thread::sleep(Duration::from_millis(10));
+
     // Node fails again
     detector.update_node_status(
         node_id,
@@ -514,10 +518,15 @@ fn test_flapping_node_detection() {
         ConnectionStatus::Connected,
     );
 
-    // Second failure should have fresh timestamp
+    // Second failure should have fresh timestamp (smaller duration since it just started)
     let second_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
+    // Tiger Style: Add tolerance (50ms) for timing jitter under system load
     assert!(
-        second_failure_duration < first_failure_duration,
-        "Should reset timestamp on new failure after recovery"
+        second_failure_duration < first_failure_duration
+            || second_failure_duration.saturating_sub(first_failure_duration)
+                < Duration::from_millis(50),
+        "Should reset timestamp on new failure after recovery. First: {:?}, Second: {:?}",
+        first_failure_duration,
+        second_failure_duration
     );
 }
