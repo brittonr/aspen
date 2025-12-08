@@ -76,13 +76,14 @@ pub const MAX_UNREACHABLE_NODES: u32 = 1000;
 // Storage Constants
 // ============================================================================
 
-/// Maximum batch size for SQLite writes (1000 entries).
+/// Maximum batch size for log append operations (1000 entries).
 ///
 /// Tiger Style: Bounded batch processing to prevent excessive memory use
-/// during bulk write operations.
+/// during bulk write operations. Applied to both redb and SQLite storage.
 ///
 /// Used in:
-/// - `storage_sqlite.rs`: Write batching logic
+/// - `storage.rs`: Redb log append pre-allocation
+/// - `storage_sqlite.rs`: SQLite write batching logic
 pub const MAX_BATCH_SIZE: u32 = 1000;
 
 /// Maximum number of keys in a SetMulti operation (100 keys).

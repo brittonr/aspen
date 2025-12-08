@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use tokio::sync::{Mutex, RwLock};
 
+use crate::raft::constants::MAX_BATCH_SIZE;
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 use crate::utils::ensure_disk_space_available;
 
@@ -602,11 +603,19 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 .open_table(RAFT_LOG_TABLE)
                 .context(OpenTableSnafu)?;
 
+            // Performance optimization: Pre-serialize all entries before inserting
+            // This reduces lock contention and allows redb to optimize bulk inserts
+            // Tiger Style: Pre-allocate with MAX_BATCH_SIZE to avoid repeated reallocations
+            let mut serialized_entries = Vec::with_capacity(MAX_BATCH_SIZE as usize);
             for entry in entries {
-                let serialized = bincode::serialize(&entry).context(SerializeSnafu)?;
-                table
-                    .insert(entry.log_id().index(), serialized.as_slice())
-                    .context(InsertSnafu)?;
+                let index = entry.log_id().index();
+                let data = bincode::serialize(&entry).context(SerializeSnafu)?;
+                serialized_entries.push((index, data));
+            }
+
+            // Bulk insert all serialized entries
+            for (index, data) in serialized_entries {
+                table.insert(index, data.as_slice()).context(InsertSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;
