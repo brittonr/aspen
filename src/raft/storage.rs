@@ -20,6 +20,7 @@ use snafu::{ResultExt, Snafu};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
+use crate::utils::ensure_disk_space_available;
 
 // ====================================================================================
 // Storage Backend Configuration
@@ -576,6 +577,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
     }
 
     async fn save_vote(&mut self, vote: &VoteOf<AppTypeConfig>) -> Result<(), io::Error> {
+        // Tiger Style: Check disk space before write to prevent corruption on full disk
+        ensure_disk_space_available(&self.path)?;
+
         self.write_meta("vote", vote)?;
         Ok(())
     }
@@ -589,6 +593,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
+        // Tiger Style: Check disk space before write to prevent corruption on full disk
+        ensure_disk_space_available(&self.path)?;
+
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut table = write_txn
