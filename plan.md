@@ -1737,11 +1737,11 @@ A comprehensive parallel-agent audit of the Aspen codebase was conducted to iden
 - ✅ **OpenRaft Test Porting**: All madsim-compatible tests ported (7 tests)
 - ✅ **Flaky Test Fixes**: Fixed leader crash test flakiness (increased timeouts to 15s)
 - ✅ **Kameo Cleanup**: Removed remaining references from plan.md
+- ✅ **Flaky Test Fixes**: Fixed `test_flapping_node_detection` race condition (moved sleep before duration measurement)
 
 **Recommended Next Steps**:
 
 1. **Actor Lifecycle & Reliability** (P0): Improve ractor supervision
-   - Fix remaining flaky test: `test_flapping_node_detection`
    - Add exponential backoff to supervision restart policies
    - Implement health checks and liveness probes for actors
    - Add circuit breakers for repeated failures
