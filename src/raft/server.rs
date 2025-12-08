@@ -20,13 +20,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
-
-/// Maximum size for RPC messages (10 MB).
-///
-/// Tiger Style: Fixed limit to prevent unbounded memory use.
-const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
 /// IRPC server for handling Raft RPC requests.
 ///

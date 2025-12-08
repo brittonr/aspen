@@ -13,19 +13,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
+use crate::raft::constants::{DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
-
-/// Maximum number of entries to apply in a single batch.
-/// Tiger Style: Fixed limits prevent unbounded resource usage.
-const MAX_BATCH_SIZE: u32 = 1000;
-
-/// Maximum number of key-value pairs in a single SetMulti operation.
-/// Tiger Style: Fixed limits prevent unbounded resource usage.
-const MAX_SETMULTI_KEYS: u32 = 100;
-
-/// Default size of read connection pool.
-/// Tiger Style: Fixed limit on concurrent readers.
-const DEFAULT_READ_POOL_SIZE: u32 = 10;
 
 /// Errors that can occur when using SQLite storage
 #[derive(Debug, Snafu)]
@@ -557,6 +546,112 @@ impl SqliteStateMachine {
             _ => Ok(None),
         }
     }
+
+    /// Update the last_applied_log metadata in the state machine.
+    ///
+    /// Serializes and stores the log ID to track which entries have been applied.
+    /// Tiger Style: Single-purpose function, explicit error handling.
+    fn update_last_applied_log(
+        conn: &Connection,
+        log_id: &openraft::LogId<AppTypeConfig>,
+    ) -> Result<(), io::Error> {
+        let last_applied_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
+            params![last_applied_bytes],
+        )
+        .context(ExecuteSnafu)?;
+        Ok(())
+    }
+
+    /// Apply a single key-value Set operation.
+    ///
+    /// Inserts or replaces a key-value pair in the state machine.
+    /// Returns response with the value that was set.
+    ///
+    /// Tiger Style: Single-purpose, explicit return type.
+    fn apply_set(conn: &Connection, key: &str, value: &str) -> Result<AppResponse, io::Error> {
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+            params![key, value],
+        )
+        .context(ExecuteSnafu)?;
+        Ok(AppResponse {
+            value: Some(value.to_string()),
+        })
+    }
+
+    /// Apply a batched SetMulti operation.
+    ///
+    /// Inserts or replaces multiple key-value pairs in a single operation.
+    /// Enforces MAX_SETMULTI_KEYS limit to prevent unbounded resource usage.
+    /// Uses prepared statement for 20-30% performance improvement.
+    ///
+    /// Tiger Style: Fixed limit, batched operation, explicit cleanup.
+    fn apply_set_multi(
+        conn: &Connection,
+        pairs: &[(String, String)],
+    ) -> Result<AppResponse, io::Error> {
+        if pairs.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "SetMulti operation with {} keys exceeds maximum limit of {}",
+                pairs.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Prepare statement once and reuse for all inserts (20-30% performance improvement)
+        let mut stmt = conn
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .context(QuerySnafu)?;
+
+        for (key, value) in pairs {
+            stmt.execute(params![key, value]).context(ExecuteSnafu)?;
+        }
+
+        drop(stmt); // Explicit drop (Tiger Style)
+        Ok(AppResponse { value: None })
+    }
+
+    /// Apply a membership change operation.
+    ///
+    /// Stores the new membership configuration in the state machine metadata.
+    /// Tiger Style: Single-purpose, explicit serialization.
+    fn apply_membership(
+        conn: &Connection,
+        log_id: &openraft::LogId<AppTypeConfig>,
+        membership: &openraft::Membership<AppTypeConfig>,
+    ) -> Result<AppResponse, io::Error> {
+        let stored_membership = StoredMembership::new(Some(*log_id), membership.clone());
+        let membership_bytes = bincode::serialize(&stored_membership).context(SerializeSnafu)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
+            params![membership_bytes],
+        )
+        .context(ExecuteSnafu)?;
+        Ok(AppResponse { value: None })
+    }
+
+    /// Apply an entry payload to the state machine.
+    ///
+    /// Dispatches to the appropriate handler based on payload type.
+    /// Tiger Style: Centralized control flow, delegates to single-purpose helpers.
+    fn apply_entry_payload(
+        conn: &Connection,
+        payload: &EntryPayload<AppTypeConfig>,
+        log_id: &openraft::LogId<AppTypeConfig>,
+    ) -> Result<AppResponse, io::Error> {
+        match payload {
+            EntryPayload::Blank => Ok(AppResponse { value: None }),
+            EntryPayload::Normal(req) => match req {
+                AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
+                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
+            },
+            EntryPayload::Membership(membership) => {
+                Self::apply_membership(conn, log_id, membership)
+            }
+        }
+    }
 }
 
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
@@ -720,63 +815,11 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             let guard = TransactionGuard::new(&conn)?;
 
             // Update last_applied_log
-            let last_applied_bytes =
-                bincode::serialize(&Some(entry.log_id)).context(SerializeSnafu)?;
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
-                params![last_applied_bytes],
-            )
-            .context(ExecuteSnafu)?;
+            SqliteStateMachine::update_last_applied_log(&conn, &entry.log_id)?;
 
             // Apply the payload
-            let response = match entry.payload {
-                EntryPayload::Blank => AppResponse { value: None },
-                EntryPayload::Normal(ref req) => match req {
-                    AppRequest::Set { key, value } => {
-                        conn.execute(
-                            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                            params![key, value],
-                        )
-                        .context(ExecuteSnafu)?;
-                        AppResponse {
-                            value: Some(value.clone()),
-                        }
-                    }
-                    AppRequest::SetMulti { pairs } => {
-                        if pairs.len() > MAX_SETMULTI_KEYS as usize {
-                            return Err(io::Error::other(format!(
-                                "SetMulti operation with {} keys exceeds maximum limit of {}",
-                                pairs.len(),
-                                MAX_SETMULTI_KEYS
-                            )));
-                        }
-
-                        // Prepare statement once and reuse for all inserts (20-30% performance improvement)
-                        let mut stmt = conn.prepare(
-                            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)"
-                        ).context(QuerySnafu)?;
-
-                        for (key, value) in pairs {
-                            stmt.execute(params![key, value]).context(ExecuteSnafu)?;
-                        }
-
-                        drop(stmt); // Explicit drop (Tiger Style)
-                        AppResponse { value: None }
-                    }
-                },
-                EntryPayload::Membership(ref membership) => {
-                    let stored_membership =
-                        StoredMembership::new(Some(entry.log_id), membership.clone());
-                    let membership_bytes =
-                        bincode::serialize(&stored_membership).context(SerializeSnafu)?;
-                    conn.execute(
-                        "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
-                        params![membership_bytes],
-                    )
-                    .context(ExecuteSnafu)?;
-                    AppResponse { value: None }
-                }
-            };
+            let response =
+                SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
 
             // Commit transaction - guard is consumed and dropped after commit
             guard.commit()?;

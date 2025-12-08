@@ -313,10 +313,8 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument, warn};
 
+use crate::raft::constants::{MAX_BACKOFF_SECONDS, MAX_RESTART_HISTORY_SIZE};
 use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
-
-const MAX_RESTART_HISTORY_SIZE: u32 = 100;
-const MAX_BACKOFF_SECONDS: u64 = 16;
 
 /// Circuit breaker state for automatic recovery from meltdown.
 ///

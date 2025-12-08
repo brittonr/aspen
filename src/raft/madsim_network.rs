@@ -51,18 +51,8 @@ use openraft::{BasicNode, OptionalSend, Raft, Snapshot};
 use parking_lot::Mutex as SyncMutex;
 use tracing::debug;
 
+use crate::raft::constants::MAX_CONNECTIONS_PER_NODE;
 use crate::raft::types::{AppTypeConfig, NodeId};
-
-/// Maximum size for RPC messages in madsim simulations (10 MB).
-///
-/// Tiger Style: Fixed limit to prevent unbounded memory use during simulations.
-/// Note: Reserved for future message size validation in madsim transport.
-const _MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
-
-/// Maximum number of concurrent connections per node.
-///
-/// Tiger Style: Fixed limit to prevent connection exhaustion.
-const MAX_CONNECTIONS_PER_NODE: u32 = 100;
 
 /// Madsim-compatible Raft network factory for deterministic simulation.
 ///

@@ -1,0 +1,188 @@
+//! Centralized constants for the Raft module.
+//!
+//! This module contains all configuration constants used throughout the Raft
+//! implementation, organized by category for easy discovery and maintenance.
+//!
+//! Tiger Style: Constants are fixed and immutable, enforced at compile time.
+//! Each constant has explicit bounds to prevent unbounded resource allocation.
+
+use std::time::Duration;
+
+// ============================================================================
+// Network Constants
+// ============================================================================
+
+/// Maximum size for RPC messages (10 MB).
+///
+/// Tiger Style: Fixed limit to prevent unbounded memory use during RPC serialization
+/// and deserialization. Applied to both request and response payloads.
+///
+/// Used in:
+/// - `network.rs`: Message reading with `read_to_end(MAX_RPC_MESSAGE_SIZE)`
+/// - `server.rs`: RPC message deserialization from streams
+pub const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+
+/// Timeout for Iroh connection establishment (5 seconds).
+///
+/// Tiger Style: Explicit timeout prevents indefinite hangs on unreachable peers.
+/// Applied when initiating peer connections.
+///
+/// Used in:
+/// - `network.rs`: `endpoint.connect()` with timeout wrapper
+pub const IROH_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Timeout for bidirectional stream open (2 seconds).
+///
+/// Tiger Style: Bounded wait for stream establishment after connection succeeds.
+/// Prevents indefinite blocking during stream initialization.
+///
+/// Used in:
+/// - `network.rs`: `connection.open_bi()` with timeout wrapper
+pub const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Timeout for RPC response read (10 seconds).
+///
+/// Accounts for slow snapshot transfers and disk I/O from the peer.
+/// Tiger Style: Prevents indefinite blocking on slow or stalled peers.
+/// Much higher than connect/stream timeouts due to variable snapshot sizes.
+///
+/// Used in:
+/// - `network.rs`: `recv_stream.read_to_end()` with timeout wrapper
+pub const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Maximum snapshot size (100 MB).
+///
+/// Tiger Style: Fixed limit prevents unbounded memory allocation from malicious
+/// or corrupt snapshots. Prevents DoS attacks via large snapshot payloads.
+///
+/// Used in:
+/// - `network.rs`: Chunked snapshot reading with size validation
+pub const MAX_SNAPSHOT_SIZE: u64 = 100 * 1024 * 1024;
+
+// ============================================================================
+// Failure Detection Constants
+// ============================================================================
+
+/// Maximum number of tracked unreachable nodes (1000).
+///
+/// Tiger Style: Bounded storage for node failure tracking.
+/// Prevents unbounded growth of failure detector state even if many nodes crash.
+///
+/// Used in:
+/// - `node_failure_detection.rs`: NodeFailureDetector state management
+pub const MAX_UNREACHABLE_NODES: u32 = 1000;
+
+// ============================================================================
+// Storage Constants
+// ============================================================================
+
+/// Maximum batch size for SQLite writes (1000 entries).
+///
+/// Tiger Style: Bounded batch processing to prevent excessive memory use
+/// during bulk write operations.
+///
+/// Used in:
+/// - `storage_sqlite.rs`: Write batching logic
+pub const MAX_BATCH_SIZE: u32 = 1000;
+
+/// Maximum number of keys in a SetMulti operation (100 keys).
+///
+/// Tiger Style: Fixed limit on multi-key operations prevents pathological
+/// cases with unbounded key counts.
+///
+/// Used in:
+/// - `storage_sqlite.rs`: SetMulti validation
+pub const MAX_SETMULTI_KEYS: u32 = 100;
+
+/// Default size for the SQLite read connection pool (10 connections).
+///
+/// Tiger Style: Fixed pool size prevents unbounded connection creation.
+/// Balances concurrency against resource usage.
+///
+/// Used in:
+/// - `storage_sqlite.rs`: Connection pool initialization
+pub const DEFAULT_READ_POOL_SIZE: u32 = 10;
+
+// ============================================================================
+// Actor and Concurrency Constants
+// ============================================================================
+
+/// Default capacity for bounded proxy queues (1000 items).
+///
+/// Tiger Style: Initial queue capacity prevents pathological growth.
+/// Used for elastic sizing between min and max capacity.
+///
+/// Used in:
+/// - `bounded_proxy.rs`: Queue initialization
+pub const DEFAULT_CAPACITY: u32 = 1000;
+
+/// Maximum capacity for bounded proxy queues (10,000 items).
+///
+/// Tiger Style: Upper bound on queue growth to prevent unbounded allocation.
+/// Hard limit regardless of demand.
+///
+/// Used in:
+/// - `bounded_proxy.rs`: Queue maximum size
+pub const MAX_CAPACITY: u32 = 10_000;
+
+/// Maximum number of concurrent connections per node in madsim (100).
+///
+/// Tiger Style: Fixed limit to prevent connection exhaustion during simulation.
+/// Applies only to madsim deterministic network, not to Iroh.
+///
+/// Used in:
+/// - `madsim_network.rs`: Connection management
+pub const MAX_CONNECTIONS_PER_NODE: u32 = 100;
+
+/// Maximum number of voters in the cluster (100 nodes).
+///
+/// Tiger Style: Bounded voter count prevents consensus complexity explosion.
+/// Maintains predictable Raft quorum sizes.
+///
+/// Used in:
+/// - `learner_promotion.rs`: Membership change validation
+pub const MAX_VOTERS: u32 = 100;
+
+// ============================================================================
+// Learning and Replication Constants
+// ============================================================================
+
+/// Maximum replication lag threshold for learner promotion (100 log entries).
+///
+/// Tiger Style: Fixed threshold ensures learners are sufficiently caught up
+/// before promotion to voters. Prevents cascade failures.
+///
+/// Used in:
+/// - `learner_promotion.rs`: Learner readiness validation
+pub const LEARNER_LAG_THRESHOLD: u64 = 100;
+
+/// Cooldown period for membership changes (300 seconds / 5 minutes).
+///
+/// Tiger Style: Fixed cooldown prevents rapid membership changes that could
+/// destabilize consensus. Allows time for quorum stabilization.
+///
+/// Used in:
+/// - `learner_promotion.rs`: Membership change rate limiting
+pub const MEMBERSHIP_COOLDOWN: Duration = Duration::from_secs(300);
+
+// ============================================================================
+// Supervision and Fault Tolerance Constants
+// ============================================================================
+
+/// Maximum size of restart history for circuit breaker (100 entries).
+///
+/// Tiger Style: Bounded history prevents unbounded memory growth in restart
+/// tracking. Sufficient for failure pattern analysis.
+///
+/// Used in:
+/// - `supervision.rs`: RestartCircuitBreaker state management
+pub const MAX_RESTART_HISTORY_SIZE: u32 = 100;
+
+/// Maximum backoff duration for exponential backoff (16 seconds).
+///
+/// Tiger Style: Upper bound on retry delays prevents stale-client-discovery bugs.
+/// Allows faster recovery when faults are transient.
+///
+/// Used in:
+/// - `supervision.rs`: Exponential backoff calculation (2^MAX_BACKOFF_SECONDS)
+pub const MAX_BACKOFF_SECONDS: u64 = 16;

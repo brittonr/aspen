@@ -9,12 +9,8 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use crate::raft::constants::MAX_UNREACHABLE_NODES;
 use crate::raft::types::NodeId;
-
-/// Maximum number of unreachable nodes to track.
-///
-/// Tiger Style: Bounded resource usage prevents unbounded memory growth.
-const MAX_UNREACHABLE_NODES: u32 = 1000;
 
 /// Classification of node failures based on connection status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

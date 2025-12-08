@@ -2,6 +2,7 @@
 name = "aspen"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0 OR MIT"
 
 [dependencies]
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::time::Duration;
 
 use anyhow::Context;
 use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
@@ -15,6 +14,10 @@ use tokio::select;
 use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::constants::{
+    IROH_CONNECT_TIMEOUT, IROH_READ_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_RPC_MESSAGE_SIZE,
+    MAX_SNAPSHOT_SIZE,
+};
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
     RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
@@ -23,32 +26,6 @@ use crate::raft::rpc::{
 use crate::raft::types::{AppTypeConfig, NodeId};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-/// Maximum size for RPC messages (10 MB).
-///
-/// Tiger Style: Fixed limit to prevent unbounded memory use.
-const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
-
-/// Timeout for Iroh connection establishment (5 seconds).
-///
-/// Tiger Style: Explicit timeout prevents indefinite hangs on unreachable peers.
-const IROH_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Timeout for bidirectional stream open (2 seconds).
-///
-/// Tiger Style: Bounded wait for stream establishment after connection succeeds.
-const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
-
-/// Timeout for RPC response read (10 seconds).
-///
-/// Accounts for slow snapshot transfers and disk I/O.
-/// Tiger Style: Prevents indefinite blocking on slow or stalled peers.
-const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Maximum snapshot size (100 MB).
-///
-/// Tiger Style: Fixed limit prevents unbounded memory allocation from malicious/corrupt snapshots.
-const MAX_SNAPSHOT_SIZE: u64 = 100 * 1024 * 1024;
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///

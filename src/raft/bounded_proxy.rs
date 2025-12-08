@@ -36,19 +36,8 @@ use snafu::Snafu;
 use tokio::sync::Semaphore;
 
 use crate::raft::RaftActorMessage;
+use crate::raft::constants::{DEFAULT_CAPACITY, MAX_CAPACITY};
 use crate::raft::types::NodeId;
-
-/// Default mailbox capacity (1000 messages).
-///
-/// This provides a reasonable buffer for normal operations while preventing
-/// unbounded memory growth. At ~1KB per message, this is ~1MB of buffering.
-const DEFAULT_CAPACITY: u32 = 1000;
-
-/// Maximum allowed mailbox capacity (10,000 messages).
-///
-/// This prevents misconfiguration that could lead to excessive memory usage.
-/// At ~1KB per message, this is ~10MB of buffering maximum.
-const MAX_CAPACITY: u32 = 10_000;
 
 /// Errors that can occur when sending messages through the bounded proxy.
 #[derive(Debug, Snafu)]

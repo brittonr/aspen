@@ -1,0 +1,179 @@
+# cargo-deny configuration for Aspen
+#
+# This configuration enforces security, licensing, and dependency policies for the Aspen project.
+# See: https://embarkstudios.github.io/cargo-deny/
+#
+# Run with: cargo deny check
+# Integrated into pre-commit hooks via Nix development environment.
+
+# -----------------------------------------------------------------------------
+# Advisories - Security vulnerability and unmaintained dependency checks
+# -----------------------------------------------------------------------------
+# More documentation: https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+[advisories]
+
+# Use the RustSec advisory database for vulnerability information.
+# Database URL: https://github.com/rustsec/advisory-db
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# Advisory IDs to ignore (with reasons).
+# Tiger Style principle: Fail fast on known security issues.
+# Only add entries here after careful review and explicit decision to accept the risk.
+ignore = [
+    # Unmaintained transitive dependencies - accepted risks:
+
+    # instant crate (via iroh) - unmaintained but stable, no direct usage
+    { id = "RUSTSEC-2024-0384", reason = "Transitive dependency via iroh. Stable functionality, no security impact. Upgrade blocked by iroh." },
+
+    # number_prefix crate (via cargo-nextest dev dependency) - display formatting only
+    { id = "RUSTSEC-2025-0119", reason = "Dev dependency via cargo-nextest. Display formatting only, no security impact." },
+
+    # paste crate (via iroh's netlink dependencies) - proc macro only
+    { id = "RUSTSEC-2024-0436", reason = "Transitive dependency via iroh's netlink stack. Proc macro only, no runtime impact." },
+
+    # rustls-pemfile (via hiqlite's axum-server) - has migration path but blocked by hiqlite
+    { id = "RUSTSEC-2025-0134", reason = "Transitive dependency via hiqlite. Migration to rustls-pki-types blocked by hiqlite update." },
+
+    # atomic-polyfill (via postcard/heapless in iroh ecosystem) - stable functionality
+    { id = "RUSTSEC-2023-0089", reason = "Transitive dependency via postcard. Stable atomic operations polyfill, alternative portable-atomic blocked by iroh ecosystem." },
+]
+
+# -----------------------------------------------------------------------------
+# Licenses - Software license policy
+# -----------------------------------------------------------------------------
+# More documentation: https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+[licenses]
+
+# Allow only permissive licenses that align with Apache-2.0/MIT.
+# This list covers the licenses found in the current dependency tree.
+# See https://spdx.org/licenses/ for possible licenses.
+allow = [
+    # Primary project licenses
+    "Apache-2.0",
+    "MIT",
+
+    # Common permissive licenses (BSD family)
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-1-Clause",
+
+    # Other permissive licenses
+    "ISC",
+    "Zlib",
+    "BSL-1.0",           # Boost Software License 1.0
+    "CC0-1.0",           # Creative Commons Zero - Public Domain
+    "MIT-0",             # MIT No Attribution
+    "Unlicense",         # Public Domain
+    "0BSD",              # Zero-Clause BSD
+
+    # OpenSSL (ring dependency)
+    "OpenSSL",
+
+    # Unicode license (unicode-ident)
+    "Unicode-3.0",
+
+    # Community Data License Agreement (iroh)
+    "CDLA-Permissive-2.0",
+
+    # LLVM exceptions (common in Rust ecosystem)
+    "Apache-2.0 WITH LLVM-exception",
+
+    # MPL-2.0 (webpki-roots and some other deps)
+    "MPL-2.0",
+]
+
+# Confidence threshold for license detection (0.0-1.0).
+# Higher values require more certain license detection.
+confidence-threshold = 0.8
+
+# Allow specific licenses on a per-crate basis.
+# Used for crates with complex licensing that don't fit the general allow list.
+exceptions = [
+    # ring uses ISC + OpenSSL + additional permissions
+    { allow = ["ISC", "OpenSSL"], crate = "ring" },
+]
+
+# License clarifications for crates with unclear licensing.
+# Uncomment and configure as needed.
+# [[licenses.clarify]]
+# crate = "ring"
+# expression = "MIT AND ISC AND OpenSSL"
+# license-files = [
+#     { path = "LICENSE", hash = 0xbd0eed23 }
+# ]
+
+# Private registry configuration.
+[licenses.private]
+# Ignore workspace crates that aren't published to public registries.
+ignore = false
+
+# -----------------------------------------------------------------------------
+# Bans - Dependency banning and duplicate detection
+# -----------------------------------------------------------------------------
+# More documentation: https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
+[bans]
+
+# Warn on multiple versions of the same dependency.
+# Multiple versions increase binary size and can cause subtle bugs.
+# Set to "warn" rather than "deny" because openraft vendoring causes intentional duplication.
+multiple-versions = "warn"
+
+# Allow wildcard dependencies (caret requirements like "1.0").
+# This is standard practice in Rust ecosystem.
+wildcards = "allow"
+
+# Highlight all duplicate dependencies for visibility.
+# Options: "lowest-version", "simplest-path", "all"
+highlight = "all"
+
+# Default features handling for workspace members and external crates.
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+# Specific crates to ban (if any).
+# Format: { crate = "crate-name", reason = "explanation" }
+# Example bans (commented out - add as needed):
+#
+# [[bans.deny]]
+# crate = "openssl"
+# reason = "Use rustls instead for pure-Rust TLS implementation"
+
+# Skip checking for duplicate versions of these crates.
+# Used for crates where duplication is expected/unavoidable.
+skip = [
+    # openraft is vendored in openraft/ directory, so duplication is intentional
+    { crate = "openraft", reason = "Vendored local version in openraft/ directory" },
+]
+
+# Skip trees rooted at these dependencies when checking for duplicates.
+# Useful when a dependency brings in older versions we don't control.
+# skip-tree = [
+#     { crate = "example", depth = 20 },
+# ]
+
+# -----------------------------------------------------------------------------
+# Sources - Dependency source restrictions
+# -----------------------------------------------------------------------------
+# More documentation: https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
+[sources]
+
+# Warn on dependencies from unknown registries.
+# This catches typosquatting and ensures dependencies come from trusted sources.
+unknown-registry = "warn"
+
+# Warn on git dependencies from unexpected sources.
+# All git dependencies should be explicitly allowed below.
+unknown-git = "warn"
+
+# Only allow dependencies from the official crates.io registry.
+# This ensures dependencies come from the trusted central registry.
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Allow specific git sources for our pinned git dependencies.
+# mad-turmoil and ractor_actors are both git dependencies with pinned revisions.
+allow-git = []
+
+# Allow GitHub organizations for git dependencies.
+# This is more flexible than listing individual repositories.
+[sources.allow-org]
+github = ["s2-streamstore", "slawlor"]

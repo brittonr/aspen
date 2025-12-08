@@ -52,23 +52,9 @@ use snafu::Snafu;
 use tokio::sync::RwLock;
 
 use crate::api::{ChangeMembershipRequest, ClusterController};
+use crate::raft::constants::{LEARNER_LAG_THRESHOLD, MAX_VOTERS, MEMBERSHIP_COOLDOWN};
 use crate::raft::node_failure_detection::{FailureType, NodeFailureDetector};
 use crate::raft::types::NodeId;
-
-/// Maximum number of voters allowed in the cluster.
-///
-/// Tiger Style: Bounded resource to prevent unbounded membership growth.
-const MAX_VOTERS: u32 = 100;
-
-/// Lag threshold for learner promotion (entries behind leader).
-///
-/// Tiger Style: Fixed threshold for determining if learner is caught up.
-const LEARNER_LAG_THRESHOLD: u64 = 100;
-
-/// Cooldown period between membership changes.
-///
-/// Tiger Style: Fixed 5-minute cooldown to prevent rapid membership churn.
-const MEMBERSHIP_COOLDOWN: Duration = Duration::from_secs(300);
 
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]

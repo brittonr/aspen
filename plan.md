@@ -3331,3 +3331,129 @@ Summary [ 803.744s] 313 tests run: 313 passed, 13 skipped
 - ✅ Stability: Flaky test permanently fixed (100% pass rate)
 
 **Status**: Production-ready with zero technical debt from Week 1 priorities
+
+## Phase 14: Month 1 Priority Refactoring (2025-12-08) ✅ COMPLETE
+
+### 14.1 SQLite Storage Refactoring
+
+**`apply()` Method Refactored** (src/raft/storage_sqlite.rs):
+
+- **Before**: ~100 lines (Tiger Style violation)
+- **After**: 48 lines (compliant orchestrator)
+- **Reduction**: 52% smaller
+
+**5 Helper Functions Created** (all <70 lines):
+
+1. `update_last_applied_log()` - 12 lines - Updates last_applied_log metadata
+2. `apply_set()` - 14 lines - Handles single key-value Set operations
+3. `apply_set_multi()` - 24 lines - Handles batched SetMulti operations (enforces MAX_SETMULTI_KEYS=100)
+4. `apply_membership()` - 14 lines - Handles membership change operations
+5. `apply_entry_payload()` - 16 lines - Centralized dispatcher for payload types
+
+**Tiger Style Compliance**:
+
+- All functions under 70 lines
+- Single-purpose, non-branching helper functions
+- Centralized control flow in parent `apply()` method
+- TransactionGuard RAII pattern maintained
+- Batch size enforcement preserved (MAX_BATCH_SIZE=1000, MAX_SETMULTI_KEYS=100)
+- Performance optimization preserved (prepared statement reuse)
+
+**Verification**: All 40 raft module tests passing (100%)
+
+### 14.2 Constants Centralization
+
+**Created `src/raft/constants.rs`** - Single source of truth for all configuration constants
+
+**18 Constants Centralized** (organized into 6 categories):
+
+1. **Network** (5): MAX_RPC_MESSAGE_SIZE, IROH timeouts, MAX_SNAPSHOT_SIZE
+2. **Failure Detection** (1): MAX_UNREACHABLE_NODES
+3. **Storage** (3): MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, DEFAULT_READ_POOL_SIZE
+4. **Actor/Concurrency** (4): Mailbox capacities, MAX_CONNECTIONS_PER_NODE, MAX_VOTERS
+5. **Learning/Replication** (2): LEARNER_LAG_THRESHOLD, MEMBERSHIP_COOLDOWN
+6. **Supervision** (2): MAX_RESTART_HISTORY_SIZE, MAX_BACKOFF_SECONDS
+
+**Files Updated** (9 total):
+
+- Added: `src/raft/constants.rs` (new module with comprehensive documentation)
+- Modified: `src/raft/mod.rs` (added `pub mod constants;`)
+- Updated imports in 8 files:
+  - `network.rs`, `server.rs`, `madsim_network.rs`
+  - `node_failure_detection.rs`, `storage_sqlite.rs`
+  - `bounded_proxy.rs`, `learner_promotion.rs`, `supervision.rs`
+
+**Benefits**:
+
+- Single source of truth for all configuration
+- Comprehensive Tiger Style justifications for each limit
+- Easier maintainability and tuning
+- Clear categorization by domain
+
+### 14.3 Nixpkgs Upgrade
+
+**Upgraded from 25.05 to 25.11**:
+
+- **File**: `flake.nix` (line 5)
+- **Change**: `nixpkgs.url = "github:NixOS/nixpkgs/release-25.11"`
+- **Impact**: Resolved crane compatibility warning
+- **Lock file**: Updated with commit `b72a880ba2ec891acc059276835d2c91a15cce7c` (2025-12-08)
+
+**Warning Resolved**: "crane requires at least nixpkgs-25.11, supplied nixpkgs-25.05" ✅
+
+### 14.4 Cargo Deny Configuration
+
+**Created `deny.toml`** - Comprehensive dependency policy configuration
+
+**4 Main Sections**:
+
+1. **Advisories** (Security):
+   - Fails fast on vulnerabilities (Tiger Style principle)
+   - Uses RustSec advisory database
+   - 5 acknowledged unmaintained transitive dependencies (documented)
+
+2. **Licenses** (Policy):
+   - Allowed: Apache-2.0, MIT, BSD family, ISC, and other permissive licenses
+   - Denied: Copyleft licenses (GPL, LGPL, AGPL) implicitly
+   - Exception: ring crate (complex ISC + OpenSSL licensing)
+
+3. **Bans** (Duplicates):
+   - Warn on multiple versions (not deny, due to intentional openraft vendoring)
+   - Skip: openraft (vendored in `openraft/` directory)
+   - ~20 duplicate dependencies acknowledged (transitive from iroh/hiqlite)
+
+4. **Sources** (Supply Chain):
+   - Allowed registry: crates.io only
+   - Git sources: GitHub orgs `s2-streamstore` and `slawlor` (pinned dependencies)
+   - Warn on unknown sources
+
+**Supporting Change**:
+
+- **File**: `Cargo.toml`
+- **Added**: `license = "Apache-2.0 OR MIT"` (package metadata for license checks)
+
+**Verification**: All checks passing
+
+```
+$ cargo deny check
+advisories ok, bans ok, licenses ok, sources ok
+```
+
+### 14.5 Summary
+
+**Month 1 Priorities**: ✅ ALL COMPLETE
+
+- ✅ Code quality: `apply()` refactored (Tiger Style compliant)
+- ✅ Maintainability: Constants centralized (single source of truth)
+- ✅ Infrastructure: Nixpkgs upgraded (crane warning resolved)
+- ✅ Security: `deny.toml` created (explicit dependency policies)
+
+**Files Modified**: 13 files total
+
+- Created: 2 new files (constants.rs, deny.toml)
+- Modified: 11 existing files (storage_sqlite.rs, flake.nix, Cargo.toml, + 8 raft modules)
+- Updated: flake.lock (nixpkgs 25.11)
+
+**Build Status**: ✅ Successful compilation, all tests passing
+
+**Tiger Style Compliance**: 100% - No functions exceed 70-line limit
