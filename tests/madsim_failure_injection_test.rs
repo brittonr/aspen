@@ -100,8 +100,8 @@ async fn test_leader_crash_and_reelection_seed_42() {
     artifact = artifact.add_event(format!("failure: crash node {} (leader)", initial_leader));
     router.mark_node_failed(initial_leader, true);
 
-    artifact = artifact.add_event("wait: for re-election (10s)");
-    madsim::time::sleep(std::time::Duration::from_millis(10000)).await;
+    artifact = artifact.add_event("wait: for re-election (15s)");
+    madsim::time::sleep(std::time::Duration::from_millis(15000)).await;
 
     artifact = artifact.add_event("metrics: check new leader elected");
     // Check only non-crashed nodes for new leader

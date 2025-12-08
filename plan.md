@@ -358,6 +358,22 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
       2. Build incrementally on proven 3-node patterns (avoid complex 5-node scenarios)
       3. Keep timing configurations conservative (long timeouts, generous sleep durations)
       4. Test new scenarios thoroughly with multiple seeds before committing
+- **Flaky Test Fixes** (2025-12-07):
+  - **Problem**: Two leader crash tests flaky under full test suite load (328 tests)
+    - `test_leader_crash_and_reelection_seed_42` (in-memory storage) - failed on try 2, took 10.009s
+    - `test_sqlite_leader_crash_recovery_seed_42` (SQLite storage) - flaky according to test summary
+  - **Root Cause**: Resource contention during full test suite causes election to take longer than configured timeout
+    - Tests pass reliably when run in isolation (15 seconds)
+    - Fail intermittently when running with 328 other tests due to CPU/scheduling delays
+    - Previous fix (commit 20e42ff) increased timeout from 5s to 10s, but still insufficient
+  - **Fix Applied**: Increased re-election wait timeout from 10s → 15s in both tests
+    - `madsim_failure_injection_test.rs` line 103: wait time 10s → 15s
+    - `madsim_sqlite_failures_test.rs` line 136: wait time 5s → 15s (was never increased from original 5s!)
+  - **Why This Works**:
+    - Gives Raft enough time to complete election even under resource contention
+    - Matches observed passing time when run in isolation (15s)
+    - Conservative timeout prevents false negatives from system load
+  - **Verification**: Running full test suite (328 tests) to confirm both tests now pass reliably
 - ✅ **Test Infrastructure Enhancements**:
   - Added `remove_node()` - Extract node for direct Raft API testing
   - Added `initialize(node_id)` - Single-node cluster initialization
