@@ -1732,33 +1732,40 @@ A comprehensive parallel-agent audit of the Aspen codebase was conducted to iden
 
 ### Next Steps
 
-**Phase 6 Focus Areas**:
+**Completed (2025-12-07)**:
 
-1. **Storage Layer** (P0): Implement redb-backed persistence
-   - Create `RedbLogStore` and `RedbStateMachine`
-   - Add storage abstraction trait for swapping backends
-   - Add persistence-specific tests
-   - Document migration path from in-memory to redb
+- ✅ **OpenRaft Test Porting**: All madsim-compatible tests ported (7 tests)
+- ✅ **Flaky Test Fixes**: Fixed leader crash test flakiness (increased timeouts to 15s)
+- ✅ **Kameo Cleanup**: Removed remaining references from plan.md
 
-2. **Learner Investigation** (P1): Resolve OpenRaft assertion
-   - Reproduce issue in minimal test case
-   - Review OpenRaft engine source code
-   - Engage with openraft community if needed
-   - Document workaround if upstream fix required
+**Recommended Next Steps**:
 
-3. **Supervision** (P1): Add actor supervision
-   - Implement ractor supervision tree
-   - Add restart policies with backoff
-   - Add health checks and liveness probes
-   - Document actor lifecycle management
+1. **Actor Lifecycle & Reliability** (P0): Improve ractor supervision
+   - Fix remaining flaky test: `test_flapping_node_detection`
+   - Add exponential backoff to supervision restart policies
+   - Implement health checks and liveness probes for actors
+   - Add circuit breakers for repeated failures
+   - Document actor lifecycle management patterns
 
-4. **Testing Enhancement** (P2): Complete chaos infrastructure
-   - Per-RPC latency in AspenRouter
-   - Probabilistic message dropping
-   - Enable deferred chaos tests
-   - Add long-running stability tests
+2. **Integration Testing** (P1): Expand KvServiceBuilder coverage
+   - Add end-to-end integration tests with real Raft cluster
+   - Test failure recovery scenarios (node restarts, network partitions)
+   - Validate SQLite state machine persistence across crashes
+   - Add performance benchmarks for write/read throughput
 
-**Status**: Audit complete. Codebase is in excellent condition with clear path forward.
+3. **Production Readiness** (P2): Operational concerns
+   - Add metrics collection (Prometheus/OpenTelemetry)
+   - Implement structured logging with tracing spans
+   - Add graceful shutdown handling
+   - Document deployment architecture and operational runbooks
+
+4. **Testing Enhancement** (P3): Advanced chaos scenarios
+   - Only after fixing existing flakiness
+   - Build on proven 3-node patterns (avoid 5+ node complexity)
+   - Use conservative timeouts (15s+ for elections)
+   - Test with multiple seeds before committing
+
+**Status**: Core Raft functionality solid. Focus shifting to reliability and operational readiness.
 
 ---
 
