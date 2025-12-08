@@ -635,13 +635,13 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
     async fn purge(&mut self, log_id: LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
         // Verify purge is monotonic (Tiger Style: fail fast on programmer error)
-        if let Some(prev) = self.read_meta::<LogIdOf<AppTypeConfig>>("last_purged_log_id")? {
-            assert!(
-                prev <= log_id,
-                "purge must be monotonic: prev={:?}, new={:?}",
-                prev,
-                log_id
-            );
+        if let Some(prev) = self.read_meta::<LogIdOf<AppTypeConfig>>("last_purged_log_id")?
+            && prev > log_id
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("purge must be monotonic: prev={:?}, new={:?}", prev, log_id),
+            ));
         }
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;

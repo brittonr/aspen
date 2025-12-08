@@ -436,11 +436,14 @@ fn setup_controllers(
             None,
         ),
         ControlBackend::RaftActor => {
-            let cluster_client = Arc::new(RaftControlClient::new_with_capacity(
-                handle.raft_actor.clone(),
-                config.raft_mailbox_capacity,
-                config.node_id,
-            ));
+            let cluster_client = Arc::new(
+                RaftControlClient::new_with_capacity(
+                    handle.raft_actor.clone(),
+                    config.raft_mailbox_capacity,
+                    config.node_id,
+                )
+                .expect("raft_mailbox_capacity config must be valid (1..=10000)"),
+            );
             let kv_client = Arc::new(KvClient::new(handle.raft_actor.clone()));
             let coordinator = Arc::new(LearnerPromotionCoordinator::with_failure_detector(
                 cluster_client.clone(),

@@ -81,6 +81,17 @@ pub enum BoundedMailboxError {
         /// Error message describing the internal failure.
         message: String,
     },
+
+    /// Invalid configuration: capacity is out of acceptable range.
+    ///
+    /// Capacity must be greater than 0 and not exceed MAX_CAPACITY (10,000).
+    #[snafu(display("invalid capacity: {} (must be 1..={})", capacity, max))]
+    InvalidCapacity {
+        /// The invalid capacity value provided.
+        capacity: u32,
+        /// The maximum allowed capacity.
+        max: u32,
+    },
 }
 
 /// Metrics for bounded mailbox monitoring.
@@ -185,6 +196,7 @@ impl BoundedRaftActorProxy {
     /// ```
     pub fn new(inner: ActorRef<RaftActorMessage>, node_id: NodeId) -> Self {
         Self::with_capacity(inner, DEFAULT_CAPACITY, node_id)
+            .expect("DEFAULT_CAPACITY is always valid (hardcoded to 1000)")
     }
 
     /// Create a bounded proxy with custom capacity.
@@ -195,39 +207,34 @@ impl BoundedRaftActorProxy {
     /// * `capacity` - Maximum number of messages that can be in flight
     /// * `node_id` - Node ID for logging and debugging
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if capacity is 0 or exceeds MAX_CAPACITY (10,000).
+    /// Returns `InvalidCapacity` if capacity is 0 or exceeds MAX_CAPACITY (10,000).
     ///
     /// # Example
     ///
     /// ```rust,ignore
-    /// let proxy = BoundedRaftActorProxy::with_capacity(raft_actor_ref, 500, 1);
+    /// let proxy = BoundedRaftActorProxy::with_capacity(raft_actor_ref, 500, 1)?;
     /// ```
     pub fn with_capacity(
         inner: ActorRef<RaftActorMessage>,
         capacity: u32,
         node_id: NodeId,
-    ) -> Self {
-        assert!(
-            capacity > 0,
-            "mailbox capacity must be greater than 0, got {}",
-            capacity
-        );
-        assert!(
-            capacity <= MAX_CAPACITY,
-            "mailbox capacity must not exceed {}, got {}",
-            MAX_CAPACITY,
-            capacity
-        );
+    ) -> Result<Self, BoundedMailboxError> {
+        if capacity == 0 || capacity > MAX_CAPACITY {
+            return Err(BoundedMailboxError::InvalidCapacity {
+                capacity,
+                max: MAX_CAPACITY,
+            });
+        }
 
-        Self {
+        Ok(Self {
             inner,
             semaphore: Arc::new(Semaphore::new(capacity as usize)),
             capacity,
             node_id,
             metrics: BoundedMailboxMetrics::new(),
-        }
+        })
     }
 
     /// Send message with backpressure (non-blocking).
@@ -501,7 +508,8 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_creation_with_custom_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 2);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 2)
+            .expect("valid capacity should succeed");
 
         assert_eq!(proxy.capacity(), 500);
         assert_eq!(proxy.mailbox_depth(), 0);
@@ -509,23 +517,34 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "mailbox capacity must be greater than 0")]
-    async fn test_proxy_panics_on_zero_capacity() {
+    async fn test_proxy_rejects_zero_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let _proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 0, 1);
+        let result = BoundedRaftActorProxy::with_capacity(actor_ref, 0, 1);
+
+        assert!(result.is_err(), "zero capacity should be rejected");
+        assert!(matches!(
+            result.unwrap_err(),
+            BoundedMailboxError::InvalidCapacity { .. }
+        ));
     }
 
     #[tokio::test]
-    #[should_panic(expected = "mailbox capacity must not exceed")]
-    async fn test_proxy_panics_on_excessive_capacity() {
+    async fn test_proxy_rejects_excessive_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let _proxy = BoundedRaftActorProxy::with_capacity(actor_ref, MAX_CAPACITY + 1, 1);
+        let result = BoundedRaftActorProxy::with_capacity(actor_ref, MAX_CAPACITY + 1, 1);
+
+        assert!(result.is_err(), "excessive capacity should be rejected");
+        assert!(matches!(
+            result.unwrap_err(),
+            BoundedMailboxError::InvalidCapacity { .. }
+        ));
     }
 
     #[tokio::test]
     async fn test_try_send_succeeds_when_capacity_available() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1)
+            .expect("valid capacity should succeed");
 
         // Send a ping message
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -541,7 +560,8 @@ mod tests {
     #[tokio::test]
     async fn test_mailbox_depth_tracking() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 100, 1);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 100, 1)
+            .expect("valid capacity should succeed");
 
         assert_eq!(proxy.mailbox_depth(), 0, "initial depth should be 0");
 
@@ -566,7 +586,8 @@ mod tests {
     #[tokio::test]
     async fn test_blocking_send_succeeds() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1)
+            .expect("valid capacity should succeed");
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         let result = proxy
@@ -616,7 +637,8 @@ mod tests {
     #[tokio::test]
     async fn test_debug_formatting() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 3);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 3)
+            .expect("valid capacity should succeed");
 
         let debug_str = format!("{:?}", proxy);
         assert!(
@@ -639,7 +661,8 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 5, 1);
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 5, 1)
+            .expect("valid capacity should succeed");
 
         let success_count = Arc::new(AtomicU32::new(0));
         let reject_count = Arc::new(AtomicU32::new(0));

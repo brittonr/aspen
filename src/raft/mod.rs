@@ -433,17 +433,21 @@ impl RaftControlClient {
     /// * `actor` - The RaftActor reference to wrap
     /// * `capacity` - Maximum number of messages in mailbox
     /// * `node_id` - Node ID for logging and debugging
+    ///
+    /// # Errors
+    ///
+    /// Returns `BoundedMailboxError::InvalidCapacity` if capacity is 0 or exceeds MAX_CAPACITY.
     pub fn new_with_capacity(
         actor: ActorRef<RaftActorMessage>,
         capacity: u32,
         node_id: u64,
-    ) -> Self {
+    ) -> Result<Self, bounded_proxy::BoundedMailboxError> {
         let proxy =
-            bounded_proxy::BoundedRaftActorProxy::with_capacity(actor.clone(), capacity, node_id);
-        Self {
+            bounded_proxy::BoundedRaftActorProxy::with_capacity(actor.clone(), capacity, node_id)?;
+        Ok(Self {
             actor,
             proxy: Some(proxy),
-        }
+        })
     }
 
     /// Get the bounded mailbox proxy if available.
