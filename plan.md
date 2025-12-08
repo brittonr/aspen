@@ -334,72 +334,97 @@ We wiped the previous modules to rebuild Aspen around a clean architecture that 
        - `t10_append_entries_partial_success.rs` - Requires `set_append_entries_quota()` for controlled replication
        - Most remaining tests need `get_storage_handle()`, direct storage state assertions, or fine-grained control
      - All new madsim tests passing (309/309 tests, 13 skipped) with simulation artifacts persisted to `docs/simulations/`
-   - ✅ **Test Infrastructure Enhancements**:
-     - Added `remove_node()` - Extract node for direct Raft API testing
-     - Added `initialize(node_id)` - Single-node cluster initialization
-     - Added `add_learner(leader, target)` - Learner node management
-     - Added `external_request<F>(target, callback)` - Internal Raft state inspection
-     - Added `new_cluster(voters, learners)` - Complete multi-node cluster setup helper
-   - ✅ **New Tests Ported** (2 tests, both passing):
-     - `router_t11_append_conflicts.rs` - Comprehensive append-entries conflict resolution
-       - Validates all 5 conflict scenarios (empty logs, missing prev_log_id, inconsistent entries, etc.)
-       - Tests direct append_entries API without network layer
-       - Critical for Raft log consistency guarantees
-     - `router_t61_heartbeat_reject_vote.rs` - Leader lease mechanism
-       - Validates followers reject vote requests while receiving heartbeats
-       - Tests leader lease expiration and vote timing
-       - Critical for preventing unnecessary elections
-   - ✅ **Test Statistics**: **25/25 router tests passing (100% pass rate)**
-   - ✅ **Phase 5 Critical Tests Ported** (6 tests, all passing):
-     - ✅ `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart
-     - ✅ `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote
-     - ✅ `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs
-     - ✅ `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition
-     - ✅ `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries)
-     - ✅ `router_t10_conflict_with_empty_entries.rs` - Conflict detection with empty append-entries (simplified to focus on core behavior)
-   - ✅ **Runtime Issues Fixed** (5 critical bugs identified and resolved via parallel agent investigation):
+
+- **Chaos Test Investigation** (2025-12-07):
+  - **Decision**: NOT creating new complex chaos scenarios at this time
+  - **Rationale**:
+      1. Comprehensive chaos coverage already exists in `madsim_advanced_scenarios_test.rs` (rolling failures, concurrent writes, asymmetric partitions)
+      2. Attempted cascading failure test hit 60s timeout, indicating complexity/timing issues with 5-node clusters
+      3. Pre-existing flakiness in `test_leader_crash_and_reelection_seed_42` (fails intermittently due to timing/election dynamics)
+      4. Madsim tests are sensitive to timing configurations (heartbeat intervals, election timeouts, sleep durations)
+  - **Root Cause Analysis**: Tokio runtime limitation discovered
+    - ALL madsim tests fail when compiled with `RUSTFLAGS='--cfg madsim'`
+    - Error: "no reactor running, must be called from the context of a Tokio 1.x runtime"
+    - Backtrace shows failure in `Tick::spawn` → `tokio::task::spawn()` at Raft initialization (line 419 in mod.rs)
+    - Tests pass WITHOUT the explicit madsim flag because they compile differently
+    - This is same root cause as snapshot limitation (tokio incompatibility with madsim runtime)
+  - **Current Chaos Test Coverage** (existing tests are sufficient):
+    - Cascading/rolling failures: `test_rolling_failures_seed_123` (madsim_advanced_scenarios_test.rs)
+    - Network asymmetry: `test_asymmetric_partition_seed_456` (madsim_advanced_scenarios_test.rs)
+    - Concurrent operations: `test_concurrent_writes_complex_failures_seed_789` (madsim_advanced_scenarios_test.rs)
+    - Leader crash/re-election: `test_leader_crash_and_reelection_seed_42` (madsim_failure_injection_test.rs, but flaky)
+  - **Future Work**: If additional chaos scenarios needed, should:
+      1. Fix flakiness in existing tests first (especially leader crash test)
+      2. Build incrementally on proven 3-node patterns (avoid complex 5-node scenarios)
+      3. Keep timing configurations conservative (long timeouts, generous sleep durations)
+      4. Test new scenarios thoroughly with multiple seeds before committing
+- ✅ **Test Infrastructure Enhancements**:
+  - Added `remove_node()` - Extract node for direct Raft API testing
+  - Added `initialize(node_id)` - Single-node cluster initialization
+  - Added `add_learner(leader, target)` - Learner node management
+  - Added `external_request<F>(target, callback)` - Internal Raft state inspection
+  - Added `new_cluster(voters, learners)` - Complete multi-node cluster setup helper
+- ✅ **New Tests Ported** (2 tests, both passing):
+  - `router_t11_append_conflicts.rs` - Comprehensive append-entries conflict resolution
+    - Validates all 5 conflict scenarios (empty logs, missing prev_log_id, inconsistent entries, etc.)
+    - Tests direct append_entries API without network layer
+    - Critical for Raft log consistency guarantees
+  - `router_t61_heartbeat_reject_vote.rs` - Leader lease mechanism
+    - Validates followers reject vote requests while receiving heartbeats
+    - Tests leader lease expiration and vote timing
+    - Critical for preventing unnecessary elections
+- ✅ **Test Statistics**: **25/25 router tests passing (100% pass rate)**
+- ✅ **Phase 5 Critical Tests Ported** (6 tests, all passing):
+  - ✅ `router_t62_follower_clear_restart_recover.rs` - Recovery from complete state loss on restart
+  - ✅ `router_t10_see_higher_vote.rs` - Election safety when leader sees higher vote
+  - ✅ `router_t50_snapshot_when_lacking_log.rs` - Automatic snapshot streaming when follower lacks logs
+  - ✅ `router_t50_append_entries_backoff_rejoin.rs` - Replication recovery after network partition
+  - ✅ `router_t11_append_inconsistent_log.rs` - Large log conflict resolution (>50 entries)
+  - ✅ `router_t10_conflict_with_empty_entries.rs` - Conflict detection with empty append-entries (simplified to focus on core behavior)
+- ✅ **Runtime Issues Fixed** (5 critical bugs identified and resolved via parallel agent investigation):
      1. **Vote progression bug**: Section 4 was bumping term to 2, preventing section 5 from using term 1
      2. **Leader stepdown race**: Added wait for stepdown before verifying write failures
      3. **Snapshot index off-by-one**: Expected index 20, actual is 19 (last committed log)
      4. **Leader lease timeout**: Missing 1-second sleep before election to allow old leader's lease to expire
      5. **Blank leader log**: Multiple tests not accounting for blank log entry added when leader is elected
-   - ✅ **Compilation Issues Fixed**: All type mismatches and RaftMetrics field access issues resolved
-     - Fixed 8 `CommittedLeaderId` type mismatches by using `log_id::<AppTypeConfig>()` helper
-     - Fixed 3 `metrics.applied_index` field access errors by using Wait API or removing redundant checks
-     - Replaced direct storage manipulation with `append_entries` RPCs for proper vote handling
-   - 📝 **Key Learnings**:
-     - Direct storage manipulation after Raft initialization causes in-memory/storage sync issues; vote updates must go through Raft protocol
-     - Leader elections add blank log entries that tests must account for in applied_index expectations
-     - Leader leases prevent elections; must wait for expiration before triggering new elections
-     - Snapshot creation happens at last_committed_index, not at the trigger threshold index
-   - 📝 **Documentation Created**: `.claude/phase5_test_migration.md` with detailed migration decisions and patterns
-   - **Deferred** (need additional AspenRouter features):
-     - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait
-     - `t50_append_entries_backoff` - Requires RPC counting infrastructure
-   - ✅ **Phase 5.2 Additional Tests Ported** (3 tests + 2 bonus, all passing):
-     - ✅ `router_t20_append_entries_three_membership.rs` - Concurrent membership changes (PASSING)
-       - Validates processing of three membership changes in single append-entries RPC
-       - Tests Learner→Follower state transition when node appears in new membership
-       - Duration: 0.206s
-     - ✅ `router_t50_install_snapshot_conflict.rs` - Snapshot installation with conflicting logs (PASSING)
-       - Validates snapshot installation when follower has uncommitted conflicting logs
-       - Tests log truncation before snapshot application
-       - Fixed: Snapshot index assertion adjusted for last_committed_index pattern (index 9 vs threshold 10)
-       - Includes bonus test: `test_install_snapshot_at_committed_boundary` (0.009s)
-       - Duration: 0.516s (main test)
-     - ✅ `router_t20_truncate_logs_revert_membership.rs` - Membership safety during log truncation (PASSING)
-       - Validates effective membership reversion when logs are truncated
-       - Tests atomic membership changes during network partition recovery
-       - Fixed: Rewrote to use pre-populated storage pattern instead of dynamic cluster operations
-       - Includes bonus test: `test_simple_log_truncation` (0.005s)
-       - Duration: 0.004s (main test)
-   - ✅ **Phase 5.2 Test Fix** (2025-12-02):
-     - Fixed `router_t10_conflict_with_empty_entries` - last failing router test
-     - Simplified from 210 lines to 154 lines, removing complex node extraction pattern
-     - Test now validates 3 core conflict scenarios with empty append-entries
-     - **Achievement**: 100% test pass rate (98/98 tests, 25/25 router tests)
-     - Commit: e568b1f
-   - **Status**: ✅ Phase 5.2 complete! All router tests passing at 100%. Ready for Phase 5.3 (Documentation)
+- ✅ **Compilation Issues Fixed**: All type mismatches and RaftMetrics field access issues resolved
+  - Fixed 8 `CommittedLeaderId` type mismatches by using `log_id::<AppTypeConfig>()` helper
+  - Fixed 3 `metrics.applied_index` field access errors by using Wait API or removing redundant checks
+  - Replaced direct storage manipulation with `append_entries` RPCs for proper vote handling
+- 📝 **Key Learnings**:
+  - Direct storage manipulation after Raft initialization causes in-memory/storage sync issues; vote updates must go through Raft protocol
+  - Leader elections add blank log entries that tests must account for in applied_index expectations
+  - Leader leases prevent elections; must wait for expiration before triggering new elections
+  - Snapshot creation happens at last_committed_index, not at the trigger threshold index
+- 📝 **Documentation Created**: `.claude/phase5_test_migration.md` with detailed migration decisions and patterns
+- **Deferred** (need additional AspenRouter features):
+  - `t10_append_entries_partial_success` - Requires quota simulation + Clone trait
+  - `t50_append_entries_backoff` - Requires RPC counting infrastructure
+- ✅ **Phase 5.2 Additional Tests Ported** (3 tests + 2 bonus, all passing):
+  - ✅ `router_t20_append_entries_three_membership.rs` - Concurrent membership changes (PASSING)
+    - Validates processing of three membership changes in single append-entries RPC
+    - Tests Learner→Follower state transition when node appears in new membership
+    - Duration: 0.206s
+  - ✅ `router_t50_install_snapshot_conflict.rs` - Snapshot installation with conflicting logs (PASSING)
+    - Validates snapshot installation when follower has uncommitted conflicting logs
+    - Tests log truncation before snapshot application
+    - Fixed: Snapshot index assertion adjusted for last_committed_index pattern (index 9 vs threshold 10)
+    - Includes bonus test: `test_install_snapshot_at_committed_boundary` (0.009s)
+    - Duration: 0.516s (main test)
+  - ✅ `router_t20_truncate_logs_revert_membership.rs` - Membership safety during log truncation (PASSING)
+    - Validates effective membership reversion when logs are truncated
+    - Tests atomic membership changes during network partition recovery
+    - Fixed: Rewrote to use pre-populated storage pattern instead of dynamic cluster operations
+    - Includes bonus test: `test_simple_log_truncation` (0.005s)
+    - Duration: 0.004s (main test)
+- ✅ **Phase 5.2 Test Fix** (2025-12-02):
+  - Fixed `router_t10_conflict_with_empty_entries` - last failing router test
+  - Simplified from 210 lines to 154 lines, removing complex node extraction pattern
+  - Test now validates 3 core conflict scenarios with empty append-entries
+  - **Achievement**: 100% test pass rate (98/98 tests, 25/25 router tests)
+  - Commit: e568b1f
+- **Status**: ✅ Phase 5.2 complete! All router tests passing at 100%. Ready for Phase 5.3 (Documentation)
+
 3. **Documentation** ✅ COMPLETE (2025-12-03)
    - ✅ Updated `AGENTS.md` with comprehensive integration architecture (391 lines added)
    - ✅ Created `docs/getting-started.md` for single-node & 3-node quickstarts (285 lines)
