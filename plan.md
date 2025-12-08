@@ -3197,3 +3197,24 @@ All property test issues resolved:
   - Access: client(), raft_core(), handle()
   - Multi-node: concurrent services, unique endpoints
 - **Commit**: 2ca4a59
+
+### 11.7 Production Safety Hardening (Tiger Style) ✅
+
+**P0 Critical Safety Items Complete** (2025-12-07):
+
+- ✅ **Network Timeouts** (Commit: 2becf35)
+  - Added explicit timeouts for all Iroh operations (connect: 5s, stream: 2s, read: 10s)
+  - Prevents indefinite blocking on unreachable peers
+- ✅ **Remove Production Panics** (Commit: 456ecb7)
+  - Converted configuration panics to proper error handling in bounded_proxy, storage, aspen-node
+  - Added InvalidCapacity error variant, changed assertions to io::Error returns
+- ✅ **Disk Space Checks** (Commit: aa82630)
+  - Pre-write validation in save_vote() and append() at 95% threshold
+  - Prevents data corruption when disk fills
+- ✅ **Snapshot Size Limit** (Commit: 436ca6e)
+  - MAX_SNAPSHOT_SIZE = 100 MB with chunked 8KB reads
+  - Prevents OOM from malicious/corrupted snapshots
+- ✅ **Add Learner Race Condition**
+  - Verified blocking=true parameter already waits for log catchup (no changes needed)
+
+**Test Status**: 312/313 tests passing (99.7% pass rate)
