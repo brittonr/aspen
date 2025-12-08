@@ -1518,8 +1518,6 @@ A comprehensive parallel-agent audit of the Aspen codebase was conducted to iden
 **Actor Framework** ✅
 
 - Ractor: Production-ready, fully integrated throughout codebase
-- Kameo: Clearly marked experimental, isolated to examples only
-- No architectural confusion or conflicts
 - Message handling complete with proper lifecycle hooks
 
 **Error Handling** ✅ (Generally Good)
