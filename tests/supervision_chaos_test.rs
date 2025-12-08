@@ -84,6 +84,8 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
         max_restarts_per_window: 5,
         restart_window_secs: 60,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     artifact = artifact.add_event("spawn: supervisor with raft actor");
@@ -149,6 +151,8 @@ async fn test_meltdown_detection_with_chaos_seed_2000() {
         max_restarts_per_window: 3,       // Only 3 restarts allowed
         restart_window_secs: 30,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     artifact = artifact.add_event("spawn: supervisor with tight meltdown config");
@@ -277,6 +281,8 @@ async fn test_multiple_supervised_actors_chaos_seed_4000() {
         max_restarts_per_window: 5,
         restart_window_secs: 60,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     artifact = artifact.add_event("spawn: 3 supervisors");
@@ -368,6 +374,8 @@ async fn test_backoff_under_network_instability_seed_5000() {
         max_restarts_per_window: 10,
         restart_window_secs: 120,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     artifact = artifact.add_event("spawn: supervisor");

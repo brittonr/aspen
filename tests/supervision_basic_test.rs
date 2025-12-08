@@ -172,6 +172,8 @@ async fn test_restart_history_bounded() {
         max_restarts_per_window: 3,
         restart_window_secs: 600,
         restart_history_size: 10, // Small size for testing
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     // Create RaftActorConfig
@@ -258,6 +260,8 @@ async fn test_meltdown_detection_threshold() {
         max_restarts_per_window: 3,
         restart_window_secs: 60, // 1 minute
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     // Create RaftActorConfig

@@ -61,6 +61,76 @@
 //! - Logs "meltdown detected" error message
 //! - Manual intervention required
 //!
+//! ### Circuit Breaker Pattern
+//!
+//! The supervisor implements a circuit breaker for automatic recovery from meltdown
+//! conditions. The circuit breaker has three states with automatic transitions:
+//!
+//! **Closed** (Normal Operation):
+//! - All restart attempts proceed normally with exponential backoff
+//! - Meltdown detection monitors restart frequency
+//! - Transitions to **Open** when meltdown detected
+//!
+//! **Open** (Failure State):
+//! - No restart attempts allowed
+//! - Actor remains stopped to prevent infinite restart loops
+//! - Automatically transitions to **HalfOpen** after `circuit_open_duration_secs` (default: 300s)
+//!
+//! **HalfOpen** (Recovery Testing):
+//! - Allows exactly ONE restart attempt to test if underlying issue resolved
+//! - On successful restart → Transitions to **Closed** after `half_open_stability_duration_secs` (default: 120s)
+//! - On failed restart → Returns to **Open** state
+//!
+//! #### Circuit Breaker Configuration
+//!
+//! ```rust
+//! SupervisionConfig {
+//!     circuit_open_duration_secs: 300,        // Wait 5 minutes before testing recovery
+//!     half_open_stability_duration_secs: 120, // Require 2 minutes uptime for recovery
+//!     ..Default::default()
+//! }
+//! ```
+//!
+//! #### Monitoring Circuit Breaker State
+//!
+//! Query supervision status to check circuit breaker state:
+//!
+//! ```bash
+//! curl http://localhost:8080/health | jq .supervision.circuit_state
+//! ```
+//!
+//! Response values:
+//! - `"Closed"`: Normal operation
+//! - `"Open"`: Meltdown detected, restarts blocked
+//! - `"HalfOpen"`: Testing recovery, one restart allowed
+//!
+//! #### Circuit Breaker vs Meltdown Detection
+//!
+//! - **Meltdown Detection**: Rate-limiting mechanism that opens the circuit breaker
+//!   - Tracks: Number of restarts within a time window
+//!   - Action: Opens circuit breaker when threshold exceeded
+//!
+//! - **Circuit Breaker**: Automatic recovery mechanism
+//!   - Provides: Automatic retry after cooldown period
+//!   - Prevents: Need for manual intervention in transient failures
+//!
+//! #### Recovery Scenarios
+//!
+//! **Transient Failure** (e.g., temporary network issue):
+//! 1. Meltdown detected after 3 rapid restarts → Circuit opens
+//! 2. Wait 5 minutes (circuit_open_duration_secs)
+//! 3. Circuit transitions to HalfOpen → One restart attempt
+//! 4. Network recovered → Restart succeeds
+//! 5. Wait 2 minutes (half_open_stability_duration_secs)
+//! 6. Circuit closes → Normal operation resumed
+//!
+//! **Persistent Failure** (e.g., corrupted storage):
+//! 1. Meltdown detected → Circuit opens
+//! 2. Wait 5 minutes → Circuit transitions to HalfOpen
+//! 3. Storage still corrupted → Restart fails
+//! 4. Circuit returns to Open
+//! 5. Cycle repeats until issue resolved manually
+//!
 //! ## Troubleshooting Common Issues
 //!
 //! ### Issue: Repeated Rapid Restarts
@@ -84,11 +154,19 @@
 //! journalctl -u aspen -n 100 --no-pager | grep -E "(panic|ERROR|WARN)"
 //! ```
 //!
-//! ### Issue: Meltdown Detected
+//! ### Issue: Meltdown Detected (Circuit Opened)
 //!
 //! **Symptoms**: Log message "exceeded max_restarts_per_window, entering meltdown"
+//! or supervision status shows `circuit_state: "Open"`
 //!
-//! **Immediate Actions**:
+//! **Automatic Recovery**:
+//! The circuit breaker will automatically attempt recovery:
+//! 1. Wait `circuit_open_duration_secs` (default: 5 minutes)
+//! 2. Transition to HalfOpen state
+//! 3. Attempt one restart
+//! 4. If successful and stable for `half_open_stability_duration_secs`, close circuit
+//!
+//! **Manual Investigation** (while waiting for automatic recovery):
 //! 1. Check storage integrity:
 //!    ```bash
 //!    # If using redb backend
@@ -101,11 +179,34 @@
 //!    journalctl -u aspen -p err -n 50 --no-pager
 //!    ```
 //!
-//! 3. Attempt manual recovery:
+//! 3. Manual recovery (if automatic recovery fails repeatedly):
 //!    - Stop node
 //!    - Restore from backup if storage corrupted
 //!    - Adjust configuration if config error identified
 //!    - Restart node
+//!
+//! ### Issue: Circuit Stuck in HalfOpen
+//!
+//! **Symptoms**: `circuit_state: "HalfOpen"` persists for extended period
+//!
+//! **Meaning**: Actor restarted successfully but hasn't remained stable for the required duration
+//!
+//! **Actions**:
+//! 1. Check if actor is experiencing intermittent issues:
+//!    ```bash
+//!    # Monitor health checks
+//!    watch -n 1 'curl -s http://localhost:8080/health | jq .supervision'
+//!    ```
+//!
+//! 2. Review resource utilization:
+//!    ```bash
+//!    top -H -p <pid>  # CPU/memory spikes
+//!    iostat -x 1 10   # Disk latency spikes
+//!    ```
+//!
+//! 3. If instability persists:
+//!    - Circuit will return to Open on next failure
+//!    - Investigate root cause before next automatic retry
 //!
 //! ### Issue: Degraded Health Persists
 //!
@@ -133,25 +234,33 @@
 //!
 //! ### Aggressive Restart (Development/Testing)
 //!
+//! Fast recovery with short cooldown periods:
+//!
 //! ```rust
 //! SupervisionConfig {
 //!     enable_auto_restart: true,
-//!     actor_stability_duration_secs: 30,     // 30 seconds
-//!     max_restarts_per_window: 10,          // Allow 10 restarts
-//!     restart_window_secs: 300,             // Within 5 minutes
+//!     actor_stability_duration_secs: 30,          // 30 seconds
+//!     max_restarts_per_window: 10,               // Allow 10 restarts
+//!     restart_window_secs: 300,                  // Within 5 minutes
 //!     restart_history_size: 50,
+//!     circuit_open_duration_secs: 60,            // 1 minute cooldown
+//!     half_open_stability_duration_secs: 30,     // 30 seconds stability
 //! }
 //! ```
 //!
 //! ### Conservative Restart (Production)
 //!
+//! Slow, careful recovery with long cooldown periods:
+//!
 //! ```rust
 //! SupervisionConfig {
 //!     enable_auto_restart: true,
-//!     actor_stability_duration_secs: 600,    // 10 minutes
-//!     max_restarts_per_window: 3,           // Only 3 restarts
-//!     restart_window_secs: 1800,            // Within 30 minutes
+//!     actor_stability_duration_secs: 600,        // 10 minutes
+//!     max_restarts_per_window: 3,                // Only 3 restarts
+//!     restart_window_secs: 1800,                 // Within 30 minutes
 //!     restart_history_size: 100,
+//!     circuit_open_duration_secs: 600,           // 10 minute cooldown
+//!     half_open_stability_duration_secs: 300,    // 5 minutes stability
 //! }
 //! ```
 //!
@@ -208,6 +317,23 @@ use crate::raft::{RaftActor, RaftActorConfig, RaftActorMessage};
 
 const MAX_RESTART_HISTORY_SIZE: u32 = 100;
 const MAX_BACKOFF_SECONDS: u64 = 16;
+
+/// Circuit breaker state for automatic recovery from meltdown.
+///
+/// Tiger Style: Fixed state transitions, bounded timers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CircuitBreakerState {
+    /// Normal operation - restarts proceed with exponential backoff.
+    Closed,
+
+    /// Failure state - too many restarts, no restart attempts allowed.
+    /// Transitions to HalfOpen after circuit_open_duration_secs.
+    Open,
+
+    /// Recovery testing - allows ONE restart attempt.
+    /// On success → Closed, On failure → Open.
+    HalfOpen,
+}
 
 // ============================================================================
 // Prometheus-style metrics for health monitoring
@@ -267,7 +393,7 @@ pub struct SupervisionConfig {
     /// Duration an actor must run to be considered stable (default: 5 minutes).
     pub actor_stability_duration_secs: u64,
 
-    /// Maximum restarts allowed within the restart window before meltdown (default: 3).
+    /// Maximum restarts allowed within the restart window before circuit opens (default: 3).
     pub max_restarts_per_window: u32,
 
     /// Time window for counting restarts (default: 10 minutes).
@@ -275,6 +401,12 @@ pub struct SupervisionConfig {
 
     /// Maximum size of restart history (default: 100).
     pub restart_history_size: u32,
+
+    /// Duration circuit breaker stays open before testing recovery (default: 5 minutes).
+    pub circuit_open_duration_secs: u64,
+
+    /// Duration actor must run in HalfOpen state to close circuit (default: 2 minutes).
+    pub half_open_stability_duration_secs: u64,
 }
 
 impl Default for SupervisionConfig {
@@ -285,6 +417,8 @@ impl Default for SupervisionConfig {
             max_restarts_per_window: 3,
             restart_window_secs: 600, // 10 minutes
             restart_history_size: MAX_RESTART_HISTORY_SIZE,
+            circuit_open_duration_secs: 300,        // 5 minutes
+            half_open_stability_duration_secs: 120, // 2 minutes
         }
     }
 }
@@ -298,6 +432,16 @@ impl SupervisionConfig {
     /// Get restart window as Duration.
     fn restart_window(&self) -> Duration {
         Duration::from_secs(self.restart_window_secs)
+    }
+
+    /// Get circuit breaker open duration as Duration.
+    fn circuit_open_duration(&self) -> Duration {
+        Duration::from_secs(self.circuit_open_duration_secs)
+    }
+
+    /// Get half-open stability duration as Duration.
+    fn half_open_stability_duration(&self) -> Duration {
+        Duration::from_secs(self.half_open_stability_duration_secs)
     }
 }
 
@@ -317,8 +461,10 @@ pub struct SupervisionStatus {
     pub total_restarts: u32,
     /// Number of restarts in the current window.
     pub restarts_in_window: u32,
-    /// Whether the supervisor is in meltdown state.
+    /// Whether the supervisor is in meltdown state (deprecated - use circuit_breaker_state).
     pub is_meltdown: bool,
+    /// Current circuit breaker state.
+    pub circuit_breaker_state: CircuitBreakerState,
     /// Whether auto-restart is enabled.
     pub auto_restart_enabled: bool,
     /// Current RaftActor reference (if running).
@@ -369,6 +515,10 @@ pub struct RaftSupervisorState {
     health_monitor: Option<Arc<HealthMonitor>>,
     /// Health monitor background task handle.
     health_monitor_task: Option<JoinHandle<()>>,
+    /// Current circuit breaker state.
+    circuit_breaker_state: CircuitBreakerState,
+    /// Timestamp when circuit breaker entered Open state.
+    circuit_opened_at: Option<Instant>,
 }
 
 /// Actor that supervises a RaftActor using OneForOne supervision.
@@ -428,6 +578,78 @@ impl RaftSupervisor {
             .rev()
             .take_while(|event| now.duration_since(event.timestamp) < window)
             .count() as u32
+    }
+
+    /// Update circuit breaker state based on restart count and time.
+    ///
+    /// State transitions:
+    /// - Closed → Open: When max_restarts_per_window exceeded
+    /// - Open → HalfOpen: After circuit_open_duration elapsed
+    /// - HalfOpen → Closed: If actor remains stable for half_open_stability_duration
+    /// - HalfOpen → Open: If restart fails in HalfOpen state
+    fn update_circuit_breaker_state(&self, state: &mut RaftSupervisorState) {
+        let now = Instant::now();
+
+        match state.circuit_breaker_state {
+            CircuitBreakerState::Closed => {
+                // Check if we should open the circuit
+                if self.is_meltdown(state) {
+                    let restarts = self.count_restarts_in_window(state);
+                    info!(
+                        circuit_state = "Closed -> Open",
+                        restarts_in_window = restarts,
+                        window_secs = state.config.restart_window_secs,
+                        "circuit breaker opening due to excessive restarts"
+                    );
+                    state.circuit_breaker_state = CircuitBreakerState::Open;
+                    state.circuit_opened_at = Some(now);
+                }
+            }
+            CircuitBreakerState::Open => {
+                // Check if we should transition to HalfOpen
+                if let Some(opened_at) = state.circuit_opened_at {
+                    let time_open = now.duration_since(opened_at);
+                    if time_open >= state.config.circuit_open_duration() {
+                        info!(
+                            circuit_state = "Open -> HalfOpen",
+                            time_open_secs = time_open.as_secs(),
+                            "circuit breaker entering half-open state for recovery testing"
+                        );
+                        state.circuit_breaker_state = CircuitBreakerState::HalfOpen;
+                    }
+                }
+            }
+            CircuitBreakerState::HalfOpen => {
+                // Check if actor has been stable long enough to close circuit
+                if let Some(spawn_time) = state.actor_spawn_time {
+                    let uptime = now.duration_since(spawn_time);
+                    if uptime >= state.config.half_open_stability_duration() {
+                        info!(
+                            circuit_state = "HalfOpen -> Closed",
+                            uptime_secs = uptime.as_secs(),
+                            "circuit breaker closing - actor stable in half-open state"
+                        );
+                        state.circuit_breaker_state = CircuitBreakerState::Closed;
+                        state.circuit_opened_at = None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if restart should be allowed based on circuit breaker state.
+    ///
+    /// Returns true if restart should proceed, false if blocked by circuit breaker.
+    fn should_allow_restart(&self, state: &RaftSupervisorState) -> bool {
+        match state.circuit_breaker_state {
+            CircuitBreakerState::Closed => true,
+            CircuitBreakerState::Open => false,
+            CircuitBreakerState::HalfOpen => {
+                // In HalfOpen, only allow restart if no actor is currently running
+                // This ensures we only test ONE restart in HalfOpen state
+                state.current_raft_actor.is_none()
+            }
+        }
     }
 
     /// Record a restart event in the history.
@@ -610,14 +832,18 @@ impl RaftSupervisor {
             return Ok(());
         }
 
-        // Check for meltdown
-        if self.is_meltdown(state) {
+        // Update circuit breaker state based on restart history
+        self.update_circuit_breaker_state(state);
+
+        // Check if restart should be allowed based on circuit breaker
+        if !self.should_allow_restart(state) {
             let restarts_in_window = self.count_restarts_in_window(state);
             error!(
                 node_id = node_id,
+                circuit_state = ?state.circuit_breaker_state,
                 restarts_in_window = restarts_in_window,
                 window_secs = state.config.restart_window_secs,
-                "supervisor in meltdown state, restart aborted"
+                "circuit breaker blocking restart"
             );
             state.current_raft_actor = None;
             state.actor_spawn_time = None;
@@ -722,8 +948,21 @@ impl RaftSupervisor {
                 error!(
                     node_id = node_id,
                     error = %spawn_err,
+                    circuit_state = ?state.circuit_breaker_state,
                     "failed to restart raft actor"
                 );
+
+                // If restart failed in HalfOpen state, transition back to Open
+                if state.circuit_breaker_state == CircuitBreakerState::HalfOpen {
+                    warn!(
+                        node_id = node_id,
+                        circuit_state = "HalfOpen -> Open",
+                        "restart failed in half-open state, reopening circuit"
+                    );
+                    state.circuit_breaker_state = CircuitBreakerState::Open;
+                    state.circuit_opened_at = Some(Instant::now());
+                }
+
                 state.current_raft_actor = None;
                 state.actor_spawn_time = None;
                 Ok(())
@@ -777,6 +1016,8 @@ impl Actor for RaftSupervisor {
             total_restarts: 0,
             health_monitor: Some(health_monitor),
             health_monitor_task: Some(health_monitor_task),
+            circuit_breaker_state: CircuitBreakerState::Closed,
+            circuit_opened_at: None,
         })
     }
 
@@ -788,6 +1029,9 @@ impl Actor for RaftSupervisor {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             SupervisorMessage::GetStatus(reply) => {
+                // Update circuit breaker state before returning status
+                self.update_circuit_breaker_state(state);
+
                 let restarts_in_window = self.count_restarts_in_window(state);
                 let is_meltdown = self.is_meltdown(state);
 
@@ -795,6 +1039,7 @@ impl Actor for RaftSupervisor {
                     total_restarts: state.total_restarts,
                     restarts_in_window,
                     is_meltdown,
+                    circuit_breaker_state: state.circuit_breaker_state,
                     auto_restart_enabled: state.config.enable_auto_restart,
                     raft_actor: state.current_raft_actor.clone(),
                 };
@@ -803,6 +1048,7 @@ impl Actor for RaftSupervisor {
                     total_restarts = state.total_restarts,
                     restarts_in_window = restarts_in_window,
                     is_meltdown = is_meltdown,
+                    circuit_state = ?state.circuit_breaker_state,
                     auto_restart = state.config.enable_auto_restart,
                     "supervision status requested"
                 );

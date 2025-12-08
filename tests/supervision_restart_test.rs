@@ -111,6 +111,8 @@ async fn test_clean_restart_after_manual_trigger() {
         max_restarts_per_window: 5,
         restart_window_secs: 60,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(100).await;
@@ -152,6 +154,8 @@ async fn test_exponential_backoff_timing() {
         max_restarts_per_window: 10,      // Allow multiple restarts
         restart_window_secs: 120,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(101).await;
@@ -203,6 +207,8 @@ async fn test_meltdown_detection_stops_restarts() {
         max_restarts_per_window: 3,       // Allow only 3 restarts
         restart_window_secs: 30,          // Within 30 seconds
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(102).await;
@@ -253,6 +259,8 @@ async fn test_restart_counter_resets_after_stability() {
         max_restarts_per_window: 2,       // Only 2 restarts allowed
         restart_window_secs: 60,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(103).await;
@@ -339,6 +347,8 @@ async fn test_supervisor_detects_actor_stop() {
         max_restarts_per_window: 5,
         restart_window_secs: 60,
         restart_history_size: 100,
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(105).await;
@@ -380,6 +390,8 @@ async fn test_restart_history_bounded_size() {
         max_restarts_per_window: 20, // Allow many restarts
         restart_window_secs: 300,
         restart_history_size: 5, // Small history for testing
+        circuit_open_duration_secs: 300,
+        half_open_stability_duration_secs: 120,
     };
 
     let raft_actor_config = create_test_raft_config(106).await;
