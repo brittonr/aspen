@@ -45,6 +45,11 @@ const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
 /// Tiger Style: Prevents indefinite blocking on slow or stalled peers.
 const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Maximum snapshot size (100 MB).
+///
+/// Tiger Style: Fixed limit prevents unbounded memory allocation from malicious/corrupt snapshots.
+const MAX_SNAPSHOT_SIZE: u64 = 100 * 1024 * 1024;
+
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
@@ -321,18 +326,40 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         cancel: impl Future<Output = ReplicationClosed> + OptionalSend + 'static,
         _option: RPCOption,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        // Read snapshot data into bytes
+        // Read snapshot data into bytes with size limit (Tiger Style: bounded allocation)
         let mut snapshot_data = Vec::new();
         let mut snapshot_reader = snapshot.snapshot;
-        snapshot_reader
-            .read_to_end(&mut snapshot_data)
-            .await
-            .map_err(|err| {
+
+        // Read in chunks, checking size limit to prevent unbounded memory allocation
+        let mut buffer = [0u8; 8192]; // 8KB chunks
+        loop {
+            let bytes_read = snapshot_reader.read(&mut buffer).await.map_err(|err| {
                 StreamingError::StorageError(StorageError::read_snapshot(
                     Some(snapshot.meta.signature()),
                     &err,
                 ))
             })?;
+
+            if bytes_read == 0 {
+                break; // EOF
+            }
+
+            // Tiger Style: Fail fast if snapshot exceeds size limit
+            if snapshot_data.len() as u64 + bytes_read as u64 > MAX_SNAPSHOT_SIZE {
+                return Err(StreamingError::StorageError(StorageError::read_snapshot(
+                    Some(snapshot.meta.signature()),
+                    &std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "snapshot exceeds maximum size of {} bytes",
+                            MAX_SNAPSHOT_SIZE
+                        ),
+                    ),
+                )));
+            }
+
+            snapshot_data.extend_from_slice(&buffer[..bytes_read]);
+        }
 
         let request = RaftSnapshotRequest {
             vote,
