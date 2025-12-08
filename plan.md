@@ -3218,3 +3218,18 @@ All property test issues resolved:
   - Verified blocking=true parameter already waits for log catchup (no changes needed)
 
 **Test Status**: 312/313 tests passing (99.7% pass rate)
+
+### 11.8 Test Suite Stabilization - 100% Pass Rate ✅
+
+**Flaky Test Fix** (2025-12-07):
+
+- ✅ Fixed `test_flapping_node_detection` timing sensitivity
+- **Root cause**: Test relied on precise 50ms sleep timing that failed under resource contention
+- **Solution**:
+  - Increased first sleep from 50ms to 100ms for reliable duration accumulation
+  - Added 10ms delay before second failure to ensure clock advances
+  - Added 50ms tolerance for timing jitter in assertion
+- **Verification**: Test passes reliably in isolation and full suite
+- **Commit**: 4ac3176
+
+**Final Test Status**: 313/313 tests passing (100% pass rate achieved)
