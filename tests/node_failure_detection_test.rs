@@ -493,10 +493,10 @@ fn test_flapping_node_detection() {
         ConnectionStatus::Disconnected,
         ConnectionStatus::Connected,
     );
-    let first_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
-    // Wait a bit
+    // Wait to accumulate measurable duration on first failure
     std::thread::sleep(Duration::from_millis(50));
+    let first_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
     // Node recovers
     detector.update_node_status(
