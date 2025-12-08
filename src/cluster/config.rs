@@ -1,3 +1,69 @@
+//! Cluster configuration types and validation.
+//!
+//! Defines configuration structures for Aspen cluster nodes, supporting multi-layer
+//! configuration loading from environment variables, TOML files, and command-line
+//! arguments. Configuration precedence is: environment < TOML < CLI args, ensuring
+//! operator overrides always take priority.
+//!
+//! # Key Components
+//!
+//! - `ClusterBootstrapConfig`: Top-level node configuration (node_id, data_dir, addresses)
+//! - `ControlBackend`: Control plane selection (Raft or Hiqlite)
+//! - `IrohConfig`: P2P networking configuration (endpoint addresses, tickets)
+//! - `StorageBackend`: Log and state machine backend selection
+//! - `SupervisionConfig`: Raft actor supervision and health check parameters
+//! - Configuration builders: Programmatic API for testing and deployment tools
+//!
+//! # Configuration Sources
+//!
+//! 1. Environment variables: `ASPEN_NODE_ID`, `ASPEN_DATA_DIR`, `ASPEN_RAFT_ADDR`, etc.
+//! 2. TOML configuration file: `--config /path/to/config.toml`
+//! 3. Command-line arguments: `--node-id 1 --raft-addr 127.0.0.1:5301`
+//!
+//! Precedence: CLI > TOML > Environment (highest to lowest)
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: u64 for node_id, SocketAddr for addresses (type-safe)
+//! - Default values: Sensible defaults for optional fields (data_dir, timeouts)
+//! - Validation: FromStr implementations fail fast on invalid input
+//! - Serialization: TOML format for human-editable config files
+//! - Fixed limits: Supervision config includes bounded retry counts and timeouts
+//! - Path handling: Absolute paths preferred, relative paths resolved early
+//!
+//! # Example TOML
+//!
+//! ```toml
+//! node_id = 1
+//! data_dir = "./data/node-1"
+//! raft_addr = "127.0.0.1:5301"
+//! storage_backend = "Sqlite"
+//! control_backend = "Raft"
+//!
+//! [iroh]
+//! bind_port = 4301
+//!
+//! [supervision]
+//! max_restart_count = 5
+//! health_check_interval_ms = 5000
+//! ```
+//!
+//! # Example Usage
+//!
+//! ```ignore
+//! use aspen::cluster::config::ClusterBootstrapConfig;
+//!
+//! // From TOML
+//! let config: ClusterBootstrapConfig = toml::from_str(&toml_str)?;
+//!
+//! // Programmatic
+//! let config = ClusterBootstrapConfig {
+//!     node_id: 1,
+//!     raft_addr: "127.0.0.1:5301".parse()?,
+//!     ..Default::default()
+//! };
+//! ```
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;

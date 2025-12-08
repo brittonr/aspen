@@ -1,3 +1,20 @@
+//! Type definitions for Raft consensus configuration.
+//!
+//! This module defines the core type configuration for openraft, specifying
+//! the concrete types used for nodes, requests, responses, and storage.
+//!
+//! # Type Configuration
+//!
+//! - **NodeId**: `u64` - Unique identifier for cluster nodes
+//! - **Node**: `BasicNode` - Simple node representation (no custom metadata)
+//! - **AppRequest**: Application-level write commands (Set, SetMulti)
+//! - **AppResponse**: Application-level read/write responses
+//!
+//! # Tiger Style
+//!
+//! - Explicitly sized types: `u64` for NodeId (not usize for portability)
+//! - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
+
 use std::fmt;
 
 use openraft::{BasicNode, declare_raft_types};

@@ -1,3 +1,46 @@
+//! Storage validation and integrity checks for Raft log and state machine.
+//!
+//! Provides offline validation tools to verify storage consistency, detect corruption,
+//! and diagnose issues in redb-based Raft log storage. This module is used for
+//! operational debugging, health checks, and post-crash analysis. All validation
+//! operations are read-only and safe to run on production data.
+//!
+//! # Key Components
+//!
+//! - `validate_raft_log_storage`: Main entry point for comprehensive log validation
+//! - Log continuity checks: Ensures log indices form a contiguous sequence
+//! - Vote persistence verification: Validates vote and hard state metadata
+//! - Snapshot integrity checks: Verifies snapshot metadata and consistency
+//! - Performance metrics: Reports validation time for operational monitoring
+//!
+//! # Validation Checks
+//!
+//! 1. Log continuity: Verifies no gaps in log index sequence
+//! 2. Vote consistency: Checks vote term and node_id are valid
+//! 3. Snapshot metadata: Ensures snapshot last_log_id matches expectations
+//! 4. Redb integrity: Detects corruption via deserialization errors
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: u64 for log indices, Duration for timing (portable)
+//! - Resource bounds: Read-only operations, no memory accumulation
+//! - Error handling: SNAFU errors with file paths and actionable messages
+//! - Fail fast: Returns on first integrity violation for quick diagnosis
+//! - Clear reporting: Structured output with counts and timing for ops teams
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::raft::storage_validation::validate_raft_log_storage;
+//!
+//! // Validate log storage integrity
+//! let result = validate_raft_log_storage("./data/raft-log.redb").await;
+//! match result {
+//!     Ok(_) => println!("Storage validation passed"),
+//!     Err(e) => eprintln!("Corruption detected: {}", e),
+//! }
+//! ```
+
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 

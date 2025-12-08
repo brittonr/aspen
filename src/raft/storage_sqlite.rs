@@ -1,3 +1,44 @@
+//! SQLite-based state machine implementation for Raft.
+//!
+//! Provides an ACID-compliant key-value state machine backed by SQLite with connection
+//! pooling for concurrent reads. This is the default production state machine, offering
+//! durability, queryability, and snapshot support. Write operations are serialized through
+//! a single connection, while reads use a bounded connection pool (r2d2) for parallelism.
+//!
+//! # Key Components
+//!
+//! - `SqliteStateMachine`: RaftStateMachine implementation with pooled reads
+//! - `SnapshotBuilder`: Incremental snapshot creation from SQLite state
+//! - Connection pooling: r2d2 manages bounded read connections (DEFAULT_READ_POOL_SIZE = 8)
+//! - Batch operations: SetMulti supports up to MAX_SETMULTI_KEYS (100) keys
+//! - Snapshot metadata: Tracks last applied log and membership in separate table
+//!
+//! # Tiger Style
+//!
+//! - Fixed limits: MAX_BATCH_SIZE (1024), MAX_SETMULTI_KEYS (100), read pool size (8)
+//! - Explicit types: u64 for log indices, i64 for SQLite integers (cross-platform)
+//! - Resource bounds: Connection pool prevents unbounded connection growth
+//! - Error handling: SNAFU errors with actionable context for operators
+//! - Transactions: All writes use BEGIN IMMEDIATE for write serialization
+//! - WAL mode: Write-ahead logging enabled for better concurrency
+//!
+//! # Schema
+//!
+//! - `kv_data`: (key TEXT PRIMARY KEY, value BLOB) - Main key-value store
+//! - `snapshot_meta`: Stores last_applied_log and membership JSON
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::raft::storage_sqlite::SqliteStateMachine;
+//!
+//! let state_machine = SqliteStateMachine::new("./data/state.db").await?;
+//!
+//! // Apply operations through Raft
+//! let request = AppRequest::Set { key: "foo".into(), value: b"bar".to_vec() };
+//! let response = state_machine.apply(log_id, request).await?;
+//! ```
+
 use std::collections::BTreeMap;
 use std::io::{self, Cursor};
 use std::path::{Path, PathBuf};

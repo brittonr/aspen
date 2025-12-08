@@ -1,3 +1,74 @@
+//! Aspen node binary - cluster node entry point.
+//!
+//! Production binary for running Aspen cluster nodes with HTTP API for cluster
+//! operations and key-value access. Supports multiple control plane backends
+//! (Raft, Hiqlite) and both in-memory and persistent storage. Configuration is
+//! loaded from environment variables, TOML files, or CLI arguments.
+//!
+//! # Architecture
+//!
+//! - Axum HTTP server: REST API for cluster and KV operations
+//! - Multi-backend support: Raft (default) or Hiqlite for control plane
+//! - Graceful shutdown: SIGTERM/SIGINT handling with coordinated cleanup
+//! - Health monitoring: /health and /metrics endpoints for ops
+//! - Configuration layers: Environment < TOML < CLI args
+//!
+//! # HTTP API Endpoints
+//!
+//! Control Plane (Raft):
+//! - POST /cluster/init - Initialize new cluster
+//! - POST /cluster/add-learner - Add learner node
+//! - POST /cluster/change-membership - Promote learners to voters
+//!
+//! Key-Value:
+//! - POST /kv/read - Read key (linearizable)
+//! - POST /kv/write - Write key-value (replicated)
+//!
+//! Monitoring:
+//! - GET /health - Health check (leader/follower status)
+//! - GET /metrics - Prometheus-compatible metrics
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: u64 for node_id, SocketAddr for addresses (type-safe)
+//! - Fixed limits: HTTP request timeouts, Raft batch sizes are bounded
+//! - Resource management: Arc for shared state, graceful shutdown cleans up
+//! - Error handling: Anyhow for application errors, clear HTTP status codes
+//! - Monitoring: Request counters, latency tracking, health checks
+//! - Fail fast: Configuration validation before server starts
+//!
+//! # Usage
+//!
+//! ```bash
+//! # Start node with TOML config
+//! aspen-node --config /etc/aspen/node.toml
+//!
+//! # Start node with CLI args
+//! aspen-node --node-id 1 --raft-addr 127.0.0.1:5301 --http-addr 127.0.0.1:8301
+//!
+//! # Environment variables
+//! export ASPEN_NODE_ID=1
+//! export ASPEN_RAFT_ADDR=127.0.0.1:5301
+//! aspen-node
+//! ```
+//!
+//! # Example Requests
+//!
+//! ```bash
+//! # Initialize cluster
+//! curl -X POST http://localhost:8301/cluster/init
+//!
+//! # Write key-value
+//! curl -X POST http://localhost:8301/kv/write \
+//!   -H "Content-Type: application/json" \
+//!   -d '{"key": "foo", "value": [98, 97, 114]}'
+//!
+//! # Read key
+//! curl -X POST http://localhost:8301/kv/read \
+//!   -H "Content-Type: application/json" \
+//!   -d '{"key": "foo"}'
+//! ```
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

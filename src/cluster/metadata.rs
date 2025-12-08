@@ -1,3 +1,57 @@
+//! Cluster metadata management and node registry.
+//!
+//! Provides persistent storage for node registration information including endpoint
+//! addresses, Raft addresses, status, and timestamps. The metadata store is backed
+//! by redb for ACID persistence and uses a single table (node_metadata) with u64
+//! node IDs as keys. This module supports cluster membership tracking and node
+//! discovery across restarts.
+//!
+//! # Key Components
+//!
+//! - `MetadataStore`: Persistent node registry with redb backend
+//! - `NodeMetadata`: Node registration record (endpoint_id, addresses, status, timestamps)
+//! - `NodeStatus`: Enum for node lifecycle states (Active, Inactive, Removed)
+//! - CRUD operations: register, get, list, update_status with ACID guarantees
+//!
+//! # Storage Layout
+//!
+//! - Table: `node_metadata` (u64 -> bincode-serialized NodeMetadata)
+//! - Key: Raft node_id (u64)
+//! - Value: NodeMetadata with endpoint_id (hex string), addresses, status, timestamps
+//! - Serialization: bincode for compact, deterministic encoding
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: u64 for node_id, i64 for Unix timestamps (portable)
+//! - Resource bounds: Metadata size is small and bounded by cluster size
+//! - Error handling: SNAFU errors with file paths and actionable context
+//! - ACID operations: All mutations use redb transactions
+//! - Immutable reads: Read transactions provide consistent snapshots
+//! - Path management: Store tracks its own path for error reporting
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
+//!
+//! let store = MetadataStore::new("./data/metadata.redb")?;
+//!
+//! // Register node
+//! let metadata = NodeMetadata {
+//!     node_id: 1,
+//!     endpoint_id: "abc123...".to_string(),
+//!     raft_addr: "127.0.0.1:5301".to_string(),
+//!     status: NodeStatus::Active,
+//!     registered_at: chrono::Utc::now().timestamp(),
+//!     updated_at: chrono::Utc::now().timestamp(),
+//! };
+//! store.register_node(metadata)?;
+//!
+//! // Retrieve node
+//! let node = store.get_node(1)?.expect("node should exist");
+//! println!("Node {} at {}", node.node_id, node.raft_addr);
+//! ```
+
 use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableTable, TableDefinition};

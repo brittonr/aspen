@@ -1,3 +1,46 @@
+//! Raft consensus implementation with actor-based control plane.
+//!
+//! This module provides a production-ready Raft consensus engine built on openraft,
+//! integrated with the ractor actor framework for distributed coordination. The Raft
+//! actor serves as both a cluster controller and key-value store, proxying operations
+//! through the underlying openraft instance while maintaining actor lifecycle semantics.
+//!
+//! # Architecture
+//!
+//! - **RaftActor**: Main actor implementing ClusterController and KeyValueStore traits
+//! - **Storage**: Hybrid storage backend (redb for log, SQLite for state machine)
+//! - **Network**: IRPC-based network transport over Iroh P2P connections
+//! - **Supervision**: Automatic actor restart with exponential backoff and meltdown detection
+//!
+//! # Key Components
+//!
+//! - `RaftActor`: Core actor driving the Raft state machine via ractor messages
+//! - `RaftControlClient`: Client-side proxy for cluster operations
+//! - `SqliteStateMachine`: ACID state machine storage with snapshot support
+//! - `IrpcRaftNetwork`: Network layer implementing RaftNetworkV2 over IRPC/Iroh
+//! - `NodeFailureDetector`: Distinguishes actor crashes from node-level failures
+//!
+//! # Tiger Style Compliance
+//!
+//! - Bounded resources: MAX_BATCH_SIZE (1000), MAX_SNAPSHOT_SIZE (1GB)
+//! - Explicit error handling: snafu-based error types with context
+//! - Fixed limits: Connection pools, restart counters, unreachable node tracking
+//!
+//! # Usage
+//!
+//! ```rust,ignore
+//! use aspen::raft::{RaftActor, RaftConfig};
+//!
+//! // Bootstrap Raft actor with storage and network
+//! let (actor_ref, bootstrap_handle) = RaftActor::spawn(config).await?;
+//!
+//! // Initialize cluster
+//! bootstrap_handle.cluster.init(node_id).await?;
+//!
+//! // Write to state machine
+//! bootstrap_handle.kv.write("key", b"value").await?;
+//! ```
+
 pub mod bounded_proxy;
 pub mod constants;
 pub mod learner_promotion;

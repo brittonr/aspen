@@ -1,3 +1,55 @@
+//! Key-value service builder and client API.
+//!
+//! Provides a high-level API for building and interacting with Aspen's distributed
+//! key-value service. The builder (KvServiceBuilder) orchestrates cluster bootstrap,
+//! wiring together Raft consensus, Iroh P2P networking, and actor supervision. The
+//! client (KvClient) offers a simple interface for read/write operations against
+//! the distributed state machine.
+//!
+//! # Key Components
+//!
+//! - `KvServiceBuilder`: Fluent builder for node configuration and bootstrap
+//! - `KvClient`: Client API for key-value operations (read, write, set_multi)
+//! - `NodeId`: Type-safe wrapper for u64 node identifiers
+//! - Bootstrap integration: Delegates to cluster::bootstrap for node startup
+//!
+//! # Architecture
+//!
+//! The KV service is built on top of Aspen's Raft-based cluster infrastructure:
+//! 1. Client submits operation (read/write) to KvClient
+//! 2. Client routes to Raft leader via cluster controller
+//! 3. Raft replicates operation to majority quorum
+//! 4. State machine applies operation to SQLite backend
+//! 5. Response returned to client with linearizable semantics
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: NodeId wrapper prevents u64 confusion with other IDs
+//! - Builder pattern: Fluent API with compile-time validation
+//! - Resource bounds: All operations bounded by Raft batch limits
+//! - Error handling: Anyhow for application errors, clear context messages
+//! - Deterministic testing: Builder supports in-memory mode for tests
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::kv::KvServiceBuilder;
+//! use aspen::raft::storage::StorageBackend;
+//!
+//! // Start a node
+//! let service = KvServiceBuilder::new(1, "./data/node-1")
+//!     .storage_backend(StorageBackend::Sqlite)
+//!     .raft_addr("127.0.0.1:5301".parse()?)
+//!     .iroh_bind_port(4301)
+//!     .build()
+//!     .await?;
+//!
+//! // Use the client
+//! let client = service.client();
+//! client.write("key".to_string(), b"value".to_vec()).await?;
+//! let value = client.read("key".to_string()).await?;
+//! ```
+
 pub mod client;
 pub mod types;
 

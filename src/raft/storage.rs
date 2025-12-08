@@ -1,3 +1,42 @@
+//! Raft log and state machine storage backends.
+//!
+//! Provides pluggable storage implementations for openraft's log and state machine,
+//! supporting both in-memory (for testing) and persistent (redb + SQLite) backends.
+//! The log storage uses redb for fast sequential append operations, while the state
+//! machine uses SQLite for ACID transactions and queryable snapshots.
+//!
+//! # Key Components
+//!
+//! - `StorageBackend`: Enum selecting log/state machine backend (InMemory, Sqlite, Redb)
+//! - `RedbLogStore`: Persistent append-only log backed by redb (default production)
+//! - `InMemoryLogStore`: Non-durable log for testing and development
+//! - `SqliteStateMachine`: ACID-compliant state machine with connection pooling
+//! - `StateMachineStore`: Type alias for active state machine implementation
+//! - Snapshot management with bounded in-memory snapshots
+//!
+//! # Tiger Style
+//!
+//! - Fixed limits: MAX_BATCH_SIZE (1024 entries), MAX_SETMULTI_KEYS (100 keys)
+//! - Explicit types: u64 for log indices (portable across architectures)
+//! - Resource bounds: Snapshot data capped to prevent unbounded memory growth
+//! - Disk space checks: Pre-flight validation before writing snapshots
+//! - Error handling: Explicit SNAFU errors for each failure mode
+//! - Connection pooling: Bounded read pool (DEFAULT_READ_POOL_SIZE = 8)
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::raft::storage::{RedbLogStore, SqliteStateMachine, StorageBackend};
+//!
+//! // Create persistent storage
+//! let log_store = RedbLogStore::new("./data/raft-log.redb").await?;
+//! let state_machine = SqliteStateMachine::new("./data/state-machine.db").await?;
+//!
+//! // Or use builder with backend selection
+//! let backend = StorageBackend::Sqlite;
+//! let (log, sm) = create_storage(backend, "./data").await?;
+//! ```
+
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::io;

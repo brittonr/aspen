@@ -1,3 +1,57 @@
+//! Node bootstrap orchestration for Aspen clusters.
+//!
+//! Coordinates the startup sequence for cluster nodes, wiring together Raft consensus,
+//! Iroh P2P networking, actor supervision, gossip discovery, and metadata storage.
+//! This module is the primary entry point for launching Aspen nodes, handling both
+//! initial cluster formation and joining existing clusters.
+//!
+//! # Key Components
+//!
+//! - `bootstrap_node`: Main orchestration function for node startup
+//! - `BootstrapHandle`: Resource handle for graceful shutdown and monitoring
+//! - `load_config`: Multi-layer configuration loading (env, TOML, CLI)
+//! - Component initialization: Metadata store, Iroh endpoint, Raft actor, RPC server
+//! - Supervision tree: Raft supervisor with health monitoring
+//!
+//! # Bootstrap Sequence
+//!
+//! 1. Load configuration from environment, TOML file, and CLI args
+//! 2. Initialize metadata store (redb) for node registry
+//! 3. Create Iroh P2P endpoint with optional ticket-based discovery
+//! 4. Initialize storage backends (redb log + SQLite state machine)
+//! 5. Start ractor_cluster node server for actor communication
+//! 6. Create Raft actor with configured supervision
+//! 7. Start gossip peer discovery (if enabled)
+//! 8. Register RPC endpoints for Raft communication
+//! 9. Return handle with all resources for coordinated shutdown
+//!
+//! # Tiger Style
+//!
+//! - Explicit types: u64 for node IDs, Duration for timeouts (portable)
+//! - Resource management: Handle owns all resources with explicit Drop
+//! - Error context: Anyhow errors with actionable messages for operators
+//! - Configuration layers: Clear precedence (env < TOML < CLI)
+//! - Fail fast: Initialization errors prevent partial startup
+//! - Clean shutdown: All components gracefully stopped via handle
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::cluster::bootstrap::bootstrap_node;
+//! use aspen::cluster::config::ClusterBootstrapConfig;
+//!
+//! let config = ClusterBootstrapConfig {
+//!     node_id: 1,
+//!     data_dir: Some("./data/node-1".into()),
+//!     raft_addr: "127.0.0.1:5301".parse()?,
+//!     ..Default::default()
+//! };
+//!
+//! let handle = bootstrap_node(config).await?;
+//! // Node is running, handle can be used to monitor or shutdown
+//! handle.shutdown().await?;
+//! ```
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
