@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::time::Duration;
 
 use anyhow::Context;
 use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
@@ -27,6 +28,22 @@ use tokio::sync::RwLock;
 ///
 /// Tiger Style: Fixed limit to prevent unbounded memory use.
 const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+
+/// Timeout for Iroh connection establishment (5 seconds).
+///
+/// Tiger Style: Explicit timeout prevents indefinite hangs on unreachable peers.
+const IROH_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Timeout for bidirectional stream open (2 seconds).
+///
+/// Tiger Style: Bounded wait for stream establishment after connection succeeds.
+const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Timeout for RPC response read (10 seconds).
+///
+/// Accounts for slow snapshot transfers and disk I/O.
+/// Tiger Style: Prevents indefinite blocking on slow or stalled peers.
+const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
@@ -147,8 +164,13 @@ impl IrpcRaftNetwork {
 
         let endpoint = self.endpoint_manager.endpoint();
 
-        // Open a connection to the peer
-        let connection_result = endpoint.connect(peer_addr.clone(), b"raft-rpc").await;
+        // Open a connection to the peer (with timeout)
+        let connection_result = tokio::time::timeout(
+            IROH_CONNECT_TIMEOUT,
+            endpoint.connect(peer_addr.clone(), b"raft-rpc"),
+        )
+        .await
+        .context("timeout connecting to peer")?;
 
         // Determine Iroh connection status based on connect attempt
         let iroh_status = if connection_result.is_ok() {
@@ -159,11 +181,12 @@ impl IrpcRaftNetwork {
 
         let connection = connection_result.context("failed to connect to peer")?;
 
-        // Open bidirectional stream
-        let (mut send_stream, mut recv_stream) = connection
-            .open_bi()
-            .await
-            .context("failed to open bidirectional stream")?;
+        // Open bidirectional stream (with timeout)
+        let (mut send_stream, mut recv_stream) =
+            tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, connection.open_bi())
+                .await
+                .context("timeout opening bidirectional stream")?
+                .context("failed to open bidirectional stream")?;
 
         // Serialize and send the request
         let serialized =
@@ -176,11 +199,14 @@ impl IrpcRaftNetwork {
             .finish()
             .context("failed to finish send stream")?;
 
-        // Read response (with 10 MB size limit)
-        let response_buf = recv_stream
-            .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-            .await
-            .context("failed to read RPC response")?;
+        // Read response (with size and time limits)
+        let response_buf = tokio::time::timeout(
+            IROH_READ_TIMEOUT,
+            recv_stream.read_to_end(MAX_RPC_MESSAGE_SIZE as usize),
+        )
+        .await
+        .context("timeout reading RPC response")?
+        .context("failed to read RPC response")?;
 
         // Deserialize response
         let response: RaftRpcResponse =
