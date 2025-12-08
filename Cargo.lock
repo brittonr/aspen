@@ -3662,7 +3662,7 @@ dependencies = [
 [[package]]
 name = "mad-turmoil"
 version = "0.2.0"
-source = "git+https://github.com/s2-streamstore/mad-turmoil?branch=main#ef75169ec299c4160af3052b2194b3ee5b048b0a"
+source = "git+https://github.com/s2-streamstore/mad-turmoil?rev=ef75169ec299c4160af3052b2194b3ee5b048b0a#ef75169ec299c4160af3052b2194b3ee5b048b0a"
 dependencies = [
  "libc",
  "rand 0.9.2",
@@ -5137,7 +5137,7 @@ dependencies = [
 [[package]]
 name = "ractor_actors"
 version = "0.4.10"
-source = "git+https://github.com/slawlor/ractor_actors?branch=main#9a10ec53244767ed025d8b21edbda2bd53c97034"
+source = "git+https://github.com/slawlor/ractor_actors?rev=9a10ec53244767ed025d8b21edbda2bd53c97034#9a10ec53244767ed025d8b21edbda2bd53c97034"
 dependencies = [
  "async-trait",
  "ractor",

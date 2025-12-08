@@ -499,6 +499,13 @@ fn test_flapping_node_detection() {
     std::thread::sleep(Duration::from_millis(100));
     let first_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
+    // Tiger Style: Verify first failure duration is reasonable (>= 100ms with small tolerance)
+    assert!(
+        first_failure_duration >= Duration::from_millis(100),
+        "First failure should have accumulated at least 100ms, got {:?}",
+        first_failure_duration
+    );
+
     // Node recovers
     detector.update_node_status(
         node_id,
@@ -508,25 +515,26 @@ fn test_flapping_node_detection() {
     assert_eq!(detector.get_failure_type(node_id), FailureType::Healthy);
     assert!(detector.get_unreachable_duration(node_id).is_none());
 
-    // Small delay to ensure clock advances before second failure
-    std::thread::sleep(Duration::from_millis(10));
-
-    // Node fails again
+    // Node fails again (no delay needed - we're testing timestamp reset, not clock precision)
     detector.update_node_status(
         node_id,
         ConnectionStatus::Disconnected,
         ConnectionStatus::Connected,
     );
 
-    // Second failure should have fresh timestamp (smaller duration since it just started)
+    // Second failure should have fresh timestamp (much smaller than first failure)
     let second_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
-    // Tiger Style: Add tolerance (50ms) for timing jitter under system load
+
+    // Tiger Style: The key invariant is that second failure started fresh.
+    // Under heavy load, measurement might take 0-30ms. First failure was 100ms+.
+    // Therefore, second should be significantly smaller (less than half of first).
     assert!(
-        second_failure_duration < first_failure_duration
-            || second_failure_duration.saturating_sub(first_failure_duration)
-                < Duration::from_millis(50),
-        "Should reset timestamp on new failure after recovery. First: {:?}, Second: {:?}",
+        second_failure_duration < first_failure_duration / 2,
+        "Should reset timestamp on new failure after recovery. \
+         First failure: {:?}, Second failure: {:?}, \
+         Expected second < {:?}",
         first_failure_duration,
-        second_failure_duration
+        second_failure_duration,
+        first_failure_duration / 2
     );
 }

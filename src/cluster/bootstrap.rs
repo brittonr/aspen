@@ -169,323 +169,46 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     );
 
     // Initialize metadata store
-    let metadata_path = config.data_dir().join("metadata.redb");
-    let metadata_store =
-        Arc::new(MetadataStore::new(&metadata_path).context("failed to create metadata store")?);
-    info!(
-        path = %metadata_path.display(),
-        "metadata store initialized"
-    );
+    let metadata_store = setup_metadata_store(&config)?;
 
     // Create Iroh endpoint manager
-    let iroh_manager = {
-        let mut iroh_config = IrohEndpointConfig::new();
+    let iroh_manager = setup_iroh_endpoint(&config).await?;
 
-        // Parse secret key if provided
-        if let Some(key_hex) = &config.iroh.secret_key {
-            let key_bytes = hex::decode(key_hex).context("invalid hex in iroh secret key")?;
-            if key_bytes.len() != 32 {
-                anyhow::bail!("iroh secret key must be 32 bytes (64 hex characters)");
-            }
-            let mut key_array = [0u8; 32];
-            key_array.copy_from_slice(&key_bytes);
-            let key = SecretKey::from_bytes(&key_array);
-            iroh_config = iroh_config.with_secret_key(key);
-        }
-
-        // Parse relay URL if provided
-        if let Some(relay_url_str) = &config.iroh.relay_url {
-            let relay_url = relay_url_str.parse().context("invalid iroh relay URL")?;
-            iroh_config = iroh_config.with_relay_url(relay_url)?;
-        }
-
-        // Configure gossip if enabled
-        iroh_config = iroh_config.with_gossip(config.iroh.enable_gossip);
-
-        // Configure discovery services
-        iroh_config = iroh_config.with_mdns(config.iroh.enable_mdns);
-        iroh_config = iroh_config.with_dns_discovery(config.iroh.enable_dns_discovery);
-        if let Some(ref dns_url) = config.iroh.dns_discovery_url {
-            iroh_config = iroh_config.with_dns_discovery_url(dns_url.clone());
-        }
-        iroh_config = iroh_config.with_pkarr(config.iroh.enable_pkarr);
-        if let Some(ref pkarr_url) = config.iroh.pkarr_relay_url {
-            iroh_config = iroh_config.with_pkarr_relay_url(pkarr_url.clone());
-        }
-
-        let manager = IrohEndpointManager::new(iroh_config)
-            .await
-            .context("failed to create iroh endpoint manager")?;
-        let endpoint_id = manager.endpoint().id();
-        info!(
-            endpoint_id = %endpoint_id,
-            node_addr = ?manager.node_addr(),
-            gossip_enabled = config.iroh.enable_gossip,
-            "iroh endpoint created"
-        );
-        Arc::new(manager)
-    };
-
-    // Parse peer addresses
+    // Parse peer addresses and create network factory
     let peer_addrs =
         parse_peer_addresses(&config.peers).context("failed to parse peer addresses")?;
     info!(peer_count = peer_addrs.len(), "parsed peer addresses");
 
-    // Create network factory for Raft
     let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
         Arc::clone(&iroh_manager),
         peer_addrs,
     ));
 
     // Spawn gossip peer discovery if enabled
-    let gossip_discovery = if config.iroh.enable_gossip {
-        use iroh_gossip::proto::TopicId;
-
-        // Determine topic ID: from ticket or derive from cookie
-        let topic_id = if let Some(ticket_str) = &config.iroh.gossip_ticket {
-            info!("parsing cluster ticket for gossip topic");
-            let ticket = AspenClusterTicket::deserialize(ticket_str)
-                .context("failed to parse cluster ticket")?;
-            info!(
-                topic_id = ?ticket.topic_id,
-                cluster_id = %ticket.cluster_id,
-                bootstrap_peers = ticket.bootstrap.len(),
-                "cluster ticket parsed"
-            );
-            ticket.topic_id
-        } else {
-            // Derive topic ID from cluster cookie using blake3
-            let hash = blake3::hash(config.cookie.as_bytes());
-            let topic_id = TopicId::from_bytes(*hash.as_bytes());
-            info!(
-                topic_id = ?topic_id,
-                "derived gossip topic from cluster cookie"
-            );
-            topic_id
-        };
-
-        // Spawn gossip discovery with network factory for automatic peer connection
-        let discovery = GossipPeerDiscovery::spawn(
-            topic_id,
-            config.node_id,
-            &iroh_manager,
-            Some(Arc::clone(&network_factory)),
-        )
-        .await
-        .context("failed to spawn gossip peer discovery")?;
-        info!("gossip peer discovery spawned with automatic peer connection");
-        Some(discovery)
-    } else {
-        info!("gossip peer discovery disabled");
-        None
-    };
+    let gossip_discovery = setup_gossip_discovery(&config, &iroh_manager, &network_factory).await?;
 
     // Launch NodeServer
-    let node_server = NodeServerConfig::new(
-        format!("node-{}", config.node_id),
-        config.host.clone(),
-        config.ractor_port,
-        config.cookie.clone(),
+    let node_server = setup_node_server(&config).await?;
+
+    // Create Raft storage backend and core
+    let (raft_core, state_machine_variant, log_store_opt) =
+        setup_raft_storage(&config, &network_factory).await?;
+
+    // Spawn Raft supervisor and retrieve actor references
+    let (raft_supervisor, supervisor_task, raft_actor, health_monitor) = spawn_raft_supervisor(
+        &config,
+        raft_core.clone(),
+        state_machine_variant.clone(),
+        log_store_opt,
     )
-    .launch()
-    .await
-    .context("failed to launch node server")?;
-    info!(
-        label = %node_server.label(),
-        addr = %node_server.addr(),
-        "node server online"
-    );
-
-    // Create Raft core and capture the actual state machine
-    let (raft_core, state_machine_variant, log_store_opt) = {
-        let raft_config = RaftConfig {
-            heartbeat_interval: config.heartbeat_interval_ms,
-            election_timeout_min: config.election_timeout_min_ms,
-            election_timeout_max: config.election_timeout_max_ms,
-            ..Default::default()
-        };
-        let validated_config = Arc::new(
-            raft_config
-                .validate()
-                .context("invalid raft configuration")?,
-        );
-
-        // Select storage backend based on configuration
-        match config.storage_backend {
-            StorageBackend::InMemory => {
-                info!("Using in-memory storage backend (non-durable)");
-                let log_store = InMemoryLogStore::default();
-                let state_machine_store = StateMachineStore::new();
-
-                let raft = openraft::Raft::new(
-                    config.node_id,
-                    validated_config,
-                    (*network_factory).clone(),
-                    log_store,
-                    state_machine_store.clone(),
-                )
-                .await
-                .context("failed to initialize raft with in-memory storage")?;
-
-                (
-                    raft,
-                    StateMachineVariant::InMemory(state_machine_store),
-                    None,
-                )
-            }
-            #[allow(deprecated)]
-            StorageBackend::Redb => {
-                info!("Using redb persistent storage backend");
-
-                // Determine paths for redb files
-                let data_dir = config.data_dir();
-                let log_path = config
-                    .redb_log_path
-                    .clone()
-                    .unwrap_or_else(|| data_dir.join("raft-log.redb"));
-                let sm_path = config
-                    .redb_sm_path
-                    .clone()
-                    .unwrap_or_else(|| data_dir.join("state-machine.redb"));
-
-                info!(
-                    log_path = %log_path.display(),
-                    sm_path = %sm_path.display(),
-                    "Initializing redb storage"
-                );
-
-                let log_store =
-                    RedbLogStore::new(&log_path).context("failed to create redb log store")?;
-                let state_machine = SqliteStateMachine::new(&sm_path)
-                    .context("failed to create sqlite state machine")?;
-
-                let raft = openraft::Raft::new(
-                    config.node_id,
-                    validated_config,
-                    (*network_factory).clone(),
-                    log_store,
-                    state_machine.clone(),
-                )
-                .await
-                .context("failed to initialize raft with redb storage")?;
-
-                (raft, StateMachineVariant::Redb(state_machine), None)
-            }
-            StorageBackend::Sqlite => {
-                info!("Using sqlite persistent storage backend");
-
-                // Determine paths for sqlite files
-                let data_dir = config.data_dir();
-                let log_path = config
-                    .sqlite_log_path
-                    .clone()
-                    .unwrap_or_else(|| data_dir.join("raft-log.db"));
-                let sm_path = config
-                    .sqlite_sm_path
-                    .clone()
-                    .unwrap_or_else(|| data_dir.join("state-machine.db"));
-
-                info!(
-                    log_path = %log_path.display(),
-                    sm_path = %sm_path.display(),
-                    "Initializing sqlite storage"
-                );
-
-                // For now, we're only migrating the state machine to SQLite
-                // The log store still uses redb (will be migrated later if needed)
-                let log_store =
-                    RedbLogStore::new(&log_path).context("failed to create redb log store")?;
-                let state_machine = SqliteStateMachine::new(&sm_path)
-                    .context("failed to create sqlite state machine")?;
-
-                let raft = openraft::Raft::new(
-                    config.node_id,
-                    validated_config,
-                    (*network_factory).clone(),
-                    log_store.clone(),
-                    state_machine.clone(),
-                )
-                .await
-                .context("failed to initialize raft with sqlite storage")?;
-
-                (
-                    raft,
-                    StateMachineVariant::Sqlite(state_machine),
-                    Some(log_store),
-                )
-            }
-        }
-    };
-
-    // Spawn Raft supervisor which will manage the RaftActor
-    let raft_actor_config = RaftActorConfig {
-        node_id: config.node_id,
-        raft: raft_core.clone(),
-        state_machine: state_machine_variant.clone(),
-        log_store: log_store_opt,
-    };
-
-    let supervisor_args = SupervisorArguments {
-        raft_actor_config,
-        supervision_config: config.supervision_config.clone(),
-    };
-
-    let (raft_supervisor, supervisor_task) = Actor::spawn(
-        Some(format!("raft-supervisor-{}", config.node_id)),
-        RaftSupervisor,
-        supervisor_args,
-    )
-    .await
-    .context("failed to spawn raft supervisor")?;
-
-    info!(
-        node_id = config.node_id,
-        "raft supervisor spawned (will spawn raft actor)"
-    );
-
-    // Retrieve the RaftActor reference from the supervisor
-    use ractor::call_t;
-    let raft_actor = call_t!(raft_supervisor, SupervisorMessage::GetRaftActor, 100)
-        .context("failed to get raft actor from supervisor")?
-        .context("raft actor not yet spawned by supervisor")?;
-
-    // Retrieve the HealthMonitor reference from the supervisor
-    let health_monitor = call_t!(raft_supervisor, SupervisorMessage::GetHealthMonitor, 100)
-        .context("failed to get health monitor from supervisor")?;
-
-    info!(
-        node_id = config.node_id,
-        health_monitor_available = health_monitor.is_some(),
-        "health monitor retrieved from supervisor"
-    );
+    .await?;
 
     // Spawn IRPC server for Raft RPC
     let rpc_server = RaftRpcServer::spawn(Arc::clone(&iroh_manager), raft_core.clone());
     info!("irpc server spawned for raft rpc");
 
     // Register node in metadata store
-    let last_updated_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .context("system time is set before Unix epoch (1970-01-01)")?
-        .as_secs();
-
-    let node_metadata = NodeMetadata {
-        node_id: config.node_id,
-        endpoint_id: iroh_manager.endpoint().id().to_string(),
-        raft_addr: format!("{}:{}", config.host, config.ractor_port),
-        status: NodeStatus::Online,
-        last_updated_secs,
-    };
-
-    metadata_store
-        .register_node(node_metadata)
-        .context("failed to register node in metadata store")?;
-
-    info!(
-        node_id = config.node_id,
-        endpoint_id = %iroh_manager.endpoint().id(),
-        "node registered in metadata store"
-    );
+    register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
     Ok(BootstrapHandle {
         config,
@@ -526,7 +249,7 @@ pub fn load_config(
         config.merge(toml_config);
     }
 
-    // Merge overrides (typically CLI args)
+    // Merge overrides (typically from CLI args)
     config.merge(overrides);
 
     // Validate final configuration
@@ -537,6 +260,8 @@ pub fn load_config(
     Ok(config)
 }
 
+// Helper functions placed after tests for better readability (high-level code first)
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -665,4 +390,433 @@ mod tests {
         let addrs = result.unwrap();
         assert_eq!(addrs.len(), 0);
     }
+}
+
+// Helper functions for bootstrap_node (Tiger Style: high-level before low-level)
+
+/// Initialize the metadata store for the cluster node.
+///
+/// Creates a redb-backed metadata store at `<data_dir>/metadata.redb`.
+fn setup_metadata_store(config: &ClusterBootstrapConfig) -> Result<Arc<MetadataStore>> {
+    let metadata_path = config.data_dir().join("metadata.redb");
+    let metadata_store =
+        Arc::new(MetadataStore::new(&metadata_path).context("failed to create metadata store")?);
+    info!(
+        path = %metadata_path.display(),
+        "metadata store initialized"
+    );
+    Ok(metadata_store)
+}
+
+/// Create and configure the Iroh P2P endpoint manager.
+///
+/// Configures the endpoint with:
+/// - Secret key (if provided)
+/// - Relay URL (if provided)
+/// - Gossip protocol
+/// - Discovery services (mDNS, DNS, pkarr)
+async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<IrohEndpointManager>> {
+    let mut iroh_config = IrohEndpointConfig::new();
+
+    // Parse secret key if provided
+    if let Some(key_hex) = &config.iroh.secret_key {
+        let key_bytes = hex::decode(key_hex).context("invalid hex in iroh secret key")?;
+        if key_bytes.len() != 32 {
+            anyhow::bail!("iroh secret key must be 32 bytes (64 hex characters)");
+        }
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&key_bytes);
+        let key = SecretKey::from_bytes(&key_array);
+        iroh_config = iroh_config.with_secret_key(key);
+    }
+
+    // Parse relay URL if provided
+    if let Some(relay_url_str) = &config.iroh.relay_url {
+        let relay_url = relay_url_str.parse().context("invalid iroh relay URL")?;
+        iroh_config = iroh_config.with_relay_url(relay_url)?;
+    }
+
+    // Configure gossip if enabled
+    iroh_config = iroh_config.with_gossip(config.iroh.enable_gossip);
+
+    // Configure discovery services
+    iroh_config = iroh_config.with_mdns(config.iroh.enable_mdns);
+    iroh_config = iroh_config.with_dns_discovery(config.iroh.enable_dns_discovery);
+    if let Some(ref dns_url) = config.iroh.dns_discovery_url {
+        iroh_config = iroh_config.with_dns_discovery_url(dns_url.clone());
+    }
+    iroh_config = iroh_config.with_pkarr(config.iroh.enable_pkarr);
+    if let Some(ref pkarr_url) = config.iroh.pkarr_relay_url {
+        iroh_config = iroh_config.with_pkarr_relay_url(pkarr_url.clone());
+    }
+
+    let manager = IrohEndpointManager::new(iroh_config)
+        .await
+        .context("failed to create iroh endpoint manager")?;
+    let endpoint_id = manager.endpoint().id();
+    info!(
+        endpoint_id = %endpoint_id,
+        node_addr = ?manager.node_addr(),
+        gossip_enabled = config.iroh.enable_gossip,
+        "iroh endpoint created"
+    );
+    Ok(Arc::new(manager))
+}
+
+/// Set up gossip-based peer discovery if enabled.
+///
+/// Determines the gossip topic ID from either:
+/// 1. Cluster ticket (if provided)
+/// 2. Cluster cookie (derived using blake3)
+///
+/// Returns None if gossip is disabled.
+async fn setup_gossip_discovery(
+    config: &ClusterBootstrapConfig,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<Option<GossipPeerDiscovery>> {
+    if !config.iroh.enable_gossip {
+        info!("gossip peer discovery disabled");
+        return Ok(None);
+    }
+
+    use iroh_gossip::proto::TopicId;
+
+    // Determine topic ID: from ticket or derive from cookie
+    let topic_id = if let Some(ticket_str) = &config.iroh.gossip_ticket {
+        info!("parsing cluster ticket for gossip topic");
+        let ticket = AspenClusterTicket::deserialize(ticket_str)
+            .context("failed to parse cluster ticket")?;
+        info!(
+            topic_id = ?ticket.topic_id,
+            cluster_id = %ticket.cluster_id,
+            bootstrap_peers = ticket.bootstrap.len(),
+            "cluster ticket parsed"
+        );
+        ticket.topic_id
+    } else {
+        // Derive topic ID from cluster cookie using blake3
+        let hash = blake3::hash(config.cookie.as_bytes());
+        let topic_id = TopicId::from_bytes(*hash.as_bytes());
+        info!(
+            topic_id = ?topic_id,
+            "derived gossip topic from cluster cookie"
+        );
+        topic_id
+    };
+
+    // Spawn gossip discovery with network factory for automatic peer connection
+    let discovery = GossipPeerDiscovery::spawn(
+        topic_id,
+        config.node_id,
+        iroh_manager,
+        Some(Arc::clone(network_factory)),
+    )
+    .await
+    .context("failed to spawn gossip peer discovery")?;
+    info!("gossip peer discovery spawned with automatic peer connection");
+    Ok(Some(discovery))
+}
+
+/// Launch the ractor NodeServer for distributed actor communication.
+///
+/// The NodeServer provides the transport layer for ractor_cluster.
+async fn setup_node_server(config: &ClusterBootstrapConfig) -> Result<NodeServerHandle> {
+    let node_server = NodeServerConfig::new(
+        format!("node-{}", config.node_id),
+        config.host.clone(),
+        config.ractor_port,
+        config.cookie.clone(),
+    )
+    .launch()
+    .await
+    .context("failed to launch node server")?;
+    info!(
+        label = %node_server.label(),
+        addr = %node_server.addr(),
+        "node server online"
+    );
+    Ok(node_server)
+}
+
+/// Create Raft storage backend and initialize the Raft core.
+///
+/// Supports three storage backends:
+/// - InMemory: Non-durable, for testing
+/// - Redb: Persistent redb log + SQLite state machine (deprecated)
+/// - Sqlite: Redb log + SQLite state machine (default)
+///
+/// Returns (Raft core, state machine variant, optional log store).
+async fn setup_raft_storage(
+    config: &ClusterBootstrapConfig,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(
+    openraft::Raft<AppTypeConfig>,
+    StateMachineVariant,
+    Option<RedbLogStore>,
+)> {
+    let raft_config = RaftConfig {
+        heartbeat_interval: config.heartbeat_interval_ms,
+        election_timeout_min: config.election_timeout_min_ms,
+        election_timeout_max: config.election_timeout_max_ms,
+        ..Default::default()
+    };
+    let validated_config = Arc::new(
+        raft_config
+            .validate()
+            .context("invalid raft configuration")?,
+    );
+
+    // Select storage backend based on configuration
+    match config.storage_backend {
+        StorageBackend::InMemory => {
+            create_inmemory_storage(config.node_id, validated_config, network_factory).await
+        }
+        #[allow(deprecated)]
+        StorageBackend::Redb => {
+            create_redb_storage(config, validated_config, network_factory).await
+        }
+        StorageBackend::Sqlite => {
+            create_sqlite_storage(config, validated_config, network_factory).await
+        }
+    }
+}
+
+/// Spawn the Raft supervisor and retrieve actor references.
+///
+/// The supervisor manages the RaftActor lifecycle and provides:
+/// - Automatic actor restart on failure
+/// - Health monitoring
+/// - Graceful shutdown coordination
+///
+/// Returns (supervisor, supervisor task, raft actor, health monitor).
+async fn spawn_raft_supervisor(
+    config: &ClusterBootstrapConfig,
+    raft_core: openraft::Raft<AppTypeConfig>,
+    state_machine: StateMachineVariant,
+    log_store_opt: Option<RedbLogStore>,
+) -> Result<(
+    ActorRef<SupervisorMessage>,
+    tokio::task::JoinHandle<()>,
+    ActorRef<RaftActorMessage>,
+    Option<Arc<HealthMonitor>>,
+)> {
+    let raft_actor_config = RaftActorConfig {
+        node_id: config.node_id,
+        raft: raft_core,
+        state_machine,
+        log_store: log_store_opt,
+    };
+
+    let supervisor_args = SupervisorArguments {
+        raft_actor_config,
+        supervision_config: config.supervision_config.clone(),
+    };
+
+    let (raft_supervisor, supervisor_task) = Actor::spawn(
+        Some(format!("raft-supervisor-{}", config.node_id)),
+        RaftSupervisor,
+        supervisor_args,
+    )
+    .await
+    .context("failed to spawn raft supervisor")?;
+
+    info!(
+        node_id = config.node_id,
+        "raft supervisor spawned (will spawn raft actor)"
+    );
+
+    // Retrieve the RaftActor reference from the supervisor
+    use ractor::call_t;
+    let raft_actor = call_t!(raft_supervisor, SupervisorMessage::GetRaftActor, 100)
+        .context("failed to get raft actor from supervisor")?
+        .context("raft actor not yet spawned by supervisor")?;
+
+    // Retrieve the HealthMonitor reference from the supervisor
+    let health_monitor = call_t!(raft_supervisor, SupervisorMessage::GetHealthMonitor, 100)
+        .context("failed to get health monitor from supervisor")?;
+
+    info!(
+        node_id = config.node_id,
+        health_monitor_available = health_monitor.is_some(),
+        "health monitor retrieved from supervisor"
+    );
+
+    Ok((raft_supervisor, supervisor_task, raft_actor, health_monitor))
+}
+
+/// Register the node in the metadata store.
+///
+/// Records node information including:
+/// - Node ID
+/// - Endpoint ID (Iroh P2P address)
+/// - Raft address (host:port)
+/// - Online status
+/// - Last updated timestamp
+fn register_node_metadata(
+    config: &ClusterBootstrapConfig,
+    metadata_store: &Arc<MetadataStore>,
+    iroh_manager: &Arc<IrohEndpointManager>,
+) -> Result<()> {
+    let last_updated_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("system time is set before Unix epoch (1970-01-01)")?
+        .as_secs();
+
+    let node_metadata = NodeMetadata {
+        node_id: config.node_id,
+        endpoint_id: iroh_manager.endpoint().id().to_string(),
+        raft_addr: format!("{}:{}", config.host, config.ractor_port),
+        status: NodeStatus::Online,
+        last_updated_secs,
+    };
+
+    metadata_store
+        .register_node(node_metadata)
+        .context("failed to register node in metadata store")?;
+
+    info!(
+        node_id = config.node_id,
+        endpoint_id = %iroh_manager.endpoint().id(),
+        "node registered in metadata store"
+    );
+
+    Ok(())
+}
+
+/// Create in-memory storage backend for Raft (non-durable).
+///
+/// Used for testing and development. All data is lost on restart.
+async fn create_inmemory_storage(
+    node_id: NodeId,
+    validated_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(
+    openraft::Raft<AppTypeConfig>,
+    StateMachineVariant,
+    Option<RedbLogStore>,
+)> {
+    info!("Using in-memory storage backend (non-durable)");
+    let log_store = InMemoryLogStore::default();
+    let state_machine_store = StateMachineStore::new();
+
+    let raft = openraft::Raft::new(
+        node_id,
+        validated_config,
+        network_factory.as_ref().clone(),
+        log_store,
+        state_machine_store.clone(),
+    )
+    .await
+    .context("failed to initialize raft with in-memory storage")?;
+
+    Ok((
+        raft,
+        StateMachineVariant::InMemory(state_machine_store),
+        None,
+    ))
+}
+
+/// Create redb persistent storage backend for Raft (deprecated).
+///
+/// Uses redb for log storage and SQLite for state machine.
+/// This backend is deprecated in favor of Sqlite.
+async fn create_redb_storage(
+    config: &ClusterBootstrapConfig,
+    validated_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(
+    openraft::Raft<AppTypeConfig>,
+    StateMachineVariant,
+    Option<RedbLogStore>,
+)> {
+    info!("Using redb persistent storage backend");
+
+    // Determine paths for redb files
+    let data_dir = config.data_dir();
+    let log_path = config
+        .redb_log_path
+        .clone()
+        .unwrap_or_else(|| data_dir.join("raft-log.redb"));
+    let sm_path = config
+        .redb_sm_path
+        .clone()
+        .unwrap_or_else(|| data_dir.join("state-machine.redb"));
+
+    info!(
+        log_path = %log_path.display(),
+        sm_path = %sm_path.display(),
+        "Initializing redb storage"
+    );
+
+    let log_store = RedbLogStore::new(&log_path).context("failed to create redb log store")?;
+    let state_machine =
+        SqliteStateMachine::new(&sm_path).context("failed to create sqlite state machine")?;
+
+    let raft = openraft::Raft::new(
+        config.node_id,
+        validated_config,
+        network_factory.as_ref().clone(),
+        log_store,
+        state_machine.clone(),
+    )
+    .await
+    .context("failed to initialize raft with redb storage")?;
+
+    Ok((raft, StateMachineVariant::Redb(state_machine), None))
+}
+
+/// Create sqlite persistent storage backend for Raft (default).
+///
+/// Uses redb for log storage and SQLite for state machine.
+/// This is the recommended production storage backend.
+async fn create_sqlite_storage(
+    config: &ClusterBootstrapConfig,
+    validated_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(
+    openraft::Raft<AppTypeConfig>,
+    StateMachineVariant,
+    Option<RedbLogStore>,
+)> {
+    info!("Using sqlite persistent storage backend");
+
+    // Determine paths for sqlite files
+    let data_dir = config.data_dir();
+    let log_path = config
+        .sqlite_log_path
+        .clone()
+        .unwrap_or_else(|| data_dir.join("raft-log.db"));
+    let sm_path = config
+        .sqlite_sm_path
+        .clone()
+        .unwrap_or_else(|| data_dir.join("state-machine.db"));
+
+    info!(
+        log_path = %log_path.display(),
+        sm_path = %sm_path.display(),
+        "Initializing sqlite storage"
+    );
+
+    // For now, we're only migrating the state machine to SQLite
+    // The log store still uses redb (will be migrated later if needed)
+    let log_store = RedbLogStore::new(&log_path).context("failed to create redb log store")?;
+    let state_machine =
+        SqliteStateMachine::new(&sm_path).context("failed to create sqlite state machine")?;
+
+    let raft = openraft::Raft::new(
+        config.node_id,
+        validated_config,
+        network_factory.as_ref().clone(),
+        log_store.clone(),
+        state_machine.clone(),
+    )
+    .await
+    .context("failed to initialize raft with sqlite storage")?;
+
+    Ok((
+        raft,
+        StateMachineVariant::Sqlite(state_machine),
+        Some(log_store),
+    ))
 }
