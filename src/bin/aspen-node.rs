@@ -1011,156 +1011,167 @@ fn append_error_metrics(body: &mut String, node_id: u64, metrics: &MetricsCollec
     ));
 }
 
-/// Append write latency histogram metrics.
+/// Operation type for latency histogram metrics.
 ///
-/// Tiger Style: Focused function for write performance metrics.
-fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &MetricsCollector) {
-    let write_count = metrics
-        .write_count
-        .load(std::sync::atomic::Ordering::Relaxed);
-    if write_count == 0 {
+/// Tiger Style: Type-safe enum prevents typos, zero runtime overhead.
+#[derive(Copy, Clone)]
+enum LatencyMetricType {
+    Read,
+    Write,
+}
+
+impl LatencyMetricType {
+    /// Returns the lowercase operation name for metric labels.
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+        }
+    }
+}
+
+/// Append latency histogram metrics for read or write operations.
+///
+/// Tiger Style: Single parameterized function eliminates code duplication,
+/// maintains type safety through enum-based operation selection.
+fn append_latency_histogram(
+    body: &mut String,
+    node_id: u64,
+    metrics: &MetricsCollector,
+    operation: LatencyMetricType,
+) {
+    let op_name = operation.as_str();
+
+    // Load operation count and skip if zero
+    let count = match operation {
+        LatencyMetricType::Read => metrics
+            .read_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        LatencyMetricType::Write => metrics
+            .write_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+    };
+    if count == 0 {
         return;
     }
 
-    body.push_str("# TYPE aspen_write_latency_seconds histogram\n");
-    body.push_str("# HELP aspen_write_latency_seconds Write operation latency histogram\n");
+    // Prometheus metric type and help text
+    body.push_str(&format!(
+        "# TYPE aspen_{}_latency_seconds histogram\n",
+        op_name
+    ));
+    body.push_str(&format!(
+        "# HELP aspen_{}_latency_seconds {} operation latency histogram\n",
+        op_name,
+        match operation {
+            LatencyMetricType::Read => "Read",
+            LatencyMetricType::Write => "Write",
+        }
+    ));
 
-    let bucket_1ms = metrics
-        .write_latency_us_bucket_1ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_10ms = metrics
-        .write_latency_us_bucket_10ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_100ms = metrics
-        .write_latency_us_bucket_100ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_1s = metrics
-        .write_latency_us_bucket_1s
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_inf = metrics
-        .write_latency_us_bucket_inf
-        .load(std::sync::atomic::Ordering::Relaxed);
+    // Load bucket values based on operation type
+    let (bucket_1ms, bucket_10ms, bucket_100ms, bucket_1s, bucket_inf) = match operation {
+        LatencyMetricType::Read => (
+            metrics
+                .read_latency_us_bucket_1ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .read_latency_us_bucket_10ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .read_latency_us_bucket_100ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .read_latency_us_bucket_1s
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .read_latency_us_bucket_inf
+                .load(std::sync::atomic::Ordering::Relaxed),
+        ),
+        LatencyMetricType::Write => (
+            metrics
+                .write_latency_us_bucket_1ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .write_latency_us_bucket_10ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .write_latency_us_bucket_100ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .write_latency_us_bucket_1s
+                .load(std::sync::atomic::Ordering::Relaxed),
+            metrics
+                .write_latency_us_bucket_inf
+                .load(std::sync::atomic::Ordering::Relaxed),
+        ),
+    };
 
+    // Output cumulative histogram buckets
     let mut cumulative = 0u64;
     cumulative += bucket_1ms;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.001\"}} {}\n",
-        node_id, cumulative
+        "aspen_{}_latency_seconds_bucket{{node_id=\"{}\",le=\"0.001\"}} {}\n",
+        op_name, node_id, cumulative
     ));
 
     cumulative += bucket_10ms;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.010\"}} {}\n",
-        node_id, cumulative
+        "aspen_{}_latency_seconds_bucket{{node_id=\"{}\",le=\"0.010\"}} {}\n",
+        op_name, node_id, cumulative
     ));
 
     cumulative += bucket_100ms;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"0.100\"}} {}\n",
-        node_id, cumulative
+        "aspen_{}_latency_seconds_bucket{{node_id=\"{}\",le=\"0.100\"}} {}\n",
+        op_name, node_id, cumulative
     ));
 
     cumulative += bucket_1s;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"1.000\"}} {}\n",
-        node_id, cumulative
+        "aspen_{}_latency_seconds_bucket{{node_id=\"{}\",le=\"1.000\"}} {}\n",
+        op_name, node_id, cumulative
     ));
 
     cumulative += bucket_inf;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_bucket{{node_id=\"{}\",le=\"+Inf\"}} {}\n",
-        node_id, cumulative
+        "aspen_{}_latency_seconds_bucket{{node_id=\"{}\",le=\"+Inf\"}} {}\n",
+        op_name, node_id, cumulative
     ));
 
     body.push_str(&format!(
-        "aspen_write_latency_seconds_count{{node_id=\"{}\"}} {}\n",
-        node_id, write_count
+        "aspen_{}_latency_seconds_count{{node_id=\"{}\"}} {}\n",
+        op_name, node_id, count
     ));
 
-    let write_total_us = metrics
-        .write_total_us
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let write_sum_seconds = write_total_us as f64 / 1_000_000.0;
+    // Calculate and output sum
+    let total_us = match operation {
+        LatencyMetricType::Read => metrics
+            .read_total_us
+            .load(std::sync::atomic::Ordering::Relaxed),
+        LatencyMetricType::Write => metrics
+            .write_total_us
+            .load(std::sync::atomic::Ordering::Relaxed),
+    };
+    let sum_seconds = total_us as f64 / 1_000_000.0;
     body.push_str(&format!(
-        "aspen_write_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
-        node_id, write_sum_seconds
+        "aspen_{}_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
+        op_name, node_id, sum_seconds
     ));
+}
+
+/// Append write latency histogram metrics.
+///
+/// Tiger Style: Thin wrapper for backward compatibility and clarity at call site.
+fn append_write_latency_histogram(body: &mut String, node_id: u64, metrics: &MetricsCollector) {
+    append_latency_histogram(body, node_id, metrics, LatencyMetricType::Write);
 }
 
 /// Append read latency histogram metrics.
 ///
-/// Tiger Style: Focused function for read performance metrics.
+/// Tiger Style: Thin wrapper for backward compatibility and clarity at call site.
 fn append_read_latency_histogram(body: &mut String, node_id: u64, metrics: &MetricsCollector) {
-    let read_count = metrics
-        .read_count
-        .load(std::sync::atomic::Ordering::Relaxed);
-    if read_count == 0 {
-        return;
-    }
-
-    body.push_str("# TYPE aspen_read_latency_seconds histogram\n");
-    body.push_str("# HELP aspen_read_latency_seconds Read operation latency histogram\n");
-
-    let bucket_1ms = metrics
-        .read_latency_us_bucket_1ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_10ms = metrics
-        .read_latency_us_bucket_10ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_100ms = metrics
-        .read_latency_us_bucket_100ms
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_1s = metrics
-        .read_latency_us_bucket_1s
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let bucket_inf = metrics
-        .read_latency_us_bucket_inf
-        .load(std::sync::atomic::Ordering::Relaxed);
-
-    let mut cumulative = 0u64;
-    cumulative += bucket_1ms;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.001\"}} {}\n",
-        node_id, cumulative
-    ));
-
-    cumulative += bucket_10ms;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.010\"}} {}\n",
-        node_id, cumulative
-    ));
-
-    cumulative += bucket_100ms;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"0.100\"}} {}\n",
-        node_id, cumulative
-    ));
-
-    cumulative += bucket_1s;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"1.000\"}} {}\n",
-        node_id, cumulative
-    ));
-
-    cumulative += bucket_inf;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_bucket{{node_id=\"{}\",le=\"+Inf\"}} {}\n",
-        node_id, cumulative
-    ));
-
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_count{{node_id=\"{}\"}} {}\n",
-        node_id, read_count
-    ));
-
-    let read_total_us = metrics
-        .read_total_us
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let read_sum_seconds = read_total_us as f64 / 1_000_000.0;
-    body.push_str(&format!(
-        "aspen_read_latency_seconds_sum{{node_id=\"{}\"}} {:.6}\n",
-        node_id, read_sum_seconds
-    ));
+    append_latency_histogram(body, node_id, metrics, LatencyMetricType::Read);
 }
 
 /// Append node failure detection metrics (unreachable nodes, duration).

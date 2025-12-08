@@ -495,14 +495,15 @@ fn test_flapping_node_detection() {
     );
 
     // Wait to accumulate measurable duration on first failure
-    // Tiger Style: Use longer sleep (100ms) for robust timing under resource contention
-    std::thread::sleep(Duration::from_millis(100));
+    // Tiger Style: Use longer sleep (200ms) for robust timing under resource contention.
+    // Doubled from 100ms to create larger safety margin for ratio-based comparison under load.
+    std::thread::sleep(Duration::from_millis(200));
     let first_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
-    // Tiger Style: Verify first failure duration is reasonable (>= 100ms with small tolerance)
+    // Tiger Style: Verify first failure duration is reasonable (>= 200ms with small tolerance)
     assert!(
-        first_failure_duration >= Duration::from_millis(100),
-        "First failure should have accumulated at least 100ms, got {:?}",
+        first_failure_duration >= Duration::from_millis(200),
+        "First failure should have accumulated at least 200ms, got {:?}",
         first_failure_duration
     );
 
@@ -526,8 +527,8 @@ fn test_flapping_node_detection() {
     let second_failure_duration = detector.get_unreachable_duration(node_id).unwrap();
 
     // Tiger Style: The key invariant is that second failure started fresh.
-    // Under heavy load, measurement might take 0-30ms. First failure was 100ms+.
-    // Therefore, second should be significantly smaller (less than half of first).
+    // Under heavy load, measurement might take 0-50ms. First failure was 200ms+.
+    // Therefore, second should be significantly smaller (less than half of first, i.e., < 100ms).
     assert!(
         second_failure_duration < first_failure_duration / 2,
         "Should reset timestamp on new failure after recovery. \

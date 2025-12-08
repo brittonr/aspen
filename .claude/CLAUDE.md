@@ -10,7 +10,7 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 
 ## Core Technologies
 
-- **openraft**: Raft consensus algorithm for cluster-wide linearizability and fault-tolerant replication
+- **openraft**: Raft consensus algorithm for cluster-wide linearizability and fault-tolerant replication (vendored)
 - **redb**: Embedded ACID storage engine for Raft log storage (append-only, fast sequential writes)
 - **rusqlite**: SQLite-based state machine storage (ACID transactions, queryable)
 - **iroh**: Peer-to-peer networking and content-addressed communication
@@ -19,6 +19,37 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 - **madsim**: Deterministic simulator for distributed systems testing
 - **snafu/anyhow**: Error handling (snafu for library errors, anyhow for application errors)
 - **proptest**: Property-based testing
+
+## Vendored Dependencies
+
+### openraft (Vendored at `openraft/openraft`)
+
+**Rationale**: Aspen vendors openraft v0.10.0 to maintain tight control over the consensus layer, enabling:
+
+1. **Local modifications without upstream delays**: Foundational distributed systems require rapid iteration on core primitives. Vendoring allows immediate fixes and enhancements without waiting for upstream review/release cycles.
+
+2. **API stability during development**: Aspen is in active development with frequent architectural changes. Vendoring prevents breaking changes from upstream openraft releases from disrupting iteration.
+
+3. **Custom optimizations**: Enables performance tuning specific to Aspen's workload patterns (e.g., append-optimized log storage with redb, SQLite state machine integration).
+
+4. **Dependency isolation**: Prevents supply chain issues from upstream dependency changes that might conflict with Aspen's other dependencies (madsim, ractor, iroh).
+
+**Current Status**:
+
+- Vendored version: openraft 0.10.0
+- Upstream crates.io fallback: 0.9.21 (configured in deny.toml to skip duplicate checking)
+- Local modifications: Tracked via git history in `openraft/` directory
+
+**Update Procedure**:
+
+1. Review upstream openraft releases for relevant changes
+2. Evaluate changes for compatibility with Aspen's architecture
+3. Cherry-pick or rebase local modifications onto new upstream version
+4. Update Cargo.toml path dependency version if needed
+5. Run full test suite (especially madsim deterministic tests) to verify compatibility
+6. Document any new local modifications in commit messages
+
+**Long-term Strategy**: As Aspen matures and the API stabilizes, evaluate transitioning back to crates.io version if local modifications can be upstreamed or if they're no longer necessary.
 
 ## Architecture
 
