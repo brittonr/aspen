@@ -88,6 +88,7 @@ use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionReque
 use aspen::raft::network::IrpcRaftNetworkFactory;
 use aspen::raft::supervision::HealthMonitor;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
+use aspen::tui_rpc_server::{TuiRpcServer, TuiRpcServerContext};
 use axum::{
     Json, Router,
     extract::State,
@@ -606,10 +607,22 @@ async fn main() -> Result<()> {
     let app_state = create_app_state(
         &config,
         &handle,
-        controller,
-        kv_store,
+        controller.clone(),
+        kv_store.clone(),
         promotion_coordinator,
     );
+
+    // Spawn TUI RPC server
+    let tui_server_context = Arc::new(TuiRpcServerContext {
+        node_id: config.node_id,
+        controller: controller.clone(),
+        kv_store: kv_store.clone(),
+        endpoint_manager: handle.iroh_manager.clone(),
+        cluster_cookie: config.cookie.clone(),
+        start_time: app_state.start_time,
+    });
+    let tui_rpc_server = TuiRpcServer::spawn(tui_server_context);
+    info!("TUI RPC server spawned");
 
     // Build router with all API endpoints
     let app = build_router(app_state);
@@ -629,6 +642,9 @@ async fn main() -> Result<()> {
             }
         }
     }
+
+    // Gracefully shutdown TUI RPC server
+    tui_rpc_server.shutdown().await?;
 
     // Gracefully shutdown
     handle.shutdown().await?;
@@ -1499,11 +1515,89 @@ async fn promote_learner(
 
 type ApiResult<T> = Result<T, ApiError>;
 
+/// Response from `/node-info` endpoint used for peer discovery.
+#[derive(Debug, serde::Deserialize)]
+struct NodeInfoResponse {
+    #[allow(dead_code)]
+    node_id: u64,
+    endpoint_addr: iroh::EndpointAddr,
+}
+
+/// Fetch peer endpoint addresses from their HTTP APIs and add to network factory.
+///
+/// This is called before Raft initialization to ensure all peer addresses are
+/// known to the network layer before leader election begins.
+///
+/// Tiger Style: Bounded timeout (2s per peer), fail-fast on errors.
+async fn discover_peer_addresses(
+    state: &AppState,
+    members: &[aspen::api::ClusterNode],
+) -> Result<(), anyhow::Error> {
+    use tokio::time::{Duration, timeout};
+
+    let client = reqwest::Client::new();
+    let self_node_id = state.node_id;
+
+    for member in members {
+        // Skip self - we don't need to discover our own address
+        if member.id == self_node_id {
+            continue;
+        }
+
+        let url = format!("http://{}/node-info", member.addr);
+        info!(
+            node_id = member.id,
+            url = %url,
+            "fetching peer endpoint address"
+        );
+
+        // Fetch with timeout (Tiger Style: bounded wait)
+        let response = timeout(Duration::from_secs(2), client.get(&url).send())
+            .await
+            .map_err(|_| anyhow::anyhow!("timeout fetching node-info from {}", url))?
+            .map_err(|e| anyhow::anyhow!("failed to fetch node-info from {}: {}", url, e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "node-info request to {} returned status {}",
+                url,
+                response.status()
+            ));
+        }
+
+        let node_info: NodeInfoResponse = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to parse node-info from {}: {}", url, e))?;
+
+        // Add peer to network factory
+        state
+            .network_factory
+            .add_peer(member.id, node_info.endpoint_addr.clone())
+            .await;
+
+        info!(
+            node_id = member.id,
+            endpoint_id = %node_info.endpoint_addr.id,
+            "added peer endpoint address to network factory"
+        );
+    }
+
+    Ok(())
+}
+
 #[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
 async fn init_cluster(
     State(state): State<AppState>,
     Json(request): Json<InitRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    // First, discover peer addresses so the network layer can communicate
+    // with other nodes during leader election (which starts immediately after init)
+    if let Err(e) = discover_peer_addresses(&state, &request.initial_members).await {
+        warn!(error = %e, "failed to discover some peer addresses, continuing anyway");
+        // Continue anyway - gossip may discover peers, or some may have been found
+    }
+
     let result = state.controller.init(request).await?;
     Ok(Json(result))
 }

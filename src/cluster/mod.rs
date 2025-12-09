@@ -514,12 +514,11 @@ impl IrohEndpointManager {
             builder = builder.relay_mode(RelayMode::Default);
         }
 
-        // Configure ALPNs: raft-rpc + optionally gossip
-        let alpns = if config.enable_gossip {
-            vec![b"raft-rpc".to_vec(), GOSSIP_ALPN.to_vec()]
-        } else {
-            vec![b"raft-rpc".to_vec()]
-        };
+        // Configure ALPNs: raft-rpc + aspen-tui + optionally gossip
+        let mut alpns = vec![b"raft-rpc".to_vec(), b"aspen-tui".to_vec()];
+        if config.enable_gossip {
+            alpns.push(GOSSIP_ALPN.to_vec());
+        }
         builder = builder.alpns(alpns);
 
         // Configure discovery services for bootstrapping network connectivity

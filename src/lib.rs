@@ -13,6 +13,8 @@ pub mod cluster;
 pub mod kv;
 pub mod raft;
 pub mod simulation;
+pub mod tui_rpc;
+pub mod tui_rpc_server;
 
 /// Testing infrastructure for deterministic multi-node Raft tests.
 ///

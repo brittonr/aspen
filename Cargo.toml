@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0 OR MIT"
 
+[[bin]]
+name = "aspen-tui"
+path = "src/bin/aspen-tui/main.rs"
+
 [dependencies]
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
@@ -54,6 +58,13 @@ futures = "0.3.31"
 toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
+
+# TUI dependencies
+ratatui = { version = "0.28", features = ["crossterm"] }
+crossterm = { version = "0.28", features = ["event-stream"] }
+color-eyre = "0.6"
+tui-logger = { version = "0.13", features = ["tracing-support"] }
+log = "0.4"
 
 [dev-dependencies]
 proptest = "1.0"

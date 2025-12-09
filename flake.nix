@@ -139,6 +139,7 @@
         );
 
         # Use crane's path to properly include vendored openraft
+        # Force re-evaluation: updated 2025-12-09
         src = craneLib.path {
           path = ./.;
           # Include everything - vendored openraft needs to be included
@@ -175,6 +176,16 @@
         # all of that work (e.g. via cachix) when running in CI
         cargoArtifacts = craneLib.buildDepsOnly basicArgs;
 
+        # Development-specific cargo artifacts that preserve incremental compilation
+        # This maintains the Cargo target directory structure for faster rebuilds
+        devCargoArtifacts = craneLib.buildDepsOnly (basicArgs
+          // {
+            # Keep intermediate artifacts for incremental compilation
+            doInstallCargoArtifacts = true;
+            # Enable incremental compilation in the dependency build
+            CARGO_INCREMENTAL = "1";
+          });
+
         # Common arguments can be set here to avoid repeating them later
         commonArgs =
           basicArgs
@@ -194,6 +205,17 @@
                   darwin.apple_sdk.frameworks.Security
                 ]
               ));
+          };
+
+        # Development-specific arguments with incremental compilation enabled
+        devArgs =
+          commonArgs
+          // {
+            cargoArtifacts = devCargoArtifacts;
+            # Enable incremental compilation
+            CARGO_INCREMENTAL = "1";
+            # Use more aggressive caching
+            CARGO_BUILD_INCREMENTAL = "true";
           };
 
         mvm-ci = craneLib.buildPackage (
@@ -234,6 +256,9 @@
               {
                 name = "aspen-node";
               }
+              {
+                name = "aspen-tui";
+              }
             ]
           );
         in
@@ -248,6 +273,29 @@
                 synthetic-events
               ];
             };
+
+            # Development builds with incremental compilation enabled
+            # Use these for faster iteration during development
+            dev-aspen-node = craneLib.buildPackage (
+              devArgs
+              // {
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                cargoExtraArgs = "--bin aspen-node";
+                doCheck = false;
+              }
+            );
+
+            dev-aspen-tui = craneLib.buildPackage (
+              devArgs
+              // {
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                cargoExtraArgs = "--bin aspen-tui";
+                doCheck = false;
+              }
+            );
+
+            # Convenience alias for the most commonly used dev build
+            dev = dev-aspen-node;
           };
       in {
         # Formatter
@@ -366,6 +414,8 @@
         };
 
         packages.default = bins.aspen-node;
+        packages.aspen-node = bins.aspen-node;
+        packages.aspen-tui = bins.aspen-tui;
         packages.netwatch = netwatch;
 
         # Docker image for cluster testing (using streamLayeredImage for better caching)
@@ -424,6 +474,34 @@
 
         apps.aspen-node = flake-utils.lib.mkApp {
           drv = bins.aspen-node;
+          exePath = "/bin/aspen-node";
+        };
+
+        apps.aspen-tui = flake-utils.lib.mkApp {
+          drv = bins.aspen-tui;
+          exePath = "/bin/aspen-tui";
+        };
+
+        # 3-node cluster launcher
+        # Usage: nix run .#cluster
+        # Environment variables:
+        #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
+        #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
+        #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: inmemory)
+        apps.cluster = {
+          type = "app";
+          program = "${pkgs.writeShellScript "aspen-cluster" ''
+            export PATH="${pkgs.lib.makeBinPath [
+              bins.aspen-node
+              pkgs.bash
+              pkgs.coreutils
+              pkgs.curl
+              pkgs.netcat
+              pkgs.gnugrep
+            ]}:$PATH"
+            export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+            exec ${./scripts/cluster.sh} "$@"
+          ''}";
         };
 
         apps.default = self.apps.${system}.aspen-node;
@@ -473,10 +551,36 @@
             pre-commit
             shellcheck
             nodePackages.markdownlint-cli
+            # Optional: sccache for additional caching
+            sccache
           ];
 
           env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
           env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+
+          # Incremental compilation settings for faster rebuilds
+          env.CARGO_INCREMENTAL = "1";
+          env.CARGO_BUILD_INCREMENTAL = "true";
+
+          # Optional: Use sccache if available
+          # Uncomment to enable sccache globally in dev shell
+          # env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+
+          # Configure cargo to use a shared target directory for better caching
+          # This prevents duplicate builds when switching between nix develop and direct cargo commands
+          env.CARGO_TARGET_DIR = "target";
+
+          # Enable cargo's new resolver for better dependency resolution
+          env.CARGO_RESOLVER = "2";
+
+          shellHook = ''
+            echo "🚀 Incremental builds enabled for faster iteration"
+            echo "   - Use 'nix build .#dev-aspen-node' for incremental Nix builds"
+            echo "   - Use 'cargo build' in this shell for local incremental compilation"
+            echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
+            echo ""
+            echo "💡 Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
+          '';
         };
       }
     );
