@@ -144,6 +144,20 @@ impl KeyValueStore for DeterministicHiqlite {
                     command: WriteCommand::SetMulti { pairs },
                 })
             }
+            WriteCommand::Delete { key } => {
+                kv.remove(&key);
+                Ok(WriteResult {
+                    command: WriteCommand::Delete { key },
+                })
+            }
+            WriteCommand::DeleteMulti { keys } => {
+                for key in &keys {
+                    kv.remove(key);
+                }
+                Ok(WriteResult {
+                    command: WriteCommand::DeleteMulti { keys },
+                })
+            }
         }
     }
 
@@ -156,6 +170,15 @@ impl KeyValueStore for DeterministicHiqlite {
             }),
             None => Err(KeyValueStoreError::NotFound { key: request.key }),
         }
+    }
+
+    async fn delete(&self, request: aspen::api::DeleteRequest) -> Result<aspen::api::DeleteResult, KeyValueStoreError> {
+        let mut kv = self.kv.lock().await;
+        let deleted = kv.remove(&request.key).is_some();
+        Ok(aspen::api::DeleteResult {
+            key: request.key,
+            deleted,
+        })
     }
 }
 

@@ -42,7 +42,6 @@
 //! ```
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -53,6 +52,7 @@ use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 use super::IrohEndpointManager;
 use crate::raft::network::IrpcRaftNetworkFactory;
@@ -106,12 +106,20 @@ impl PeerAnnouncement {
 /// 2. Receiver: Listens for peer announcements and automatically adds them to the network factory
 ///
 /// Tiger Style: Bounded announcement interval (10s), explicit shutdown mechanism.
+///
+/// ## Task Lifecycle Management
+///
+/// - Uses CancellationToken for clean shutdown coordination
+/// - Implements Drop to abort tasks if struct dropped without shutdown()
+/// - Tasks check cancellation token for responsive shutdown
+/// - Bounded shutdown timeout (10s) with explicit task abortion
 pub struct GossipPeerDiscovery {
     topic_id: TopicId,
     _node_id: NodeId, // Stored for debugging/logging purposes
-    shutdown: Arc<AtomicBool>,
-    announcer_task: JoinHandle<()>,
-    receiver_task: JoinHandle<()>,
+    cancel_token: CancellationToken,
+    // Tiger Style: Option allows moving out in shutdown() while still implementing Drop
+    announcer_task: Option<JoinHandle<()>>,
+    receiver_task: Option<JoinHandle<()>>,
 }
 
 impl GossipPeerDiscovery {
@@ -149,11 +157,11 @@ impl GossipPeerDiscovery {
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
 
-        let shutdown = Arc::new(AtomicBool::new(false));
+        let cancel_token = CancellationToken::new();
         let endpoint_addr = iroh_manager.node_addr().clone();
 
         // Spawn announcer task
-        let announcer_shutdown = Arc::clone(&shutdown);
+        let announcer_cancel = cancel_token.child_token();
         let announcer_sender = gossip_sender.clone();
         let announcer_node_id = node_id;
         let announcer_task = tokio::spawn(async move {
@@ -161,51 +169,52 @@ impl GossipPeerDiscovery {
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
-                if announcer_shutdown.load(Ordering::Relaxed) {
-                    tracing::debug!("gossip announcer shutting down");
-                    break;
-                }
-
-                ticker.tick().await;
-
-                let announcement =
-                    match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
-                        Ok(ann) => ann,
-                        Err(e) => {
-                            tracing::error!("failed to create peer announcement: {}", e);
-                            continue;
-                        }
-                    };
-                match announcement.to_bytes() {
-                    Ok(bytes) => {
-                        if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
-                            tracing::warn!("failed to broadcast peer announcement: {}", e);
-                        } else {
-                            tracing::trace!(
-                                "broadcast peer announcement for node_id={}",
-                                announcer_node_id
-                            );
-                        }
+                tokio::select! {
+                    _ = announcer_cancel.cancelled() => {
+                        tracing::debug!("gossip announcer shutting down");
+                        break;
                     }
-                    Err(e) => {
-                        tracing::warn!("failed to serialize peer announcement: {}", e);
+                    _ = ticker.tick() => {
+                        let announcement =
+                            match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
+                                Ok(ann) => ann,
+                                Err(e) => {
+                                    tracing::error!("failed to create peer announcement: {}", e);
+                                    continue;
+                                }
+                            };
+                        match announcement.to_bytes() {
+                            Ok(bytes) => {
+                                if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
+                                    tracing::warn!("failed to broadcast peer announcement: {}", e);
+                                } else {
+                                    tracing::trace!(
+                                        "broadcast peer announcement for node_id={}",
+                                        announcer_node_id
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("failed to serialize peer announcement: {}", e);
+                            }
+                        }
                     }
                 }
             }
         });
 
         // Spawn receiver task
-        let receiver_shutdown = Arc::clone(&shutdown);
+        let receiver_cancel = cancel_token.child_token();
         let receiver_node_id = node_id;
         let receiver_network_factory = network_factory.clone();
         let receiver_task = tokio::spawn(async move {
             loop {
-                if receiver_shutdown.load(Ordering::Relaxed) {
-                    tracing::debug!("gossip receiver shutting down");
-                    break;
-                }
-
-                match gossip_receiver.next().await {
+                tokio::select! {
+                    _ = receiver_cancel.cancelled() => {
+                        tracing::debug!("gossip receiver shutting down");
+                        break;
+                    }
+                    event = gossip_receiver.next() => match event {
                     Some(Ok(Event::Received(msg))) => {
                         match PeerAnnouncement::from_bytes(&msg.content) {
                             Ok(announcement) => {
@@ -270,16 +279,17 @@ impl GossipPeerDiscovery {
                         tracing::info!("gossip receiver stream ended");
                         break;
                     }
-                }
+                    } // end of match event
+                } // end of tokio::select!
             }
         });
 
         Ok(Self {
             topic_id,
             _node_id: node_id,
-            shutdown,
-            announcer_task,
-            receiver_task,
+            cancel_token,
+            announcer_task: Some(announcer_task),
+            receiver_task: Some(receiver_task),
         })
     }
 
@@ -290,35 +300,69 @@ impl GossipPeerDiscovery {
 
     /// Shutdown the discovery tasks and wait for completion.
     ///
-    /// Tiger Style: Bounded wait time (10 seconds max).
-    pub async fn shutdown(self) -> Result<()> {
+    /// Tiger Style: Bounded wait time (10 seconds max), explicit task abortion on timeout.
+    pub async fn shutdown(mut self) -> Result<()> {
         tracing::info!("shutting down gossip peer discovery");
 
-        // Signal shutdown
-        self.shutdown.store(true, Ordering::Relaxed);
+        // Signal cancellation to both tasks
+        self.cancel_token.cancel();
 
         // Wait for tasks with timeout
         let timeout = Duration::from_secs(10);
 
+        // Take tasks out of Option (they will be None after this, preventing Drop from aborting)
+        let mut announcer_task = self.announcer_task.take().expect("announcer_task already consumed");
+        let mut receiver_task = self.receiver_task.take().expect("receiver_task already consumed");
+
         tokio::select! {
-            _ = self.announcer_task => {
-                tracing::debug!("announcer task completed");
+            result = &mut announcer_task => {
+                match result {
+                    Ok(()) => tracing::debug!("announcer task completed"),
+                    Err(e) => tracing::error!("announcer task panicked: {}", e),
+                }
             }
             _ = tokio::time::sleep(timeout) => {
-                tracing::warn!("announcer task did not complete within timeout");
+                tracing::warn!("announcer task did not complete within timeout, aborting");
+                // Tiger Style: Explicit task abortion to prevent leak
+                announcer_task.abort();
             }
         }
 
         tokio::select! {
-            _ = self.receiver_task => {
-                tracing::debug!("receiver task completed");
+            result = &mut receiver_task => {
+                match result {
+                    Ok(()) => tracing::debug!("receiver task completed"),
+                    Err(e) => tracing::error!("receiver task panicked: {}", e),
+                }
             }
             _ = tokio::time::sleep(timeout) => {
-                tracing::warn!("receiver task did not complete within timeout");
+                tracing::warn!("receiver task did not complete within timeout, aborting");
+                // Tiger Style: Explicit task abortion to prevent leak
+                receiver_task.abort();
             }
         }
 
         Ok(())
+    }
+}
+
+/// Tiger Style: Abort tasks if dropped without explicit shutdown().
+///
+/// This prevents task leaks when GossipPeerDiscovery is dropped (e.g., on panic
+/// or if shutdown() is not called). The tasks will be aborted immediately.
+///
+/// If shutdown() was called, tasks will already be None and this is a no-op.
+impl Drop for GossipPeerDiscovery {
+    fn drop(&mut self) {
+        if self.announcer_task.is_some() || self.receiver_task.is_some() {
+            tracing::warn!("GossipPeerDiscovery dropped without shutdown(), aborting tasks");
+            if let Some(task) = self.announcer_task.take() {
+                task.abort();
+            }
+            if let Some(task) = self.receiver_task.take() {
+                task.abort();
+            }
+        }
     }
 }
 

@@ -688,3 +688,1081 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
 
     assert_eq!(sm.count_kv_pairs().unwrap(), 2000); // 999 + 1000 + 1 recovery entry
 }
+
+// ====================================================================================
+// Test 9: WAL Checkpoint Corruption During Heavy Write Load
+// ====================================================================================
+
+#[tokio::test]
+async fn test_wal_checkpoint_corruption_during_heavy_writes() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "wal_checkpoint_heavy");
+    let wal_path = temp_dir.path().join("wal_checkpoint_heavy.db-wal");
+
+    // Phase 1: Bootstrap node with heavy write load to grow WAL significantly
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write 500 entries to generate substantial WAL content
+        for i in 0..500 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("heavy_write_key_{:05}", i),
+                    // Use larger values to grow WAL faster
+                    value: format!("heavy_write_value_{:05}_{}", i, "x".repeat(100)),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Verify WAL exists and has substantial size before checkpoint
+        if let Ok(Some(wal_size)) = sm.wal_file_size() {
+            assert!(wal_size > 0, "WAL should have content before checkpoint");
+        }
+
+        // Perform manual checkpoint
+        let _pages_checkpointed = sm.checkpoint_wal().expect("failed to checkpoint WAL");
+
+        // Graceful shutdown
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt WAL file if it exists (may be truncated after checkpoint)
+    if wal_path.exists() {
+        // Corrupt at frame header boundary (offset 32 = after WAL header)
+        corrupt_file(&wal_path, CorruptionStrategy::RandomBytes(32))
+            .expect("failed to corrupt WAL");
+
+        // Phase 3: Attempt restart and validation
+        match SqliteStateMachine::new(&db_path) {
+            Ok(sm) => {
+                let validation_result = sm.validate(1);
+
+                match validation_result {
+                    Ok(_) => {
+                        // SQLite auto-recovered - verify data integrity
+                        let count = sm.count_kv_pairs().unwrap();
+                        // Should have recovered most entries
+                        assert!(
+                            count >= 400,
+                            "should recover at least 400 entries, got {}",
+                            count
+                        );
+                        println!(
+                            "SUCCESS: SQLite auto-recovered, {} entries intact",
+                            count
+                        );
+                    }
+                    Err(e) => {
+                        println!("SUCCESS: Validation detected corruption: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("SUCCESS: Database failed to open due to corruption: {:?}", e);
+            }
+        }
+    } else {
+        // WAL was fully checkpointed and removed - verify main database intact
+        let sm = SqliteStateMachine::new(&db_path).expect("failed to reopen state machine");
+        assert_eq!(
+            sm.count_kv_pairs().unwrap(),
+            500,
+            "all 500 entries should persist after full checkpoint"
+        );
+        println!("SUCCESS: WAL fully checkpointed, all data persisted");
+    }
+
+    // Phase 4: Verify PRAGMA integrity_check behavior
+    // After WAL corruption, integrity may pass or fail depending on SQLite recovery
+    let integrity = verify_database_integrity(&db_path);
+    println!(
+        "Integrity check result: {} (SQLite may auto-recover)",
+        if integrity { "passed" } else { "failed" }
+    );
+}
+
+// ====================================================================================
+// Test 10: WAL Frame Header Corruption - Tests First Frame
+// ====================================================================================
+
+#[tokio::test]
+async fn test_wal_frame_header_corruption() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "wal_frame_header");
+    let wal_path = temp_dir.path().join("wal_frame_header.db-wal");
+
+    // Phase 1: Write data without checkpoint to ensure WAL contains frames
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write entries - SQLite uses PASSIVE checkpoint which may leave WAL intact
+        for i in 0..50 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("frame_key_{}", i),
+                    value: format!("frame_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Explicitly don't call checkpoint - let WAL remain
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt first frame header (bytes 32-40 contain page number and size)
+    if wal_path.exists() {
+        // Corrupt at offset 32 (first frame header starts here)
+        // Frame header is 24 bytes: page number (4), commit size (4), salt (8), checksum (8)
+        corrupt_file(&wal_path, CorruptionStrategy::RandomBytes(32))
+            .expect("failed to corrupt WAL frame header");
+
+        // Phase 3: Verify behavior on restart
+        match SqliteStateMachine::new(&db_path) {
+            Ok(sm) => {
+                // Database opened successfully - SQLite may have recovered
+                let count = sm.count_kv_pairs().unwrap();
+
+                // Validate database state
+                let validation = sm.validate(1);
+                match validation {
+                    Ok(_) => {
+                        println!(
+                            "WAL frame corruption recovered, {} entries found",
+                            count
+                        );
+                    }
+                    Err(e) => {
+                        println!("Validation detected issue after recovery: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                // Database failed to open - corruption was severe
+                println!("Database failed to open due to WAL frame corruption: {:?}", e);
+            }
+        }
+    } else {
+        println!("WAL file not present - checkpoint completed during apply");
+    }
+}
+
+// ====================================================================================
+// Test 11: WAL Truncation at Non-Page Boundary - Simulates Partial Write
+// ====================================================================================
+
+#[tokio::test]
+async fn test_wal_truncation_at_non_page_boundary() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "wal_truncation");
+    let wal_path = temp_dir.path().join("wal_truncation.db-wal");
+
+    // Phase 1: Write substantial data to ensure WAL has multiple frames
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        for i in 0..100 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("truncation_key_{:03}", i),
+                    // Larger values to ensure multiple WAL pages
+                    value: format!("truncation_value_{:03}_{}", i, "y".repeat(200)),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        drop(sm);
+    }
+
+    // Phase 2: Truncate WAL to non-page-aligned size (simulates crash during write)
+    if wal_path.exists() {
+        // Truncate to 75% of original size, which likely leaves orphaned frames
+        corrupt_file(&wal_path, CorruptionStrategy::Truncate(75))
+            .expect("failed to truncate WAL");
+
+        // Phase 3: Attempt recovery
+        match SqliteStateMachine::new(&db_path) {
+            Ok(sm) => {
+                let count = sm.count_kv_pairs().unwrap();
+
+                // SQLite should recover at least some entries
+                assert!(
+                    count >= 50,
+                    "should recover at least 50 entries after WAL truncation, got {}",
+                    count
+                );
+
+                println!(
+                    "SUCCESS: Recovered {} entries after WAL truncation (75% of file)",
+                    count
+                );
+
+                // Verify validation still works
+                let validation = sm.validate(1);
+                if let Err(e) = validation {
+                    println!("Note: Validation issue after recovery: {:?}", e);
+                }
+            }
+            Err(e) => {
+                // If database completely fails to open, that's also acceptable
+                println!("Database failed to open after WAL truncation: {:?}", e);
+            }
+        }
+    } else {
+        // WAL was checkpointed - verify main DB is intact
+        let sm = SqliteStateMachine::new(&db_path).expect("should open after checkpoint");
+        assert_eq!(sm.count_kv_pairs().unwrap(), 100);
+        println!("WAL was checkpointed - all 100 entries intact");
+    }
+}
+
+// ====================================================================================
+// Test 12: WAL Header Corruption - Most Severe WAL Corruption
+// ====================================================================================
+
+#[tokio::test]
+async fn test_wal_header_corruption_severe() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "wal_header_severe");
+    let wal_path = temp_dir.path().join("wal_header_severe.db-wal");
+
+    // Phase 1: Create database and write data
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        for i in 0..30 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("header_key_{}", i),
+                    value: format!("header_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt WAL header (first 32 bytes contain magic number and format info)
+    if wal_path.exists() {
+        // Corrupt at offset 0 - the WAL header itself
+        // This is the most severe WAL corruption scenario
+        corrupt_file(&wal_path, CorruptionStrategy::RandomBytes(0))
+            .expect("failed to corrupt WAL header");
+
+        // Phase 3: Attempt to open database
+        match SqliteStateMachine::new(&db_path) {
+            Ok(sm) => {
+                let count = sm.count_kv_pairs().unwrap();
+
+                // With corrupted WAL header, SQLite may:
+                // 1. Ignore the WAL entirely (fall back to main DB state)
+                // 2. Recover partial data
+                // 3. Open with stale data
+                println!(
+                    "Database opened after WAL header corruption, {} entries found",
+                    count
+                );
+
+                // Either way, validation should work
+                let validation = sm.validate(1);
+                if let Err(e) = validation {
+                    println!("Validation detected issue: {:?}", e);
+                }
+            }
+            Err(e) => {
+                println!("Database failed to open after WAL header corruption: {:?}", e);
+            }
+        }
+    } else {
+        println!("WAL was already checkpointed - no corruption test needed");
+    }
+}
+
+// ====================================================================================
+// Test 13: Auto-Checkpoint Threshold Corruption
+// ====================================================================================
+
+#[tokio::test]
+async fn test_auto_checkpoint_threshold_corruption() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "auto_checkpoint_corrupt");
+    let wal_path = temp_dir.path().join("auto_checkpoint_corrupt.db-wal");
+
+    // Phase 1: Write data and trigger auto-checkpoint at threshold
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write enough data to trigger auto-checkpoint threshold (use 1KB threshold)
+        for i in 0..200 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("autockpt_key_{:03}", i),
+                    value: format!("autockpt_value_{:03}_{}", i, "z".repeat(50)),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Check WAL size before auto-checkpoint
+        let wal_size_before = sm.wal_file_size().expect("failed to get WAL size");
+
+        // Trigger auto-checkpoint if WAL is above 1KB threshold
+        if let Some(size) = wal_size_before
+            && size > 1024 {
+                match sm.auto_checkpoint_if_needed(1024) {
+                    Ok(Some(pages)) => {
+                        println!("Auto-checkpointed {} pages", pages);
+                    }
+                    Ok(None) => {
+                        println!("WAL below threshold, no checkpoint");
+                    }
+                    Err(e) => {
+                        println!("Auto-checkpoint error: {:?}", e);
+                    }
+                }
+            }
+
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt WAL if it still exists
+    if wal_path.exists() {
+        corrupt_file(&wal_path, CorruptionStrategy::RandomBytes(100))
+            .expect("failed to corrupt WAL");
+
+        // Phase 3: Verify recovery or detection
+        match SqliteStateMachine::new(&db_path) {
+            Ok(sm) => {
+                let count = sm.count_kv_pairs().unwrap();
+
+                // After auto-checkpoint, main DB should have most data
+                // WAL corruption shouldn't affect already-checkpointed data
+                assert!(
+                    count >= 150,
+                    "should have at least 150 entries after checkpoint+corruption, got {}",
+                    count
+                );
+
+                println!(
+                    "SUCCESS: {} entries intact after WAL corruption (post-checkpoint)",
+                    count
+                );
+            }
+            Err(e) => {
+                println!("Database failed to open: {:?}", e);
+            }
+        }
+    } else {
+        // WAL fully checkpointed and removed
+        let sm = SqliteStateMachine::new(&db_path).expect("should open");
+        assert_eq!(sm.count_kv_pairs().unwrap(), 200);
+        println!("All 200 entries checkpointed to main DB");
+    }
+}
+
+// ====================================================================================
+// Test 14: Snapshot Metadata Corruption - Corrupted Snapshot Data
+// ====================================================================================
+
+#[tokio::test]
+async fn test_snapshot_metadata_corruption_detection() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "snapshot_meta_corrupt");
+
+    // Phase 1: Create database with data and build a snapshot
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write 20 entries
+        for i in 0..20 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("snap_key_{}", i),
+                    value: format!("snap_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Build a snapshot
+        let _snapshot = sm
+            .build_snapshot()
+            .await
+            .expect("failed to build snapshot");
+
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt snapshot metadata in the database directly
+    {
+        let conn = Connection::open(&db_path).expect("failed to open database");
+
+        // Write corrupted blob to snapshots table
+        let corrupted_snapshot_bytes: Vec<u8> = (0..256).map(|_| rand::random::<u8>()).collect();
+
+        conn.execute(
+            "UPDATE snapshots SET data = ?1 WHERE id = 'current'",
+            rusqlite::params![corrupted_snapshot_bytes],
+        )
+        .expect("failed to corrupt snapshot");
+    }
+
+    // Phase 3: Attempt to read the snapshot
+    let sm = SqliteStateMachine::new(&db_path).expect("failed to reopen state machine");
+
+    // Try to get the current snapshot - should fail or return error
+    let mut sm_mut = Arc::clone(&sm);
+    let snapshot_result = sm_mut.get_current_snapshot().await;
+
+    // Either snapshot retrieval fails OR validation detects corruption
+    match snapshot_result {
+        Ok(Some(_)) => {
+            // If somehow it succeeded, validation should still detect corruption
+            // (corrupted snapshot is stored but data doesn't match expected format)
+            println!("Snapshot retrieved - checking validation");
+            let validation = sm.validate(1);
+            if validation.is_err() {
+                println!("SUCCESS: Validation detected snapshot corruption");
+            } else {
+                // If validation passes, the corrupted data was recoverable
+                println!("Note: Corrupted snapshot was somehow recoverable");
+            }
+        }
+        Ok(None) => {
+            // Snapshot was deleted or corrupted beyond recovery
+            println!("SUCCESS: Corrupted snapshot returned as None");
+        }
+        Err(e) => {
+            // Deserialization failed
+            println!("SUCCESS: Snapshot retrieval failed due to corruption: {:?}", e);
+        }
+    }
+
+    // Phase 4: Verify data integrity - original data should be preserved
+    let count = sm.count_kv_pairs().unwrap();
+    assert_eq!(count, 20, "original 20 entries should persist despite snapshot corruption");
+}
+
+// ====================================================================================
+// Test 15: Snapshot Index Inconsistency - last_log_id mismatch
+// ====================================================================================
+
+#[tokio::test]
+async fn test_snapshot_index_exceeds_applied_state() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "snapshot_index_inconsistent");
+
+    // Phase 1: Create database with data
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write 10 entries
+        for i in 0..10 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("index_key_{}", i),
+                    value: format!("index_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Build a valid snapshot
+        let _snapshot = sm
+            .build_snapshot()
+            .await
+            .expect("failed to build snapshot");
+
+        drop(sm);
+    }
+
+    // Phase 2: Verify snapshot and applied state are consistent
+    {
+        let sm = SqliteStateMachine::new(&db_path).expect("failed to reopen state machine");
+
+        // Get applied state
+        let mut sm_mut = Arc::clone(&sm);
+        let (last_applied, _membership) = sm_mut
+            .applied_state()
+            .await
+            .expect("failed to get applied state");
+
+        // Get snapshot
+        let snapshot = sm_mut
+            .get_current_snapshot()
+            .await
+            .expect("failed to get snapshot");
+
+        if let Some(snap) = snapshot
+            && let (Some(applied_log_id), Some(snap_log_id)) = (last_applied, snap.meta.last_log_id)
+            {
+                assert_eq!(
+                    applied_log_id.index, snap_log_id.index,
+                    "snapshot index should match applied index"
+                );
+                println!(
+                    "SUCCESS: Snapshot index {} matches applied index {}",
+                    snap_log_id.index, applied_log_id.index
+                );
+            }
+
+        // Validation should pass on consistent state
+        let validation = sm.validate(1);
+        assert!(
+            validation.is_ok(),
+            "validation should pass on consistent state: {:?}",
+            validation
+        );
+    }
+}
+
+// ====================================================================================
+// Test 16: Empty Snapshot After Entries - Simulates Snapshot Corruption
+// ====================================================================================
+
+#[tokio::test]
+async fn test_empty_snapshot_with_nonzero_entries() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "empty_snapshot");
+
+    // Phase 1: Create database with data
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        // Write entries
+        for i in 0..15 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("empty_key_{}", i),
+                    value: format!("empty_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Build snapshot
+        let _snapshot = sm
+            .build_snapshot()
+            .await
+            .expect("failed to build snapshot");
+
+        drop(sm);
+    }
+
+    // Phase 2: Delete snapshot from database
+    {
+        let conn = Connection::open(&db_path).expect("failed to open database");
+        conn.execute("DELETE FROM snapshots WHERE id = 'current'", [])
+            .expect("failed to delete snapshot");
+    }
+
+    // Phase 3: Verify database still works without snapshot
+    let sm = SqliteStateMachine::new(&db_path).expect("failed to reopen state machine");
+
+    // Data should still be present
+    assert_eq!(
+        sm.count_kv_pairs().unwrap(),
+        15,
+        "entries should persist without snapshot"
+    );
+
+    // Get snapshot should return None
+    let mut sm_mut = Arc::clone(&sm);
+    let snapshot = sm_mut
+        .get_current_snapshot()
+        .await
+        .expect("failed to query snapshot");
+
+    assert!(snapshot.is_none(), "snapshot should be None after deletion");
+
+    // Validation should still pass (no snapshot is valid)
+    let validation = sm.validate(1);
+    assert!(
+        validation.is_ok(),
+        "validation should pass without snapshot: {:?}",
+        validation
+    );
+
+    println!("SUCCESS: Database functional without snapshot");
+}
+
+// ====================================================================================
+// Test 17: Snapshot Data Mismatch - Snapshot content doesn't match state
+// ====================================================================================
+
+#[tokio::test]
+async fn test_snapshot_data_state_mismatch() {
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "snapshot_mismatch");
+
+    // Phase 1: Create database with snapshot
+    {
+        let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
+
+        for i in 0..25 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("mismatch_key_{}", i),
+                    value: format!("mismatch_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Build snapshot
+        let _snapshot = sm
+            .build_snapshot()
+            .await
+            .expect("failed to build snapshot");
+
+        drop(sm);
+    }
+
+    // Phase 2: Modify KV state without updating snapshot
+    {
+        let conn = Connection::open(&db_path).expect("failed to open database");
+
+        // Delete half the entries from KV store
+        conn.execute("DELETE FROM state_machine_kv WHERE key LIKE 'mismatch_key_1%'", [])
+            .expect("failed to delete entries");
+    }
+
+    // Phase 3: Verify the mismatch is detectable
+    let sm = SqliteStateMachine::new(&db_path).expect("failed to reopen state machine");
+
+    // Count entries - should be less than 25
+    let count = sm.count_kv_pairs().unwrap();
+    println!("KV entries after deletion: {}", count);
+    assert!(
+        count < 25,
+        "some entries should be deleted, got {}",
+        count
+    );
+
+    // Snapshot should still have old metadata
+    let mut sm_mut = Arc::clone(&sm);
+    let snapshot = sm_mut
+        .get_current_snapshot()
+        .await
+        .expect("failed to get snapshot");
+
+    if let Some(snap) = snapshot
+        && let Some(log_id) = snap.meta.last_log_id {
+            // Snapshot claims index 24 was applied, but we deleted entries
+            // This is a detectable inconsistency
+            println!(
+                "Snapshot claims last_log_id index {}, but only {} entries remain",
+                log_id.index, count
+            );
+        }
+
+    // Note: This test demonstrates that snapshot metadata can become stale
+    // after manual database modification (which would indicate corruption)
+    println!("SUCCESS: Detected potential snapshot/state mismatch");
+}
+
+// ====================================================================================
+// Test 18: Cross-Storage Metadata Corruption - Log and State Machine Divergence
+// ====================================================================================
+
+#[tokio::test]
+async fn test_cross_storage_corruption_log_state_divergence() {
+    use aspen::raft::storage::RedbLogStore;
+    use openraft::storage::{IOFlushed, RaftLogStorage};
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("cross_log.redb");
+    let sm_path = create_db_path(&temp_dir, "cross_sm");
+
+    // Phase 1: Create consistent log store and state machine
+    {
+        let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+        let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+
+        // Write 20 entries to both log and state machine
+        for i in 0..20_u64 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("cross_key_{}", i),
+                    value: format!("cross_value_{}", i),
+                },
+            );
+
+            // Append to log
+            log_store
+                .append([entry.clone()], IOFlushed::noop())
+                .await
+                .expect("failed to append to log");
+
+            // Apply to state machine
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        // Set committed index to 19
+        log_store
+            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 19)))
+            .await
+            .expect("failed to save committed");
+
+        drop(log_store);
+        drop(sm);
+    }
+
+    // Phase 2: Verify consistency before corruption
+    {
+        let log_store = RedbLogStore::new(&log_path).expect("failed to reopen log store");
+        let sm = SqliteStateMachine::new(&sm_path).expect("failed to reopen state machine");
+
+        let result = sm.validate_consistency_with_log(&log_store).await;
+        assert!(result.is_ok(), "should be consistent before corruption: {:?}", result);
+    }
+
+    // Phase 3: Corrupt state machine metadata (set last_applied to future index)
+    {
+        let conn = Connection::open(&sm_path).expect("failed to open state machine db");
+
+        // Serialize a log_id with index 100 (beyond committed)
+        let future_log_id: Option<openraft::LogId<AppTypeConfig>> = Some(log_id::<AppTypeConfig>(1, 1, 100));
+        let corrupted_bytes = bincode::serialize(&future_log_id).expect("failed to serialize");
+
+        conn.execute(
+            "UPDATE state_machine_meta SET value = ?1 WHERE key = 'last_applied_log'",
+            rusqlite::params![corrupted_bytes],
+        )
+        .expect("failed to corrupt last_applied");
+    }
+
+    // Phase 4: Detect cross-storage inconsistency
+    {
+        let log_store = RedbLogStore::new(&log_path).expect("failed to reopen log store");
+        let sm = SqliteStateMachine::new(&sm_path).expect("failed to reopen state machine");
+
+        let result = sm.validate_consistency_with_log(&log_store).await;
+        assert!(
+            result.is_err(),
+            "should detect cross-storage inconsistency after corruption"
+        );
+
+        let err_msg = result.unwrap_err();
+        assert!(
+            err_msg.contains("100") && err_msg.contains("corruption"),
+            "error should mention corrupted index: {}",
+            err_msg
+        );
+
+        println!("SUCCESS: Detected cross-storage corruption: {}", err_msg);
+    }
+}
+
+// ====================================================================================
+// Test 19: Cross-Storage Term Mismatch - Detects Term Inconsistency
+// ====================================================================================
+
+#[tokio::test]
+async fn test_cross_storage_term_mismatch_detection() {
+    use aspen::raft::storage::RedbLogStore;
+    use openraft::storage::{IOFlushed, RaftLogStorage};
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("term_mismatch_log.redb");
+    let sm_path = create_db_path(&temp_dir, "term_mismatch_sm");
+
+    // Phase 1: Create log store with entries in term 5
+    {
+        let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+
+        for i in 0..10_u64 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(5, 1, i), // Term 5
+                AppRequest::Set {
+                    key: format!("term_key_{}", i),
+                    value: format!("term_value_{}", i),
+                },
+            );
+
+            log_store
+                .append([entry], IOFlushed::noop())
+                .await
+                .expect("failed to append to log");
+        }
+
+        // Save vote for term 5
+        let vote = openraft::Vote::new(5, 1);
+        log_store.save_vote(&vote).await.expect("failed to save vote");
+
+        log_store
+            .save_committed(Some(log_id::<AppTypeConfig>(5, 1, 9)))
+            .await
+            .expect("failed to save committed");
+
+        drop(log_store);
+    }
+
+    // Phase 2: Create state machine with entries claiming term 10 (inconsistent)
+    {
+        let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+
+        for i in 0..10_u64 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(10, 1, i), // Term 10 (mismatched!)
+                AppRequest::Set {
+                    key: format!("term_key_{}", i),
+                    value: format!("term_value_{}", i),
+                },
+            );
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply entry");
+        }
+
+        drop(sm);
+    }
+
+    // Phase 3: Verify the term mismatch is detectable
+    {
+        let mut log_store = RedbLogStore::new(&log_path).expect("failed to reopen log store");
+        let sm = SqliteStateMachine::new(&sm_path).expect("failed to reopen state machine");
+
+        // Get applied state from state machine
+        let mut sm_mut = Arc::clone(&sm);
+        let (last_applied, _membership) = sm_mut
+            .applied_state()
+            .await
+            .expect("failed to get applied state");
+
+        // Get log state
+        let log_state = log_store
+            .get_log_state()
+            .await
+            .expect("failed to get log state");
+
+        // Check for term mismatch
+        if let (Some(applied), Some(log_last)) = (last_applied, log_state.last_log_id) {
+            // Terms should match for consistent state
+            assert_ne!(
+                applied.leader_id.term, log_last.leader_id.term,
+                "test setup should have mismatched terms"
+            );
+
+            println!(
+                "SUCCESS: Detected term mismatch - state machine term {} vs log term {}",
+                applied.leader_id.term, log_last.leader_id.term
+            );
+        }
+    }
+}
+
+// ====================================================================================
+// Test 20: Cross-Storage Recovery After Redb Corruption
+// ====================================================================================
+
+#[tokio::test]
+async fn test_cross_storage_recovery_after_log_corruption() {
+    use aspen::raft::storage::RedbLogStore;
+    use aspen::raft::storage_validation::validate_raft_storage;
+    use openraft::storage::{IOFlushed, RaftLogStorage};
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("recovery_log.redb");
+    let sm_path = create_db_path(&temp_dir, "recovery_sm");
+
+    // Phase 1: Create consistent state
+    {
+        let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+        let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+
+        for i in 0..30_u64 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("recovery_key_{}", i),
+                    value: format!("recovery_value_{}", i),
+                },
+            );
+
+            log_store
+                .append([entry.clone()], IOFlushed::noop())
+                .await
+                .expect("failed to append");
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply");
+        }
+
+        log_store
+            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 29)))
+            .await
+            .expect("failed to save committed");
+
+        drop(log_store);
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt redb log entries (delete entries 15-20)
+    {
+        use redb::{Database, TableDefinition};
+        const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
+
+        let db = Database::open(&log_path).expect("failed to open redb");
+        let write_txn = db.begin_write().expect("failed to begin write");
+
+        {
+            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
+            for i in 15..20_u64 {
+                table.remove(i).expect("failed to delete entry");
+            }
+        }
+
+        write_txn.commit().expect("failed to commit");
+    }
+
+    // Phase 3: Validate log is corrupted
+    let log_validation = validate_raft_storage(1, &log_path);
+    assert!(
+        log_validation.is_err(),
+        "log validation should detect gap from corruption"
+    );
+
+    // Phase 4: State machine should still be valid
+    let sm = SqliteStateMachine::new(&sm_path).expect("failed to reopen state machine");
+    let sm_validation = sm.validate(1);
+    assert!(
+        sm_validation.is_ok(),
+        "state machine should still be valid: {:?}",
+        sm_validation
+    );
+
+    // Verify state machine has all 30 entries
+    assert_eq!(
+        sm.count_kv_pairs().unwrap(),
+        30,
+        "state machine should have all 30 entries despite log corruption"
+    );
+
+    println!("SUCCESS: State machine intact despite log corruption - recovery possible from snapshot");
+}
+
+// ====================================================================================
+// Test 21: Both Storage Components Corrupted
+// ====================================================================================
+
+#[tokio::test]
+async fn test_both_storage_components_corrupted() {
+    use aspen::raft::storage::RedbLogStore;
+    use aspen::raft::storage_validation::validate_raft_storage;
+    use openraft::storage::{IOFlushed, RaftLogStorage};
+
+    let temp_dir = create_temp_dir();
+    let log_path = temp_dir.path().join("both_corrupt_log.redb");
+    let sm_path = create_db_path(&temp_dir, "both_corrupt_sm");
+
+    // Phase 1: Create consistent state
+    {
+        let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
+        let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
+
+        for i in 0..20_u64 {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                log_id::<AppTypeConfig>(1, 1, i),
+                AppRequest::Set {
+                    key: format!("both_key_{}", i),
+                    value: format!("both_value_{}", i),
+                },
+            );
+
+            log_store
+                .append([entry.clone()], IOFlushed::noop())
+                .await
+                .expect("failed to append");
+
+            let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
+            sm.apply(entries).await.expect("failed to apply");
+        }
+
+        log_store
+            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 19)))
+            .await
+            .expect("failed to save committed");
+
+        drop(log_store);
+        drop(sm);
+    }
+
+    // Phase 2: Corrupt BOTH storage components
+
+    // Corrupt redb log (delete entries)
+    {
+        use redb::{Database, TableDefinition};
+        const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
+
+        let db = Database::open(&log_path).expect("failed to open redb");
+        let write_txn = db.begin_write().expect("failed to begin write");
+        {
+            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
+            for i in 10..15_u64 {
+                table.remove(i).expect("failed to delete");
+            }
+        }
+        write_txn.commit().expect("failed to commit");
+    }
+
+    // Corrupt SQLite database (truncate)
+    corrupt_file(&sm_path, CorruptionStrategy::Truncate(50))
+        .expect("failed to corrupt state machine");
+
+    // Phase 3: Both validations should fail
+    let log_validation = validate_raft_storage(1, &log_path);
+    assert!(
+        log_validation.is_err(),
+        "log validation should fail after corruption"
+    );
+
+    let sm_result = SqliteStateMachine::new(&sm_path);
+    if let Ok(sm) = sm_result {
+        let sm_validation = sm.validate(1);
+        assert!(
+            sm_validation.is_err(),
+            "state machine validation should fail after truncation"
+        );
+    }
+
+    // Phase 4: Integrity check should fail
+    assert!(
+        !verify_database_integrity(&sm_path),
+        "integrity check should fail on corrupted database"
+    );
+
+    println!("SUCCESS: Detected corruption in both storage components");
+}

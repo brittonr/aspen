@@ -27,6 +27,8 @@ pub type NodeId = u64;
 pub enum AppRequest {
     Set { key: String, value: String },
     SetMulti { pairs: Vec<(String, String)> },
+    Delete { key: String },
+    DeleteMulti { keys: Vec<String> },
 }
 
 impl fmt::Display for AppRequest {
@@ -40,6 +42,17 @@ impl fmt::Display for AppRequest {
                         write!(f, ", ")?;
                     }
                     write!(f, "({k}, {v})")?;
+                }
+                write!(f, "] }}")
+            }
+            AppRequest::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
+            AppRequest::DeleteMulti { keys } => {
+                write!(f, "DeleteMulti {{ keys: [")?;
+                for (i, k) in keys.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}")?;
                 }
                 write!(f, "] }}")
             }

@@ -138,27 +138,11 @@
           }
         );
 
-        srcFilters = path: type:
-          builtins.any (suffix: lib.hasSuffix suffix path) [
-            ".subplot" # build and documentation
-            ".md"
-            ".yaml"
-            ".css"
-            ".html" # Include askama templates
-          ]
-          ||
-          # Include vendor directory for h3-iroh and snix proto files
-          (lib.hasInfix "/vendor/" path)
-          ||
-          # Include templates directory for askama
-          (lib.hasInfix "/templates/" path)
-          ||
-          # Default filter from crane (allow .rs files)
-          (craneLib.filterCargoSources path type);
-
-        src = lib.cleanSourceWith {
-          src = ./.;
-          filter = srcFilters;
+        # Use crane's path to properly include vendored openraft
+        src = craneLib.path {
+          path = ./.;
+          # Include everything - vendored openraft needs to be included
+          filter = path: type: true;
         };
 
         basicArgs = {
@@ -246,6 +230,9 @@
               }
               {
                 name = "worker";
+              }
+              {
+                name = "aspen-node";
               }
             ]
           );
@@ -378,7 +365,7 @@
           };
         };
 
-        packages.default = mvm-ci;
+        packages.default = bins.aspen-node;
         packages.netwatch = netwatch;
 
         # Docker image for cluster testing (using streamLayeredImage for better caching)
@@ -434,6 +421,12 @@
         apps.synthetic-events = flake-utils.lib.mkApp {
           drv = self.bins.${system}.synthetic-events;
         };
+
+        apps.aspen-node = flake-utils.lib.mkApp {
+          drv = bins.aspen-node;
+        };
+
+        apps.default = self.apps.${system}.aspen-node;
 
         # Integration tests app - starts flawless server and runs tests
         apps.integration-tests = {

@@ -859,6 +859,16 @@ impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
                         }
                         AppResponse { value: None }
                     }
+                    AppRequest::Delete { key } => {
+                        sm.data.remove(key);
+                        AppResponse { value: None }
+                    }
+                    AppRequest::DeleteMulti { keys } => {
+                        for key in keys {
+                            sm.data.remove(key);
+                        }
+                        AppResponse { value: None }
+                    }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =

@@ -66,9 +66,10 @@ use tracing::{info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
-    WriteCommand, WriteRequest, WriteResult,
+    ControlPlaneError, DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError,
+    ReadRequest, ReadResult, WriteCommand, WriteRequest, WriteResult,
 };
+use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use crate::raft::storage::StateMachineStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig};
@@ -151,6 +152,11 @@ pub enum RaftActorMessage {
         ReadRequest,
         RpcReplyPort<Result<ReadResult, KeyValueStoreError>>,
     ),
+    /// Delete a key from the store.
+    Delete(
+        DeleteRequest,
+        RpcReplyPort<Result<DeleteResult, KeyValueStoreError>>,
+    ),
     /// Get current Raft metrics for observability.
     GetMetrics(RpcReplyPort<Result<RaftMetrics<AppTypeConfig>, ControlPlaneError>>),
     /// Trigger a snapshot immediately.
@@ -232,6 +238,14 @@ impl Actor for RaftActor {
                 let result = async {
                     ensure_initialized_kv(state)?;
                     handle_read(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::Delete(request, reply) => {
+                let result = async {
+                    ensure_initialized_kv(state)?;
+                    handle_delete(state, request).await
                 }
                 .await;
                 let _ = reply.send(result);
@@ -379,20 +393,77 @@ async fn handle_change_membership(
     Ok(state.cluster_state.clone())
 }
 
+/// Validate key size against MAX_KEY_SIZE.
+fn validate_key_size(key: &str) -> Result<(), KeyValueStoreError> {
+    if key.len() > MAX_KEY_SIZE as usize {
+        return Err(KeyValueStoreError::KeyTooLarge {
+            size: key.len(),
+            max: MAX_KEY_SIZE,
+        });
+    }
+    Ok(())
+}
+
+/// Validate value size against MAX_VALUE_SIZE.
+fn validate_value_size(value: &str) -> Result<(), KeyValueStoreError> {
+    if value.len() > MAX_VALUE_SIZE as usize {
+        return Err(KeyValueStoreError::ValueTooLarge {
+            size: value.len(),
+            max: MAX_VALUE_SIZE,
+        });
+    }
+    Ok(())
+}
+
+/// Validate batch size against MAX_SETMULTI_KEYS.
+fn validate_batch_size(size: usize) -> Result<(), KeyValueStoreError> {
+    if size > MAX_SETMULTI_KEYS as usize {
+        return Err(KeyValueStoreError::BatchTooLarge {
+            size,
+            max: MAX_SETMULTI_KEYS,
+        });
+    }
+    Ok(())
+}
+
 #[instrument(skip(state, request), fields(node_id = state.node_id, command = ?request.command))]
 async fn handle_write(
     state: &mut RaftActorState,
     request: WriteRequest,
 ) -> Result<WriteResult, KeyValueStoreError> {
     let cmd = request.command.clone();
+
+    // Tiger Style: Validate input sizes before processing
     let app_req = match cmd.clone() {
-        WriteCommand::Set { ref key, ref value } => AppRequest::Set {
-            key: key.clone(),
-            value: value.clone(),
-        },
-        WriteCommand::SetMulti { ref pairs } => AppRequest::SetMulti {
-            pairs: pairs.clone(),
-        },
+        WriteCommand::Set { ref key, ref value } => {
+            validate_key_size(key)?;
+            validate_value_size(value)?;
+            AppRequest::Set {
+                key: key.clone(),
+                value: value.clone(),
+            }
+        }
+        WriteCommand::SetMulti { ref pairs } => {
+            validate_batch_size(pairs.len())?;
+            for (key, value) in pairs {
+                validate_key_size(key)?;
+                validate_value_size(value)?;
+            }
+            AppRequest::SetMulti {
+                pairs: pairs.clone(),
+            }
+        }
+        WriteCommand::Delete { ref key } => {
+            validate_key_size(key)?;
+            AppRequest::Delete { key: key.clone() }
+        }
+        WriteCommand::DeleteMulti { ref keys } => {
+            validate_batch_size(keys.len())?;
+            for key in keys {
+                validate_key_size(key)?;
+            }
+            AppRequest::DeleteMulti { keys: keys.clone() }
+        }
     };
     state
         .raft
@@ -402,6 +473,35 @@ async fn handle_write(
             reason: err.to_string(),
         })?;
     Ok(WriteResult { command: cmd })
+}
+
+#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
+async fn handle_delete(
+    state: &mut RaftActorState,
+    request: DeleteRequest,
+) -> Result<DeleteResult, KeyValueStoreError> {
+    // Validate key size
+    validate_key_size(&request.key)?;
+
+    // Check if key exists before deletion (for deleted flag)
+    let existed = state.state_machine.get(&request.key).await.is_some();
+
+    // Submit delete through Raft
+    let app_req = AppRequest::Delete {
+        key: request.key.clone(),
+    };
+    state
+        .raft
+        .client_write(app_req)
+        .await
+        .map_err(|err| KeyValueStoreError::Failed {
+            reason: err.to_string(),
+        })?;
+
+    Ok(DeleteResult {
+        key: request.key,
+        deleted: existed,
+    })
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
@@ -571,6 +671,14 @@ impl KeyValueStore for RaftControlClient {
 
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         call_t!(self.actor, RaftActorMessage::Read, 500, request).map_err(|err| {
+            KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        call_t!(self.actor, RaftActorMessage::Delete, 500, request).map_err(|err| {
             KeyValueStoreError::Failed {
                 reason: err.to_string(),
             }

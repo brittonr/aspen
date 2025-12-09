@@ -15,8 +15,8 @@ use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::constants::{
-    IROH_CONNECT_TIMEOUT, IROH_READ_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_RPC_MESSAGE_SIZE,
-    MAX_SNAPSHOT_SIZE,
+    IROH_CONNECT_TIMEOUT, IROH_READ_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_PEERS,
+    MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
@@ -72,17 +72,38 @@ impl IrpcRaftNetworkFactory {
     ///
     /// This allows dynamic peer addition after the network factory has been created.
     /// Useful for integration tests where nodes exchange addresses at runtime.
+    ///
+    /// Tiger Style: Bounded peer map to prevent Sybil attacks and memory exhaustion.
     pub async fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
         let mut peers = self.peer_addrs.write().await;
+        if peers.len() >= MAX_PEERS as usize && !peers.contains_key(&node_id) {
+            warn!(
+                current_peers = peers.len(),
+                max_peers = MAX_PEERS,
+                "peer map full, dropping add_peer request for node {}", node_id
+            );
+            return;
+        }
         peers.insert(node_id, addr);
     }
 
     /// Update peer addresses in bulk.
     ///
     /// Extends the existing peer map with new entries. Existing entries are replaced.
+    /// Tiger Style: Bounded peer map to prevent Sybil attacks and memory exhaustion.
     pub async fn update_peers(&self, new_peers: HashMap<NodeId, iroh::EndpointAddr>) {
         let mut peers = self.peer_addrs.write().await;
-        peers.extend(new_peers);
+        for (node_id, addr) in new_peers {
+            if peers.len() >= MAX_PEERS as usize && !peers.contains_key(&node_id) {
+                warn!(
+                    current_peers = peers.len(),
+                    max_peers = MAX_PEERS,
+                    "peer map full, dropping peer {} from bulk update", node_id
+                );
+                continue;
+            }
+            peers.insert(node_id, addr);
+        }
     }
 
     /// Get a clone of the current peer addresses map.

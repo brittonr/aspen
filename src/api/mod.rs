@@ -152,6 +152,8 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
 pub enum WriteCommand {
     Set { key: String, value: String },
     SetMulti { pairs: Vec<(String, String)> },
+    Delete { key: String },
+    DeleteMulti { keys: Vec<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -181,10 +183,36 @@ pub enum KeyValueStoreError {
     NotFound { key: String },
     #[error("operation failed: {reason}")]
     Failed { reason: String },
+    #[error("key size {size} exceeds maximum of {max} bytes")]
+    KeyTooLarge { size: usize, max: u32 },
+    #[error("value size {size} exceeds maximum of {max} bytes")]
+    ValueTooLarge { size: usize, max: u32 },
+    #[error("batch size {size} exceeds maximum of {max} keys")]
+    BatchTooLarge { size: usize, max: u32 },
+    #[error("operation timed out after {duration_ms}ms")]
+    Timeout { duration_ms: u64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeleteRequest {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeleteResult {
+    pub key: String,
+    /// True if the key existed and was deleted, false if it didn't exist.
+    pub deleted: bool,
 }
 
 #[async_trait]
 pub trait KeyValueStore: Send + Sync {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
+
+    /// Delete a key from the store.
+    ///
+    /// Returns Ok with deleted=true if the key was found and removed,
+    /// or Ok with deleted=false if the key was not found (idempotent).
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError>;
 }

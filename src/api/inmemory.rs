@@ -6,8 +6,8 @@ use tokio::sync::Mutex;
 
 use super::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
-    InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult, WriteCommand,
-    WriteRequest, WriteResult,
+    DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest,
+    ReadResult, WriteCommand, WriteRequest, WriteResult,
 };
 
 #[derive(Clone, Default)]
@@ -111,6 +111,20 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     command: request.command.clone(),
                 })
             }
+            WriteCommand::Delete { ref key } => {
+                inner.remove(key);
+                Ok(WriteResult {
+                    command: request.command.clone(),
+                })
+            }
+            WriteCommand::DeleteMulti { ref keys } => {
+                for key in keys {
+                    inner.remove(key);
+                }
+                Ok(WriteResult {
+                    command: request.command.clone(),
+                })
+            }
         }
     }
 
@@ -123,5 +137,14 @@ impl KeyValueStore for DeterministicKeyValueStore {
             }),
             None => Err(KeyValueStoreError::NotFound { key: request.key }),
         }
+    }
+
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        let mut inner = self.inner.lock().await;
+        let deleted = inner.remove(&request.key).is_some();
+        Ok(DeleteResult {
+            key: request.key,
+            deleted,
+        })
     }
 }

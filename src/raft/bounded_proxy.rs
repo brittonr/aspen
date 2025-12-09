@@ -144,6 +144,23 @@ impl Default for BoundedMailboxMetrics {
 /// - Thread-safe: Can be used from multiple tasks concurrently
 /// - Metrics tracking: Counts sent, rejected, and error messages
 ///
+/// ## Backpressure Semantics
+///
+/// **IMPORTANT**: This proxy enforces **enqueue-rate** backpressure, NOT **processing-rate**
+/// backpressure. Permits are released immediately after `send_message()` returns, which only
+/// means the message was enqueued in the actor's mailbox, NOT that it has been processed.
+///
+/// - **Enqueue-rate**: Limits how fast messages can be sent to the actor mailbox
+/// - **Processing-rate**: Would limit based on how fast the actor processes messages
+///
+/// This means:
+/// - The semaphore tracks "messages sent" rather than "messages in mailbox"
+/// - The actor's internal mailbox can still grow under sustained load
+/// - For true processing-rate backpressure, use `health_check()` to monitor actor state
+///
+/// Tiger Style: This is an explicit design choice to avoid blocking senders on slow
+/// processing, while still preventing unbounded send rates.
+///
 /// ## Performance Characteristics
 ///
 /// - Semaphore overhead: ~10-20 CPU cycles per acquire/release
@@ -276,15 +293,14 @@ impl BoundedRaftActorProxy {
                 self.metrics
                     .send_errors_total
                     .fetch_add(1, Ordering::Relaxed);
+                // Tiger Style: Explicit permit release on error path
+                drop(permit);
                 return Err(BoundedMailboxError::SendError { source: e });
             }
         }
 
-        // Release permit after send (message is now in flight)
-        // Note: In production, we'd ideally track message completion and release
-        // permit only after processing, but for simplicity we release immediately.
-        // This means the semaphore tracks "messages sent" rather than "messages in mailbox",
-        // which is sufficient for backpressure purposes.
+        // Tiger Style: Explicit permit release after enqueue
+        // Permit tracks "enqueue rate" not "processing rate" - see module docs
         drop(permit);
 
         Ok(())
@@ -332,11 +348,14 @@ impl BoundedRaftActorProxy {
                 self.metrics
                     .send_errors_total
                     .fetch_add(1, Ordering::Relaxed);
+                // Tiger Style: Explicit permit release on error path
+                drop(permit);
                 return Err(BoundedMailboxError::SendError { source: e });
             }
         }
 
-        // Release permit
+        // Tiger Style: Explicit permit release after enqueue
+        // Permit tracks "enqueue rate" not "processing rate" - see module docs
         drop(permit);
 
         Ok(())

@@ -363,6 +363,22 @@ impl ClusterBootstrapConfig {
             self.http_addr = other.http_addr;
         }
         self.control_backend = other.control_backend;
+        // Tiger Style: Explicitly merge storage_backend if provided
+        // Note: We always merge storage_backend since it defaults to Sqlite
+        // and we want CLI args to override both env and TOML configs
+        self.storage_backend = other.storage_backend;
+        if other.redb_log_path.is_some() {
+            self.redb_log_path = other.redb_log_path;
+        }
+        if other.redb_sm_path.is_some() {
+            self.redb_sm_path = other.redb_sm_path;
+        }
+        if other.sqlite_log_path.is_some() {
+            self.sqlite_log_path = other.sqlite_log_path;
+        }
+        if other.sqlite_sm_path.is_some() {
+            self.sqlite_sm_path = other.sqlite_sm_path;
+        }
         if other.heartbeat_interval_ms != default_heartbeat_interval_ms() {
             self.heartbeat_interval_ms = other.heartbeat_interval_ms;
         }

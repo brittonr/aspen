@@ -54,7 +54,10 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
-use crate::raft::constants::{DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS};
+use crate::raft::constants::{
+    DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
+    MAX_SNAPSHOT_SIZE,
+};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 
 /// Errors that can occur when using SQLite storage
@@ -654,6 +657,47 @@ impl SqliteStateMachine {
         Ok(AppResponse { value: None })
     }
 
+    /// Apply a single key Delete operation.
+    ///
+    /// Deletes a key from the state machine.
+    /// Returns response indicating the operation completed.
+    ///
+    /// Tiger Style: Single-purpose, idempotent (no error if key doesn't exist).
+    fn apply_delete(conn: &Connection, key: &str) -> Result<AppResponse, io::Error> {
+        conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
+            .context(ExecuteSnafu)?;
+        Ok(AppResponse { value: None })
+    }
+
+    /// Apply a batched DeleteMulti operation.
+    ///
+    /// Deletes multiple keys in a single operation.
+    /// Enforces MAX_SETMULTI_KEYS limit to prevent unbounded resource usage.
+    /// Uses prepared statement for consistent performance.
+    ///
+    /// Tiger Style: Fixed limit, batched operation, idempotent.
+    fn apply_delete_multi(conn: &Connection, keys: &[String]) -> Result<AppResponse, io::Error> {
+        if keys.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "DeleteMulti operation with {} keys exceeds maximum limit of {}",
+                keys.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Prepare statement once and reuse for all deletes
+        let mut stmt = conn
+            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+
+        for key in keys {
+            stmt.execute(params![key]).context(ExecuteSnafu)?;
+        }
+
+        drop(stmt); // Explicit drop (Tiger Style)
+        Ok(AppResponse { value: None })
+    }
+
     /// Apply a membership change operation.
     ///
     /// Stores the new membership configuration in the state machine metadata.
@@ -687,6 +731,8 @@ impl SqliteStateMachine {
             EntryPayload::Normal(req) => match req {
                 AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
                 AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
+                AppRequest::Delete { key } => Self::apply_delete(conn, key),
+                AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)
@@ -712,8 +758,22 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             .context(QuerySnafu)?;
 
         let mut data = BTreeMap::new();
+        let mut entry_count: u32 = 0;
         for row in rows {
             let (key, value) = row.context(QuerySnafu)?;
+
+            // Tiger Style: Check entry count BEFORE inserting to prevent unbounded growth
+            entry_count += 1;
+            if entry_count > MAX_SNAPSHOT_ENTRIES {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "snapshot exceeds maximum entry count of {} (current: {})",
+                        MAX_SNAPSHOT_ENTRIES, entry_count
+                    ),
+                ));
+            }
+
             data.insert(key, value);
         }
 
@@ -761,6 +821,18 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
         // Serialize snapshot data
         let snapshot_data = serde_json::to_vec(&data).context(JsonSerializeSnafu)?;
 
+        // Tiger Style: Validate size BEFORE storing to database
+        if snapshot_data.len() as u64 > MAX_SNAPSHOT_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "serialized snapshot size {} bytes exceeds maximum of {} bytes",
+                    snapshot_data.len(),
+                    MAX_SNAPSHOT_SIZE
+                ),
+            ));
+        }
+
         // Generate snapshot ID
         let snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
         let snapshot_id = if let Some(last) = last_applied_log {
@@ -793,12 +865,19 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
                 operation: "snapshot_build",
             })?;
 
+        // Start transaction with RAII guard for automatic rollback on error
+        // Tiger Style: Atomic snapshot write, fail-fast with explicit error handling
+        let guard = TransactionGuard::new(&write_conn)?;
+
         write_conn
             .execute(
                 "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
                 params![snapshot_blob],
             )
             .context(ExecuteSnafu)?;
+
+        // Commit transaction - guard is consumed and dropped after commit
+        guard.commit()?;
 
         Ok(Snapshot {
             meta,

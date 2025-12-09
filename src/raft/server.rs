@@ -12,15 +12,17 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use anyhow::{Context, Result};
 use openraft::Raft;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::raft::constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 
@@ -73,6 +75,8 @@ impl RaftRpcServer {
 }
 
 /// Main server loop that accepts incoming connections and processes RPCs.
+///
+/// Tiger Style: Bounded connection count to prevent DoS attacks.
 async fn run_server(
     endpoint_manager: Arc<IrohEndpointManager>,
     raft_core: Raft<AppTypeConfig>,
@@ -80,7 +84,10 @@ async fn run_server(
 ) -> Result<()> {
     let endpoint = endpoint_manager.endpoint();
 
-    info!("IRPC server listening for incoming connections");
+    // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
+    let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
+
+    info!(max_connections = MAX_CONCURRENT_CONNECTIONS, "IRPC server listening for incoming connections");
 
     loop {
         tokio::select! {
@@ -94,8 +101,20 @@ async fn run_server(
                     break;
                 };
 
+                // Try to acquire a connection permit
+                let permit = match connection_semaphore.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        warn!("connection limit reached ({}), rejecting connection", MAX_CONCURRENT_CONNECTIONS);
+                        // Drop the incoming connection by not processing it
+                        continue;
+                    }
+                };
+
                 let raft_core_clone = raft_core.clone();
                 tokio::spawn(async move {
+                    // Permit is held for the duration of the connection
+                    let _permit = permit;
                     if let Err(err) = handle_connection(incoming, raft_core_clone).await {
                         error!(error = %err, "failed to handle incoming connection");
                     }
@@ -108,6 +127,8 @@ async fn run_server(
 }
 
 /// Handle a single incoming Iroh connection.
+///
+/// Tiger Style: Bounded stream count per connection to prevent resource exhaustion.
 #[instrument(skip(connecting, raft_core))]
 async fn handle_connection(
     connecting: iroh::endpoint::Incoming,
@@ -117,6 +138,10 @@ async fn handle_connection(
     let remote_node_id = connection.remote_id();
 
     debug!(remote_node = %remote_node_id, "accepted connection");
+
+    // Tiger Style: Fixed limit on concurrent streams per connection
+    let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
+    let active_streams = Arc::new(AtomicU32::new(0));
 
     // Accept bidirectional streams from this connection
     loop {
@@ -129,12 +154,32 @@ async fn handle_connection(
             }
         };
 
+        // Try to acquire a stream permit
+        let permit = match stream_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    remote_node = %remote_node_id,
+                    max_streams = MAX_STREAMS_PER_CONNECTION,
+                    "stream limit reached, dropping stream"
+                );
+                // Drop the stream by not processing it
+                continue;
+            }
+        };
+
+        active_streams.fetch_add(1, Ordering::Relaxed);
+        let active_streams_clone = active_streams.clone();
+
         let raft_core_clone = raft_core.clone();
         let (send, recv) = stream;
         tokio::spawn(async move {
+            // Permit is held for the duration of the stream
+            let _permit = permit;
             if let Err(err) = handle_rpc_stream((recv, send), raft_core_clone).await {
                 error!(error = %err, "failed to handle RPC stream");
             }
+            active_streams_clone.fetch_sub(1, Ordering::Relaxed);
         });
     }
 

@@ -127,7 +127,7 @@ struct Args {
     data_dir: Option<PathBuf>,
 
     /// Storage backend for Raft log and state machine.
-    /// Options: "inmemory" (default), "redb"
+    /// Options: "inmemory", "redb", "sqlite" (default)
     #[arg(long)]
     storage_backend: Option<String>,
 
@@ -1777,6 +1777,26 @@ impl IntoResponse for ApiError {
             ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
             }
+            ApiError::KeyValue(KeyValueStoreError::KeyTooLarge { size, max }) => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("key size {size} exceeds maximum of {max} bytes") })),
+            )
+                .into_response(),
+            ApiError::KeyValue(KeyValueStoreError::ValueTooLarge { size, max }) => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("value size {size} exceeds maximum of {max} bytes") })),
+            )
+                .into_response(),
+            ApiError::KeyValue(KeyValueStoreError::BatchTooLarge { size, max }) => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("batch size {size} exceeds maximum of {max} keys") })),
+            )
+                .into_response(),
+            ApiError::KeyValue(KeyValueStoreError::Timeout { duration_ms }) => (
+                StatusCode::GATEWAY_TIMEOUT,
+                Json(json!({ "error": format!("operation timed out after {duration_ms}ms") })),
+            )
+                .into_response(),
             ApiError::General(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": err.to_string() })),

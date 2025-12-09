@@ -93,7 +93,62 @@ pub const MAX_BATCH_SIZE: u32 = 1000;
 ///
 /// Used in:
 /// - `storage_sqlite.rs`: SetMulti validation
+/// - `mod.rs`: Write handler validation
 pub const MAX_SETMULTI_KEYS: u32 = 100;
+
+/// Maximum size of a single key in bytes (1 KB).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized keys.
+/// Applied to all write operations before they reach the Raft log.
+///
+/// Used in:
+/// - `mod.rs`: Write handler validation
+pub const MAX_KEY_SIZE: u32 = 1024;
+
+/// Maximum size of a single value in bytes (1 MB).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized values.
+/// Applied to all write operations before they reach the Raft log.
+///
+/// Used in:
+/// - `mod.rs`: Write handler validation
+pub const MAX_VALUE_SIZE: u32 = 1024 * 1024;
+
+/// Maximum number of concurrent streams per connection (100).
+///
+/// Tiger Style: Fixed limit prevents DoS attacks via unbounded stream creation.
+/// Applied in the RPC server to limit streams from any single peer.
+///
+/// Used in:
+/// - `server.rs`: Stream acceptance limits
+pub const MAX_STREAMS_PER_CONNECTION: u32 = 100;
+
+/// Maximum number of concurrent connections (500).
+///
+/// Tiger Style: Fixed limit prevents connection exhaustion attacks.
+/// Applied in the RPC server to limit total concurrent connections.
+///
+/// Used in:
+/// - `server.rs`: Connection acceptance limits
+pub const MAX_CONCURRENT_CONNECTIONS: u32 = 500;
+
+/// Maximum number of peers in the peer map (1000).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from peer map growth.
+/// Applied in the network factory to prevent Sybil attacks.
+///
+/// Used in:
+/// - `network.rs`: Peer map bounds
+pub const MAX_PEERS: u32 = 1000;
+
+/// Maximum snapshot entries during build (1,000,000 entries).
+///
+/// Tiger Style: Fixed limit prevents OOM during snapshot construction.
+/// This is a conservative estimate before MAX_SNAPSHOT_SIZE applies.
+///
+/// Used in:
+/// - `storage_sqlite.rs`: Snapshot builder validation
+pub const MAX_SNAPSHOT_ENTRIES: u32 = 1_000_000;
 
 /// Default size for the SQLite read connection pool (10 connections).
 ///
