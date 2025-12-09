@@ -191,7 +191,6 @@ Thumbs.db
 
 ### Custom additions for this project ###
 # Nix related files
-flake.lock
 .envrc
 .direnv/
 docs/simulations/*.json
