@@ -172,7 +172,10 @@ impl KeyValueStore for DeterministicHiqlite {
         }
     }
 
-    async fn delete(&self, request: aspen::api::DeleteRequest) -> Result<aspen::api::DeleteResult, KeyValueStoreError> {
+    async fn delete(
+        &self,
+        request: aspen::api::DeleteRequest,
+    ) -> Result<aspen::api::DeleteResult, KeyValueStoreError> {
         let mut kv = self.kv.lock().await;
         let deleted = kv.remove(&request.key).is_some();
         Ok(aspen::api::DeleteResult {

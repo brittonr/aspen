@@ -751,10 +751,7 @@ async fn test_wal_checkpoint_corruption_during_heavy_writes() {
                             "should recover at least 400 entries, got {}",
                             count
                         );
-                        println!(
-                            "SUCCESS: SQLite auto-recovered, {} entries intact",
-                            count
-                        );
+                        println!("SUCCESS: SQLite auto-recovered, {} entries intact", count);
                     }
                     Err(e) => {
                         println!("SUCCESS: Validation detected corruption: {:?}", e);
@@ -762,7 +759,10 @@ async fn test_wal_checkpoint_corruption_during_heavy_writes() {
                 }
             }
             Err(e) => {
-                println!("SUCCESS: Database failed to open due to corruption: {:?}", e);
+                println!(
+                    "SUCCESS: Database failed to open due to corruption: {:?}",
+                    e
+                );
             }
         }
     } else {
@@ -834,10 +834,7 @@ async fn test_wal_frame_header_corruption() {
                 let validation = sm.validate(1);
                 match validation {
                     Ok(_) => {
-                        println!(
-                            "WAL frame corruption recovered, {} entries found",
-                            count
-                        );
+                        println!("WAL frame corruption recovered, {} entries found", count);
                     }
                     Err(e) => {
                         println!("Validation detected issue after recovery: {:?}", e);
@@ -846,7 +843,10 @@ async fn test_wal_frame_header_corruption() {
             }
             Err(e) => {
                 // Database failed to open - corruption was severe
-                println!("Database failed to open due to WAL frame corruption: {:?}", e);
+                println!(
+                    "Database failed to open due to WAL frame corruption: {:?}",
+                    e
+                );
             }
         }
     } else {
@@ -888,8 +888,7 @@ async fn test_wal_truncation_at_non_page_boundary() {
     // Phase 2: Truncate WAL to non-page-aligned size (simulates crash during write)
     if wal_path.exists() {
         // Truncate to 75% of original size, which likely leaves orphaned frames
-        corrupt_file(&wal_path, CorruptionStrategy::Truncate(75))
-            .expect("failed to truncate WAL");
+        corrupt_file(&wal_path, CorruptionStrategy::Truncate(75)).expect("failed to truncate WAL");
 
         // Phase 3: Attempt recovery
         match SqliteStateMachine::new(&db_path) {
@@ -985,7 +984,10 @@ async fn test_wal_header_corruption_severe() {
                 }
             }
             Err(e) => {
-                println!("Database failed to open after WAL header corruption: {:?}", e);
+                println!(
+                    "Database failed to open after WAL header corruption: {:?}",
+                    e
+                );
             }
         }
     } else {
@@ -1026,19 +1028,20 @@ async fn test_auto_checkpoint_threshold_corruption() {
 
         // Trigger auto-checkpoint if WAL is above 1KB threshold
         if let Some(size) = wal_size_before
-            && size > 1024 {
-                match sm.auto_checkpoint_if_needed(1024) {
-                    Ok(Some(pages)) => {
-                        println!("Auto-checkpointed {} pages", pages);
-                    }
-                    Ok(None) => {
-                        println!("WAL below threshold, no checkpoint");
-                    }
-                    Err(e) => {
-                        println!("Auto-checkpoint error: {:?}", e);
-                    }
+            && size > 1024
+        {
+            match sm.auto_checkpoint_if_needed(1024) {
+                Ok(Some(pages)) => {
+                    println!("Auto-checkpointed {} pages", pages);
+                }
+                Ok(None) => {
+                    println!("WAL below threshold, no checkpoint");
+                }
+                Err(e) => {
+                    println!("Auto-checkpoint error: {:?}", e);
                 }
             }
+        }
 
         drop(sm);
     }
@@ -1106,10 +1109,7 @@ async fn test_snapshot_metadata_corruption_detection() {
         }
 
         // Build a snapshot
-        let _snapshot = sm
-            .build_snapshot()
-            .await
-            .expect("failed to build snapshot");
+        let _snapshot = sm.build_snapshot().await.expect("failed to build snapshot");
 
         drop(sm);
     }
@@ -1155,13 +1155,19 @@ async fn test_snapshot_metadata_corruption_detection() {
         }
         Err(e) => {
             // Deserialization failed
-            println!("SUCCESS: Snapshot retrieval failed due to corruption: {:?}", e);
+            println!(
+                "SUCCESS: Snapshot retrieval failed due to corruption: {:?}",
+                e
+            );
         }
     }
 
     // Phase 4: Verify data integrity - original data should be preserved
     let count = sm.count_kv_pairs().unwrap();
-    assert_eq!(count, 20, "original 20 entries should persist despite snapshot corruption");
+    assert_eq!(
+        count, 20,
+        "original 20 entries should persist despite snapshot corruption"
+    );
 }
 
 // ====================================================================================
@@ -1192,10 +1198,7 @@ async fn test_snapshot_index_exceeds_applied_state() {
         }
 
         // Build a valid snapshot
-        let _snapshot = sm
-            .build_snapshot()
-            .await
-            .expect("failed to build snapshot");
+        let _snapshot = sm.build_snapshot().await.expect("failed to build snapshot");
 
         drop(sm);
     }
@@ -1219,16 +1222,16 @@ async fn test_snapshot_index_exceeds_applied_state() {
 
         if let Some(snap) = snapshot
             && let (Some(applied_log_id), Some(snap_log_id)) = (last_applied, snap.meta.last_log_id)
-            {
-                assert_eq!(
-                    applied_log_id.index, snap_log_id.index,
-                    "snapshot index should match applied index"
-                );
-                println!(
-                    "SUCCESS: Snapshot index {} matches applied index {}",
-                    snap_log_id.index, applied_log_id.index
-                );
-            }
+        {
+            assert_eq!(
+                applied_log_id.index, snap_log_id.index,
+                "snapshot index should match applied index"
+            );
+            println!(
+                "SUCCESS: Snapshot index {} matches applied index {}",
+                snap_log_id.index, applied_log_id.index
+            );
+        }
 
         // Validation should pass on consistent state
         let validation = sm.validate(1);
@@ -1268,10 +1271,7 @@ async fn test_empty_snapshot_with_nonzero_entries() {
         }
 
         // Build snapshot
-        let _snapshot = sm
-            .build_snapshot()
-            .await
-            .expect("failed to build snapshot");
+        let _snapshot = sm.build_snapshot().await.expect("failed to build snapshot");
 
         drop(sm);
     }
@@ -1340,10 +1340,7 @@ async fn test_snapshot_data_state_mismatch() {
         }
 
         // Build snapshot
-        let _snapshot = sm
-            .build_snapshot()
-            .await
-            .expect("failed to build snapshot");
+        let _snapshot = sm.build_snapshot().await.expect("failed to build snapshot");
 
         drop(sm);
     }
@@ -1353,8 +1350,11 @@ async fn test_snapshot_data_state_mismatch() {
         let conn = Connection::open(&db_path).expect("failed to open database");
 
         // Delete half the entries from KV store
-        conn.execute("DELETE FROM state_machine_kv WHERE key LIKE 'mismatch_key_1%'", [])
-            .expect("failed to delete entries");
+        conn.execute(
+            "DELETE FROM state_machine_kv WHERE key LIKE 'mismatch_key_1%'",
+            [],
+        )
+        .expect("failed to delete entries");
     }
 
     // Phase 3: Verify the mismatch is detectable
@@ -1363,11 +1363,7 @@ async fn test_snapshot_data_state_mismatch() {
     // Count entries - should be less than 25
     let count = sm.count_kv_pairs().unwrap();
     println!("KV entries after deletion: {}", count);
-    assert!(
-        count < 25,
-        "some entries should be deleted, got {}",
-        count
-    );
+    assert!(count < 25, "some entries should be deleted, got {}", count);
 
     // Snapshot should still have old metadata
     let mut sm_mut = Arc::clone(&sm);
@@ -1377,14 +1373,15 @@ async fn test_snapshot_data_state_mismatch() {
         .expect("failed to get snapshot");
 
     if let Some(snap) = snapshot
-        && let Some(log_id) = snap.meta.last_log_id {
-            // Snapshot claims index 24 was applied, but we deleted entries
-            // This is a detectable inconsistency
-            println!(
-                "Snapshot claims last_log_id index {}, but only {} entries remain",
-                log_id.index, count
-            );
-        }
+        && let Some(log_id) = snap.meta.last_log_id
+    {
+        // Snapshot claims index 24 was applied, but we deleted entries
+        // This is a detectable inconsistency
+        println!(
+            "Snapshot claims last_log_id index {}, but only {} entries remain",
+            log_id.index, count
+        );
+    }
 
     // Note: This test demonstrates that snapshot metadata can become stale
     // after manual database modification (which would indicate corruption)
@@ -1446,7 +1443,11 @@ async fn test_cross_storage_corruption_log_state_divergence() {
         let sm = SqliteStateMachine::new(&sm_path).expect("failed to reopen state machine");
 
         let result = sm.validate_consistency_with_log(&log_store).await;
-        assert!(result.is_ok(), "should be consistent before corruption: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "should be consistent before corruption: {:?}",
+            result
+        );
     }
 
     // Phase 3: Corrupt state machine metadata (set last_applied to future index)
@@ -1454,7 +1455,8 @@ async fn test_cross_storage_corruption_log_state_divergence() {
         let conn = Connection::open(&sm_path).expect("failed to open state machine db");
 
         // Serialize a log_id with index 100 (beyond committed)
-        let future_log_id: Option<openraft::LogId<AppTypeConfig>> = Some(log_id::<AppTypeConfig>(1, 1, 100));
+        let future_log_id: Option<openraft::LogId<AppTypeConfig>> =
+            Some(log_id::<AppTypeConfig>(1, 1, 100));
         let corrupted_bytes = bincode::serialize(&future_log_id).expect("failed to serialize");
 
         conn.execute(
@@ -1520,7 +1522,10 @@ async fn test_cross_storage_term_mismatch_detection() {
 
         // Save vote for term 5
         let vote = openraft::Vote::new(5, 1);
-        log_store.save_vote(&vote).await.expect("failed to save vote");
+        log_store
+            .save_vote(&vote)
+            .await
+            .expect("failed to save vote");
 
         log_store
             .save_committed(Some(log_id::<AppTypeConfig>(5, 1, 9)))
@@ -1639,7 +1644,9 @@ async fn test_cross_storage_recovery_after_log_corruption() {
         let write_txn = db.begin_write().expect("failed to begin write");
 
         {
-            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
+            let mut table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .expect("failed to open table");
             for i in 15..20_u64 {
                 table.remove(i).expect("failed to delete entry");
             }
@@ -1671,7 +1678,9 @@ async fn test_cross_storage_recovery_after_log_corruption() {
         "state machine should have all 30 entries despite log corruption"
     );
 
-    println!("SUCCESS: State machine intact despite log corruption - recovery possible from snapshot");
+    println!(
+        "SUCCESS: State machine intact despite log corruption - recovery possible from snapshot"
+    );
 }
 
 // ====================================================================================
@@ -1730,7 +1739,9 @@ async fn test_both_storage_components_corrupted() {
         let db = Database::open(&log_path).expect("failed to open redb");
         let write_txn = db.begin_write().expect("failed to begin write");
         {
-            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
+            let mut table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .expect("failed to open table");
             for i in 10..15_u64 {
                 table.remove(i).expect("failed to delete");
             }

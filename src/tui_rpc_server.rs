@@ -26,16 +26,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest,
-    KeyValueStore, ReadRequest, WriteRequest,
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
+    ReadRequest, WriteRequest,
 };
 use crate::cluster::IrohEndpointManager;
 use crate::tui_rpc::{
-    TuiRpcRequest, TuiRpcResponse, HealthResponse, RaftMetricsResponse,
-    NodeInfoResponse, ClusterTicketResponse, InitResultResponse,
-    ReadResultResponse, WriteResultResponse, SnapshotResultResponse,
-    AddLearnerResultResponse, ChangeMembershipResultResponse,
-    MAX_TUI_MESSAGE_SIZE,
+    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterTicketResponse,
+    HealthResponse, InitResultResponse, MAX_TUI_MESSAGE_SIZE, NodeInfoResponse,
+    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse,
+    WriteResultResponse,
 };
 
 /// Maximum concurrent TUI connections.
@@ -104,10 +103,7 @@ impl TuiRpcServer {
 }
 
 /// Main TUI server loop that accepts incoming connections.
-async fn run_tui_server(
-    ctx: Arc<TuiRpcServerContext>,
-    cancel: CancellationToken,
-) -> Result<()> {
+async fn run_tui_server(ctx: Arc<TuiRpcServerContext>, cancel: CancellationToken) -> Result<()> {
     let endpoint = ctx.endpoint_manager.endpoint();
 
     // Tiger Style: Fixed limit on concurrent connections
@@ -268,7 +264,7 @@ async fn process_tui_request(
                         "degraded"
                     }
                 }
-                Err(_) => "unhealthy"
+                Err(_) => "unhealthy",
             };
 
             Ok(TuiRpcResponse::Health(HealthResponse {
@@ -280,7 +276,10 @@ async fn process_tui_request(
         }
 
         TuiRpcRequest::GetRaftMetrics => {
-            let metrics = ctx.controller.get_metrics().await
+            let metrics = ctx
+                .controller
+                .get_metrics()
+                .await
                 .context("failed to get Raft metrics")?;
 
             Ok(TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
@@ -295,7 +294,10 @@ async fn process_tui_request(
         }
 
         TuiRpcRequest::GetLeader => {
-            let leader = ctx.controller.get_leader().await
+            let leader = ctx
+                .controller
+                .get_leader()
+                .await
                 .context("failed to get leader")?;
             Ok(TuiRpcResponse::Leader(leader))
         }
@@ -334,9 +336,12 @@ async fn process_tui_request(
         }
 
         TuiRpcRequest::InitCluster => {
-            let result = ctx.controller.init(InitRequest {
-                initial_members: vec![],
-            }).await;
+            let result = ctx
+                .controller
+                .init(InitRequest {
+                    initial_members: vec![],
+                })
+                .await;
 
             Ok(TuiRpcResponse::InitResult(InitResultResponse {
                 success: result.is_ok(),
@@ -355,19 +360,22 @@ async fn process_tui_request(
                 Err(_e) => Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
                     value: None,
                     found: false,
-                }))
+                })),
             }
         }
 
         TuiRpcRequest::WriteKey { key, value } => {
             use crate::api::WriteCommand;
 
-            let result = ctx.kv_store.write(WriteRequest {
-                command: WriteCommand::Set {
-                    key,
-                    value: String::from_utf8_lossy(&value).to_string()
-                },
-            }).await;
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key,
+                        value: String::from_utf8_lossy(&value).to_string(),
+                    },
+                })
+                .await;
 
             Ok(TuiRpcResponse::WriteResult(WriteResultResponse {
                 success: result.is_ok(),
@@ -388,20 +396,23 @@ async fn process_tui_request(
                     success: false,
                     snapshot_index: None,
                     error: Some(e.to_string()),
-                }))
+                })),
             }
         }
 
         TuiRpcRequest::AddLearner { node_id, addr } => {
             use crate::api::ClusterNode;
 
-            let result = ctx.controller.add_learner(AddLearnerRequest {
-                learner: ClusterNode {
-                    id: node_id,
-                    addr: addr.clone(),
-                    raft_addr: Some(addr.clone()),
-                },
-            }).await;
+            let result = ctx
+                .controller
+                .add_learner(AddLearnerRequest {
+                    learner: ClusterNode {
+                        id: node_id,
+                        addr: addr.clone(),
+                        raft_addr: Some(addr.clone()),
+                    },
+                })
+                .await;
 
             Ok(TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
                 success: result.is_ok(),
@@ -410,18 +421,19 @@ async fn process_tui_request(
         }
 
         TuiRpcRequest::ChangeMembership { members } => {
-            let result = ctx.controller.change_membership(ChangeMembershipRequest {
-                members,
-            }).await;
+            let result = ctx
+                .controller
+                .change_membership(ChangeMembershipRequest { members })
+                .await;
 
-            Ok(TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-                success: result.is_ok(),
-                error: result.err().map(|e| e.to_string()),
-            }))
+            Ok(TuiRpcResponse::ChangeMembershipResult(
+                ChangeMembershipResultResponse {
+                    success: result.is_ok(),
+                    error: result.err().map(|e| e.to_string()),
+                },
+            ))
         }
 
-        TuiRpcRequest::Ping => {
-            Ok(TuiRpcResponse::Pong)
-        }
+        TuiRpcRequest::Ping => Ok(TuiRpcResponse::Pong),
     }
 }

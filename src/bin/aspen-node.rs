@@ -1878,12 +1878,16 @@ impl IntoResponse for ApiError {
                 .into_response(),
             ApiError::KeyValue(KeyValueStoreError::ValueTooLarge { size, max }) => (
                 StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("value size {size} exceeds maximum of {max} bytes") })),
+                Json(
+                    json!({ "error": format!("value size {size} exceeds maximum of {max} bytes") }),
+                ),
             )
                 .into_response(),
             ApiError::KeyValue(KeyValueStoreError::BatchTooLarge { size, max }) => (
                 StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("batch size {size} exceeds maximum of {max} keys") })),
+                Json(
+                    json!({ "error": format!("batch size {size} exceeds maximum of {max} keys") }),
+                ),
             )
                 .into_response(),
             ApiError::KeyValue(KeyValueStoreError::Timeout { duration_ms }) => (

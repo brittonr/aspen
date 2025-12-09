@@ -13,7 +13,7 @@ use color_eyre::Result;
 use tracing::{info, warn};
 
 use crate::client::{AspenClient, ClusterMetrics, NodeInfo};
-use crate::client_trait::{ClusterClient, ClientImpl};
+use crate::client_trait::{ClientImpl, ClusterClient};
 use crate::event::Event;
 use crate::iroh_client::{IrohClient, parse_cluster_ticket};
 
@@ -155,7 +155,9 @@ impl App {
     /// Tiger Style: Explicit initialization of all fields.
     pub fn new(node_urls: Vec<String>, debug_mode: bool, max_display_nodes: usize) -> Self {
         // Use the first node URL for now
-        let url = node_urls.into_iter().next()
+        let url = node_urls
+            .into_iter()
+            .next()
             .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
 
         let client = AspenClient::new(url);
@@ -189,11 +191,12 @@ impl App {
         max_display_nodes: usize,
     ) -> Result<Self> {
         // Parse the ticket to get endpoint address
-        let endpoint_addr = parse_cluster_ticket(&ticket)
-            .map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
+        let endpoint_addr =
+            parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
 
         // Create Iroh client
-        let iroh_client = IrohClient::new(endpoint_addr).await
+        let iroh_client = IrohClient::new(endpoint_addr)
+            .await
             .map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Iroh(iroh_client));
 
@@ -225,7 +228,7 @@ impl App {
         match event {
             Event::Tick => self.on_tick().await,
             Event::Key(key_event) => self.on_key(key_event).await,
-            Event::Mouse(_) => {} // Ignore mouse events for now
+            Event::Mouse(_) => {}     // Ignore mouse events for now
             Event::Resize(_, _) => {} // Terminal handles resize
         }
         Ok(())
@@ -335,20 +338,41 @@ impl App {
     /// Refresh cluster state from the node.
     async fn refresh_cluster_state(&mut self) {
         self.refreshing = true;
+        let mut new_nodes = BTreeMap::new();
 
-        // Get node info from client
+        // First, get info from the connected node
         match self.client.get_node_info().await {
             Ok(info) => {
-                // Update node info
-                let mut new_nodes = BTreeMap::new();
-                new_nodes.insert(info.node_id, info.clone());
+                let connected_node_id = info.node_id;
+                let is_http = info.http_addr.starts_with("http://");
+                new_nodes.insert(info.node_id, info);
 
-                // Try to get metrics
+                // Try to get metrics to discover other nodes
                 if let Ok(metrics) = self.client.get_metrics().await {
                     self.cluster_metrics = Some(metrics);
                 }
 
-                self.nodes = new_nodes;
+                // For HTTP client, try to query other nodes using standard ports
+                // This is a temporary solution until we have proper node discovery
+                if is_http {
+                    // Try standard cluster ports (21001, 21002, 21003)
+                    for port in 21001..=21003 {
+                        let node_id = port - 21000; // Assume node IDs 1, 2, 3
+                        if node_id != connected_node_id {
+                            // Create a temporary client for this node
+                            let temp_client =
+                                AspenClient::new(format!("http://127.0.0.1:{}", port));
+                            if let Ok(node_info) = temp_client.get_node_info().await {
+                                info!(node_id = node_info.node_id, "discovered node");
+                                new_nodes.insert(node_info.node_id, node_info);
+                            }
+                        }
+                    }
+                    info!(total_nodes = new_nodes.len(), "nodes discovered");
+                }
+
+                // For Iroh client, we currently only show the connected node
+                // TODO: Implement multi-node discovery for Iroh P2P connections
             }
             Err(e) => {
                 warn!(error = %e, "failed to get node info");
@@ -356,6 +380,7 @@ impl App {
             }
         }
 
+        self.nodes = new_nodes;
         self.last_refresh = Some(Instant::now());
         self.refreshing = false;
     }

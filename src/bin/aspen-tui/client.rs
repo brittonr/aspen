@@ -75,6 +75,10 @@ pub struct RaftMetricsResponse {
     pub last_log_index: Option<u64>,
     pub last_applied: Option<LogId>,
     pub snapshot: Option<LogId>,
+    /// Replication status for all nodes in the cluster.
+    /// Maps node_id to replication status.
+    #[serde(default)]
+    pub replication: std::collections::HashMap<String, LogId>,
 }
 
 /// Log ID from Raft.
@@ -210,7 +214,14 @@ impl AspenClient {
         let body = ReadRequest {
             key: key.to_string(),
         };
-        let resp: ReadResponse = self.client.post(&url).json(&body).send().await?.json().await?;
+        let resp: ReadResponse = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await?
+            .json()
+            .await?;
         Ok(resp.value)
     }
 
@@ -226,7 +237,8 @@ impl AspenClient {
         let health = self.get_health().await?;
         let metrics = self.get_raft_metrics().await.ok();
 
-        let is_leader = metrics.as_ref()
+        let is_leader = metrics
+            .as_ref()
             .and_then(|m| m.current_leader)
             .map(|l| l == health.node_id)
             .unwrap_or(false);
@@ -241,9 +253,9 @@ impl AspenClient {
                 NodeStatus::Unhealthy
             },
             is_leader,
-            last_applied_index: metrics.as_ref().and_then(|m| {
-                m.last_applied.as_ref().map(|la| la.index)
-            }),
+            last_applied_index: metrics
+                .as_ref()
+                .and_then(|m| m.last_applied.as_ref().map(|la| la.index)),
             current_term: metrics.as_ref().map(|m| m.current_term),
             uptime_secs: Some(health.uptime_seconds),
             http_addr: self.base_url.clone(),
@@ -257,7 +269,7 @@ impl AspenClient {
         Ok(ClusterMetrics {
             leader: metrics.current_leader,
             term: metrics.current_term,
-            node_count: 1,  // Would need to query full cluster
+            node_count: 1, // Would need to query full cluster
             last_log_index: metrics.last_log_index,
             last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
         })

@@ -1,8 +1,8 @@
 //! Common client trait for both HTTP and Iroh connections.
 
 use async_trait::async_trait;
-use color_eyre::eyre::eyre;
 use color_eyre::Result;
+use color_eyre::eyre::eyre;
 
 use crate::client::{ClusterMetrics, NodeInfo, NodeStatus};
 
@@ -60,7 +60,8 @@ impl ClusterClient for ClientImpl {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 let metrics = client.get_raft_metrics().await.ok();
 
-                let is_leader = metrics.as_ref()
+                let is_leader = metrics
+                    .as_ref()
                     .and_then(|m| m.current_leader)
                     .map(|l| l == info.node_id)
                     .unwrap_or(false);
@@ -133,11 +134,17 @@ impl ClusterClient for ClientImpl {
     async fn add_learner(&self, node_id: u64, addr: String) -> Result<()> {
         match self {
             Self::Http(client) => {
-                client.add_learner(node_id, &addr).await.map_err(|e| eyre!("{}", e))?;
+                client
+                    .add_learner(node_id, &addr)
+                    .await
+                    .map_err(|e| eyre!("{}", e))?;
                 Ok(())
             }
             Self::Iroh(client) => {
-                let result = client.add_learner(node_id, addr).await.map_err(anyhow_to_eyre)?;
+                let result = client
+                    .add_learner(node_id, addr)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to add learner: {}", error));
@@ -153,11 +160,17 @@ impl ClusterClient for ClientImpl {
     async fn change_membership(&self, members: Vec<u64>) -> Result<()> {
         match self {
             Self::Http(client) => {
-                client.change_membership(members).await.map_err(|e| eyre!("{}", e))?;
+                client
+                    .change_membership(members)
+                    .await
+                    .map_err(|e| eyre!("{}", e))?;
                 Ok(())
             }
             Self::Iroh(client) => {
-                let result = client.change_membership(members).await.map_err(anyhow_to_eyre)?;
+                let result = client
+                    .change_membership(members)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to change membership: {}", error));
@@ -200,7 +213,10 @@ impl ClusterClient for ClientImpl {
     async fn trigger_snapshot(&self) -> Result<()> {
         match self {
             Self::Http(client) => {
-                client.trigger_snapshot().await.map_err(|e| eyre!("{}", e))?;
+                client
+                    .trigger_snapshot()
+                    .await
+                    .map_err(|e| eyre!("{}", e))?;
                 Ok(())
             }
             Self::Iroh(client) => {

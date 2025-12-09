@@ -8,11 +8,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use aspen::tui_rpc::{
-    TuiRpcRequest, TuiRpcResponse, HealthResponse, RaftMetricsResponse,
-    NodeInfoResponse, ClusterTicketResponse, InitResultResponse,
-    ReadResultResponse, WriteResultResponse, SnapshotResultResponse,
-    AddLearnerResultResponse, ChangeMembershipResultResponse,
-    MAX_TUI_MESSAGE_SIZE,
+    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterTicketResponse,
+    HealthResponse, InitResultResponse, MAX_TUI_MESSAGE_SIZE, NodeInfoResponse,
+    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse,
+    WriteResultResponse,
 };
 use iroh::{Endpoint, EndpointAddr, SecretKey};
 use tokio::sync::RwLock;
@@ -99,7 +98,8 @@ impl IrohClient {
         );
 
         // Connect to the target node
-        let connection = self.endpoint
+        let connection = self
+            .endpoint
             .connect(target_addr, TUI_ALPN)
             .await
             .context("failed to connect to node")?;
@@ -111,14 +111,12 @@ impl IrohClient {
             .context("failed to open stream")?;
 
         // Serialize and send the request
-        let request_bytes = postcard::to_stdvec(&request)
-            .context("failed to serialize request")?;
+        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
         send.write_all(&request_bytes)
             .await
             .context("failed to send request")?;
-        send.finish()
-            .context("failed to finish send stream")?;
+        send.finish().context("failed to finish send stream")?;
 
         // Read the response
         let response_bytes = recv
@@ -127,8 +125,8 @@ impl IrohClient {
             .context("failed to read response")?;
 
         // Deserialize the response
-        let response: TuiRpcResponse = postcard::from_bytes(&response_bytes)
-            .context("failed to deserialize response")?;
+        let response: TuiRpcResponse =
+            postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
 
         // Check for error response
         if let TuiRpcResponse::Error(err) = &response {
@@ -165,11 +163,7 @@ impl IrohClient {
                     tokio::time::sleep(RETRY_DELAY).await;
                 }
                 Err(_) => {
-                    warn!(
-                        retries,
-                        max_retries = MAX_RETRIES,
-                        "RPC request timed out"
-                    );
+                    warn!(retries, max_retries = MAX_RETRIES, "RPC request timed out");
 
                     if retries >= MAX_RETRIES {
                         anyhow::bail!("RPC request timed out after {} retries", MAX_RETRIES);
@@ -199,7 +193,9 @@ impl IrohClient {
 
     /// Get Raft metrics from the node.
     pub async fn get_raft_metrics(&self) -> Result<RaftMetricsResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::GetRaftMetrics).await?;
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::GetRaftMetrics)
+            .await?;
 
         match response {
             TuiRpcResponse::RaftMetrics(metrics) => Ok(metrics),
@@ -229,7 +225,9 @@ impl IrohClient {
 
     /// Get cluster ticket for joining.
     pub async fn get_cluster_ticket(&self) -> Result<ClusterTicketResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::GetClusterTicket).await?;
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::GetClusterTicket)
+            .await?;
 
         match response {
             TuiRpcResponse::ClusterTicket(ticket) => Ok(ticket),
@@ -249,7 +247,9 @@ impl IrohClient {
 
     /// Read a key from the key-value store.
     pub async fn read_key(&self, key: String) -> Result<ReadResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::ReadKey { key }).await?;
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::ReadKey { key })
+            .await?;
 
         match response {
             TuiRpcResponse::ReadResult(result) => Ok(result),
@@ -259,7 +259,9 @@ impl IrohClient {
 
     /// Write a key-value pair to the store.
     pub async fn write_key(&self, key: String, value: Vec<u8>) -> Result<WriteResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::WriteKey { key, value }).await?;
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::WriteKey { key, value })
+            .await?;
 
         match response {
             TuiRpcResponse::WriteResult(result) => Ok(result),
@@ -269,7 +271,9 @@ impl IrohClient {
 
     /// Trigger a Raft snapshot.
     pub async fn trigger_snapshot(&self) -> Result<SnapshotResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::TriggerSnapshot).await?;
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::TriggerSnapshot)
+            .await?;
 
         match response {
             TuiRpcResponse::SnapshotResult(result) => Ok(result),
@@ -278,8 +282,14 @@ impl IrohClient {
     }
 
     /// Add a learner node to the cluster.
-    pub async fn add_learner(&self, node_id: u64, addr: String) -> Result<AddLearnerResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::AddLearner { node_id, addr }).await?;
+    pub async fn add_learner(
+        &self,
+        node_id: u64,
+        addr: String,
+    ) -> Result<AddLearnerResultResponse> {
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::AddLearner { node_id, addr })
+            .await?;
 
         match response {
             TuiRpcResponse::AddLearnerResult(result) => Ok(result),
@@ -288,8 +298,13 @@ impl IrohClient {
     }
 
     /// Change cluster membership.
-    pub async fn change_membership(&self, members: Vec<u64>) -> Result<ChangeMembershipResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::ChangeMembership { members }).await?;
+    pub async fn change_membership(
+        &self,
+        members: Vec<u64>,
+    ) -> Result<ChangeMembershipResultResponse> {
+        let response = self
+            .send_rpc_with_retry(TuiRpcRequest::ChangeMembership { members })
+            .await?;
 
         match response {
             TuiRpcResponse::ChangeMembershipResult(result) => Ok(result),

@@ -311,8 +311,14 @@ impl GossipPeerDiscovery {
         let timeout = Duration::from_secs(10);
 
         // Take tasks out of Option (they will be None after this, preventing Drop from aborting)
-        let mut announcer_task = self.announcer_task.take().expect("announcer_task already consumed");
-        let mut receiver_task = self.receiver_task.take().expect("receiver_task already consumed");
+        let mut announcer_task = self
+            .announcer_task
+            .take()
+            .expect("announcer_task already consumed");
+        let mut receiver_task = self
+            .receiver_task
+            .take()
+            .expect("receiver_task already consumed");
 
         tokio::select! {
             result = &mut announcer_task => {

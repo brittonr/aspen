@@ -3,13 +3,11 @@
 //! Implements the View layer of The Elm Architecture (TEA).
 
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap,
-    },
-    Frame,
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap},
 };
 
 use crate::app::{ActiveView, App, InputMode};
@@ -128,7 +126,10 @@ fn draw_node_list(frame: &mut Frame, app: &App, area: Rect) {
             let leader_marker = if node.is_leader { " [L]" } else { "" };
 
             let content = Line::from(vec![
-                Span::styled(format!("{} ", status_icon), Style::default().fg(status_color)),
+                Span::styled(
+                    format!("{} ", status_icon),
+                    Style::default().fg(status_color),
+                ),
                 Span::raw(format!("Node {}{}", node.node_id, leader_marker)),
             ]);
 
@@ -206,7 +207,11 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let paragraph = Paragraph::new(content)
-        .block(Block::default().borders(Borders::ALL).title(" Node Details "))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Node Details "),
+        )
         .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
@@ -310,7 +315,11 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
         ],
     )
     .header(header)
-    .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Node Metrics "),
+    );
 
     frame.render_widget(table, chunks[1]);
 }
@@ -496,10 +505,7 @@ fn draw_input_popup(frame: &mut Frame, app: &App) {
     frame.render_widget(input, area);
 
     // Set cursor position
-    frame.set_cursor(
-        area.x + app.input_buffer.len() as u16 + 1,
-        area.y + 1,
-    );
+    frame.set_cursor(area.x + app.input_buffer.len() as u16 + 1, area.y + 1);
 }
 
 /// Create a centered rectangle.

@@ -80,7 +80,8 @@ impl IrpcRaftNetworkFactory {
             warn!(
                 current_peers = peers.len(),
                 max_peers = MAX_PEERS,
-                "peer map full, dropping add_peer request for node {}", node_id
+                "peer map full, dropping add_peer request for node {}",
+                node_id
             );
             return;
         }
@@ -98,7 +99,8 @@ impl IrpcRaftNetworkFactory {
                 warn!(
                     current_peers = peers.len(),
                     max_peers = MAX_PEERS,
-                    "peer map full, dropping peer {} from bulk update", node_id
+                    "peer map full, dropping peer {} from bulk update",
+                    node_id
                 );
                 continue;
             }

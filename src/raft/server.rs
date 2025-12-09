@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
+use crate::raft::constants::{
+    MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
+};
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 
@@ -87,7 +89,10 @@ async fn run_server(
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
 
-    info!(max_connections = MAX_CONCURRENT_CONNECTIONS, "IRPC server listening for incoming connections");
+    info!(
+        max_connections = MAX_CONCURRENT_CONNECTIONS,
+        "IRPC server listening for incoming connections"
+    );
 
     loop {
         tokio::select! {

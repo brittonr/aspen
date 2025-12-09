@@ -11,11 +11,11 @@
 use std::path::{Path, PathBuf};
 
 use aspen::raft::storage::RedbLogStore;
-use aspen::raft::storage_validation::{validate_raft_storage, StorageValidationError};
+use aspen::raft::storage_validation::{StorageValidationError, validate_raft_storage};
+use openraft::RaftLogReader;
 use openraft::entry::RaftEntry;
 use openraft::storage::{IOFlushed, RaftLogStorage};
 use openraft::testing::log_id;
-use openraft::RaftLogReader;
 use redb::{Database, TableDefinition};
 use tempfile::TempDir;
 
@@ -89,7 +89,10 @@ async fn test_redb_log_gap_detection() {
         }
 
         // Verify 50 entries written
-        let log_state = log_store.get_log_state().await.expect("failed to get log state");
+        let log_state = log_store
+            .get_log_state()
+            .await
+            .expect("failed to get log state");
         assert_eq!(
             log_state.last_log_id.unwrap().index,
             49,
@@ -197,7 +200,10 @@ async fn test_redb_vote_corruption_detection() {
             println!("SUCCESS: Detected vote inconsistency: {}", reason);
         }
         Err(e) => {
-            panic!("expected Deserialize or VoteInconsistent error, got: {:?}", e);
+            panic!(
+                "expected Deserialize or VoteInconsistent error, got: {:?}",
+                e
+            );
         }
         Ok(report) => {
             panic!(
