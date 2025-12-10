@@ -133,14 +133,14 @@ impl NetworkBridge {
 
 impl Drop for NetworkBridge {
     fn drop(&mut self) {
-        if self.cleanup_on_drop {
-            if let Err(e) = self.teardown() {
-                warn!(
-                    bridge = %self.name,
-                    error = %e,
-                    "Failed to cleanup bridge during drop"
-                );
-            }
+        if self.cleanup_on_drop
+            && let Err(e) = self.teardown()
+        {
+            warn!(
+                bridge = %self.name,
+                error = %e,
+                "Failed to cleanup bridge during drop"
+            );
         }
     }
 }
@@ -243,14 +243,14 @@ impl TapDevice {
 
 impl Drop for TapDevice {
     fn drop(&mut self) {
-        if self.cleanup_on_drop {
-            if let Err(e) = self.teardown() {
-                warn!(
-                    tap = %self.name,
-                    error = %e,
-                    "Failed to cleanup TAP device during drop"
-                );
-            }
+        if self.cleanup_on_drop
+            && let Err(e) = self.teardown()
+        {
+            warn!(
+                tap = %self.name,
+                error = %e,
+                "Failed to cleanup TAP device during drop"
+            );
         }
     }
 }
@@ -259,10 +259,9 @@ impl Drop for TapDevice {
 fn run_ip_command(args: &[&str]) -> Result<(), NetworkError> {
     debug!(args = ?args, "Running ip command");
 
-    let output = Command::new("ip")
-        .args(args)
-        .output()
-        .context(IoSnafu { operation: "ip command" })?;
+    let output = Command::new("ip").args(args).output().context(IoSnafu {
+        operation: "ip command",
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

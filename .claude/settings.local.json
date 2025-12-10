@@ -21,6 +21,11 @@
       "Bash(cargo nextest run:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/home/brittonr/git/munix/",
+      "/home/brittonr/git/cloud-hypervisor/",
+      "/home/brittonr/git/microvm.nix/"
+    ]
   }
 }

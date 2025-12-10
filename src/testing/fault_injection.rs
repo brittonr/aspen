@@ -32,9 +32,7 @@
 //! // Or let it heal automatically when dropped
 //! ```
 
-use std::collections::HashSet;
 use std::process::Command;
-use std::time::Duration;
 
 use snafu::{ResultExt, Snafu};
 use tracing::{debug, info, warn};
@@ -94,18 +92,26 @@ impl NetworkPartition {
         for target_ip in &self.target_ips {
             // Block traffic from source to target
             run_iptables(&[
-                "-I", "FORWARD",
-                "-s", &self.source_ip,
-                "-d", target_ip,
-                "-j", "DROP",
+                "-I",
+                "FORWARD",
+                "-s",
+                &self.source_ip,
+                "-d",
+                target_ip,
+                "-j",
+                "DROP",
             ])?;
 
             // Block traffic from target to source (symmetric partition)
             run_iptables(&[
-                "-I", "FORWARD",
-                "-s", target_ip,
-                "-d", &self.source_ip,
-                "-j", "DROP",
+                "-I",
+                "FORWARD",
+                "-s",
+                target_ip,
+                "-d",
+                &self.source_ip,
+                "-j",
+                "DROP",
             ])?;
         }
 
@@ -127,17 +133,25 @@ impl NetworkPartition {
         for target_ip in &self.target_ips {
             // Remove DROP rules
             let _ = run_iptables(&[
-                "-D", "FORWARD",
-                "-s", &self.source_ip,
-                "-d", target_ip,
-                "-j", "DROP",
+                "-D",
+                "FORWARD",
+                "-s",
+                &self.source_ip,
+                "-d",
+                target_ip,
+                "-j",
+                "DROP",
             ]);
 
             let _ = run_iptables(&[
-                "-D", "FORWARD",
-                "-s", target_ip,
-                "-d", &self.source_ip,
-                "-j", "DROP",
+                "-D",
+                "FORWARD",
+                "-s",
+                target_ip,
+                "-d",
+                &self.source_ip,
+                "-j",
+                "DROP",
             ]);
         }
 
@@ -153,14 +167,14 @@ impl NetworkPartition {
 
 impl Drop for NetworkPartition {
     fn drop(&mut self) {
-        if self.active {
-            if let Err(e) = self.heal() {
-                warn!(
-                    source = %self.source_ip,
-                    error = %e,
-                    "Failed to heal partition during drop"
-                );
-            }
+        if self.active
+            && let Err(e) = self.heal()
+        {
+            warn!(
+                source = %self.source_ip,
+                error = %e,
+                "Failed to heal partition during drop"
+            );
         }
     }
 }
@@ -172,8 +186,6 @@ impl Drop for NetworkPartition {
 pub struct LatencyInjection {
     /// Interface to apply latency to.
     interface: String,
-    /// Target IP to apply latency for (or "all" for all traffic).
-    target_ip: Option<String>,
     /// Latency in milliseconds.
     latency_ms: u32,
     /// Jitter (variation) in milliseconds.
@@ -205,7 +217,6 @@ impl LatencyInjection {
 
         let mut injection = Self {
             interface: interface.to_string(),
-            target_ip: None,
             latency_ms,
             jitter_ms,
             active: false,
@@ -227,8 +238,14 @@ impl LatencyInjection {
 
         // Add netem qdisc with delay
         run_tc(&[
-            "qdisc", "add", "dev", &self.interface, "root", "netem",
-            "delay", &format!("{}ms", self.latency_ms),
+            "qdisc",
+            "add",
+            "dev",
+            &self.interface,
+            "root",
+            "netem",
+            "delay",
+            &format!("{}ms", self.latency_ms),
             &format!("{}ms", self.jitter_ms),
         ])?;
 
@@ -247,9 +264,7 @@ impl LatencyInjection {
         );
 
         // Remove the qdisc
-        let _ = run_tc(&[
-            "qdisc", "del", "dev", &self.interface, "root",
-        ]);
+        let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
 
         self.active = false;
         Ok(())
@@ -263,14 +278,14 @@ impl LatencyInjection {
 
 impl Drop for LatencyInjection {
     fn drop(&mut self) {
-        if self.active {
-            if let Err(e) = self.heal() {
-                warn!(
-                    interface = %self.interface,
-                    error = %e,
-                    "Failed to heal latency injection during drop"
-                );
-            }
+        if self.active
+            && let Err(e) = self.heal()
+        {
+            warn!(
+                interface = %self.interface,
+                error = %e,
+                "Failed to heal latency injection during drop"
+            );
         }
     }
 }
@@ -329,8 +344,14 @@ impl PacketLossInjection {
 
         // Add netem qdisc with loss
         run_tc(&[
-            "qdisc", "add", "dev", &self.interface, "root", "netem",
-            "loss", &format!("{}%", self.loss_percent),
+            "qdisc",
+            "add",
+            "dev",
+            &self.interface,
+            "root",
+            "netem",
+            "loss",
+            &format!("{}%", self.loss_percent),
         ])?;
 
         Ok(())
@@ -348,9 +369,7 @@ impl PacketLossInjection {
         );
 
         // Remove the qdisc
-        let _ = run_tc(&[
-            "qdisc", "del", "dev", &self.interface, "root",
-        ]);
+        let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
 
         self.active = false;
         Ok(())
@@ -364,14 +383,14 @@ impl PacketLossInjection {
 
 impl Drop for PacketLossInjection {
     fn drop(&mut self) {
-        if self.active {
-            if let Err(e) = self.heal() {
-                warn!(
-                    interface = %self.interface,
-                    error = %e,
-                    "Failed to heal packet loss injection during drop"
-                );
-            }
+        if self.active
+            && let Err(e) = self.heal()
+        {
+            warn!(
+                interface = %self.interface,
+                error = %e,
+                "Failed to heal packet loss injection during drop"
+            );
         }
     }
 }
@@ -459,21 +478,34 @@ impl FaultScenario {
     }
 
     /// Add a network partition to the scenario.
-    pub fn with_partition(mut self, source_ip: &str, target_ips: &[&str]) -> Result<Self, FaultError> {
+    pub fn with_partition(
+        mut self,
+        source_ip: &str,
+        target_ips: &[&str],
+    ) -> Result<Self, FaultError> {
         let partition = NetworkPartition::create(source_ip, target_ips)?;
         self.partitions.push(partition);
         Ok(self)
     }
 
     /// Add a latency injection to the scenario.
-    pub fn with_latency(mut self, interface: &str, latency_ms: u32, jitter_ms: u32) -> Result<Self, FaultError> {
+    pub fn with_latency(
+        mut self,
+        interface: &str,
+        latency_ms: u32,
+        jitter_ms: u32,
+    ) -> Result<Self, FaultError> {
         let latency = LatencyInjection::create(interface, latency_ms, jitter_ms)?;
         self.latencies.push(latency);
         Ok(self)
     }
 
     /// Add a packet loss injection to the scenario.
-    pub fn with_packet_loss(mut self, interface: &str, loss_percent: u8) -> Result<Self, FaultError> {
+    pub fn with_packet_loss(
+        mut self,
+        interface: &str,
+        loss_percent: u8,
+    ) -> Result<Self, FaultError> {
         let loss = PacketLossInjection::create(interface, loss_percent)?;
         self.packet_losses.push(loss);
         Ok(self)
@@ -531,7 +563,8 @@ mod tests {
     #[test]
     #[ignore = "requires root privileges"]
     fn test_partition_lifecycle() {
-        let mut partition = NetworkPartition::create("10.100.0.11", &["10.100.0.12", "10.100.0.13"]).unwrap();
+        let mut partition =
+            NetworkPartition::create("10.100.0.11", &["10.100.0.12", "10.100.0.13"]).unwrap();
         assert!(partition.is_active());
         partition.heal().unwrap();
         assert!(!partition.is_active());

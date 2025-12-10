@@ -133,7 +133,10 @@ async fn test_minority_partition_cannot_write() {
         Ok(resp) => resp.status().is_success(),
         Err(_) => false,
     };
-    assert!(!node1_can_write, "Isolated node should not be able to write");
+    assert!(
+        !node1_can_write,
+        "Isolated node should not be able to write"
+    );
 
     // Write via majority partition (nodes 2 and 3)
     let endpoint2 = manager.http_endpoint(2).await.unwrap();
@@ -208,7 +211,11 @@ async fn test_leader_partition_triggers_reelection() {
     let mut leader_id: Option<u64> = None;
     for node_id in 1..=3 {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
-        if let Ok(resp) = client.get(format!("{}/cluster/status", endpoint)).send().await {
+        if let Ok(resp) = client
+            .get(format!("{}/cluster/status", endpoint))
+            .send()
+            .await
+        {
             if let Ok(text) = resp.text().await {
                 // Parse leader_id from response (assumes JSON with leader_id field)
                 if text.contains(&format!("\"leader_id\":{}", node_id)) {
@@ -252,13 +259,10 @@ async fn test_leader_partition_triggers_reelection() {
     let text = resp.text().await.unwrap();
 
     // The new leader should be one of the followers
-    let new_leader_is_follower = follower_ips
-        .iter()
-        .enumerate()
-        .any(|(i, _)| {
-            let follower_node_id = (1..=3).filter(|&id| id != leader_id).nth(i).unwrap();
-            text.contains(&format!("\"leader_id\":{}", follower_node_id))
-        });
+    let new_leader_is_follower = follower_ips.iter().enumerate().any(|(i, _)| {
+        let follower_node_id = (1..=3).filter(|&id| id != leader_id).nth(i).unwrap();
+        text.contains(&format!("\"leader_id\":{}", follower_node_id))
+    });
 
     assert!(
         new_leader_is_follower,
@@ -275,7 +279,11 @@ async fn test_leader_partition_triggers_reelection() {
     let mut leaders_seen = std::collections::HashSet::new();
     for node_id in 1..=3 {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
-        if let Ok(resp) = client.get(format!("{}/cluster/status", endpoint)).send().await {
+        if let Ok(resp) = client
+            .get(format!("{}/cluster/status", endpoint))
+            .send()
+            .await
+        {
             if let Ok(text) = resp.text().await {
                 // Extract leader_id from response
                 for check_id in 1..=3 {

@@ -73,6 +73,15 @@ rand09 = { package = "rand", version = "0.9" }
 anyerror = { version = "0.1", features = ["anyhow"] }
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
+# VM-based integration testing with Cloud Hypervisor
+cloud-hypervisor-client = "0.3"
+hyper = { version = "1.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
+http-body-util = "0.1"
+
+[features]
+testing = []
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
 
@@ -101,6 +110,19 @@ path = "tests/load/test_concurrent_read_load.rs"
 [[test]]
 name = "test_mixed_workload"
 path = "tests/load/test_mixed_workload.rs"
+
+# VM-based integration tests (require root and KVM)
+[[test]]
+name = "test_vm_basic"
+path = "tests/vm/basic_tests.rs"
+
+[[test]]
+name = "test_vm_partition"
+path = "tests/vm/partition_tests.rs"
+
+[[test]]
+name = "test_vm_failure"
+path = "tests/vm/failure_tests.rs"
 
 # Benchmarks
 [[bench]]

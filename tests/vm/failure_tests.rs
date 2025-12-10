@@ -111,7 +111,11 @@ async fn test_follower_crash_and_recovery() {
     let mut leader_id: Option<u64> = None;
     for node_id in 1..=3 {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
-        if let Ok(resp) = client.get(format!("{}/cluster/status", endpoint)).send().await {
+        if let Ok(resp) = client
+            .get(format!("{}/cluster/status", endpoint))
+            .send()
+            .await
+        {
             if let Ok(text) = resp.text().await {
                 if text.contains(&format!("\"leader_id\":{}", node_id)) {
                     leader_id = Some(node_id);
@@ -225,7 +229,11 @@ async fn test_leader_crash_triggers_election() {
     let mut leader_id: Option<u64> = None;
     for node_id in 1..=3 {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
-        if let Ok(resp) = client.get(format!("{}/cluster/status", endpoint)).send().await {
+        if let Ok(resp) = client
+            .get(format!("{}/cluster/status", endpoint))
+            .send()
+            .await
+        {
             if let Ok(text) = resp.text().await {
                 if text.contains(&format!("\"leader_id\":{}", node_id)) {
                     leader_id = Some(node_id);
@@ -246,7 +254,11 @@ async fn test_leader_crash_triggers_election() {
     let mut new_leader_id: Option<u64> = None;
     for node_id in (1..=3).filter(|&id| id != old_leader_id) {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
-        if let Ok(resp) = client.get(format!("{}/cluster/status", endpoint)).send().await {
+        if let Ok(resp) = client
+            .get(format!("{}/cluster/status", endpoint))
+            .send()
+            .await
+        {
             if let Ok(text) = resp.text().await {
                 for check_id in (1..=3).filter(|&id| id != old_leader_id) {
                     if text.contains(&format!("\"leader_id\":{}", check_id)) {
@@ -262,7 +274,10 @@ async fn test_leader_crash_triggers_election() {
     }
 
     let new_leader_id = new_leader_id.expect("No new leader elected");
-    assert_ne!(new_leader_id, old_leader_id, "New leader should be different");
+    assert_ne!(
+        new_leader_id, old_leader_id,
+        "New leader should be different"
+    );
 
     // Write via new leader
     let new_leader_endpoint = manager.http_endpoint(new_leader_id).await.unwrap();
@@ -498,7 +513,10 @@ async fn test_rolling_restart() {
 
         // Write data before restarting this node
         let resp = client
-            .put(format!("{}/kv/before-restart-{}", write_endpoint, restart_id))
+            .put(format!(
+                "{}/kv/before-restart-{}",
+                write_endpoint, restart_id
+            ))
             .body(format!("value-before-{}", restart_id))
             .send()
             .await
@@ -513,7 +531,10 @@ async fn test_rolling_restart() {
 
         // Cluster should still accept writes
         let resp = client
-            .put(format!("{}/kv/during-restart-{}", write_endpoint, restart_id))
+            .put(format!(
+                "{}/kv/during-restart-{}",
+                write_endpoint, restart_id
+            ))
             .body(format!("value-during-{}", restart_id))
             .send()
             .await

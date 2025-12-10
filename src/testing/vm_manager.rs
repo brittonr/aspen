@@ -246,7 +246,10 @@ impl ManagedVm {
 
     /// Check if the VM's HTTP API is responsive.
     pub async fn health_check(&self) -> Result<bool, VmManagerError> {
-        let url = format!("http://{}:{}/health", self.config.ip_address, self.config.http_port);
+        let url = format!(
+            "http://{}:{}/health",
+            self.config.ip_address, self.config.http_port
+        );
 
         match self.http_client.get(&url).send().await {
             Ok(response) => Ok(response.status().is_success()),
@@ -266,7 +269,10 @@ impl ManagedVm {
     /// # Errors
     ///
     /// Returns an error if the VM doesn't become healthy within the timeout.
-    pub async fn wait_for_health(&mut self, timeout_duration: Duration) -> Result<(), VmManagerError> {
+    pub async fn wait_for_health(
+        &mut self,
+        timeout_duration: Duration,
+    ) -> Result<(), VmManagerError> {
         let deadline = tokio::time::Instant::now() + timeout_duration;
 
         while tokio::time::Instant::now() < deadline {
@@ -309,7 +315,10 @@ impl ManagedVm {
 
     /// Get the HTTP API endpoint address.
     pub fn http_endpoint(&self) -> String {
-        format!("http://{}:{}", self.config.ip_address, self.config.http_port)
+        format!(
+            "http://{}:{}",
+            self.config.ip_address, self.config.http_port
+        )
     }
 }
 
@@ -360,7 +369,10 @@ impl VmManager {
     }
 
     /// Create a new VM manager with custom network configuration.
-    pub fn with_network_config(base_dir: PathBuf, network_config: NetworkConfig) -> Result<Self, VmManagerError> {
+    pub fn with_network_config(
+        base_dir: PathBuf,
+        network_config: NetworkConfig,
+    ) -> Result<Self, VmManagerError> {
         let mut manager = Self::new(base_dir)?;
         manager.network_config = network_config;
         Ok(manager)
@@ -432,7 +444,10 @@ impl VmManager {
     }
 
     /// Wait for all VMs to become healthy.
-    pub async fn wait_for_all_healthy(&self, timeout_duration: Duration) -> Result<(), VmManagerError> {
+    pub async fn wait_for_all_healthy(
+        &self,
+        timeout_duration: Duration,
+    ) -> Result<(), VmManagerError> {
         let mut vms = self.vms.write().await;
 
         for (node_id, vm) in vms.iter_mut() {
@@ -476,7 +491,9 @@ impl VmManager {
             .json(&body)
             .send()
             .await
-            .context(HttpSnafu { operation: "init cluster" })?;
+            .context(HttpSnafu {
+                operation: "init cluster",
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();

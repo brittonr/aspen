@@ -1,16 +1,23 @@
 /// Testing infrastructure for Aspen distributed system tests.
 ///
-/// This module provides deterministic testing primitives for multi-node Raft clusters,
-/// enabling fast, reliable tests without real network I/O or timing dependencies.
+/// This module provides testing primitives at multiple levels:
 ///
-/// ## Key Components
+/// ## In-Memory Testing (Fast, Deterministic)
 ///
 /// - `AspenRouter`: Manages multiple in-memory Raft nodes with simulated networking
 /// - Wait helpers: Metrics-based assertions via OpenRaft's `Wait` API
 /// - Network simulation: Configurable delays, failures, and partitions
 /// - `create_test_aspen_node`: Helper for creating test node metadata
 ///
-/// ## Usage Pattern
+/// ## VM-Based Testing (Realistic, Isolated)
+///
+/// - `VmManager`: Manages Cloud Hypervisor microVMs for integration testing
+/// - `NetworkBridge`, `TapDevice`: Network infrastructure for VM isolation
+/// - `NetworkPartition`, `LatencyInjection`: Fault injection utilities
+///
+/// ## Usage Patterns
+///
+/// ### In-Memory Testing
 ///
 /// ```ignore
 /// let config = Arc::new(Config::default().validate()?);
@@ -27,9 +34,46 @@
 /// router.wait(&0, timeout()).applied_index(Some(1), "initialized").await?;
 /// router.wait(&0, timeout()).current_leader(Some(0), "leader elected").await?;
 /// ```
+///
+/// ### VM-Based Testing
+///
+/// ```ignore
+/// use aspen::testing::vm_manager::{VmManager, VmConfig};
+/// use aspen::testing::fault_injection::NetworkPartition;
+///
+/// let manager = VmManager::new(PathBuf::from("/tmp/aspen-test"))?;
+/// manager.add_vm(VmConfig::for_node(1, &base_dir)).await?;
+/// manager.add_vm(VmConfig::for_node(2, &base_dir)).await?;
+/// manager.add_vm(VmConfig::for_node(3, &base_dir)).await?;
+///
+/// manager.start_all().await?;
+/// manager.wait_for_all_healthy(Duration::from_secs(60)).await?;
+/// manager.init_raft_cluster().await?;
+///
+/// // Inject a network partition
+/// let partition = NetworkPartition::create("10.100.0.11", &["10.100.0.12", "10.100.0.13"])?;
+/// // ... run tests ...
+/// partition.heal()?;
+/// ```
 pub mod router;
 
+// VM-based testing modules (only available for testing)
+#[cfg(any(test, feature = "testing"))]
+pub mod fault_injection;
+#[cfg(any(test, feature = "testing"))]
+pub mod network_utils;
+#[cfg(any(test, feature = "testing"))]
+pub mod vm_manager;
+
 pub use router::AspenRouter;
+
+// Re-export VM testing types when available
+#[cfg(any(test, feature = "testing"))]
+pub use fault_injection::{FaultScenario, LatencyInjection, NetworkPartition, PacketLossInjection};
+#[cfg(any(test, feature = "testing"))]
+pub use network_utils::{NetworkBridge, TapDevice};
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::{ManagedVm, NetworkConfig, VmConfig, VmManager, VmState};
 
 use crate::raft::types::{AspenNode, NodeId};
 
