@@ -234,6 +234,109 @@
           }
         );
 
+        # Custom Cloud Hypervisor build from vendored source
+        # Optimized for testing with specific features enabled
+        cloud-hypervisor-custom = let
+          src = ./cloud-hypervisor;
+        in craneLib.buildPackage {
+          pname = "cloud-hypervisor-custom";
+          version = "48.0";
+          inherit src;
+
+          buildInputs = with pkgs; [
+            openssl
+          ];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          # Enable specific features for testing
+          cargoExtraArgs = "--features kvm,io_uring";
+
+          # Skip tests during build (they require KVM)
+          doCheck = false;
+        };
+
+        # Helper script for setting up VM test environment
+        vm-test-setup = pkgs.writeShellScriptBin "aspen-vm-setup" ''
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Setting up Cloud Hypervisor test environment..."
+
+          # Check for KVM support
+          if [ ! -e /dev/kvm ]; then
+            echo "ERROR: KVM not available. Please ensure KVM is enabled."
+            exit 1
+          fi
+
+          # Create network bridge if it doesn't exist
+          if ! ip link show aspen-br0 &>/dev/null; then
+            echo "Creating network bridge aspen-br0..."
+            sudo ip link add aspen-br0 type bridge
+            sudo ip addr add 10.100.0.1/24 dev aspen-br0
+            sudo ip link set aspen-br0 up
+            echo "Bridge created successfully."
+          else
+            echo "Bridge aspen-br0 already exists."
+          fi
+
+          # Create TAP devices for testing (up to 10)
+          for i in {0..9}; do
+            if ! ip link show aspen-tap$i &>/dev/null; then
+              echo "Creating TAP device aspen-tap$i..."
+              sudo ip tuntap add aspen-tap$i mode tap
+              sudo ip link set aspen-tap$i master aspen-br0
+              sudo ip link set aspen-tap$i up
+            fi
+          done
+
+          echo "Setup complete! You can now run VM tests."
+          echo ""
+          echo "Quick start:"
+          echo "  cloud-hypervisor --api-socket /tmp/ch.sock"
+          echo ""
+          echo "Or use the aspen-vm-run helper to launch a test VM."
+        '';
+
+        # Helper script for running a test VM
+        vm-test-run = pkgs.writeShellScriptBin "aspen-vm-run" ''
+          #!/usr/bin/env bash
+          NODE_ID=''${1:-1}
+
+          # Default paths (can be overridden with env vars)
+          KERNEL=''${CH_KERNEL:-${pkgs.linuxPackages.kernel}/bzImage}
+          INITRD=''${CH_INITRD:-}
+          DISK=''${CH_DISK:-/tmp/aspen-node-$NODE_ID.img}
+
+          # Create a simple disk if it doesn't exist
+          if [ ! -f "$DISK" ]; then
+            echo "Creating disk image at $DISK..."
+            qemu-img create -f raw "$DISK" 1G
+          fi
+
+          # Calculate TAP device and MAC address based on node ID
+          TAP_NUM=$((NODE_ID - 1))
+          MAC=$(printf "52:54:00:00:00:%02x" $NODE_ID)
+
+          echo "Launching Cloud Hypervisor VM for node $NODE_ID..."
+          echo "  Kernel: $KERNEL"
+          echo "  Disk: $DISK"
+          echo "  Network: TAP aspen-tap$TAP_NUM, MAC $MAC"
+
+          cloud-hypervisor \
+            --kernel "$KERNEL" \
+            --disk path="$DISK" \
+            --cmdline "console=hvc0 root=/dev/vda rw" \
+            --cpus boot=2 \
+            --memory size=512M \
+            --net tap=aspen-tap$TAP_NUM,mac=$MAC \
+            --serial tty \
+            --console off \
+            --api-socket /tmp/ch-node-$NODE_ID.sock
+        '';
+
         bins = let
           bin = {name}:
             craneLib.buildPackage (
@@ -436,10 +539,14 @@
               };
             };
 
+
           packages.default = bins.aspen-node;
           packages.aspen-node = bins.aspen-node;
           packages.aspen-tui = bins.aspen-tui;
           packages.netwatch = netwatch;
+          packages.cloud-hypervisor-custom = cloud-hypervisor-custom;
+          packages.vm-test-setup = vm-test-setup;
+          packages.vm-test-run = vm-test-run;
 
           # Docker image for cluster testing (using streamLayeredImage for better caching)
           packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
@@ -596,6 +703,17 @@
               nodePackages.markdownlint-cli
               # Optional: sccache for additional caching
               sccache
+              # Cloud Hypervisor for VM-based testing
+              cloud-hypervisor
+              OVMF # UEFI firmware for Cloud Hypervisor
+              # Helper tools for VM management
+              bridge-utils # For network bridge management
+              iproute2 # For ip commands (TAP devices)
+              qemu-utils # For qemu-img disk operations
+            ] ++ [
+              # Add our custom helper scripts to devShell
+              vm-test-setup
+              vm-test-run
             ];
 
             env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
@@ -616,11 +734,21 @@
             # Enable cargo's new resolver for better dependency resolution
             env.CARGO_RESOLVER = "2";
 
+            # Cloud Hypervisor environment variables
+            env.CH_KERNEL = "${pkgs.linuxPackages.kernel}/bzImage";
+            env.CH_FIRMWARE = "${pkgs.OVMF.fd}/FV/OVMF.fd";
+
             shellHook = ''
               echo "Incremental builds enabled for faster iteration"
               echo "   - Use 'nix build .#dev-aspen-node' for incremental Nix builds"
               echo "   - Use 'cargo build' in this shell for local incremental compilation"
               echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
+              echo ""
+              echo "Cloud Hypervisor VM testing available:"
+              echo "   - Run 'aspen-vm-setup' to configure network bridges and TAP devices"
+              echo "   - Run 'aspen-vm-run <node-id>' to launch a test VM"
+              echo "   - Run 'cloud-hypervisor --version' to check Cloud Hypervisor"
+              echo "   - Custom build: 'nix build .#cloud-hypervisor-custom' (from vendored source)"
               echo ""
               echo "Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
             '';
