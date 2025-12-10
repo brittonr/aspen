@@ -229,6 +229,38 @@ impl App {
         })
     }
 
+    /// Create new application state without any initial connection.
+    ///
+    /// Starts in disconnected mode, allowing user to connect later via commands.
+    pub fn new_disconnected(debug_mode: bool, max_display_nodes: usize) -> Self {
+        use crate::client_trait::DisconnectedClient;
+
+        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Disconnected(DisconnectedClient));
+
+        Self {
+            should_quit: false,
+            active_view: ActiveView::default(),
+            input_mode: InputMode::default(),
+            debug_mode,
+            max_display_nodes,
+            client,
+            nodes: BTreeMap::new(),
+            cluster_metrics: None,
+            selected_node: 0,
+            last_refresh: None,
+            refreshing: false,
+            status_message: Some((
+                "Not connected - Press 'c' to connect to nodes or 't' for ticket".to_string(),
+                Instant::now(),
+            )),
+            input_buffer: String::new(),
+            key_buffer: String::new(),
+            value_buffer: String::new(),
+            last_read_result: None,
+            log_scroll: 0,
+        }
+    }
+
     /// Handle incoming event.
     ///
     /// Tiger Style: Centralized event dispatch.
@@ -246,14 +278,27 @@ impl App {
     async fn on_tick(&mut self) {
         // Auto-refresh every tick if not already refreshing
         if !self.refreshing {
-            self.refresh_cluster_state().await;
+            // Wrap refresh in a timeout to prevent UI freezing
+            // If refresh takes too long, skip it and try again next tick
+            let refresh_timeout = Duration::from_secs(3);
+            match tokio::time::timeout(refresh_timeout, self.refresh_cluster_state()).await {
+                Ok(_) => {
+                    // Refresh completed successfully
+                }
+                Err(_) => {
+                    // Refresh timed out, mark as not refreshing so we try again
+                    self.refreshing = false;
+                    self.set_status("Network timeout - retrying...");
+                    warn!("Refresh timed out after {:?}", refresh_timeout);
+                }
+            }
         }
 
         // Clear old status messages (after 5 seconds)
-        if let Some((_, timestamp)) = &self.status_message {
-            if timestamp.elapsed() > Duration::from_secs(5) {
-                self.status_message = None;
-            }
+        if let Some((_, timestamp)) = &self.status_message
+            && timestamp.elapsed() > Duration::from_secs(5)
+        {
+            self.status_message = None;
         }
     }
 
@@ -304,6 +349,22 @@ impl App {
                     self.init_cluster().await;
                 }
 
+                // Connection commands
+                KeyCode::Char('c') => {
+                    // Connect to HTTP nodes - enter edit mode to get addresses
+                    self.input_mode = InputMode::Editing;
+                    self.input_buffer = "http://127.0.0.1:21001".to_string(); // Default suggestion
+                    self.set_status(
+                        "Enter HTTP node address(es) separated by spaces, then press Enter",
+                    );
+                }
+                KeyCode::Char('t') => {
+                    // Connect via Iroh ticket - enter edit mode to get ticket
+                    self.input_mode = InputMode::Editing;
+                    self.input_buffer.clear();
+                    self.set_status("Paste Iroh cluster ticket, then press Enter");
+                }
+
                 // Enter editing mode for KV operations
                 KeyCode::Enter if self.active_view == ActiveView::KeyValue => {
                     self.input_mode = InputMode::Editing;
@@ -325,8 +386,30 @@ impl App {
                     self.input_buffer.clear();
                 }
                 KeyCode::Enter => {
-                    self.execute_kv_operation().await;
+                    // Check if we're doing a connection operation based on status message
+                    let is_http_connect = self
+                        .status_message
+                        .as_ref()
+                        .map(|(msg, _)| msg.contains("Enter HTTP node"))
+                        .unwrap_or(false);
+                    let is_ticket_connect = self
+                        .status_message
+                        .as_ref()
+                        .map(|(msg, _)| msg.contains("Paste Iroh cluster ticket"))
+                        .unwrap_or(false);
+
+                    if is_http_connect {
+                        // Connect to HTTP nodes
+                        self.connect_http_nodes(&self.input_buffer.clone()).await;
+                    } else if is_ticket_connect {
+                        // Connect via Iroh ticket
+                        self.connect_iroh_ticket(&self.input_buffer.clone()).await;
+                    } else {
+                        // Regular KV operation
+                        self.execute_kv_operation().await;
+                    }
                     self.input_mode = InputMode::Normal;
+                    self.input_buffer.clear();
                 }
                 KeyCode::Backspace => {
                     self.input_buffer.pop();
@@ -500,6 +583,100 @@ impl App {
             }
             Err(e) => {
                 self.set_status(&format!("Write failed: {}", e));
+            }
+        }
+    }
+
+    /// Connect to HTTP nodes.
+    async fn connect_http_nodes(&mut self, input: &str) {
+        // Parse input - could be single node or space-separated list
+        let urls: Vec<String> = input
+            .trim()
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect();
+
+        if urls.is_empty() {
+            self.set_status("No nodes specified");
+            return;
+        }
+
+        // For now, use the first URL
+        // TODO: Support multiple HTTP nodes later
+        let url = urls[0].clone();
+
+        // Validate URL format
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            self.set_status("Invalid URL format - must start with http:// or https://");
+            return;
+        }
+
+        // Create new HTTP client
+        let client = AspenClient::new(url.clone());
+        let new_client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Http(client));
+
+        // Test the connection
+        match new_client.get_node_info().await {
+            Ok(node_info) => {
+                // Connection successful, replace the client
+                self.client = new_client;
+                self.set_status(&format!(
+                    "Connected to node {} at {}",
+                    node_info.node_id, url
+                ));
+                // Immediately refresh to populate nodes
+                self.refresh_cluster_state().await;
+            }
+            Err(e) => {
+                self.set_status(&format!("Failed to connect: {}", e));
+            }
+        }
+    }
+
+    /// Connect via Iroh ticket.
+    async fn connect_iroh_ticket(&mut self, ticket: &str) {
+        let ticket = ticket.trim();
+
+        if ticket.is_empty() {
+            self.set_status("No ticket provided");
+            return;
+        }
+
+        // Parse the ticket to get all endpoint addresses
+        match parse_cluster_ticket(ticket) {
+            Ok(endpoint_addrs) => {
+                info!("Ticket contains {} bootstrap peers", endpoint_addrs.len());
+
+                // Create MultiNodeClient with all bootstrap endpoints
+                match MultiNodeClient::new(endpoint_addrs).await {
+                    Ok(multi_client) => {
+                        let new_client: Arc<dyn ClusterClient> =
+                            Arc::new(ClientImpl::MultiNode(multi_client));
+
+                        // Test the connection
+                        match new_client.get_node_info().await {
+                            Ok(node_info) => {
+                                // Connection successful, replace the client
+                                self.client = new_client;
+                                self.set_status(&format!(
+                                    "Connected to cluster via Iroh (node {})",
+                                    node_info.node_id
+                                ));
+                                // Immediately refresh to populate all discovered nodes
+                                self.refresh_cluster_state().await;
+                            }
+                            Err(e) => {
+                                self.set_status(&format!("Failed to connect via ticket: {}", e));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.set_status(&format!("Failed to create Iroh client: {:#}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                self.set_status(&format!("Invalid ticket format: {:#}", e));
             }
         }
     }

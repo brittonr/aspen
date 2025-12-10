@@ -18,13 +18,16 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 /// Timeout for individual RPC calls.
-const RPC_TIMEOUT: Duration = Duration::from_secs(10);
+/// Reduced for TUI to keep UI responsive during network issues.
+const RPC_TIMEOUT: Duration = Duration::from_secs(2); // Reduced from 10s
 
 /// Connection retry delay.
-const RETRY_DELAY: Duration = Duration::from_secs(5);
+/// Shorter delay for TUI to fail fast and keep UI responsive.
+const RETRY_DELAY: Duration = Duration::from_millis(500); // Reduced from 5s
 
 /// Maximum connection retries before giving up.
-const MAX_RETRIES: u32 = 5;
+/// Reduced for TUI to avoid long blocking periods.
+const MAX_RETRIES: u32 = 1; // Reduced from 5
 
 /// TUI ALPN for identifying TUI connections.
 const TUI_ALPN: &[u8] = b"aspen-tui";
@@ -421,12 +424,18 @@ impl MultiNodeClient {
         let secret_key = SecretKey::from(key_bytes);
 
         // Build the shared Iroh endpoint with TUI ALPN
-        let endpoint = Endpoint::builder()
-            .secret_key(secret_key)
-            .alpns(vec![TUI_ALPN.to_vec()])
-            .bind()
-            .await
-            .context("failed to bind Iroh endpoint")?;
+        // Add a timeout to prevent indefinite blocking on bind()
+        let bind_timeout = Duration::from_secs(10);
+        let endpoint = tokio::time::timeout(
+            bind_timeout,
+            Endpoint::builder()
+                .secret_key(secret_key)
+                .alpns(vec![TUI_ALPN.to_vec()])
+                .bind(),
+        )
+        .await
+        .context("timeout waiting for Iroh endpoint to bind")?
+        .context("failed to bind Iroh endpoint")?;
 
         info!(
             node_id = %endpoint.id(),

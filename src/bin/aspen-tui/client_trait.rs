@@ -51,6 +51,54 @@ pub enum ClientImpl {
     Http(crate::client::AspenClient),
     Iroh(crate::iroh_client::IrohClient),
     MultiNode(crate::iroh_client::MultiNodeClient),
+    Disconnected(DisconnectedClient),
+}
+
+/// A client that's not connected to any nodes.
+/// Returns errors for all operations until replaced with a real client.
+pub struct DisconnectedClient;
+
+#[async_trait]
+impl ClusterClient for DisconnectedClient {
+    async fn get_node_info(&self) -> Result<NodeInfo> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn get_metrics(&self) -> Result<ClusterMetrics> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn get_discovered_nodes(&self) -> Result<Vec<NodeDescriptor>> {
+        Ok(vec![])
+    }
+
+    async fn is_healthy(&self) -> Result<bool> {
+        Ok(false)
+    }
+
+    async fn init_cluster(&self) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn add_learner(&self, _node_id: u64, _addr: String) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn change_membership(&self, _members: Vec<u64>) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn write(&self, _key: String, _value: Vec<u8>) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn read(&self, _key: String) -> Result<Option<Vec<u8>>> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn trigger_snapshot(&self) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
 }
 
 /// Helper to convert anyhow::Error to color_eyre::Report.
@@ -68,6 +116,7 @@ impl ClusterClient for ClientImpl {
                 // MultiNodeClient can discover peers
                 client.discover_peers().await.map_err(anyhow_to_eyre)
             }
+            Self::Disconnected(client) => client.get_discovered_nodes().await,
         }
     }
 
@@ -128,6 +177,7 @@ impl ClusterClient for ClientImpl {
                     http_addr: format!("iroh://{}", info.endpoint_addr),
                 })
             }
+            Self::Disconnected(client) => client.get_node_info().await,
         }
     }
 
@@ -160,6 +210,7 @@ impl ClusterClient for ClientImpl {
                     last_applied_index: metrics.last_applied_index,
                 })
             }
+            Self::Disconnected(client) => client.get_metrics().await,
         }
     }
 
@@ -174,6 +225,7 @@ impl ClusterClient for ClientImpl {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 Ok(health.status == "healthy")
             }
+            Self::Disconnected(client) => client.is_healthy().await,
         }
     }
 
@@ -205,6 +257,7 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::Disconnected(client) => client.init_cluster().await,
         }
     }
 
@@ -245,6 +298,7 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::Disconnected(client) => client.add_learner(node_id, addr).await,
         }
     }
 
@@ -285,6 +339,7 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::Disconnected(client) => client.change_membership(members).await,
         }
     }
 
@@ -313,6 +368,7 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::Disconnected(client) => client.write(key, value).await,
         }
     }
 
@@ -327,6 +383,7 @@ impl ClusterClient for ClientImpl {
                 let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
                 Ok(result.value)
             }
+            Self::Disconnected(client) => client.read(key).await,
         }
     }
 
@@ -361,6 +418,7 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::Disconnected(client) => client.trigger_snapshot().await,
         }
     }
 }

@@ -61,7 +61,8 @@ const MAX_DISPLAY_NODES: usize = 50;
 struct Args {
     /// HTTP API addresses of Aspen nodes to connect to.
     /// Can be specified multiple times.
-    #[arg(short, long, default_value = "http://127.0.0.1:8080")]
+    /// If not specified, TUI starts disconnected and can connect later.
+    #[arg(short, long)]
     nodes: Vec<String>,
 
     /// Aspen cluster ticket for Iroh P2P connection.
@@ -149,9 +150,13 @@ async fn main() -> Result<()> {
     let app = if let Some(ticket) = args.ticket {
         // Use Iroh P2P connection
         App::new_with_iroh(ticket, args.debug, MAX_DISPLAY_NODES).await?
-    } else {
+    } else if !args.nodes.is_empty() {
         // Use HTTP connections
         App::new(args.nodes, args.debug, MAX_DISPLAY_NODES)
+    } else {
+        // Start disconnected - can connect later
+        info!("starting in disconnected mode - use 'c' to connect");
+        App::new_disconnected(args.debug, MAX_DISPLAY_NODES)
     };
 
     // Create event handler with tick interval

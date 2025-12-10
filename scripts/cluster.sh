@@ -93,10 +93,12 @@ trap cleanup EXIT INT TERM
 wait_for_port() {
     local port=$1
     local timeout=${2:-30}
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
 
     while ! nc -z 127.0.0.1 "$port" 2>/dev/null; do
-        local now=$(date +%s)
+        local now
+        now=$(date +%s)
         if (( now - start_time > timeout )); then
             echo -e "${RED}Timeout waiting for port $port${NC}" >&2
             return 1
@@ -152,7 +154,31 @@ start_node() {
 init_cluster() {
     local leader_port=$BASE_HTTP
 
-    # Build member list with raft_addr included
+    # First, get node info from each node to obtain their Iroh endpoint addresses
+    echo -e "${BLUE}Getting Iroh endpoint addresses from nodes...${NC}"
+    local endpoint_addrs=()
+    for ((i=1; i<=NODE_COUNT; i++)); do
+        local http_port=$((BASE_HTTP + i - 1))
+        local node_info
+        node_info=$(curl -s "http://127.0.0.1:$http_port/node-info" 2>/dev/null)
+        if [ $? -ne 0 ] || [ -z "$node_info" ]; then
+            echo -e "${YELLOW}Warning: Could not get node info from node $i${NC}"
+            endpoint_addrs+=("null")
+        else
+            # Extract endpoint_addr from JSON response
+            local endpoint_addr
+            endpoint_addr=$(echo "$node_info" | jq -c '.endpoint_addr' 2>/dev/null)
+            if [ -z "$endpoint_addr" ] || [ "$endpoint_addr" = "null" ]; then
+                echo -e "${YELLOW}Warning: Node $i has no endpoint_addr${NC}"
+                endpoint_addrs+=("null")
+            else
+                echo -e "  Node $i endpoint: $(echo "$endpoint_addr" | jq -r '.id' 2>/dev/null || echo 'unknown')"
+                endpoint_addrs+=("$endpoint_addr")
+            fi
+        fi
+    done
+
+    # Build member list with both raft_addr and iroh_addr included
     local members="["
     for ((i=1; i<=NODE_COUNT; i++)); do
         local http_port=$((BASE_HTTP + i - 1))
@@ -160,8 +186,14 @@ init_cluster() {
         if (( i > 1 )); then
             members+=","
         fi
-        # Include raft_addr pointing to the Ractor cluster port
-        members+="{\"id\":$i,\"addr\":\"127.0.0.1:$http_port\",\"raft_addr\":\"127.0.0.1:$ractor_port\"}"
+        # Include both raft_addr and iroh_addr
+        members+="{\"id\":$i,\"addr\":\"127.0.0.1:$http_port\",\"raft_addr\":\"127.0.0.1:$ractor_port\""
+
+        # Add iroh_addr if we have it
+        if [ "${endpoint_addrs[$i-1]}" != "null" ]; then
+            members+=",\"iroh_addr\":${endpoint_addrs[$i-1]}"
+        fi
+        members+="}"
     done
     members+="]"
 
@@ -177,6 +209,7 @@ init_cluster() {
         return 0
     else
         echo -e "${YELLOW}Cluster initialization response: $response${NC}"
+        echo -e "${YELLOW}Cluster initialization may need manual intervention${NC}"
         return 1
     fi
 }

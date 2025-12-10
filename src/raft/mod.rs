@@ -205,7 +205,43 @@ impl Actor for RaftActor {
                 let _ = reply.send(());
             }
             RaftActorMessage::CurrentState(reply) => {
-                let result = ensure_initialized(state).map(|_| state.cluster_state.clone());
+                let result = ensure_initialized(state).map(|_| {
+                    // Get the actual membership from Raft metrics instead of using cached state
+                    let metrics = state.raft.metrics().borrow().clone();
+                    let membership = &metrics.membership_config;
+
+                    // Build ClusterState from actual membership
+                    let mut nodes = Vec::new();
+                    let mut learners = Vec::new();
+                    let mut members = Vec::new();
+
+                    // Get voter IDs first
+                    let voter_ids: std::collections::HashSet<u64> =
+                        membership.membership().voter_ids().collect();
+
+                    // Get all nodes from membership (includes AspenNode with Iroh addresses)
+                    for (node_id, aspen_node) in membership.membership().nodes() {
+                        let cluster_node = ClusterNode {
+                            id: *node_id,
+                            addr: aspen_node.iroh_addr.id.to_string(),
+                            raft_addr: None, // Legacy field, not needed with Iroh
+                            iroh_addr: Some(aspen_node.iroh_addr.clone()),
+                        };
+
+                        if voter_ids.contains(node_id) {
+                            members.push(*node_id);
+                            nodes.push(cluster_node);
+                        } else {
+                            learners.push(cluster_node);
+                        }
+                    }
+
+                    ClusterState {
+                        nodes,
+                        members,
+                        learners,
+                    }
+                });
                 let _ = reply.send(result);
             }
             RaftActorMessage::InitCluster(request, reply) => {
