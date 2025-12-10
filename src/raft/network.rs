@@ -11,7 +11,7 @@ use openraft::type_config::alias::VoteOf;
 use openraft::{BasicNode, OptionalSend, Snapshot, StorageError};
 use tokio::io::AsyncReadExt;
 use tokio::select;
-use tracing::warn;
+use tracing::{debug, error, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::constants::{
@@ -213,9 +213,23 @@ impl IrpcRaftNetwork {
         .context("timeout reading RPC response")?
         .context("failed to read RPC response")?;
 
+        debug!(
+            response_size = response_buf.len(),
+            "received RPC response bytes"
+        );
+
         // Deserialize response
-        let response: RaftRpcResponse =
-            postcard::from_bytes(&response_buf).context("failed to deserialize RPC response")?;
+        let response: RaftRpcResponse = postcard::from_bytes(&response_buf)
+            .map_err(|e| {
+                error!(
+                    error = %e,
+                    bytes_len = response_buf.len(),
+                    first_bytes = ?response_buf.get(..20.min(response_buf.len())),
+                    "failed to deserialize RPC response"
+                );
+                e
+            })
+            .context("failed to deserialize RPC response")?;
 
         // Update failure detector: RPC succeeded, Iroh connection succeeded
         self.failure_detector.write().await.update_node_status(

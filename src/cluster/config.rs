@@ -8,7 +8,7 @@
 //! # Key Components
 //!
 //! - `ClusterBootstrapConfig`: Top-level node configuration (node_id, data_dir, addresses)
-//! - `ControlBackend`: Control plane selection (Raft or Hiqlite)
+//! - `ControlBackend`: Control plane backend (Raft)
 //! - `IrohConfig`: P2P networking configuration (endpoint addresses, tickets)
 //! - `StorageBackend`: Log and state machine backend selection
 //! - `SupervisionConfig`: Raft actor supervision and health check parameters

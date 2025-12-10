@@ -128,11 +128,10 @@ start_node() {
         --control-backend "raft_actor"
     )
 
-    # Add storage backend options
-    if [[ "$STORAGE" != "inmemory" ]]; then
-        mkdir -p "$node_data_dir"
-        cmd+=(--storage-backend "$STORAGE" --data-dir "$node_data_dir")
-    fi
+    # Always create data directory and pass it to node
+    # Even inmemory storage needs a data dir for metadata.redb
+    mkdir -p "$node_data_dir"
+    cmd+=(--storage-backend "$STORAGE" --data-dir "$node_data_dir")
 
     # Start node in background
     RUST_LOG="$LOG_LEVEL" RUST_BACKTRACE=1 "${cmd[@]}" >"$log_file" 2>&1 &
@@ -244,7 +243,20 @@ main() {
     echo -e "${BLUE}Starting Aspen $NODE_COUNT-node cluster${NC}"
     echo ""
 
-    # Create data directory
+    # Kill any existing aspen-node processes
+    # This prevents port conflicts from previous runs
+    if pgrep -f "aspen-node" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Killing existing aspen-node processes from previous runs${NC}"
+        pkill -f "aspen-node" 2>/dev/null || true
+        sleep 1  # Give processes time to exit
+    fi
+
+    # Clean and recreate data directory
+    # This ensures no stale redb lock files prevent startup
+    if [[ -d "$DATA_DIR" ]]; then
+        echo -e "${YELLOW}Cleaning previous cluster data in $DATA_DIR${NC}"
+        rm -rf "$DATA_DIR"
+    fi
     mkdir -p "$DATA_DIR"
 
     # Start all nodes

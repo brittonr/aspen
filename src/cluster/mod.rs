@@ -73,6 +73,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use iroh::protocol::Router;
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
 use iroh_gossip::proto::TopicId;
@@ -89,6 +90,7 @@ use tokio::task::JoinHandle;
 
 pub mod bootstrap;
 pub mod config;
+pub mod gossip_actor;
 pub mod gossip_discovery;
 pub mod metadata;
 pub mod ticket;
@@ -470,6 +472,9 @@ impl IrohEndpointConfig {
 
 /// Manages the lifecycle of an Iroh endpoint for P2P transport.
 ///
+/// Uses Iroh Router for proper ALPN-based protocol dispatching.
+/// Protocol handlers are registered with the Router during initialization.
+///
 /// Tiger Style:
 /// - Explicit error handling for endpoint creation and connection
 /// - Resource cleanup via shutdown method
@@ -479,6 +484,9 @@ pub struct IrohEndpointManager {
     node_addr: EndpointAddr,
     secret_key: SecretKey,
     gossip: Option<Arc<Gossip>>,
+    /// The Iroh Router for ALPN-based protocol dispatching.
+    /// If None, protocol handlers must be registered separately.
+    router: Option<Router>,
 }
 
 impl IrohEndpointManager {
@@ -514,12 +522,10 @@ impl IrohEndpointManager {
             builder = builder.relay_mode(RelayMode::Default);
         }
 
-        // Configure ALPNs: raft-rpc + aspen-tui + optionally gossip
-        let mut alpns = vec![b"raft-rpc".to_vec(), b"aspen-tui".to_vec()];
-        if config.enable_gossip {
-            alpns.push(GOSSIP_ALPN.to_vec());
-        }
-        builder = builder.alpns(alpns);
+        // Note: ALPNs are NOT set here. They will be configured by the Router
+        // when protocol handlers are registered via spawn_router().
+        // This prevents the race condition where multiple servers accept
+        // from the same endpoint without proper ALPN-based dispatching.
 
         // Configure discovery services for bootstrapping network connectivity
         // mDNS: Local network discovery (default enabled for dev/testing)
@@ -586,6 +592,7 @@ impl IrohEndpointManager {
             node_addr,
             secret_key,
             gossip,
+            router: None, // Router is created later via spawn_router()
         })
     }
 
@@ -614,6 +621,54 @@ impl IrohEndpointManager {
         self.gossip.as_ref()
     }
 
+    /// Get a reference to the router, if spawned.
+    pub fn router(&self) -> Option<&Router> {
+        self.router.as_ref()
+    }
+
+    /// Spawn the Iroh Router with protocol handlers.
+    ///
+    /// This method creates a Router that properly dispatches incoming connections
+    /// based on their ALPN. This eliminates the race condition that occurred when
+    /// multiple servers were accepting from the same endpoint.
+    ///
+    /// # Arguments
+    /// * `raft_handler` - Protocol handler for Raft RPC (ALPN: `raft-rpc`)
+    /// * `tui_handler` - Optional protocol handler for TUI RPC (ALPN: `aspen-tui`)
+    ///
+    /// # Tiger Style
+    /// - Must be called before any server starts accepting connections
+    /// - ALPNs are set automatically by the Router
+    pub fn spawn_router<R, T>(&mut self, raft_handler: R, tui_handler: Option<T>)
+    where
+        R: iroh::protocol::ProtocolHandler,
+        T: iroh::protocol::ProtocolHandler,
+    {
+        use crate::protocol_handlers::{RAFT_ALPN, TUI_ALPN};
+
+        let mut builder = Router::builder(self.endpoint.clone());
+
+        // Register Raft RPC handler
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+
+        // Register TUI RPC handler if provided
+        if let Some(handler) = tui_handler {
+            builder = builder.accept(TUI_ALPN, handler);
+            tracing::info!("registered TUI RPC protocol handler (ALPN: aspen-tui)");
+        }
+
+        // Register Gossip handler if enabled
+        if let Some(gossip) = &self.gossip {
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            tracing::info!("registered Gossip protocol handler (ALPN: gossip)");
+        }
+
+        // Spawn the router (sets ALPNs and starts accept loop)
+        self.router = Some(builder.spawn());
+        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
+    }
+
     /// Add a known peer address to the endpoint for direct connections.
     ///
     /// Note: In Iroh 0.95.1, peer discovery is handled differently.
@@ -631,12 +686,20 @@ impl IrohEndpointManager {
     ///
     /// Tiger Style: Explicit cleanup with bounded wait time.
     pub async fn shutdown(&self) -> Result<()> {
-        // Note: Gossip and router are owned by the endpoint and will be
-        // cleaned up when the endpoint closes. No explicit shutdown needed.
+        // Shutdown the Router first (this stops accepting new connections)
+        if let Some(router) = &self.router {
+            router
+                .shutdown()
+                .await
+                .context("failed to shutdown Iroh Router")?;
+            tracing::info!("Iroh Router shutdown complete");
+        }
 
         // Iroh endpoint shutdown is graceful with internal timeouts
         // In Iroh 0.95.1, close() returns () not Result
         self.endpoint.close().await;
+        tracing::info!("Iroh endpoint closed");
+
         Ok(())
     }
 }

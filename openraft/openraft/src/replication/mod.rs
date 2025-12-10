@@ -427,7 +427,15 @@ where
                 let conflict = sending_range.prev;
                 debug_assert!(conflict.is_some(), "prev_log_id=None never conflict");
 
-                let conflict = conflict.unwrap();
+                // Defensive check to prevent panic on unexpected None
+                let conflict = match conflict {
+                    Some(c) => c,
+                    None => {
+                        tracing::error!("Unexpected None prev_log_id in Conflict response");
+                        // Return early to avoid panic
+                        return Ok(());
+                    }
+                };
 
                 // Conflict is also a successful replication RPC, because the leadership is acknowledged.
                 self.notify_heartbeat_progress(leader_time).await;

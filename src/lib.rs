@@ -11,6 +11,7 @@
 pub mod api;
 pub mod cluster;
 pub mod kv;
+pub mod protocol_handlers;
 pub mod raft;
 pub mod simulation;
 pub mod tui_rpc;

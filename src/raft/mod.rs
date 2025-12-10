@@ -49,6 +49,7 @@ pub mod network;
 pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
+pub mod server_actor;
 pub mod storage;
 pub mod storage_sqlite;
 pub mod storage_validation;

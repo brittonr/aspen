@@ -267,11 +267,11 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
 
     // Verify gossip is None (disabled)
     assert!(
-        handle1.gossip_discovery.is_none(),
+        handle1.gossip_actor.is_none(),
         "node 1 should not have gossip discovery"
     );
     assert!(
-        handle2.gossip_discovery.is_none(),
+        handle2.gossip_actor.is_none(),
         "node 2 should not have gossip discovery"
     );
 

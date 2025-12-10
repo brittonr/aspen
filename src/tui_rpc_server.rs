@@ -126,8 +126,8 @@ async fn run_tui_server(ctx: Arc<TuiRpcServerContext>, cancel: CancellationToken
                     break;
                 };
 
-                // Check if this is a TUI connection (ALPN = "aspen-tui")
-                // We'll handle it after accepting to check ALPN
+                // Note: In Iroh, connections are already filtered by ALPN at the endpoint level,
+                // but both servers are accepting from the same endpoint
 
                 let permit = match connection_semaphore.clone().try_acquire_owned() {
                     Ok(permit) => permit,

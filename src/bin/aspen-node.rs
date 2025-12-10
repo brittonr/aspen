@@ -88,7 +88,7 @@ use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionReque
 use aspen::raft::network::IrpcRaftNetworkFactory;
 use aspen::raft::supervision::HealthMonitor;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
-use aspen::tui_rpc_server::{TuiRpcServer, TuiRpcServerContext};
+use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolHandler, TuiProtocolContext};
 use axum::{
     Json, Router,
     extract::State,
@@ -612,19 +612,39 @@ async fn main() -> Result<()> {
         promotion_coordinator,
     );
 
-    // Spawn TUI RPC server
-    // Temporarily disable TUI server to fix ALPN conflict
-    // TODO: Implement proper ALPN-based dispatching
-    // let tui_server_context = Arc::new(TuiRpcServerContext {
-    //     node_id: config.node_id,
-    //     controller: controller.clone(),
-    //     kv_store: kv_store.clone(),
-    //     endpoint_manager: handle.iroh_manager.clone(),
-    //     cluster_cookie: config.cookie.clone(),
-    //     start_time: app_state.start_time,
-    // });
-    // let tui_rpc_server = TuiRpcServer::spawn(tui_server_context);
-    // info!("TUI RPC server spawned");
+    // Spawn Iroh Router with protocol handlers for ALPN-based dispatching
+    // This eliminates the race condition where TUI and Raft servers compete for connections
+    let raft_handler = RaftProtocolHandler::new(handle.raft_core.clone());
+
+    // Create TUI protocol context and handler
+    let tui_context = TuiProtocolContext {
+        node_id: config.node_id,
+        controller: controller.clone(),
+        kv_store: kv_store.clone(),
+        endpoint_manager: handle.iroh_manager.clone(),
+        cluster_cookie: config.cookie.clone(),
+        start_time: app_state.start_time,
+    };
+    let tui_handler = TuiProtocolHandler::new(tui_context);
+
+    // Spawn the Router with both handlers and gossip (if enabled)
+    let router = {
+        use iroh::protocol::Router;
+        use aspen::protocol_handlers::{RAFT_ALPN, TUI_ALPN};
+        use iroh_gossip::ALPN as GOSSIP_ALPN;
+
+        let mut builder = Router::builder(handle.iroh_manager.endpoint().clone());
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+        builder = builder.accept(TUI_ALPN, tui_handler);
+
+        // Add gossip handler if enabled
+        if let Some(gossip) = handle.iroh_manager.gossip() {
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+        }
+
+        builder.spawn()
+    };
+    info!("Iroh Router spawned with Raft and TUI protocol handlers");
 
     // Build router with all API endpoints
     let app = build_router(app_state);
@@ -645,10 +665,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Gracefully shutdown TUI RPC server
-    // tui_rpc_server.shutdown().await?;
+    // Gracefully shutdown Iroh Router
+    info!("shutting down Iroh Router");
+    router.shutdown().await?;
 
-    // Gracefully shutdown
+    // Gracefully shutdown bootstrap handle (includes RPC server actor, gossip, etc.)
     handle.shutdown().await?;
 
     Ok(())

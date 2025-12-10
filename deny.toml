@@ -31,9 +31,6 @@ ignore = [
     # paste crate (via iroh's netlink dependencies) - proc macro only
     { id = "RUSTSEC-2024-0436", reason = "Transitive dependency via iroh's netlink stack. Proc macro only, no runtime impact." },
 
-    # rustls-pemfile (via hiqlite's axum-server) - has migration path but blocked by hiqlite
-    { id = "RUSTSEC-2025-0134", reason = "Transitive dependency via hiqlite. Migration to rustls-pki-types blocked by hiqlite update." },
-
     # atomic-polyfill (via postcard/heapless in iroh ecosystem) - stable functionality
     { id = "RUSTSEC-2023-0089", reason = "Transitive dependency via postcard. Stable atomic operations polyfill, alternative portable-atomic blocked by iroh ecosystem." },
 ]

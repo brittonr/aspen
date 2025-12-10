@@ -72,6 +72,15 @@ pub const MAX_SNAPSHOT_SIZE: u64 = 100 * 1024 * 1024;
 /// - `node_failure_detection.rs`: NodeFailureDetector state management
 pub const MAX_UNREACHABLE_NODES: u32 = 1000;
 
+/// Maximum number of peers to track in gossip discovery (1000).
+///
+/// Tiger Style: Bounded storage for peer discovery state.
+/// Prevents unbounded growth of peer list even in large clusters.
+///
+/// Used in:
+/// - `gossip_actor.rs`: GossipActor peer management
+pub const MAX_PEER_COUNT: u32 = 1000;
+
 // ============================================================================
 // Storage Constants
 // ============================================================================

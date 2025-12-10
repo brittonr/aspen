@@ -106,6 +106,10 @@ async fn run_server(
                     break;
                 };
 
+                // We'll check ALPN after accepting the connection
+                // Note: In Iroh, connections are already filtered by ALPN at the endpoint level,
+                // but we should handle this gracefully if there's a race condition
+
                 // Try to acquire a connection permit
                 let permit = match connection_semaphore.clone().try_acquire_owned() {
                     Ok(permit) => permit,
@@ -253,10 +257,15 @@ async fn handle_rpc_stream(
     // Serialize and send response
     let response_bytes =
         postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
+
+    debug!(response_size = response_bytes.len(), "sending RPC response");
+
     send.write_all(&response_bytes)
         .await
         .context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
+
+    debug!("RPC response sent successfully");
 
     Ok(())
 }

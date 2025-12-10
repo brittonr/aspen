@@ -64,12 +64,12 @@ use ractor::{Actor, ActorRef};
 use tracing::{info, instrument};
 
 use crate::cluster::config::ClusterBootstrapConfig;
-use crate::cluster::gossip_discovery::GossipPeerDiscovery;
+use crate::cluster::gossip_actor::{GossipActor, GossipActorArgs, GossipMessage};
 use crate::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
 use crate::raft::network::IrpcRaftNetworkFactory;
-use crate::raft::server::RaftRpcServer;
+use crate::raft::server_actor::{RaftRpcServerActor, RaftRpcServerActorArgs, RaftRpcServerMessage};
 use crate::raft::storage::{InMemoryLogStore, RedbLogStore, StateMachineStore, StorageBackend};
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervision::{
@@ -81,6 +81,7 @@ use crate::raft::{RaftActorConfig, RaftActorMessage, StateMachineVariant};
 /// Handle to a bootstrapped cluster node.
 ///
 /// Contains all the resources needed to run and shutdown a node cleanly.
+/// Uses actor references for RPC server and gossip discovery instead of raw handles.
 pub struct BootstrapHandle {
     /// Node configuration.
     pub config: ClusterBootstrapConfig,
@@ -100,12 +101,16 @@ pub struct BootstrapHandle {
     pub raft_core: openraft::Raft<AppTypeConfig>,
     /// State machine variant (actual state machine used by Raft).
     pub state_machine: StateMachineVariant,
-    /// IRPC server handle.
-    pub rpc_server: RaftRpcServer,
+    /// IRPC server actor reference.
+    pub rpc_server_actor: ActorRef<RaftRpcServerMessage>,
+    /// IRPC server actor join handle.
+    pub rpc_server_task: tokio::task::JoinHandle<()>,
     /// IRPC network factory for dynamic peer addition.
     pub network_factory: Arc<IrpcRaftNetworkFactory>,
-    /// Gossip-based peer discovery (None if disabled).
-    pub gossip_discovery: Option<GossipPeerDiscovery>,
+    /// Gossip discovery actor reference (None if disabled).
+    pub gossip_actor: Option<ActorRef<GossipMessage>>,
+    /// Gossip actor join handle (None if disabled).
+    pub gossip_task: Option<tokio::task::JoinHandle<()>>,
     /// Health monitor for the RaftActor.
     pub health_monitor: Option<Arc<HealthMonitor>>,
 }
@@ -114,20 +119,36 @@ impl BootstrapHandle {
     /// Gracefully shutdown the node.
     ///
     /// Shuts down components in reverse order of startup:
-    /// 1. Gossip discovery (if enabled)
-    /// 2. IRPC server
+    /// 1. Gossip discovery actor (if enabled)
+    /// 2. IRPC server actor
     /// 3. Iroh endpoint
     /// 4. Node server
-    /// 5. Raft actor
+    /// 5. Raft supervisor
     pub async fn shutdown(self) -> Result<()> {
-        // Shutdown gossip discovery first
-        if let Some(gossip_discovery) = self.gossip_discovery {
-            info!("shutting down gossip discovery");
-            gossip_discovery.shutdown().await?;
+        // Shutdown gossip discovery actor first
+        if let Some(gossip_actor) = self.gossip_actor {
+            info!("shutting down gossip discovery actor");
+            // Send shutdown message to actor
+            if let Err(e) = gossip_actor.cast(GossipMessage::Shutdown) {
+                tracing::warn!(error = %e, "failed to send shutdown to gossip actor");
+            }
+        }
+        // Wait for gossip actor task to complete
+        if let Some(gossip_task) = self.gossip_task {
+            if let Err(e) = gossip_task.await {
+                tracing::warn!(error = %e, "gossip actor task panicked during shutdown");
+            }
         }
 
-        info!("shutting down IRPC server");
-        self.rpc_server.shutdown().await?;
+        info!("shutting down IRPC server actor");
+        // Send shutdown message to RPC server actor
+        if let Err(e) = self.rpc_server_actor.cast(RaftRpcServerMessage::Shutdown) {
+            tracing::warn!(error = %e, "failed to send shutdown to RPC server actor");
+        }
+        // Wait for RPC server actor task to complete
+        if let Err(e) = self.rpc_server_task.await {
+            tracing::warn!(error = %e, "RPC server actor task panicked during shutdown");
+        }
 
         info!("shutting down Iroh endpoint");
         self.iroh_manager.shutdown().await?;
@@ -238,8 +259,9 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         peer_addrs,
     ));
 
-    // Spawn gossip peer discovery if enabled
-    let gossip_discovery = setup_gossip_discovery(&config, &iroh_manager, &network_factory).await?;
+    // Spawn gossip actor if enabled
+    let (gossip_actor, gossip_task) =
+        setup_gossip_discovery(&config, &iroh_manager, &network_factory).await?;
 
     // Launch NodeServer
     let node_server = setup_node_server(&config).await?;
@@ -257,9 +279,22 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     )
     .await?;
 
-    // Spawn IRPC server for Raft RPC
-    let rpc_server = RaftRpcServer::spawn(Arc::clone(&iroh_manager), raft_core.clone());
-    info!("irpc server spawned for raft rpc");
+    // Spawn IRPC server actor for Raft RPC
+    // Note: use_router=true means the actor won't spawn its own accept loop,
+    // the caller is responsible for spawning an Iroh Router for ALPN dispatching
+    let rpc_server_args = RaftRpcServerActorArgs {
+        endpoint_manager: Arc::clone(&iroh_manager),
+        raft_core: raft_core.clone(),
+        use_router: true,
+    };
+    let (rpc_server_actor, rpc_server_task) = Actor::spawn(
+        Some(format!("raft-rpc-server-{}", config.node_id)),
+        RaftRpcServerActor,
+        rpc_server_args,
+    )
+    .await
+    .context("failed to spawn Raft RPC server actor")?;
+    info!("irpc server actor spawned for raft rpc (using Router for ALPN dispatch)");
 
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
@@ -274,9 +309,11 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
         supervisor_task,
         raft_core,
         state_machine: state_machine_variant,
-        rpc_server,
+        rpc_server_actor,
+        rpc_server_task,
         network_factory,
-        gossip_discovery,
+        gossip_actor,
+        gossip_task,
         health_monitor,
     })
 }
@@ -517,21 +554,21 @@ async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<Iroh
     Ok(Arc::new(manager))
 }
 
-/// Set up gossip-based peer discovery if enabled.
+/// Set up gossip-based peer discovery actor if enabled.
 ///
 /// Determines the gossip topic ID from either:
 /// 1. Cluster ticket (if provided)
 /// 2. Cluster cookie (derived using blake3)
 ///
-/// Returns None if gossip is disabled.
+/// Returns (None, None) if gossip is disabled.
 async fn setup_gossip_discovery(
     config: &ClusterBootstrapConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
-) -> Result<Option<GossipPeerDiscovery>> {
+) -> Result<(Option<ActorRef<GossipMessage>>, Option<tokio::task::JoinHandle<()>>)> {
     if !config.iroh.enable_gossip {
         info!("gossip peer discovery disabled");
-        return Ok(None);
+        return Ok((None, None));
     }
 
     use iroh_gossip::proto::TopicId;
@@ -559,17 +596,22 @@ async fn setup_gossip_discovery(
         topic_id
     };
 
-    // Spawn gossip discovery with network factory for automatic peer connection
-    let discovery = GossipPeerDiscovery::spawn(
+    // Spawn gossip actor with network factory for automatic peer connection
+    let gossip_args = GossipActorArgs {
         topic_id,
-        config.node_id,
-        iroh_manager,
-        Some(Arc::clone(network_factory)),
+        node_id: config.node_id,
+        endpoint_manager: Arc::clone(iroh_manager),
+        network_factory: Some(Arc::clone(network_factory)),
+    };
+    let (gossip_actor, gossip_task) = Actor::spawn(
+        Some(format!("gossip-actor-{}", config.node_id)),
+        GossipActor,
+        gossip_args,
     )
     .await
-    .context("failed to spawn gossip peer discovery")?;
-    info!("gossip peer discovery spawned with automatic peer connection");
-    Ok(Some(discovery))
+    .context("failed to spawn gossip actor")?;
+    info!("gossip actor spawned with automatic peer connection");
+    Ok((Some(gossip_actor), Some(gossip_task)))
 }
 
 /// Launch the ractor NodeServer for distributed actor communication.

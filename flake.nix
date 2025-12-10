@@ -437,7 +437,6 @@
               cp ${./worker-entrypoint.sh} $out/bin/worker-entrypoint.sh
               chmod +x $out/bin/docker-entrypoint.sh
               chmod +x $out/bin/worker-entrypoint.sh
-              cp ${./hiqlite-cluster.toml.template} $out/etc/hiqlite.toml.template
             '')
           ];
 
