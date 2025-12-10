@@ -1,5 +1,6 @@
 //! Common client trait for both HTTP and Iroh connections.
 
+use aspen::tui_rpc::NodeDescriptor;
 use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
@@ -16,6 +17,12 @@ pub trait ClusterClient: Send + Sync {
 
     /// Get cluster metrics.
     async fn get_metrics(&self) -> Result<ClusterMetrics>;
+
+    /// Get all discovered cluster nodes (for multi-node clients).
+    /// Returns empty vec for single-node clients.
+    async fn get_discovered_nodes(&self) -> Result<Vec<NodeDescriptor>> {
+        Ok(vec![])
+    }
 
     /// Check if the node is healthy.
     async fn is_healthy(&self) -> Result<bool>;
@@ -43,6 +50,7 @@ pub trait ClusterClient: Send + Sync {
 pub enum ClientImpl {
     Http(crate::client::AspenClient),
     Iroh(crate::iroh_client::IrohClient),
+    MultiNode(crate::iroh_client::MultiNodeClient),
 }
 
 /// Helper to convert anyhow::Error to color_eyre::Report.
@@ -52,10 +60,48 @@ fn anyhow_to_eyre(err: anyhow::Error) -> color_eyre::Report {
 
 #[async_trait]
 impl ClusterClient for ClientImpl {
+    async fn get_discovered_nodes(&self) -> Result<Vec<NodeDescriptor>> {
+        match self {
+            Self::Http(_) => Ok(vec![]), // HTTP doesn't support discovery yet
+            Self::Iroh(_) => Ok(vec![]), // Single Iroh client doesn't discover
+            Self::MultiNode(client) => {
+                // MultiNodeClient can discover peers
+                client.discover_peers().await.map_err(anyhow_to_eyre)
+            }
+        }
+    }
+
     async fn get_node_info(&self) -> Result<NodeInfo> {
         match self {
             Self::Http(client) => client.get_node_info().await,
             Self::Iroh(client) => {
+                let info = client.get_node_info().await.map_err(anyhow_to_eyre)?;
+                let health = client.get_health().await.map_err(anyhow_to_eyre)?;
+                let metrics = client.get_raft_metrics().await.ok();
+
+                let is_leader = metrics
+                    .as_ref()
+                    .and_then(|m| m.current_leader)
+                    .map(|l| l == info.node_id)
+                    .unwrap_or(false);
+
+                Ok(NodeInfo {
+                    node_id: info.node_id,
+                    status: if health.status == "healthy" {
+                        NodeStatus::Healthy
+                    } else if health.status == "degraded" {
+                        NodeStatus::Degraded
+                    } else {
+                        NodeStatus::Unhealthy
+                    },
+                    is_leader,
+                    last_applied_index: metrics.as_ref().and_then(|m| m.last_applied_index),
+                    current_term: metrics.as_ref().map(|m| m.current_term),
+                    uptime_secs: Some(health.uptime_seconds),
+                    http_addr: format!("iroh://{}", info.endpoint_addr),
+                })
+            }
+            Self::MultiNode(client) => {
                 let info = client.get_node_info().await.map_err(anyhow_to_eyre)?;
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 let metrics = client.get_raft_metrics().await.ok();
@@ -98,6 +144,22 @@ impl ClusterClient for ClientImpl {
                     last_applied_index: metrics.last_applied_index,
                 })
             }
+            Self::MultiNode(client) => {
+                let metrics = client.get_raft_metrics().await.map_err(anyhow_to_eyre)?;
+                // Use discover_peers to get actual node count
+                let node_count = client
+                    .discover_peers()
+                    .await
+                    .map(|peers| peers.len())
+                    .unwrap_or(1);
+                Ok(ClusterMetrics {
+                    leader: metrics.current_leader,
+                    term: metrics.current_term,
+                    node_count,
+                    last_log_index: metrics.last_log_index,
+                    last_applied_index: metrics.last_applied_index,
+                })
+            }
         }
     }
 
@@ -105,6 +167,10 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Http(client) => client.is_healthy().await,
             Self::Iroh(client) => {
+                let health = client.get_health().await.map_err(anyhow_to_eyre)?;
+                Ok(health.status == "healthy")
+            }
+            Self::MultiNode(client) => {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 Ok(health.status == "healthy")
             }
@@ -128,6 +194,17 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::MultiNode(client) => {
+                let result = client.init_cluster().await.map_err(anyhow_to_eyre)?;
+                if !result.success {
+                    if let Some(error) = result.error {
+                        return Err(eyre!("Failed to initialize cluster: {}", error));
+                    } else {
+                        return Err(eyre!("Failed to initialize cluster"));
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -141,6 +218,20 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::Iroh(client) => {
+                let result = client
+                    .add_learner(node_id, addr)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+                if !result.success {
+                    if let Some(error) = result.error {
+                        return Err(eyre!("Failed to add learner: {}", error));
+                    } else {
+                        return Err(eyre!("Failed to add learner"));
+                    }
+                }
+                Ok(())
+            }
+            Self::MultiNode(client) => {
                 let result = client
                     .add_learner(node_id, addr)
                     .await
@@ -180,6 +271,20 @@ impl ClusterClient for ClientImpl {
                 }
                 Ok(())
             }
+            Self::MultiNode(client) => {
+                let result = client
+                    .change_membership(members)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+                if !result.success {
+                    if let Some(error) = result.error {
+                        return Err(eyre!("Failed to change membership: {}", error));
+                    } else {
+                        return Err(eyre!("Failed to change membership"));
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -187,6 +292,17 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Http(client) => client.write(key, value).await,
             Self::Iroh(client) => {
+                let result = client.write_key(key, value).await.map_err(anyhow_to_eyre)?;
+                if !result.success {
+                    if let Some(error) = result.error {
+                        return Err(eyre!("Failed to write key: {}", error));
+                    } else {
+                        return Err(eyre!("Failed to write key"));
+                    }
+                }
+                Ok(())
+            }
+            Self::MultiNode(client) => {
                 let result = client.write_key(key, value).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
@@ -207,6 +323,10 @@ impl ClusterClient for ClientImpl {
                 let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
                 Ok(result.value)
             }
+            Self::MultiNode(client) => {
+                let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
+                Ok(result.value)
+            }
         }
     }
 
@@ -220,6 +340,17 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::Iroh(client) => {
+                let result = client.trigger_snapshot().await.map_err(anyhow_to_eyre)?;
+                if !result.success {
+                    if let Some(error) = result.error {
+                        return Err(eyre!("Failed to trigger snapshot: {}", error));
+                    } else {
+                        return Err(eyre!("Failed to trigger snapshot"));
+                    }
+                }
+                Ok(())
+            }
+            Self::MultiNode(client) => {
                 let result = client.trigger_snapshot().await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {

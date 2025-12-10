@@ -84,14 +84,14 @@ use aspen::api::{
 use aspen::cluster::bootstrap::{BootstrapHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
+use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 use aspen::raft::network::IrpcRaftNetworkFactory;
 use aspen::raft::supervision::HealthMonitor;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
-use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolHandler, TuiProtocolContext};
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -563,6 +563,7 @@ fn build_router(app_state: AppState) -> Router {
         .route("/iroh-metrics", get(iroh_metrics))
         .route("/node-info", get(node_info))
         .route("/cluster-ticket", get(cluster_ticket))
+        .route("/cluster-ticket-combined", get(cluster_ticket_combined))
         .route("/init", post(init_cluster))
         .route("/add-learner", post(add_learner))
         .route("/change-membership", post(change_membership))
@@ -629,8 +630,8 @@ async fn main() -> Result<()> {
 
     // Spawn the Router with both handlers and gossip (if enabled)
     let router = {
-        use iroh::protocol::Router;
         use aspen::protocol_handlers::{RAFT_ALPN, TUI_ALPN};
+        use iroh::protocol::Router;
         use iroh_gossip::ALPN as GOSSIP_ALPN;
 
         let mut builder = Router::builder(handle.iroh_manager.endpoint().clone());
@@ -1454,6 +1455,60 @@ async fn cluster_ticket(State(ctx): State<AppState>) -> impl IntoResponse {
         "topic_id": format!("{:?}", topic_id),
         "cluster_id": ctx.cluster_cookie,
         "endpoint_id": ctx.iroh_manager.endpoint().id().to_string(),
+    }))
+}
+
+/// Get cluster ticket with all known peer endpoints included as bootstrap peers.
+/// This allows connecting to the entire cluster with a single ticket.
+///
+/// Accepts optional query parameter: endpoint_ids=id1,id2,id3
+/// to include specific peer endpoints in the ticket.
+async fn cluster_ticket_combined(
+    State(ctx): State<AppState>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    use aspen::cluster::ticket::AspenClusterTicket;
+    use iroh::EndpointId;
+    use iroh_gossip::proto::TopicId;
+
+    // Derive topic ID from cluster cookie using blake3
+    let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
+    let topic_id = TopicId::from_bytes(*hash.as_bytes());
+
+    // Create ticket with this node as the first bootstrap peer
+    let mut ticket = AspenClusterTicket::with_bootstrap(
+        topic_id,
+        ctx.cluster_cookie.clone(),
+        ctx.iroh_manager.endpoint().id(),
+    );
+
+    // If endpoint_ids parameter is provided, add those endpoints to the ticket
+    if let Some(endpoint_ids_str) = params.get("endpoint_ids") {
+        for id_str in endpoint_ids_str.split(',') {
+            let id_str = id_str.trim();
+            if !id_str.is_empty() && id_str != ctx.iroh_manager.endpoint().id().to_string() {
+                // Try to parse the endpoint ID
+                if let Ok(endpoint_id) = id_str.parse::<EndpointId>() {
+                    let _ = ticket.add_bootstrap(endpoint_id);
+                }
+            }
+        }
+    }
+
+    let ticket_str = ticket.serialize();
+    let bootstrap_count = ticket.bootstrap.len();
+
+    Json(json!({
+        "ticket": ticket_str,
+        "topic_id": format!("{:?}", topic_id),
+        "cluster_id": ctx.cluster_cookie,
+        "endpoint_id": ctx.iroh_manager.endpoint().id().to_string(),
+        "bootstrap_peers": bootstrap_count,
+        "note": if bootstrap_count > 1 {
+            format!("Combined ticket with {} bootstrap peers", bootstrap_count)
+        } else {
+            "Single bootstrap peer - nodes will discover each other via gossip".to_string()
+        },
     }))
 }
 

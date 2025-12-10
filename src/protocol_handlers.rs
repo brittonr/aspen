@@ -51,10 +51,10 @@ use crate::raft::constants::{
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 use crate::tui_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterTicketResponse,
-    HealthResponse, InitResultResponse, MAX_TUI_MESSAGE_SIZE, NodeInfoResponse,
-    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse,
-    WriteResultResponse,
+    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterStateResponse,
+    ClusterTicketResponse, HealthResponse, InitResultResponse, MAX_CLUSTER_NODES,
+    MAX_TUI_MESSAGE_SIZE, NodeDescriptor, NodeInfoResponse, RaftMetricsResponse,
+    ReadResultResponse, SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse, WriteResultResponse,
 };
 
 /// ALPN protocol identifier for Raft RPC.
@@ -252,7 +252,10 @@ async fn handle_raft_rpc_stream(
     let response_bytes =
         postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
 
-    debug!(response_size = response_bytes.len(), "sending Raft RPC response");
+    debug!(
+        response_size = response_bytes.len(),
+        "sending Raft RPC response"
+    );
 
     send.write_all(&response_bytes)
         .await
@@ -631,5 +634,59 @@ async fn process_tui_request(
         }
 
         TuiRpcRequest::Ping => Ok(TuiRpcResponse::Pong),
+
+        TuiRpcRequest::GetClusterState => {
+            // Get current cluster state from the Raft controller
+            let cluster_state = ctx
+                .controller
+                .current_state()
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to get cluster state: {}", e))?;
+
+            // Get current leader from metrics
+            let leader_id = ctx.controller.get_leader().await.unwrap_or(None);
+
+            // Convert ClusterNode to NodeDescriptor with membership info
+            // Tiger Style: Bounded to MAX_CLUSTER_NODES
+            let mut nodes: Vec<NodeDescriptor> = Vec::with_capacity(
+                (cluster_state.nodes.len() + cluster_state.learners.len()).min(MAX_CLUSTER_NODES),
+            );
+
+            // Track which nodes are voters (members)
+            let member_ids: std::collections::HashSet<u64> =
+                cluster_state.members.iter().copied().collect();
+
+            // Add all nodes from the cluster state
+            for node in cluster_state.nodes.iter().take(MAX_CLUSTER_NODES) {
+                let is_voter = member_ids.contains(&node.id);
+                nodes.push(NodeDescriptor {
+                    node_id: node.id,
+                    endpoint_addr: node.addr.clone(),
+                    is_voter,
+                    is_learner: false,
+                    is_leader: leader_id == Some(node.id),
+                });
+            }
+
+            // Add learners
+            for learner in cluster_state.learners.iter() {
+                if nodes.len() >= MAX_CLUSTER_NODES {
+                    break;
+                }
+                nodes.push(NodeDescriptor {
+                    node_id: learner.id,
+                    endpoint_addr: learner.addr.clone(),
+                    is_voter: false,
+                    is_learner: true,
+                    is_leader: false, // Learners can't be leaders
+                });
+            }
+
+            Ok(TuiRpcResponse::ClusterState(ClusterStateResponse {
+                nodes,
+                leader_id,
+                this_node_id: ctx.node_id,
+            }))
+        }
     }
 }

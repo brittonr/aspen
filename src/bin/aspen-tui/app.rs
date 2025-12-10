@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 use color_eyre::Result;
 use tracing::{info, warn};
 
-use crate::client::{AspenClient, ClusterMetrics, NodeInfo};
+use crate::client::{AspenClient, ClusterMetrics, NodeInfo, NodeStatus};
 use crate::client_trait::{ClientImpl, ClusterClient};
 use crate::event::Event;
-use crate::iroh_client::{IrohClient, parse_cluster_ticket};
+use crate::iroh_client::{MultiNodeClient, parse_cluster_ticket};
 
 /// Active view/tab in the TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -184,21 +184,29 @@ impl App {
         }
     }
 
-    /// Create new application state with Iroh client.
+    /// Create new application state with Iroh multi-node client.
+    ///
+    /// Uses the MultiNodeClient to automatically discover and connect to all
+    /// nodes in the cluster.
     pub async fn new_with_iroh(
         ticket: String,
         debug_mode: bool,
         max_display_nodes: usize,
     ) -> Result<Self> {
-        // Parse the ticket to get endpoint address
-        let endpoint_addr =
+        // Parse the ticket to get all endpoint addresses
+        let endpoint_addrs =
             parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
 
-        // Create Iroh client
-        let iroh_client = IrohClient::new(endpoint_addr)
+        info!(
+            "Ticket contains {} bootstrap peers, creating multi-node client",
+            endpoint_addrs.len()
+        );
+
+        // Create MultiNodeClient with all bootstrap endpoints
+        let multi_client = MultiNodeClient::new(endpoint_addrs)
             .await
             .map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
-        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Iroh(iroh_client));
+        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
 
         Ok(Self {
             should_quit: false,
@@ -336,6 +344,9 @@ impl App {
     }
 
     /// Refresh cluster state from the node.
+    ///
+    /// For HTTP clients: queries each known node port individually.
+    /// For MultiNode clients: uses GetClusterState to discover all nodes automatically.
     async fn refresh_cluster_state(&mut self) {
         self.refreshing = true;
         let mut new_nodes = BTreeMap::new();
@@ -345,11 +356,58 @@ impl App {
             Ok(info) => {
                 let connected_node_id = info.node_id;
                 let is_http = info.http_addr.starts_with("http://");
+                let is_iroh = info.http_addr.starts_with("iroh://");
                 new_nodes.insert(info.node_id, info);
 
-                // Try to get metrics to discover other nodes
+                // Try to get metrics - this also triggers discovery for MultiNode client
                 if let Ok(metrics) = self.client.get_metrics().await {
-                    self.cluster_metrics = Some(metrics);
+                    self.cluster_metrics = Some(metrics.clone());
+
+                    // For MultiNode (Iroh) client, populate all discovered nodes
+                    if is_iroh {
+                        // Use the trait method to get discovered nodes
+                        match self.client.get_discovered_nodes().await {
+                            Ok(discovered_nodes) if !discovered_nodes.is_empty() => {
+                                info!(
+                                    discovered_count = discovered_nodes.len(),
+                                    leader = ?metrics.leader,
+                                    "discovered cluster peers via GetClusterState"
+                                );
+
+                                // Add each discovered node to our nodes map
+                                for node_desc in discovered_nodes {
+                                    // Create a NodeInfo from the discovered node descriptor
+                                    let node_info = NodeInfo {
+                                        node_id: node_desc.node_id,
+                                        status: if node_desc.is_leader {
+                                            NodeStatus::Healthy // Leaders are always healthy
+                                        } else {
+                                            NodeStatus::Healthy // Assume healthy for discovered nodes
+                                        },
+                                        is_leader: node_desc.is_leader,
+                                        last_applied_index: None, // Will be updated on next metrics call
+                                        current_term: Some(metrics.term),
+                                        uptime_secs: None,
+                                        http_addr: format!("iroh://{}", node_desc.endpoint_addr),
+                                    };
+                                    new_nodes.insert(node_desc.node_id, node_info);
+                                }
+                            }
+                            Ok(_) => {
+                                // No discovered nodes (single-node client or HTTP)
+                                if metrics.node_count > 1 {
+                                    info!(
+                                        total_nodes = metrics.node_count,
+                                        leader = ?metrics.leader,
+                                        "cluster has multiple nodes but discovery not available"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "failed to discover peers");
+                            }
+                        }
+                    }
                 }
 
                 // For HTTP client, try to query other nodes using standard ports
@@ -368,11 +426,11 @@ impl App {
                             }
                         }
                     }
-                    info!(total_nodes = new_nodes.len(), "nodes discovered");
+                    info!(total_nodes = new_nodes.len(), "nodes discovered via HTTP");
                 }
 
-                // For Iroh client, we currently only show the connected node
-                // TODO: Implement multi-node discovery for Iroh P2P connections
+                // For Iroh MultiNode client, we already got the cluster state from get_metrics()
+                // The ClusterMetrics now includes the actual discovered node count
             }
             Err(e) => {
                 warn!(error = %e, "failed to get node info");

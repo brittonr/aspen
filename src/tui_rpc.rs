@@ -67,6 +67,12 @@ pub enum TuiRpcRequest {
 
     /// Ping for connection health check.
     Ping,
+
+    /// Get cluster state with all known nodes.
+    ///
+    /// Returns information about all nodes in the cluster including
+    /// their endpoint addresses, membership status, and role.
+    GetClusterState,
 }
 
 /// TUI RPC response protocol.
@@ -109,6 +115,9 @@ pub enum TuiRpcResponse {
 
     /// Pong response for ping.
     Pong,
+
+    /// Cluster state response.
+    ClusterState(ClusterStateResponse),
 
     /// Error response for any request.
     Error(ErrorResponse),
@@ -232,6 +241,41 @@ pub struct ErrorResponse {
     /// Error message.
     pub message: String,
 }
+
+/// Cluster state response containing all known nodes.
+///
+/// Tiger Style: Bounded to MAX_CLUSTER_NODES (16) to prevent unbounded growth.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClusterStateResponse {
+    /// All known nodes in the cluster.
+    pub nodes: Vec<NodeDescriptor>,
+    /// Current leader node ID, if known.
+    pub leader_id: Option<u64>,
+    /// This node's ID.
+    pub this_node_id: u64,
+}
+
+/// Descriptor for a node in the cluster.
+///
+/// Contains all information needed to connect to and identify a node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeDescriptor {
+    /// Node identifier.
+    pub node_id: u64,
+    /// Iroh endpoint address (serialized).
+    pub endpoint_addr: String,
+    /// Whether this node is a voter in Raft consensus.
+    pub is_voter: bool,
+    /// Whether this node is a learner (non-voting replica).
+    pub is_learner: bool,
+    /// Whether this node is the current leader.
+    pub is_leader: bool,
+}
+
+/// Maximum number of nodes in cluster state response.
+///
+/// Tiger Style: Bounded limit to prevent memory exhaustion.
+pub const MAX_CLUSTER_NODES: usize = 16;
 
 impl TuiRpcResponse {
     /// Create an error response.
