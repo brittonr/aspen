@@ -11,7 +11,7 @@ use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
-use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::types::{AppTypeConfig, AspenNode, NodeId};
 use aspen::raft::{RaftActorConfig, StateMachineVariant};
 
 /// Mock network factory for testing that doesn't actually send messages.
@@ -21,7 +21,7 @@ struct MockNetworkFactory;
 impl RaftNetworkFactory<AppTypeConfig> for MockNetworkFactory {
     type Network = MockNetwork;
 
-    async fn new_client(&mut self, _target: NodeId, _node: &openraft::BasicNode) -> Self::Network {
+    async fn new_client(&mut self, _target: NodeId, _node: &AspenNode) -> Self::Network {
         MockNetwork
     }
 }

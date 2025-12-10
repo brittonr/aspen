@@ -230,7 +230,30 @@ impl GossipPeerDiscovery {
                                     announcement.endpoint_addr.id
                                 );
 
-                                // Add peer to network factory if available
+                                // Add peer to network factory's fallback cache.
+                                //
+                                // ARCHITECTURAL NOTE: Gossip discovery intentionally does NOT
+                                // automatically trigger add_learner() to add discovered peers to
+                                // Raft membership. This separation is by design:
+                                //
+                                // 1. Transport vs Application Layer: Gossip provides transport-layer
+                                //    connectivity (who can I talk to?), while Raft membership is an
+                                //    application-layer concern (who is part of the cluster?).
+                                //
+                                // 2. Security: Automatic promotion would allow any gossiping node to
+                                //    join the cluster, creating a Sybil attack vector.
+                                //
+                                // 3. Bounded Growth: Manual add_learner() calls ensure cluster
+                                //    membership is explicitly controlled by operators.
+                                //
+                                // 4. Address Persistence: Addresses ARE persisted! When a peer is
+                                //    added via add_learner(), their AspenNode (with iroh_addr) is
+                                //    stored in Raft membership and persisted to the state machine.
+                                //    On restart, these addresses are recovered automatically.
+                                //
+                                // The network factory's peer_addrs map is just a fallback cache for
+                                // addresses not yet in Raft membership. Once a peer is promoted to
+                                // learner/voter, their address comes from the Raft membership state.
                                 if let Some(ref factory) = receiver_network_factory {
                                     factory
                                         .add_peer(

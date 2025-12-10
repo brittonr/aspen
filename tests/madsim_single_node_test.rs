@@ -11,7 +11,8 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
-use openraft::{BasicNode, Config, Raft};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(node_id: NodeId) -> Raft<aspen::raft::types::AppTypeConfig> {
@@ -61,7 +62,7 @@ async fn test_single_node_initialization_seed_42() {
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
-    nodes.insert(1, BasicNode::default());
+    nodes.insert(1, create_test_aspen_node(1));
     raft1
         .initialize(nodes)
         .await
@@ -103,7 +104,7 @@ async fn test_single_node_initialization_seed_123() {
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
-    nodes.insert(1, BasicNode::default());
+    nodes.insert(1, create_test_aspen_node(1));
     raft1
         .initialize(nodes)
         .await
@@ -144,7 +145,7 @@ async fn test_single_node_initialization_seed_456() {
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
-    nodes.insert(1, BasicNode::default());
+    nodes.insert(1, create_test_aspen_node(1));
     raft1
         .initialize(nodes)
         .await

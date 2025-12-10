@@ -381,6 +381,12 @@ pub struct IrohEndpointConfig {
     pub enable_pkarr: bool,
     /// Custom Pkarr relay URL (None = use n0's service).
     pub pkarr_relay_url: Option<String>,
+    /// ALPNs to accept on this endpoint.
+    ///
+    /// Required when NOT using an Iroh Router for ALPN dispatching.
+    /// When using Router, ALPNs are set automatically via `.accept()` calls.
+    /// When using internal server (use_router=false), these must be set here.
+    pub alpns: Vec<Vec<u8>>,
 }
 
 impl Default for IrohEndpointConfig {
@@ -396,6 +402,7 @@ impl Default for IrohEndpointConfig {
             dns_discovery_url: None,
             enable_pkarr: false,
             pkarr_relay_url: None,
+            alpns: Vec::new(),
         }
     }
 }
@@ -468,6 +475,21 @@ impl IrohEndpointConfig {
         self.pkarr_relay_url = Some(url);
         self
     }
+
+    /// Set ALPNs to accept on this endpoint.
+    ///
+    /// Required when NOT using an Iroh Router for ALPN dispatching.
+    /// The endpoint must have at least one ALPN configured to accept incoming connections.
+    pub fn with_alpns(mut self, alpns: Vec<Vec<u8>>) -> Self {
+        self.alpns = alpns;
+        self
+    }
+
+    /// Add a single ALPN to accept on this endpoint.
+    pub fn with_alpn(mut self, alpn: Vec<u8>) -> Self {
+        self.alpns.push(alpn);
+        self
+    }
 }
 
 /// Manages the lifecycle of an Iroh endpoint for P2P transport.
@@ -522,10 +544,17 @@ impl IrohEndpointManager {
             builder = builder.relay_mode(RelayMode::Default);
         }
 
-        // Note: ALPNs are NOT set here. They will be configured by the Router
-        // when protocol handlers are registered via spawn_router().
-        // This prevents the race condition where multiple servers accept
-        // from the same endpoint without proper ALPN-based dispatching.
+        // Configure ALPNs if provided.
+        // When using Router (spawn_router()), ALPNs are set automatically via .accept() calls.
+        // When NOT using Router (use_router=false), ALPNs must be set here for the endpoint
+        // to accept incoming connections.
+        if !config.alpns.is_empty() {
+            builder = builder.alpns(config.alpns.clone());
+            tracing::info!(
+                alpns = ?config.alpns.iter().map(|a| String::from_utf8_lossy(a).to_string()).collect::<Vec<_>>(),
+                "configured endpoint to accept ALPNs"
+            );
+        }
 
         // Configure discovery services for bootstrapping network connectivity
         // mDNS: Local network discovery (default enabled for dev/testing)

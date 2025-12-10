@@ -60,8 +60,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use iroh::EndpointAddr;
 use openraft::metrics::RaftMetrics;
-use openraft::{BasicNode, LogId, Raft, ReadPolicy};
+use openraft::{LogId, Raft, ReadPolicy};
 use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, call_t};
 use tracing::{info, instrument, warn};
 
@@ -73,7 +74,7 @@ use crate::api::{
 use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use crate::raft::storage::StateMachineStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
-use crate::raft::types::{AppRequest, AppTypeConfig};
+use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
 
 /// State machine variant that can hold either in-memory, redb-backed, or sqlite-backed storage.
 ///
@@ -304,14 +305,19 @@ fn ensure_initialized_kv(state: &RaftActorState) -> Result<(), KeyValueStoreErro
     }
 }
 
-fn ensure_raft_addr(node: &ClusterNode) -> Result<(), ControlPlaneError> {
-    if node.raft_addr.is_none() {
-        Err(ControlPlaneError::InvalidRequest {
-            reason: "raft_addr must be set for every node".into(),
+/// Ensure the node has an Iroh address for Raft communication.
+///
+/// With the introduction of `AspenNode`, the primary address source is `iroh_addr`.
+/// The legacy `raft_addr` is no longer required.
+fn ensure_iroh_addr(node: &ClusterNode) -> Result<&EndpointAddr, ControlPlaneError> {
+    node.iroh_addr
+        .as_ref()
+        .ok_or_else(|| ControlPlaneError::InvalidRequest {
+            reason: format!(
+                "iroh_addr must be set for node {} (use ClusterNode::with_iroh_addr)",
+                node.id
+            ),
         })
-    } else {
-        Ok(())
-    }
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
@@ -324,18 +330,14 @@ async fn handle_init(
             reason: "initial_members must not be empty".into(),
         });
     }
-    for member in &request.initial_members {
-        ensure_raft_addr(member)?;
-    }
+
+    // Build AspenNode map from ClusterNodes with Iroh addresses
     let mut nodes = BTreeMap::new();
-    for node in &request.initial_members {
-        nodes.insert(
-            node.id,
-            BasicNode {
-                addr: node.addr.clone(),
-            },
-        );
+    for cluster_node in &request.initial_members {
+        let iroh_addr = ensure_iroh_addr(cluster_node)?;
+        nodes.insert(cluster_node.id, AspenNode::new(iroh_addr.clone()));
     }
+
     state
         .raft
         .initialize(nodes)
@@ -356,10 +358,15 @@ async fn handle_add_learner(
     request: AddLearnerRequest,
 ) -> Result<ClusterState, ControlPlaneError> {
     let learner = request.learner;
-    ensure_raft_addr(&learner)?;
-    let node = BasicNode {
-        addr: learner.addr.clone(),
-    };
+    let iroh_addr = ensure_iroh_addr(&learner)?;
+    let node = AspenNode::new(iroh_addr.clone());
+
+    info!(
+        learner_id = learner.id,
+        endpoint_id = %iroh_addr.id,
+        "adding learner with Iroh address stored in Raft membership"
+    );
+
     state
         .raft
         .add_learner(learner.id, node, true)
@@ -617,7 +624,9 @@ impl ClusterController for RaftControlClient {
         &self,
         request: AddLearnerRequest,
     ) -> Result<ClusterState, ControlPlaneError> {
-        call_t!(self.actor, RaftActorMessage::AddLearner, 500, request).map_err(|err| {
+        // Tiger Style: Adding a learner may require initial connection setup and log sync.
+        // Use a longer timeout (5s) to account for network establishment.
+        call_t!(self.actor, RaftActorMessage::AddLearner, 5000, request).map_err(|err| {
             ControlPlaneError::Failed {
                 reason: err.to_string(),
             }
@@ -628,10 +637,19 @@ impl ClusterController for RaftControlClient {
         &self,
         request: ChangeMembershipRequest,
     ) -> Result<ClusterState, ControlPlaneError> {
-        call_t!(self.actor, RaftActorMessage::ChangeMembership, 500, request).map_err(|err| {
-            ControlPlaneError::Failed {
-                reason: err.to_string(),
-            }
+        // Tiger Style: Membership changes require waiting for replication to a quorum,
+        // which can take multiple heartbeat cycles. Use a longer timeout (10s) to account for:
+        // - Network latency establishing connections
+        // - Log replication to new members
+        // - Joint consensus commit (C-old,new -> C-new)
+        call_t!(
+            self.actor,
+            RaftActorMessage::ChangeMembership,
+            10000,
+            request
+        )
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
         })?
     }
 

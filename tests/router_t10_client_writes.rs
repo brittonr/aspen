@@ -10,7 +10,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
-use openraft::{BasicNode, Config, ServerState};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -39,7 +40,7 @@ async fn test_client_writes() -> Result<()> {
     {
         let node0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         node0.initialize(nodes).await?;
 
         router
@@ -128,7 +129,7 @@ async fn test_leader_write_path() -> Result<()> {
     {
         let node0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         node0.initialize(nodes).await?;
 
         router
@@ -177,7 +178,7 @@ async fn test_sequential_log_indices() -> Result<()> {
     {
         let node0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         node0.initialize(nodes).await?;
 
         router

@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
-use openraft::{BasicNode, Config, ServerState, SnapshotPolicy};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, ServerState, SnapshotPolicy};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -51,7 +52,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     {
         let n0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         n0.initialize(nodes).await?;
     }
 

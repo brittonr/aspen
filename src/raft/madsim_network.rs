@@ -47,12 +47,12 @@ use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::type_config::alias::VoteOf;
-use openraft::{BasicNode, OptionalSend, Raft, Snapshot};
+use openraft::{OptionalSend, Raft, Snapshot};
 use parking_lot::Mutex as SyncMutex;
 use tracing::debug;
 
 use crate::raft::constants::MAX_CONNECTIONS_PER_NODE;
-use crate::raft::types::{AppTypeConfig, NodeId};
+use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
 
 /// Madsim-compatible Raft network factory for deterministic simulation.
 ///
@@ -88,7 +88,7 @@ impl RaftNetworkFactory<AppTypeConfig> for MadsimNetworkFactory {
     type Network = MadsimRaftNetwork;
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, _node: &AspenNode) -> Self::Network {
         MadsimRaftNetwork::new(
             self.source_node_id,
             target,

@@ -346,12 +346,12 @@ impl Actor for GossipActor {
                 state.add_peer(peer);
 
                 // Forward to network factory if available
-                if let Some(ref factory) = state.args.network_factory {
-                    if let Some(peer_info) = state.known_peers.get(&node_id) {
-                        factory
-                            .add_peer(peer_info.node_id, peer_info.endpoint_addr.clone())
-                            .await;
-                    }
+                if let Some(ref factory) = state.args.network_factory
+                    && let Some(peer_info) = state.known_peers.get(&node_id)
+                {
+                    factory
+                        .add_peer(peer_info.node_id, peer_info.endpoint_addr.clone())
+                        .await;
                 }
             }
             GossipMessage::GetPeers(reply) => {

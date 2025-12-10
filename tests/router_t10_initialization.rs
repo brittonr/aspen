@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
-use openraft::{BasicNode, Config, ServerState};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -61,7 +62,7 @@ async fn test_cluster_initialization() -> Result<()> {
     {
         let n0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         n0.initialize(nodes).await?;
 
         // Wait for initialization
@@ -112,7 +113,7 @@ async fn test_initialize_err_target_not_in_membership() -> Result<()> {
     for node_id in [0, 1] {
         let n = router.get_raft_handle(&node_id)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(9, BasicNode::default()); // Node 9 doesn't exist
+        nodes.insert(9, create_test_aspen_node(9)); // Node 9 doesn't exist
 
         let res = n.initialize(nodes).await;
         assert!(
@@ -147,7 +148,7 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
     {
         let n0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         n0.initialize(nodes).await?;
 
         n0.wait(timeout())
@@ -160,7 +161,7 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
     {
         let n0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
 
         let res = n0.initialize(nodes).await;
         assert!(res.is_err(), "second initialization should be rejected");

@@ -15,7 +15,8 @@ use aspen::raft::types::*;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
-use openraft::{BasicNode, Config, ServerState};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, ServerState};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -103,8 +104,8 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Add learners via the leader
     let raft = router.get_raft_handle(&initial_leader)?;
-    raft.add_learner(3, BasicNode::default(), true).await?;
-    raft.add_learner(4, BasicNode::default(), true).await?;
+    raft.add_learner(3, create_test_aspen_node(3), true).await?;
+    raft.add_learner(4, create_test_aspen_node(4), true).await?;
     events.push("learners-added: nodes 3, 4".into());
 
     // Wait for learners to catch up (2 add_learner ops = index 6)

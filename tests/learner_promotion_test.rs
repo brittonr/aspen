@@ -75,23 +75,12 @@ async fn test_promote_learner_basic() {
     // Initialize cluster on node 1001
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
+    // Use REAL Iroh addresses from running nodes
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(
-                NODE_ID_BASE + 1,
-                "127.0.0.1:20001",
-                Some("127.0.0.1:20001".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 2,
-                "127.0.0.1:20002",
-                Some("127.0.0.1:20002".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 3,
-                "127.0.0.1:20003",
-                Some("127.0.0.1:20003".to_string()),
-            ),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 1, addrs[0].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 2, addrs[1].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 3, addrs[2].clone()),
         ],
     };
 
@@ -147,12 +136,9 @@ async fn test_promote_learner_basic() {
             .await;
     }
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 4,
-            "127.0.0.1:20004",
-            Some("127.0.0.1:20004".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 4, learner_addr.clone()),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -247,23 +233,12 @@ async fn test_promote_learner_replace_voter() {
     // Initialize cluster on node 2001
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
+    // Use REAL Iroh addresses from running nodes
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(
-                NODE_ID_BASE + 1,
-                "127.0.0.1:21001",
-                Some("127.0.0.1:21001".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 2,
-                "127.0.0.1:21002",
-                Some("127.0.0.1:21002".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 3,
-                "127.0.0.1:21003",
-                Some("127.0.0.1:21003".to_string()),
-            ),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 1, addrs[0].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 2, addrs[1].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 3, addrs[2].clone()),
         ],
     };
 
@@ -319,12 +294,9 @@ async fn test_promote_learner_replace_voter() {
             .await;
     }
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 4,
-            "127.0.0.1:21004",
-            Some("127.0.0.1:21004".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 4, learner_addr.clone()),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -409,23 +381,12 @@ async fn test_membership_cooldown_enforced() {
     // Initialize cluster on node 3001
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
+    // Use REAL Iroh addresses from running nodes
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(
-                NODE_ID_BASE + 1,
-                "127.0.0.1:22001",
-                Some("127.0.0.1:22001".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 2,
-                "127.0.0.1:22002",
-                Some("127.0.0.1:22002".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 3,
-                "127.0.0.1:22003",
-                Some("127.0.0.1:22003".to_string()),
-            ),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 1, addrs[0].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 2, addrs[1].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 3, addrs[2].clone()),
         ],
     };
 
@@ -481,12 +442,9 @@ async fn test_membership_cooldown_enforced() {
             .await;
     }
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 4,
-            "127.0.0.1:22004",
-            Some("127.0.0.1:22004".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 4, learner_addr.clone()),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -539,12 +497,9 @@ async fn test_membership_cooldown_enforced() {
         .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
         .await;
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 5,
-            "127.0.0.1:22005",
-            Some("127.0.0.1:22005".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 5, learner_addr_5.clone()),
     };
 
     controller_1.add_learner(add_learner_req_5).await.unwrap();
@@ -625,23 +580,12 @@ async fn test_force_bypasses_cooldown() {
     // Initialize cluster on node 4001
     let controller_1 = RaftControlClient::new(handles[0].raft_actor.clone());
 
+    // Use REAL Iroh addresses from running nodes
     let init_request = InitRequest {
         initial_members: vec![
-            ClusterNode::new(
-                NODE_ID_BASE + 1,
-                "127.0.0.1:23001",
-                Some("127.0.0.1:23001".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 2,
-                "127.0.0.1:23002",
-                Some("127.0.0.1:23002".to_string()),
-            ),
-            ClusterNode::new(
-                NODE_ID_BASE + 3,
-                "127.0.0.1:23003",
-                Some("127.0.0.1:23003".to_string()),
-            ),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 1, addrs[0].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 2, addrs[1].clone()),
+            ClusterNode::with_iroh_addr(NODE_ID_BASE + 3, addrs[2].clone()),
         ],
     };
 
@@ -697,12 +641,9 @@ async fn test_force_bypasses_cooldown() {
             .await;
     }
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 4,
-            "127.0.0.1:23004",
-            Some("127.0.0.1:23004".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 4, learner_addr.clone()),
     };
 
     controller_1.add_learner(add_learner_req).await.unwrap();
@@ -755,12 +696,9 @@ async fn test_force_bypasses_cooldown() {
         .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
         .await;
 
+    // Use REAL Iroh address from running learner node
     let add_learner_req_5 = aspen::api::AddLearnerRequest {
-        learner: ClusterNode::new(
-            NODE_ID_BASE + 5,
-            "127.0.0.1:23005",
-            Some("127.0.0.1:23005".to_string()),
-        ),
+        learner: ClusterNode::with_iroh_addr(NODE_ID_BASE + 5, learner_addr_5.clone()),
     };
 
     controller_1.add_learner(add_learner_req_5).await.unwrap();

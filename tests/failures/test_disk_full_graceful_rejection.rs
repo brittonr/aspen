@@ -28,6 +28,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
+use aspen::testing::create_test_aspen_node;
 
 /// Test that write operations fail gracefully when disk space check fails,
 /// but read operations continue to work.
@@ -88,10 +89,9 @@ async fn test_disk_full_error_handling() -> anyhow::Result<()> {
     // Initialize single-node cluster
     let cluster = RaftControlClient::new(handle.raft_actor.clone());
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             1,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(1).iroh_addr,
         )],
     };
     cluster.init(init_req).await?;

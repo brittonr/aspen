@@ -45,8 +45,8 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
     ReadRequest, WriteRequest,
 };
-use crate::cluster::gossip_actor::{GossipMessage, PeerInfo};
 use crate::cluster::IrohEndpointManager;
+use crate::cluster::gossip_actor::{GossipMessage, PeerInfo};
 use crate::raft::constants::{
     MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
 };
@@ -605,17 +605,31 @@ async fn process_tui_request(
 
         TuiRpcRequest::AddLearner { node_id, addr } => {
             use crate::api::ClusterNode;
+            use iroh::EndpointAddr;
+            use std::str::FromStr;
 
-            let result = ctx
-                .controller
-                .add_learner(AddLearnerRequest {
-                    learner: ClusterNode {
-                        id: node_id,
-                        addr: addr.clone(),
-                        raft_addr: Some(addr.clone()),
-                    },
-                })
-                .await;
+            // Parse the address as either JSON EndpointAddr or bare EndpointId
+            let iroh_addr = if addr.starts_with('{') {
+                serde_json::from_str::<EndpointAddr>(&addr)
+                    .map_err(|e| format!("invalid JSON EndpointAddr: {e}"))
+            } else {
+                iroh::EndpointId::from_str(&addr)
+                    .map(EndpointAddr::new)
+                    .map_err(|e| format!("invalid EndpointId: {e}"))
+            };
+
+            let result = match iroh_addr {
+                Ok(iroh_addr) => {
+                    ctx.controller
+                        .add_learner(AddLearnerRequest {
+                            learner: ClusterNode::with_iroh_addr(node_id, iroh_addr),
+                        })
+                        .await
+                }
+                Err(parse_err) => {
+                    Err(crate::api::ControlPlaneError::InvalidRequest { reason: parse_err })
+                }
+            };
 
             Ok(TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
                 success: result.is_ok(),
@@ -656,8 +670,11 @@ async fn process_tui_request(
                     use ractor::call_t;
                     match call_t!(gossip_actor, GossipMessage::GetPeers, 2000) {
                         Ok(peers) => {
-                            let peer_map: std::collections::HashMap<u64, String> = peers.into_iter()
-                                .map(|peer: PeerInfo| (peer.node_id, format!("{:?}", peer.endpoint_addr)))
+                            let peer_map: std::collections::HashMap<u64, String> = peers
+                                .into_iter()
+                                .map(|peer: PeerInfo| {
+                                    (peer.node_id, format!("{:?}", peer.endpoint_addr))
+                                })
                                 .collect();
                             info!(
                                 gossip_peer_count = peer_map.len(),
@@ -735,7 +752,8 @@ async fn process_tui_request(
                 }
 
                 // Use Iroh endpoint address from gossip if available
-                let endpoint_addr = gossip_peers.get(&learner.id)
+                let endpoint_addr = gossip_peers
+                    .get(&learner.id)
                     .cloned()
                     .unwrap_or_else(|| learner.addr.clone());
 

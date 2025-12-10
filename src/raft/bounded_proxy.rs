@@ -58,7 +58,8 @@ pub enum BoundedMailboxError {
     #[snafu(display("failed to send message: {}", source))]
     SendError {
         /// The underlying messaging error from ractor.
-        source: MessagingErr<RaftActorMessage>,
+        #[snafu(source(from(MessagingErr<RaftActorMessage>, Box::new)))]
+        source: Box<MessagingErr<RaftActorMessage>>,
     },
 
     /// Internal error: semaphore closed unexpectedly.
@@ -295,7 +296,9 @@ impl BoundedRaftActorProxy {
                     .fetch_add(1, Ordering::Relaxed);
                 // Tiger Style: Explicit permit release on error path
                 drop(permit);
-                return Err(BoundedMailboxError::SendError { source: e });
+                return Err(BoundedMailboxError::SendError {
+                    source: Box::new(e),
+                });
             }
         }
 
@@ -350,7 +353,9 @@ impl BoundedRaftActorProxy {
                     .fetch_add(1, Ordering::Relaxed);
                 // Tiger Style: Explicit permit release on error path
                 drop(permit);
-                return Err(BoundedMailboxError::SendError { source: e });
+                return Err(BoundedMailboxError::SendError {
+                    source: Box::new(e),
+                });
             }
         }
 

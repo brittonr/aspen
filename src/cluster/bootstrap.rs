@@ -134,10 +134,10 @@ impl BootstrapHandle {
             }
         }
         // Wait for gossip actor task to complete
-        if let Some(gossip_task) = self.gossip_task {
-            if let Err(e) = gossip_task.await {
-                tracing::warn!(error = %e, "gossip actor task panicked during shutdown");
-            }
+        if let Some(gossip_task) = self.gossip_task
+            && let Err(e) = gossip_task.await
+        {
+            tracing::warn!(error = %e, "gossip actor task panicked during shutdown");
         }
 
         info!("shutting down IRPC server actor");
@@ -280,12 +280,13 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     .await?;
 
     // Spawn IRPC server actor for Raft RPC
-    // Note: use_router=true means the actor won't spawn its own accept loop,
-    // the caller is responsible for spawning an Iroh Router for ALPN dispatching
+    // Note: use_router=false means the actor will spawn its own accept loop
+    // for handling Raft RPC connections. This is simpler than setting up an
+    // Iroh Router with protocol handlers for ALPN dispatching.
     let rpc_server_args = RaftRpcServerActorArgs {
         endpoint_manager: Arc::clone(&iroh_manager),
         raft_core: raft_core.clone(),
-        use_router: true,
+        use_router: false,
     };
     let (rpc_server_actor, rpc_server_task) = Actor::spawn(
         Some(format!("raft-rpc-server-{}", config.node_id)),
@@ -294,7 +295,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     )
     .await
     .context("failed to spawn Raft RPC server actor")?;
-    info!("irpc server actor spawned for raft rpc (using Router for ALPN dispatch)");
+    info!("irpc server actor spawned for raft rpc (using internal accept loop)");
 
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
@@ -540,6 +541,14 @@ async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<Iroh
     if let Some(ref pkarr_url) = config.iroh.pkarr_relay_url {
         iroh_config = iroh_config.with_pkarr_relay_url(pkarr_url.clone());
     }
+
+    // Configure ALPNs for the endpoint.
+    // Since we use use_router=false in the RPC server actor, we must configure
+    // ALPNs here so the endpoint knows what protocols to accept.
+    // The raft-rpc ALPN is required for Raft RPC communication.
+    use crate::protocol_handlers::RAFT_ALPN;
+    iroh_config = iroh_config.with_alpn(RAFT_ALPN.to_vec());
+    info!(alpn = ?String::from_utf8_lossy(RAFT_ALPN), "configured raft-rpc ALPN");
 
     let manager = IrohEndpointManager::new(iroh_config)
         .await

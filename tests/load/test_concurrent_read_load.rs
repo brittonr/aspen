@@ -29,6 +29,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
+use aspen::testing::create_test_aspen_node;
 use tokio::task::JoinSet;
 
 /// Test concurrent read load with 100 parallel readers.
@@ -80,9 +81,9 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     let cluster = RaftControlClient::new(handles[0].raft_actor.clone());
     let init_req = InitRequest {
         initial_members: vec![
-            ClusterNode::new(1, "127.0.0.1:26000", Some("iroh://placeholder1".into())),
-            ClusterNode::new(2, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
-            ClusterNode::new(3, "127.0.0.1:26002", Some("iroh://placeholder3".into())),
+            ClusterNode::with_iroh_addr(1, create_test_aspen_node(1).iroh_addr),
+            ClusterNode::with_iroh_addr(2, create_test_aspen_node(2).iroh_addr),
+            ClusterNode::with_iroh_addr(3, create_test_aspen_node(3).iroh_addr),
         ],
     };
     cluster.init(init_req).await?;
@@ -237,10 +238,9 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     // Initialize single-node cluster
     let cluster = RaftControlClient::new(handle.raft_actor.clone());
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             1,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(1).iroh_addr,
         )],
     };
     cluster.init(init_req).await?;

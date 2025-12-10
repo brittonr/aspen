@@ -14,7 +14,8 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use openraft::{BasicNode, Config, Raft};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -84,9 +85,9 @@ async fn test_enable_heartbeat_seed_3001() {
 
     artifact = artifact.add_event("init: initialize cluster with 3 voters on node 0");
     let mut voters = BTreeMap::new();
-    voters.insert(0, BasicNode::default());
-    voters.insert(1, BasicNode::default());
-    voters.insert(2, BasicNode::default());
+    voters.insert(0, create_test_aspen_node(0));
+    voters.insert(1, create_test_aspen_node(1));
+    voters.insert(2, create_test_aspen_node(2));
     raft0
         .initialize(voters)
         .await
@@ -114,7 +115,7 @@ async fn test_enable_heartbeat_seed_3001() {
     // Add node 3 as learner via the actual leader
     artifact = artifact.add_event("membership: add node 3 as learner");
     leader_raft
-        .add_learner(3, BasicNode::default(), true)
+        .add_learner(3, create_test_aspen_node(3), true)
         .await
         .expect("failed to add learner");
 

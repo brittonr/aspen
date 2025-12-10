@@ -10,8 +10,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::testing::AspenRouter;
+use aspen::testing::create_test_aspen_node;
 use openraft::storage::RaftLogStorage;
-use openraft::{BasicNode, Config, ServerState, Vote};
+use openraft::{Config, ServerState, Vote};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -48,7 +49,7 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
     {
         let n0 = router.get_raft_handle(&0)?;
         let mut nodes = std::collections::BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         n0.initialize(nodes).await?;
     }
 

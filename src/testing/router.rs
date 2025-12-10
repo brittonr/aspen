@@ -21,15 +21,17 @@ use openraft::network::v2::RaftNetworkV2;
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
-use openraft::{BasicNode, Config, Raft};
+use openraft::{Config, Raft};
 use rand::Rng;
 use tokio::time::sleep;
 
 use crate::raft::storage::{InMemoryLogStore, StateMachineStore};
-use crate::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode as RaftAspenNode, NodeId};
 
 /// A Raft node managed by the router, including its storage and Raft handle.
-pub struct AspenNode {
+/// Note: This is a test-specific wrapper around a Raft node, distinct from
+/// `crate::raft::types::AspenNode` which represents node metadata in Raft membership.
+pub struct TestNode {
     pub id: NodeId,
     pub raft: Raft<AppTypeConfig>,
     pub log_store: InMemoryLogStore,
@@ -53,7 +55,7 @@ impl InMemoryNetworkFactory {
 impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFactory {
     type Network = InMemoryNetwork;
 
-    async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, _node: &RaftAspenNode) -> Self::Network {
         InMemoryNetwork {
             source: self.source,
             target,
@@ -103,7 +105,7 @@ impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
 
 /// Inner router state shared across network factories.
 struct InnerRouter {
-    nodes: StdMutex<BTreeMap<NodeId, AspenNode>>,
+    nodes: StdMutex<BTreeMap<NodeId, TestNode>>,
     /// Per-pair network delays in milliseconds: (source, target) -> delay_ms
     /// Enables simulating asymmetric network latencies between specific node pairs
     delays: StdMutex<HashMap<(NodeId, NodeId), u64>>,
@@ -409,7 +411,7 @@ impl AspenRouter {
         .await
         .context("failed to create Raft node")?;
 
-        let node = AspenNode {
+        let node = TestNode {
             id,
             raft,
             log_store,
@@ -647,12 +649,14 @@ impl AspenRouter {
 
     /// Initialize a single-node cluster with the given node as the leader.
     pub async fn initialize(&self, node_id: NodeId) -> Result<()> {
-        use openraft::BasicNode;
         use std::collections::BTreeMap;
 
-        let members: BTreeMap<NodeId, BasicNode> = {
+        let members: BTreeMap<NodeId, RaftAspenNode> = {
             let nodes = self.inner.nodes.lock().unwrap();
-            nodes.keys().map(|id| (*id, BasicNode::default())).collect()
+            nodes
+                .keys()
+                .map(|id| (*id, create_test_aspen_node(*id)))
+                .collect()
         };
 
         let raft = self.get_raft_handle(&node_id)?;
@@ -662,10 +666,8 @@ impl AspenRouter {
 
     /// Add a learner node to the cluster.
     pub async fn add_learner(&self, leader: NodeId, target: NodeId) -> Result<()> {
-        use openraft::BasicNode;
-
         let raft = self.get_raft_handle(&leader)?;
-        raft.add_learner(target, BasicNode::default(), true)
+        raft.add_learner(target, create_test_aspen_node(target), true)
             .await
             .map_err(|e| e.into_api_error().unwrap())?;
         Ok(())
@@ -771,6 +773,25 @@ impl AspenRouter {
         let node = nodes.remove(&node_id)?;
         Some((node.raft, node.log_store, node.state_machine))
     }
+}
+
+/// Create a test `AspenNode` with a deterministic Iroh address derived from the node ID.
+///
+/// This is used in the in-memory test router where we don't have real Iroh endpoints.
+/// The address is deterministically generated from the node ID to ensure consistency.
+fn create_test_aspen_node(node_id: NodeId) -> RaftAspenNode {
+    use iroh::{EndpointAddr, EndpointId, SecretKey};
+
+    // Generate a deterministic secret key from the node ID
+    let mut seed = [0u8; 32];
+    seed[..8].copy_from_slice(&node_id.to_le_bytes());
+    let secret_key = SecretKey::from(seed);
+    let endpoint_id: EndpointId = secret_key.public();
+
+    // Create an EndpointAddr with just the ID (no relay URLs or direct addresses for tests)
+    let endpoint_addr = EndpointAddr::new(endpoint_id);
+
+    RaftAspenNode::new(endpoint_addr)
 }
 
 #[cfg(test)]

@@ -20,9 +20,10 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::raft::types::AppTypeConfig;
 use aspen::testing::AspenRouter;
+use aspen::testing::create_test_aspen_node;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
-use openraft::{BasicNode, Config, RaftLogReader, ServerState};
+use openraft::{Config, RaftLogReader, ServerState};
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -70,7 +71,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
     {
         let node0 = router.get_raft_handle(&0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, BasicNode::default());
+        nodes.insert(0, create_test_aspen_node(0));
         node0.initialize(nodes).await?;
 
         router

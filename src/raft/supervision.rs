@@ -1387,9 +1387,8 @@ pub enum HealthCheckError {
 mod health_monitor_tests {
     use super::*;
     use crate::raft::storage::StateMachineStore;
-    use crate::raft::types::{AppTypeConfig, NodeId};
+    use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
     use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
-    use openraft::BasicNode;
     use openraft::Config as RaftConfig;
     use openraft::error::{RPCError, Unreachable};
     use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
@@ -1402,7 +1401,7 @@ mod health_monitor_tests {
     impl RaftNetworkFactory<AppTypeConfig> for MockNetworkFactory {
         type Network = MockNetwork;
 
-        async fn new_client(&mut self, _target: NodeId, _node: &BasicNode) -> Self::Network {
+        async fn new_client(&mut self, _target: NodeId, _node: &AspenNode) -> Self::Network {
             MockNetwork
         }
     }

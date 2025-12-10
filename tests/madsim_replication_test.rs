@@ -13,7 +13,8 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use openraft::{BasicNode, Config, Raft};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -78,9 +79,9 @@ async fn test_follower_clear_restart_recover_seed_2001() {
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 0");
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, BasicNode::default());
-    nodes.insert(1, BasicNode::default());
-    nodes.insert(2, BasicNode::default());
+    nodes.insert(0, create_test_aspen_node(0));
+    nodes.insert(1, create_test_aspen_node(1));
+    nodes.insert(2, create_test_aspen_node(2));
     raft0
         .initialize(nodes)
         .await
@@ -212,9 +213,9 @@ async fn test_append_entries_backoff_seed_2002() {
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 0");
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, BasicNode::default());
-    nodes.insert(1, BasicNode::default());
-    nodes.insert(2, BasicNode::default());
+    nodes.insert(0, create_test_aspen_node(0));
+    nodes.insert(1, create_test_aspen_node(1));
+    nodes.insert(2, create_test_aspen_node(2));
     raft0
         .initialize(nodes)
         .await

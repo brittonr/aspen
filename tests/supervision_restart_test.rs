@@ -30,7 +30,11 @@ struct MockNetworkFactory;
 impl RaftNetworkFactory<AppTypeConfig> for MockNetworkFactory {
     type Network = MockNetwork;
 
-    async fn new_client(&mut self, _target: NodeId, _node: &openraft::BasicNode) -> Self::Network {
+    async fn new_client(
+        &mut self,
+        _target: NodeId,
+        _node: &aspen::raft::types::AspenNode,
+    ) -> Self::Network {
         MockNetwork
     }
 }

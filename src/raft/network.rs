@@ -8,10 +8,10 @@ use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
 use openraft::type_config::alias::VoteOf;
-use openraft::{BasicNode, OptionalSend, Snapshot, StorageError};
+use openraft::{OptionalSend, Snapshot, StorageError};
 use tokio::io::AsyncReadExt;
 use tokio::select;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::constants::{
@@ -23,25 +23,33 @@ use crate::raft::rpc::{
     RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
     RaftVoteRequest,
 };
-use crate::raft::types::{AppTypeConfig, NodeId};
+use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
+/// With the introduction of `AspenNode`, peer addresses are now stored directly
+/// in the Raft membership state. The network factory receives addresses via
+/// the `new_client()` method's `node` parameter, which contains the `AspenNode`
+/// with the Iroh `EndpointAddr`.
+///
+/// The `peer_addrs` map is retained as a fallback/cache for:
+/// - Initial bootstrap before Raft membership is populated
+/// - Manual peer additions via CLI/config
+/// - Testing scenarios
+///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 #[derive(Clone)]
 pub struct IrpcRaftNetworkFactory {
     endpoint_manager: Arc<IrohEndpointManager>,
-    /// Map of NodeId to Iroh EndpointAddr for peer discovery.
+    /// Fallback map of NodeId to Iroh EndpointAddr.
     ///
-    /// Initially populated from:
-    /// - CLI args/config manual peers (`--peers` flag)
-    /// - Empty if using automatic discovery
+    /// Used as a fallback when addresses aren't available from Raft membership.
+    /// Initially populated from CLI args/config manual peers.
     ///
-    /// Dynamically updated via:
-    /// - Gossip announcements (when `enable_gossip: true`)
-    /// - `add_peer()`/`update_peers()` calls (manual/testing)
+    /// With `AspenNode`, the primary source of peer addresses is now the
+    /// Raft membership state, passed to `new_client()` via the `node` parameter.
     ///
     /// Uses Arc<RwLock> to allow concurrent peer addition during runtime.
     peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
@@ -119,13 +127,24 @@ impl IrpcRaftNetworkFactory {
 impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
     type Network = IrpcRaftNetwork;
 
-    #[tracing::instrument(level = "debug", skip_all)]
-    async fn new_client(&mut self, target: NodeId, _node: &BasicNode) -> Self::Network {
-        // Look up peer's Iroh address
-        let peer_addr = {
-            let peers = self.peer_addrs.read().await;
-            peers.get(&target).cloned()
-        };
+    #[tracing::instrument(level = "debug", skip_all, fields(target = %target))]
+    async fn new_client(&mut self, target: NodeId, node: &AspenNode) -> Self::Network {
+        // Primary source: Get address from AspenNode (stored in Raft membership)
+        let peer_addr = Some(node.iroh_addr.clone());
+
+        // Update the fallback cache with this address for future reference
+        {
+            let mut peers = self.peer_addrs.write().await;
+            if peers.len() < MAX_PEERS as usize || peers.contains_key(&target) {
+                peers.insert(target, node.iroh_addr.clone());
+            }
+        }
+
+        info!(
+            target_node = %target,
+            endpoint_id = %node.iroh_addr.id,
+            "creating network client with address from Raft membership"
+        );
 
         IrpcRaftNetwork {
             endpoint_manager: Arc::clone(&self.endpoint_manager),

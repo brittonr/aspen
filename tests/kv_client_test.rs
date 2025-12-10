@@ -15,6 +15,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
 use aspen::kv::KvClient;
 use aspen::raft::RaftControlClient;
+use aspen::testing::create_test_aspen_node;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
@@ -51,10 +52,9 @@ async fn test_single_node_write_read() {
 
     // Initialize cluster with single node
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             1000,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(1000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -143,17 +143,17 @@ async fn test_two_node_replication() {
     )
     .unwrap();
 
-    // Exchange peer addresses between nodes
+    // Exchange peer addresses between nodes - use REAL Iroh addresses
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
     handle1
         .network_factory
-        .add_peer(config2.node_id, addr2)
+        .add_peer(config2.node_id, addr2.clone())
         .await;
     handle2
         .network_factory
-        .add_peer(config1.node_id, addr1)
+        .add_peer(config1.node_id, addr1.clone())
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
@@ -162,12 +162,9 @@ async fn test_two_node_replication() {
 
     // Initialize cluster with only node1 as the initial member
     // Node2 will join later as a learner via add_learner()
+    // Use REAL Iroh address from running node
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
-            2001,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder1".into()),
-        )],
+        initial_members: vec![ClusterNode::with_iroh_addr(2001, addr1.clone())],
     };
 
     cluster_client1.init(init_req).await.unwrap();
@@ -179,9 +176,9 @@ async fn test_two_node_replication() {
     // Give Raft time to establish leadership
     sleep(Duration::from_millis(500)).await;
 
-    // Add node2 as a learner
+    // Add node2 as a learner - use REAL Iroh address from running node
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(2002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+        learner: ClusterNode::with_iroh_addr(2002, addr2.clone()),
     };
     cluster_client1.add_learner(learner_req).await.unwrap();
 
@@ -258,10 +255,9 @@ async fn test_read_nonexistent_key() {
 
     // Initialize cluster
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             3000,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(3000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -314,10 +310,9 @@ async fn test_multiple_operations() {
 
     // Initialize cluster
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             4000,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(4000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -404,30 +399,26 @@ async fn test_add_learner_and_replicate() {
     )
     .unwrap();
 
-    // Exchange peer addresses between nodes
+    // Exchange peer addresses between nodes - use the REAL Iroh addresses
     let addr1 = handle1.iroh_manager.node_addr().clone();
     let addr2 = handle2.iroh_manager.node_addr().clone();
 
     handle1
         .network_factory
-        .add_peer(config2.node_id, addr2)
+        .add_peer(config2.node_id, addr2.clone())
         .await;
     handle2
         .network_factory
-        .add_peer(config1.node_id, addr1)
+        .add_peer(config1.node_id, addr1.clone())
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
     let kv_client1 = KvClient::new(handle1.raft_actor.clone());
     let _kv_client2 = KvClient::new(handle2.raft_actor.clone());
 
-    // Initialize cluster with only node1
+    // Initialize cluster with only node1 - use REAL Iroh address from running node
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
-            5001,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder1".into()),
-        )],
+        initial_members: vec![ClusterNode::with_iroh_addr(5001, addr1.clone())],
     };
     cluster_client1.init(init_req).await.unwrap();
 
@@ -442,9 +433,9 @@ async fn test_add_learner_and_replicate() {
     };
     kv_client1.write(write_req).await.unwrap();
 
-    // Add node2 as learner
+    // Add node2 as learner - use REAL Iroh address from running node
     let learner_req = AddLearnerRequest {
-        learner: ClusterNode::new(5002, "127.0.0.1:26001", Some("iroh://placeholder2".into())),
+        learner: ClusterNode::with_iroh_addr(5002, addr2.clone()),
     };
     cluster_client1.add_learner(learner_req).await.unwrap();
 
@@ -524,10 +515,9 @@ async fn test_setmulti_operations() {
 
     // Initialize cluster
     let init_req = InitRequest {
-        initial_members: vec![ClusterNode::new(
+        initial_members: vec![ClusterNode::with_iroh_addr(
             6000,
-            "127.0.0.1:26000",
-            Some("iroh://placeholder".into()),
+            create_test_aspen_node(6000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use iroh::EndpointAddr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -10,19 +11,40 @@ pub use openraft::ServerState;
 pub use openraft::metrics::RaftMetrics;
 
 /// Describes a node participating in the control-plane cluster.
+///
+/// Contains both the node's identifier and its Iroh P2P endpoint address,
+/// which is stored in Raft membership state for persistent discovery.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClusterNode {
     pub id: u64,
+    /// Display address for logging and human-readable output.
+    /// When Iroh address is available, this is derived from `iroh_addr.id()`.
     pub addr: String,
+    /// Optional legacy Raft address (host:port) for backwards compatibility.
     pub raft_addr: Option<String>,
+    /// Iroh P2P endpoint address for connecting to this node.
+    /// This is the primary address used for Raft RPC transport.
+    pub iroh_addr: Option<EndpointAddr>,
 }
 
 impl ClusterNode {
+    /// Create a new ClusterNode with a simple string address (legacy).
     pub fn new(id: u64, addr: impl Into<String>, raft_addr: Option<String>) -> Self {
         Self {
             id,
             addr: addr.into(),
             raft_addr,
+            iroh_addr: None,
+        }
+    }
+
+    /// Create a new ClusterNode with an Iroh endpoint address.
+    pub fn with_iroh_addr(id: u64, iroh_addr: EndpointAddr) -> Self {
+        Self {
+            id,
+            addr: iroh_addr.id.to_string(),
+            raft_addr: None,
+            iroh_addr: Some(iroh_addr),
         }
     }
 }

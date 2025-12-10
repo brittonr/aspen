@@ -10,7 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::testing::AspenRouter;
-use openraft::{BasicNode, Config, ServerState};
+use aspen::testing::create_test_aspen_node;
+use openraft::{Config, ServerState};
 use proptest::prelude::*;
 
 // Helper to create key-value generators
@@ -36,7 +37,7 @@ async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
 
     let node0 = router.get_raft_handle(&0)?;
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, BasicNode::default());
+    nodes.insert(0, create_test_aspen_node(0));
     node0.initialize(nodes).await?;
 
     router
