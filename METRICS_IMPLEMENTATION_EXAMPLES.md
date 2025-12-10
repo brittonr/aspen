@@ -36,12 +36,12 @@ impl SoakMetrics {
             total_duration_secs: 0.0,
         }
     }
-    
+
     /// Record a successful operation with its latency
     pub fn record_op_ms(&mut self, latency_ms: u32) {
         self.total_ops += 1;
         self.successful_ops = self.successful_ops.saturating_add(1);
-        
+
         let bucket = match latency_ms {
             0..=1 => 0,
             2..=10 => 1,
@@ -50,17 +50,17 @@ impl SoakMetrics {
             1001..=10000 => 4,
             _ => 5,
         };
-        
+
         if self.latency_buckets[bucket] < u32::MAX {
             self.latency_buckets[bucket] += 1;
         }
     }
-    
+
     pub fn record_failure(&mut self) {
         self.total_ops += 1;
         self.failed_ops = self.failed_ops.saturating_add(1);
     }
-    
+
     pub fn success_rate_percent(&self) -> f64 {
         if self.total_ops == 0 {
             0.0
@@ -68,7 +68,7 @@ impl SoakMetrics {
             (self.successful_ops as f64 / self.total_ops as f64) * 100.0
         }
     }
-    
+
     pub fn throughput_ops_per_sec(&self) -> f64 {
         if self.total_duration_secs > 0.0 {
             self.successful_ops as f64 / self.total_duration_secs
@@ -76,11 +76,11 @@ impl SoakMetrics {
             0.0
         }
     }
-    
+
     pub fn print_summary(&self) {
         println!("\n===== Soak Test Metrics =====");
         println!("Total operations:   {}", self.total_ops);
-        println!("Successful:         {} ({:.2}%)", 
+        println!("Successful:         {} ({:.2}%)",
                  self.successful_ops, self.success_rate_percent());
         println!("Failed:             {}", self.failed_ops);
         println!("Duration:           {:.2}s", self.total_duration_secs);
@@ -106,23 +106,23 @@ impl MetricsCollector {
             metrics: Arc::new(Mutex::new(SoakMetrics::new())),
         }
     }
-    
+
     pub fn record_success(&self, latency_ms: u32) {
         if let Ok(mut m) = self.metrics.lock() {
             m.record_op_ms(latency_ms);
         }
     }
-    
+
     pub fn record_failure(&self) {
         if let Ok(mut m) = self.metrics.lock() {
             m.record_failure();
         }
     }
-    
+
     pub fn snapshot(&self) -> Option<SoakMetrics> {
         self.metrics.lock().ok().map(|m| m.clone())
     }
-    
+
     pub fn finalize(&self, duration: Duration) {
         if let Ok(mut m) = self.metrics.lock() {
             m.total_duration_secs = duration.as_secs_f64();
@@ -147,24 +147,24 @@ use aspen::metrics::{MetricsCollector};
 async fn soak_sustained_load_24h() -> anyhow::Result<()> {
     const SOAK_DURATION: Duration = Duration::from_secs(86400); // 24 hours
     const LOG_INTERVAL: u32 = 1000; // Log every 1000 ops
-    
+
     let metrics = MetricsCollector::new();
-    
+
     // Setup cluster (3 nodes)
     let cluster = setup_test_cluster().await?;
     let kv = cluster.create_kv_client();
-    
+
     println!("Starting 24-hour soak test...");
     let test_start = Instant::now();
     let mut op_count = 0u32;
-    
+
     while test_start.elapsed() < SOAK_DURATION {
         let op_start = Instant::now();
-        
+
         // Execute operation
         let key = format!("soak-key-{}", op_count);
         let value = format!("soak-value-{}", op_count);
-        
+
         match kv.write(WriteRequest {
             command: WriteCommand::Set { key, value },
         }).await {
@@ -177,9 +177,9 @@ async fn soak_sustained_load_24h() -> anyhow::Result<()> {
                 metrics.record_failure();
             }
         }
-        
+
         op_count += 1;
-        
+
         // Periodic logging
         if op_count % LOG_INTERVAL == 0 {
             if let Some(snapshot) = metrics.snapshot() {
@@ -193,12 +193,12 @@ async fn soak_sustained_load_24h() -> anyhow::Result<()> {
             }
         }
     }
-    
+
     // Finalize and print summary
     metrics.finalize(test_start.elapsed());
     if let Some(snapshot) = metrics.snapshot() {
         snapshot.print_summary();
-        
+
         // Assertions
         assert!(
             snapshot.success_rate_percent() > 99.5,
@@ -206,7 +206,7 @@ async fn soak_sustained_load_24h() -> anyhow::Result<()> {
             snapshot.success_rate_percent()
         );
     }
-    
+
     cluster.shutdown().await?;
     Ok(())
 }
@@ -232,11 +232,11 @@ impl MemorySnapshot {
     /// Capture current process memory (Linux /proc/self/status)
     pub fn capture() -> anyhow::Result<Self> {
         let status = fs::read_to_string("/proc/self/status")?;
-        
+
         let mut rss_kb = 0u64;
         let mut vms_kb = 0u64;
         let mut threads = 0u32;
-        
+
         for line in status.lines() {
             if line.starts_with("VmRSS:") {
                 rss_kb = line.split_whitespace()
@@ -255,14 +255,14 @@ impl MemorySnapshot {
                     .unwrap_or(0);
             }
         }
-        
+
         Ok(MemorySnapshot {
             rss_mb: rss_kb / 1024,
             vms_mb: vms_kb / 1024,
             threads,
         })
     }
-    
+
     pub fn delta(&self, baseline: &MemorySnapshot) -> (i64, i64) {
         let rss_delta = self.rss_mb as i64 - baseline.rss_mb as i64;
         let vms_delta = self.vms_mb as i64 - baseline.vms_mb as i64;
@@ -282,7 +282,7 @@ pub struct SoakMetricsWithMemory {
 impl SoakMetricsWithMemory {
     pub fn new() -> Self {
         let mem_start = MemorySnapshot::capture().ok();
-        
+
         Self {
             metrics: SoakMetrics::new(),
             memory_start: mem_start,
@@ -290,12 +290,12 @@ impl SoakMetricsWithMemory {
             peak_memory_mb: 0,
         }
     }
-    
+
     pub fn finalize(&mut self, duration: Duration) {
         self.metrics.total_duration_secs = duration.as_secs_f64();
         self.memory_end = MemorySnapshot::capture().ok();
     }
-    
+
     pub fn update_peak_memory(&mut self) {
         if let Ok(current) = MemorySnapshot::capture() {
             if current.rss_mb > self.peak_memory_mb {
@@ -303,10 +303,10 @@ impl SoakMetricsWithMemory {
             }
         }
     }
-    
+
     pub fn print_summary(&self) {
         self.metrics.print_summary();
-        
+
         // Memory summary
         if let (Some(start), Some(end)) = (self.memory_start, self.memory_end) {
             let (rss_delta, vms_delta) = end.delta(&start);
@@ -333,17 +333,17 @@ async fn soak_concurrent_mixed_workload() -> anyhow::Result<()> {
     const NUM_WORKERS: usize = 100;
     const OPS_PER_WORKER: u32 = 10000;
     const READ_PERCENT: u32 = 70;
-    
+
     let metrics = Arc::new(MetricsCollector::new());
     let cluster = setup_test_cluster().await?;
     let kv = Arc::new(cluster.create_kv_client());
-    
+
     println!("Starting concurrent mixed workload: {} workers, {} ops each",
              NUM_WORKERS, OPS_PER_WORKER);
-    
+
     let test_start = Instant::now();
     let mut handles = Vec::new();
-    
+
     // Pre-populate some keys
     for i in 0..1000 {
         let key = format!("key-{}", i);
@@ -354,21 +354,21 @@ async fn soak_concurrent_mixed_workload() -> anyhow::Result<()> {
             },
         }).await?;
     }
-    
+
     // Spawn worker tasks
     for worker_id in 0..NUM_WORKERS {
         let kv_clone = Arc::clone(&kv);
         let metrics_clone = Arc::clone(&metrics);
-        
+
         let handle = tokio::spawn(async move {
             let mut rng = rand::thread_rng();
-            
+
             for op_num in 0..OPS_PER_WORKER {
                 let op_start = Instant::now();
                 let is_read = (rng.gen::<u32>() % 100) < READ_PERCENT;
                 let key_id = rng.gen::<u32>() % 1000;
                 let key = format!("key-{}", key_id);
-                
+
                 let result = if is_read {
                     kv_clone.read(ReadRequest { key }).await
                 } else {
@@ -379,38 +379,38 @@ async fn soak_concurrent_mixed_workload() -> anyhow::Result<()> {
                         },
                     }).await.map(|_| ())
                 };
-                
+
                 let latency_ms = op_start.elapsed().as_millis() as u32;
-                
+
                 match result {
                     Ok(_) => metrics_clone.record_success(latency_ms),
                     Err(_) => metrics_clone.record_failure(),
                 }
             }
         });
-        
+
         handles.push(handle);
     }
-    
+
     // Wait for all workers
     for handle in handles {
         handle.await?;
     }
-    
+
     let duration = test_start.elapsed();
     metrics.finalize(duration);
-    
+
     // Print results
     if let Some(snapshot) = metrics.snapshot() {
         snapshot.print_summary();
-        
+
         // Verify expectations
         assert!(
             snapshot.success_rate_percent() > 98.0,
             "Success rate below threshold"
         );
     }
-    
+
     cluster.shutdown().await?;
     Ok(())
 }
@@ -456,7 +456,7 @@ impl MetricsArtifact {
             memory_delta_mb: memory_delta,
         }
     }
-    
+
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;
@@ -483,4 +483,3 @@ if let Some(snapshot) = metrics.snapshot() {
 - [ ] Create `artifacts/` directory in gitignore for metric outputs
 - [ ] Update CI/GitHub Actions to optionally run soak tests on schedule
 - [ ] Add memory monitoring for sustained tests (Example 3)
-

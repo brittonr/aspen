@@ -243,5 +243,3 @@ See also:
 
 - [LogIOId](crate::docs::data::log_io_id)
 - [Log I/O Progress Tracking](crate::docs::data::log_io_progress)
-
-

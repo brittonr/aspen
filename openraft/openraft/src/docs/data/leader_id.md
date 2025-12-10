@@ -1,6 +1,7 @@
-## Leader-id in Advanced mode and Standard mode
+# Leader-id in Advanced mode and Standard mode
 
 Openraft provides two `LeaderId` types to switch between these two modes:
+
 - the default mode: every term may have more than one leader
   (enabled by default, or explicitly by setting [`RaftTypeConfig::LeaderId`] to [`leader_id_adv::LeaderId`]).
 - and the standard Raft mode: every term has only one leader
@@ -9,7 +10,7 @@ Openraft provides two `LeaderId` types to switch between these two modes:
 [`leader_id_adv::LeaderId`] is totally ordered.
 [`leader_id_std::LeaderId`] is `PartialOrd`.
 
-### Definition of `LeaderId`
+## Definition of `LeaderId`
 
 Within Openraft, and also implicitly in the standard Raft, `LeaderId` is used to uniquely identify a leader.
 The `LeaderId` could either be a confirmed leader, one that has been granted by a `Quorum`, or a potential `Leader`, such as a `Candidate`.
@@ -27,7 +28,7 @@ The `LeaderId` could either be a confirmed leader, one that has been granted by 
 
 Using [`leader_id_std::LeaderId`] makes `LeaderId` conform to the `partial order` seen in standard Raft.
 
-### Usage of `LeaderId`
+## Usage of `LeaderId`
 
 When handling `VoteRequest`, both Openraft and standard Raft (though not explicitly detailed) rely on the ordering of
 `LeaderId` to decide whether to grant a vote:
@@ -37,7 +38,7 @@ Consequently, by default in Openraft (with [`leader_id_adv::LeaderId`]), it is p
 within the same term, with the last elected `Leader` being recognized as valid. In contrast, under standard Raft protocol,
 only a single `Leader` is elected per `term`.
 
-### Default: advanced mode
+## Default: advanced mode
 
 Use `openraft::impls::leader_id_adv::LeaderId` for [`RaftTypeConfig::LeaderId`] or leave it to default to switch to advanced mode.
 `LeaderId` is defined as the following, and it is a **totally ordered** value (two or more leaders can be granted in the same term):
@@ -63,7 +64,7 @@ elected (although only the last is valid and can commit logs).
   be negligible.
 
 
-#### Standard mode
+## Standard mode
 
 Use `openraft::impls::leader_id_std::LeaderId` for [`RaftTypeConfig::LeaderId`] to switch to standard mode.
 In the standard mode, `LeaderId` is defined as the following, and it is a **partially ordered** value (no two leaders can be granted in the same term):
@@ -80,7 +81,7 @@ impl<NID: NodeId> PartialOrd for LeaderId<NID> {
 
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     match PartialOrd::partial_cmp(&self.term, &other.term) {
-    
+
       Some(Ordering::Equal) => {
         match (&self.voted_for, &other.voted_for) {
           (None, None) => Some(Ordering::Equal),

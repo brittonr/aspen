@@ -503,59 +503,6 @@
           ''}";
         };
 
-        # Launch cluster with TUI in separate Kitty window
-        # Usage: nix run .#cluster-with-tui
-        # Requires: Running from within Kitty terminal
-        apps.cluster-with-tui = {
-          type = "app";
-          program = "${pkgs.writeShellScript "aspen-cluster-with-tui" ''
-            # Check if running in Kitty
-            if [ -z "''${KITTY_WINDOW_ID:-}" ]; then
-              echo "Error: This must be run from within Kitty terminal"
-              echo ""
-              echo "Alternative: You can run these separately:"
-              echo "  1. In one terminal: nix run .#cluster"
-              echo "  2. In another: nix run .#aspen-tui -- --nodes http://127.0.0.1:21001"
-              exit 1
-            fi
-
-            export PATH="${pkgs.lib.makeBinPath [
-              bins.aspen-node
-              bins.aspen-tui
-              pkgs.bash
-              pkgs.coreutils
-              pkgs.curl
-              pkgs.netcat
-              pkgs.gnugrep
-              pkgs.jq
-              pkgs.kitty
-            ]}:$PATH"
-            export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-            exec ${./scripts/cluster-with-tui.sh} ${./scripts/cluster.sh}
-          ''}";
-        };
-
-        # Launch cluster with TUI in tmux session (works anywhere)
-        # Usage: nix run .#cluster-tui
-        apps.cluster-tui = {
-          type = "app";
-          program = "${pkgs.writeShellScript "aspen-cluster-tui-tmux" ''
-            export PATH="${pkgs.lib.makeBinPath [
-              bins.aspen-node
-              bins.aspen-tui
-              pkgs.bash
-              pkgs.coreutils
-              pkgs.curl
-              pkgs.netcat
-              pkgs.gnugrep
-              pkgs.jq
-              pkgs.tmux
-            ]}:$PATH"
-            export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-            exec ${./scripts/cluster-with-tui-tmux.sh}
-          ''}";
-        };
-
         apps.default = self.apps.${system}.aspen-node;
 
         # Integration tests app - starts flawless server and runs tests

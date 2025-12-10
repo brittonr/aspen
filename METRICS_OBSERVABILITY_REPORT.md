@@ -3,6 +3,7 @@
 ## Executive Summary
 
 The Aspen codebase has **limited existing metrics infrastructure** but provides a solid foundation through:
+
 - **OpenRaft's RaftMetrics** - Comprehensive Raft consensus metrics
 - **Basic load test measurements** - Duration and throughput tracking
 - **Simulation artifact collection** - Event traces and runtime metrics
@@ -19,6 +20,7 @@ There are **no Prometheus, StatsD, or OpenTelemetry integrations** currently, bu
 **Location**: `/home/brittonr/git/aspen/openraft/openraft/src/metrics/`
 
 **Available Metrics**:
+
 - **Node State**: `id`, `state` (Leader/Follower/Candidate), `current_leader`, `running_state`
 - **Log State**: `last_log_index`, `last_applied`, `snapshot`, `purged`
 - **Voting State**: `current_term`, `vote`
@@ -29,6 +31,7 @@ There are **no Prometheus, StatsD, or OpenTelemetry integrations** currently, bu
 - **Cluster Config**: `membership_config`
 
 **Access Pattern**:
+
 ```rust
 let metrics_rx = raft.metrics();
 let metrics = metrics_rx.borrow_watched();
@@ -40,12 +43,14 @@ raft.wait(Some(timeout)).log(Some(10), "log-10 applied").await?;
 ```
 
 **Files**:
+
 - `raft_metrics.rs` - RaftMetrics struct definition
 - `metric.rs` - Individual metric types
 - `wait.rs` - Metric wait conditions API
 - `metric_display.rs` - Display formatting
 
 **Test Coverage**:
+
 - `openraft/tests/tests/metrics/t10_server_metrics_and_data_metrics.rs`
 - `openraft/tests/tests/metrics/t20_metrics_state_machine_consistency.rs`
 - `openraft/tests/tests/metrics/t30_leader_metrics.rs`
@@ -56,6 +61,7 @@ raft.wait(Some(timeout)).log(Some(10), "log-10 applied").await?;
 **Location**: `/home/brittonr/git/aspen/src/simulation.rs`
 
 **What It Captures**:
+
 ```rust
 pub struct SimulationArtifact {
     pub run_id: String,
@@ -71,11 +77,13 @@ pub struct SimulationArtifact {
 ```
 
 **Artifact Persistence**:
+
 - Written to `docs/simulations/{run_id}.json`
 - Gitignored to avoid bloating repo
 - Useful for CI debugging and test analysis
 
 **Usage Pattern**:
+
 ```rust
 let start = Instant::now();
 let artifact = SimulationArtifactBuilder::new("test_name", seed)
@@ -95,6 +103,7 @@ artifact.persist("docs/simulations")?;
 **No dedicated memory tracking library** is used in the codebase. Memory management relies on:
 
 1. **Tiger Style Fixed Buffers** - Bounded data structures:
+
    ```rust
    // From src/raft/storage_sqlite.rs
    const MAX_BATCH_SIZE: u32 = 1000;              // Max entries per batch
@@ -103,6 +112,7 @@ artifact.persist("docs/simulations")?;
    ```
 
 2. **Arc/Mutex for Reference Counting**:
+
    ```rust
    use std::sync::Arc;
    use std::sync::Mutex;
@@ -110,12 +120,14 @@ artifact.persist("docs/simulations")?;
    ```
 
 3. **Vec Capacity Pre-allocation** (in load tests):
+
    ```rust
    // From tests/load/test_mixed_workload.rs
    let mut operations = Vec::with_capacity(TOTAL_OPS);  // Pre-allocate
    ```
 
 4. **Atomic Counters** (SQLite implementation):
+
    ```rust
    use std::sync::atomic::{AtomicU64, Ordering};
    let counter = Arc::new(AtomicU64::new(0));
@@ -124,11 +136,13 @@ artifact.persist("docs/simulations")?;
 ### 2.2 Memory Accounting in Storage
 
 **SQLite Storage** (`src/raft/storage_sqlite.rs`):
+
 - Uses `r2d2` connection pool with fixed size
 - Bounded transaction batch sizes
 - Automatic cleanup via Drop/RAII
 
 **Redb Storage** (legacy):
+
 - In-memory B-tree based
 - No explicit memory limits (deprecated)
 
@@ -141,6 +155,7 @@ artifact.persist("docs/simulations")?;
 **Location**: `tests/load/`
 
 #### Pattern 1: Single-Operation Latency
+
 ```rust
 // From test_sustained_write_load.rs
 let start = Instant::now();
@@ -153,6 +168,7 @@ println!("Average latency: {:.2} ms/op", avg_latency_ms);
 ```
 
 #### Pattern 2: Throughput Calculation
+
 ```rust
 let duration_secs = duration.as_secs_f64();
 let throughput = successful_writes as f64 / duration_secs;
@@ -160,6 +176,7 @@ println!("Throughput: {:.2} ops/sec", throughput);
 ```
 
 #### Pattern 3: Per-Reader Latency (Concurrent Reads)
+
 ```rust
 // From test_concurrent_read_load.rs
 let start = Instant::now();
@@ -172,6 +189,7 @@ println!("Average latency: {:.2} ms/read", latency);
 ```
 
 ### 3.2 Simulation Duration Tracking
+
 ```rust
 let start = Instant::now();
 // ... run simulation ...
@@ -183,11 +201,13 @@ artifact.with_duration_ms(duration_ms)
 ### 3.3 Test-Specific Latency
 
 **Failure Detection** (`src/raft/node_failure_detection.rs`):
+
 ```rust
 pub fn get_unreachable_duration(&self, node_id: u64) -> Option<Duration>
 ```
 
 **Snapshot Building** (`tests/router_snapshot_t10_build_snapshot.rs`):
+
 ```rust
 let start = Instant::now();
 while !snapshot_complete && start.elapsed() < Duration::from_secs(10) {
@@ -200,12 +220,14 @@ while !snapshot_complete && start.elapsed() < Duration::from_secs(10) {
 ## 4. Observability Dependencies
 
 ### 4.1 Currently Used
+
 - **`tracing`** (0.1) - Structured logging
 - **`tracing-subscriber`** (0.3) - Log filtering and output
 - **`iroh-metrics`** (0.37) - Available but unused
 - **`serde_json`** (1.0) - Metrics serialization
 
 ### 4.2 Not Currently Used (But Available)
+
 - **`prometheus`** - Not in dependencies
 - **`statsd`** - Not in dependencies
 - **`opentelemetry`** - Not in dependencies
@@ -227,21 +249,21 @@ use std::sync::Mutex;
 pub struct SoakTestMetrics {
     /// Operation count (u64 to prevent overflow with large counts)
     pub total_ops: u64,
-    
+
     /// Success/failure counts (u32 sufficient for most scenarios)
     pub successful_ops: u32,
     pub failed_ops: u32,
-    
+
     /// Fixed-size latency histogram (10 buckets: 1ms, 10ms, 100ms, etc.)
     /// Tiger Style: Fixed limits prevent unbounded memory allocation
     pub latency_buckets_ms: [u32; 10],  // [0-1ms, 1-10ms, 10-100ms, 100ms-1s, ...]
-    
+
     /// Throughput snapshot (ops/sec)
     pub throughput_ops_per_sec: f64,
-    
+
     /// Total duration
     pub duration: Duration,
-    
+
     /// Resource utilization (if available)
     pub memory_used_bytes: Option<u64>,
     pub cpu_time_ms: Option<u64>,
@@ -260,7 +282,7 @@ impl SoakTestMetrics {
             cpu_time_ms: None,
         }
     }
-    
+
     /// Record operation latency into appropriate bucket
     /// Tiger Style: O(1) latency, bounded computation
     pub fn record_latency_ms(&mut self, latency_ms: u32) {
@@ -272,17 +294,17 @@ impl SoakTestMetrics {
             1001..=10000 => 4,
             _ => 9,  // Cap at 10000+ ms bucket
         };
-        
+
         // Prevent bucket overflow
         if self.latency_buckets_ms[bucket_index] < u32::MAX {
             self.latency_buckets_ms[bucket_index] += 1;
         }
     }
-    
+
     pub fn finalize(&mut self, duration: Duration) {
         self.duration = duration;
         if duration.as_secs_f64() > 0.0 {
-            self.throughput_ops_per_sec = 
+            self.throughput_ops_per_sec =
                 self.total_ops as f64 / duration.as_secs_f64();
         }
     }
@@ -299,7 +321,7 @@ impl SoakTestMetricsCollector {
             metrics: Arc::new(Mutex::new(SoakTestMetrics::new(duration))),
         }
     }
-    
+
     pub fn record_success(&self, latency_ms: u32) {
         if let Ok(mut m) = self.metrics.lock() {
             m.total_ops += 1;
@@ -307,14 +329,14 @@ impl SoakTestMetricsCollector {
             m.record_latency_ms(latency_ms);
         }
     }
-    
+
     pub fn record_failure(&self) {
         if let Ok(mut m) = self.metrics.lock() {
             m.total_ops += 1;
             m.failed_ops = m.failed_ops.saturating_add(1);
         }
     }
-    
+
     pub fn snapshot(&self) -> Option<SoakTestMetrics> {
         self.metrics.lock().ok().map(|m| m.clone())
     }
@@ -329,13 +351,13 @@ impl SoakTestMetricsCollector {
 async fn test_soak_sustained_load() -> anyhow::Result<()> {
     const DURATION_SECS: u64 = 3600;  // 1 hour
     const OPS_PER_BATCH: u32 = 100;
-    
+
     let duration = Duration::from_secs(DURATION_SECS);
     let metrics = SoakTestMetricsCollector::new(duration);
-    
+
     let start = Instant::now();
     let mut batch_count = 0u32;
-    
+
     while start.elapsed() < duration {
         for _ in 0..OPS_PER_BATCH {
             let op_start = Instant::now();
@@ -347,7 +369,7 @@ async fn test_soak_sustained_load() -> anyhow::Result<()> {
                 Err(_) => metrics.record_failure(),
             }
         }
-        
+
         batch_count += 1;
         if batch_count % 10 == 0 {  // Log every 1000 ops
             let snapshot = metrics.snapshot().unwrap();
@@ -359,9 +381,9 @@ async fn test_soak_sustained_load() -> anyhow::Result<()> {
             );
         }
     }
-    
+
     let final_metrics = metrics.snapshot().unwrap();
-    
+
     // Log histogram
     println!("\nLatency Distribution (ms):");
     println!("  0-1ms:       {} ops", final_metrics.latency_buckets_ms[0]);
@@ -369,15 +391,15 @@ async fn test_soak_sustained_load() -> anyhow::Result<()> {
     println!("  10-100ms:    {} ops", final_metrics.latency_buckets_ms[2]);
     println!("  100-1000ms:  {} ops", final_metrics.latency_buckets_ms[3]);
     println!("  1000+ ms:    {} ops", final_metrics.latency_buckets_ms[9]);
-    
+
     // Persist to simulation artifact
     let artifact = SimulationArtifactBuilder::new("soak_test_1hour", seed)
         .with_metrics(format!("{:#?}", final_metrics))
         .with_duration_ms(final_metrics.duration.as_millis() as u64)
         .build();
-    
+
     artifact.persist("docs/simulations")?;
-    
+
     Ok(())
 }
 ```
@@ -399,11 +421,11 @@ impl ProcessMetrics {
     /// Tiger Style: Fail-fast, explicit error handling
     pub fn capture() -> anyhow::Result<Self> {
         let status = fs::read_to_string("/proc/self/status")?;
-        
+
         let mut rss_bytes = 0u64;
         let mut vms_bytes = 0u64;
         let mut threads = 0u32;
-        
+
         for line in status.lines() {
             if line.starts_with("VmRSS:") {
                 let kb: u64 = line
@@ -427,7 +449,7 @@ impl ProcessMetrics {
                     .unwrap_or(0);
             }
         }
-        
+
         Ok(ProcessMetrics {
             rss_bytes,
             vms_bytes,
@@ -453,19 +475,23 @@ println!(
 ## 6. Files Reference
 
 ### Core Metrics
+
 - `/home/brittonr/git/aspen/openraft/openraft/src/metrics/mod.rs`
 - `/home/brittonr/git/aspen/openraft/openraft/src/metrics/raft_metrics.rs`
 - `/home/brittonr/git/aspen/src/simulation.rs`
 
 ### Load Tests (Current Measurement Examples)
+
 - `/home/brittonr/git/aspen/tests/load/test_sustained_write_load.rs`
 - `/home/brittonr/git/aspen/tests/load/test_concurrent_read_load.rs`
 - `/home/brittonr/git/aspen/tests/load/test_mixed_workload.rs`
 
 ### Storage (Fixed Limits)
+
 - `/home/brittonr/git/aspen/src/raft/storage_sqlite.rs` (lines 18-28: MAX_BATCH_SIZE, etc.)
 
 ### Benchmarks
+
 - `/home/brittonr/git/aspen/benches/storage_comparison.rs`
 - `/home/brittonr/git/aspen/benches/storage_read_concurrency.rs`
 
@@ -484,6 +510,7 @@ println!(
 7. **Atomic Operations**: Use Arc<Mutex> for thread-safe counters in concurrent tests
 
 **Recommended Integration**:
+
 - Add optional metrics collection to load tests using pattern above
 - Persist metrics to simulation artifacts for historical analysis
 - Use OpenRaft RaftMetrics for cluster-level observability

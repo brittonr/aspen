@@ -1,6 +1,6 @@
-## Getting Started
+# Getting Started
 
-### How to initialize a cluster?
+## How to initialize a cluster?
 
 There are two ways to initialize a raft cluster, assuming there are three nodes,
 `n1, n2, n3`:
@@ -20,7 +20,7 @@ cluster for testing purposes and subsequently expand it to a three-node cluster
 for deployment in a production environment.
 
 
-### Are there any issues with running a single node service?
+## Are there any issues with running a single node service?
 
 Not at all.
 
@@ -648,4 +648,3 @@ when a follower is unreachable
 **Solution**: In your [`RaftNetwork`][] implementation, when a node is known to be unreachable,
 return [`Unreachable`][] error instead of [`NetworkError`][]. Openraft backs off longer for
 `Unreachable` errors, reducing log spam.
-
