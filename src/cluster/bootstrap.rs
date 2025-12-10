@@ -565,7 +565,10 @@ async fn setup_gossip_discovery(
     config: &ClusterBootstrapConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
-) -> Result<(Option<ActorRef<GossipMessage>>, Option<tokio::task::JoinHandle<()>>)> {
+) -> Result<(
+    Option<ActorRef<GossipMessage>>,
+    Option<tokio::task::JoinHandle<()>>,
+)> {
     if !config.iroh.enable_gossip {
         info!("gossip peer discovery disabled");
         return Ok((None, None));

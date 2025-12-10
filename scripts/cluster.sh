@@ -282,15 +282,59 @@ main() {
     sleep 2
     check_health
 
-    # Get cluster ticket for Iroh P2P connections
-    echo -e "\n${BLUE}Cluster Ticket (for Iroh P2P):${NC}"
+    # Get combined cluster ticket for Iroh P2P connections
+    echo -e "\n${BLUE}Creating combined cluster ticket with all nodes...${NC}"
+
+    # Wait a moment for gossip discovery to happen
+    sleep 3
+
+    # Collect endpoint IDs from all nodes
+    local endpoint_ids=""
+    for ((i=1; i<=NODE_COUNT; i++)); do
+        local http_port=$((BASE_HTTP + i - 1))
+        local response
+        response=$(curl -s "http://127.0.0.1:$http_port/cluster-ticket" 2>/dev/null || echo "{}")
+
+        local endpoint_id
+        endpoint_id=$(echo "$response" | grep -o '"endpoint_id":"[^"]*"' | cut -d'"' -f4)
+
+        if [[ -n "$endpoint_id" ]]; then
+            if [[ -n "$endpoint_ids" ]]; then
+                endpoint_ids="${endpoint_ids},${endpoint_id}"
+            else
+                endpoint_ids="${endpoint_id}"
+            fi
+        fi
+    done
+
+    # Get combined ticket from node 1 with all endpoint IDs
+    local response
+    if [[ -n "$endpoint_ids" ]]; then
+        # URL encode the endpoint IDs (commas are safe in query params)
+        response=$(curl -s "http://127.0.0.1:$BASE_HTTP/cluster-ticket-combined?endpoint_ids=$endpoint_ids" 2>/dev/null || echo "{}")
+    else
+        response=$(curl -s "http://127.0.0.1:$BASE_HTTP/cluster-ticket-combined" 2>/dev/null || echo "{}")
+    fi
+
     local ticket
-    ticket=$(curl -s "http://127.0.0.1:$BASE_HTTP/cluster-ticket" 2>/dev/null | grep -o '"ticket":"[^"]*"' | cut -d'"' -f4 || echo "unavailable")
-    if [[ -n "$ticket" ]] && [[ "$ticket" != "unavailable" ]]; then
+    ticket=$(echo "$response" | grep -o '"ticket":"[^"]*"' | cut -d'"' -f4)
+    local bootstrap_peers
+    bootstrap_peers=$(echo "$response" | grep -o '"bootstrap_peers":[0-9]*' | cut -d':' -f2)
+
+    if [[ -n "$ticket" ]] && [[ "$ticket" != "null" ]]; then
+        echo -e "${BLUE}Cluster Ticket (for Iroh P2P):${NC}"
         echo "  $ticket"
+        echo ""
+        if [[ -n "$bootstrap_peers" ]] && [[ "$bootstrap_peers" -gt 1 ]]; then
+            echo -e "${GREEN}This ticket includes $bootstrap_peers bootstrap peers - all nodes in the cluster${NC}"
+        else
+            echo -e "${YELLOW}Note: Nodes will discover each other via gossip after initial connection${NC}"
+        fi
         echo ""
         echo "Connect via Iroh:"
         echo "  nix run .#aspen-tui -- --ticket \"$ticket\""
+    else
+        echo -e "${YELLOW}Could not fetch combined cluster ticket${NC}"
     fi
 
     echo -e "\n${GREEN}Cluster is running. Press Ctrl+C to stop.${NC}"

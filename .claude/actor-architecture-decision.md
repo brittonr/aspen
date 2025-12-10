@@ -70,10 +70,12 @@ RaftSupervisor (Actor)
 ### Performance Analysis
 
 From ractor benchmarks:
+
 - Single-threaded actor RPC: ~170 microseconds
 - Multi-threaded actor RPC: ~1000 microseconds
 
 For our use cases:
+
 - Gossip announcements: every 10 seconds (1ms overhead is 0.01%)
 - IRPC connections: connection setup only, not per-request
 - Health monitoring: every 5 seconds (1ms overhead is 0.02%)
@@ -83,6 +85,7 @@ For our use cases:
 ## Implementation Plan
 
 ### Phase 1: IrpcServerActor
+
 Most critical - needs connection pooling and supervision.
 
 ```rust
@@ -100,6 +103,7 @@ struct IrpcServerActor {
 ```
 
 ### Phase 2: GossipActor
+
 Clean peer management API.
 
 ```rust
@@ -118,6 +122,7 @@ struct GossipActor {
 ```
 
 ### Phase 3: HealthMonitorActor
+
 Convert existing implementation.
 
 ```rust
@@ -136,6 +141,7 @@ struct HealthMonitorActor {
 ## Tiger Style Compliance
 
 All actors will enforce:
+
 - **Bounded resources**: max_connections, max_peers, max_retries
 - **Fixed timeouts**: shutdown_timeout_secs = 10
 - **Explicit limits**: No unbounded loops or queues
@@ -159,15 +165,21 @@ All actors will enforce:
 ## Alternatives Considered
 
 ### Pure Actor Approach
+
 Convert all tasks to actors.
+
 - **Rejected**: Too much overhead for high-frequency I/O
 
 ### Pure Task Approach
+
 Keep everything as tasks.
+
 - **Rejected**: No supervision, scattered state, no clean APIs
 
 ### Status Quo
+
 Leave as-is.
+
 - **Rejected**: Current issues with unbounded resources and missing supervision
 
 ## References

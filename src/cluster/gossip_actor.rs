@@ -67,8 +67,8 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
-use super::gossip_discovery::GossipPeerDiscovery;
 use super::IrohEndpointManager;
+use super::gossip_discovery::GossipPeerDiscovery;
 use crate::raft::constants::MAX_PEER_COUNT;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::types::NodeId;
@@ -523,11 +523,11 @@ mod tests {
     fn test_max_peers_bounds() {
         // Test the clamping logic that will be used in SetMaxPeers
         let test_cases = [
-            (0u32, 1u32),      // Below minimum -> clamp to 1
-            (1, 1),           // At minimum -> unchanged
-            (500, 500),       // Normal value -> unchanged
-            (10000, 10000),   // At maximum -> unchanged
-            (20000, 10000),   // Above maximum -> clamp to 10000
+            (0u32, 1u32),   // Below minimum -> clamp to 1
+            (1, 1),         // At minimum -> unchanged
+            (500, 500),     // Normal value -> unchanged
+            (10000, 10000), // At maximum -> unchanged
+            (20000, 10000), // Above maximum -> clamp to 10000
         ];
 
         for (input, expected) in test_cases {

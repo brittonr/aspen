@@ -1,6 +1,7 @@
 # Aspen Codebase Audit - Quick Reference
 
 ## Overview
+
 - **Total LOC**: 12,187 (main modules)
 - **Modules**: 30+ files across 6 main packages
 - **Language**: Rust 2024 Edition
@@ -9,14 +10,17 @@
 ## Module Breakdown
 
 ### 1. API Module (src/api/) - 368 LOC
+
 **Core Traits**:
+
 - `ClusterController`: init, add_learner, change_membership, get_metrics, trigger_snapshot
 - `KeyValueStore`: write, read, delete
 
 **Key Types**: ClusterNode, ClusterState, WriteCommand, ReadRequest/Result
 
 **Implementations**:
-- Real: RaftControlClient, KvClient  
+
+- Real: RaftControlClient, KvClient
 - Mock: DeterministicClusterController, DeterministicKeyValueStore
 
 ---
@@ -39,6 +43,7 @@
 | constants.rs | 244 | Tiger Style fixed limits |
 
 **Key Features**:
+
 - 3-phase supervision: health checks → auto-restart → circuit breaker
 - Hybrid storage: redb (log) + SQLite (state machine)
 - IRPC-based P2P networking over Iroh
@@ -46,6 +51,7 @@
 - All resource limits fixed at compile time
 
 **Tiger Style Constants**:
+
 - Network: MAX_RPC_MESSAGE_SIZE (10MB), IROH timeouts (5/2/10s), MAX_SNAPSHOT_SIZE (100MB)
 - Storage: MAX_BATCH_SIZE (1000), MAX_SETMULTI_KEYS (100), MAX_KEY_SIZE (1KB), MAX_VALUE_SIZE (1MB)
 - Concurrency: MAX_CONCURRENT_CONNECTIONS (500), MAX_STREAMS_PER_CONNECTION (100), MAX_PEERS (1000)
@@ -69,6 +75,7 @@
 Environment Variables < TOML File < CLI Arguments
 
 **Bootstrap Sequence**:
+
 1. Load configuration
 2. Initialize metadata store (redb)
 3. Create Iroh P2P endpoint
@@ -80,6 +87,7 @@ Environment Variables < TOML File < CLI Arguments
 9. Return BootstrapHandle
 
 **Peer Discovery Options**:
+
 - mDNS: Local network (LAN only)
 - DNS: Production discovery via DNS service
 - Pkarr: DHT-based distributed discovery
@@ -91,12 +99,14 @@ Environment Variables < TOML File < CLI Arguments
 ### 4. Key-Value Service Module (src/kv/) - ~120 LOC
 
 **API**:
+
 - `KvServiceBuilder`: Fluent builder for node bootstrap
 - `KvService`: Returned handle with shutdown support
 - `KvClient`: Implements KeyValueStore, wraps RaftActor
 - `NodeId`: Newtype wrapper preventing u64 confusion
 
 **Example**:
+
 ```rust
 let service = KvServiceBuilder::new(1, "./data/node-1")
     .with_storage(StorageBackend::Sqlite)
@@ -112,12 +122,14 @@ client.write(WriteRequest { command: Set { key, value } }).await?;
 ### 5. Binary Entry Point (src/bin/aspen-node.rs)
 
 **HTTP Endpoints**:
+
 - Control Plane: POST /cluster/init, /cluster/add-learner, /cluster/change-membership
 - Key-Value: POST /kv/read, /kv/write, /kv/delete
 - Monitoring: GET /health, /metrics, /raft-metrics, /cluster-ticket
 - Admin: POST /admin/promote-learner
 
 **Configuration**:
+
 - CLI args (clap): --config, --node-id, --data-dir, --storage-backend
 - TOML support
 - Environment variable fallback
@@ -127,6 +139,7 @@ client.write(WriteRequest { command: Set { key, value } }).await?;
 ## Key Design Patterns
 
 ### Tiger Style Compliance
+
 - **Explicit Types**: u64 for node IDs (not usize), NodeId newtype
 - **Fixed Limits**: All constants at compile time
 - **Fail Fast**: Disk checks before writes, config validation before startup
@@ -134,6 +147,7 @@ client.write(WriteRequest { command: Set { key, value } }).await?;
 - **Bounded Memory**: MAX_SNAPSHOT_SIZE (100MB), MAX_BATCH_SIZE (1000 entries)
 
 ### Supervision Pattern
+
 ```
 Health Check (5s interval)
     ↓
@@ -149,11 +163,13 @@ Circuit Breaker (prevent restart loops)
 ```
 
 ### Error Handling
+
 - **Library Layer**: snafu for explicit, contextual errors
 - **Application Layer**: anyhow for general errors
 - **HTTP Layer**: Semantic status codes + JSON error bodies
 
 ### Storage Architecture
+
 ```
 Raft Log: redb (append-only optimized)
     ↓
@@ -167,6 +183,7 @@ State Machine: SQLite (queryable, ACID transactions)
 ## Observable Components
 
 ### Health Endpoint (GET /health)
+
 ```json
 {
   "node_id": 1,
@@ -183,6 +200,7 @@ State Machine: SQLite (queryable, ACID transactions)
 ```
 
 ### Metrics
+
 - RaftActor: messages sent/rejected, operation latency, responsiveness
 - Supervision: restart count, meltdown detection, circuit state
 - Storage: write latency, read latency, snapshot size
@@ -193,11 +211,13 @@ State Machine: SQLite (queryable, ACID transactions)
 ## Error Types Summary
 
 ### ControlPlaneError
+
 - `InvalidRequest { reason }`: Validation failed
 - `NotInitialized`: Cluster not initialized
 - `Failed { reason }`: Operation failed
 
 ### KeyValueStoreError
+
 - `NotFound { key }`: Key missing (idempotent)
 - `KeyTooLarge { size, max }`: Exceeds MAX_KEY_SIZE (1KB)
 - `ValueTooLarge { size, max }`: Exceeds MAX_VALUE_SIZE (1MB)
@@ -205,6 +225,7 @@ State Machine: SQLite (queryable, ACID transactions)
 - `Timeout { duration_ms }`: Operation exceeded timeout
 
 ### SqliteStorageError (snafu)
+
 - `OpenDatabase`, `Execute`, `Query`, `Serialize`, `Deserialize`
 - `JsonSerialize`, `JsonDeserialize`, `IoError`
 - `DiskSpaceInsufficient`: >95% disk usage
@@ -245,12 +266,12 @@ bin/aspen-node.rs
 
 ## Strengths & Achievements
 
-✓ **Type Safety**: Explicit types prevent bugs at compile time  
-✓ **Predictability**: Fixed resource bounds ensure deterministic behavior  
-✓ **Resilience**: Multi-layer health monitoring with automatic recovery  
-✓ **Flexibility**: Narrow trait interfaces enable testing and pluggability  
-✓ **Observability**: Health endpoints, metrics, supervision tracking  
-✓ **Testability**: madsim for deterministic simulation, in-memory mocks  
+✓ **Type Safety**: Explicit types prevent bugs at compile time
+✓ **Predictability**: Fixed resource bounds ensure deterministic behavior
+✓ **Resilience**: Multi-layer health monitoring with automatic recovery
+✓ **Flexibility**: Narrow trait interfaces enable testing and pluggability
+✓ **Observability**: Health endpoints, metrics, supervision tracking
+✓ **Testability**: madsim for deterministic simulation, in-memory mocks
 
 ---
 
@@ -270,4 +291,3 @@ bin/aspen-node.rs
 ## Files Location
 
 Complete audit report: `/home/brittonr/git/aspen/ASPEN_AUDIT_REPORT.txt`
-

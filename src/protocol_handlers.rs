@@ -656,9 +656,15 @@ async fn process_tui_request(
                     use ractor::call_t;
                     match call_t!(gossip_actor, GossipMessage::GetPeers, 2000) {
                         Ok(peers) => {
-                            peers.into_iter()
+                            let peer_map: std::collections::HashMap<u64, String> = peers.into_iter()
                                 .map(|peer: PeerInfo| (peer.node_id, format!("{:?}", peer.endpoint_addr)))
-                                .collect()
+                                .collect();
+                            info!(
+                                gossip_peer_count = peer_map.len(),
+                                our_node_id = ctx.node_id,
+                                "retrieved peer addresses from gossip"
+                            );
+                            peer_map
                         }
                         Err(e) => {
                             debug!(error = %e, "failed to get peers from gossip actor");
@@ -666,6 +672,7 @@ async fn process_tui_request(
                         }
                     }
                 } else {
+                    debug!("no gossip actor available");
                     std::collections::HashMap::new()
                 };
 
@@ -686,12 +693,30 @@ async fn process_tui_request(
                 // Use Iroh endpoint address from gossip if available, otherwise fall back to node.addr
                 let endpoint_addr = if node.id == ctx.node_id {
                     // For our own node, use our actual endpoint address
-                    format!("{:?}", ctx.endpoint_manager.node_addr())
+                    let our_addr = format!("{:?}", ctx.endpoint_manager.node_addr());
+                    debug!(
+                        node_id = node.id,
+                        addr = %our_addr,
+                        "using our own Iroh endpoint address"
+                    );
+                    our_addr
                 } else {
                     // For other nodes, prefer gossip endpoint address
-                    gossip_peers.get(&node.id)
-                        .cloned()
-                        .unwrap_or_else(|| node.addr.clone())
+                    if let Some(gossip_addr) = gossip_peers.get(&node.id) {
+                        debug!(
+                            node_id = node.id,
+                            addr = %gossip_addr,
+                            "using gossip-discovered Iroh address"
+                        );
+                        gossip_addr.clone()
+                    } else {
+                        debug!(
+                            node_id = node.id,
+                            addr = %node.addr,
+                            "no gossip address available, using Raft-stored address"
+                        );
+                        node.addr.clone()
+                    }
                 };
 
                 nodes.push(NodeDescriptor {

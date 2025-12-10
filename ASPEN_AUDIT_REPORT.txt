@@ -10,9 +10,9 @@ Build System: Nix with flakes
 EXECUTIVE SUMMARY
 ==============================================================================
 
-Aspen is a foundational orchestration layer for distributed systems built on Rust. 
-The codebase implements a complete Raft consensus engine integrated with actor-based 
-concurrency (ractor), P2P networking (Iroh), and deterministic testing (madsim). 
+Aspen is a foundational orchestration layer for distributed systems built on Rust.
+The codebase implements a complete Raft consensus engine integrated with actor-based
+concurrency (ractor), P2P networking (Iroh), and deterministic testing (madsim).
 
 Key Architectural Principles:
 - Trait-based Abstraction: Tight ClusterController and KeyValueStore interfaces
@@ -687,4 +687,3 @@ Key Technical Achievements:
 - Health monitoring and observability endpoints
 - Configuration management with multi-layer precedence
 - Cluster ticket system for easy node joining
-

@@ -64,7 +64,10 @@ impl Actor for TestActor {
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> std::result::Result<Self::State, ractor::ActorProcessingErr> {
-        info!("TestActor starting with initial count: {}", args.initial_count);
+        info!(
+            "TestActor starting with initial count: {}",
+            args.initial_count
+        );
         Ok(TestActorState {
             count: args.initial_count,
             max_count: args.max_count,
@@ -118,13 +121,9 @@ async fn test_actor_lifecycle() -> Result<()> {
         max_count: 100,
     };
 
-    let (actor_ref, handle) = Actor::spawn(
-        Some("test-actor".to_string()),
-        TestActor,
-        args,
-    )
-    .await
-    .context(ActorSpawnSnafu)?;
+    let (actor_ref, handle) = Actor::spawn(Some("test-actor".to_string()), TestActor, args)
+        .await
+        .context(ActorSpawnSnafu)?;
 
     // Test ping-pong
     let response = ractor::call_t!(
@@ -133,7 +132,7 @@ async fn test_actor_lifecycle() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("Failed to send ping: {:?}", e)
+        message: format!("Failed to send ping: {:?}", e),
     })?;
 
     assert_eq!(response, "Pong! Count is 0");
@@ -142,8 +141,8 @@ async fn test_actor_lifecycle() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Increment(5))
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -154,7 +153,7 @@ async fn test_actor_lifecycle() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert_eq!(count, 5);
@@ -163,8 +162,8 @@ async fn test_actor_lifecycle() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Increment(200))
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -174,7 +173,7 @@ async fn test_actor_lifecycle() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert_eq!(count, 100, "Count should be capped at max_count");
@@ -183,8 +182,8 @@ async fn test_actor_lifecycle() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Shutdown)
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     // Wait for actor to stop
     let _ = handle.await;
@@ -258,13 +257,9 @@ async fn test_actor_supervision() -> Result<()> {
     }
 
     // Spawn supervisor
-    let (supervisor_ref, _) = Actor::spawn(
-        Some("supervisor".to_string()),
-        SupervisorActor,
-        (),
-    )
-    .await
-    .context(ActorSpawnSnafu)?;
+    let (supervisor_ref, _) = Actor::spawn(Some("supervisor".to_string()), SupervisorActor, ())
+        .await
+        .context(ActorSpawnSnafu)?;
 
     // Spawn test actor under supervision
     let args = TestActorArgs {
@@ -294,7 +289,7 @@ async fn test_actor_supervision() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert!(failure_count > 0, "Supervisor should have detected failure");
@@ -314,13 +309,9 @@ async fn test_concurrent_actors() -> Result<()> {
             max_count: 1000,
         };
 
-        let (actor_ref, _) = Actor::spawn(
-            Some(format!("actor-{}", i)),
-            TestActor,
-            args,
-        )
-        .await
-        .context(ActorSpawnSnafu)?;
+        let (actor_ref, _) = Actor::spawn(Some(format!("actor-{}", i)), TestActor, args)
+            .await
+            .context(ActorSpawnSnafu)?;
 
         actors.push(actor_ref);
     }
@@ -330,8 +321,8 @@ async fn test_concurrent_actors() -> Result<()> {
         actor
             .send_message(TestMessage::Increment(i as u32))
             .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+                message: format!("RPC call failed: {:?}", e),
+            })?;
     }
 
     // Wait for processing
@@ -345,8 +336,8 @@ async fn test_concurrent_actors() -> Result<()> {
             Duration::from_secs(1).as_millis() as u64
         )
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
         let expected = (i * 10 + i) as u32;
         assert_eq!(
@@ -361,8 +352,8 @@ async fn test_concurrent_actors() -> Result<()> {
         actor
             .send_message(TestMessage::Shutdown)
             .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+                message: format!("RPC call failed: {:?}", e),
+            })?;
     }
 
     sleep(Duration::from_millis(200)).await;
@@ -379,21 +370,17 @@ async fn test_tiger_style_bounds() -> Result<()> {
         max_count: 10, // Small max for testing
     };
 
-    let (actor_ref, _) = Actor::spawn(
-        Some("bounded-actor".to_string()),
-        TestActor,
-        args,
-    )
-    .await
-    .context(ActorSpawnSnafu)?;
+    let (actor_ref, _) = Actor::spawn(Some("bounded-actor".to_string()), TestActor, args)
+        .await
+        .context(ActorSpawnSnafu)?;
 
     // Try to exceed bounds
     for _ in 0..20 {
         actor_ref
             .send_message(TestMessage::Increment(1))
             .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+                message: format!("RPC call failed: {:?}", e),
+            })?;
     }
 
     sleep(Duration::from_millis(300)).await;
@@ -404,7 +391,7 @@ async fn test_tiger_style_bounds() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert_eq!(count, 10, "Count should be capped at max_count");
@@ -413,8 +400,8 @@ async fn test_tiger_style_bounds() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Increment(u32::MAX))
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -424,7 +411,7 @@ async fn test_tiger_style_bounds() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert_eq!(count, 10, "Count should still be capped at max_count");
@@ -432,8 +419,8 @@ async fn test_tiger_style_bounds() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Shutdown)
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     Ok(())
 }
@@ -446,21 +433,17 @@ async fn test_message_ordering() -> Result<()> {
         max_count: 1000,
     };
 
-    let (actor_ref, _) = Actor::spawn(
-        Some("ordering-test-actor".to_string()),
-        TestActor,
-        args,
-    )
-    .await
-    .context(ActorSpawnSnafu)?;
+    let (actor_ref, _) = Actor::spawn(Some("ordering-test-actor".to_string()), TestActor, args)
+        .await
+        .context(ActorSpawnSnafu)?;
 
     // Send multiple increments in order
     for i in 1..=10 {
         actor_ref
             .send_message(TestMessage::Increment(i))
             .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+                message: format!("RPC call failed: {:?}", e),
+            })?;
     }
 
     // Wait for all messages to be processed
@@ -473,7 +456,7 @@ async fn test_message_ordering() -> Result<()> {
         Duration::from_secs(1).as_millis() as u64
     )
     .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
+        message: format!("RPC call failed: {:?}", e),
     })?;
 
     assert_eq!(count, 55, "All increments should be processed in order");
@@ -481,8 +464,8 @@ async fn test_message_ordering() -> Result<()> {
     actor_ref
         .send_message(TestMessage::Shutdown)
         .map_err(|e| SimulationError::RpcCall {
-        message: format!("RPC call failed: {:?}", e)
-    })?;
+            message: format!("RPC call failed: {:?}", e),
+        })?;
 
     Ok(())
 }

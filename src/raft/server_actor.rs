@@ -361,11 +361,11 @@ mod tests {
     fn test_max_connections_bounds() {
         // Test the clamping logic that will be used in SetMaxConnections
         let test_cases = [
-            (0u32, 1u32),      // Below minimum -> clamp to 1
-            (1, 1),           // At minimum -> unchanged
-            (500, 500),       // Normal value -> unchanged
-            (10000, 10000),   // At maximum -> unchanged
-            (20000, 10000),   // Above maximum -> clamp to 10000
+            (0u32, 1u32),   // Below minimum -> clamp to 1
+            (1, 1),         // At minimum -> unchanged
+            (500, 500),     // Normal value -> unchanged
+            (10000, 10000), // At maximum -> unchanged
+            (20000, 10000), // Above maximum -> clamp to 10000
         ];
 
         for (input, expected) in test_cases {

@@ -171,6 +171,7 @@ enum RaftActorMessage {
 ```
 
 **Key Properties:**
+
 - **Isolated**: Each actor has its own mailbox (no shared memory)
 - **Sequential**: Messages processed one at a time (no race conditions)
 - **Bounded**: Mailbox capacity 1000 msgs (max 10000) for backpressure
@@ -183,6 +184,7 @@ Aspen uses a **hybrid actor-task architecture** where long-living actors manage 
 #### Core Actors (Existing)
 
 ##### 1. **RaftActor** (Core Consensus)
+
 - **Purpose**: Owns the OpenRaft instance, processes consensus operations
 - **Spawned by**: RaftSupervisor (via `spawn_linked`)
 - **Mailbox**: Bounded (1000-10000 messages)
@@ -190,6 +192,7 @@ Aspen uses a **hybrid actor-task architecture** where long-living actors manage 
 - **Lifetime**: Restarted on failure by supervisor
 
 ##### 2. **RaftSupervisor** (Fault Tolerance)
+
 - **Purpose**: Monitors and restarts RaftActor on failures
 - **Spawned by**: bootstrap_node() during startup
 - **Implements**: OneForOne supervision with exponential backoff
@@ -197,6 +200,7 @@ Aspen uses a **hybrid actor-task architecture** where long-living actors manage 
 - **Circuit Breaker**: Prevents restart storms (>3 restarts/10min)
 
 ##### 3. **NodeServer** (Actor System Root)
+
 - **Purpose**: Ractor cluster node, manages actor hierarchy
 - **Spawned by**: bootstrap_node() via `NodeServerConfig`
 - **Transport**: Can use Iroh P2P or custom transports
@@ -207,6 +211,7 @@ Aspen uses a **hybrid actor-task architecture** where long-living actors manage 
 These actors manage subsystems and internally spawn tasks for efficient I/O:
 
 ##### 4. **RaftRpcServerActor** (RPC Management) - NEW
+
 - **Purpose**: Manages incoming Raft RPC connections with supervision
 - **File**: `src/raft/server_actor.rs`
 - **Tiger Style**: Bounded connections (MAX_CONCURRENT_CONNECTIONS)
@@ -217,6 +222,7 @@ These actors manage subsystems and internally spawn tasks for efficient I/O:
 - **Internal Tasks**: Connection handlers (tokio::spawn)
 
 ##### 5. **GossipActor** (Peer Discovery) - NEW
+
 - **Purpose**: Manages gossip-based peer discovery with supervision
 - **File**: `src/cluster/gossip_actor.rs`
 - **Tiger Style**: Bounded peer list (MAX_PEER_COUNT = 1000)
@@ -228,6 +234,7 @@ These actors manage subsystems and internally spawn tasks for efficient I/O:
 - **Internal Tasks**: Announcer/receiver (tokio::spawn)
 
 ##### 6. **HealthMonitorActor** - PLANNED
+
 - **Purpose**: Monitor Raft health with proper supervision
 - **Tiger Style**: Bounded retries (MAX_HEALTH_RETRIES)
 - **Messages**: `CheckHealth`, `GetStatus`
@@ -246,6 +253,7 @@ RaftSupervisor (Actor)
 ```
 
 **Pattern Benefits:**
+
 - **Supervision**: Automatic restart on failure
 - **Message APIs**: Clean, testable interfaces
 - **State Management**: Centralized state ownership
@@ -276,6 +284,7 @@ Failure → Circuit OPEN
 ```
 
 **Health Monitoring:**
+
 - Health check every 5 seconds
 - 25ms timeout for actor response
 - Status exposed via `/health` endpoint
@@ -318,6 +327,7 @@ Peer RaftActor → process & reply
 ```
 
 **Connection Management:**
+
 - Connection caching (reuses QUIC connections)
 - Auto-reconnect on failure
 - MAX_PEERS: 1000, MAX_STREAMS: 100 per connection
@@ -381,6 +391,7 @@ Bootstrap Sequence:
 ```
 
 Actor Hierarchy:
+
 ```
 NodeServer (root)
     └── RaftSupervisor
@@ -474,6 +485,7 @@ src/
 All limits fixed at compile time in `src/raft/constants.rs`:
 
 **Network:**
+
 - `MAX_RPC_MESSAGE_SIZE`: 10 MB
 - `MAX_SNAPSHOT_SIZE`: 100 MB
 - `IROH_CONNECT_TIMEOUT`: 5 seconds
@@ -484,6 +496,7 @@ All limits fixed at compile time in `src/raft/constants.rs`:
 - `MAX_PEERS`: 1000
 
 **Storage:**
+
 - `MAX_KEY_SIZE`: 1 KB
 - `MAX_VALUE_SIZE`: 1 MB
 - `MAX_BATCH_SIZE`: 1000 entries
@@ -492,11 +505,13 @@ All limits fixed at compile time in `src/raft/constants.rs`:
 - `DEFAULT_READ_POOL_SIZE`: 10 connections
 
 **Cluster:**
+
 - `MAX_VOTERS`: 100 nodes
 - `LEARNER_LAG_THRESHOLD`: 100 entries
 - `MEMBERSHIP_COOLDOWN`: 300 seconds
 
 **Actor:**
+
 - `DEFAULT_CAPACITY`: 1000 messages
 - `MAX_CAPACITY`: 10000 messages
 - `MAX_BACKOFF_SECONDS`: 16 seconds
@@ -549,6 +564,7 @@ nix run .#aspen-tui -- --refresh 500 --debug
 ### TUI Views
 
 **Cluster View:**
+
 ```
 ┌─────────────── Nodes ────────────────┐ ┌──────── Node Details ─────────┐
 │ [1] ● Leader    127.0.0.1:8081      │ │ Node ID: 1                    │
@@ -560,17 +576,20 @@ nix run .#aspen-tui -- --refresh 500 --debug
 ```
 
 **Metrics View:**
+
 - Raft metrics: term, commit index, applied index
 - Network stats: RPC latencies, message counts
 - Storage metrics: log size, snapshot count
 - Performance: operations/sec, latencies
 
 **Key-Value View:**
+
 - Interactive write/read operations
 - Result display with syntax highlighting
 - Operation history
 
 **Logs View:**
+
 - Scrollable log output
 - Severity-based coloring
 - Timestamp and module info
@@ -715,6 +734,7 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 **Assessment Score**: 85/100 - Production-ready consensus layer
 
 **Completed Phases:**
+
 1. Core Building Blocks (modules, actor primitives)
 2. Raft Integration (storage, actor, OpenRaft wiring)
 3. Network Fabric (IRPC transport, gossip discovery)
@@ -737,6 +757,7 @@ Aspen provides two main binaries:
 ## Dependencies
 
 **Core:**
+
 - `openraft` v0.10.0 (vendored) - Raft consensus
 - `iroh` v0.95.1 - P2P networking (QUIC)
 - `iroh-gossip` v0.95 - Peer discovery
@@ -746,12 +767,14 @@ Aspen provides two main binaries:
 - `tokio` v1.48 - Async runtime
 
 **TUI:**
+
 - `ratatui` v0.28 - Terminal UI framework
 - `crossterm` v0.28 - Terminal input/output
 - `color-eyre` v0.6 - Error formatting
 - `tui-logger` v0.13 - Log integration
 
 **Testing:**
+
 - `madsim` v0.2.34 - Deterministic simulation
 - `proptest` v1.0 - Property-based testing
 - `cargo-nextest` - Parallel test runner
