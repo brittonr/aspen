@@ -1,0 +1,130 @@
+# VM-based Integration Tests for Aspen Cluster
+#
+# This workflow runs the NixOS-based VM integration tests to verify
+# cluster functionality in isolated environments.
+#
+# The tests use QEMU VMs (via NixOS test framework) to:
+# - Boot a 3-node Aspen cluster
+# - Verify HTTP APIs are accessible
+# - Initialize and test Raft consensus
+# - Verify key-value replication
+#
+# These tests require KVM support, which is available on GitHub-hosted runners.
+
+name: VM Integration Tests
+
+on:
+  push:
+    branches: [main, kameo]
+  pull_request:
+    branches: [main]
+  # Allow manual triggering
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cluster-test:
+    name: NixOS Cluster Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            system-features = nixos-test benchmark big-parallel kvm
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Check KVM availability
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo "KVM is available"
+            ls -la /dev/kvm
+          else
+            echo "Warning: KVM not available, tests may be slower"
+          fi
+
+      - name: Run NixOS cluster test
+        run: |
+          echo "Running NixOS cluster integration test..."
+          nix build .#checks.x86_64-linux.cluster-test --print-build-logs
+
+      - name: Run cluster test interactively (on failure)
+        if: failure()
+        run: |
+          echo "Test failed, attempting to get more details..."
+          nix build .#checks.x86_64-linux.cluster-test.driverInteractive --print-build-logs || true
+
+  # Build check for microvm configurations
+  microvm-build:
+    name: Build MicroVM Configurations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Verify NixOS configurations evaluate
+        run: |
+          echo "Checking NixOS configurations evaluate correctly..."
+          nix eval --json '.#nixosConfigurations."x86_64-linux-aspen-node-1".config.networking.hostName'
+          nix eval --json '.#nixosConfigurations."x86_64-linux-aspen-node-2".config.networking.hostName'
+          nix eval --json '.#nixosConfigurations."x86_64-linux-aspen-node-3".config.networking.hostName'
+
+      - name: Verify microvm hypervisor configuration
+        run: |
+          echo "Checking microvm hypervisor configuration..."
+          nix eval --raw '.#nixosConfigurations."x86_64-linux-aspen-node-1".config.microvm.hypervisor'
+
+      - name: Verify aspen-node service configuration
+        run: |
+          echo "Checking aspen-node service configuration..."
+          nix eval --json '.#nixosConfigurations."x86_64-linux-aspen-node-1".config.services.aspen-node.nodeId'
+          nix eval --json '.#nixosConfigurations."x86_64-linux-aspen-node-1".config.services.aspen-node.httpAddr'
+
+  # Run the Rust-based VM tests (requires root, so we just verify they compile)
+  rust-vm-tests:
+    name: Rust VM Tests (Compile Check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Verify VM tests compile
+        run: |
+          echo "Checking VM test code compiles..."
+          nix develop -c cargo check --tests
+          nix develop -c cargo nextest list --test test_vm_basic
+          nix develop -c cargo nextest list --test test_vm_partition
+          nix develop -c cargo nextest list --test test_vm_failure
+
+      - name: Run non-privileged VM tests
+        run: |
+          echo "Running non-privileged VM tests..."
+          # These tests don't require root/KVM
+          nix develop -c cargo nextest run --test test_vm_basic test_vm_manager_creation test_vm_config_for_nodes test_network_config_defaults
