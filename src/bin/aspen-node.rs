@@ -1,14 +1,14 @@
 //! Aspen node binary - cluster node entry point.
 //!
 //! Production binary for running Aspen cluster nodes with HTTP API for cluster
-//! operations and key-value access. Supports multiple control plane backends
-//! (Raft, Hiqlite) and both in-memory and persistent storage. Configuration is
+//! operations and key-value access. Supports Raft control plane backend
+//! and both in-memory and persistent storage. Configuration is
 //! loaded from environment variables, TOML files, or CLI arguments.
 //!
 //! # Architecture
 //!
 //! - Axum HTTP server: REST API for cluster and KV operations
-//! - Multi-backend support: Raft (default) or Hiqlite for control plane
+//! - Raft control plane: Distributed consensus for cluster management
 //! - Graceful shutdown: SIGTERM/SIGINT handling with coordinated cleanup
 //! - Health monitoring: /health and /metrics endpoints for ops
 //! - Configuration layers: Environment < TOML < CLI args
@@ -613,16 +613,18 @@ async fn main() -> Result<()> {
     );
 
     // Spawn TUI RPC server
-    let tui_server_context = Arc::new(TuiRpcServerContext {
-        node_id: config.node_id,
-        controller: controller.clone(),
-        kv_store: kv_store.clone(),
-        endpoint_manager: handle.iroh_manager.clone(),
-        cluster_cookie: config.cookie.clone(),
-        start_time: app_state.start_time,
-    });
-    let tui_rpc_server = TuiRpcServer::spawn(tui_server_context);
-    info!("TUI RPC server spawned");
+    // Temporarily disable TUI server to fix ALPN conflict
+    // TODO: Implement proper ALPN-based dispatching
+    // let tui_server_context = Arc::new(TuiRpcServerContext {
+    //     node_id: config.node_id,
+    //     controller: controller.clone(),
+    //     kv_store: kv_store.clone(),
+    //     endpoint_manager: handle.iroh_manager.clone(),
+    //     cluster_cookie: config.cookie.clone(),
+    //     start_time: app_state.start_time,
+    // });
+    // let tui_rpc_server = TuiRpcServer::spawn(tui_server_context);
+    // info!("TUI RPC server spawned");
 
     // Build router with all API endpoints
     let app = build_router(app_state);
@@ -644,7 +646,7 @@ async fn main() -> Result<()> {
     }
 
     // Gracefully shutdown TUI RPC server
-    tui_rpc_server.shutdown().await?;
+    // tui_rpc_server.shutdown().await?;
 
     // Gracefully shutdown
     handle.shutdown().await?;
