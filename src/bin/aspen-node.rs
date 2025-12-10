@@ -625,6 +625,7 @@ async fn main() -> Result<()> {
         endpoint_manager: handle.iroh_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         start_time: app_state.start_time,
+        gossip_actor: handle.gossip_actor.clone(),
     };
     let tui_handler = TuiProtocolHandler::new(tui_context);
 
