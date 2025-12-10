@@ -462,11 +462,7 @@ impl App {
                                     // Create a NodeInfo from the discovered node descriptor
                                     let node_info = NodeInfo {
                                         node_id: node_desc.node_id,
-                                        status: if node_desc.is_leader {
-                                            NodeStatus::Healthy // Leaders are always healthy
-                                        } else {
-                                            NodeStatus::Healthy // Assume healthy for discovered nodes
-                                        },
+                                        status: NodeStatus::Healthy, // Assume healthy for discovered nodes
                                         is_leader: node_desc.is_leader,
                                         last_applied_index: None, // Will be updated on next metrics call
                                         current_term: Some(metrics.term),
@@ -590,11 +586,7 @@ impl App {
     /// Connect to HTTP nodes.
     async fn connect_http_nodes(&mut self, input: &str) {
         // Parse input - could be single node or space-separated list
-        let urls: Vec<String> = input
-            .trim()
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
+        let urls: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
 
         if urls.is_empty() {
             self.set_status("No nodes specified");
