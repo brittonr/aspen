@@ -6,6 +6,8 @@
 //! - Large object chunking
 //! - Error handling
 
+#![cfg(feature = "s3")]
+
 use aspen::api::DeterministicKeyValueStore;
 use aspen::s3::AspenS3Service;
 use s3s::dto::*;

@@ -3,6 +3,29 @@
 /// Provides a subset of the Amazon S3 REST API on top of Aspen's
 /// distributed key-value store.
 ///
+/// # Feature Flag
+///
+/// The S3 implementation is an optional feature that must be explicitly enabled:
+///
+/// ```toml
+/// # In Cargo.toml
+/// [dependencies]
+/// aspen = { version = "0.1", features = ["s3"] }
+/// ```
+///
+/// Or when building:
+/// ```bash
+/// # Build with S3 support
+/// cargo build --features s3
+///
+/// # Build S3 server binary (requires s3 feature)
+/// cargo build --bin aspen-s3 --features s3
+///
+/// # With Nix
+/// nix build .#aspen-full      # Full build with S3
+/// nix build .#aspen-s3        # Just the S3 server binary
+/// ```
+///
 /// # Architecture
 ///
 /// The S3 layer maps S3 buckets to Aspen vaults and objects to

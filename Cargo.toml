@@ -11,6 +11,7 @@ path = "src/bin/aspen-tui/main.rs"
 [[bin]]
 name = "aspen-s3"
 path = "src/bin/aspen-s3.rs"
+required-features = ["s3"]
 
 [workspace]
 members = [".", "scripts/tutorial-verify"]
@@ -111,17 +112,19 @@ toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
 
-# S3 API dependencies
-s3s = "0.11"
-s3s-aws = "0.11"
-md5 = "0.7"
-base64 = "0.22"
-time = "0.3"
+# S3 API dependencies (optional, enabled with 's3' feature)
+s3s = { version = "0.11", optional = true }
+s3s-aws = { version = "0.11", optional = true }
+md5 = { version = "0.7", optional = true }
+time = { version = "0.3", optional = true }
 
-# HTTP server (moved from dev-dependencies for S3 server)
-hyper = { version = "1.0", features = ["server", "http1"] }
-hyper-util = { version = "0.1", features = ["server", "tokio", "client", "client-legacy"] }
-http-body-util = "0.1"
+# base64 is used by core modules too, not just S3
+base64 = "0.22"
+
+# HTTP server (optional for S3 server, enabled with 's3' feature)
+hyper = { version = "1.0", features = ["server", "http1"], optional = true }
+hyper-util = { version = "0.1", features = ["server", "tokio", "client", "client-legacy"], optional = true }
+http-body-util = { version = "0.1", optional = true }
 
 # TUI dependencies
 ratatui = { version = "0.28", features = ["crossterm"] }
@@ -144,6 +147,16 @@ criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 cloud-hypervisor-client = "0.3"
 
 [features]
+default = []
+s3 = [
+    "dep:s3s",
+    "dep:s3s-aws",
+    "dep:md5",
+    "dep:time",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:http-body-util",
+]
 testing = []
 
 [lints.rust]

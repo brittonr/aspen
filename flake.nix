@@ -228,10 +228,21 @@
             CARGO_BUILD_INCREMENTAL = "true";
           };
 
+        # Build without S3 feature (default)
         aspen = craneLib.buildPackage (
           commonArgs
           // {
             inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+            doCheck = false;
+          }
+        );
+
+        # Build with S3 feature enabled
+        aspen-full = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+            cargoExtraArgs = "--features s3";
             doCheck = false;
           }
         );
@@ -343,16 +354,27 @@
                 doCheck = false;
               }
             );
-          bins = builtins.listToAttrs (
-            map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
-              {
-                name = "aspen-node";
-              }
-              {
-                name = "aspen-tui";
-              }
-            ]
+          # Special build for aspen-s3 with S3 feature enabled
+          aspen-s3 = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+              cargoExtraArgs = "--bin aspen-s3 --features s3";
+              doCheck = false;
+            }
           );
+          bins =
+            builtins.listToAttrs (
+              map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
+                {
+                  name = "aspen-node";
+                }
+                {
+                  name = "aspen-tui";
+                }
+              ]
+            )
+            // {inherit aspen-s3;};
         in
           bins
           // rec {
@@ -570,6 +592,8 @@
               default = bins.aspen-node;
               aspen-node = bins.aspen-node;
               aspen-tui = bins.aspen-tui;
+              aspen-s3 = bins.aspen-s3; # S3 server binary (requires S3 feature)
+              aspen-full = aspen-full; # Full build with all features including S3
               netwatch = netwatch;
               vm-test-setup = vm-test-setup;
               vm-test-run = vm-test-run;

@@ -596,6 +596,38 @@ nix run .#aspen-tui -- --refresh 500 --debug
 
 ## Quick Start
 
+### Building
+
+```bash
+# Build without S3 support (default)
+nix develop -c cargo build --release
+
+# Build with S3 support
+nix develop -c cargo build --release --features s3
+
+# Using Nix
+nix build .#aspen          # Without S3
+nix build .#aspen-full     # With S3 support
+nix build .#aspen-s3       # Just the S3 server binary
+```
+
+### Optional Features
+
+| Feature | Description               | Dependencies              |
+|---------|---------------------------|---------------------------|
+| `s3`    | S3-compatible API server  | s3s, s3s-aws, md5, hyper  |
+
+When the `s3` feature is enabled, you can run an S3-compatible server:
+
+```bash
+# Build and run S3 server
+nix develop -c cargo build --bin aspen-s3 --features s3
+./target/release/aspen-s3 --node-id 1 --s3-addr 127.0.0.1:9000
+
+# Or using Nix
+nix run .#aspen-s3 -- --node-id 1 --s3-addr 127.0.0.1:9000
+```
+
 ### Single Node
 
 ```bash
