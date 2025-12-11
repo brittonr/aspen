@@ -65,18 +65,20 @@ impl ClusterController for DeterministicClusterController {
     async fn get_metrics(
         &self,
     ) -> Result<super::RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
-        // Deterministic backend doesn't have real Raft metrics
-        Err(ControlPlaneError::Failed {
-            reason: "metrics not available in deterministic backend".into(),
+        // Deterministic backend is in-memory stub without Raft consensus
+        Err(ControlPlaneError::Unsupported {
+            backend: "deterministic".into(),
+            operation: "get_metrics".into(),
         })
     }
 
     async fn trigger_snapshot(
         &self,
     ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError> {
-        // Deterministic backend doesn't support snapshots
-        Err(ControlPlaneError::Failed {
-            reason: "snapshots not available in deterministic backend".into(),
+        // Deterministic backend is in-memory stub without snapshot support
+        Err(ControlPlaneError::Unsupported {
+            backend: "deterministic".into(),
+            operation: "trigger_snapshot".into(),
         })
     }
 }

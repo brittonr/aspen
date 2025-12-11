@@ -90,11 +90,20 @@ pub enum StateMachineVariant {
 
 impl StateMachineVariant {
     /// Read a value from the state machine.
-    pub async fn get(&self, key: &str) -> Option<String> {
+    ///
+    /// Returns:
+    /// - `Ok(Some(value))` if key exists
+    /// - `Ok(None)` if key not found
+    /// - `Err(...)` if storage I/O error occurred
+    pub async fn get(&self, key: &str) -> Result<Option<String>, KeyValueStoreError> {
         match self {
-            Self::InMemory(sm) => sm.get(key).await,
-            Self::Redb(sm) => sm.get(key).await.ok().flatten(),
-            Self::Sqlite(sm) => sm.get(key).await.ok().flatten(),
+            Self::InMemory(sm) => Ok(sm.get(key).await),
+            Self::Redb(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
+                reason: format!("redb storage read error: {}", err),
+            }),
+            Self::Sqlite(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
+                reason: format!("sqlite storage read error: {}", err),
+            }),
         }
     }
 }
@@ -117,7 +126,7 @@ pub struct RaftActorState {
     node_id: u64,
     raft: Raft<AppTypeConfig>,
     state_machine: StateMachineVariant,
-    cluster_state: ClusterState,
+    // cluster_state removed - always derive from Raft metrics
     initialized: bool,
 }
 
@@ -185,7 +194,6 @@ impl Actor for RaftActor {
             node_id: config.node_id,
             raft: config.raft,
             state_machine: config.state_machine,
-            cluster_state: ClusterState::default(),
             initialized: false,
         })
     }
@@ -205,43 +213,8 @@ impl Actor for RaftActor {
                 let _ = reply.send(());
             }
             RaftActorMessage::CurrentState(reply) => {
-                let result = ensure_initialized(state).map(|_| {
-                    // Get the actual membership from Raft metrics instead of using cached state
-                    let metrics = state.raft.metrics().borrow().clone();
-                    let membership = &metrics.membership_config;
-
-                    // Build ClusterState from actual membership
-                    let mut nodes = Vec::new();
-                    let mut learners = Vec::new();
-                    let mut members = Vec::new();
-
-                    // Get voter IDs first
-                    let voter_ids: std::collections::HashSet<u64> =
-                        membership.membership().voter_ids().collect();
-
-                    // Get all nodes from membership (includes AspenNode with Iroh addresses)
-                    for (node_id, aspen_node) in membership.membership().nodes() {
-                        let cluster_node = ClusterNode {
-                            id: *node_id,
-                            addr: aspen_node.iroh_addr.id.to_string(),
-                            raft_addr: None, // Legacy field, not needed with Iroh
-                            iroh_addr: Some(aspen_node.iroh_addr.clone()),
-                        };
-
-                        if voter_ids.contains(node_id) {
-                            members.push(*node_id);
-                            nodes.push(cluster_node);
-                        } else {
-                            learners.push(cluster_node);
-                        }
-                    }
-
-                    ClusterState {
-                        nodes,
-                        members,
-                        learners,
-                    }
-                });
+                let result =
+                    ensure_initialized(state).map(|_| build_cluster_state_from_metrics(state));
                 let _ = reply.send(result);
             }
             RaftActorMessage::InitCluster(request, reply) => {
@@ -341,6 +314,45 @@ fn ensure_initialized_kv(state: &RaftActorState) -> Result<(), KeyValueStoreErro
     }
 }
 
+/// Build ClusterState from Raft metrics (single source of truth).
+///
+/// Tiger Style: Centralize state derivation to prevent drift between
+/// cached cluster_state and actual Raft membership.
+fn build_cluster_state_from_metrics(state: &RaftActorState) -> ClusterState {
+    let metrics = state.raft.metrics().borrow().clone();
+    let membership = &metrics.membership_config;
+
+    let mut nodes = Vec::new();
+    let mut learners = Vec::new();
+    let mut members = Vec::new();
+
+    // Get voter IDs first
+    let voter_ids: std::collections::HashSet<u64> = membership.membership().voter_ids().collect();
+
+    // Get all nodes from membership (includes AspenNode with Iroh addresses)
+    for (node_id, aspen_node) in membership.membership().nodes() {
+        let cluster_node = ClusterNode {
+            id: *node_id,
+            addr: aspen_node.iroh_addr.id.to_string(),
+            raft_addr: None,
+            iroh_addr: Some(aspen_node.iroh_addr.clone()),
+        };
+
+        if voter_ids.contains(node_id) {
+            members.push(*node_id);
+            nodes.push(cluster_node);
+        } else {
+            learners.push(cluster_node);
+        }
+    }
+
+    ClusterState {
+        nodes,
+        members,
+        learners,
+    }
+}
+
 /// Ensure the node has an Iroh address for Raft communication.
 ///
 /// With the introduction of `AspenNode`, the primary address source is `iroh_addr`.
@@ -381,11 +393,11 @@ async fn handle_init(
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
         })?;
-    state.cluster_state.nodes = request.initial_members.clone();
-    state.cluster_state.learners.clear();
-    state.cluster_state.members = request.initial_members.iter().map(|node| node.id).collect();
+
     state.initialized = true;
-    Ok(state.cluster_state.clone())
+
+    // Tiger Style: Derive state from Raft metrics instead of caching
+    Ok(build_cluster_state_from_metrics(state))
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, learner_id = request.learner.id))]
@@ -410,8 +422,10 @@ async fn handle_add_learner(
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
         })?;
-    state.cluster_state.learners.push(learner);
-    Ok(state.cluster_state.clone())
+
+    // Tiger Style: Rebuild from Raft metrics (single source of truth)
+    // This eliminates drift between cached state and actual membership
+    Ok(build_cluster_state_from_metrics(state))
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, new_members = ?request.members))]
@@ -424,8 +438,8 @@ async fn handle_change_membership(
             reason: "members must include at least one voter".into(),
         });
     }
-    let new_members = request.members;
-    let members: BTreeSet<u64> = new_members.iter().copied().collect();
+    let members: BTreeSet<u64> = request.members.iter().copied().collect();
+
     state
         .raft
         .change_membership(members, false)
@@ -433,8 +447,10 @@ async fn handle_change_membership(
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
         })?;
-    state.cluster_state.members = new_members;
-    Ok(state.cluster_state.clone())
+
+    // Tiger Style: Rebuild from Raft metrics (single source of truth)
+    // Automatically prunes promoted learners from learners list
+    Ok(build_cluster_state_from_metrics(state))
 }
 
 /// Validate key size against MAX_KEY_SIZE.
@@ -528,7 +544,8 @@ async fn handle_delete(
     validate_key_size(&request.key)?;
 
     // Check if key exists before deletion (for deleted flag)
-    let existed = state.state_machine.get(&request.key).await.is_some();
+    // Propagate storage errors instead of masking them
+    let existed = state.state_machine.get(&request.key).await?.is_some();
 
     // Submit delete through Raft
     let app_req = AppRequest::Delete {
@@ -566,13 +583,13 @@ async fn handle_read(
         .map_err(|err| KeyValueStoreError::Failed {
             reason: err.to_string(),
         })?;
-    if let Some(value) = state.state_machine.get(&request.key).await {
-        Ok(ReadResult {
+    // Propagate storage errors instead of masking them
+    match state.state_machine.get(&request.key).await? {
+        Some(value) => Ok(ReadResult {
             key: request.key,
             value,
-        })
-    } else {
-        Err(KeyValueStoreError::NotFound { key: request.key })
+        }),
+        None => Err(KeyValueStoreError::NotFound { key: request.key }),
     }
 }
 
@@ -698,7 +715,8 @@ impl ClusterController for RaftControlClient {
     }
 
     async fn get_metrics(&self) -> Result<RaftMetrics<AppTypeConfig>, ControlPlaneError> {
-        call_t!(self.actor, RaftActorMessage::GetMetrics, 100).map_err(|err| {
+        // 500ms allows for actor mailbox processing under load
+        call_t!(self.actor, RaftActorMessage::GetMetrics, 500).map_err(|err| {
             ControlPlaneError::Failed {
                 reason: err.to_string(),
             }
@@ -717,7 +735,8 @@ impl ClusterController for RaftControlClient {
 #[async_trait]
 impl KeyValueStore for RaftControlClient {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
-        call_t!(self.actor, RaftActorMessage::Write, 500, request).map_err(|err| {
+        // 5s allows for leader election + quorum replication
+        call_t!(self.actor, RaftActorMessage::Write, 5000, request).map_err(|err| {
             KeyValueStoreError::Failed {
                 reason: err.to_string(),
             }
@@ -725,7 +744,8 @@ impl KeyValueStore for RaftControlClient {
     }
 
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
-        call_t!(self.actor, RaftActorMessage::Read, 500, request).map_err(|err| {
+        // 5s allows for ReadIndex consensus round-trip
+        call_t!(self.actor, RaftActorMessage::Read, 5000, request).map_err(|err| {
             KeyValueStoreError::Failed {
                 reason: err.to_string(),
             }
@@ -733,7 +753,8 @@ impl KeyValueStore for RaftControlClient {
     }
 
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
-        call_t!(self.actor, RaftActorMessage::Delete, 500, request).map_err(|err| {
+        // 5s allows for leader election + quorum replication
+        call_t!(self.actor, RaftActorMessage::Delete, 5000, request).map_err(|err| {
             KeyValueStoreError::Failed {
                 reason: err.to_string(),
             }

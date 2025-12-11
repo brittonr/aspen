@@ -389,8 +389,8 @@ impl MadsimRaftRouter {
         &self,
         source: NodeId,
         target: NodeId,
-        _vote: VoteOf<AppTypeConfig>,
-        _snapshot: Snapshot<AppTypeConfig>,
+        vote: VoteOf<AppTypeConfig>,
+        snapshot: Snapshot<AppTypeConfig>,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
@@ -410,13 +410,27 @@ impl MadsimRaftRouter {
             )));
         }
 
-        // TODO: Implement actual madsim TCP snapshot streaming
-        Err(StreamingError::Network(NetworkError::new(
-            &std::io::Error::new(
-                std::io::ErrorKind::NotConnected,
-                "madsim snapshot streaming not yet implemented",
-            ),
-        )))
+        // Get target node's Raft handle
+        let raft = {
+            let nodes = self.nodes.lock();
+            let Some(node) = nodes.get(&target) else {
+                return Err(StreamingError::Network(NetworkError::new(
+                    &std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("target node {target} not registered"),
+                    ),
+                )));
+            };
+            node.raft.clone()
+        };
+
+        debug!(source, target, snapshot_meta = ?snapshot.meta, "dispatching snapshot RPC");
+
+        // Tiger Style: Direct dispatch to Raft core (Phase 2 implementation)
+        // This validates integration; future work can add real madsim TCP streaming
+        raft.install_full_snapshot(vote, snapshot)
+            .await
+            .map_err(|err| StreamingError::Network(NetworkError::new(&err)))
     }
 }
 

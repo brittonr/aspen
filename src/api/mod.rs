@@ -80,6 +80,8 @@ pub enum ControlPlaneError {
     NotInitialized,
     #[error("operation failed: {reason}")]
     Failed { reason: String },
+    #[error("operation not supported by {backend} backend: {operation}")]
+    Unsupported { backend: String, operation: String },
 }
 
 #[async_trait]

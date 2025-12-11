@@ -52,10 +52,14 @@ pub struct KvClient {
 impl KvClient {
     /// Create a new KV client that forwards operations to the given Raft actor.
     ///
-    /// Uses a default timeout of 500ms for operations. For custom timeout behavior,
-    /// use `with_timeout()`.
+    /// Uses a default timeout of 5000ms (5 seconds) for operations. This allows time for:
+    /// - Leader election (up to 3s with default election_timeout_max)
+    /// - Log replication across the quorum
+    /// - Network round-trips
+    ///
+    /// For custom timeout behavior, use `with_timeout()`.
     pub fn new(raft_actor: ActorRef<RaftActorMessage>) -> Self {
-        Self::with_timeout(raft_actor, 500)
+        Self::with_timeout(raft_actor, 5000)
     }
 
     /// Create a KV client with a custom timeout in milliseconds.

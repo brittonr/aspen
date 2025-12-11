@@ -1942,6 +1942,11 @@ impl IntoResponse for ApiError {
             ApiError::Control(ControlPlaneError::Failed { reason }) => {
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
             }
+            ApiError::Control(ControlPlaneError::Unsupported { backend, operation }) => (
+                StatusCode::NOT_IMPLEMENTED,
+                Json(json!({ "error": format!("{} backend does not support {}", backend, operation) })),
+            )
+                .into_response(),
             ApiError::KeyValue(KeyValueStoreError::NotFound { key }) => (
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": format!("key '{key}' not found") })),

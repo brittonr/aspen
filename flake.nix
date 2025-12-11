@@ -1,5 +1,5 @@
 {
-  description = "mvm-ci";
+  description = "Aspen - Foundational orchestration layer for distributed systems";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
@@ -36,25 +36,23 @@
     builders = "";
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      crane,
-      flake-utils,
-      advisory-db,
-      rust-overlay,
-      microvm,
-      ...
-    }:
+  outputs = {
+    self,
+    nixpkgs,
+    crane,
+    flake-utils,
+    advisory-db,
+    rust-overlay,
+    microvm,
+    ...
+  }:
     flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pname = "mvm-ci";
+      system: let
+        pname = "aspen";
         lib = nixpkgs.lib;
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [(import rust-overlay)];
         };
 
         rustToolChain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
@@ -199,67 +197,44 @@
         );
 
         # Common arguments can be set here to avoid repeating them later
-        commonArgs = basicArgs // {
-          inherit cargoArtifacts;
+        commonArgs =
+          basicArgs
+          // {
+            inherit cargoArtifacts;
 
-          nativeBuildInputs =
-            basicArgs.nativeBuildInputs
-            ++ (with pkgs; [
-              autoPatchelfHook
-            ]);
+            nativeBuildInputs =
+              basicArgs.nativeBuildInputs
+              ++ (with pkgs; [
+                autoPatchelfHook
+              ]);
 
-          buildInputs =
-            basicArgs.buildInputs
-            ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
-              with pkgs;
-              [
-                darwin.apple_sdk.frameworks.Security
-              ]
-            ));
-        };
+            buildInputs =
+              basicArgs.buildInputs
+              ++ (lib.optionals pkgs.stdenv.buildPlatform.isDarwin (
+                with pkgs; [
+                  darwin.apple_sdk.frameworks.Security
+                ]
+              ));
+          };
 
         # Development-specific arguments with incremental compilation enabled
-        devArgs = commonArgs // {
-          cargoArtifacts = devCargoArtifacts;
-          # Enable incremental compilation
-          CARGO_INCREMENTAL = "1";
-          # Use more aggressive caching
-          CARGO_BUILD_INCREMENTAL = "true";
-        };
-
-        mvm-ci = craneLib.buildPackage (
+        devArgs =
           commonArgs
           // {
-            inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
+            cargoArtifacts = devCargoArtifacts;
+            # Enable incremental compilation
+            CARGO_INCREMENTAL = "1";
+            # Use more aggressive caching
+            CARGO_BUILD_INCREMENTAL = "true";
+          };
+
+        aspen = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
             doCheck = false;
           }
         );
-
-        # Custom Cloud Hypervisor build from vendored source
-        # Optimized for testing with specific features enabled
-        cloud-hypervisor-custom =
-          let
-            src = ./cloud-hypervisor;
-          in
-          craneLib.buildPackage {
-            pname = "cloud-hypervisor-custom";
-            version = "48.0";
-            inherit src;
-
-            buildInputs = with pkgs; [
-              openssl
-            ];
-
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-            ];
-
-            # Enable specific features for testing
-            cargoExtraArgs = "--features kvm,io_uring";
-
-            # Skip tests during build (they require KVM)
-            doCheck = false;
-          };
 
         # Helper script for setting up VM test environment
         vm-test-setup = pkgs.writeShellScriptBin "aspen-vm-setup" ''
@@ -358,62 +333,37 @@
             --api-socket /tmp/ch-node-$NODE_ID.sock
         '';
 
-        bins =
-          let
-            bin =
-              { name }:
-              craneLib.buildPackage (
-                commonArgs
-                // {
-                  inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
-                  cargoExtraArgs = "--bin ${name}";
-                  doCheck = false;
-                }
-              );
-            bins = builtins.listToAttrs (
-              map ({ name, ... }@package: lib.nameValuePair name (bin package)) [
-                {
-                  name = "cibtool";
-                }
-                {
-                  name = "cib";
-                }
-                {
-                  name = "synthetic-events";
-                }
-                {
-                  name = "mvm-ci";
-                }
-                {
-                  name = "worker";
-                }
-                {
-                  name = "aspen-node";
-                }
-                {
-                  name = "aspen-tui";
-                }
-              ]
+        bins = let
+          bin = {name}:
+            craneLib.buildPackage (
+              commonArgs
+              // {
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
+                cargoExtraArgs = "--bin ${name}";
+                doCheck = false;
+              }
             );
-          in
+          bins = builtins.listToAttrs (
+            map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
+              {
+                name = "aspen-node";
+              }
+              {
+                name = "aspen-tui";
+              }
+            ]
+          );
+        in
           bins
           // rec {
-            default = mvm-ci;
-            ci-broker = pkgs.buildEnv {
-              name = "mvm-ci";
-              paths = with bins; [
-                cibtool
-                cib
-                synthetic-events
-              ];
-            };
+            default = bins.aspen-node;
 
             # Development builds with incremental compilation enabled
             # Use these for faster iteration during development
             dev-aspen-node = craneLib.buildPackage (
               devArgs
               // {
-                inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                 cargoExtraArgs = "--bin aspen-node";
                 doCheck = false;
               }
@@ -422,7 +372,7 @@
             dev-aspen-tui = craneLib.buildPackage (
               devArgs
               // {
-                inherit (craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; }) pname version;
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                 cargoExtraArgs = "--bin aspen-tui";
                 doCheck = false;
               }
@@ -431,159 +381,21 @@
             # Convenience alias for the most commonly used dev build
             dev = dev-aspen-node;
           };
-      in
-      {
-        # Formatter
-        formatter = pkgs.alejandra;
-
-        # Set of checks that are run: `nix flake check`
-        checks = {
-          # Run clippy (and deny all warnings) on the crate source,
-          # again, reusing the dependency artifacts from above.
-          #
-          # Note that this is done as a separate derivation so that
-          # we can block the CI if there are issues here, but not
-          # prevent downstream consumers from building our crate by itself.
-          clippy = craneLib.cargoClippy (
-            commonArgs
-            // {
-              cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-            }
-          );
-
-          doc = craneLib.cargoDoc commonArgs;
-          fmt = craneLib.cargoFmt basicArgs;
-          deny = craneLib.cargoDeny commonArgs;
-
-          audit = craneLib.cargoAudit {
-            inherit src advisory-db;
-          };
-
-          # NixOS cluster integration test (x86_64-linux only)
-          # Run with: nix build .#checks.x86_64-linux.cluster-test
-        }
-        // (
-          if system == "x86_64-linux" then
-            {
-              cluster-test = import ./nix/checks/cluster-test.nix {
-                inherit self nixpkgs system;
-              };
-            }
-          else
-            { }
-        )
-        // {
-          # Run tests with cargo-nextest
-          nextest = craneLib.cargoNextest (
-            commonArgs
-            // {
-              # We skip the test since it uses the underlying .git directory,
-              # which is not available in the Nix sandbox.
-              # In any case, this test is slow and we expect it to be tested
-              # before merges (and it can be tested in the devShell)
-              cargoNextestExtraArgs = "-- --skip acceptance_criteria_for_upgrades";
-              partitions = 1;
-              partitionType = "count";
-              nativeBuildInputs = [
-                pkgs.bash
-                pkgs.git
-                pkgs.jq
-                pkgs.sqlite
-              ];
-
-              # Ensure dev is used since we rely on env variables being
-              # set in tests.
-              env.CARGO_PROFILE = "dev";
-
-              # Collect simulation artifacts if tests fail
-              postInstall = ''
-                if [ -d docs/simulations ]; then
-                  mkdir -p $out/simulations
-                  cp -r docs/simulations/*.json $out/simulations/ 2>/dev/null || true
-                  if [ -n "$(ls -A $out/simulations 2>/dev/null)" ]; then
-                    echo "Simulation artifacts collected in $out/simulations"
-                  fi
-                fi
-              '';
-            }
-          );
-
-          # Integration tests with flawless server
-          # Run with: nix run .#integration-tests
-          # Or check with: nix flake check -L
-          integration-tests = pkgs.stdenv.mkDerivation {
-            name = "mvm-ci-integration-tests";
-            src = ./.;
-
-            nativeBuildInputs = [
-              rustToolChain
-              flawless
-              pkgs.bash
-              pkgs.curl
-              pkgs.git
-              pkgs.jq
-              pkgs.sqlite
-              pkgs.pkg-config
-              pkgs.openssl.dev
-              pkgs.protobuf
-            ];
-
-            buildInputs = [
-              pkgs.openssl
-            ];
-
-            # Required environment variables
-            env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
-            env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
-
-            # Disable sandbox for network access (flawless server needs it)
-            __noChroot = true;
-
-            buildPhase = ''
-              export HOME=$TMPDIR
-              export CARGO_HOME=$TMPDIR/.cargo
-              mkdir -p $CARGO_HOME
-
-              echo "Building project for tests..."
-              cargo build --tests
-            '';
-
-            checkPhase = ''
-              echo "Running integration test script..."
-              bash ${./scripts/run-integration-tests.sh}
-            '';
-
-            installPhase = ''
-              mkdir -p $out
-              echo "Integration tests passed" > $out/result
-            '';
-
-            doCheck = true;
-          };
-        };
-
-        packages.default = bins.aspen-node;
-        packages.aspen-node = bins.aspen-node;
-        packages.aspen-tui = bins.aspen-tui;
-        packages.netwatch = netwatch;
-        packages.cloud-hypervisor-custom = cloud-hypervisor-custom;
-        packages.vm-test-setup = vm-test-setup;
-        packages.vm-test-run = vm-test-run;
 
         # Docker image for cluster testing (using streamLayeredImage for better caching)
-        packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
-          name = "mvm-ci-cluster";
+        dockerImage = pkgs.dockerTools.streamLayeredImage {
+          name = "aspen-cluster";
           tag = "latest";
 
           contents = [
-            mvm-ci
+            aspen
             flawless
             pkgs.bash
             pkgs.coreutils
             pkgs.gettext # for envsubst
             pkgs.cacert
             # Add entrypoint scripts and config template
-            (pkgs.runCommand "mvm-ci-extras" { } ''
+            (pkgs.runCommand "aspen-extras" {} ''
               mkdir -p $out/bin $out/etc
               cp ${./docker-entrypoint.sh} $out/bin/docker-entrypoint.sh
               cp ${./worker-entrypoint.sh} $out/bin/worker-entrypoint.sh
@@ -602,192 +414,268 @@
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
             ExposedPorts = {
-              "3020/tcp" = { };
-              "9000/tcp" = { };
-              "9001/tcp" = { };
-              "27288/tcp" = { };
+              "3020/tcp" = {};
+              "9000/tcp" = {};
+              "9001/tcp" = {};
+              "27288/tcp" = {};
             };
             WorkingDir = "/";
           };
         };
+      in
+        {
+          # Formatter
+          formatter = pkgs.alejandra;
 
-        apps.cibtool = flake-utils.lib.mkApp {
-          drv = self.bins.${system}.cibtool;
-        };
+          # Set of checks that are run: `nix flake check`
+          checks =
+            {
+              # Run clippy (and deny all warnings) on the crate source,
+              # again, reusing the dependency artifacts from above.
+              #
+              # Note that this is done as a separate derivation so that
+              # we can block the CI if there are issues here, but not
+              # prevent downstream consumers from building our crate by itself.
+              clippy = craneLib.cargoClippy (
+                commonArgs
+                // {
+                  cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+                }
+              );
 
-        apps.cib = flake-utils.lib.mkApp {
-          drv = self.bins.${system}.cib;
-        };
+              doc = craneLib.cargoDoc commonArgs;
+              fmt = craneLib.cargoFmt basicArgs;
+              deny = craneLib.cargoDeny commonArgs;
 
-        apps.synthetic-events = flake-utils.lib.mkApp {
-          drv = self.bins.${system}.synthetic-events;
-        };
+              audit = craneLib.cargoAudit {
+                inherit src advisory-db;
+              };
 
-        apps.aspen-node = flake-utils.lib.mkApp {
-          drv = bins.aspen-node;
-          exePath = "/bin/aspen-node";
-        };
+              # NixOS cluster integration test (x86_64-linux only)
+              # Run with: nix build .#checks.x86_64-linux.cluster-test
+            }
+            // (
+              if system == "x86_64-linux"
+              then {
+                cluster-test = import ./nix/checks/cluster-test.nix {
+                  inherit self nixpkgs system;
+                };
+              }
+              else {}
+            )
+            // {
+              # Run tests with cargo-nextest
+              nextest = craneLib.cargoNextest (
+                commonArgs
+                // {
+                  # We skip the test since it uses the underlying .git directory,
+                  # which is not available in the Nix sandbox.
+                  # In any case, this test is slow and we expect it to be tested
+                  # before merges (and it can be tested in the devShell)
+                  cargoNextestExtraArgs = "-- --skip acceptance_criteria_for_upgrades";
+                  partitions = 1;
+                  partitionType = "count";
+                  nativeBuildInputs = [
+                    pkgs.bash
+                    pkgs.git
+                    pkgs.jq
+                    pkgs.sqlite
+                  ];
 
-        apps.aspen-tui = flake-utils.lib.mkApp {
-          drv = bins.aspen-tui;
-          exePath = "/bin/aspen-tui";
-        };
+                  # Ensure dev is used since we rely on env variables being
+                  # set in tests.
+                  env.CARGO_PROFILE = "dev";
 
-        # 3-node cluster launcher
-        # Usage: nix run .#cluster
-        # Environment variables:
-        #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
-        #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
-        #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: inmemory)
-        apps.cluster = {
-          type = "app";
-          program = "${pkgs.writeShellScript "aspen-cluster" ''
-            export PATH="${
-              pkgs.lib.makeBinPath [
-                bins.aspen-node
-                pkgs.bash
-                pkgs.coreutils
-                pkgs.curl
-                pkgs.netcat
-                pkgs.gnugrep
-              ]
-            }:$PATH"
-            export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-            exec ${./scripts/cluster.sh} "$@"
-          ''}";
-        };
-
-        apps.default = self.apps.${system}.aspen-node;
-
-        # Integration tests app - starts flawless server and runs tests
-        apps.integration-tests = {
-          type = "app";
-          program = "${pkgs.writeShellScript "run-integration-tests" ''
-            export PATH="${
-              pkgs.lib.makeBinPath [
-                rustToolChain
-                flawless
-                pkgs.bash
-                pkgs.curl
-                pkgs.coreutils
-                pkgs.cargo-nextest
-              ]
-            }:$PATH"
-            export SNIX_BUILD_SANDBOX_SHELL="${pkgs.busybox}/bin/sh"
-
-            echo "Running integration tests with flawless server..."
-            exec ${./scripts/run-integration-tests.sh}
-          ''}";
-        };
-
-        # VM-based cluster testing apps (x86_64-linux only)
-        # These use Cloud Hypervisor microVMs for true network isolation testing
-      }
-      // (
-        if system == "x86_64-linux" then
-          let
-            testCluster = import ./nix/test-cluster.nix {
-              inherit
-                self
-                nixpkgs
-                microvm
-                system
-                ;
+                  # Collect simulation artifacts if tests fail
+                  postInstall = ''
+                    if [ -d docs/simulations ]; then
+                      mkdir -p $out/simulations
+                      cp -r docs/simulations/*.json $out/simulations/ 2>/dev/null || true
+                      if [ -n "$(ls -A $out/simulations 2>/dev/null)" ]; then
+                        echo "Simulation artifacts collected in $out/simulations"
+                      fi
+                    fi
+                  '';
+                }
+              );
             };
-          in
-          {
-            apps.vm-cluster = testCluster.apps.launch-cluster;
-            apps.vm-setup-network = testCluster.apps.setup-network;
-            apps.vm-teardown-network = testCluster.apps.teardown-network;
-            apps.vm-inject-partition = testCluster.apps.inject-partition;
-            apps.vm-heal-partition = testCluster.apps.heal-partition;
 
-            packages.vm-cluster = testCluster.packages.vm-cluster;
+          # Base apps available on all systems
+          apps =
+            {
+              aspen-node = flake-utils.lib.mkApp {
+                drv = bins.aspen-node;
+                exePath = "/bin/aspen-node";
+              };
+
+              aspen-tui = flake-utils.lib.mkApp {
+                drv = bins.aspen-tui;
+                exePath = "/bin/aspen-tui";
+              };
+
+              # 3-node cluster launcher
+              # Usage: nix run .#cluster
+              # Environment variables:
+              #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
+              #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
+              #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: inmemory)
+              cluster = {
+                type = "app";
+                program = "${pkgs.writeShellScript "aspen-cluster" ''
+                  export PATH="${
+                    pkgs.lib.makeBinPath [
+                      bins.aspen-node
+                      pkgs.bash
+                      pkgs.coreutils
+                      pkgs.curl
+                      pkgs.netcat
+                      pkgs.gnugrep
+                    ]
+                  }:$PATH"
+                  export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                  exec ${./scripts/cluster.sh} "$@"
+                ''}";
+              };
+
+              default = self.apps.${system}.aspen-node;
+            }
+            // (
+              if system == "x86_64-linux"
+              then let
+                testCluster = import ./nix/test-cluster.nix {
+                  inherit
+                    self
+                    nixpkgs
+                    microvm
+                    system
+                    ;
+                };
+              in {
+                vm-cluster = testCluster.apps.launch-cluster;
+                vm-setup-network = testCluster.apps.setup-network;
+                vm-teardown-network = testCluster.apps.teardown-network;
+                vm-inject-partition = testCluster.apps.inject-partition;
+                vm-heal-partition = testCluster.apps.heal-partition;
+              }
+              else {}
+            );
+
+          # VM-based cluster testing apps (x86_64-linux only)
+          # These use Cloud Hypervisor microVMs for true network isolation testing
+        }
+        // (
+          let
+            # Base packages available on all systems
+            basePackages = {
+              default = bins.aspen-node;
+              aspen-node = bins.aspen-node;
+              aspen-tui = bins.aspen-tui;
+              netwatch = netwatch;
+              vm-test-setup = vm-test-setup;
+              vm-test-run = vm-test-run;
+            };
+          in {
+            # Packages exposed by the flake
+            packages =
+              basePackages
+              // (
+                if system == "x86_64-linux"
+                then let
+                  testCluster = import ./nix/test-cluster.nix {
+                    inherit
+                      self
+                      nixpkgs
+                      microvm
+                      system
+                      ;
+                  };
+                in {
+                  vm-cluster = testCluster.packages.vm-cluster;
+                }
+                else {}
+              );
           }
-        else
-          { }
-      )
-      // {
-        devShells.default = craneLib.devShell {
-          # Extra inputs can be added here; cargo and rustc are provided by default.
-          packages =
-            with pkgs;
-            [
-              flawless
-              netwatch
-              litefs # Transparent SQLite replication via FUSE filesystem
-              bash
-              coreutils
-              cargo-watch
-              cargo-nextest
-              git
-              jq
-              ripgrep
-              rust-analyzer
-              sqlite
-              pkg-config
-              openssl.dev
-              codex
-              lld # Linker for WASM targets
-              protobuf # Protocol Buffers compiler for snix crates
-              # Pre-commit and quality tools
-              pre-commit
-              shellcheck
-              nodePackages.markdownlint-cli
-              # Optional: sccache for additional caching
-              sccache
-              # Cloud Hypervisor for VM-based testing
-              cloud-hypervisor
-              OVMF # UEFI firmware for Cloud Hypervisor
-              # Helper tools for VM management
-              bridge-utils # For network bridge management
-              iproute2 # For ip commands (TAP devices)
-              qemu-utils # For qemu-img disk operations
-            ]
-            ++ [
-              # Add our custom helper scripts to devShell
-              vm-test-setup
-              vm-test-run
-            ];
+        )
+        // {
+          devShells.default = craneLib.devShell {
+            # Extra inputs can be added here; cargo and rustc are provided by default.
+            packages = with pkgs;
+              [
+                flawless
+                netwatch
+                litefs # Transparent SQLite replication via FUSE filesystem
+                bash
+                coreutils
+                cargo-watch
+                cargo-nextest
+                git
+                jq
+                ripgrep
+                rust-analyzer
+                sqlite
+                pkg-config
+                openssl.dev
+                codex
+                lld # Linker for WASM targets
+                protobuf # Protocol Buffers compiler for snix crates
+                # Pre-commit and quality tools
+                pre-commit
+                shellcheck
+                nodePackages.markdownlint-cli
+                # Optional: sccache for additional caching
+                sccache
+                # Cloud Hypervisor for VM-based testing
+                cloud-hypervisor
+                OVMF # UEFI firmware for Cloud Hypervisor
+                # Helper tools for VM management
+                bridge-utils # For network bridge management
+                iproute2 # For ip commands (TAP devices)
+                qemu-utils # For qemu-img disk operations
+              ]
+              ++ [
+                # Add our custom helper scripts to devShell
+                vm-test-setup
+                vm-test-run
+              ];
 
-          env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
-          env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+            env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
+            env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
 
-          # Incremental compilation settings for faster rebuilds
-          env.CARGO_INCREMENTAL = "1";
-          env.CARGO_BUILD_INCREMENTAL = "true";
+            # Incremental compilation settings for faster rebuilds
+            env.CARGO_INCREMENTAL = "1";
+            env.CARGO_BUILD_INCREMENTAL = "true";
 
-          # Optional: Use sccache if available
-          # Uncomment to enable sccache globally in dev shell
-          # env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+            # Optional: Use sccache if available
+            # Uncomment to enable sccache globally in dev shell
+            # env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
 
-          # Configure cargo to use a shared target directory for better caching
-          # This prevents duplicate builds when switching between nix develop and direct cargo commands
-          env.CARGO_TARGET_DIR = "target";
+            # Configure cargo to use a shared target directory for better caching
+            # This prevents duplicate builds when switching between nix develop and direct cargo commands
+            env.CARGO_TARGET_DIR = "target";
 
-          # Enable cargo's new resolver for better dependency resolution
-          env.CARGO_RESOLVER = "2";
+            # Enable cargo's new resolver for better dependency resolution
+            env.CARGO_RESOLVER = "2";
 
-          # Cloud Hypervisor environment variables
-          env.CH_KERNEL = "${pkgs.linuxPackages.kernel}/bzImage";
-          env.CH_FIRMWARE = "${pkgs.OVMF.fd}/FV/OVMF.fd";
+            # Cloud Hypervisor environment variables
+            env.CH_KERNEL = "${pkgs.linuxPackages.kernel}/bzImage";
+            env.CH_FIRMWARE = "${pkgs.OVMF.fd}/FV/OVMF.fd";
 
-          shellHook = ''
-            echo "Incremental builds enabled for faster iteration"
-            echo "   - Use 'nix build .#dev-aspen-node' for incremental Nix builds"
-            echo "   - Use 'cargo build' in this shell for local incremental compilation"
-            echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
-            echo ""
-            echo "Cloud Hypervisor VM testing available:"
-            echo "   - Run 'aspen-vm-setup' to configure network bridges and TAP devices"
-            echo "   - Run 'aspen-vm-run <node-id>' to launch a test VM"
-            echo "   - Run 'cloud-hypervisor --version' to check Cloud Hypervisor"
-            echo "   - Custom build: 'nix build .#cloud-hypervisor-custom' (from vendored source)"
-            echo ""
-            echo "Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
-          '';
-        };
-      }
+            shellHook = ''
+              echo "Incremental builds enabled for faster iteration"
+              echo "   - Use 'nix build .#dev-aspen-node' for incremental Nix builds"
+              echo "   - Use 'cargo build' in this shell for local incremental compilation"
+              echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
+              echo ""
+              echo "Cloud Hypervisor VM testing available:"
+              echo "   - Run 'aspen-vm-setup' to configure network bridges and TAP devices"
+              echo "   - Run 'aspen-vm-run <node-id>' to launch a test VM"
+              echo "   - Run 'cloud-hypervisor --version' to check Cloud Hypervisor"
+              echo "   - Custom build: 'nix build .#cloud-hypervisor-custom' (from vendored source)"
+              echo ""
+              echo "Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
+            '';
+          };
+        }
     )
     // {
       # NixOS modules (system-independent)
@@ -801,24 +689,22 @@
 
       # MicroVM configurations for testing clusters
       # These are Linux-only configurations using Cloud Hypervisor
-      nixosConfigurations =
-        let
-          # Helper to create an Aspen node microVM configuration
-          makeAspenMicrovm =
-            {
-              nodeId,
-              httpPort,
-              ractorPort,
-              macAddress,
-              system ? "x86_64-linux",
-              additionalModules ? [ ],
-            }:
-            let
-              pkgs = import nixpkgs { inherit system; };
-            in
-            nixpkgs.lib.nixosSystem {
-              inherit system;
-              modules = [
+      nixosConfigurations = let
+        # Helper to create an Aspen node microVM configuration
+        makeAspenMicrovm = {
+          nodeId,
+          httpPort,
+          ractorPort,
+          macAddress,
+          system ? "x86_64-linux",
+          additionalModules ? [],
+        }: let
+          pkgs = import nixpkgs {inherit system;};
+        in
+          nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules =
+              [
                 microvm.nixosModules.microvm
                 self.nixosModules.aspen-node
                 (
@@ -826,8 +712,7 @@
                     lib,
                     config,
                     ...
-                  }:
-                  {
+                  }: {
                     system.stateVersion = lib.trivial.release;
 
                     # Basic system configuration
@@ -929,31 +814,30 @@
                 )
               ]
               ++ additionalModules;
-            };
-        in
-        {
-          # 3-node test cluster configurations
-          "x86_64-linux-aspen-node-1" = makeAspenMicrovm {
-            nodeId = 1;
-            httpPort = 8301;
-            ractorPort = 26001;
-            macAddress = "02:00:00:01:01:01";
           };
-
-          "x86_64-linux-aspen-node-2" = makeAspenMicrovm {
-            nodeId = 2;
-            httpPort = 8302;
-            ractorPort = 26002;
-            macAddress = "02:00:00:01:01:02";
-          };
-
-          "x86_64-linux-aspen-node-3" = makeAspenMicrovm {
-            nodeId = 3;
-            httpPort = 8303;
-            ractorPort = 26003;
-            macAddress = "02:00:00:01:01:03";
-          };
+      in {
+        # 3-node test cluster configurations
+        "x86_64-linux-aspen-node-1" = makeAspenMicrovm {
+          nodeId = 1;
+          httpPort = 8301;
+          ractorPort = 26001;
+          macAddress = "02:00:00:01:01:01";
         };
+
+        "x86_64-linux-aspen-node-2" = makeAspenMicrovm {
+          nodeId = 2;
+          httpPort = 8302;
+          ractorPort = 26002;
+          macAddress = "02:00:00:01:01:02";
+        };
+
+        "x86_64-linux-aspen-node-3" = makeAspenMicrovm {
+          nodeId = 3;
+          httpPort = 8303;
+          ractorPort = 26003;
+          macAddress = "02:00:00:01:01:03";
+        };
+      };
 
       # Overlay for microvm packages
       overlays.microvm = final: prev: {
