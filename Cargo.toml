@@ -12,6 +12,9 @@ path = "src/bin/aspen-tui/main.rs"
 name = "aspen-s3"
 path = "src/bin/aspen-s3.rs"
 
+[workspace]
+members = [".", "scripts/tutorial-verify"]
+
 [dependencies]
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
@@ -78,6 +81,7 @@ crossterm = { version = "0.28", features = ["event-stream"] }
 color-eyre = "0.6"
 tui-logger = { version = "0.13", features = ["tracing-support"] }
 log = "0.4"
+mime = "0.3.17"
 
 [dev-dependencies]
 proptest = "1.0"

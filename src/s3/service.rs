@@ -1,20 +1,50 @@
 /// S3 service implementation for Aspen.
 ///
 /// Maps S3 operations to Aspen's distributed key-value store.
-use crate::api::KeyValueStore;
+use crate::api::{
+    DeleteRequest, KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest,
+};
 use crate::s3::constants::*;
 use crate::s3::error::{S3Error, S3Result};
+use crate::s3::metadata::{BucketMetadata, ObjectMetadata};
 use async_trait::async_trait;
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use futures::stream;
+use futures::TryStreamExt;
 use s3s::dto::*;
 use s3s::s3_error;
-use s3s::{S3, S3Request, S3Response};
+use s3s::{S3Request, S3Response, S3};
 use std::sync::Arc;
-use tracing::{debug, info};
+use std::time::SystemTime;
+use tracing::{debug, info, warn};
+
+/// Convert chrono DateTime to s3s Timestamp.
+fn chrono_to_timestamp(dt: DateTime<Utc>) -> Timestamp {
+    // Convert to SystemTime
+    let duration = dt.timestamp() as u64;
+    let nanos = dt.timestamp_subsec_nanos();
+    let system_time = SystemTime::UNIX_EPOCH + std::time::Duration::new(duration, nanos);
+    Timestamp::from(system_time)
+}
+
+/// Parse a content type string into a ContentType.
+fn parse_content_type(s: &str) -> Option<ContentType> {
+    // ContentType wraps mime::Mime, parse the string as a Mime type
+    s.parse::<mime::Mime>().ok().map(ContentType::from)
+}
+
+/// Create a streaming blob from bytes.
+fn bytes_to_streaming_blob(data: Vec<u8>) -> StreamingBlob {
+    let bytes = Bytes::from(data);
+    // Create a stream that yields one chunk
+    let data_stream = stream::once(async move { Ok::<_, std::io::Error>(bytes) });
+    StreamingBlob::wrap(data_stream)
+}
 
 /// S3 service implementation backed by Aspen's KV store.
 pub struct AspenS3Service {
     /// The underlying key-value store (Raft-backed).
-    #[allow(dead_code)]
     kv_store: Arc<dyn KeyValueStore>,
 
     /// Node ID for this S3 service instance.
@@ -29,13 +59,11 @@ impl AspenS3Service {
     }
 
     /// Generate a vault name for an S3 bucket.
-    #[allow(dead_code)]
     fn bucket_vault_name(bucket: &str) -> String {
         format!("{}:{}", S3_VAULT_PREFIX, bucket)
     }
 
     /// Generate a metadata key for a bucket.
-    #[allow(dead_code)]
     fn bucket_metadata_key(bucket: &str) -> String {
         format!(
             "vault:{}:{}:{}",
@@ -44,7 +72,6 @@ impl AspenS3Service {
     }
 
     /// Generate a metadata key for an object.
-    #[allow(dead_code)]
     fn object_metadata_key(bucket: &str, key: &str) -> String {
         format!(
             "vault:{}:{}:{}:{}",
@@ -53,7 +80,6 @@ impl AspenS3Service {
     }
 
     /// Generate a data key for an object (non-chunked).
-    #[allow(dead_code)]
     fn object_data_key(bucket: &str, key: &str) -> String {
         format!(
             "vault:{}:{}:{}:{}",
@@ -62,7 +88,6 @@ impl AspenS3Service {
     }
 
     /// Generate a data key for an object chunk.
-    #[allow(dead_code)]
     fn object_chunk_key(bucket: &str, key: &str, chunk_index: u32) -> String {
         format!(
             "vault:{}:{}:{}:{}:{}:{}",
@@ -131,7 +156,6 @@ impl AspenS3Service {
     }
 
     /// Infer content type from file extension.
-    #[allow(dead_code)]
     fn infer_content_type(key: &str) -> String {
         let extension = key.rsplit('.').next().unwrap_or("").to_lowercase();
 
@@ -154,6 +178,280 @@ impl AspenS3Service {
         }
         .to_string()
     }
+
+    /// Check if a bucket exists by reading its metadata.
+    async fn bucket_exists(&self, bucket: &str) -> Result<bool, KeyValueStoreError> {
+        let key = Self::bucket_metadata_key(bucket);
+        match self.kv_store.read(ReadRequest { key }).await {
+            Ok(_) => Ok(true),
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get bucket metadata.
+    async fn get_bucket_metadata(
+        &self,
+        bucket: &str,
+    ) -> Result<Option<BucketMetadata>, KeyValueStoreError> {
+        let key = Self::bucket_metadata_key(bucket);
+        match self.kv_store.read(ReadRequest { key }).await {
+            Ok(result) => {
+                let meta: BucketMetadata =
+                    serde_json::from_str(&result.value).map_err(|e| KeyValueStoreError::Failed {
+                        reason: format!("Failed to deserialize bucket metadata: {}", e),
+                    })?;
+                Ok(Some(meta))
+            }
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Calculate MD5 hash and return as ETag.
+    fn calculate_etag(data: &[u8]) -> String {
+        let digest = md5::compute(data);
+        format!("\"{}\"", hex::encode(digest.as_ref()))
+    }
+
+    /// Store object metadata.
+    async fn store_object_metadata(
+        &self,
+        bucket: &str,
+        key: &str,
+        metadata: &ObjectMetadata,
+    ) -> Result<(), KeyValueStoreError> {
+        let meta_key = Self::object_metadata_key(bucket, key);
+        let meta_value = serde_json::to_string(metadata).map_err(|e| KeyValueStoreError::Failed {
+            reason: format!("Failed to serialize object metadata: {}", e),
+        })?;
+
+        self.kv_store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: meta_key,
+                    value: meta_value,
+                },
+            })
+            .await?;
+
+        Ok(())
+    }
+
+    /// Get object metadata.
+    async fn get_object_metadata(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> Result<Option<ObjectMetadata>, KeyValueStoreError> {
+        let meta_key = Self::object_metadata_key(bucket, key);
+        match self.kv_store.read(ReadRequest { key: meta_key }).await {
+            Ok(result) => {
+                let meta: ObjectMetadata = serde_json::from_str(&result.value).map_err(|e| {
+                    KeyValueStoreError::Failed {
+                        reason: format!("Failed to deserialize object metadata: {}", e),
+                    }
+                })?;
+                Ok(Some(meta))
+            }
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Store a small object (non-chunked) directly.
+    async fn store_simple_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        data: &[u8],
+        content_type: Option<String>,
+    ) -> Result<ObjectMetadata, KeyValueStoreError> {
+        let data_key = Self::object_data_key(bucket, key);
+
+        // Encode data as base64 for safe storage
+        let encoded_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
+
+        // Store the data
+        self.kv_store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: data_key,
+                    value: encoded_data,
+                },
+            })
+            .await?;
+
+        // Calculate ETag
+        let etag = Self::calculate_etag(data);
+
+        // Determine content type
+        let content_type = content_type.unwrap_or_else(|| Self::infer_content_type(key));
+
+        // Create and store metadata
+        let metadata = ObjectMetadata::new_simple(data.len() as u64, etag, content_type);
+        self.store_object_metadata(bucket, key, &metadata).await?;
+
+        Ok(metadata)
+    }
+
+    /// Store a large object using chunking.
+    async fn store_chunked_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        data: &[u8],
+        content_type: Option<String>,
+    ) -> Result<ObjectMetadata, KeyValueStoreError> {
+        let chunk_size = S3_CHUNK_SIZE_BYTES as usize;
+        let total_size = data.len();
+        let chunk_count = ((total_size + chunk_size - 1) / chunk_size) as u32;
+
+        // Validate chunk count doesn't exceed limit
+        if chunk_count > MAX_CHUNKS_PER_OBJECT {
+            return Err(KeyValueStoreError::Failed {
+                reason: format!(
+                    "Object would require {} chunks, exceeding maximum of {}",
+                    chunk_count, MAX_CHUNKS_PER_OBJECT
+                ),
+            });
+        }
+
+        // Store each chunk
+        for i in 0..chunk_count {
+            let start = (i as usize) * chunk_size;
+            let end = std::cmp::min(start + chunk_size, total_size);
+            let chunk_data = &data[start..end];
+
+            let chunk_key = Self::object_chunk_key(bucket, key, i);
+            let encoded_chunk =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, chunk_data);
+
+            self.kv_store
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: chunk_key,
+                        value: encoded_chunk,
+                    },
+                })
+                .await?;
+        }
+
+        // Calculate ETag (for chunked objects, we still hash the whole thing)
+        let etag = Self::calculate_etag(data);
+
+        // Determine content type
+        let content_type = content_type.unwrap_or_else(|| Self::infer_content_type(key));
+
+        // Create and store metadata
+        let metadata = ObjectMetadata::new_chunked(
+            total_size as u64,
+            etag,
+            content_type,
+            chunk_count,
+            S3_CHUNK_SIZE_BYTES,
+        );
+        self.store_object_metadata(bucket, key, &metadata).await?;
+
+        Ok(metadata)
+    }
+
+    /// Retrieve a simple (non-chunked) object.
+    async fn get_simple_object(&self, bucket: &str, key: &str) -> Result<Vec<u8>, S3Error> {
+        let data_key = Self::object_data_key(bucket, key);
+
+        let result = self
+            .kv_store
+            .read(ReadRequest { key: data_key })
+            .await
+            .map_err(|e| match e {
+                KeyValueStoreError::NotFound { .. } => S3Error::ObjectNotFound {
+                    bucket: bucket.to_string(),
+                    key: key.to_string(),
+                },
+                _ => S3Error::StorageError {
+                    source: anyhow::anyhow!("{}", e),
+                },
+            })?;
+
+        // Decode from base64
+        let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &result.value)
+            .map_err(|e| S3Error::StorageError {
+                source: anyhow::anyhow!("Failed to decode object data: {}", e),
+            })?;
+
+        Ok(data)
+    }
+
+    /// Retrieve a chunked object.
+    async fn get_chunked_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        metadata: &ObjectMetadata,
+    ) -> Result<Vec<u8>, S3Error> {
+        let mut data = Vec::with_capacity(metadata.size_bytes as usize);
+
+        for i in 0..metadata.chunk_count {
+            let chunk_key = Self::object_chunk_key(bucket, key, i);
+
+            let result = self
+                .kv_store
+                .read(ReadRequest { key: chunk_key })
+                .await
+                .map_err(|e| S3Error::ChunkingError {
+                    key: key.to_string(),
+                    reason: format!("Failed to read chunk {}: {}", i, e),
+                })?;
+
+            // Decode from base64
+            let chunk_data =
+                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &result.value)
+                    .map_err(|e| S3Error::ChunkingError {
+                        key: key.to_string(),
+                        reason: format!("Failed to decode chunk {}: {}", i, e),
+                    })?;
+
+            data.extend_from_slice(&chunk_data);
+        }
+
+        Ok(data)
+    }
+
+    /// Delete all chunks and metadata for an object.
+    async fn delete_object_data(&self, bucket: &str, key: &str) -> Result<bool, S3Error> {
+        // First check if object exists and get its metadata
+        let metadata = match self.get_object_metadata(bucket, key).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return Ok(false), // Object doesn't exist
+            Err(e) => {
+                return Err(S3Error::StorageError {
+                    source: anyhow::anyhow!("{}", e),
+                })
+            }
+        };
+
+        // Delete chunks if object is chunked
+        if metadata.is_chunked() {
+            for i in 0..metadata.chunk_count {
+                let chunk_key = Self::object_chunk_key(bucket, key, i);
+                let _ = self
+                    .kv_store
+                    .delete(DeleteRequest { key: chunk_key })
+                    .await;
+            }
+        } else {
+            // Delete simple object data
+            let data_key = Self::object_data_key(bucket, key);
+            let _ = self.kv_store.delete(DeleteRequest { key: data_key }).await;
+        }
+
+        // Delete metadata
+        let meta_key = Self::object_metadata_key(bucket, key);
+        let _ = self.kv_store.delete(DeleteRequest { key: meta_key }).await;
+
+        Ok(true)
+    }
 }
 
 /// S3 trait implementation.
@@ -170,8 +468,8 @@ impl S3 for AspenS3Service {
     ) -> s3s::S3Result<S3Response<ListBucketsOutput>> {
         debug!("S3 ListBuckets request");
 
-        // TODO: Implement bucket listing
-        // For now, return empty list
+        // TODO: Implement proper bucket listing by scanning keys with vault prefix
+        // For now, return empty list since we don't have scan implemented yet
         Ok(S3Response::new(ListBucketsOutput {
             buckets: Some(vec![]),
             owner: Some(Owner {
@@ -193,9 +491,39 @@ impl S3 for AspenS3Service {
         // Validate bucket name
         Self::validate_bucket_name(bucket).map_err(|e| s3_error!(InvalidBucketName, "{}", e))?;
 
-        // TODO: Check if bucket exists and create it
-        // For now, return success
+        // Check if bucket already exists
+        match self.bucket_exists(bucket).await {
+            Ok(true) => {
+                return Err(s3_error!(
+                    BucketAlreadyExists,
+                    "Bucket '{}' already exists",
+                    bucket
+                ));
+            }
+            Ok(false) => {}
+            Err(e) => {
+                warn!("Failed to check bucket existence: {}", e);
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
+        // Create bucket metadata
+        let metadata = BucketMetadata::new(bucket.to_string());
+        let meta_key = Self::bucket_metadata_key(bucket);
+        let meta_value = serde_json::to_string(&metadata)
+            .map_err(|e| s3_error!(InternalError, "Failed to serialize metadata: {}", e))?;
+
+        self.kv_store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: meta_key,
+                    value: meta_value,
+                },
+            })
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to create bucket: {}", e))?;
+
+        info!("Created bucket '{}'", bucket);
         Ok(S3Response::new(CreateBucketOutput {
             location: Some(format!("/{}", bucket)),
         }))
@@ -208,9 +536,27 @@ impl S3 for AspenS3Service {
         let bucket = req.input.bucket.as_str();
         info!("S3 DeleteBucket request for bucket '{}'", bucket);
 
-        // TODO: Check if bucket exists and is empty, then delete
-        // For now, return success
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
+        // TODO: Check if bucket is empty (requires scan implementation)
+        // For now, just delete the bucket metadata
+
+        let meta_key = Self::bucket_metadata_key(bucket);
+        self.kv_store
+            .delete(DeleteRequest { key: meta_key })
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to delete bucket: {}", e))?;
+
+        info!("Deleted bucket '{}'", bucket);
         Ok(S3Response::new(DeleteBucketOutput {}))
     }
 
@@ -221,13 +567,14 @@ impl S3 for AspenS3Service {
         let bucket = req.input.bucket.as_str();
         debug!("S3 HeadBucket request for bucket '{}'", bucket);
 
-        // TODO: Check if bucket exists
-        // For now, return success
-
-        Ok(S3Response::new(HeadBucketOutput {
-            bucket_region: Some("us-east-1".to_string()),
-            ..Default::default()
-        }))
+        match self.bucket_exists(bucket).await {
+            Ok(true) => Ok(S3Response::new(HeadBucketOutput {
+                bucket_region: Some("us-east-1".to_string()),
+                ..Default::default()
+            })),
+            Ok(false) => Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket)),
+            Err(e) => Err(s3_error!(InternalError, "Failed to check bucket: {}", e)),
+        }
     }
 
     // ===== Object Operations =====
@@ -244,11 +591,74 @@ impl S3 for AspenS3Service {
         Self::validate_object_key(key)
             .map_err(|e| s3_error!(InvalidArgument, "Invalid object key: {}", e))?;
 
-        // TODO: Read body, check size, store object
-        // For now, return dummy ETag
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
+
+        // Read body data
+        let body = match req.input.body {
+            Some(stream) => {
+                let bytes: Vec<u8> = stream
+                    .try_fold(Vec::new(), |mut acc, chunk| async move {
+                        acc.extend_from_slice(&chunk);
+                        Ok(acc)
+                    })
+                    .await
+                    .map_err(|e| {
+                        s3_error!(InternalError, "Failed to read request body: {:?}", e)
+                    })?;
+                bytes
+            }
+            None => Vec::new(),
+        };
+
+        // Check size limit
+        if body.len() as u64 > MAX_S3_OBJECT_SIZE_BYTES {
+            return Err(s3_error!(
+                EntityTooLarge,
+                "Object size {} exceeds maximum {}",
+                body.len(),
+                MAX_S3_OBJECT_SIZE_BYTES
+            ));
+        }
+
+        // Get content type from request or infer from key
+        let content_type = req.input.content_type.map(|s| s.to_string());
+
+        // Store object (chunked if > 1MB)
+        let metadata = if body.len() > S3_CHUNK_SIZE_BYTES as usize {
+            debug!("Storing chunked object {} bytes", body.len());
+            self.store_chunked_object(bucket, key, &body, content_type)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to store object: {}", e))?
+        } else {
+            debug!("Storing simple object {} bytes", body.len());
+            self.store_simple_object(bucket, key, &body, content_type)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to store object: {}", e))?
+        };
+
+        info!(
+            "Stored object {}/{} ({} bytes, {} chunks)",
+            bucket,
+            key,
+            metadata.size_bytes,
+            if metadata.is_chunked() {
+                metadata.chunk_count
+            } else {
+                0
+            }
+        );
 
         Ok(S3Response::new(PutObjectOutput {
-            e_tag: Some("\"d41d8cd98f00b204e9800998ecf8427e\"".to_string()),
+            e_tag: Some(metadata.etag),
             ..Default::default()
         }))
     }
@@ -261,10 +671,46 @@ impl S3 for AspenS3Service {
         let key = req.input.key.as_str();
         info!("S3 GetObject request for {}/{}", bucket, key);
 
-        // TODO: Retrieve object from storage
-        // For now, return not found
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
-        Err(s3_error!(NoSuchKey, "Object not found"))
+        // Get object metadata
+        let metadata = match self.get_object_metadata(bucket, key).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return Err(s3_error!(NoSuchKey, "Object not found")),
+            Err(e) => return Err(s3_error!(InternalError, "Failed to get metadata: {}", e)),
+        };
+
+        // Retrieve object data
+        let data = if metadata.is_chunked() {
+            self.get_chunked_object(bucket, key, &metadata)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to get object: {}", e))?
+        } else {
+            self.get_simple_object(bucket, key)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to get object: {}", e))?
+        };
+
+        // Convert to streaming body
+        let body = bytes_to_streaming_blob(data);
+
+        Ok(S3Response::new(GetObjectOutput {
+            body: Some(body),
+            content_length: Some(metadata.size_bytes as i64),
+            content_type: parse_content_type(&metadata.content_type),
+            e_tag: Some(metadata.etag.into()),
+            last_modified: Some(chrono_to_timestamp(metadata.last_modified)),
+            ..Default::default()
+        }))
     }
 
     async fn delete_object(
@@ -275,8 +721,19 @@ impl S3 for AspenS3Service {
         let key = req.input.key.as_str();
         info!("S3 DeleteObject request for {}/{}", bucket, key);
 
-        // TODO: Delete object from storage
-        // For now, return success
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
+
+        // Delete object (S3 delete is idempotent - no error if object doesn't exist)
+        let _ = self.delete_object_data(bucket, key).await;
 
         Ok(S3Response::new(DeleteObjectOutput::default()))
     }
@@ -289,10 +746,31 @@ impl S3 for AspenS3Service {
         let key = req.input.key.as_str();
         debug!("S3 HeadObject request for {}/{}", bucket, key);
 
-        // TODO: Retrieve object metadata
-        // For now, return not found
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
-        Err(s3_error!(NoSuchKey, "Object not found"))
+        // Get object metadata
+        let metadata = match self.get_object_metadata(bucket, key).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return Err(s3_error!(NoSuchKey, "Object not found")),
+            Err(e) => return Err(s3_error!(InternalError, "Failed to get metadata: {}", e)),
+        };
+
+        Ok(S3Response::new(HeadObjectOutput {
+            content_length: Some(metadata.size_bytes as i64),
+            content_type: parse_content_type(&metadata.content_type),
+            e_tag: Some(metadata.etag.into()),
+            last_modified: Some(chrono_to_timestamp(metadata.last_modified)),
+            ..Default::default()
+        }))
     }
 
     async fn list_objects_v2(
@@ -306,9 +784,19 @@ impl S3 for AspenS3Service {
             bucket, prefix
         );
 
-        // TODO: List objects from storage
-        // For now, return empty list
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
+        // TODO: Implement proper listing by scanning keys with prefix
+        // For now, return empty list since we don't have scan implemented yet
         Ok(S3Response::new(ListObjectsV2Output {
             name: Some(bucket.to_string()),
             prefix: req.input.prefix.clone(),
@@ -330,14 +818,13 @@ impl S3 for AspenS3Service {
     ) -> s3s::S3Result<S3Response<CopyObjectOutput>> {
         let dest_bucket = req.input.bucket.as_str();
         let dest_key = req.input.key.as_str();
-        let source = match &req.input.copy_source {
+
+        let (src_bucket, src_key) = match &req.input.copy_source {
             CopySource::Bucket {
                 bucket,
                 key,
                 version_id: _,
-            } => {
-                format!("{}/{}", bucket, key)
-            }
+            } => (bucket.as_ref(), key.as_ref()),
             CopySource::AccessPoint { .. } => {
                 return Err(s3_error!(
                     NotImplemented,
@@ -347,16 +834,86 @@ impl S3 for AspenS3Service {
         };
 
         info!(
-            "S3 CopyObject from '{}' to {}/{}",
-            source, dest_bucket, dest_key
+            "S3 CopyObject from {}/{} to {}/{}",
+            src_bucket, src_key, dest_bucket, dest_key
         );
 
-        // TODO: Parse source, copy object
-        // For now, return not implemented
+        // Check source bucket exists
+        match self.bucket_exists(src_bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Source bucket '{}' does not exist",
+                    src_bucket
+                ));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
 
-        Err(s3_error!(
-            NotImplemented,
-            "Copy operation not yet implemented"
-        ))
+        // Check destination bucket exists
+        match self.bucket_exists(dest_bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Destination bucket '{}' does not exist",
+                    dest_bucket
+                ));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
+
+        // Get source object metadata
+        let src_metadata = match self.get_object_metadata(src_bucket, src_key).await {
+            Ok(Some(m)) => m,
+            Ok(None) => return Err(s3_error!(NoSuchKey, "Source object not found")),
+            Err(e) => return Err(s3_error!(InternalError, "Failed to get metadata: {}", e)),
+        };
+
+        // Get source object data
+        let data = if src_metadata.is_chunked() {
+            self.get_chunked_object(src_bucket, src_key, &src_metadata)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to read source object: {}", e))?
+        } else {
+            self.get_simple_object(src_bucket, src_key)
+                .await
+                .map_err(|e| s3_error!(InternalError, "Failed to read source object: {}", e))?
+        };
+
+        // Store to destination (reuse content type from source)
+        let dest_metadata = if data.len() > S3_CHUNK_SIZE_BYTES as usize {
+            self.store_chunked_object(
+                dest_bucket,
+                dest_key,
+                &data,
+                Some(src_metadata.content_type.clone()),
+            )
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to store object: {}", e))?
+        } else {
+            self.store_simple_object(
+                dest_bucket,
+                dest_key,
+                &data,
+                Some(src_metadata.content_type.clone()),
+            )
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to store object: {}", e))?
+        };
+
+        Ok(S3Response::new(CopyObjectOutput {
+            copy_object_result: Some(CopyObjectResult {
+                e_tag: Some(dest_metadata.etag.into()),
+                last_modified: Some(chrono_to_timestamp(dest_metadata.last_modified)),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
     }
 }

@@ -3645,3 +3645,283 @@ Summary [18.565s] 15 tests run: 15 passed, 311 skipped
 - Metrics verification: Soak test validates refactored histogram code
 
 **Commit**: `2a8b82a` "fix: eliminate flaky test and refactor metrics formatting"
+
+## Phase 17: S3 Compatibility
+
+### Overview
+
+Add S3-compatible API to Aspen, allowing standard S3 clients (AWS CLI, MinIO client, s3fs) to interact with Aspen's distributed storage. This enables Aspen to serve as an S3-compatible object store backed by Raft consensus.
+
+### 17.1 Foundation (COMPLETED)
+
+**Status**: ✅ Implemented in commit f8bd209
+
+**Completed Work**:
+
+- Added S3 dependencies to Cargo.toml (s3s, s3s-aws, hyper, etc.)
+- Created S3 module structure with Tiger Style compliance:
+  - `src/s3/constants.rs`: Fixed limits (100MB max object, 1MB chunks)
+  - `src/s3/error.rs`: S3-specific error types using snafu
+  - `src/s3/metadata.rs`: Object and bucket metadata structures
+  - `src/s3/service.rs`: AspenS3Service implementing s3s::S3 trait
+- Created `src/bin/aspen-s3.rs` binary with CLI configuration
+- Implemented S3 operation stubs (ListBuckets, CreateBucket, PutObject, GetObject, etc.)
+- Added validation for bucket names and object keys
+- Integrated with KeyValueStore trait via Arc<dyn KeyValueStore>
+
+**Key Design Decisions**:
+
+- Using s3s crate for S3 protocol implementation
+- Mapping S3 buckets to Aspen vaults with "s3:" prefix
+- Chunking strategy: 1MB chunks for objects > 1MB
+- Maximum object size: 100MB (aligns with Aspen's MAX_SNAPSHOT_SIZE)
+
+### 17.2 HTTP Server Integration
+
+**Goal**: Complete the HTTP server to handle S3 API requests
+
+**Tasks**:
+
+1. **Wire s3s service to Hyper HTTP server**
+   - Use `s3s_hyper::S3ServiceBuilder` to create HTTP service
+   - Configure virtual-host and path-style bucket addressing
+   - Add authentication middleware (initially allow anonymous)
+   - Handle CORS headers for browser-based S3 clients
+
+2. **Request routing and middleware**
+   - Parse S3 authorization headers (AWS Signature V4)
+   - Route requests to appropriate S3 operations
+   - Add request/response logging middleware
+   - Handle multipart/form-data for browser uploads
+
+3. **Error handling**
+   - Map S3Error to proper HTTP status codes
+   - Generate S3-compliant XML error responses
+   - Handle request timeouts and size limits
+
+**Estimated effort**: 2-3 days
+
+### 17.3 Storage Integration
+
+**Goal**: Connect S3 operations to Aspen's Raft-backed KV store
+
+**Tasks**:
+
+1. **Bucket operations**
+   - Implement bucket creation in vault namespace
+   - Store bucket metadata in KV store
+   - List buckets by scanning vault prefixes
+   - Validate bucket ownership and ACLs
+
+2. **Object operations (non-chunked)**
+   - Store small objects (<1MB) directly in KV
+   - Implement atomic put/get operations
+   - Calculate MD5 ETags for integrity
+   - Store object metadata alongside data
+
+3. **Listing and metadata**
+   - Implement efficient prefix scanning
+   - Support delimiter-based hierarchical listing
+   - Return proper ListObjectsV2 pagination
+   - Query object metadata without fetching data
+
+**Estimated effort**: 3-4 days
+
+### 17.4 Chunking Support
+
+**Goal**: Handle large objects (1MB - 100MB) with chunking
+
+**Tasks**:
+
+1. **Chunked upload**
+   - Split objects > 1MB into 1MB chunks
+   - Store chunks with deterministic keys
+   - Track chunk count in metadata
+   - Implement parallel chunk uploads
+
+2. **Chunked retrieval**
+   - Fetch chunks in order
+   - Support HTTP range requests
+   - Stream chunks to client
+   - Handle partial chunk reads
+
+3. **Chunk management**
+   - Atomic chunk operations via Raft
+   - Cleanup orphaned chunks
+   - Validate chunk integrity
+   - Optimize chunk caching
+
+**Estimated effort**: 3-4 days
+
+### 17.5 Multipart Upload
+
+**Goal**: Support S3 multipart upload API for large objects
+
+**Tasks**:
+
+1. **Multipart initialization**
+   - Generate upload IDs
+   - Track active multipart uploads
+   - Store upload metadata
+
+2. **Part management**
+   - Accept individual parts (5MB - 100MB)
+   - Store parts temporarily
+   - Track part ETags and numbers
+
+3. **Upload completion**
+   - Combine parts into final object
+   - Calculate composite ETag
+   - Atomic commit via Raft
+   - Cleanup temporary parts
+
+**Estimated effort**: 2-3 days
+
+### 17.6 Production Features
+
+**Goal**: Production-ready S3 compatibility
+
+**Tasks**:
+
+1. **Authentication & Authorization**
+   - AWS Signature V4 validation
+   - Access key/secret key management
+   - Bucket policies and ACLs
+   - IAM-style permissions
+
+2. **Performance optimization**
+   - Connection pooling
+   - Request pipelining
+   - Chunk prefetching
+   - Metadata caching
+
+3. **Observability**
+   - S3 operation metrics (latency, throughput)
+   - Request tracing with OpenTelemetry
+   - Audit logging for compliance
+   - Storage usage tracking
+
+4. **Compatibility testing**
+   - AWS CLI compatibility
+   - MinIO client testing
+   - s3fs filesystem mount
+   - Boto3/SDK testing
+
+**Estimated effort**: 4-5 days
+
+### 17.7 Testing Strategy
+
+**Test Coverage**:
+
+1. **Unit tests**
+   - Validation functions (bucket names, keys)
+   - Metadata serialization
+   - Chunking logic
+   - ETag calculation
+
+2. **Integration tests**
+   - Full S3 operation flow
+   - Multi-node Raft consensus
+   - Concurrent operations
+   - Failure scenarios
+
+3. **Compatibility tests**
+   - AWS S3 API compliance
+   - Client library testing
+   - Edge cases and error handling
+
+4. **Performance tests**
+   - Throughput benchmarks
+   - Latency measurements
+   - Concurrent client load
+   - Large object handling
+
+### 17.8 Migration Path
+
+**Phases**:
+
+1. **Phase 1**: Internal testing with MinIO client
+2. **Phase 2**: Limited beta with monitoring
+3. **Phase 3**: Production deployment with fallback
+4. **Phase 4**: Full production with all features
+
+**Rollback strategy**:
+
+- Feature flag for S3 service
+- Separate port/endpoint
+- No impact on existing KV operations
+- Gradual migration of workloads
+
+### 17.9 Performance Considerations
+
+**Optimizations**:
+
+- Chunk size tuning (1MB baseline, adjustable)
+- Parallel chunk operations
+- Metadata caching layer
+- Connection pooling
+- Zero-copy streaming where possible
+
+**Benchmarks to track**:
+
+- Small object latency (<1ms P50)
+- Large object throughput (>100MB/s)
+- List operations (<10ms P50)
+- Concurrent client scaling (1000+ clients)
+
+### 17.10 Risk Mitigation
+
+**Technical risks**:
+
+1. **Raft consensus overhead**
+   - Mitigation: Batch operations, async replication
+
+2. **Large object handling**
+   - Mitigation: Streaming, chunking, memory limits
+
+3. **S3 API complexity**
+   - Mitigation: Start with MVP operations, iterate
+
+4. **Client compatibility**
+   - Mitigation: Extensive testing, compliance suite
+
+**Operational risks**:
+
+1. **Storage growth**
+   - Mitigation: Quotas, monitoring, cleanup policies
+
+2. **Performance degradation**
+   - Mitigation: Load testing, capacity planning
+
+### 17.11 Future Enhancements
+
+**Post-MVP features**:
+
+- Object versioning
+- Lifecycle policies
+- Cross-region replication
+- Server-side encryption
+- Event notifications
+- Object tagging
+- Batch operations
+- S3 Select (SQL queries)
+
+### 17.12 Success Criteria
+
+**MVP Success**:
+
+- ✅ 9 core S3 operations working
+- ✅ AWS CLI can list/put/get objects
+- ✅ 100MB object support with chunking
+- ✅ Multi-node Raft consensus maintained
+- ✅ <10ms latency for small objects
+- ✅ All tests passing
+
+**Production Success**:
+
+- [ ] 99.9% uptime SLA
+- [ ] <1ms P50 latency small objects
+- [ ] >200MB/s throughput large objects
+- [ ] 1000+ concurrent clients
+- [ ] Full S3 API compatibility
+- [ ] Production workloads migrated

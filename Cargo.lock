@@ -235,6 +235,7 @@ dependencies = [
  "mad-turmoil",
  "madsim",
  "md5",
+ "mime",
  "openraft",
  "parking_lot",
  "portpicker",
