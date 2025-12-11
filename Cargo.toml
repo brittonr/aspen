@@ -8,6 +8,10 @@ license = "Apache-2.0 OR MIT"
 name = "aspen-tui"
 path = "src/bin/aspen-tui/main.rs"
 
+[[bin]]
+name = "aspen-s3"
+path = "src/bin/aspen-s3.rs"
+
 [dependencies]
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
@@ -57,6 +61,17 @@ toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
 
+# S3 API dependencies
+s3s = "0.11"
+s3s-aws = "0.11"
+md5 = "0.7"
+base64 = "0.22"
+
+# HTTP server (moved from dev-dependencies for S3 server)
+hyper = { version = "1.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["server", "tokio", "client", "client-legacy"] }
+http-body-util = "0.1"
+
 # TUI dependencies
 ratatui = { version = "0.28", features = ["crossterm"] }
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -75,9 +90,6 @@ criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
 # VM-based integration testing with Cloud Hypervisor
 cloud-hypervisor-client = "0.3"
-hyper = { version = "1.0", features = ["client", "http1"] }
-hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
-http-body-util = "0.1"
 
 [features]
 testing = []

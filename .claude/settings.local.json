@@ -18,7 +18,8 @@
       "Bash(find:*)",
       "Bash(done)",
       "WebFetch(domain:iroh.computer)",
-      "Bash(cargo nextest run:*)"
+      "Bash(cargo nextest run:*)",
+      "WebFetch(domain:lib.rs)"
     ],
     "deny": [],
     "ask": [],

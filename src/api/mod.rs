@@ -242,3 +242,22 @@ pub trait KeyValueStore: Send + Sync {
     /// or Ok with deleted=false if the key was not found (idempotent).
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError>;
 }
+
+/// Implement KeyValueStore for Arc<T> where T: KeyValueStore.
+///
+/// This allows Arc-wrapped KeyValueStore implementations to be used
+/// directly where the trait is expected.
+#[async_trait]
+impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        (**self).write(request).await
+    }
+
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        (**self).read(request).await
+    }
+
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        (**self).delete(request).await
+    }
+}
