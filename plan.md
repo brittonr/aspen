@@ -16,6 +16,7 @@
 - **Presigned URLs**: Secure temporary access with SigV4 signatures
 - **Storage**: Chunked storage for large objects (>5MB)
 - **Tiger Style Compliance**: Memory allocation patterns optimized (score: 66/100)
+- **Code Organization**: Refactored monolithic service.rs (3,667 lines) into 9 focused modules (~300-800 lines each)
 
 ### 🚧 Future Enhancements
 
@@ -51,3 +52,47 @@
 - **S3 Tests**: All 7 S3 tests passing
 - **Total Tests**: 395 tests passing across the codebase
 - **Simulation**: Deterministic testing with madsim for distributed scenarios
+
+## Next Priorities
+
+### 1. Expand S3 Test Coverage
+
+- Add comprehensive integration tests for each S3 operation module
+- Test error cases and edge conditions (malformed requests, concurrent operations)
+- Add property-based tests for S3 operations
+- Goal: 50+ S3-specific tests
+
+### 2. Improve Tiger Style Compliance
+
+- Current score: 66/100 (Performance: 55/100, Safety: 98/100)
+- Focus on performance optimizations:
+  - Reduce allocations in hot paths
+  - Implement zero-copy streaming where possible
+  - Add bounded resource pools for connections/buffers
+- Target score: 80+/100
+
+### 3. S3 Feature Completeness
+
+Priority order based on common use cases:
+
+1. **ACLs**: Essential for multi-tenant scenarios
+2. **CORS**: Required for web browser access
+3. **Object Lock**: Compliance and regulatory requirements
+4. **Metrics**: Observability and monitoring
+
+### 4. Performance Benchmarks
+
+- Establish baseline performance metrics for S3 operations
+- Add benchmarks for:
+  - Object put/get throughput
+  - Multipart upload performance
+  - List operations with large buckets
+  - Concurrent operation handling
+- Compare against S3 performance targets
+
+### 5. Documentation
+
+- Add comprehensive rustdoc comments to new operation modules
+- Create S3 API compatibility matrix
+- Document chunking strategy and performance characteristics
+- Add architecture diagrams for S3 layer
