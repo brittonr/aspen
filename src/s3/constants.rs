@@ -71,3 +71,68 @@ pub const S3_API_VERSION: &str = "2006-03-01";
 
 /// S3 server port (MinIO/S3 compatible default).
 pub const DEFAULT_S3_PORT: u16 = 9000;
+
+/// Maximum number of parts per multipart upload (S3 limit: 10000).
+///
+/// Tiger Style: Bounded to prevent excessive resource usage.
+pub const MAX_MULTIPART_PARTS: u32 = 10_000;
+
+/// Minimum part size in bytes (5 MB, except for the last part).
+///
+/// Tiger Style: S3 specification compliance.
+pub const MIN_PART_SIZE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Maximum part size in bytes (5 GB).
+///
+/// Tiger Style: S3 specification compliance.
+pub const MAX_PART_SIZE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+
+/// Multipart upload metadata key prefix.
+pub const MULTIPART_UPLOAD_PREFIX: &str = "_mpu";
+
+/// Multipart upload part data key prefix.
+pub const MULTIPART_PART_PREFIX: &str = "_mpu_part";
+
+/// Version ID for the "null" version (used before versioning was enabled).
+///
+/// Tiger Style: Special sentinel value for non-versioned objects.
+pub const NULL_VERSION_ID: &str = "null";
+
+/// Version metadata key prefix for storing versioned objects.
+pub const VERSION_METADATA_PREFIX: &str = "_ver_meta";
+
+/// Version data key prefix for storing versioned object data.
+pub const VERSION_DATA_PREFIX: &str = "_ver_data";
+
+/// Maximum number of versions to return in ListObjectVersions (S3 default: 1000).
+///
+/// Tiger Style: Bounded pagination prevents unbounded memory usage.
+pub const MAX_LIST_VERSIONS: u32 = 1000;
+
+/// Object tags metadata key prefix.
+pub const OBJECT_TAGS_PREFIX: &str = "_tags";
+
+/// Maximum number of tags per object (S3 limit: 10).
+///
+/// Tiger Style: Bounded to prevent resource exhaustion.
+pub const MAX_OBJECT_TAGS: usize = 10;
+
+/// Maximum number of tags per bucket (S3 limit: 50).
+///
+/// Tiger Style: Bounded to prevent resource exhaustion.
+pub const MAX_BUCKET_TAGS: usize = 50;
+
+/// Maximum tag key length in bytes (S3 limit: 128 UTF-8 characters).
+///
+/// Tiger Style: S3 specification compliance.
+pub const MAX_TAG_KEY_LENGTH: usize = 128;
+
+/// Maximum tag value length in bytes (S3 limit: 256 UTF-8 characters).
+///
+/// Tiger Style: S3 specification compliance.
+pub const MAX_TAG_VALUE_LENGTH: usize = 256;
+
+/// Maximum number of multipart uploads to list (S3 default: 1000).
+///
+/// Tiger Style: Bounded pagination prevents unbounded memory usage.
+pub const MAX_LIST_MULTIPART_UPLOADS: u32 = 1000;

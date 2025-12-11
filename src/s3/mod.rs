@@ -30,15 +30,17 @@
 pub mod constants;
 pub mod error;
 pub mod metadata;
+pub mod presign;
 pub mod service;
-
-// These modules will be added in subsequent implementation phases
-// pub mod bucket;
-// pub mod chunking;
-// pub mod object;
 
 // Re-export commonly used types
 pub use constants::*;
 pub use error::{S3Error, S3Result};
-pub use metadata::{BucketMetadata, ObjectMetadata};
+pub use metadata::{
+    BucketAcl, BucketEncryptionConfiguration, BucketLifecycleConfiguration, BucketMetadata,
+    BucketVersioning, LifecycleExpiration, LifecycleRule, LifecycleRuleStatus, LifecycleTransition,
+    MultipartUploadMetadata, NoncurrentVersionExpiration, ObjectMetadata, PartMetadata,
+    ServerSideEncryption,
+};
+pub use presign::{HttpMethod, PresignError, PresignedUrlBuilder};
 pub use service::AspenS3Service;
