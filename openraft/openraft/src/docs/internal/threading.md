@@ -3,22 +3,22 @@
 There are several threads, also known as tokio-tasks, in this Raft implementation:
 
 - **`RaftCore`**:
-    All user request handling and log IO are done in this thread.
+  All user request handling and log IO are done in this thread.
 
-    All writes to the [`RaftLogStorage`] are done in this task, meaning writes
-    to the store are serialized.
+  All writes to the [`RaftLogStorage`] are done in this task, meaning writes
+  to the store are serialized.
 
     **Lifecycle**:
   - The RaftCore thread is spawned when a Raft node is created and keeps
-      running until the Raft node is dropped.
+    running until the Raft node is dropped.
 
 
 - **Replication tasks**:
-    There is exactly one replication task spawned for every target node
-    (i.e., a follower or learner).
+  There is exactly one replication task spawned for every target node
+  (i.e., a follower or learner).
 
-    A replication task replicates logs or snapshots to its target. A replication
-    thread does not write logs or state machines but only reads from them.
+  A replication task replicates logs or snapshots to its target. A replication
+  thread does not write logs or state machines but only reads from them.
 
     **Lifecycle**:
   - A replication task is spawned when `RaftCore` enters `LeaderState`.
@@ -26,28 +26,28 @@ There are several threads, also known as tokio-tasks, in this Raft implementatio
 
 
 - **StateMachine**:
-    Handles all state-machine read and write operations, such as applying a committed log
-    entry or constructing a snapshot.
+  Handles all state-machine read and write operations, such as applying a committed log
+  entry or constructing a snapshot.
 
-    **Lifecycle**:
+  **Lifecycle**:
   - Spawned when the `RaftCore` is initialized, and continues running until
-      `RaftCore` is terminated.
+    `RaftCore` is terminated.
 
 
 - **Snapshot building task**:
-    Is a short-term task for building a snapshot.
+  Is a short-term task for building a snapshot.
 
-    **Lifecycle**:
+  **Lifecycle**:
   - The snapshot building task is spawned by [`StateMachine task`] when a
-        snapshot is requested and is dropped once the snapshot is ready.
+    snapshot is requested and is dropped once the snapshot is ready.
 
 
 - **User application**:
-    runs in another task that spawns the RaftCore task and keeps a control
-    handle [`Raft`].
+  runs in another task that spawns the RaftCore task and keeps a control
+  handle [`Raft`].
 
 
-# Communication between tasks
+## Communication between tasks
 
 All tasks communicate with channels:
 
@@ -96,7 +96,7 @@ User
 - Replication to RaftCore:
 
   - Replication tasks send the already replicated log ID
-      to RaftCore through another per-replication channel.
+    to RaftCore through another per-replication channel.
 
 - RaftCore to `sm::Worker`: `RaftCore` forwards entries to apply to
   `sm::Worker`, and if snapshot-based replication is required, `RaftCore`

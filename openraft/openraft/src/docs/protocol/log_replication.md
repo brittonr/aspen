@@ -15,8 +15,8 @@ Therefore, the receiving end in the algorithm is modified as follows:
 - Save every log entry into the local store if:
   - the entry at the target index is empty.
   - the entry at the target index is the same as the input one.
-      Otherwise, there's an **inconsistent** entry,
-      and the follower must **delete** all entries starting from this one before storing the input one.
+    Otherwise, there's an **inconsistent** entry,
+    and the follower must **delete** all entries starting from this one before storing the input one.
 
 ## Necessity to delete conflicting logs
 
@@ -25,14 +25,14 @@ When conflicting logs are present, it can lead to data loss issues.
 Because **that the next leader always chooses committed logs**:
 
 - When a leader is elected, it is essential that it has the most up-to-date log entries,
-    i.e., the committed logs from previous leader.
+  i.e., the committed logs from previous leader.
 
 - The conflicting logs on a follower `A` may have a smaller log ID than the last log ID on the leader.
-    Therefore,
-    the next leader may choose another node `B` that has a **greater** log than node
-    `A` but has a **smaller** log than the previous leader.
+  Therefore,
+  the next leader may choose another node `B` that has a **greater** log than node
+  `A` but has a **smaller** log than the previous leader.
 
-    This can lead to data loss.
+  This can lead to data loss.
 
 By deleting conflicting logs, it ensures that the next leader will have the most up-to-date and committed logs.
 The following diagram shows only the log terms, `*` indicates modified states.

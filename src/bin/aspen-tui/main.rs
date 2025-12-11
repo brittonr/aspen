@@ -18,6 +18,9 @@
 //! - Cluster initialization and membership changes
 //! - Key-value store operations
 //! - Log viewing with tracing integration
+
+// TUI application under active development - allow dead code for unfinished features
+#![allow(dead_code)]
 //!
 //! # Tiger Style
 //!

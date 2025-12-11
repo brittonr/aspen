@@ -12,43 +12,43 @@ The major components inside Openraft include:
   provides APIs to send `RaftMsg` to `RaftCore` to manipulate Openraft.
 
 - **`RaftCore`**: This is the main component running in a `tokio::task`,
-    which handles all client requests (such as [`client_write`]) and Raft
-    protocol requests (such as [`append_entries`]). It is primarily an event
-    loop that receives messages from the `RaftMsg` channel and the internal
-    notification channel `Notify`.
+  which handles all client requests (such as [`client_write`]) and Raft
+  protocol requests (such as [`append_entries`]). It is primarily an event
+  loop that receives messages from the `RaftMsg` channel and the internal
+  notification channel `Notify`.
 
-    In `v0.8`, [`RaftLogStorage`] runs in the same task as `RaftCore`, while
-    [`RaftStateMachine`] runs in a standalone task.
+  In `v0.8`, [`RaftLogStorage`] runs in the same task as `RaftCore`, while
+  [`RaftStateMachine`] runs in a standalone task.
 
 - **`ReplicationHandle`**: This is the control handle for replication tasks,
-    e.g., sending replication commands to `ReplicationCore`.
+  e.g., sending replication commands to `ReplicationCore`.
 
 - **`ReplicationCore`**: This is another event loop running in separate tasks
-    to replicate logs or snapshots. It communicates with `RaftCore` through
-    channels.
+  to replicate logs or snapshots. It communicates with `RaftCore` through
+  channels.
 
 - **`HeartbeatWorkersHandle`**: This control handle manages all heartbeat
-    tasks: `HeartbeatWorker`.
+  tasks: `HeartbeatWorker`.
 
 - **`HeartbeatWorker`**: This specialized task is solely responsible for
-    sending heartbeat messages (in the form of an empty
-    [`AppendEntriesRequest`]) to a specific target node.  This task, separate
-    from the `ReplicationCore`, is responsible for sending heartbeats. This
-    design prevents intensive log entry replication from blocking heartbeat
-    acknowledgments, which could otherwise lead to the Leader's lease expiration
-    and subsequent step down.
+  sending heartbeat messages (in the form of an empty
+  [`AppendEntriesRequest`]) to a specific target node.  This task, separate
+  from the `ReplicationCore`, is responsible for sending heartbeats. This
+  design prevents intensive log entry replication from blocking heartbeat
+  acknowledgments, which could otherwise lead to the Leader's lease expiration
+  and subsequent step down.
 
 - **[`RaftNetwork`]**: This is a user-provided component that implements the
-    network transport layer, e.g., sending logs to a remote node or sending a
-    [`VoteRequest`] to a remote node.
+  network transport layer, e.g., sending logs to a remote node or sending a
+  [`VoteRequest`] to a remote node.
 
 - **[`RaftLogStorage`]**: This is a user-provided component that implements the
-    log storage layer, e.g., appending a log to the log storage or reading a log
-    from the log storage.
+  log storage layer, e.g., appending a log to the log storage or reading a log
+  from the log storage.
 
 - **[`RaftStateMachine`]**: This is a user-provided component that implements
-    the state machine and snapshot, e.g., applying a log to the state machine or
-    building a snapshot from the state machine.
+  the state machine and snapshot, e.g., applying a log to the state machine or
+  building a snapshot from the state machine.
 
 
 

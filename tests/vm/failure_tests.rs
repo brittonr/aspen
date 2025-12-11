@@ -22,6 +22,7 @@ use aspen::testing::vm_manager::{VmConfig, VmManager, VmState};
 const VM_BOOT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Timeout for Raft operations.
+#[allow(dead_code)]
 const RAFT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Time to wait for leader election after failure.
@@ -51,7 +52,7 @@ fn get_runner_paths() -> Option<[PathBuf; 3]> {
 #[test]
 fn test_vm_state_enum() {
     // Verify all state variants exist
-    let states = [
+    let _states = [
         VmState::NotStarted,
         VmState::Booting,
         VmState::Running,
@@ -115,13 +116,11 @@ async fn test_follower_crash_and_recovery() {
             .get(format!("{}/cluster/status", endpoint))
             .send()
             .await
+            && let Ok(text) = resp.text().await
+            && text.contains(&format!("\"leader_id\":{}", node_id))
         {
-            if let Ok(text) = resp.text().await {
-                if text.contains(&format!("\"leader_id\":{}", node_id)) {
-                    leader_id = Some(node_id);
-                    break;
-                }
-            }
+            leader_id = Some(node_id);
+            break;
         }
     }
     let leader_id = leader_id.expect("No leader found");
@@ -233,13 +232,11 @@ async fn test_leader_crash_triggers_election() {
             .get(format!("{}/cluster/status", endpoint))
             .send()
             .await
+            && let Ok(text) = resp.text().await
+            && text.contains(&format!("\"leader_id\":{}", node_id))
         {
-            if let Ok(text) = resp.text().await {
-                if text.contains(&format!("\"leader_id\":{}", node_id)) {
-                    leader_id = Some(node_id);
-                    break;
-                }
-            }
+            leader_id = Some(node_id);
+            break;
         }
     }
     let old_leader_id = leader_id.expect("No leader found");
@@ -258,13 +255,12 @@ async fn test_leader_crash_triggers_election() {
             .get(format!("{}/cluster/status", endpoint))
             .send()
             .await
+            && let Ok(text) = resp.text().await
         {
-            if let Ok(text) = resp.text().await {
-                for check_id in (1..=3).filter(|&id| id != old_leader_id) {
-                    if text.contains(&format!("\"leader_id\":{}", check_id)) {
-                        new_leader_id = Some(check_id);
-                        break;
-                    }
+            for check_id in (1..=3).filter(|&id| id != old_leader_id) {
+                if text.contains(&format!("\"leader_id\":{}", check_id)) {
+                    new_leader_id = Some(check_id);
+                    break;
                 }
             }
         }

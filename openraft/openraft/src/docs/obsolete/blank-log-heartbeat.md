@@ -4,7 +4,7 @@
 
 The original design of using a blank log as a heartbeat message is described in the following chapter.
 
-# Why it is bad
+## Why it is bad
 
 This design has two problems:
 
@@ -19,12 +19,12 @@ This design has two problems:
 
   In the following graph:
   - node-1 is the leader, has 4 log entries, and is sending a snapshot to
-      node-2,
+    node-2,
   - node-2 received several chunks of snapshot, and it perceived an active
-      leader thus extended leader lease.
+    leader thus extended leader lease.
   - node-3 tried to send a vote request to node-2, although node-2 does not have
-      as many logs as node-3, it should still reject node-3's vote request
-      because the leader lease has not yet expired.
+    as many logs as node-3, it should still reject node-3's vote request
+    because the leader lease has not yet expired.
 
   In the obsolete design, extending pseudo time `(term, index)` with a
   `tick`, in this case node-3 will seize the leadership from node-2.
@@ -49,7 +49,7 @@ This design has two problems:
 
 The original document is presented below for reference.
 
-# Heartbeat in openraft
+## Heartbeat in openraft
 
 ## Heartbeat in standard raft
 

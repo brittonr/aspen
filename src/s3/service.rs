@@ -37,7 +37,7 @@ fn chrono_to_timestamp(dt: DateTime<Utc>) -> Timestamp {
 /// Parse a content type string into a ContentType.
 fn parse_content_type(s: &str) -> Option<ContentType> {
     // ContentType wraps mime::Mime, parse the string as a Mime type
-    s.parse::<mime::Mime>().ok().map(ContentType::from)
+    s.parse::<mime::Mime>().ok()
 }
 
 /// Create a streaming blob from bytes.
@@ -129,6 +129,7 @@ impl AspenS3Service {
     }
 
     /// Generate a vault name for an S3 bucket.
+    #[allow(dead_code)]
     fn bucket_vault_name(bucket: &str) -> String {
         format!("{}:{}", S3_VAULT_PREFIX, bucket)
     }
@@ -385,7 +386,7 @@ impl AspenS3Service {
     ) -> Result<ObjectMetadata, KeyValueStoreError> {
         let chunk_size = S3_CHUNK_SIZE_BYTES as usize;
         let total_size = data.len();
-        let chunk_count = ((total_size + chunk_size - 1) / chunk_size) as u32;
+        let chunk_count = total_size.div_ceil(chunk_size) as u32;
 
         // Validate chunk count doesn't exceed limit
         if chunk_count > MAX_CHUNKS_PER_OBJECT {
@@ -652,6 +653,7 @@ impl AspenS3Service {
     /// Generate a new version ID.
     ///
     /// Version IDs are timestamp-based UUIDs for ordering and uniqueness.
+    #[allow(dead_code)]
     fn generate_version_id() -> String {
         // Use timestamp prefix for natural ordering + UUID for uniqueness
         let timestamp = Utc::now().timestamp_millis();
@@ -660,6 +662,7 @@ impl AspenS3Service {
     }
 
     /// Generate a versioned metadata key for an object.
+    #[allow(dead_code)]
     fn versioned_metadata_key(bucket: &str, key: &str, version_id: &str) -> String {
         format!(
             "vault:{}:{}:{}:{}:{}",
@@ -668,6 +671,7 @@ impl AspenS3Service {
     }
 
     /// Generate a versioned data key for an object (non-chunked).
+    #[allow(dead_code)]
     fn versioned_data_key(bucket: &str, key: &str, version_id: &str) -> String {
         format!(
             "vault:{}:{}:{}:{}:{}",
@@ -676,6 +680,7 @@ impl AspenS3Service {
     }
 
     /// Generate a versioned data key for an object chunk.
+    #[allow(dead_code)]
     fn versioned_chunk_key(bucket: &str, key: &str, version_id: &str, chunk_index: u32) -> String {
         format!(
             "vault:{}:{}:{}:{}:{}:{}:{}",
@@ -690,6 +695,7 @@ impl AspenS3Service {
     }
 
     /// Generate a delete marker metadata key.
+    #[allow(dead_code)]
     fn delete_marker_key(bucket: &str, key: &str, version_id: &str) -> String {
         format!(
             "vault:{}:{}:_del_marker:{}:{}",
@@ -698,6 +704,7 @@ impl AspenS3Service {
     }
 
     /// Store a versioned object.
+    #[allow(dead_code)]
     async fn store_versioned_object(
         &self,
         bucket: &str,
@@ -717,7 +724,7 @@ impl AspenS3Service {
 
         if total_size > chunk_size {
             // Store as chunked object
-            let chunk_count = ((total_size + chunk_size - 1) / chunk_size) as u32;
+            let chunk_count = total_size.div_ceil(chunk_size) as u32;
 
             if chunk_count > MAX_CHUNKS_PER_OBJECT {
                 return Err(KeyValueStoreError::Failed {
@@ -815,6 +822,7 @@ impl AspenS3Service {
     }
 
     /// Get versioned object data.
+    #[allow(dead_code)]
     async fn get_versioned_object(
         &self,
         bucket: &str,
@@ -880,6 +888,7 @@ impl AspenS3Service {
     }
 
     /// Get versioned object metadata.
+    #[allow(dead_code)]
     async fn get_versioned_metadata(
         &self,
         bucket: &str,
@@ -902,6 +911,7 @@ impl AspenS3Service {
     }
 
     /// Store a delete marker for versioned deletion.
+    #[allow(dead_code)]
     async fn store_delete_marker(
         &self,
         bucket: &str,
@@ -929,6 +939,7 @@ impl AspenS3Service {
     }
 
     /// Check if a delete marker exists for a key.
+    #[allow(dead_code)]
     async fn get_delete_marker(
         &self,
         bucket: &str,
@@ -954,6 +965,7 @@ impl AspenS3Service {
     /// Update the "current" pointer for a versioned object.
     ///
     /// This stores the latest version ID in the standard object metadata location.
+    #[allow(dead_code)]
     async fn update_current_version(
         &self,
         bucket: &str,
@@ -964,6 +976,7 @@ impl AspenS3Service {
     }
 
     /// Delete versioned object data (a specific version).
+    #[allow(dead_code)]
     async fn delete_versioned_object(
         &self,
         bucket: &str,
@@ -1000,6 +1013,7 @@ impl AspenS3Service {
     }
 
     /// List all versions of an object.
+    #[allow(dead_code)]
     async fn list_object_versions(
         &self,
         bucket: &str,
@@ -1676,7 +1690,7 @@ impl S3 for AspenS3Service {
             content_type: parse_content_type(&metadata.content_type),
             content_range,
             accept_ranges: Some("bytes".to_string()),
-            e_tag: Some(metadata.etag.into()),
+            e_tag: Some(metadata.etag),
             last_modified: Some(chrono_to_timestamp(metadata.last_modified)),
             ..Default::default()
         }))
@@ -1827,7 +1841,7 @@ impl S3 for AspenS3Service {
             content_length: Some(metadata.size_bytes as i64),
             content_type: parse_content_type(&metadata.content_type),
             accept_ranges: Some("bytes".to_string()),
-            e_tag: Some(metadata.etag.into()),
+            e_tag: Some(metadata.etag),
             last_modified: Some(chrono_to_timestamp(metadata.last_modified)),
             ..Default::default()
         }))
@@ -1907,16 +1921,14 @@ impl S3 for AspenS3Service {
             let object_key = &entry.key[base_prefix_len..];
 
             // Handle delimiter-based hierarchical listing
-            if let Some(delim) = delimiter {
-                // Find if there's a delimiter after the prefix
-                if let Some(rel_key) = object_key.strip_prefix(s3_prefix) {
-                    if let Some(pos) = rel_key.find(delim) {
-                        // This is a "directory" - add to common prefixes
-                        let common_prefix = format!("{}{}{}", s3_prefix, &rel_key[..pos], delim);
-                        common_prefixes_set.insert(common_prefix);
-                        continue;
-                    }
-                }
+            if let Some(delim) = delimiter
+                && let Some(rel_key) = object_key.strip_prefix(s3_prefix)
+                && let Some(pos) = rel_key.find(delim)
+            {
+                // This is a "directory" - add to common prefixes
+                let common_prefix = format!("{}{}{}", s3_prefix, &rel_key[..pos], delim);
+                common_prefixes_set.insert(common_prefix);
+                continue;
             }
 
             // Parse object metadata
@@ -1924,7 +1936,7 @@ impl S3 for AspenS3Service {
                 contents.push(Object {
                     key: Some(object_key.to_string()),
                     size: Some(meta.size_bytes as i64),
-                    e_tag: Some(meta.etag.into()),
+                    e_tag: Some(meta.etag),
                     last_modified: Some(chrono_to_timestamp(meta.last_modified)),
                     storage_class: Some(ObjectStorageClass::STANDARD.to_string().into()),
                     ..Default::default()
@@ -2077,7 +2089,7 @@ impl S3 for AspenS3Service {
 
         Ok(S3Response::new(CopyObjectOutput {
             copy_object_result: Some(CopyObjectResult {
-                e_tag: Some(dest_metadata.etag.into()),
+                e_tag: Some(dest_metadata.etag),
                 last_modified: Some(chrono_to_timestamp(dest_metadata.last_modified)),
                 ..Default::default()
             }),
@@ -2257,7 +2269,7 @@ impl S3 for AspenS3Service {
         );
 
         Ok(S3Response::new(UploadPartOutput {
-            e_tag: Some(etag.into()),
+            e_tag: Some(etag),
             ..Default::default()
         }))
     }
@@ -2438,7 +2450,7 @@ impl S3 for AspenS3Service {
         Ok(S3Response::new(CompleteMultipartUploadOutput {
             bucket: Some(bucket.to_string()),
             key: Some(key.to_string()),
-            e_tag: Some(etag.into()),
+            e_tag: Some(etag),
             location: Some(format!("/{}/{}", bucket, key)),
             ..Default::default()
         }))
@@ -2543,7 +2555,7 @@ impl S3 for AspenS3Service {
             .map(|p| Part {
                 part_number: Some(p.part_number as i32),
                 size: Some(p.size_bytes as i64),
-                e_tag: Some(p.etag.clone().into()),
+                e_tag: Some(p.etag.clone()),
                 last_modified: Some(chrono_to_timestamp(p.last_modified)),
                 ..Default::default()
             })

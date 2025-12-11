@@ -22,6 +22,7 @@ use aspen::testing::vm_manager::{VmConfig, VmManager};
 const VM_BOOT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Timeout for Raft operations.
+#[allow(dead_code)]
 const RAFT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Time to wait for leader election after partition.
@@ -211,18 +212,16 @@ async fn test_leader_partition_triggers_reelection() {
     let mut leader_id: Option<u64> = None;
     for node_id in 1..=3 {
         let endpoint = manager.http_endpoint(node_id).await.unwrap();
+        // Parse leader_id from response (assumes JSON with leader_id field)
         if let Ok(resp) = client
             .get(format!("{}/cluster/status", endpoint))
             .send()
             .await
+            && let Ok(text) = resp.text().await
+            && text.contains(&format!("\"leader_id\":{}", node_id))
         {
-            if let Ok(text) = resp.text().await {
-                // Parse leader_id from response (assumes JSON with leader_id field)
-                if text.contains(&format!("\"leader_id\":{}", node_id)) {
-                    leader_id = Some(node_id);
-                    break;
-                }
-            }
+            leader_id = Some(node_id);
+            break;
         }
     }
 
@@ -283,13 +282,12 @@ async fn test_leader_partition_triggers_reelection() {
             .get(format!("{}/cluster/status", endpoint))
             .send()
             .await
+            && let Ok(text) = resp.text().await
         {
-            if let Ok(text) = resp.text().await {
-                // Extract leader_id from response
-                for check_id in 1..=3 {
-                    if text.contains(&format!("\"leader_id\":{}", check_id)) {
-                        leaders_seen.insert(check_id);
-                    }
+            // Extract leader_id from response
+            for check_id in 1..=3 {
+                if text.contains(&format!("\"leader_id\":{}", check_id)) {
+                    leaders_seen.insert(check_id);
                 }
             }
         }

@@ -688,7 +688,7 @@ fn draw_input_popup(frame: &mut Frame, app: &App) {
     frame.render_widget(input, area);
 
     // Set cursor position
-    frame.set_cursor(area.x + app.input_buffer.len() as u16 + 1, area.y + 1);
+    frame.set_cursor_position((area.x + app.input_buffer.len() as u16 + 1, area.y + 1));
 }
 
 /// Create a centered rectangle.

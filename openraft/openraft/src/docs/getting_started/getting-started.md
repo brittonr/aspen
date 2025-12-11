@@ -155,7 +155,7 @@ Follow the links to method documentations to see the details.
 Most of the APIs are quite straightforward, except two indirect APIs:
 
 - Read logs:
-    [`RaftLogStorage`] defines a method [`get_log_reader()`] to get log reader [`RaftLogReader`] :
+  [`RaftLogStorage`] defines a method [`get_log_reader()`] to get log reader [`RaftLogReader`] :
 
     ```ignore
     trait RaftLogStorage<C: RaftTypeConfig> {

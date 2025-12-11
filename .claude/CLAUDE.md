@@ -51,6 +51,67 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 
 **Long-term Strategy**: As Aspen matures and the API stabilizes, evaluate transitioning back to crates.io version if local modifications can be upstreamed or if they're no longer necessary.
 
+## Distributed Cluster Architecture Patterns
+
+Aspen is a distributed cluster system that requires coordinated use of three essential components:
+
+### Core Distributed Components (All Required)
+
+1. **Ractor Actors**: Provide fault-tolerant, supervised execution and message-passing concurrency
+2. **Raft (via openraft)**: Ensures cluster-wide consensus and linearizable operations
+3. **Iroh P2P**: Handles all inter-node networking, discovery, and NAT traversal
+
+These are NOT optional - a proper Aspen node requires all three working in concert.
+
+### Architecture Patterns for Distributed Features
+
+When implementing distributed features:
+
+1. **Cluster Membership & Consensus** (Raft + Ractor):
+   - Use RaftActor to manage consensus state machine lifecycle
+   - Raft handles membership changes, leader election, log replication
+   - Actor supervision ensures Raft continues running despite transient failures
+
+2. **Inter-Node Communication** (Iroh + Ractor):
+   - ALL node-to-node communication goes through Iroh (no raw TCP/HTTP between nodes)
+   - IrohEndpointManager actor manages the P2P endpoint lifecycle
+   - Iroh provides automatic peer discovery, NAT traversal, and secure connections
+   - Use Iroh for: Raft RPC transport, state synchronization, gossip protocols
+
+3. **Distributed State Management** (All three):
+   - Ractor actors own and protect local state
+   - Raft ensures state changes are agreed upon cluster-wide
+   - Iroh transports Raft messages and state updates between nodes
+
+### Implementation Guidelines
+
+**For new distributed features, always:**
+
+1. Create a ractor actor to manage the feature's lifecycle and state
+2. Use Iroh for any network communication between nodes
+3. Go through Raft if the feature requires cluster-wide consistency
+
+**Actor patterns in distributed context:**
+
+- Each major subsystem should be an actor (consensus, networking, storage)
+- Actors communicate locally via message passing
+- Actors communicate remotely via Iroh transport
+- Use supervision trees to handle partial failures without full system restart
+
+**Iroh patterns in distributed context:**
+
+- One Iroh endpoint per node (managed by IrohEndpointManager)
+- Use Iroh gossip for eventually consistent data propagation
+- Use Iroh direct connections for Raft RPC and critical paths
+- Content addressing for immutable data distribution
+
+**Never:**
+
+- Implement node-to-node communication without Iroh
+- Create distributed state without considering Raft consensus
+- Build long-running services without ractor actor supervision
+- Use threads or raw async tasks for stateful components (use actors instead)
+
 ## Architecture
 
 The project is structured into focused modules with narrow APIs:

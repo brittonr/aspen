@@ -233,10 +233,8 @@ impl PresignedUrlBuilder {
 
         // Build final URL
         let presigned_url = format!(
-            "{}{}&X-Amz-Signature={}",
-            self.endpoint,
-            format!("{}?{}", canonical_uri, canonical_query_string),
-            signature
+            "{}{}?{}&X-Amz-Signature={}",
+            self.endpoint, canonical_uri, canonical_query_string, signature
         );
 
         Ok(presigned_url)

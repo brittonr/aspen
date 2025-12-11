@@ -29,10 +29,10 @@ This method will:
 - If this method is called on more than one node simultaneously:
 
   - with the same `membership`, it is safe,
-      as the voting protocol ensures consistency.
+    as the voting protocol ensures consistency.
 
   - with different `membership`, it is **ILLEGAL** and will lead to an undefined
-      state, also known as the **split-brain** state.
+    state, also known as the **split-brain** state.
 
 ### Preconditions for Initialization
 

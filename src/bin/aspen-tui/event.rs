@@ -56,17 +56,17 @@ impl EventHandler {
         tokio::spawn(async move {
             loop {
                 // Poll for events with 50ms timeout
-                if event::poll(Duration::from_millis(50)).unwrap_or(false) {
-                    if let Ok(evt) = event::read() {
-                        let event = match evt {
-                            CrosstermEvent::Key(key) => Event::Key(key),
-                            CrosstermEvent::Mouse(mouse) => Event::Mouse(mouse),
-                            CrosstermEvent::Resize(w, h) => Event::Resize(w, h),
-                            _ => continue,
-                        };
-                        if input_tx.send(event).is_err() {
-                            break;
-                        }
+                if event::poll(Duration::from_millis(50)).unwrap_or(false)
+                    && let Ok(evt) = event::read()
+                {
+                    let event = match evt {
+                        CrosstermEvent::Key(key) => Event::Key(key),
+                        CrosstermEvent::Mouse(mouse) => Event::Mouse(mouse),
+                        CrosstermEvent::Resize(w, h) => Event::Resize(w, h),
+                        _ => continue,
+                    };
+                    if input_tx.send(event).is_err() {
+                        break;
                     }
                 }
             }
