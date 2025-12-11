@@ -302,6 +302,54 @@ impl SqliteStateMachine {
             )
             .context(ExecuteSnafu)?;
 
+        // Create indexes for efficient vault operations
+        write_conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS idx_kv_prefix ON state_machine_kv(key)",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Create vault metadata table for tracking vault-level information
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS vault_metadata (
+                vault_name TEXT PRIMARY KEY,
+                created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                key_count INTEGER NOT NULL DEFAULT 0,
+                total_bytes INTEGER NOT NULL DEFAULT 0,
+                description TEXT,
+                owner TEXT,
+                tags TEXT
+            )",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Create vault access log for monitoring and optimization
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS vault_access_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vault_name TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                key TEXT,
+                timestamp INTEGER NOT NULL DEFAULT (unixepoch()),
+                duration_us INTEGER
+            )",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Index for time-based access queries
+        write_conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS idx_access_time ON vault_access_log(timestamp)",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
         // Create read connection pool
         let manager = SqliteConnectionManager::file(&path);
         let read_pool = Pool::builder()
@@ -467,6 +515,62 @@ impl SqliteStateMachine {
             .context(QuerySnafu)?;
 
         Ok(result)
+    }
+
+    /// Scan all keys that start with the given prefix.
+    ///
+    /// Returns a list of full key names.
+    pub fn scan_keys_with_prefix(&self, prefix: &str) -> Result<Vec<String>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        // Use range query for better performance with indexes
+        // The end bound is the prefix with the next character incremented
+        let end_prefix = format!("{}\u{10000}", prefix); // Use a high Unicode character as boundary
+
+        let mut stmt = conn
+            .prepare_cached("SELECT key FROM state_machine_kv WHERE key >= ?1 AND key < ?2 ORDER BY key LIMIT ?3")
+            .context(QuerySnafu)?;
+
+        let keys = stmt
+            .query_map(params![prefix, end_prefix, MAX_BATCH_SIZE as i64], |row| {
+                row.get(0)
+            })
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|k: &String| k.starts_with(prefix)) // Double-check the prefix match
+            .collect();
+
+        Ok(keys)
+    }
+
+    /// Scan all key-value pairs that start with the given prefix.
+    ///
+    /// Returns a list of (key, value) pairs.
+    pub fn scan_kv_with_prefix(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<(String, String)>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        // Use range query for better performance with indexes
+        let end_prefix = format!("{}\u{10000}", prefix);
+
+        let mut stmt = conn
+            .prepare_cached("SELECT key, value FROM state_machine_kv WHERE key >= ?1 AND key < ?2 ORDER BY key LIMIT ?3")
+            .context(QuerySnafu)?;
+
+        let kv_pairs = stmt
+            .query_map(params![prefix, end_prefix, MAX_BATCH_SIZE as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|(k, _)| k.starts_with(prefix)) // Double-check the prefix match
+            .collect();
+
+        Ok(kv_pairs)
     }
 
     /// Validates that the SQLite state machine is consistent with the redb log.

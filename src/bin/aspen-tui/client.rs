@@ -297,4 +297,79 @@ impl AspenClient {
     pub async fn read(&self, key: String) -> color_eyre::Result<Option<Vec<u8>>> {
         Ok(self.read_key(&key).await?)
     }
+
+    /// List all vaults by fetching from /vaults endpoint.
+    pub async fn list_vaults(&self) -> color_eyre::Result<Vec<crate::client_trait::VaultSummary>> {
+        let url = format!("{}/vaults", self.base_url);
+        let resp = self.client.get(&url).send().await;
+
+        match resp {
+            Ok(response) => {
+                // Response format: {"vaults": [{"name": "...", "key_count": N}, ...]}
+                #[derive(Deserialize)]
+                struct VaultItem {
+                    name: String,
+                    key_count: u64,
+                }
+                #[derive(Deserialize)]
+                struct VaultsResponse {
+                    vaults: Vec<VaultItem>,
+                }
+
+                let vaults: VaultsResponse = response.json().await?;
+                Ok(vaults
+                    .vaults
+                    .into_iter()
+                    .map(|v| crate::client_trait::VaultSummary {
+                        name: v.name,
+                        key_count: v.key_count,
+                    })
+                    .collect())
+            }
+            Err(_) => {
+                // Fallback: endpoint may not exist, return empty
+                Ok(vec![])
+            }
+        }
+    }
+
+    /// List all keys in a specific vault.
+    pub async fn list_vault_keys(
+        &self,
+        vault: &str,
+    ) -> color_eyre::Result<Vec<crate::client_trait::VaultKeyEntry>> {
+        let url = format!("{}/vault/{}", self.base_url, vault);
+        let resp = self.client.get(&url).send().await;
+
+        match resp {
+            Ok(response) => {
+                // Response format: {"vault": "...", "keys": [{"key": "...", "value": "..."}, ...]}
+                #[derive(Deserialize)]
+                struct KeyItem {
+                    key: String,
+                    value: String,
+                }
+                #[derive(Deserialize)]
+                struct VaultResponse {
+                    #[allow(dead_code)]
+                    vault: String,
+                    keys: Vec<KeyItem>,
+                }
+
+                let vault_resp: VaultResponse = response.json().await?;
+                Ok(vault_resp
+                    .keys
+                    .into_iter()
+                    .map(|k| crate::client_trait::VaultKeyEntry {
+                        key: k.key,
+                        value: k.value,
+                    })
+                    .collect())
+            }
+            Err(_) => {
+                // Fallback: endpoint may not exist, return empty
+                Ok(vec![])
+            }
+        }
+    }
 }

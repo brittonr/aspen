@@ -42,6 +42,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Cluster,
         ActiveView::Metrics,
         ActiveView::KeyValue,
+        ActiveView::Vaults,
         ActiveView::Logs,
         ActiveView::Help,
     ]
@@ -68,8 +69,9 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::Cluster => 0,
             ActiveView::Metrics => 1,
             ActiveView::KeyValue => 2,
-            ActiveView::Logs => 3,
-            ActiveView::Help => 4,
+            ActiveView::Vaults => 3,
+            ActiveView::Logs => 4,
+            ActiveView::Help => 5,
         })
         .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().fg(Color::Yellow));
@@ -83,6 +85,7 @@ fn draw_content(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Cluster => draw_cluster_view(frame, app, area),
         ActiveView::Metrics => draw_metrics_view(frame, app, area),
         ActiveView::KeyValue => draw_kv_view(frame, app, area),
+        ActiveView::Vaults => draw_vaults_view(frame, app, area),
         ActiveView::Logs => draw_logs_view(frame, app, area),
         ActiveView::Help => draw_help_view(frame, area),
     }
@@ -374,6 +377,177 @@ fn draw_kv_view(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(results, chunks[1]);
 }
 
+/// Draw vaults browser view.
+fn draw_vaults_view(frame: &mut Frame, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    // Left panel: vault list or key list depending on mode
+    if let Some(vault_name) = &app.active_vault {
+        // Viewing vault contents - show keys
+        draw_vault_keys_list(frame, app, chunks[0], vault_name);
+        draw_vault_key_detail(frame, app, chunks[1]);
+    } else {
+        // Viewing vault list
+        draw_vaults_list(frame, app, chunks[0]);
+        draw_vault_info(frame, app, chunks[1]);
+    }
+}
+
+/// Draw the list of vaults.
+fn draw_vaults_list(frame: &mut Frame, app: &App, area: Rect) {
+    let items: Vec<ListItem> = app
+        .vaults
+        .iter()
+        .enumerate()
+        .map(|(i, vault)| {
+            let style = if i == app.selected_vault {
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let content = Line::from(vec![
+                Span::styled(format!(" {} ", vault.name), style),
+                Span::styled(
+                    format!("({} keys)", vault.key_count),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]);
+            ListItem::new(content)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Vaults (Enter to browse, r to refresh) "),
+        )
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+
+    frame.render_widget(list, area);
+}
+
+/// Draw vault info panel.
+fn draw_vault_info(frame: &mut Frame, app: &App, area: Rect) {
+    let content = if app.vaults.is_empty() {
+        vec![
+            Line::from("No vaults found."),
+            Line::from(""),
+            Line::from("Vaults are created when keys are stored with the prefix:"),
+            Line::from("  vault:<vault_name>:<key>"),
+            Line::from(""),
+            Line::from("Press 'r' to refresh."),
+        ]
+    } else if let Some(vault) = app.vaults.get(app.selected_vault) {
+        vec![
+            Line::from(vec![
+                Span::raw("Vault: "),
+                Span::styled(
+                    &vault.name,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Keys: "),
+                Span::styled(
+                    vault.key_count.to_string(),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]),
+            Line::from(""),
+            Line::from("Press Enter to browse vault contents."),
+            Line::from("Press Backspace/Esc to go back."),
+        ]
+    } else {
+        vec![Line::from("Select a vault")]
+    };
+
+    let paragraph = Paragraph::new(content)
+        .block(Block::default().borders(Borders::ALL).title(" Vault Info "))
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw the list of keys within a vault.
+fn draw_vault_keys_list(frame: &mut Frame, app: &App, area: Rect, vault_name: &str) {
+    let items: Vec<ListItem> = app
+        .vault_keys
+        .iter()
+        .enumerate()
+        .map(|(i, kv)| {
+            let style = if i == app.selected_vault_key {
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let content = Line::from(vec![Span::styled(format!(" {} ", kv.key), style)]);
+            ListItem::new(content)
+        })
+        .collect();
+
+    let title = format!(
+        " {} ({} keys) - Backspace to go back ",
+        vault_name,
+        app.vault_keys.len()
+    );
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+
+    frame.render_widget(list, area);
+}
+
+/// Draw vault key detail panel.
+fn draw_vault_key_detail(frame: &mut Frame, app: &App, area: Rect) {
+    let content = if app.vault_keys.is_empty() {
+        vec![Line::from("No keys in this vault.")]
+    } else if let Some(kv) = app.vault_keys.get(app.selected_vault_key) {
+        vec![
+            Line::from(vec![
+                Span::raw("Key: "),
+                Span::styled(
+                    &kv.key,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![Span::styled(
+                "Value:",
+                Style::default().add_modifier(Modifier::UNDERLINED),
+            )]),
+            Line::from(""),
+            Line::from(kv.value.clone()),
+        ]
+    } else {
+        vec![Line::from("Select a key")]
+    };
+
+    let paragraph = Paragraph::new(content)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Key Details "),
+        )
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
 /// Draw logs view with tui-logger integration.
 fn draw_logs_view(frame: &mut Frame, app: &App, area: Rect) {
     // Create tui-logger widget
@@ -410,7 +584,7 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
             Style::default().add_modifier(Modifier::UNDERLINED),
         )]),
         Line::from("  Tab / Shift+Tab  Switch between views"),
-        Line::from("  1-4              Jump to view"),
+        Line::from("  1-5              Jump to view"),
         Line::from("  ?                Show this help"),
         Line::from("  q / Esc          Quit"),
         Line::from(""),
@@ -428,6 +602,15 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         )]),
         Line::from("  Enter            Enter command mode"),
         Line::from("  Esc              Exit command mode"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "Vaults View",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  j/k or Up/Down   Navigate vault/key list"),
+        Line::from("  Enter            Browse vault contents"),
+        Line::from("  Backspace/Esc    Go back to vault list"),
+        Line::from("  r                Refresh vaults"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Logs View",

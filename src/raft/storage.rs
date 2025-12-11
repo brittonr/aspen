@@ -773,6 +773,32 @@ impl StateMachineStore {
         let sm = self.state_machine.read().await;
         sm.data.get(key).cloned()
     }
+
+    /// Scan all keys that start with the given prefix.
+    ///
+    /// Returns a list of full key names.
+    pub fn scan_keys_with_prefix(&self, prefix: &str) -> Vec<String> {
+        // Block on async read - this is a synchronous API for compatibility
+        let sm = futures::executor::block_on(self.state_machine.read());
+        sm.data
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
+    }
+
+    /// Scan all key-value pairs that start with the given prefix.
+    ///
+    /// Returns a list of (key, value) pairs.
+    pub fn scan_kv_with_prefix(&self, prefix: &str) -> Vec<(String, String)> {
+        // Block on async read - this is a synchronous API for compatibility
+        let sm = futures::executor::block_on(self.state_machine.read());
+        sm.data
+            .iter()
+            .filter(|(k, _)| k.starts_with(prefix))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
 }
 
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<StateMachineStore> {

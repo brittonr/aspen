@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod inmemory;
+pub mod vault;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
+pub use vault::{VaultInfo, VaultKeyValue, VaultListRequest, VaultListResponse};
 
 // Re-export OpenRaft types for observability
 pub use openraft::ServerState;

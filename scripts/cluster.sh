@@ -9,8 +9,9 @@
 #   ASPEN_COOKIE      - Cluster authentication cookie (default: aspen-cluster)
 #   ASPEN_LOG_LEVEL   - Log level for nodes (default: info)
 #   ASPEN_DATA_DIR    - Base data directory (default: /tmp/aspen-cluster)
-#   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: inmemory)
+#   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
 #   ASPEN_NO_INIT     - If set, don't auto-initialize the cluster
+#   ASPEN_NO_VAULTS   - If set, don't create default vaults with sample data
 set -euo pipefail
 
 # Configuration with defaults
@@ -20,8 +21,9 @@ BASE_RACTOR="${ASPEN_BASE_RACTOR:-26001}"
 COOKIE="${ASPEN_COOKIE:-aspen-cluster}"
 LOG_LEVEL="${ASPEN_LOG_LEVEL:-info}"
 DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-cluster}"
-STORAGE="${ASPEN_STORAGE:-inmemory}"
+STORAGE="${ASPEN_STORAGE:-sqlite}"
 NO_INIT="${ASPEN_NO_INIT:-}"
+NO_VAULTS="${ASPEN_NO_VAULTS:-}"
 
 # Resolve script directory and binary path
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -131,7 +133,7 @@ start_node() {
     )
 
     # Always create data directory and pass it to node
-    # Even inmemory storage needs a data dir for metadata.redb
+    # Even inmemory storage needs a data dir for metadata.redb (Raft log)
     mkdir -p "$node_data_dir"
     cmd+=(--storage-backend "$STORAGE" --data-dir "$node_data_dir")
 
@@ -240,6 +242,64 @@ check_health() {
     echo "----------------------------------------"
 }
 
+# Create default vaults with sample data
+create_default_vaults() {
+    local leader_port=$BASE_HTTP
+    echo -e "\n${BLUE}Creating default vaults with sample data...${NC}"
+
+    # Helper function to write a key-value pair
+    write_kv() {
+        local key="$1"
+        local value="$2"
+        curl -s -X POST "http://127.0.0.1:$leader_port/write" \
+            -H "Content-Type: application/json" \
+            -d "{\"command\":{\"Set\":{\"key\":\"$key\",\"value\":\"$value\"}}}" >/dev/null 2>&1
+    }
+
+    # Create 'config' vault - application configuration
+    echo -e "  ${GREEN}Creating 'config' vault...${NC}"
+    write_kv "vault:config:app_name" "Aspen Cluster"
+    write_kv "vault:config:version" "0.1.0"
+    write_kv "vault:config:environment" "development"
+    write_kv "vault:config:log_level" "$LOG_LEVEL"
+    write_kv "vault:config:node_count" "$NODE_COUNT"
+    write_kv "vault:config:storage_backend" "$STORAGE"
+
+    # Create 'system' vault - system metadata
+    echo -e "  ${GREEN}Creating 'system' vault...${NC}"
+    write_kv "vault:system:cluster_id" "$COOKIE"
+    write_kv "vault:system:created_at" "$(date -Iseconds)"
+    write_kv "vault:system:base_http_port" "$BASE_HTTP"
+    write_kv "vault:system:base_ractor_port" "$BASE_RACTOR"
+
+    # Create 'demo' vault - demonstration data for TUI testing
+    echo -e "  ${GREEN}Creating 'demo' vault...${NC}"
+    write_kv "vault:demo:greeting" "Hello from Aspen!"
+    write_kv "vault:demo:counter" "0"
+    write_kv "vault:demo:message" "This is sample data for testing the TUI vault browser."
+    write_kv "vault:demo:status" "active"
+
+    # Create 'users' vault - example user data
+    echo -e "  ${GREEN}Creating 'users' vault...${NC}"
+    write_kv "vault:users:admin" "{\"name\":\"Administrator\",\"role\":\"admin\"}"
+    write_kv "vault:users:guest" "{\"name\":\"Guest User\",\"role\":\"guest\"}"
+
+    # Create 'features' vault - feature flags
+    echo -e "  ${GREEN}Creating 'features' vault...${NC}"
+    write_kv "vault:features:dark_mode" "true"
+    write_kv "vault:features:analytics" "false"
+    write_kv "vault:features:experimental_ui" "false"
+
+    echo -e "${GREEN}Default vaults created successfully${NC}"
+    echo ""
+    echo "Available vaults:"
+    echo "  - config   : Application configuration (6 keys)"
+    echo "  - system   : System metadata (4 keys)"
+    echo "  - demo     : Demo/test data (4 keys)"
+    echo "  - users    : Example user data (2 keys)"
+    echo "  - features : Feature flags (3 keys)"
+}
+
 # Print cluster info
 print_info() {
     echo -e "\n${BLUE}Aspen Cluster Information${NC}"
@@ -264,10 +324,14 @@ print_info() {
     echo "  nix run .#aspen-tui --$nodes_arg"
     echo ""
     echo "Useful commands:"
-    echo "  Health: curl http://127.0.0.1:$BASE_HTTP/health | jq"
-    echo "  Metrics: curl http://127.0.0.1:$BASE_HTTP/metrics"
+    echo "  Health:      curl http://127.0.0.1:$BASE_HTTP/health | jq"
+    echo "  Metrics:     curl http://127.0.0.1:$BASE_HTTP/metrics"
+    echo "  List vaults: curl http://127.0.0.1:$BASE_HTTP/vaults | jq"
+    echo "  Read vault:  curl http://127.0.0.1:$BASE_HTTP/vault/config | jq"
+    echo ""
+    echo "KV Examples:"
     echo "  Write: curl -X POST http://127.0.0.1:$BASE_HTTP/write -H 'Content-Type: application/json' -d '{\"command\":{\"Set\":{\"key\":\"test\",\"value\":\"hello\"}}}'"
-    echo "  Read: curl -X POST http://127.0.0.1:$BASE_HTTP/read -H 'Content-Type: application/json' -d '{\"key\":\"test\"}'"
+    echo "  Read:  curl -X POST http://127.0.0.1:$BASE_HTTP/read -H 'Content-Type: application/json' -d '{\"key\":\"test\"}'"
     echo "========================================"
 }
 
@@ -306,6 +370,12 @@ main() {
         if ! init_cluster; then
             echo -e "${YELLOW}Cluster initialization may need manual intervention${NC}"
         fi
+    fi
+
+    # Create default vaults unless disabled
+    if [[ -z "$NO_INIT" ]] && [[ -z "$NO_VAULTS" ]]; then
+        sleep 1  # Give cluster a moment to elect leader
+        create_default_vaults
     fi
 
     # Print cluster info

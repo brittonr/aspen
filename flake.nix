@@ -518,7 +518,7 @@
               # Environment variables:
               #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
               #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
-              #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: inmemory)
+              #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
               cluster = {
                 type = "app";
                 program = "${pkgs.writeShellScript "aspen-cluster" ''

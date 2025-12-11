@@ -91,7 +91,7 @@ use aspen::raft::supervision::HealthMonitor;
 use aspen::raft::{RaftActorMessage, RaftControlClient};
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -575,6 +575,9 @@ fn build_router(app_state: AppState) -> Router {
         .route("/trigger-snapshot", post(trigger_snapshot))
         .route("/admin/promote-learner", post(promote_learner))
         .route("/admin/checkpoint-wal", post(checkpoint_wal))
+        // Vault endpoints
+        .route("/vaults", get(list_vaults))
+        .route("/vault/:vault_name", get(get_vault_keys))
         .with_state(app_state)
 }
 
@@ -1895,6 +1898,128 @@ async fn checkpoint_wal(
             "Checkpoint only supported for SQLite backend".to_string(),
         ))
     }
+}
+
+/// List all vaults in the cluster.
+///
+/// GET /vaults
+///
+/// Scans all keys with "vault:" prefix and groups them by vault name.
+/// Returns a list of vault names with key counts.
+async fn list_vaults(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    use aspen::api::vault::{VAULT_PREFIX, parse_vault_key};
+    use std::collections::HashMap;
+
+    // Read all keys from state machine that start with "vault:"
+    let keys = match &state.state_machine {
+        aspen::raft::StateMachineVariant::Sqlite(sm) => {
+            sm.scan_keys_with_prefix(VAULT_PREFIX).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to scan vault keys: {}", e),
+                )
+            })?
+        }
+        aspen::raft::StateMachineVariant::InMemory(sm) => sm.scan_keys_with_prefix(VAULT_PREFIX),
+        #[allow(deprecated)]
+        aspen::raft::StateMachineVariant::Redb(sm) => {
+            // Redb variant is deprecated but shares SqliteStateMachine type
+            sm.scan_keys_with_prefix(VAULT_PREFIX).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to scan vault keys: {}", e),
+                )
+            })?
+        }
+    };
+
+    // Group keys by vault name
+    let mut vault_counts: HashMap<String, u64> = HashMap::new();
+    for key in keys {
+        if let Some((vault_name, _)) = parse_vault_key(&key) {
+            *vault_counts.entry(vault_name).or_insert(0) += 1;
+        }
+    }
+
+    // Convert to response format
+    let vaults: Vec<serde_json::Value> = vault_counts
+        .into_iter()
+        .map(|(name, key_count)| {
+            serde_json::json!({
+                "name": name,
+                "key_count": key_count
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "vaults": vaults
+    })))
+}
+
+/// Get all keys in a specific vault.
+///
+/// GET /vault/:vault_name
+///
+/// Returns all key-value pairs in the vault.
+async fn get_vault_keys(
+    State(state): State<AppState>,
+    Path(vault_name): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    use aspen::api::vault::{parse_vault_key, validate_vault_name, vault_scan_prefix};
+
+    // Validate vault name
+    if let Err(e) = validate_vault_name(&vault_name) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Invalid vault name: {}", e),
+        ));
+    }
+
+    let prefix = vault_scan_prefix(&vault_name);
+
+    // Scan keys with the vault prefix
+    let kv_pairs = match &state.state_machine {
+        aspen::raft::StateMachineVariant::Sqlite(sm) => {
+            sm.scan_kv_with_prefix(&prefix).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to scan vault keys: {}", e),
+                )
+            })?
+        }
+        aspen::raft::StateMachineVariant::InMemory(sm) => sm.scan_kv_with_prefix(&prefix),
+        #[allow(deprecated)]
+        aspen::raft::StateMachineVariant::Redb(sm) => {
+            // Redb variant is deprecated but shares SqliteStateMachine type
+            sm.scan_kv_with_prefix(&prefix).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to scan vault keys: {}", e),
+                )
+            })?
+        }
+    };
+
+    // Convert to response format
+    let keys: Vec<serde_json::Value> = kv_pairs
+        .into_iter()
+        .filter_map(|(full_key, value)| {
+            parse_vault_key(&full_key).map(|(_, key)| {
+                serde_json::json!({
+                    "key": key,
+                    "value": value
+                })
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "vault": vault_name,
+        "keys": keys
+    })))
 }
 
 #[derive(Debug)]

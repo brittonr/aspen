@@ -27,6 +27,8 @@ pub enum ActiveView {
     Metrics,
     /// Key-value store operations.
     KeyValue,
+    /// Vault browser with namespace navigation.
+    Vaults,
     /// Log viewer.
     Logs,
     /// Help screen.
@@ -39,7 +41,8 @@ impl ActiveView {
         match self {
             Self::Cluster => Self::Metrics,
             Self::Metrics => Self::KeyValue,
-            Self::KeyValue => Self::Logs,
+            Self::KeyValue => Self::Vaults,
+            Self::Vaults => Self::Logs,
             Self::Logs => Self::Help,
             Self::Help => Self::Cluster,
         }
@@ -51,7 +54,8 @@ impl ActiveView {
             Self::Cluster => Self::Help,
             Self::Metrics => Self::Cluster,
             Self::KeyValue => Self::Metrics,
-            Self::Logs => Self::KeyValue,
+            Self::Vaults => Self::KeyValue,
+            Self::Logs => Self::Vaults,
             Self::Help => Self::Logs,
         }
     }
@@ -62,6 +66,7 @@ impl ActiveView {
             Self::Cluster => "Cluster",
             Self::Metrics => "Metrics",
             Self::KeyValue => "Key-Value",
+            Self::Vaults => "Vaults",
             Self::Logs => "Logs",
             Self::Help => "Help",
         }
@@ -147,6 +152,21 @@ pub struct App {
 
     /// Scroll position for log view.
     pub log_scroll: u16,
+
+    /// Cached vault list.
+    pub vaults: Vec<crate::client_trait::VaultSummary>,
+
+    /// Selected vault index.
+    pub selected_vault: usize,
+
+    /// Currently displayed vault keys (when viewing a specific vault).
+    pub vault_keys: Vec<crate::client_trait::VaultKeyEntry>,
+
+    /// Selected key index within a vault.
+    pub selected_vault_key: usize,
+
+    /// Currently active vault name (None = vault list view, Some = vault contents view).
+    pub active_vault: Option<String>,
 }
 
 impl App {
@@ -181,6 +201,11 @@ impl App {
             value_buffer: String::new(),
             last_read_result: None,
             log_scroll: 0,
+            vaults: Vec::new(),
+            selected_vault: 0,
+            vault_keys: Vec::new(),
+            selected_vault_key: 0,
+            active_vault: None,
         }
     }
 
@@ -226,6 +251,11 @@ impl App {
             value_buffer: String::new(),
             last_read_result: None,
             log_scroll: 0,
+            vaults: Vec::new(),
+            selected_vault: 0,
+            vault_keys: Vec::new(),
+            selected_vault_key: 0,
+            active_vault: None,
         })
     }
 
@@ -258,6 +288,11 @@ impl App {
             value_buffer: String::new(),
             last_read_result: None,
             log_scroll: 0,
+            vaults: Vec::new(),
+            selected_vault: 0,
+            vault_keys: Vec::new(),
+            selected_vault_key: 0,
+            active_vault: None,
         }
     }
 
@@ -308,34 +343,98 @@ impl App {
 
         match self.input_mode {
             InputMode::Normal => match key.code {
-                // Quit
-                KeyCode::Char('q') | KeyCode::Esc => {
+                // Quit (but Esc goes back first in vault view)
+                KeyCode::Char('q') => {
                     self.should_quit = true;
+                }
+                KeyCode::Esc => {
+                    // In vault view with active vault, Esc goes back
+                    if self.active_view == ActiveView::Vaults && self.active_vault.is_some() {
+                        self.active_vault = None;
+                        self.vault_keys.clear();
+                        self.selected_vault_key = 0;
+                    } else {
+                        self.should_quit = true;
+                    }
                 }
 
                 // View navigation
                 KeyCode::Tab => {
+                    let prev_view = self.active_view;
                     self.active_view = self.active_view.next();
+                    // Auto-refresh vaults when switching to Vaults view
+                    if self.active_view == ActiveView::Vaults && prev_view != ActiveView::Vaults {
+                        self.refresh_vaults().await;
+                    }
                 }
                 KeyCode::BackTab => {
+                    let prev_view = self.active_view;
                     self.active_view = self.active_view.prev();
+                    // Auto-refresh vaults when switching to Vaults view
+                    if self.active_view == ActiveView::Vaults && prev_view != ActiveView::Vaults {
+                        self.refresh_vaults().await;
+                    }
                 }
                 KeyCode::Char('1') => self.active_view = ActiveView::Cluster,
                 KeyCode::Char('2') => self.active_view = ActiveView::Metrics,
                 KeyCode::Char('3') => self.active_view = ActiveView::KeyValue,
-                KeyCode::Char('4') => self.active_view = ActiveView::Logs,
+                KeyCode::Char('4') => {
+                    let prev_view = self.active_view;
+                    self.active_view = ActiveView::Vaults;
+                    // Auto-refresh vaults when switching to Vaults view
+                    if prev_view != ActiveView::Vaults {
+                        self.refresh_vaults().await;
+                    }
+                }
+                KeyCode::Char('5') => self.active_view = ActiveView::Logs,
                 KeyCode::Char('?') => self.active_view = ActiveView::Help,
 
                 // List navigation
                 KeyCode::Up | KeyCode::Char('k') => {
-                    if self.selected_node > 0 {
-                        self.selected_node -= 1;
+                    match self.active_view {
+                        ActiveView::Vaults => {
+                            if self.active_vault.is_some() {
+                                // Navigating vault keys
+                                if self.selected_vault_key > 0 {
+                                    self.selected_vault_key -= 1;
+                                }
+                            } else {
+                                // Navigating vault list
+                                if self.selected_vault > 0 {
+                                    self.selected_vault -= 1;
+                                }
+                            }
+                        }
+                        _ => {
+                            if self.selected_node > 0 {
+                                self.selected_node -= 1;
+                            }
+                        }
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    let max = self.nodes.len().saturating_sub(1);
-                    if self.selected_node < max {
-                        self.selected_node += 1;
+                    match self.active_view {
+                        ActiveView::Vaults => {
+                            if self.active_vault.is_some() {
+                                // Navigating vault keys
+                                let max = self.vault_keys.len().saturating_sub(1);
+                                if self.selected_vault_key < max {
+                                    self.selected_vault_key += 1;
+                                }
+                            } else {
+                                // Navigating vault list
+                                let max = self.vaults.len().saturating_sub(1);
+                                if self.selected_vault < max {
+                                    self.selected_vault += 1;
+                                }
+                            }
+                        }
+                        _ => {
+                            let max = self.nodes.len().saturating_sub(1);
+                            if self.selected_node < max {
+                                self.selected_node += 1;
+                            }
+                        }
                     }
                 }
 
@@ -368,6 +467,27 @@ impl App {
                 // Enter editing mode for KV operations
                 KeyCode::Enter if self.active_view == ActiveView::KeyValue => {
                     self.input_mode = InputMode::Editing;
+                }
+
+                // Vault navigation - Enter to drill into vault, Backspace to go back
+                KeyCode::Enter if self.active_view == ActiveView::Vaults => {
+                    if self.active_vault.is_none() && !self.vaults.is_empty() {
+                        // Enter the selected vault
+                        if let Some(vault) = self.vaults.get(self.selected_vault) {
+                            let vault_name = vault.name.clone();
+                            self.active_vault = Some(vault_name.clone());
+                            self.selected_vault_key = 0;
+                            self.refresh_vault_keys(&vault_name).await;
+                        }
+                    }
+                }
+                KeyCode::Backspace if self.active_view == ActiveView::Vaults => {
+                    // Go back to vault list
+                    if self.active_vault.is_some() {
+                        self.active_vault = None;
+                        self.vault_keys.clear();
+                        self.selected_vault_key = 0;
+                    }
                 }
 
                 // Log scroll
@@ -520,6 +640,45 @@ impl App {
         self.nodes = new_nodes;
         self.last_refresh = Some(Instant::now());
         self.refreshing = false;
+
+        // Also refresh vaults if we're on the vaults view
+        if self.active_view == ActiveView::Vaults {
+            self.refresh_vaults().await;
+        }
+    }
+
+    /// Refresh the list of vaults.
+    async fn refresh_vaults(&mut self) {
+        match self.client.list_vaults().await {
+            Ok(vaults) => {
+                self.vaults = vaults;
+                // Reset selection if out of bounds
+                if self.selected_vault >= self.vaults.len() && !self.vaults.is_empty() {
+                    self.selected_vault = self.vaults.len() - 1;
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to list vaults");
+                self.set_status(&format!("Failed to list vaults: {}", e));
+            }
+        }
+    }
+
+    /// Refresh keys for a specific vault.
+    async fn refresh_vault_keys(&mut self, vault: &str) {
+        match self.client.list_vault_keys(vault).await {
+            Ok(keys) => {
+                self.vault_keys = keys;
+                // Reset selection if out of bounds
+                if self.selected_vault_key >= self.vault_keys.len() && !self.vault_keys.is_empty() {
+                    self.selected_vault_key = self.vault_keys.len() - 1;
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, vault = vault, "failed to list vault keys");
+                self.set_status(&format!("Failed to list vault keys: {}", e));
+            }
+        }
     }
 
     /// Initialize the cluster.

@@ -44,6 +44,39 @@ pub trait ClusterClient: Send + Sync {
 
     /// Trigger a snapshot.
     async fn trigger_snapshot(&self) -> Result<()>;
+
+    /// List all vaults (keys with "vault:" prefix).
+    ///
+    /// Returns a list of vault names and their key counts.
+    async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
+        // Default implementation: scan keys with vault prefix
+        // This works for HTTP clients; Iroh clients may override
+        Ok(vec![])
+    }
+
+    /// List all keys in a specific vault.
+    async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
+        let _ = vault;
+        Ok(vec![])
+    }
+}
+
+/// Summary information about a vault.
+#[derive(Debug, Clone)]
+pub struct VaultSummary {
+    /// Name of the vault.
+    pub name: String,
+    /// Number of keys in the vault.
+    pub key_count: u64,
+}
+
+/// A key-value entry within a vault.
+#[derive(Debug, Clone)]
+pub struct VaultKeyEntry {
+    /// Key name (without vault prefix).
+    pub key: String,
+    /// Value (as string).
+    pub value: String,
 }
 
 /// Wrapper enum for different client types.
@@ -97,6 +130,14 @@ impl ClusterClient for DisconnectedClient {
     }
 
     async fn trigger_snapshot(&self) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn list_vault_keys(&self, _vault: &str) -> Result<Vec<VaultKeyEntry>> {
         Err(eyre!("Not connected to any cluster"))
     }
 }
@@ -419,6 +460,24 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::Disconnected(client) => client.trigger_snapshot().await,
+        }
+    }
+
+    async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
+        match self {
+            Self::Http(client) => client.list_vaults().await,
+            Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
+            Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
+            Self::Disconnected(client) => client.list_vaults().await,
+        }
+    }
+
+    async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
+        match self {
+            Self::Http(client) => client.list_vault_keys(vault).await,
+            Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
+            Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
+            Self::Disconnected(client) => client.list_vault_keys(vault).await,
         }
     }
 }
