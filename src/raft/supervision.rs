@@ -1040,6 +1040,7 @@ impl RaftSupervisor {
     /// Clear actor state references.
     ///
     /// Tiger Style: Common cleanup logic extracted to avoid duplication.
+    /// Fixed operation to prevent resource leaks.
     fn clear_actor_state(&self, state: &mut RaftSupervisorState) {
         state.current_raft_actor = None;
         state.actor_spawn_time = None;
