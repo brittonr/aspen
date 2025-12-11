@@ -30,6 +30,7 @@
 pub mod constants;
 pub mod error;
 pub mod metadata;
+mod operations;
 pub mod presign;
 pub mod service;
 
