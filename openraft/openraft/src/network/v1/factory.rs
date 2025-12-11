@@ -21,7 +21,8 @@ use crate::network::v2::RaftNetworkV2;
 /// this interface implemented on the `Box<T>` or `Arc<T>`.
 #[add_async_trait]
 pub trait RaftNetworkFactory<C>: OptionalSend + OptionalSync + 'static
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Actual type of the network handling a single connection.
     type Network: RaftNetworkV2<C>;

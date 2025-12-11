@@ -15,7 +15,8 @@ use crate::vote::RaftLeaderId;
 #[since(version = "0.10.0")]
 #[derive(Clone, Debug)]
 pub struct Leader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) raft: Raft<C>,
 
@@ -30,7 +31,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Leader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub fn raft(&self) -> &Raft<C> {
         &self.raft
@@ -47,7 +49,9 @@ where C: RaftTypeConfig
     /// Only when the [`CommittedLeaderIdOf`] is a single term this method is allowed.
     /// Otherwise, the user may mistakenly get the term as the entire [`CommittedLeaderIdOf`]
     pub fn term(&self) -> C::Term
-    where C: RaftTypeConfig<LeaderId = leader_id_std::LeaderId<C>> {
+    where
+        C: RaftTypeConfig<LeaderId = leader_id_std::LeaderId<C>>,
+    {
         self.leader_id.term()
     }
 

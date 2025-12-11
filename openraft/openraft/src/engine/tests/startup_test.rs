@@ -76,12 +76,15 @@ fn test_startup_as_leader_without_logs() -> anyhow::Result<()> {
                 io_id: IOId::new_log_io(Vote::new(2, 2).into_committed(), Some(log_id(1, 1, 3)))
             },
             Command::RebuildReplicationStreams {
-                targets: vec![ReplicationProgress(3, ProgressEntry {
-                    matching: None,
-                    inflight: Inflight::None,
-                    searching_end: 4,
-                    allow_log_reversion: false,
-                })]
+                targets: vec![ReplicationProgress(
+                    3,
+                    ProgressEntry {
+                        matching: None,
+                        inflight: Inflight::None,
+                        searching_end: 4,
+                        allow_log_reversion: false,
+                    }
+                )]
             },
             Command::AppendEntries {
                 committed_vote: Vote::new(2, 2).into_committed(),
@@ -128,12 +131,15 @@ fn test_startup_as_leader_with_proposed_logs() -> anyhow::Result<()> {
                 io_id: IOId::new_log_io(Vote::new(1, 2).into_committed(), Some(log_id(1, 2, 6)))
             },
             Command::RebuildReplicationStreams {
-                targets: vec![ReplicationProgress(3, ProgressEntry {
-                    matching: None,
-                    inflight: Inflight::None,
-                    searching_end: 7,
-                    allow_log_reversion: false,
-                })]
+                targets: vec![ReplicationProgress(
+                    3,
+                    ProgressEntry {
+                        matching: None,
+                        inflight: Inflight::None,
+                        searching_end: 7,
+                        allow_log_reversion: false,
+                    }
+                )]
             },
             Command::Replicate {
                 target: 3,

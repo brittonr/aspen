@@ -10,14 +10,16 @@ use crate::type_config::alias::WriteResponderOf;
 /// RaftCore use this responder to send response to the caller.
 /// It is either a progress responder or a user-defined responder.
 pub(crate) enum CoreResponder<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     Progress(ProgressResponder<C, ClientWriteResult<C>>),
     UserDefined(WriteResponderOf<C>),
 }
 
 impl<C> Responder<C, ClientWriteResult<C>> for CoreResponder<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn on_commit(&mut self, log_id: LogId<C>) {
         match self {

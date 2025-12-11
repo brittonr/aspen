@@ -13,7 +13,8 @@ use crate::vote::raft_vote::RaftVoteExt;
 /// This is used to specify which metric to observe.
 #[derive(Debug)]
 pub enum Metric<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The current term.
     Term(C::Term),
@@ -32,7 +33,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Metric<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn name(&self) -> &'static str {
         match self {
@@ -53,7 +55,8 @@ where C: RaftTypeConfig
 
 /// Metric can be compared with RaftMetrics by comparing the corresponding field of RaftMetrics.
 impl<C> PartialEq<Metric<C>> for RaftMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn eq(&self, other: &Metric<C>) -> bool {
         match other {
@@ -70,7 +73,8 @@ where C: RaftTypeConfig
 
 /// Metric can be compared with RaftMetrics by comparing the corresponding field of RaftMetrics.
 impl<C> PartialOrd<Metric<C>> for RaftMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn partial_cmp(&self, other: &Metric<C>) -> Option<Ordering> {
         match other {

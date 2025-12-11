@@ -13,7 +13,8 @@ where
     QS: QuorumSet<ID>,
 {
     fn as_joint(&'d self) -> Joint<ID, QS, D>
-    where D: 'd;
+    where
+        D: 'd;
 }
 
 /// A wrapper that uses other data to define a joint quorum set.

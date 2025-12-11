@@ -26,7 +26,8 @@ use crate::display_ext::display_option::DisplayOptionExt;
 ///   yet become leader (no AppendEntries received).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct FlushPoint<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The vote(leader) under which this I/O operation was submitted.
     pub vote: Vote<C>,
@@ -37,7 +38,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for FlushPoint<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "FlushPoint({}, {})", self.vote, self.last_log_id.display(),)
@@ -45,7 +47,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> FlushPoint<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub fn new(vote: Vote<C>, last_log_id: Option<LogId<C>>) -> Self {
         Self { vote, last_log_id }

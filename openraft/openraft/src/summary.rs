@@ -32,7 +32,8 @@ pub trait MessageSummary<M> {
 }
 
 impl<T> MessageSummary<T> for T
-where T: fmt::Display
+where
+    T: fmt::Display,
 {
     fn summary(&self) -> String {
         self.to_string()
@@ -40,7 +41,8 @@ where T: fmt::Display
 }
 
 impl<T> MessageSummary<T> for &[T]
-where T: MessageSummary<T>
+where
+    T: MessageSummary<T>,
 {
     fn summary(&self) -> String {
         if self.is_empty() {
@@ -64,7 +66,8 @@ where T: MessageSummary<T>
 }
 
 impl<T> MessageSummary<T> for Option<T>
-where T: MessageSummary<T>
+where
+    T: MessageSummary<T>,
 {
     fn summary(&self) -> String {
         match self {

@@ -17,7 +17,8 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct LogIdRange<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The prev log id before the first to send, exclusive.
     pub(crate) prev: Option<LogIdOf<C>>,
@@ -34,7 +35,8 @@ where
 }
 
 impl<C> Display for LogIdRange<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {}]", self.prev.display(), self.last.display())
@@ -42,7 +44,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Validate for LogIdRange<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn validate(&self) -> Result<(), Box<dyn Error>> {
         validit::less_equal!(&self.prev, &self.last);
@@ -51,7 +54,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> LogIdRange<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(prev: Option<LogIdOf<C>>, last: Option<LogIdOf<C>>) -> Self {
         Self { prev, last }

@@ -231,6 +231,50 @@ pub struct DeleteResult {
     pub deleted: bool,
 }
 
+/// Request to scan keys with a given prefix.
+///
+/// Supports pagination via continuation tokens.
+/// Tiger Style: Fixed limits prevent unbounded memory usage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanRequest {
+    /// Key prefix to match (empty string matches all keys).
+    pub prefix: String,
+    /// Maximum number of results to return (default: 1000, max: 10000).
+    pub limit: Option<u32>,
+    /// Opaque continuation token from previous scan response.
+    pub continuation_token: Option<String>,
+}
+
+/// A single key-value pair from a scan operation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanEntry {
+    pub key: String,
+    pub value: String,
+}
+
+/// Response from a scan operation.
+///
+/// Tiger Style: Bounded results with explicit truncation indicator.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanResult {
+    /// Matching key-value pairs (ordered by key).
+    pub entries: Vec<ScanEntry>,
+    /// Total number of entries returned.
+    pub count: u32,
+    /// True if more results are available.
+    pub is_truncated: bool,
+    /// Token for fetching the next page (present if is_truncated is true).
+    pub continuation_token: Option<String>,
+}
+
+/// Maximum number of keys that can be returned in a single scan.
+///
+/// Tiger Style: Fixed limit prevents unbounded memory allocation.
+pub const MAX_SCAN_RESULTS: u32 = 10_000;
+
+/// Default number of keys returned in a scan if limit is not specified.
+pub const DEFAULT_SCAN_LIMIT: u32 = 1_000;
+
 #[async_trait]
 pub trait KeyValueStore: Send + Sync {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
@@ -241,6 +285,15 @@ pub trait KeyValueStore: Send + Sync {
     /// Returns Ok with deleted=true if the key was found and removed,
     /// or Ok with deleted=false if the key was not found (idempotent).
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError>;
+
+    /// Scan keys matching a prefix with pagination support.
+    ///
+    /// Returns keys in sorted order (lexicographic). The continuation_token
+    /// from the response can be used to fetch the next page of results.
+    ///
+    /// Tiger Style: Bounded results prevent unbounded memory usage.
+    /// Maximum limit is MAX_SCAN_RESULTS (10,000).
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError>;
 }
 
 /// Implement KeyValueStore for Arc<T> where T: KeyValueStore.
@@ -259,5 +312,9 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
 
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         (**self).delete(request).await
+    }
+
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        (**self).scan(request).await
     }
 }

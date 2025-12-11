@@ -20,7 +20,8 @@ use crate::type_config::alias::WatchSenderOf;
 
 /// Handle for a single heartbeat worker task.
 pub(crate) struct WorkerHandle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Channel to send heartbeat events to the worker.
     event_tx: WatchSenderOf<C, Option<HeartbeatEvent<C>>>,
@@ -35,7 +36,8 @@ where C: RaftTypeConfig
 }
 
 pub(crate) struct HeartbeatWorkersHandle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) id: C::NodeId,
 
@@ -45,7 +47,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> HeartbeatWorkersHandle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(id: C::NodeId, config: Arc<Config>) -> Self {
         Self {

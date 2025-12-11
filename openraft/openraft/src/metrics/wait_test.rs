@@ -247,7 +247,9 @@ pub(crate) type InitResult<C> = (RaftMetrics<C>, Wait<C>, WatchSenderOf<C, RaftM
 /// Build a initial state for testing of Wait:
 /// Returns init metrics, Wait, and the tx to send an updated metrics.
 fn init_wait_test<C>() -> InitResult<C>
-where C: RaftTypeConfig<NodeId = u64> {
+where
+    C: RaftTypeConfig<NodeId = u64>,
+{
     #[allow(deprecated)]
     let init = RaftMetrics {
         running_state: Ok(()),

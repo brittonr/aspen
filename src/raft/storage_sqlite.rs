@@ -573,6 +573,19 @@ impl SqliteStateMachine {
         Ok(kv_pairs)
     }
 
+    /// Async version of scan_kv_with_prefix for use in async contexts.
+    ///
+    /// This is a thin async wrapper around the sync version since SQLite
+    /// operations are synchronous but may need to be called from async code.
+    pub async fn scan_kv_with_prefix_async(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<(String, String)>, SqliteStorageError> {
+        // SQLite operations are sync but fast enough for inline execution
+        // For very large datasets, consider tokio::task::spawn_blocking
+        self.scan_kv_with_prefix(prefix)
+    }
+
     /// Validates that the SQLite state machine is consistent with the redb log.
     ///
     /// Returns error if last_applied exceeds the log's committed index, which

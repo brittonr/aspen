@@ -37,7 +37,8 @@ impl<'a, T, const SIMPLE: bool, const LOCAL: bool> DisplayInstant<'a, T, SIMPLE,
 }
 
 impl<T, const SIMPLE: bool, const LOCAL: bool> fmt::Display for DisplayInstant<'_, T, SIMPLE, LOCAL>
-where T: Instant
+where
+    T: Instant,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Convert Instant to SystemTime
@@ -79,7 +80,8 @@ pub(crate) trait DisplayInstantExt<'a, T> {
 }
 
 impl<T> DisplayInstantExt<'_, T> for T
-where T: Instant
+where
+    T: Instant,
 {
     fn display(&self) -> DisplayInstant<'_, T, true> {
         DisplayInstant(self)

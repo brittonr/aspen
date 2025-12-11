@@ -20,7 +20,8 @@ use crate::vote::committed::CommittedVote;
 #[derive(Debug, Clone)]
 #[derive(PartialEq, Eq)]
 pub(crate) struct ReplicationSessionId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The Leader or Candidate this replication belongs to.
     pub(crate) leader_vote: CommittedVote<C>,
@@ -30,7 +31,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Display for ReplicationSessionId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -43,7 +45,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> ReplicationSessionId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(vote: CommittedVote<C>, membership_log_id: Option<LogIdOf<C>>) -> Self {
         Self {

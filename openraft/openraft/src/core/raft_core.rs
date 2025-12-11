@@ -1795,12 +1795,15 @@ where
                 .iter()
                 .filter(|progress_entry| progress_entry.id != self.id)
                 .map(|progress_entry| {
-                    (progress_entry.id.clone(), HeartbeatEvent {
-                        time: now,
-                        session_id: session_id.clone(),
-                        matching: progress_entry.val.matching.clone(),
-                        committed: committed.clone(),
-                    })
+                    (
+                        progress_entry.id.clone(),
+                        HeartbeatEvent {
+                            time: now,
+                            session_id: session_id.clone(),
+                            matching: progress_entry.val.matching.clone(),
+                            committed: committed.clone(),
+                        },
+                    )
                 });
 
         self.heartbeat_handle.broadcast(events);

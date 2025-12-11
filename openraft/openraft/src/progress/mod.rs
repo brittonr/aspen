@@ -47,7 +47,8 @@ where
     /// It returns `Err(quorum_accepted)` if the `id` is not found.
     /// The provided function `f` updates the value of `id`.
     fn update_with<F>(&mut self, id: &ID, f: F) -> Result<&Prog, &Prog>
-    where F: FnOnce(&mut Ent);
+    where
+        F: FnOnce(&mut Ent);
 
     /// Update one of the scalar values and re-calculate the quorum-accepted value.
     ///
@@ -60,7 +61,9 @@ where
     ///
     /// It returns `Err(quorum_accepted)` if the `id` is not found.
     fn increase_to(&mut self, id: &ID, value: Ent) -> Result<&Prog, &Prog>
-    where Ent: PartialOrd {
+    where
+        Ent: PartialOrd,
+    {
         self.update_with(id, |x| {
             if value > *x {
                 *x = value;

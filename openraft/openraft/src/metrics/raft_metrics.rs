@@ -165,7 +165,8 @@ pub struct RaftMetrics<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for RaftMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Metrics{{")?;
@@ -210,7 +211,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> RaftMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create initial metrics for a new Raft node with the given ID.
     pub fn new_initial(id: C::NodeId) -> Self {
@@ -296,7 +298,8 @@ pub struct RaftDataMetrics<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for RaftDataMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DataMetrics{{")?;
@@ -351,7 +354,8 @@ pub struct RaftServerMetrics<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for RaftServerMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ServerMetrics{{")?;
@@ -372,7 +376,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> RaftServerMetrics<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create initial server metrics for a new Raft node.
     ///

@@ -3,7 +3,8 @@ use crate::entry::RaftEntry;
 use crate::log_id::ref_log_id::RefLogId;
 
 pub(crate) trait RaftEntryExt<C>: RaftEntry<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Returns a lightweight [`RefLogId`] that contains the log id information.
     fn ref_log_id(&self) -> RefLogId<'_, C> {

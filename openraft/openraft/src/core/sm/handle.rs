@@ -13,7 +13,8 @@ use crate::type_config::alias::MpscUnboundedWeakSenderOf;
 
 /// State machine worker handle for sending command to it.
 pub(crate) struct Handle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(in crate::core::sm) cmd_tx: MpscUnboundedSenderOf<C, sm::Command<C>>,
 
@@ -22,7 +23,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Handle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn send(&mut self, cmd: sm::Command<C>) -> Result<(), SendError<sm::Command<C>>> {
         tracing::debug!("sending command to state machine worker: {:?}", cmd);
@@ -39,7 +41,8 @@ where C: RaftTypeConfig
 
 /// A handle for retrieving a snapshot from the state machine.
 pub(crate) struct SnapshotReader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Weak command sender to the state machine worker.
     ///
@@ -50,7 +53,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> SnapshotReader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Get a snapshot from the state machine.
     ///

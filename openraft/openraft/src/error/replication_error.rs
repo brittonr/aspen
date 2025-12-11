@@ -8,7 +8,8 @@ use crate::error::replication_closed::ReplicationClosed;
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ReplicationError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     #[error(transparent)]
     HigherVote(#[from] HigherVote<C>),

@@ -11,7 +11,8 @@ use crate::raft_state::io_state::IOState;
 /// Queues of pending responds waiting for IO conditions to be satisfied.
 #[derive(Debug, Default)]
 pub(crate) struct PendingResponds<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Responds waiting for log IO to be flushed to storage.
     pub(crate) on_log_io: VecDeque<PendingRespond<C, IOId<C>>>,
@@ -27,7 +28,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> PendingResponds<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(capacity: usize) -> Self {
         Self {
@@ -70,7 +72,8 @@ where
 /// Iterates through all phases (LogIO, LogFlush, Apply, Snapshot) and yields responds
 /// whose waiting conditions are satisfied by the current IO state.
 pub(crate) struct DrainSatisfied<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pending_responds: &'a mut PendingResponds<C>,
     io_state: &'a IOState<C>,
@@ -105,7 +108,8 @@ impl fmt::Display for DrainPhase {
 }
 
 impl<'a, C> Iterator for DrainSatisfied<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     type Item = (DrainPhase, Respond<C>);
 

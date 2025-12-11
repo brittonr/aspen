@@ -6,7 +6,8 @@ use crate::type_config::alias::WatchSenderOf;
 ///
 /// Dropping this handle cancels the snapshot transmission.
 pub(crate) struct SnapshotTransmitterHandle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The spawn handle of the `SnapshotTransmitter` task.
     pub(crate) _join_handle: JoinHandleOf<C, ()>,

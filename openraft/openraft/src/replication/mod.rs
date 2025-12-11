@@ -62,7 +62,8 @@ use crate::vote::raft_vote::RaftVoteExt;
 
 /// The handle to a spawned replication stream.
 pub(crate) struct ReplicationHandle<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) session_id: ReplicationSessionId<C>,
 

@@ -16,7 +16,8 @@ mod purge_log_test;
 
 /// Handle raft-log related operations
 pub(crate) struct LogHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) config: &'x mut EngineConfig<C>,
     pub(crate) state: &'x mut RaftState<C>,
@@ -24,7 +25,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> LogHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Purge log entries up to `RaftState.purge_upto()`, inclusive.
     #[tracing::instrument(level = "debug", skip_all)]

@@ -40,7 +40,8 @@ use crate::base::OptionalFeatures;
 /// [`RaftLeaderId`]: crate::vote::RaftLeaderId
 #[since(version = "0.10.0")]
 pub trait RaftCommittedLeaderId
-where Self: OptionalFeatures + Ord + Clone + Debug + Display + Default + 'static
+where
+    Self: OptionalFeatures + Ord + Clone + Debug + Display + Default + 'static,
 {
 }
 

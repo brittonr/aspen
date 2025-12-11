@@ -21,13 +21,15 @@ use crate::type_config::alias::WriteResponderOf;
 /// and writes.
 #[since(version = "0.10.0")]
 pub(crate) struct AppApi<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     inner: &'a RaftInner<C>,
 }
 
 impl<'a, C> AppApi<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(in crate::raft) fn new(inner: &'a RaftInner<C>) -> Self {
         Self { inner }

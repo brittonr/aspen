@@ -8,7 +8,8 @@ pub(crate) trait UnwrapInfallible<T> {
 }
 
 impl<T, E> UnwrapInfallible<T> for Result<T, E>
-where E: Into<Infallible>
+where
+    E: Into<Infallible>,
 {
     fn into_ok(self) -> T {
         match self {
@@ -24,6 +25,8 @@ where E: Into<Infallible>
 
 /// Convert `Result<T, E>` to `T`, if `E` is a `never` type.
 pub(crate) fn into_ok<T, E>(result: Result<T, E>) -> T
-where E: Into<Infallible> {
+where
+    E: Into<Infallible>,
+{
     UnwrapInfallible::into_ok(result)
 }

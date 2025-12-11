@@ -47,7 +47,8 @@ use crate::type_config::alias::VoteOf;
 #[since(version = "0.10.0")]
 #[add_async_trait]
 pub trait RaftNetworkV2<C>: OptionalSend + OptionalSync + 'static
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Send an AppendEntries RPC to the target.
     async fn append_entries(

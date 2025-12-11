@@ -9,13 +9,15 @@ use crate::error::InProgress;
 /// the necessary conditions are met. It operates at the `Engine` and `RaftState` level and
 /// serves as the outermost API for a consensus engine.
 pub(crate) struct ChangeHandler<'m, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) state: &'m MembershipState<C>,
 }
 
 impl<C> ChangeHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Builds a new membership configuration by applying changes to the current configuration.
     ///

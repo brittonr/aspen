@@ -26,7 +26,8 @@ use crate::vote::RaftVote;
 /// - An I/O error occurred during log reading
 #[derive(Debug, thiserror::Error)]
 pub enum LeaderBoundedStreamError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The leader has changed, making the stream invalid.
     #[error(transparent)]
@@ -58,7 +59,8 @@ pub type EntriesStreamResult<C> = Result<EntryOf<C>, io::Error>;
 /// [`RaftLogStorage::save_vote`]: crate::storage::RaftLogStorage::save_vote
 #[add_async_trait]
 pub trait RaftLogReader<C>: OptionalSend + OptionalSync + 'static
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Read log entries as a stream, conditional on vote state.
     ///
@@ -172,7 +174,9 @@ where C: RaftTypeConfig
     /// streaming entries incrementally.
     #[since(version = "0.10.0")]
     async fn entries_stream<RB>(&mut self, range: RB) -> impl Stream<Item = EntriesStreamResult<C>> + OptionalSend
-    where RB: RangeBounds<u64> + Clone + Debug + OptionalSend {
+    where
+        RB: RangeBounds<u64> + Clone + Debug + OptionalSend,
+    {
         use futures::stream;
 
         let fu = async move {

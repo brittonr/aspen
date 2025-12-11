@@ -15,6 +15,51 @@ path = "src/bin/aspen-s3.rs"
 [workspace]
 members = [".", "scripts/tutorial-verify"]
 
+# Required for vendored openraft workspace inheritance
+[workspace.package]
+version = "0.10.0"
+edition = "2024"
+authors = ["Databend Authors <opensource@datafuselabs.com>", "Anthony Dodd <Dodd.AnthonyJosiah@gmail.com>"]
+categories = ["algorithms", "asynchronous", "data-structures"]
+description = "Advanced Raft consensus"
+documentation = "https://docs.rs/openraft"
+homepage = "https://github.com/databendlabs/openraft"
+keywords = ["raft", "consensus"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/databendlabs/openraft"
+
+# Workspace dependencies for openraft (mirrors openraft/Cargo.toml)
+[workspace.dependencies]
+anyerror = "0.1.10"
+anyhow = "1.0.63"
+async-entry = "0.3.1"
+byte-unit = "5.1.4"
+bytes = "1.0"
+chrono = "0.4"
+clap = { version = "4.1.11", features = ["derive", "env"] }
+derive_more = { version = "1.0", features = ["std", "from", "try_into", "display"] }
+futures = "0.3"
+lazy_static = "1.4.0"
+maplit = "1.0.2"
+openraft-macros = { path = "openraft/macros", version = "0.10.0" }
+pretty_assertions = "1.0.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+rand = "0.9"
+semver = "1.0.14"
+serde = { version = "1.0.114", features = ["derive", "rc"] }
+serde_json = "1.0.57"
+syn = "2.0"
+tempfile = "3.4.0"
+test-harness = "0.3.0"
+thiserror = "1.0.49"
+tokio = { version = "1.22", default-features = false, features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1.40"
+tracing-appender = "0.2.0"
+tracing-futures = "0.2.4"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+validit = "0.2.2"
+
 [dependencies]
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"

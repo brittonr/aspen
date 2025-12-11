@@ -21,7 +21,8 @@ use crate::vote::RaftLeaderId;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The term of the leader.
     pub term: C::Term,
@@ -31,7 +32,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> PartialOrd for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -40,7 +42,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "T{}-N{}", self.term, self.voted_for.display())
@@ -48,7 +51,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> PartialEq<CommittedLeaderId<C>> for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn eq(&self, _other: &CommittedLeaderId<C>) -> bool {
         // Committed and non-committed are never equal
@@ -57,7 +61,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> PartialOrd<CommittedLeaderId<C>> for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn partial_cmp(&self, other: &CommittedLeaderId<C>) -> Option<Ordering> {
         if self.term == other.term {
@@ -73,7 +78,8 @@ where C: RaftTypeConfig
 ///
 /// Not required by [`RaftLeaderId`] trait bound, but provides symmetric comparison semantics.
 impl<C> PartialEq<LeaderId<C>> for CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn eq(&self, _other: &LeaderId<C>) -> bool {
         false
@@ -84,7 +90,8 @@ where C: RaftTypeConfig
 ///
 /// Not required by [`RaftLeaderId`] trait bound, but provides symmetric comparison semantics.
 impl<C> PartialOrd<LeaderId<C>> for CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn partial_cmp(&self, other: &LeaderId<C>) -> Option<Ordering> {
         if self.term == other.term {
@@ -96,7 +103,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> RaftLeaderId<C> for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     type Committed = CommittedLeaderId<C>;
 
@@ -140,7 +148,8 @@ where C: RaftTypeConfig
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The term of the committed leader.
     pub term: C::Term,
@@ -148,7 +157,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a new committed leader ID for the given term.
     pub fn new(term: C::Term, node_id: C::NodeId) -> Self {
@@ -158,7 +168,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Deref for CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     type Target = C::Term;
 
@@ -168,7 +179,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> DerefMut for CommittedLeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.term

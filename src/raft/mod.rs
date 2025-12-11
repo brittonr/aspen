@@ -68,8 +68,9 @@ use tracing::{info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError,
-    ReadRequest, ReadResult, WriteCommand, WriteRequest, WriteResult,
+    ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
+    KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
+    ScanResult, WriteCommand, WriteRequest, WriteResult,
 };
 use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use crate::raft::storage::StateMachineStore;
@@ -105,6 +106,95 @@ impl StateMachineVariant {
                 reason: format!("sqlite storage read error: {}", err),
             }),
         }
+    }
+
+    /// Scan keys matching a prefix with pagination support.
+    ///
+    /// Returns keys in sorted order (lexicographic).
+    /// Tiger Style: Bounded results prevent unbounded memory usage.
+    pub async fn scan(&self, request: &ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        let limit = request
+            .limit
+            .unwrap_or(DEFAULT_SCAN_LIMIT)
+            .min(MAX_SCAN_RESULTS) as usize;
+
+        // Decode continuation token (format: base64(last_key))
+        let start_after = request.continuation_token.as_ref().and_then(|token| {
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, token)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+        });
+
+        match self {
+            Self::InMemory(sm) => {
+                let kv_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
+                Self::build_scan_result(kv_pairs, &start_after, limit)
+            }
+            Self::Redb(sm) => {
+                let kv_pairs = sm
+                    .scan_kv_with_prefix_async(&request.prefix)
+                    .await
+                    .map_err(|err| KeyValueStoreError::Failed {
+                        reason: format!("redb storage scan error: {}", err),
+                    })?;
+                Self::build_scan_result(kv_pairs, &start_after, limit)
+            }
+            Self::Sqlite(sm) => {
+                let kv_pairs = sm
+                    .scan_kv_with_prefix_async(&request.prefix)
+                    .await
+                    .map_err(|err| KeyValueStoreError::Failed {
+                        reason: format!("sqlite storage scan error: {}", err),
+                    })?;
+                Self::build_scan_result(kv_pairs, &start_after, limit)
+            }
+        }
+    }
+
+    /// Build a ScanResult from key-value pairs with pagination.
+    fn build_scan_result(
+        mut kv_pairs: Vec<(String, String)>,
+        start_after: &Option<String>,
+        limit: usize,
+    ) -> Result<ScanResult, KeyValueStoreError> {
+        // Sort by key for consistent ordering
+        kv_pairs.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Filter to entries after continuation token
+        let filtered: Vec<_> = if let Some(after) = start_after {
+            kv_pairs
+                .into_iter()
+                .filter(|(k, _)| k.as_str() > after.as_str())
+                .collect()
+        } else {
+            kv_pairs
+        };
+
+        // Check if truncated and build entries
+        let is_truncated = filtered.len() > limit;
+        let entries: Vec<ScanEntry> = filtered
+            .into_iter()
+            .take(limit)
+            .map(|(key, value)| ScanEntry { key, value })
+            .collect();
+
+        // Generate continuation token if truncated
+        let continuation_token = if is_truncated {
+            entries
+                .last()
+                .map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
+        } else {
+            None
+        };
+
+        let count = entries.len() as u32;
+
+        Ok(ScanResult {
+            entries,
+            count,
+            is_truncated,
+            continuation_token,
+        })
     }
 }
 
@@ -167,6 +257,11 @@ pub enum RaftActorMessage {
     Delete(
         DeleteRequest,
         RpcReplyPort<Result<DeleteResult, KeyValueStoreError>>,
+    ),
+    /// Scan keys matching a prefix with pagination.
+    Scan(
+        ScanRequest,
+        RpcReplyPort<Result<ScanResult, KeyValueStoreError>>,
     ),
     /// Get current Raft metrics for observability.
     GetMetrics(RpcReplyPort<Result<RaftMetrics<AppTypeConfig>, ControlPlaneError>>),
@@ -257,6 +352,29 @@ impl Actor for RaftActor {
                 let result = async {
                     ensure_initialized_kv(state)?;
                     handle_delete(state, request).await
+                }
+                .await;
+                let _ = reply.send(result);
+            }
+            RaftActorMessage::Scan(request, reply) => {
+                let result = async {
+                    ensure_initialized_kv(state)?;
+                    // Scan is a read operation - use ReadIndex for linearizability
+                    let linearizer = state
+                        .raft
+                        .get_read_linearizer(ReadPolicy::ReadIndex)
+                        .await
+                        .map_err(|err| KeyValueStoreError::Failed {
+                            reason: err.to_string(),
+                        })?;
+                    // Wait for read to become linearizable
+                    linearizer.await_ready(&state.raft).await.map_err(|err| {
+                        KeyValueStoreError::Failed {
+                            reason: err.to_string(),
+                        }
+                    })?;
+                    // Perform scan on state machine
+                    state.state_machine.scan(&request).await
                 }
                 .await;
                 let _ = reply.send(result);
@@ -755,6 +873,15 @@ impl KeyValueStore for RaftControlClient {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         // 5s allows for leader election + quorum replication
         call_t!(self.actor, RaftActorMessage::Delete, 5000, request).map_err(|err| {
+            KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }
+        })?
+    }
+
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        // 5s allows for ReadIndex consensus round-trip
+        call_t!(self.actor, RaftActorMessage::Scan, 5000, request).map_err(|err| {
             KeyValueStoreError::Failed {
                 reason: err.to_string(),
             }

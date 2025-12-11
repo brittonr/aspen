@@ -17,7 +17,8 @@ use crate::vote::non_committed::UncommittedVote;
 
 /// A message coming from the internal components.
 pub(crate) enum Notification<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     VoteResponse {
         target: C::NodeId,
@@ -84,7 +85,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Notification<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn sm(command_result: sm::CommandResult<C>) -> Self {
         Self::StateMachine { command_result }
@@ -92,7 +94,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Notification<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

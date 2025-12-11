@@ -113,7 +113,9 @@ where
     /// let state = vote_progress.wait_until(|v| v.as_ref().map_or(false, |vote| vote.leader_id().term == 5)).await?;
     /// ```
     pub async fn wait_until<F>(&mut self, condition: F) -> Result<T, RecvError>
-    where F: Fn(&T) -> bool + OptionalSend {
+    where
+        F: Fn(&T) -> bool + OptionalSend,
+    {
         self.inner.wait_until(condition).await
     }
 
@@ -200,7 +202,8 @@ mod tests {
         type AsyncRuntime = TokioRuntime;
         type Responder<T>
             = crate::impls::OneshotResponder<Self, T>
-        where T: OptionalSend + 'static;
+        where
+            T: OptionalSend + 'static;
     }
 
     #[tokio::test]

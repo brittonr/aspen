@@ -8,7 +8,8 @@ use crate::vote::RaftLeaderId;
 pub struct LeaderIdCompare<C>(PhantomData<C>);
 
 impl<C> LeaderIdCompare<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Implements [`PartialOrd`] for LeaderId to enforce the standard Raft behavior of at most one
     /// leader per term.
@@ -17,7 +18,9 @@ where C: RaftTypeConfig
     /// IDs with the same term incomparable (returning None), unless they refer to the same
     /// node.
     pub fn std<LID>(a: &LID, b: &LID) -> Option<Ordering>
-    where LID: RaftLeaderId<C> {
+    where
+        LID: RaftLeaderId<C>,
+    {
         match a.term().cmp(&b.term()) {
             Ordering::Equal => {
                 if a.node_id() == b.node_id() {
@@ -32,7 +35,9 @@ where C: RaftTypeConfig
 
     /// Implements [`PartialOrd`] for LeaderId to allow multiple leaders per term.
     pub fn adv<LID>(a: &LID, b: &LID) -> Option<Ordering>
-    where LID: RaftLeaderId<C> {
+    where
+        LID: RaftLeaderId<C>,
+    {
         let res = (a.term(), a.node_id()).cmp(&(b.term(), b.node_id()));
         Some(res)
     }

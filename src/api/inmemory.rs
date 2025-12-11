@@ -6,8 +6,9 @@ use tokio::sync::Mutex;
 
 use super::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
-    DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest,
-    ReadResult, WriteCommand, WriteRequest, WriteResult,
+    DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
+    KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
+    ScanResult, WriteCommand, WriteRequest, WriteResult,
 };
 
 #[derive(Clone, Default)]
@@ -147,6 +148,66 @@ impl KeyValueStore for DeterministicKeyValueStore {
         Ok(DeleteResult {
             key: request.key,
             deleted,
+        })
+    }
+
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        let inner = self.inner.lock().await;
+
+        // Apply Tiger Style bounded limit
+        let limit = request
+            .limit
+            .unwrap_or(DEFAULT_SCAN_LIMIT)
+            .min(MAX_SCAN_RESULTS) as usize;
+
+        // Decode continuation token (format: base64(last_key))
+        let start_after = request.continuation_token.as_ref().and_then(|token| {
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, token)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+        });
+
+        // Collect matching keys and sort them
+        let mut matching: Vec<_> = inner
+            .iter()
+            .filter(|(k, _)| k.starts_with(&request.prefix))
+            .filter(|(k, _)| {
+                // Skip keys <= continuation token
+                match &start_after {
+                    Some(after) => k.as_str() > after.as_str(),
+                    None => true,
+                }
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        // Sort by key for consistent ordering
+        matching.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Take limit + 1 to check if there are more results
+        let is_truncated = matching.len() > limit;
+        let entries: Vec<ScanEntry> = matching
+            .into_iter()
+            .take(limit)
+            .map(|(key, value)| ScanEntry { key, value })
+            .collect();
+
+        // Generate continuation token if truncated
+        let continuation_token = if is_truncated {
+            entries
+                .last()
+                .map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
+        } else {
+            None
+        };
+
+        let count = entries.len() as u32;
+
+        Ok(ScanResult {
+            entries,
+            count,
+            is_truncated,
+            continuation_token,
         })
     }
 }

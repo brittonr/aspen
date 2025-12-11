@@ -12,7 +12,8 @@ use crate::type_config::alias::LogIdOf;
 /// Sent by a replication task `ReplicationCore`.
 #[derive(Debug, Clone)]
 pub(crate) struct Progress<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The ID of the target node for which the match index is to be updated.
     pub(crate) target: C::NodeId,
@@ -38,7 +39,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Progress<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -58,7 +60,8 @@ where C: RaftTypeConfig
 pub(crate) struct ReplicationResult<C: RaftTypeConfig>(pub(crate) Result<Option<LogIdOf<C>>, LogIdOf<C>>);
 
 impl<C> fmt::Display for ReplicationResult<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {

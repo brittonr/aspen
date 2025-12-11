@@ -29,7 +29,8 @@ mod transfer_leader_test;
 /// - Change membership;
 /// - etc.
 pub(crate) struct LeaderHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) config: &'x mut EngineConfig<C>,
     pub(crate) leader: &'x mut Leader<C, LeaderQuorumSet<C>>,
@@ -38,7 +39,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> LeaderHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Append new log entries by a leader.
     ///

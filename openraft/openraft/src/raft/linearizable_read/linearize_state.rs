@@ -23,7 +23,8 @@ use crate::display_ext::DisplayOptionExt;
 #[since(version = "0.10.0")]
 #[derive(Debug, Clone)]
 pub struct LinearizeState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The node from which this Linearizer collects the applied log ID.
     node_id: C::NodeId,
@@ -32,7 +33,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for LinearizeState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "LinearizeState[id={}]", self.node_id)?;
@@ -47,7 +49,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> LinearizeState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(node_id: C::NodeId, read_log_id: LogId<C>, applied: Option<LogId<C>>) -> Self {
         Self {

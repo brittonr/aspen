@@ -9,7 +9,9 @@ where
     QS: QuorumSet<ID>,
 {
     fn as_joint(&'d self) -> Joint<ID, QS, &'d [QS]>
-    where &'d [QS]: 'd {
+    where
+        &'d [QS]: 'd,
+    {
         Joint::new(self)
     }
 }

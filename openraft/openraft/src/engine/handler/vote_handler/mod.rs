@@ -40,7 +40,8 @@ mod handle_message_vote_test;
 /// A `vote` defines the state of an openraft node.
 /// See [`RaftState::calc_server_state`].
 pub(crate) struct VoteHandler<'st, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) config: &'st mut EngineConfig<C>,
     pub(crate) state: &'st mut RaftState<C>,
@@ -50,7 +51,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> VoteHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Validate and accept the input `vote` and send the result via `tx`.
     ///

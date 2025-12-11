@@ -8,14 +8,16 @@ use crate::vote::raft_vote::RaftVoteExt;
 
 /// Establish a leader for the Engine, when Candidate finishes voting stage.
 pub(crate) struct EstablishHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) config: &'x mut EngineConfig<C>,
     pub(crate) leader: &'x mut LeaderState<C>,
 }
 
 impl<'x, C> EstablishHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Consume the `candidate` state and establish a leader.
     pub(crate) fn establish(

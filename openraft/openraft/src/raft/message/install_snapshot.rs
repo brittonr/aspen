@@ -68,7 +68,8 @@ impl<C: RaftTypeConfig> SnapshotResponse<C> {
 }
 
 impl<C> From<SnapshotResponse<C>> for InstallSnapshotResponse<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(snap_resp: SnapshotResponse<C>) -> Self {
         Self { vote: snap_resp.vote }

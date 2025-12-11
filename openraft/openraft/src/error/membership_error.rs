@@ -20,7 +20,8 @@ pub enum MembershipError<C: RaftTypeConfig> {
 }
 
 impl<C> From<MembershipError<C>> for ChangeMembershipError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(me: MembershipError<C>) -> Self {
         match me {

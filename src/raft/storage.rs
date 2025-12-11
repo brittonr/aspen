@@ -799,6 +799,18 @@ impl StateMachineStore {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
+
+    /// Async version of scan_kv_with_prefix for use in async contexts.
+    ///
+    /// Returns a list of (key, value) pairs matching the prefix.
+    pub async fn scan_kv_with_prefix_async(&self, prefix: &str) -> Vec<(String, String)> {
+        let sm = self.state_machine.read().await;
+        sm.data
+            .iter()
+            .filter(|(k, _)| k.starts_with(prefix))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
 }
 
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<StateMachineStore> {

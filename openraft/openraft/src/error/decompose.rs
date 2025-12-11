@@ -14,7 +14,8 @@ use crate::error::into_ok::into_ok;
 /// to `Result<Result<R, Self::InnerError>, OuterError>`,
 /// where `SomeCompositeError` is a composite of `Self::InnerError` and `OuterError`.
 pub trait DecomposeResult<C, R, OuterError>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The inner error type extracted from the composite error.
     type InnerError;
@@ -35,7 +36,8 @@ where C: RaftTypeConfig
 }
 
 impl<C, R, E> DecomposeResult<C, R, RaftError<C>> for Result<R, RaftError<C, E>>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     type InnerError = E;
 

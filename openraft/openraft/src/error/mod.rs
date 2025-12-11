@@ -74,7 +74,8 @@ pub type CheckIsLeaderError<C> = LinearizableReadError<C>;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum RaftError<C, E = Infallible>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// API-specific error returned by Raft API methods.
     #[error(transparent)]
@@ -88,7 +89,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> RaftError<C, Infallible>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Convert to a [`Fatal`] error if its `APIError` variant is [`Infallible`],
     /// otherwise panic.
@@ -137,7 +139,9 @@ where
 
     /// Return a reference to ForwardToLeader if Self::APIError contains it.
     pub fn forward_to_leader(&self) -> Option<&ForwardToLeader<C>>
-    where E: TryAsRef<ForwardToLeader<C>> {
+    where
+        E: TryAsRef<ForwardToLeader<C>>,
+    {
         match self {
             RaftError::APIError(api_err) => api_err.try_as_ref(),
             RaftError::Fatal(_) => None,
@@ -146,7 +150,9 @@ where
 
     /// Try to convert self to ForwardToLeader error if APIError is a ForwardToLeader error.
     pub fn into_forward_to_leader(self) -> Option<ForwardToLeader<C>>
-    where E: TryInto<ForwardToLeader<C>> {
+    where
+        E: TryInto<ForwardToLeader<C>>,
+    {
         match self {
             RaftError::APIError(api_err) => api_err.try_into().ok(),
             RaftError::Fatal(_) => None,
@@ -165,7 +171,8 @@ where
 }
 
 impl<C, E> From<StorageError<C>> for RaftError<C, E>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(se: StorageError<C>) -> Self {
         RaftError::Fatal(Fatal::from(se))
@@ -187,7 +194,8 @@ where C: RaftTypeConfig
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum Fatal<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Storage error that caused the Raft node to stop.
     #[error(transparent)]
@@ -218,7 +226,8 @@ pub enum InstallSnapshotError {
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum ClientWriteError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// This node is not the leader; request should be forwarded to the leader.
     #[error(transparent)]
@@ -230,7 +239,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> TryAsRef<ForwardToLeader<C>> for ClientWriteError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn try_as_ref(&self) -> Option<&ForwardToLeader<C>> {
         match self {
@@ -261,7 +271,8 @@ pub enum ChangeMembershipError<C: RaftTypeConfig> {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, derive_more::TryInto)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum InitializeError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Initialization operation is not allowed in the current state.
     #[error(transparent)]
@@ -308,7 +319,9 @@ where
 {
     /// Return a reference to ForwardToLeader error if Self::RemoteError contains one.
     pub fn forward_to_leader(&self) -> Option<&ForwardToLeader<C>>
-    where E: TryAsRef<ForwardToLeader<C>> {
+    where
+        E: TryAsRef<ForwardToLeader<C>>,
+    {
         match self {
             RPCError::Timeout(_) => None,
             RPCError::Unreachable(_) => None,
@@ -319,7 +332,8 @@ where
 }
 
 impl<C> RPCError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Convert to a [`RPCError`] with [`RaftError`] as the error type.
     pub fn with_raft_error<E: Error>(self) -> RPCError<C, RaftError<C, E>> {
@@ -336,7 +350,8 @@ where C: RaftTypeConfig
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[error("error occur on remote peer {target}: {source}")]
 pub struct RemoteError<C, T: Error>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The node ID of the remote peer where the error occurred.
     #[cfg_attr(feature = "serde", serde(bound = ""))]
@@ -449,7 +464,8 @@ pub struct Timeout<C: RaftTypeConfig> {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 #[error("has to forward request to: {leader_id:?}, {leader_node:?}")]
 pub struct ForwardToLeader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The node ID of the current leader, if known.
     pub leader_id: Option<C::NodeId>,
@@ -458,7 +474,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> ForwardToLeader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a ForwardToLeader error with no known leader information.
     pub const fn empty() -> Self {
@@ -537,7 +554,8 @@ pub struct NotAllowed<C: RaftTypeConfig> {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 #[error("node {node_id} has to be a member. membership:{membership:?}")]
 pub struct NotInMembers<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The node ID that is not in the membership.
     pub node_id: C::NodeId,
@@ -575,7 +593,8 @@ pub(crate) enum RejectVoteRequest<C: RaftTypeConfig> {
 }
 
 impl<C> From<RejectVoteRequest<C>> for AppendEntriesResponse<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(r: RejectVoteRequest<C>) -> Self {
         match r {
@@ -600,7 +619,8 @@ pub(crate) enum RejectAppendEntries<C: RaftTypeConfig> {
 }
 
 impl<C> From<RejectVoteRequest<C>> for RejectAppendEntries<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(r: RejectVoteRequest<C>) -> Self {
         match r {
@@ -613,7 +633,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> From<Result<(), RejectAppendEntries<C>>> for AppendEntriesResponse<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(r: Result<(), RejectAppendEntries<C>>) -> Self {
         match r {

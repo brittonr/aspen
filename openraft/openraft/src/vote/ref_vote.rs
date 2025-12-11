@@ -9,14 +9,16 @@ use crate::vote::RaftVote;
 /// implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RefVote<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) leader_id: &'a C::LeaderId,
     pub(crate) committed: bool,
 }
 
 impl<'a, C> RefVote<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(leader_id: &'a C::LeaderId, committed: bool) -> Self {
         Self { leader_id, committed }
@@ -35,7 +37,8 @@ where C: RaftTypeConfig
 
 // Commit votes have a total order relation with all other votes
 impl<'a, C> PartialOrd for RefVote<'a, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     #[inline]
     fn partial_cmp(&self, other: &RefVote<'a, C>) -> Option<Ordering> {
@@ -60,7 +63,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> std::fmt::Display for RefVote<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(

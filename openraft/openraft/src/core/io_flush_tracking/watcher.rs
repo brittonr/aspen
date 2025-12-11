@@ -34,7 +34,8 @@ use crate::type_config::alias::WatchReceiverOf;
 /// - Use log progress to wait for specific log entries to be durable
 /// - Use vote progress to wait for leadership changes to be persisted
 pub(crate) struct IoProgressWatcher<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Receiver for log I/O progress (vote + log appends).
     log: WatchReceiverOf<C, Option<FlushPoint<C>>>,
@@ -53,7 +54,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> IoProgressWatcher<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a new progress watcher/sender pair.
     ///

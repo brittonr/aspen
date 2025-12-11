@@ -43,7 +43,8 @@ mod update_matching_test;
 /// - Purging in-snapshot logs;
 /// - etc.
 pub(crate) struct ReplicationHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) config: &'x mut EngineConfig<C>,
     pub(crate) leader: &'x mut Leader<C, LeaderQuorumSet<C>>,
@@ -52,7 +53,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> ReplicationHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Append a new membership and update related state such as replication streams.
     ///

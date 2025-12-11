@@ -11,7 +11,8 @@ use crate::type_config::alias::LogIdOf;
 /// Extension trait for [`RaftLogReader`] providing convenience methods for log access.
 #[add_async_trait]
 pub trait RaftLogReaderExt<C>: RaftLogReader<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Try to get a log entry.
     ///

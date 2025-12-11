@@ -9,7 +9,8 @@ use crate::engine::respond_command::PendingRespond;
 /// The entry of output from Engine to the runtime.
 #[derive(Debug, Default)]
 pub(crate) struct EngineOutput<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Command queue that needs to be executed by `RaftRuntime`.
     pub(crate) commands: VecDeque<Command<C>>,
@@ -19,7 +20,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> EngineOutput<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(command_buffer_size: usize) -> Self {
         let pending_capacity = 1024;

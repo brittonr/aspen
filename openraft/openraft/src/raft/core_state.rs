@@ -6,7 +6,8 @@ use crate::type_config::alias::WatchReceiverOf;
 
 /// The running state of RaftCore
 pub(in crate::raft) enum CoreState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The RaftCore task is still running.
     Running(JoinHandleOf<C, Result<Infallible, Fatal<C>>>),
@@ -19,7 +20,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> CoreState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Returns `true` if the RaftCore task is still running.
     pub(in crate::raft) fn is_running(&self) -> bool {

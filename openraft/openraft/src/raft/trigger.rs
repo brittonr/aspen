@@ -26,13 +26,15 @@ use crate::type_config::TypeConfigExt;
 ///
 /// [`Raft::trigger()`]: crate::Raft::trigger
 pub struct Trigger<'r, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     raft_inner: &'r RaftInner<C>,
 }
 
 impl<'r, C> Trigger<'r, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(in crate::raft) fn new(raft_inner: &'r RaftInner<C>) -> Self {
         Self { raft_inner }

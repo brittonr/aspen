@@ -75,7 +75,10 @@ async fn main() -> Result<()> {
     let mut builder = S3ServiceBuilder::new(s3_service);
 
     // Configure authentication with static credentials
-    info!("Configuring S3 authentication (access_key={})", args.access_key);
+    info!(
+        "Configuring S3 authentication (access_key={})",
+        args.access_key
+    );
     let secret_key = SecretKey::from(args.secret_key.as_str());
     let auth = SimpleAuth::from_single(args.access_key.clone(), secret_key);
     builder.set_auth(auth);

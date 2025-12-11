@@ -33,7 +33,7 @@ use tracing::instrument;
 
 use crate::api::{
     DeleteRequest, DeleteResult, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
-    WriteRequest, WriteResult,
+    ScanRequest, ScanResult, WriteRequest, WriteResult,
 };
 use crate::raft::RaftActorMessage;
 
@@ -115,6 +115,19 @@ impl KeyValueStore for KvClient {
         call_t!(
             self.raft_actor,
             RaftActorMessage::Delete,
+            self.timeout_ms,
+            request
+        )
+        .map_err(|err| KeyValueStoreError::Failed {
+            reason: err.to_string(),
+        })?
+    }
+
+    #[instrument(skip(self), fields(prefix = %request.prefix, limit = ?request.limit))]
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        call_t!(
+            self.raft_actor,
+            RaftActorMessage::Scan,
             self.timeout_ms,
             request
         )

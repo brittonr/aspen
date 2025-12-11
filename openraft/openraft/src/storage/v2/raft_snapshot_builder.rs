@@ -18,7 +18,8 @@ use crate::storage::Snapshot;
 /// [`RaftStateMachine`]: crate::storage::RaftStateMachine
 #[add_async_trait]
 pub trait RaftSnapshotBuilder<C>: OptionalSend + OptionalSync + 'static
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Build snapshot
     ///

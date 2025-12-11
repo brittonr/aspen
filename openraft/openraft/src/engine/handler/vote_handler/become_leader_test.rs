@@ -59,23 +59,26 @@ fn test_become_leader() -> anyhow::Result<()> {
 
     assert_eq!(ServerState::Leader, eng.state.server_state);
 
-    assert_eq!(eng.output.take_commands(), vec![
-        Command::UpdateIOProgress {
-            when: None,
-            io_id: IOId::new_log_io(Vote::new(2, 1).into_committed(), None)
-        },
-        Command::RebuildReplicationStreams {
-            targets: vec![ReplicationProgress(0, ProgressEntry::empty(0))]
-        },
-        Command::AppendEntries {
-            committed_vote: Vote::new(2, 1).into_committed(),
-            entries: vec![EntryOf::<UTConfig>::new_blank(log_id(2, 1, 0)),]
-        },
-        Command::Replicate {
-            target: 0,
-            req: Replicate::logs(LogIdRange::new(None, Some(log_id(2, 1, 0))), InflightId::new(1))
-        }
-    ]);
+    assert_eq!(
+        eng.output.take_commands(),
+        vec![
+            Command::UpdateIOProgress {
+                when: None,
+                io_id: IOId::new_log_io(Vote::new(2, 1).into_committed(), None)
+            },
+            Command::RebuildReplicationStreams {
+                targets: vec![ReplicationProgress(0, ProgressEntry::empty(0))]
+            },
+            Command::AppendEntries {
+                committed_vote: Vote::new(2, 1).into_committed(),
+                entries: vec![EntryOf::<UTConfig>::new_blank(log_id(2, 1, 0)),]
+            },
+            Command::Replicate {
+                target: 0,
+                req: Replicate::logs(LogIdRange::new(None, Some(log_id(2, 1, 0))), InflightId::new(1))
+            }
+        ]
+    );
 
     Ok(())
 }

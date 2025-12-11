@@ -4,7 +4,8 @@ use crate::quorum::quorum_set::QuorumSet;
 
 /// Impl a simple majority quorum set
 impl<ID> QuorumSet<ID> for BTreeSet<ID>
-where ID: PartialOrd + Ord + Clone + 'static
+where
+    ID: PartialOrd + Ord + Clone + 'static,
 {
     type Iter = std::collections::btree_set::IntoIter<ID>;
 
@@ -29,7 +30,8 @@ where ID: PartialOrd + Ord + Clone + 'static
 
 /// Impl a simple majority quorum set
 impl<ID> QuorumSet<ID> for Vec<ID>
-where ID: PartialOrd + Ord + Clone + 'static
+where
+    ID: PartialOrd + Ord + Clone + 'static,
 {
     type Iter = std::collections::btree_set::IntoIter<ID>;
 
@@ -54,7 +56,8 @@ where ID: PartialOrd + Ord + Clone + 'static
 
 /// Impl a simple majority quorum set
 impl<ID> QuorumSet<ID> for &[ID]
-where ID: PartialOrd + Ord + Copy + 'static
+where
+    ID: PartialOrd + Ord + Copy + 'static,
 {
     type Iter = std::collections::btree_set::IntoIter<ID>;
 

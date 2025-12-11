@@ -8,20 +8,25 @@ use crate::type_config::alias::LogIdOf;
 
 /// Convert error to StorageError::IO();
 pub trait ToStorageResult<C, T>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Convert `Result<T, E>` to `Result<T, StorageError>`
     ///
     /// `f` provides error context for building the StorageError.
     fn sto_res<F>(self, f: F) -> Result<T, StorageError<C>>
-    where F: FnOnce() -> (ErrorSubject<C>, ErrorVerb);
+    where
+        F: FnOnce() -> (ErrorSubject<C>, ErrorVerb);
 }
 
 impl<C, T> ToStorageResult<C, T> for Result<T, std::io::Error>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn sto_res<F>(self, f: F) -> Result<T, StorageError<C>>
-    where F: FnOnce() -> (ErrorSubject<C>, ErrorVerb) {
+    where
+        F: FnOnce() -> (ErrorSubject<C>, ErrorVerb),
+    {
         match self {
             Ok(x) => Ok(x),
             Err(e) => {
@@ -37,7 +42,8 @@ where C: RaftTypeConfig
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub enum ErrorSubject<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// A general storage error
     Store,
@@ -94,7 +100,8 @@ impl fmt::Display for ErrorVerb {
 pub type StorageIOError<C> = StorageError<C>;
 
 impl<C> StorageError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Backward compatible with old form `StorageError::IO{ source: StorageError }`
     #[deprecated(note = "no need to call this method", since = "0.10.0")]
@@ -109,7 +116,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> From<StorageError<C>> for std::io::Error
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(e: StorageError<C>) -> Self {
         std::io::Error::other(e.to_string())
@@ -124,7 +132,8 @@ where C: RaftTypeConfig
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct StorageError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     subject: ErrorSubject<C>,
     verb: ErrorVerb,
@@ -133,7 +142,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for StorageError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "when {:?} {:?}: {}", self.verb, self.subject, self.source)
@@ -141,7 +151,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> StorageError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a new StorageError.
     pub fn new(subject: ErrorSubject<C>, verb: ErrorVerb, source: impl Into<AnyError>) -> Self {

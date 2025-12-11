@@ -13,7 +13,8 @@ use crate::type_config::alias::WatchSenderOf;
 /// The sender maintains independent channels (log, vote, commit, snapshot, and apply) to allow
 /// efficient filtering of notifications.
 pub(crate) struct IoProgressSender<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Sender for log I/O progress (includes all I/O operations).
     pub(crate) log_tx: WatchSenderOf<C, Option<FlushPoint<C>>>,
@@ -36,7 +37,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> IoProgressSender<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Publish an I/O flush completion notification to watchers.
     ///

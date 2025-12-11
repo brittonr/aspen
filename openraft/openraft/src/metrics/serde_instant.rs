@@ -17,13 +17,15 @@ use crate::display_ext::DisplayInstantExt;
 #[derive(PartialEq, Eq)]
 #[derive(PartialOrd, Ord)]
 pub struct SerdeInstant<I>
-where I: Instant
+where
+    I: Instant,
 {
     inner: I,
 }
 
 impl<I> Deref for SerdeInstant<I>
-where I: Instant
+where
+    I: Instant,
 {
     type Target = I;
 
@@ -33,7 +35,8 @@ where I: Instant
 }
 
 impl<I> From<I> for SerdeInstant<I>
-where I: Instant
+where
+    I: Instant,
 {
     fn from(inner: I) -> Self {
         Self { inner }
@@ -41,7 +44,8 @@ where I: Instant
 }
 
 impl<I> fmt::Display for SerdeInstant<I>
-where I: Instant
+where
+    I: Instant,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.inner.display().fmt(f)
@@ -49,7 +53,8 @@ where I: Instant
 }
 
 impl<I> SerdeInstant<I>
-where I: Instant
+where
+    I: Instant,
 {
     /// Create a new SerdeInstant wrapping the given Instant.
     pub fn new(inner: I) -> Self {
@@ -81,10 +86,13 @@ mod serde_impl {
     use crate::Instant;
 
     impl<I> Serialize for SerdeInstant<I>
-    where I: Instant
+    where
+        I: Instant,
     {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+        where
+            S: Serializer,
+        {
             // Convert Instant to SystemTime
             let system_time = {
                 let sys_now = SystemTime::now();
@@ -108,10 +116,13 @@ mod serde_impl {
     }
 
     impl<'de, I> Deserialize<'de> for SerdeInstant<I>
-    where I: Instant
+    where
+        I: Instant,
     {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+        where
+            D: Deserializer<'de>,
+        {
             struct InstantVisitor<II: Instant>(PhantomData<II>);
 
             impl<II: Instant> Visitor<'_> for InstantVisitor<II> {
@@ -122,7 +133,9 @@ mod serde_impl {
                 }
 
                 fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-                where E: de::Error {
+                where
+                    E: de::Error,
+                {
                     let datetime = DateTime::from_timestamp_nanos(value as i64);
 
                     let system_time: SystemTime = datetime.with_timezone(&Utc).into();

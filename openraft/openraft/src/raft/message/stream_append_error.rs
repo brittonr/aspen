@@ -21,7 +21,8 @@ pub enum StreamAppendError<C: RaftTypeConfig> {
 }
 
 impl<C> fmt::Display for StreamAppendError<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

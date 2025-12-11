@@ -43,7 +43,8 @@ use crate::type_config::alias::LogIdOf;
 #[derive(Debug, Clone, Default)]
 #[derive(PartialEq, Eq)]
 pub struct MembershipState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     committed: Arc<EffectiveMembership<C>>,
 
@@ -52,7 +53,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for MembershipState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -64,7 +66,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> MembershipState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(committed: Arc<EffectiveMembership<C>>, effective: Arc<EffectiveMembership<C>>) -> Self {
         Self { committed, effective }
@@ -214,7 +217,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Validate for MembershipState<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn validate(&self) -> Result<(), Box<dyn Error>> {
         validit::less_equal!(self.committed.log_id(), self.effective.log_id());

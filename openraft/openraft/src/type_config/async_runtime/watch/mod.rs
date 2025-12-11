@@ -80,7 +80,8 @@ where
     /// in subsequent calls to `borrow_watched`, but receivers will not receive
     /// a change notification.
     fn send_if_modified<F>(&self, modify: F) -> bool
-    where F: FnOnce(&mut T) -> bool;
+    where
+        F: FnOnce(&mut T) -> bool;
 
     /// Returns a reference to the most recently sent value
     ///
@@ -142,7 +143,9 @@ where
     /// tx.send(5).unwrap(); // Unblocks the receiver with value 5
     /// ```
     async fn wait_until_ge(&mut self, value: &T) -> Result<T, RecvError>
-    where T: PartialOrd + Clone {
+    where
+        T: PartialOrd + Clone,
+    {
         loop {
             {
                 let current = self.borrow_watched();

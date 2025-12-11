@@ -2,7 +2,8 @@
 ///
 /// Maps S3 operations to Aspen's distributed key-value store.
 use crate::api::{
-    DeleteRequest, KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest,
+    DeleteRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ScanRequest, WriteCommand,
+    WriteRequest,
 };
 use crate::s3::constants::*;
 use crate::s3::error::{S3Error, S3Result};
@@ -10,11 +11,11 @@ use crate::s3::metadata::{BucketMetadata, ObjectMetadata};
 use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use futures::stream;
 use futures::TryStreamExt;
+use futures::stream;
 use s3s::dto::*;
 use s3s::s3_error;
-use s3s::{S3Request, S3Response, S3};
+use s3s::{S3, S3Request, S3Response};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tracing::{debug, info, warn};
@@ -197,10 +198,11 @@ impl AspenS3Service {
         let key = Self::bucket_metadata_key(bucket);
         match self.kv_store.read(ReadRequest { key }).await {
             Ok(result) => {
-                let meta: BucketMetadata =
-                    serde_json::from_str(&result.value).map_err(|e| KeyValueStoreError::Failed {
+                let meta: BucketMetadata = serde_json::from_str(&result.value).map_err(|e| {
+                    KeyValueStoreError::Failed {
                         reason: format!("Failed to deserialize bucket metadata: {}", e),
-                    })?;
+                    }
+                })?;
                 Ok(Some(meta))
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
@@ -222,9 +224,10 @@ impl AspenS3Service {
         metadata: &ObjectMetadata,
     ) -> Result<(), KeyValueStoreError> {
         let meta_key = Self::object_metadata_key(bucket, key);
-        let meta_value = serde_json::to_string(metadata).map_err(|e| KeyValueStoreError::Failed {
-            reason: format!("Failed to serialize object metadata: {}", e),
-        })?;
+        let meta_value =
+            serde_json::to_string(metadata).map_err(|e| KeyValueStoreError::Failed {
+                reason: format!("Failed to serialize object metadata: {}", e),
+            })?;
 
         self.kv_store
             .write(WriteRequest {
@@ -375,10 +378,11 @@ impl AspenS3Service {
             })?;
 
         // Decode from base64
-        let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &result.value)
-            .map_err(|e| S3Error::StorageError {
-                source: anyhow::anyhow!("Failed to decode object data: {}", e),
-            })?;
+        let data =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &result.value)
+                .map_err(|e| S3Error::StorageError {
+                    source: anyhow::anyhow!("Failed to decode object data: {}", e),
+                })?;
 
         Ok(data)
     }
@@ -408,9 +412,9 @@ impl AspenS3Service {
             let chunk_data =
                 base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &result.value)
                     .map_err(|e| S3Error::ChunkingError {
-                        key: key.to_string(),
-                        reason: format!("Failed to decode chunk {}: {}", i, e),
-                    })?;
+                    key: key.to_string(),
+                    reason: format!("Failed to decode chunk {}: {}", i, e),
+                })?;
 
             data.extend_from_slice(&chunk_data);
         }
@@ -427,7 +431,7 @@ impl AspenS3Service {
             Err(e) => {
                 return Err(S3Error::StorageError {
                     source: anyhow::anyhow!("{}", e),
-                })
+                });
             }
         };
 
@@ -435,10 +439,7 @@ impl AspenS3Service {
         if metadata.is_chunked() {
             for i in 0..metadata.chunk_count {
                 let chunk_key = Self::object_chunk_key(bucket, key, i);
-                let _ = self
-                    .kv_store
-                    .delete(DeleteRequest { key: chunk_key })
-                    .await;
+                let _ = self.kv_store.delete(DeleteRequest { key: chunk_key }).await;
             }
         } else {
             // Delete simple object data
@@ -468,10 +469,43 @@ impl S3 for AspenS3Service {
     ) -> s3s::S3Result<S3Response<ListBucketsOutput>> {
         debug!("S3 ListBuckets request");
 
-        // TODO: Implement proper bucket listing by scanning keys with vault prefix
-        // For now, return empty list since we don't have scan implemented yet
+        // Scan for all bucket metadata keys
+        // Bucket metadata keys have format: vault:s3:{bucket}:_bucket_meta
+        let prefix = format!("vault:{}:", S3_VAULT_PREFIX);
+        let suffix = format!(":{}", BUCKET_METADATA_SUFFIX);
+
+        let scan_result = self
+            .kv_store
+            .scan(ScanRequest {
+                prefix: prefix.clone(),
+                limit: Some(MAX_VAULT_SCAN_KEYS),
+                continuation_token: None,
+            })
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to scan buckets: {}", e))?;
+
+        // Extract bucket names from keys that end with _bucket_meta suffix
+        let mut buckets = Vec::new();
+        for entry in scan_result.entries {
+            if entry.key.ends_with(&suffix) {
+                // Parse bucket metadata to get creation date
+                if let Ok(meta) = serde_json::from_str::<BucketMetadata>(&entry.value) {
+                    buckets.push(Bucket {
+                        name: Some(meta.name),
+                        creation_date: Some(chrono_to_timestamp(meta.created_at)),
+                        bucket_region: None,
+                    });
+                }
+            }
+        }
+
+        // Sort buckets by name for consistent ordering
+        buckets.sort_by(|a, b| a.name.cmp(&b.name));
+
+        debug!("ListBuckets found {} buckets", buckets.len());
+
         Ok(S3Response::new(ListBucketsOutput {
-            buckets: Some(vec![]),
+            buckets: Some(buckets),
             owner: Some(Owner {
                 display_name: Some("aspen".to_string()),
                 id: Some(self.node_id.to_string()),
@@ -539,7 +573,11 @@ impl S3 for AspenS3Service {
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -572,7 +610,11 @@ impl S3 for AspenS3Service {
                 bucket_region: Some("us-east-1".to_string()),
                 ..Default::default()
             })),
-            Ok(false) => Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket)),
+            Ok(false) => Err(s3_error!(
+                NoSuchBucket,
+                "Bucket '{}' does not exist",
+                bucket
+            )),
             Err(e) => Err(s3_error!(InternalError, "Failed to check bucket: {}", e)),
         }
     }
@@ -594,7 +636,11 @@ impl S3 for AspenS3Service {
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -674,7 +720,11 @@ impl S3 for AspenS3Service {
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -724,7 +774,11 @@ impl S3 for AspenS3Service {
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -738,6 +792,88 @@ impl S3 for AspenS3Service {
         Ok(S3Response::new(DeleteObjectOutput::default()))
     }
 
+    async fn delete_objects(
+        &self,
+        req: S3Request<DeleteObjectsInput>,
+    ) -> s3s::S3Result<S3Response<DeleteObjectsOutput>> {
+        let bucket = req.input.bucket.as_str();
+        let objects = &req.input.delete.objects;
+        let quiet = req.input.delete.quiet.unwrap_or(false);
+
+        info!(
+            "S3 DeleteObjects request for bucket '{}' with {} objects, quiet={}",
+            bucket,
+            objects.len(),
+            quiet
+        );
+
+        // Check if bucket exists
+        match self.bucket_exists(bucket).await {
+            Ok(false) => {
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
+            }
+            Ok(true) => {}
+            Err(e) => {
+                return Err(s3_error!(InternalError, "Failed to check bucket: {}", e));
+            }
+        }
+
+        let mut deleted: Vec<DeletedObject> = Vec::new();
+        let mut errors: Vec<s3s::dto::Error> = Vec::new();
+
+        // Delete each object
+        for obj in objects {
+            let key = obj.key.as_str();
+
+            match self.delete_object_data(bucket, key).await {
+                Ok(_) => {
+                    // Only report deleted objects if not in quiet mode
+                    if !quiet {
+                        deleted.push(DeletedObject {
+                            key: Some(key.to_string()),
+                            delete_marker: None,
+                            delete_marker_version_id: None,
+                            version_id: None,
+                        });
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to delete object {}/{}: {}", bucket, key, e);
+                    errors.push(s3s::dto::Error {
+                        code: Some("InternalError".to_string()),
+                        key: Some(key.to_string()),
+                        message: Some(e.to_string()),
+                        version_id: None,
+                    });
+                }
+            }
+        }
+
+        debug!(
+            "DeleteObjects completed: {} deleted, {} errors",
+            deleted.len(),
+            errors.len()
+        );
+
+        Ok(S3Response::new(DeleteObjectsOutput {
+            deleted: if deleted.is_empty() {
+                None
+            } else {
+                Some(deleted)
+            },
+            errors: if errors.is_empty() {
+                None
+            } else {
+                Some(errors)
+            },
+            request_charged: None,
+        }))
+    }
+
     async fn head_object(
         &self,
         req: S3Request<HeadObjectInput>,
@@ -749,7 +885,11 @@ impl S3 for AspenS3Service {
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -778,16 +918,27 @@ impl S3 for AspenS3Service {
         req: S3Request<ListObjectsV2Input>,
     ) -> s3s::S3Result<S3Response<ListObjectsV2Output>> {
         let bucket = req.input.bucket.as_str();
-        let prefix = req.input.prefix.as_deref().unwrap_or("");
+        let s3_prefix = req.input.prefix.as_deref().unwrap_or("");
+        let delimiter = req.input.delimiter.as_deref();
+        let max_keys = req
+            .input
+            .max_keys
+            .unwrap_or(1000)
+            .min(MAX_LIST_OBJECTS as i32) as usize;
+
         debug!(
-            "S3 ListObjectsV2 request for bucket '{}' with prefix '{}'",
-            bucket, prefix
+            "S3 ListObjectsV2 request for bucket '{}' with prefix '{}', delimiter {:?}, max_keys {}",
+            bucket, s3_prefix, delimiter, max_keys
         );
 
         // Check if bucket exists
         match self.bucket_exists(bucket).await {
             Ok(false) => {
-                return Err(s3_error!(NoSuchBucket, "Bucket '{}' does not exist", bucket));
+                return Err(s3_error!(
+                    NoSuchBucket,
+                    "Bucket '{}' does not exist",
+                    bucket
+                ));
             }
             Ok(true) => {}
             Err(e) => {
@@ -795,17 +946,114 @@ impl S3 for AspenS3Service {
             }
         }
 
-        // TODO: Implement proper listing by scanning keys with prefix
-        // For now, return empty list since we don't have scan implemented yet
+        // Build the KV prefix for scanning object metadata keys
+        // Object metadata keys have format: vault:s3:{bucket}:_meta:{key}
+        let kv_prefix = format!(
+            "vault:{}:{}:{}:{}",
+            S3_VAULT_PREFIX, bucket, OBJECT_METADATA_PREFIX, s3_prefix
+        );
+
+        // Use continuation token from request (S3 continuation token maps to our KV token)
+        let continuation_token = req.input.continuation_token.clone();
+
+        // Request one extra to detect truncation
+        let scan_result = self
+            .kv_store
+            .scan(ScanRequest {
+                prefix: kv_prefix.clone(),
+                limit: Some((max_keys + 1) as u32),
+                continuation_token,
+            })
+            .await
+            .map_err(|e| s3_error!(InternalError, "Failed to scan objects: {}", e))?;
+
+        // Extract the base prefix length to strip from keys
+        let base_prefix = format!(
+            "vault:{}:{}:{}:",
+            S3_VAULT_PREFIX, bucket, OBJECT_METADATA_PREFIX
+        );
+        let base_prefix_len = base_prefix.len();
+
+        // Process entries into S3 objects and common prefixes
+        let mut contents: Vec<Object> = Vec::new();
+        let mut common_prefixes_set: std::collections::BTreeSet<String> =
+            std::collections::BTreeSet::new();
+
+        for entry in &scan_result.entries {
+            // Extract the S3 object key from the KV key
+            if entry.key.len() <= base_prefix_len {
+                continue;
+            }
+            let object_key = &entry.key[base_prefix_len..];
+
+            // Handle delimiter-based hierarchical listing
+            if let Some(delim) = delimiter {
+                // Find if there's a delimiter after the prefix
+                if let Some(rel_key) = object_key.strip_prefix(s3_prefix) {
+                    if let Some(pos) = rel_key.find(delim) {
+                        // This is a "directory" - add to common prefixes
+                        let common_prefix = format!("{}{}{}", s3_prefix, &rel_key[..pos], delim);
+                        common_prefixes_set.insert(common_prefix);
+                        continue;
+                    }
+                }
+            }
+
+            // Parse object metadata
+            if let Ok(meta) = serde_json::from_str::<ObjectMetadata>(&entry.value) {
+                contents.push(Object {
+                    key: Some(object_key.to_string()),
+                    size: Some(meta.size_bytes as i64),
+                    e_tag: Some(meta.etag.into()),
+                    last_modified: Some(chrono_to_timestamp(meta.last_modified)),
+                    storage_class: Some(ObjectStorageClass::STANDARD.to_string().into()),
+                    ..Default::default()
+                });
+            }
+
+            // Stop if we've reached max_keys
+            if contents.len() >= max_keys {
+                break;
+            }
+        }
+
+        // Determine if truncated
+        let is_truncated = scan_result.is_truncated || scan_result.entries.len() > max_keys;
+
+        // Build common prefixes list
+        let common_prefixes: Vec<CommonPrefix> = common_prefixes_set
+            .into_iter()
+            .map(|p| CommonPrefix { prefix: Some(p) })
+            .collect();
+
+        // Generate next continuation token if truncated
+        let next_continuation_token = if is_truncated {
+            scan_result.continuation_token
+        } else {
+            None
+        };
+
+        let key_count = contents.len() as i32;
+
+        debug!(
+            "ListObjectsV2 found {} objects, {} common prefixes, truncated: {}",
+            key_count,
+            common_prefixes.len(),
+            is_truncated
+        );
+
         Ok(S3Response::new(ListObjectsV2Output {
             name: Some(bucket.to_string()),
             prefix: req.input.prefix.clone(),
             delimiter: req.input.delimiter.clone(),
-            max_keys: Some(req.input.max_keys.unwrap_or(1000)),
-            is_truncated: Some(false),
-            key_count: Some(0),
-            contents: Some(vec![]),
-            common_prefixes: Some(vec![]),
+            max_keys: Some(max_keys as i32),
+            is_truncated: Some(is_truncated),
+            key_count: Some(key_count),
+            contents: Some(contents),
+            common_prefixes: Some(common_prefixes),
+            next_continuation_token,
+            continuation_token: req.input.continuation_token.clone(),
+            start_after: req.input.start_after.clone(),
             ..Default::default()
         }))
     }

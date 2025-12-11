@@ -14,7 +14,8 @@ use crate::vote::RaftLeaderId;
 #[derive(PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The term of the leader.
     pub term: C::Term,
@@ -23,7 +24,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for LeaderId<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "T{}-N{}", self.term, self.node_id)
@@ -45,7 +47,8 @@ where C: RaftTypeConfig
 pub type CommittedLeaderId<C> = LeaderId<C>;
 
 impl<C> RaftLeaderId<C> for LeaderId<C>
-where C: RaftTypeConfig<LeaderId = Self>
+where
+    C: RaftTypeConfig<LeaderId = Self>,
 {
     type Committed = Self;
 

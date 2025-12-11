@@ -12,7 +12,8 @@ use crate::storage::SnapshotMeta;
 /// The Ok part of a state machine command result.
 #[derive(Debug)]
 pub(crate) enum Response<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Snapshot building completed or was deferred.
     ///
@@ -30,7 +31,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Response<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -50,13 +52,15 @@ where C: RaftTypeConfig
 /// Container of result of a command.
 #[derive(Debug)]
 pub(crate) struct CommandResult<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) result: Result<Response<C>, StorageError<C>>,
 }
 
 impl<C> fmt::Display for CommandResult<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "sm::Result({})", self.result.display())
@@ -64,7 +68,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> CommandResult<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new(result: Result<Response<C>, StorageError<C>>) -> Self {
         Self { result }

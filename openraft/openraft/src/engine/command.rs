@@ -31,7 +31,8 @@ use crate::vote::committed::CommittedVote;
 /// Commands to send to `RaftRuntime` to execute, to update the application state.
 #[derive(Debug)]
 pub(crate) enum Command<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// No actual IO is submitted but need to update io progress.
     ///
@@ -139,7 +140,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Command<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -183,7 +185,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> From<sm::Command<C>> for Command<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn from(cmd: sm::Command<C>) -> Self {
         Self::StateMachine { command: cmd }
@@ -219,7 +222,8 @@ where
 }
 
 impl<C> Command<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     #[allow(dead_code)]
     #[rustfmt::skip]
@@ -280,7 +284,8 @@ where C: RaftTypeConfig
 #[derive(Debug, Clone)]
 #[derive(PartialEq, Eq)]
 pub(crate) enum Condition<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Wait for log IO to be flushed to storage.
     ///
@@ -301,7 +306,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Condition<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -318,7 +324,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Condition<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Check if the condition is satisfied by the current IO state.
     pub(crate) fn is_met(&self, io_state: &IOState<C>) -> bool {
@@ -335,7 +342,9 @@ where C: RaftTypeConfig
 
     /// Check if actual value satisfies the expected threshold.
     fn is_satisfied_by<T>(&self, expected: &T, actual: Option<&T>) -> bool
-    where T: PartialOrd + fmt::Display {
+    where
+        T: PartialOrd + fmt::Display,
+    {
         let Some(actual) = actual else {
             tracing::debug!("{} is not met: actual: None", self);
             return false;
@@ -355,7 +364,8 @@ where C: RaftTypeConfig
 #[derive(Debug, PartialEq, Eq)]
 #[derive(derive_more::From)]
 pub(crate) enum Respond<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     Vote(ValueSender<C, VoteResponse<C>>),
     AppendEntries(ValueSender<C, AppendEntriesResponse<C>>),
@@ -366,7 +376,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for Respond<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -387,7 +398,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> Respond<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     pub(crate) fn new<T>(res: T, tx: OneshotSenderOf<C, T>) -> Self
     where

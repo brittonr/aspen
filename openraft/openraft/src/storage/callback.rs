@@ -19,7 +19,8 @@ pub type LogFlushed<C> = IOFlushed<C>;
 ///
 /// [`RaftLogStorage`]: `crate::storage::RaftLogStorage`
 pub enum IOFlushed<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// A placeholder that does nothing when `io_completed` is called.
     ///
@@ -40,7 +41,8 @@ where C: RaftTypeConfig
 ///
 /// This struct is public but has private fields, preventing external construction.
 pub struct IOFlushedNotify<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The IO ID to send when the IO completes.
     io_id: IOId<C>,
@@ -50,7 +52,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> IOFlushed<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a no-op callback that does nothing when `io_completed` is called.
     pub fn noop() -> Self {
@@ -128,14 +131,16 @@ where C: RaftTypeConfig
 
 /// A oneshot callback for completion of applying logs to the state machine.
 pub struct LogApplied<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     last_log_id: LogIdOf<C>,
     tx: OneshotSenderOf<C, Result<(LogIdOf<C>, Vec<C::R>), StorageError<C>>>,
 }
 
 impl<C> LogApplied<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     #[allow(dead_code)]
     pub(crate) fn new(

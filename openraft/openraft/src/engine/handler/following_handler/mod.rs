@@ -43,7 +43,8 @@ mod update_committed_membership_test;
 ///
 /// It mainly implements the logic of a follower/learner
 pub(crate) struct FollowingHandler<'x, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The Leader this Acceptor (Follower/Leaner) currently following.
     pub(crate) leader_vote: CommittedVote<C>,
@@ -54,7 +55,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> FollowingHandler<'_, C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Append entries to follower/learner.
     ///
@@ -187,7 +189,9 @@ where C: RaftTypeConfig
     /// Append membership log if membership config entries are found, after appending entries to
     /// log.
     fn append_membership<'a>(&mut self, entries: impl DoubleEndedIterator<Item = &'a C::Entry>)
-    where C::Entry: 'a {
+    where
+        C::Entry: 'a,
+    {
         let memberships = Self::last_two_memberships(entries);
         if memberships.is_empty() {
             return;
@@ -307,7 +311,9 @@ where C: RaftTypeConfig
     /// A follower/learner reverts the effective membership to the previous one
     /// when conflicting logs are found.
     fn last_two_memberships<'a>(entries: impl DoubleEndedIterator<Item = &'a C::Entry>) -> Vec<StoredMembership<C>>
-    where C::Entry: 'a {
+    where
+        C::Entry: 'a,
+    {
         let mut memberships = vec![];
 
         // Find the last 2 membership config entries: the committed and the effective.

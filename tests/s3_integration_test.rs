@@ -9,7 +9,7 @@
 use aspen::api::DeterministicKeyValueStore;
 use aspen::s3::AspenS3Service;
 use s3s::dto::*;
-use s3s::{S3Request, S3};
+use s3s::{S3, S3Request};
 use std::sync::Arc;
 
 /// Create a test S3 service with in-memory storage.
@@ -31,13 +31,14 @@ async fn test_create_bucket() {
     let req = S3Request::new(input);
 
     let result = service.create_bucket(req).await;
-    assert!(result.is_ok(), "Failed to create bucket: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to create bucket: {:?}",
+        result.err()
+    );
 
     let response = result.unwrap();
-    assert_eq!(
-        response.output.location,
-        Some("/test-bucket".to_string())
-    );
+    assert_eq!(response.output.location, Some("/test-bucket".to_string()));
 }
 
 #[tokio::test]
@@ -49,7 +50,10 @@ async fn test_head_bucket_exists() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Now check it exists
     let head_input = HeadBucketInput::builder()
@@ -82,7 +86,10 @@ async fn test_delete_bucket() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Delete it
     let delete_input = DeleteBucketInput::builder()
@@ -110,7 +117,10 @@ async fn test_create_bucket_already_exists() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Try to create it again
     let create_input2 = CreateBucketInput::builder()
@@ -131,7 +141,10 @@ async fn test_invalid_bucket_name_too_short() {
         .unwrap();
 
     let result = service.create_bucket(S3Request::new(input)).await;
-    assert!(result.is_err(), "Should reject bucket name that is too short");
+    assert!(
+        result.is_err(),
+        "Should reject bucket name that is too short"
+    );
 }
 
 #[tokio::test]
@@ -158,7 +171,10 @@ async fn test_put_and_get_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Put an object
     let data = b"Hello, World!".to_vec();
@@ -173,7 +189,11 @@ async fn test_put_and_get_object() {
         .unwrap();
 
     let put_result = service.put_object(S3Request::new(put_input)).await;
-    assert!(put_result.is_ok(), "Failed to put object: {:?}", put_result.err());
+    assert!(
+        put_result.is_ok(),
+        "Failed to put object: {:?}",
+        put_result.err()
+    );
 
     // Get the object back
     let get_input = GetObjectInput::builder()
@@ -183,7 +203,11 @@ async fn test_put_and_get_object() {
         .unwrap();
 
     let get_result = service.get_object(S3Request::new(get_input)).await;
-    assert!(get_result.is_ok(), "Failed to get object: {:?}", get_result.err());
+    assert!(
+        get_result.is_ok(),
+        "Failed to get object: {:?}",
+        get_result.err()
+    );
 
     let response = get_result.unwrap();
     assert_eq!(response.output.content_length, Some(data.len() as i64));
@@ -198,7 +222,10 @@ async fn test_head_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Put an object
     let data = b"Test data for head".to_vec();
@@ -235,7 +262,10 @@ async fn test_delete_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Put an object
     let data = b"Delete me".to_vec();
@@ -279,7 +309,10 @@ async fn test_delete_nonexistent_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Delete a nonexistent object (S3 delete is idempotent)
     let delete_input = DeleteObjectInput::builder()
@@ -289,7 +322,10 @@ async fn test_delete_nonexistent_object() {
         .unwrap();
 
     let result = service.delete_object(S3Request::new(delete_input)).await;
-    assert!(result.is_ok(), "Delete should succeed even for nonexistent object");
+    assert!(
+        result.is_ok(),
+        "Delete should succeed even for nonexistent object"
+    );
 }
 
 #[tokio::test]
@@ -301,7 +337,10 @@ async fn test_get_nonexistent_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Try to get nonexistent object
     let get_input = GetObjectInput::builder()
@@ -343,7 +382,10 @@ async fn test_copy_object() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Put source object
     let data = b"Copy me!".to_vec();
@@ -371,7 +413,11 @@ async fn test_copy_object() {
         .unwrap();
 
     let copy_result = service.copy_object(S3Request::new(copy_input)).await;
-    assert!(copy_result.is_ok(), "Failed to copy object: {:?}", copy_result.err());
+    assert!(
+        copy_result.is_ok(),
+        "Failed to copy object: {:?}",
+        copy_result.err()
+    );
 
     // Verify the copy exists
     let get_input = GetObjectInput::builder()
@@ -395,7 +441,10 @@ async fn test_large_object_chunking() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Create a 2MB object (will be chunked into 2 chunks)
     let chunk_size = 1024 * 1024; // 1MB
@@ -411,7 +460,11 @@ async fn test_large_object_chunking() {
         .unwrap();
 
     let put_result = service.put_object(S3Request::new(put_input)).await;
-    assert!(put_result.is_ok(), "Failed to put large object: {:?}", put_result.err());
+    assert!(
+        put_result.is_ok(),
+        "Failed to put large object: {:?}",
+        put_result.err()
+    );
 
     // Get the object back and verify size
     let get_input = GetObjectInput::builder()
@@ -436,7 +489,10 @@ async fn test_list_objects_empty_bucket() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // List objects (empty bucket)
     let list_input = ListObjectsV2Input::builder()
@@ -461,7 +517,10 @@ async fn test_content_type_inference() {
         .bucket("test-bucket".to_string())
         .build()
         .unwrap();
-    service.create_bucket(S3Request::new(create_input)).await.unwrap();
+    service
+        .create_bucket(S3Request::new(create_input))
+        .await
+        .unwrap();
 
     // Put JSON file (should infer application/json)
     let data = br#"{"key": "value"}"#.to_vec();
@@ -483,7 +542,10 @@ async fn test_content_type_inference() {
         .build()
         .unwrap();
 
-    let result = service.head_object(S3Request::new(head_input)).await.unwrap();
+    let result = service
+        .head_object(S3Request::new(head_input))
+        .await
+        .unwrap();
 
     // Content type should be inferred from extension
     if let Some(content_type) = result.output.content_type {

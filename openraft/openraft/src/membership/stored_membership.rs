@@ -18,7 +18,8 @@ use crate::type_config::alias::LogIdOf;
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub struct StoredMembership<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// The id of the log that stores this membership config
     log_id: Option<LogIdOf<C>>,
@@ -28,7 +29,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> StoredMembership<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     /// Create a new StoredMembership with the given log ID and membership configuration.
     pub fn new(log_id: Option<LogIdOf<C>>, membership: Membership<C>) -> Self {
@@ -57,7 +59,8 @@ where C: RaftTypeConfig
 }
 
 impl<C> fmt::Display for StoredMembership<C>
-where C: RaftTypeConfig
+where
+    C: RaftTypeConfig,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{log_id:{}, {}}}", DisplayOption(&self.log_id), self.membership)
