@@ -42,10 +42,18 @@ pub(crate) trait BucketOps {
 #[async_trait]
 impl BucketOps for AspenS3Service {
     fn bucket_metadata_key(bucket: &str) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_bucket_meta"
+        let capacity =
+            6 + S3_VAULT_PREFIX.len() + 1 + bucket.len() + 1 + BUCKET_METADATA_SUFFIX.len();
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, BUCKET_METADATA_SUFFIX
         )
+        .expect("String write should not fail");
+        result
     }
 
     fn validate_bucket_name(name: &str) -> S3Result<()> {

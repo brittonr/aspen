@@ -56,17 +56,48 @@ pub(crate) trait MultipartOps {
 #[async_trait]
 impl MultipartOps for AspenS3Service {
     fn multipart_upload_metadata_key(bucket: &str, upload_id: &str) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_mpu" + ":" + upload_id
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + MULTIPART_UPLOAD_PREFIX.len()
+            + 1
+            + upload_id.len();
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, MULTIPART_UPLOAD_PREFIX, upload_id
         )
+        .expect("String write should not fail");
+        result
     }
 
     fn multipart_part_data_key(bucket: &str, upload_id: &str, part_number: u32) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_mpp" + ":" + upload_id + ":" + part_number
+        // Add 10 for part_number digits
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + MULTIPART_PART_PREFIX.len()
+            + 1
+            + upload_id.len()
+            + 1
+            + 10;
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, MULTIPART_PART_PREFIX, upload_id, part_number
         )
+        .expect("String write should not fail");
+        result
     }
 
     async fn store_multipart_metadata(

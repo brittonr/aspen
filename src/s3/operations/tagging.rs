@@ -22,10 +22,24 @@ pub(crate) trait TaggingOps {
 
 impl TaggingOps for AspenS3Service {
     fn object_tags_key(bucket: &str, key: &str) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_tags" + ":" + key
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + OBJECT_TAGS_PREFIX.len()
+            + 1
+            + key.len();
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, OBJECT_TAGS_PREFIX, key
         )
+        .expect("String write should not fail");
+        result
     }
 }
 

@@ -97,24 +97,71 @@ pub(crate) trait ObjectOps {
 #[async_trait]
 impl ObjectOps for AspenS3Service {
     fn object_metadata_key(bucket: &str, key: &str) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_meta" + ":" + key
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + OBJECT_METADATA_PREFIX.len()
+            + 1
+            + key.len();
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, OBJECT_METADATA_PREFIX, key
         )
+        .expect("String write should not fail");
+        result
     }
 
     fn object_data_key(bucket: &str, key: &str) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_data" + ":" + key
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + OBJECT_DATA_PREFIX.len()
+            + 1
+            + key.len();
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, OBJECT_DATA_PREFIX, key
         )
+        .expect("String write should not fail");
+        result
     }
 
     fn object_chunk_key(bucket: &str, key: &str, chunk_index: u32) -> String {
-        format!(
+        use std::fmt::Write;
+        // Pre-allocate: "vault:" + "s3" + ":" + bucket + ":" + "_data" + ":" + key + ":" + "_chunk" + ":" + index
+        // Add 10 for chunk_index digits
+        let capacity = 6
+            + S3_VAULT_PREFIX.len()
+            + 1
+            + bucket.len()
+            + 1
+            + OBJECT_DATA_PREFIX.len()
+            + 1
+            + key.len()
+            + 1
+            + CHUNK_KEY_COMPONENT.len()
+            + 1
+            + 10;
+        let mut result = String::with_capacity(capacity);
+        write!(
+            &mut result,
             "vault:{}:{}:{}:{}:{}:{}",
             S3_VAULT_PREFIX, bucket, OBJECT_DATA_PREFIX, key, CHUNK_KEY_COMPONENT, chunk_index
         )
+        .expect("String write should not fail");
+        result
     }
 
     fn validate_object_key(key: &str) -> S3Result<()> {
