@@ -804,6 +804,8 @@ impl RaftSupervisor {
     }
 
     /// Handle actor failure and restart logic.
+    ///
+    /// Tiger Style: Refactored to be under 70 lines by extracting helper functions.
     async fn handle_actor_failed(
         &self,
         myself: ActorRef<SupervisorMessage>,
@@ -819,15 +821,68 @@ impl RaftSupervisor {
             "raft actor failed"
         );
 
+        // Check circuit breaker and auto-restart eligibility
+        if !self.check_restart_eligibility(state) {
+            return Ok(());
+        }
+
+        // Calculate and log actor uptime/stability
+        let actor_uptime_duration = self.check_actor_stability(state);
+
+        // Validate storage before restart
+        if let Err(validation_err) = self.validate_storage(state).await {
+            error!(
+                node_id = node_id,
+                error = %validation_err,
+                "storage validation failed, restart aborted"
+            );
+            self.clear_actor_state(state);
+            return Ok(());
+        }
+
+        // Apply exponential backoff
+        let backoff_duration = self.apply_restart_backoff(state).await;
+
+        // Attempt to respawn RaftActor
+        info!(node_id = node_id, "attempting to restart raft actor");
+
+        match self
+            .spawn_raft_actor(myself.clone(), &state.raft_actor_config)
+            .await
+        {
+            Ok((new_actor, _task)) => {
+                self.handle_restart_success(
+                    state,
+                    new_actor,
+                    err,
+                    actor_uptime_duration,
+                    backoff_duration,
+                )
+                .await;
+                Ok(())
+            }
+            Err(spawn_err) => {
+                self.handle_restart_failure(state, spawn_err);
+                Ok(())
+            }
+        }
+    }
+
+    /// Check if restart is eligible based on config and circuit breaker.
+    ///
+    /// Returns false if restart should not proceed.
+    /// Tiger Style: Extracted to reduce main function complexity.
+    fn check_restart_eligibility(&self, state: &mut RaftSupervisorState) -> bool {
+        let node_id = state.raft_actor_config.node_id;
+
         // Check if auto-restart is enabled
         if !state.config.enable_auto_restart {
             warn!(
                 node_id = node_id,
                 "auto-restart disabled, actor will not be restarted"
             );
-            state.current_raft_actor = None;
-            state.actor_spawn_time = None;
-            return Ok(());
+            self.clear_actor_state(state);
+            return false;
         }
 
         // Update circuit breaker state based on restart history
@@ -843,129 +898,151 @@ impl RaftSupervisor {
                 window_secs = state.config.restart_window_secs,
                 "circuit breaker blocking restart"
             );
-            state.current_raft_actor = None;
-            state.actor_spawn_time = None;
-            return Ok(());
+            self.clear_actor_state(state);
+            return false;
         }
 
-        // Calculate actor uptime
-        let actor_uptime = state
+        true
+    }
+
+    /// Check actor stability and return uptime duration.
+    ///
+    /// Tiger Style: Extracted helper with explicit duration naming.
+    fn check_actor_stability(&self, state: &RaftSupervisorState) -> Duration {
+        let node_id = state.raft_actor_config.node_id;
+
+        // Calculate actor uptime with explicit duration naming
+        let actor_uptime_duration = state
             .actor_spawn_time
             .map(|spawn_time| Instant::now().duration_since(spawn_time))
             .unwrap_or(Duration::ZERO);
 
         // Check if actor was stable
-        let was_stable = actor_uptime >= state.config.actor_stability_duration();
+        let was_stable = actor_uptime_duration >= state.config.actor_stability_duration();
         if was_stable {
             info!(
                 node_id = node_id,
-                uptime_secs = actor_uptime.as_secs(),
+                uptime_secs = actor_uptime_duration.as_secs(),
                 "actor was stable before failure"
             );
         } else {
             warn!(
                 node_id = node_id,
-                uptime_secs = actor_uptime.as_secs(),
+                uptime_secs = actor_uptime_duration.as_secs(),
                 stability_threshold_secs = state.config.actor_stability_duration_secs,
                 "actor failed before reaching stability threshold"
             );
         }
 
-        // Validate storage before restart
-        if let Err(validation_err) = self.validate_storage(state).await {
-            error!(
-                node_id = node_id,
-                error = %validation_err,
-                "storage validation failed, restart aborted"
-            );
-            state.current_raft_actor = None;
-            state.actor_spawn_time = None;
-            return Ok(());
-        }
+        actor_uptime_duration
+    }
+
+    /// Apply exponential backoff before restart.
+    ///
+    /// Returns the backoff duration that was applied.
+    /// Tiger Style: Async function extracted to handle delay.
+    async fn apply_restart_backoff(&self, state: &RaftSupervisorState) -> Duration {
+        let node_id = state.raft_actor_config.node_id;
 
         // Calculate backoff based on restarts in window
         let restarts_in_window = self.count_restarts_in_window(state);
-        let backoff = self.calculate_backoff(restarts_in_window);
+        let backoff_duration = self.calculate_backoff(restarts_in_window);
 
         info!(
             node_id = node_id,
-            backoff_secs = backoff.as_secs(),
+            backoff_secs = backoff_duration.as_secs(),
             restarts_in_window = restarts_in_window,
             "applying exponential backoff before restart"
         );
 
         // Apply backoff delay
-        tokio::time::sleep(backoff).await;
+        tokio::time::sleep(backoff_duration).await;
 
-        // Attempt to respawn RaftActor
-        info!(node_id = node_id, "attempting to restart raft actor");
+        backoff_duration
+    }
 
-        match self
-            .spawn_raft_actor(myself.clone(), &state.raft_actor_config)
-            .await
-        {
-            Ok((new_actor, _task)) => {
-                info!(node_id = node_id, "raft actor restarted successfully");
+    /// Handle successful actor restart.
+    ///
+    /// Tiger Style: Extracted to keep main function under 70 lines.
+    async fn handle_restart_success(
+        &self,
+        state: &mut RaftSupervisorState,
+        new_actor: ActorRef<RaftActorMessage>,
+        failure_reason: String,
+        actor_uptime_duration: Duration,
+        backoff_duration: Duration,
+    ) {
+        let node_id = state.raft_actor_config.node_id;
 
-                // Stop old health monitor task if it exists
-                if let Some(task) = state.health_monitor_task.take() {
-                    task.abort();
-                }
+        info!(node_id = node_id, "raft actor restarted successfully");
 
-                // Start new health monitor for the restarted actor
-                let health_monitor = Arc::new(HealthMonitor::new(
-                    HealthMonitorConfig::default(),
-                    new_actor.clone(),
-                ));
-                let health_monitor_task = health_monitor.clone().start();
-
-                info!(
-                    node_id = node_id,
-                    "health monitor restarted for new raft actor"
-                );
-
-                // Record restart event
-                let event = RestartEvent {
-                    timestamp: Instant::now(),
-                    reason: err,
-                    actor_uptime_secs: actor_uptime.as_secs(),
-                    backoff_applied_secs: backoff.as_secs(),
-                };
-                self.record_restart_event(state, event);
-
-                // Update state
-                state.current_raft_actor = Some(new_actor);
-                state.actor_spawn_time = Some(Instant::now());
-                state.total_restarts += 1;
-                state.health_monitor = Some(health_monitor);
-                state.health_monitor_task = Some(health_monitor_task);
-
-                Ok(())
-            }
-            Err(spawn_err) => {
-                error!(
-                    node_id = node_id,
-                    error = %spawn_err,
-                    circuit_state = ?state.circuit_breaker_state,
-                    "failed to restart raft actor"
-                );
-
-                // If restart failed in HalfOpen state, transition back to Open
-                if state.circuit_breaker_state == CircuitBreakerState::HalfOpen {
-                    warn!(
-                        node_id = node_id,
-                        circuit_state = "HalfOpen -> Open",
-                        "restart failed in half-open state, reopening circuit"
-                    );
-                    state.circuit_breaker_state = CircuitBreakerState::Open;
-                    state.circuit_opened_at = Some(Instant::now());
-                }
-
-                state.current_raft_actor = None;
-                state.actor_spawn_time = None;
-                Ok(())
-            }
+        // Stop old health monitor task if it exists
+        if let Some(task) = state.health_monitor_task.take() {
+            task.abort();
         }
+
+        // Start new health monitor for the restarted actor
+        let health_monitor = Arc::new(HealthMonitor::new(
+            HealthMonitorConfig::default(),
+            new_actor.clone(),
+        ));
+        let health_monitor_task = health_monitor.clone().start();
+
+        info!(
+            node_id = node_id,
+            "health monitor restarted for new raft actor"
+        );
+
+        // Record restart event with explicit duration naming
+        let event = RestartEvent {
+            timestamp: Instant::now(),
+            reason: failure_reason,
+            actor_uptime_secs: actor_uptime_duration.as_secs(),
+            backoff_applied_secs: backoff_duration.as_secs(),
+        };
+        self.record_restart_event(state, event);
+
+        // Update state
+        state.current_raft_actor = Some(new_actor);
+        state.actor_spawn_time = Some(Instant::now());
+        state.total_restarts += 1;
+        state.health_monitor = Some(health_monitor);
+        state.health_monitor_task = Some(health_monitor_task);
+    }
+
+    /// Handle failed restart attempt.
+    ///
+    /// Tiger Style: Extracted circuit breaker state transition logic.
+    fn handle_restart_failure(&self, state: &mut RaftSupervisorState, spawn_err: SupervisionError) {
+        let node_id = state.raft_actor_config.node_id;
+
+        error!(
+            node_id = node_id,
+            error = %spawn_err,
+            circuit_state = ?state.circuit_breaker_state,
+            "failed to restart raft actor"
+        );
+
+        // If restart failed in HalfOpen state, transition back to Open
+        if state.circuit_breaker_state == CircuitBreakerState::HalfOpen {
+            warn!(
+                node_id = node_id,
+                circuit_state = "HalfOpen -> Open",
+                "restart failed in half-open state, reopening circuit"
+            );
+            state.circuit_breaker_state = CircuitBreakerState::Open;
+            state.circuit_opened_at = Some(Instant::now());
+        }
+
+        self.clear_actor_state(state);
+    }
+
+    /// Clear actor state references.
+    ///
+    /// Tiger Style: Common cleanup logic extracted to avoid duplication.
+    fn clear_actor_state(&self, state: &mut RaftSupervisorState) {
+        state.current_raft_actor = None;
+        state.actor_spawn_time = None;
     }
 }
 

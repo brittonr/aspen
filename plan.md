@@ -63,14 +63,55 @@
 - Add property-based tests for S3 operations
 - Goal: 50+ S3-specific tests
 
-### 2. Improve Tiger Style Compliance
+### 2. Improve Tiger Style Compliance - Function Length Violations
 
-- Current score: 66/100 (Performance: 55/100, Safety: 98/100)
-- Focus on performance optimizations:
-  - Reduce allocations in hot paths
-  - Implement zero-copy streaming where possible
-  - Add bounded resource pools for connections/buffers
-- Target score: 80+/100
+**Current Overall Score**: 87/100 (Exceeded target of 80/100)
+
+**Function Length Violations (>70 lines)**: 21 implementation functions
+
+**Priority 1 - Critical Refactoring (>150 lines)**:
+
+| Function | File | Lines | Description |
+| -------- | ---- | ----- | ----------- |
+| `on_key` | `src/bin/aspen-tui/app.rs:341` | 206 | Key event handler with nested match blocks |
+| `complete_multipart_upload` | `src/s3/operations/multipart.rs:388` | 187 | Part assembly, ETag calculation, finalization |
+| `spawn` | `src/cluster/gossip_discovery.rs:140` | 177 | Announcer and receiver task spawning |
+| `handle_actor_failed` | `src/raft/supervision.rs:807` | 162 | Circuit breaker logic, backoff, health monitoring |
+
+**Priority 2 - Medium Refactoring (100-150 lines)**:
+
+| Function | File | Lines | Description |
+| -------- | ---- | ----- | ----------- |
+| `validate` | `src/cluster/config.rs:434` | 137 | Validation blocks for required fields/ranges |
+| `upload_part` | `src/s3/operations/multipart.rs:255` | 130 | Body reading, validation, storage |
+| `list_multipart_uploads` | `src/s3/operations/multipart.rs:697` | 130 | Scan, filter, construct response |
+
+**Refactoring Strategies**:
+
+1. **TUI `on_key`**: Extract mode-specific handlers
+   - `handle_normal_mode_key()`
+   - `handle_editing_mode_key()`
+   - `handle_vault_navigation()`
+
+2. **S3 `complete_multipart_upload`**: Extract helpers
+   - `validate_and_collect_parts()`
+   - `assemble_object_from_parts()`
+   - `finalize_multipart_upload()`
+
+3. **Gossip `spawn`**: Split task spawning
+   - `spawn_announcer_task()`
+   - `spawn_receiver_task()`
+
+4. **Supervision `handle_actor_failed`**: Extract logic
+   - `check_circuit_breaker_restart()`
+   - `spawn_new_actor_with_backoff()`
+   - `update_health_monitor()`
+
+**Other Tiger Style Violations**:
+
+- **Variable naming**: Add units to temporal variables (e.g., `uptime` -> `uptime_duration`)
+- **usize casts**: Consolidate `as usize` into helper functions
+- **Resource bounds**: All collections properly bounded (100% compliant)
 
 ### 3. S3 Feature Completeness
 
