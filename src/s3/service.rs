@@ -587,7 +587,8 @@ impl AspenS3Service {
     ///
     /// S3 multipart ETags are: MD5(concatenated MD5s of all parts) + "-{part_count}"
     fn calculate_multipart_etag(parts: &[&PartMetadata]) -> String {
-        let mut concatenated_md5s: Vec<u8> = Vec::new();
+        // Tiger Style: Pre-allocate with known capacity (16 bytes per MD5 hash).
+        let mut concatenated_md5s: Vec<u8> = Vec::with_capacity(parts.len() * 16);
 
         for part in parts {
             // Strip quotes from part ETags and decode hex
@@ -1045,7 +1046,8 @@ impl AspenS3Service {
             S3_VAULT_PREFIX, bucket, VERSION_METADATA_PREFIX
         );
 
-        let mut entries: Vec<ObjectVersionEntry> = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on scan results.
+        let mut entries: Vec<ObjectVersionEntry> = Vec::with_capacity(scan_result.entries.len());
 
         for entry in scan_result.entries {
             // Extract key and version ID from the KV key
@@ -1354,7 +1356,8 @@ impl S3 for AspenS3Service {
             .map_err(|e| s3_error!(InternalError, "Failed to scan buckets: {}", e))?;
 
         // Extract bucket names from keys that end with _bucket_meta suffix
-        let mut buckets = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on scan results.
+        let mut buckets = Vec::with_capacity(scan_result.entries.len());
         for entry in scan_result.entries {
             if entry.key.ends_with(&suffix) {
                 // Parse bucket metadata to get creation date
@@ -1539,20 +1542,32 @@ impl S3 for AspenS3Service {
         }
 
         // Read body data
+        // Tiger Style: Use content_length hint for pre-allocation when available,
+        // falling back to chunk size as a reasonable default capacity.
+        let initial_capacity = req
+            .input
+            .content_length
+            .map(|len| len as usize)
+            .unwrap_or(S3_CHUNK_SIZE_BYTES as usize);
         let body = match req.input.body {
             Some(stream) => {
                 let bytes: Vec<u8> = stream
-                    .try_fold(Vec::new(), |mut acc, chunk| async move {
-                        acc.extend_from_slice(&chunk);
-                        Ok(acc)
-                    })
+                    .try_fold(
+                        Vec::with_capacity(initial_capacity),
+                        |mut acc, chunk| async move {
+                            acc.extend_from_slice(&chunk);
+                            Ok(acc)
+                        },
+                    )
                     .await
                     .map_err(|e| {
                         s3_error!(InternalError, "Failed to read request body: {:?}", e)
                     })?;
                 bytes
             }
-            None => Vec::new(),
+            // Tiger Style: Empty body still needs explicit Vec, but with zero capacity
+            // to avoid unnecessary allocation.
+            None => Vec::with_capacity(0),
         };
 
         // Check size limit
@@ -1755,8 +1770,9 @@ impl S3 for AspenS3Service {
             }
         }
 
-        let mut deleted: Vec<DeletedObject> = Vec::new();
-        let mut errors: Vec<s3s::dto::Error> = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on input size.
+        let mut deleted: Vec<DeletedObject> = Vec::with_capacity(objects.len());
+        let mut errors: Vec<s3s::dto::Error> = Vec::with_capacity(objects.len());
 
         // Delete each object
         for obj in objects {
@@ -1909,7 +1925,8 @@ impl S3 for AspenS3Service {
         let base_prefix_len = base_prefix.len();
 
         // Process entries into S3 objects and common prefixes
-        let mut contents: Vec<Object> = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on scan results.
+        let mut contents: Vec<Object> = Vec::with_capacity(scan_result.entries.len());
         let mut common_prefixes_set: std::collections::BTreeSet<String> =
             std::collections::BTreeSet::new();
 
@@ -2209,20 +2226,32 @@ impl S3 for AspenS3Service {
         }
 
         // Read body data
+        // Tiger Style: Use content_length hint for pre-allocation when available,
+        // falling back to chunk size as a reasonable default capacity.
+        let initial_capacity = req
+            .input
+            .content_length
+            .map(|len| len as usize)
+            .unwrap_or(S3_CHUNK_SIZE_BYTES as usize);
         let body = match req.input.body {
             Some(stream) => {
                 let bytes: Vec<u8> = stream
-                    .try_fold(Vec::new(), |mut acc, chunk| async move {
-                        acc.extend_from_slice(&chunk);
-                        Ok(acc)
-                    })
+                    .try_fold(
+                        Vec::with_capacity(initial_capacity),
+                        |mut acc, chunk| async move {
+                            acc.extend_from_slice(&chunk);
+                            Ok(acc)
+                        },
+                    )
                     .await
                     .map_err(|e| {
                         s3_error!(InternalError, "Failed to read request body: {:?}", e)
                     })?;
                 bytes
             }
-            None => Vec::new(),
+            // Tiger Style: Empty body still needs explicit Vec, but with zero capacity
+            // to avoid unnecessary allocation.
+            None => Vec::with_capacity(0),
         };
 
         // Validate part size
@@ -2316,12 +2345,13 @@ impl S3 for AspenS3Service {
         }
 
         // Get parts from request
+        // Tiger Style: Use with_capacity(0) for empty cases to avoid allocation overhead.
         let requested_parts = match &req.input.multipart_upload {
             Some(upload) => match &upload.parts {
                 Some(parts) => parts.clone(),
-                None => Vec::new(),
+                None => Vec::with_capacity(0),
             },
-            None => Vec::new(),
+            None => Vec::with_capacity(0),
         };
 
         if requested_parts.is_empty() {
@@ -2330,7 +2360,8 @@ impl S3 for AspenS3Service {
 
         // Verify parts are in order and match
         let mut total_size: u64 = 0;
-        let mut collected_parts: Vec<&PartMetadata> = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on requested parts count.
+        let mut collected_parts: Vec<&PartMetadata> = Vec::with_capacity(requested_parts.len());
         let mut last_part_number: i32 = 0;
 
         for completed_part in &requested_parts {
@@ -2990,7 +3021,9 @@ impl S3 for AspenS3Service {
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e| s3_error!(InvalidRequest, "Invalid lifecycle rule: {}", e))?
             }
-            None => Vec::new(),
+            // Tiger Style: Use with_capacity(0) to explicitly indicate an empty collection
+            // without heap allocation.
+            None => Vec::with_capacity(0),
         };
 
         info!(
@@ -3113,7 +3146,8 @@ impl S3 for AspenS3Service {
                     })
                     .collect()
             }
-            Err(KeyValueStoreError::NotFound { .. }) => Vec::new(),
+            // Tiger Style: Explicitly empty collection with no allocation.
+            Err(KeyValueStoreError::NotFound { .. }) => Vec::with_capacity(0),
             Err(e) => {
                 return Err(s3_error!(InternalError, "Failed to read tags: {}", e));
             }
@@ -3550,7 +3584,8 @@ impl S3 for AspenS3Service {
 
         let base_prefix_len = kv_prefix.len();
 
-        let mut uploads: Vec<MultipartUpload> = Vec::new();
+        // Tiger Style: Pre-allocate with capacity based on scan results.
+        let mut uploads: Vec<MultipartUpload> = Vec::with_capacity(scan_result.entries.len());
 
         for entry in &scan_result.entries {
             if uploads.len() >= max_uploads as usize {

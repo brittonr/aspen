@@ -271,7 +271,10 @@ impl std::fmt::Display for PresignError {
 impl std::error::Error for PresignError {}
 
 /// URI-encode a path component (preserving slashes).
+///
+/// Tiger Style: Uses write! macro to avoid string allocations in loops.
 fn uri_encode_path(path: &str) -> String {
+    use std::fmt::Write;
     let mut result = String::with_capacity(path.len() * 3);
     for c in path.chars() {
         match c {
@@ -279,8 +282,11 @@ fn uri_encode_path(path: &str) -> String {
                 result.push(c);
             }
             _ => {
-                for b in c.to_string().as_bytes() {
-                    result.push_str(&format!("%{:02X}", b));
+                // Encode multi-byte characters correctly
+                let mut buf = [0u8; 4];
+                let encoded = c.encode_utf8(&mut buf);
+                for b in encoded.as_bytes() {
+                    let _ = write!(result, "%{:02X}", b);
                 }
             }
         }
@@ -289,7 +295,10 @@ fn uri_encode_path(path: &str) -> String {
 }
 
 /// URI-encode a query parameter value.
+///
+/// Tiger Style: Uses write! macro to avoid string allocations in loops.
 fn uri_encode_value(value: &str) -> String {
+    use std::fmt::Write;
     let mut result = String::with_capacity(value.len() * 3);
     for c in value.chars() {
         match c {
@@ -297,8 +306,11 @@ fn uri_encode_value(value: &str) -> String {
                 result.push(c);
             }
             _ => {
-                for b in c.to_string().as_bytes() {
-                    result.push_str(&format!("%{:02X}", b));
+                // Encode multi-byte characters correctly
+                let mut buf = [0u8; 4];
+                let encoded = c.encode_utf8(&mut buf);
+                for b in encoded.as_bytes() {
+                    let _ = write!(result, "%{:02X}", b);
                 }
             }
         }
