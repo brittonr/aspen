@@ -16,7 +16,7 @@ use openraft::error::{RPCError, Unreachable};
 use openraft::network::{RaftNetworkFactory, v2::RaftNetworkV2};
 use ractor::Actor;
 
-use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
+use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
@@ -83,7 +83,7 @@ impl RaftNetworkV2<AppTypeConfig> for MockNetwork {
 async fn create_test_raft_config(node_id: u64) -> RaftActorConfig {
     let raft_config = Arc::new(RaftConfig::default());
     let log_store = InMemoryLogStore::default();
-    let state_machine = StateMachineStore::default();
+    let state_machine = InMemoryStateMachine::default();
     let network = MockNetworkFactory;
 
     let state_machine_arc = Arc::new(state_machine);

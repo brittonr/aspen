@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
+use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_aspen_node;
@@ -24,7 +24,7 @@ async fn create_raft_node(
     config: Arc<Config>,
 ) -> Raft<AppTypeConfig> {
     let log_store = InMemoryLogStore::default();
-    let state_machine = Arc::new(StateMachineStore::default());
+    let state_machine = Arc::new(InMemoryStateMachine::default());
 
     let network_factory = MadsimNetworkFactory::new(node_id, router, injector);
 

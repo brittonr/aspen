@@ -25,7 +25,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 
@@ -89,7 +89,7 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Create KV client
-    let kv = KvClient::new(handles[0].raft_actor.clone());
+    let kv = NodeClient::new(handles[0].raft_actor.clone());
 
     // Perform sustained writes
     let start = Instant::now();
@@ -200,7 +200,7 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Create KV client
-    let kv = KvClient::new(handle.raft_actor.clone());
+    let kv = NodeClient::new(handle.raft_actor.clone());
 
     // Perform writes
     let start = Instant::now();

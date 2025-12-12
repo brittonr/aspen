@@ -1432,7 +1432,7 @@ pub enum HealthCheckError {
 #[cfg(test)]
 mod health_monitor_tests {
     use super::*;
-    use crate::raft::storage::StateMachineStore;
+    use crate::raft::storage::InMemoryStateMachine;
     use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
     use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
     use openraft::Config as RaftConfig;
@@ -1502,7 +1502,7 @@ mod health_monitor_tests {
         let node_id = 1;
         let config = Arc::new(RaftConfig::default());
         let log_store = InMemoryLogStore::default();
-        let state_machine = StateMachineStore::default();
+        let state_machine = InMemoryStateMachine::default();
         let network = MockNetworkFactory;
 
         let state_machine_arc = Arc::new(state_machine);

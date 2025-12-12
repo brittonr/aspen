@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
+use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::supervision::{
     RaftSupervisor, SupervisionConfig, SupervisorArguments, SupervisorMessage,
 };
@@ -40,7 +40,7 @@ async fn create_supervised_raft_config(
     );
 
     let log_store = InMemoryLogStore::default();
-    let state_machine = Arc::new(StateMachineStore::default());
+    let state_machine = Arc::new(InMemoryStateMachine::default());
     let network_factory = MadsimNetworkFactory::new(node_id, router, injector);
 
     let raft = Raft::new(

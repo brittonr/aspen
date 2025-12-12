@@ -70,7 +70,7 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::server_actor::{RaftRpcServerActor, RaftRpcServerActorArgs, RaftRpcServerMessage};
-use crate::raft::storage::{InMemoryLogStore, RedbLogStore, StateMachineStore, StorageBackend};
+use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervision::{
     HealthMonitor, RaftSupervisor, SupervisorArguments, SupervisorMessage,
@@ -793,7 +793,7 @@ async fn create_inmemory_storage(
 )> {
     info!("Using in-memory storage backend (non-durable)");
     let log_store = InMemoryLogStore::default();
-    let state_machine_store = StateMachineStore::new();
+    let state_machine_store = InMemoryStateMachine::new();
 
     let raft = openraft::Raft::new(
         node_id,

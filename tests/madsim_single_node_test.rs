@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, StateMachineStore};
+use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_aspen_node;
@@ -25,7 +25,7 @@ async fn create_raft_node(node_id: NodeId) -> Raft<aspen::raft::types::AppTypeCo
     let config = Arc::new(config.validate().expect("invalid raft config"));
 
     let log_store = InMemoryLogStore::default();
-    let state_machine = Arc::new(StateMachineStore::default());
+    let state_machine = Arc::new(InMemoryStateMachine::default());
 
     Raft::new(
         node_id,

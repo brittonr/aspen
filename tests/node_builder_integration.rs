@@ -1,11 +1,11 @@
-//! Integration tests for KvServiceBuilder.
+//! Integration tests for NodeBuilder.
 //!
 //! These tests validate the production API for programmatic node startup,
 //! covering lifecycle management, configuration options, and multi-node clusters.
 
 use std::time::Duration;
 
-use aspen::kv::{KvServiceBuilder, NodeId};
+use aspen::node::{NodeBuilder, NodeId};
 use aspen::raft::storage::StorageBackend;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -16,7 +16,7 @@ async fn test_service_lifecycle() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-1");
 
-    let service = KvServiceBuilder::new(NodeId(1), &data_dir)
+    let service = NodeBuilder::new(NodeId(1), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -40,7 +40,7 @@ async fn test_custom_storage_backend() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-2");
 
-    let service = KvServiceBuilder::new(NodeId(2), &data_dir)
+    let service = NodeBuilder::new(NodeId(2), &data_dir)
         .with_storage(StorageBackend::Sqlite)
         .start()
         .await
@@ -56,7 +56,7 @@ async fn test_gossip_enabled() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-3");
 
-    let service = KvServiceBuilder::new(NodeId(3), &data_dir)
+    let service = NodeBuilder::new(NodeId(3), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_gossip(true)
         .start()
@@ -73,7 +73,7 @@ async fn test_mdns_enabled() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-4");
 
-    let service = KvServiceBuilder::new(NodeId(4), &data_dir)
+    let service = NodeBuilder::new(NodeId(4), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_mdns(true)
         .start()
@@ -90,7 +90,7 @@ async fn test_custom_raft_timeouts() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-5");
 
-    let service = KvServiceBuilder::new(NodeId(5), &data_dir)
+    let service = NodeBuilder::new(NodeId(5), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_heartbeat_interval_ms(500)
         .with_election_timeout_ms(1500, 3000)
@@ -108,7 +108,7 @@ async fn test_client_creation() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-6");
 
-    let service = KvServiceBuilder::new(NodeId(6), &data_dir)
+    let service = NodeBuilder::new(NodeId(6), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -126,7 +126,7 @@ async fn test_raft_core_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-7");
 
-    let service = KvServiceBuilder::new(NodeId(7), &data_dir)
+    let service = NodeBuilder::new(NodeId(7), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -152,7 +152,7 @@ async fn test_bootstrap_handle_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-8");
 
-    let service = KvServiceBuilder::new(NodeId(8), &data_dir)
+    let service = NodeBuilder::new(NodeId(8), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -171,7 +171,7 @@ async fn test_builder_all_options() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-9");
 
-    let service = KvServiceBuilder::new(NodeId(9), &data_dir)
+    let service = NodeBuilder::new(NodeId(9), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_peers(vec![])
         .with_gossip(false)
@@ -191,13 +191,13 @@ async fn test_builder_all_options() {
 async fn test_multiple_services() {
     let temp_dir = TempDir::new().unwrap();
 
-    let service1 = KvServiceBuilder::new(NodeId(10), temp_dir.path().join("node-10"))
+    let service1 = NodeBuilder::new(NodeId(10), temp_dir.path().join("node-10"))
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
         .expect("failed to start service1");
 
-    let service2 = KvServiceBuilder::new(NodeId(11), temp_dir.path().join("node-11"))
+    let service2 = NodeBuilder::new(NodeId(11), temp_dir.path().join("node-11"))
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -224,7 +224,7 @@ async fn test_service_restart_inmemory() {
     let data_dir = temp_dir.path().join("node-12");
 
     // Start first instance
-    let service1 = KvServiceBuilder::new(NodeId(12), &data_dir)
+    let service1 = NodeBuilder::new(NodeId(12), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -240,7 +240,7 @@ async fn test_service_restart_inmemory() {
     sleep(Duration::from_millis(100)).await;
 
     // Start second instance (InMemory means fresh state)
-    let service2 = KvServiceBuilder::new(NodeId(12), &data_dir)
+    let service2 = NodeBuilder::new(NodeId(12), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .start()
         .await
@@ -264,7 +264,7 @@ async fn test_rapid_lifecycle_cycles() {
     let data_dir = temp_dir.path().join("node-13");
 
     for i in 0..3 {
-        let service = KvServiceBuilder::new(NodeId(13), &data_dir)
+        let service = NodeBuilder::new(NodeId(13), &data_dir)
             .with_storage(StorageBackend::InMemory)
             .start()
             .await
@@ -291,7 +291,7 @@ async fn test_peer_configuration() {
     // Start with empty peer list (peers can be added dynamically later)
     let peers = vec![];
 
-    let service = KvServiceBuilder::new(NodeId(14), &data_dir)
+    let service = NodeBuilder::new(NodeId(14), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_peers(peers)
         .start()

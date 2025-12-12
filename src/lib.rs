@@ -10,7 +10,7 @@
 
 pub mod api;
 pub mod cluster;
-pub mod kv;
+pub mod node;
 pub mod protocol_handlers;
 pub mod raft;
 pub mod simulation;
@@ -29,5 +29,5 @@ pub mod testing;
 /// with fixed thresholds and fail-fast semantics.
 pub mod utils;
 
-pub use kv::{KvClient, KvServiceBuilder};
+pub use node::{NodeBuilder, NodeClient};
 pub use raft::RaftControlClient;

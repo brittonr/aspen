@@ -11,7 +11,7 @@
 //! - `RedbLogStore`: Persistent append-only log backed by redb (default production)
 //! - `InMemoryLogStore`: Non-durable log for testing and development
 //! - `SqliteStateMachine`: ACID-compliant state machine with connection pooling
-//! - `StateMachineStore`: Type alias for active state machine implementation
+//! - `InMemoryStateMachine`: In-memory state machine implementation
 //! - Snapshot management with bounded in-memory snapshots
 //!
 //! # Tiger Style
@@ -748,15 +748,15 @@ struct StateMachineData {
     pub data: BTreeMap<String, String>,
 }
 
-/// Simple state machine that mirrors the openraft memstore example.
+/// Simple in-memory state machine that mirrors the openraft memstore example.
 #[derive(Debug, Default)]
-pub struct StateMachineStore {
+pub struct InMemoryStateMachine {
     state_machine: RwLock<StateMachineData>,
     snapshot_idx: AtomicU64,
     current_snapshot: RwLock<Option<StoredSnapshot>>,
 }
 
-impl StateMachineStore {
+impl InMemoryStateMachine {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
@@ -805,7 +805,7 @@ impl StateMachineStore {
     }
 }
 
-impl RaftSnapshotBuilder<AppTypeConfig> for Arc<StateMachineStore> {
+impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
         let state_machine = self.state_machine.read().await;
@@ -846,7 +846,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<StateMachineStore> {
     }
 }
 
-impl RaftStateMachine<AppTypeConfig> for Arc<StateMachineStore> {
+impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
     type SnapshotBuilder = Self;
 
     async fn applied_state(

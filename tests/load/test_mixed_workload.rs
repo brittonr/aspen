@@ -25,7 +25,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 use rand::Rng;
@@ -90,7 +90,7 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Create KV client
-    let kv = KvClient::with_timeout(handles[0].raft_actor.clone(), 5000);
+    let kv = NodeClient::with_timeout(handles[0].raft_actor.clone(), 5000);
 
     // Pre-populate half the key space to allow reads
     println!("Pre-populating {} keys...", KEY_SPACE / 2);
@@ -275,7 +275,7 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
     // Pre-populate keys (90% of key space to ensure >= 85% success rate)
     // With 90% initial coverage and random write distribution, final coverage
     // approaches ~98%, giving expected success: 30 writes + ~69 reads = ~99%
-    let kv = KvClient::with_timeout(handle.raft_actor.clone(), 5000);
+    let kv = NodeClient::with_timeout(handle.raft_actor.clone(), 5000);
     for i in 0..((KEY_SPACE * 9) / 10) {
         let write_req = WriteRequest {
             command: WriteCommand::Set {
@@ -396,7 +396,7 @@ async fn test_mixed_workload_100_ops_sqlite() -> anyhow::Result<()> {
     // Pre-populate keys (90% of key space to ensure >= 85% success rate)
     // With 90% initial coverage and random write distribution, final coverage
     // approaches ~98%, giving expected success: 30 writes + ~69 reads = ~99%
-    let kv = KvClient::with_timeout(handle.raft_actor.clone(), 5000);
+    let kv = NodeClient::with_timeout(handle.raft_actor.clone(), 5000);
     for i in 0..((KEY_SPACE * 9) / 10) {
         let write_req = WriteRequest {
             command: WriteCommand::Set {

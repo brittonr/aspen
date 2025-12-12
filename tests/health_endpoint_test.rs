@@ -250,7 +250,8 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
     let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(
         handle.raft_actor.clone(),
     ));
-    let kv: Arc<dyn KeyValueStore> = Arc::new(aspen::kv::KvClient::new(handle.raft_actor.clone()));
+    let kv: Arc<dyn KeyValueStore> =
+        Arc::new(aspen::node::NodeClient::new(handle.raft_actor.clone()));
 
     // Start HTTP server
     let _server_task = start_test_server(
@@ -380,7 +381,8 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
     let controller: Arc<dyn ClusterController> = Arc::new(aspen::raft::RaftControlClient::new(
         handle.raft_actor.clone(),
     ));
-    let kv: Arc<dyn KeyValueStore> = Arc::new(aspen::kv::KvClient::new(handle.raft_actor.clone()));
+    let kv: Arc<dyn KeyValueStore> =
+        Arc::new(aspen::node::NodeClient::new(handle.raft_actor.clone()));
 
     // Start HTTP server
     let _server_task = start_test_server(

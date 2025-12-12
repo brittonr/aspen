@@ -1,6 +1,6 @@
-//! Type definitions for the key-value service.
+//! Type definitions for the node module.
 //!
-//! Defines the core types used throughout the KV module, primarily the NodeId
+//! Defines the core types used throughout the node module, primarily the NodeId
 //! newtype wrapper for type-safe node identification. This module is intentionally
 //! minimal, providing strong typing without coupling to specific implementations.
 //!
@@ -27,7 +27,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen::kv::types::NodeId;
+//! use aspen::node::types::NodeId;
 //!
 //! // Type-safe construction
 //! let node_id = NodeId::new(1);

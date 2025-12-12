@@ -26,7 +26,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 
@@ -36,7 +36,7 @@ use aspen::testing::create_test_aspen_node;
 /// # Why This Test Is Ignored
 ///
 /// This test is marked as `#[ignore]` because:
-/// 1. It uses `KvClient` directly, bypassing the HTTP layer where disk space checks occur
+/// 1. It uses `NodeClient` directly, bypassing the HTTP layer where disk space checks occur
 /// 2. The disk space check is only performed in `write_value()` handler (src/bin/aspen-node.rs:914)
 /// 3. Actual disk full simulation requires root permissions or filesystem manipulation
 ///
@@ -53,7 +53,7 @@ use aspen::testing::create_test_aspen_node;
 /// # Future Improvements
 ///
 /// To properly integration test this, we would need to:
-/// 1. Test via HTTP endpoints instead of KvClient
+/// 1. Test via HTTP endpoints instead of NodeClient
 /// 2. Use a mock filesystem or small tmpfs mount (requires root)
 /// 3. Or inject a disk space check function for testing
 #[tokio::test]
@@ -98,7 +98,7 @@ async fn test_disk_full_error_handling() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let kv = KvClient::new(handle.raft_actor.clone());
+    let kv = NodeClient::new(handle.raft_actor.clone());
 
     // Write some initial data (should succeed - disk not full yet)
     let write_req = WriteRequest {

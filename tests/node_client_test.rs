@@ -1,4 +1,4 @@
-//! Integration tests for KvClient with RaftActor backend.
+//! Integration tests for NodeClient with RaftActor backend.
 //!
 //! These tests validate the key-value client implementation by bootstrapping
 //! real nodes with the RaftActor backend and exercising KV operations. Multi-node
@@ -13,7 +13,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 use tempfile::TempDir;
@@ -48,7 +48,7 @@ async fn test_single_node_write_read() {
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
     let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
-    let kv_client = KvClient::new(handle.raft_actor.clone());
+    let kv_client = NodeClient::new(handle.raft_actor.clone());
 
     // Initialize cluster with single node
     let init_req = InitRequest {
@@ -157,8 +157,8 @@ async fn test_two_node_replication() {
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
-    let kv_client1 = KvClient::new(handle1.raft_actor.clone());
-    let _kv_client2 = KvClient::new(handle2.raft_actor.clone());
+    let kv_client1 = NodeClient::new(handle1.raft_actor.clone());
+    let _kv_client2 = NodeClient::new(handle2.raft_actor.clone());
 
     // Initialize cluster with only node1 as the initial member
     // Node2 will join later as a learner via add_learner()
@@ -251,7 +251,7 @@ async fn test_read_nonexistent_key() {
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
     let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
-    let kv_client = KvClient::new(handle.raft_actor.clone());
+    let kv_client = NodeClient::new(handle.raft_actor.clone());
 
     // Initialize cluster
     let init_req = InitRequest {
@@ -306,7 +306,7 @@ async fn test_multiple_operations() {
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
     let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
-    let kv_client = KvClient::new(handle.raft_actor.clone());
+    let kv_client = NodeClient::new(handle.raft_actor.clone());
 
     // Initialize cluster
     let init_req = InitRequest {
@@ -413,8 +413,8 @@ async fn test_add_learner_and_replicate() {
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
-    let kv_client1 = KvClient::new(handle1.raft_actor.clone());
-    let _kv_client2 = KvClient::new(handle2.raft_actor.clone());
+    let kv_client1 = NodeClient::new(handle1.raft_actor.clone());
+    let _kv_client2 = NodeClient::new(handle2.raft_actor.clone());
 
     // Initialize cluster with only node1 - use REAL Iroh address from running node
     let init_req = InitRequest {
@@ -511,7 +511,7 @@ async fn test_setmulti_operations() {
 
     let handle = bootstrap_node(config.clone()).await.unwrap();
     let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
-    let kv_client = KvClient::new(handle.raft_actor.clone());
+    let kv_client = NodeClient::new(handle.raft_actor.clone());
 
     // Initialize cluster
     let init_req = InitRequest {

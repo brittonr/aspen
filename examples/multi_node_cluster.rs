@@ -16,7 +16,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
 
     // Create clients for node 1 (will be the leader)
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
-    let kv_client1 = KvClient::new(handle1.raft_actor.clone());
+    let kv_client1 = NodeClient::new(handle1.raft_actor.clone());
 
     // Initialize cluster with node 1 as the only initial member
     info!("\n🏗️  Initializing cluster with node 1 as initial member");

@@ -1,4 +1,4 @@
-//! Key-Value Operations Example
+//! Node Operations Example
 //!
 //! This example demonstrates:
 //! - Bootstrapping a single-node cluster
@@ -7,7 +7,7 @@
 //! - Handling NotFound errors
 //! - Linearizable read consistency
 //!
-//! Run with: cargo run --example kv_operations
+//! Run with: cargo run --example node_operations
 
 use anyhow::Result;
 use aspen::api::{
@@ -16,7 +16,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use tempfile::TempDir;
 use tracing::{Level, error, info, warn};
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
 
     // Create clients
     let cluster_client = RaftControlClient::new(handle.raft_actor.clone());
-    let kv_client = KvClient::new(handle.raft_actor.clone());
+    let kv_client = NodeClient::new(handle.raft_actor.clone());
 
     // Initialize cluster
     info!("🏗️  Initializing cluster");

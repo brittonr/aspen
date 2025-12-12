@@ -25,7 +25,7 @@ use openraft::{Config, Raft};
 use rand::Rng;
 use tokio::time::sleep;
 
-use crate::raft::storage::{InMemoryLogStore, StateMachineStore};
+use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode as RaftAspenNode, NodeId};
 
 /// A Raft node managed by the router, including its storage and Raft handle.
@@ -35,7 +35,7 @@ pub struct TestNode {
     pub id: NodeId,
     pub raft: Raft<AppTypeConfig>,
     pub log_store: InMemoryLogStore,
-    pub state_machine: Arc<StateMachineStore>,
+    pub state_machine: Arc<InMemoryStateMachine>,
 }
 
 /// Network factory for in-memory Raft nodes. Routes RPCs through the router's
@@ -373,7 +373,7 @@ impl AspenRouter {
     /// and must be initialized or added to a cluster via `initialize()` or membership changes.
     pub async fn new_raft_node(&mut self, id: NodeId) -> Result<()> {
         let log_store = InMemoryLogStore::default();
-        let state_machine = StateMachineStore::new();
+        let state_machine = InMemoryStateMachine::new();
         self.new_raft_node_with_storage(id, log_store, state_machine)
             .await
     }
@@ -390,14 +390,14 @@ impl AspenRouter {
     /// // Pre-populate log with entries
     /// log_store.append([...]).await?;
     ///
-    /// let state_machine = StateMachineStore::new();
+    /// let state_machine = InMemoryStateMachine::new();
     /// router.new_raft_node_with_storage(0, log_store, state_machine).await?;
     /// ```
     pub async fn new_raft_node_with_storage(
         &mut self,
         id: NodeId,
         log_store: InMemoryLogStore,
-        state_machine: Arc<StateMachineStore>,
+        state_machine: Arc<InMemoryStateMachine>,
     ) -> Result<()> {
         let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
@@ -427,8 +427,8 @@ impl AspenRouter {
     /// Create a new storage pair (log store + state machine) for testing.
     ///
     /// Useful when you need to pre-populate storage before creating a node.
-    pub fn new_store(&self) -> (InMemoryLogStore, Arc<StateMachineStore>) {
-        (InMemoryLogStore::default(), StateMachineStore::new())
+    pub fn new_store(&self) -> (InMemoryLogStore, Arc<InMemoryStateMachine>) {
+        (InMemoryLogStore::default(), InMemoryStateMachine::new())
     }
 
     /// Get a handle to the Raft instance for the given node.
@@ -767,7 +767,7 @@ impl AspenRouter {
     ) -> Option<(
         Raft<AppTypeConfig>,
         InMemoryLogStore,
-        Arc<StateMachineStore>,
+        Arc<InMemoryStateMachine>,
     )> {
         let mut nodes = self.inner.nodes.lock().unwrap();
         let node = nodes.remove(&node_id)?;

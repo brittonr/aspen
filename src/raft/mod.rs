@@ -74,7 +74,7 @@ use crate::api::{
     ScanResult, WriteCommand, WriteRequest, WriteResult,
 };
 use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
-use crate::raft::storage::StateMachineStore;
+use crate::raft::storage::InMemoryStateMachine;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
 
@@ -85,7 +85,7 @@ use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
 /// queried a placeholder state machine.
 #[derive(Clone, Debug)]
 pub enum StateMachineVariant {
-    InMemory(Arc<StateMachineStore>),
+    InMemory(Arc<InMemoryStateMachine>),
     Sqlite(Arc<SqliteStateMachine>),
 }
 

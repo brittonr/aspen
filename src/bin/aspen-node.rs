@@ -83,7 +83,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::{BootstrapHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 use aspen::raft::network::IrpcRaftNetworkFactory;
@@ -505,7 +505,7 @@ fn setup_controllers(
                 )
                 .expect("raft_mailbox_capacity config must be valid (1..=10000)"),
             );
-            let kv_client = Arc::new(KvClient::new(handle.raft_actor.clone()));
+            let kv_client = Arc::new(NodeClient::new(handle.raft_actor.clone()));
             let coordinator = Arc::new(LearnerPromotionCoordinator::with_failure_detector(
                 cluster_client.clone(),
                 handle.network_factory.failure_detector().clone(),

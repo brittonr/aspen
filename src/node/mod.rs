@@ -1,26 +1,27 @@
-//! Key-value service builder and client API.
+//! Node orchestration and distributed system client API.
 //!
-//! Provides a high-level API for building and interacting with Aspen's distributed
-//! key-value service. The builder (KvServiceBuilder) orchestrates cluster bootstrap,
-//! wiring together Raft consensus, Iroh P2P networking, and actor supervision. The
-//! client (KvClient) offers a simple interface for read/write operations against
-//! the distributed state machine.
+//! Provides a high-level API for building and operating Aspen nodes. This module
+//! orchestrates the complete node bootstrap sequence, wiring together Raft consensus,
+//! Iroh P2P networking, actor supervision, and distributed storage. The builder
+//! (NodeBuilder) handles node configuration and startup, while the client (NodeClient)
+//! provides access to the distributed key-value store and cluster operations.
 //!
 //! # Key Components
 //!
-//! - `KvServiceBuilder`: Fluent builder for node configuration and bootstrap
-//! - `KvClient`: Client API for key-value operations (read, write, set_multi)
+//! - `NodeBuilder`: Fluent builder for node configuration and bootstrap
+//! - `Node`: Handle to a running Aspen node with all its subsystems
+//! - `NodeClient`: Client API for key-value operations (read, write, scan, delete)
 //! - `NodeId`: Type-safe wrapper for u64 node identifiers
-//! - Bootstrap integration: Delegates to cluster::bootstrap for node startup
+//! - Bootstrap integration: Delegates to cluster::bootstrap for full node startup
 //!
 //! # Architecture
 //!
-//! The KV service is built on top of Aspen's Raft-based cluster infrastructure:
-//! 1. Client submits operation (read/write) to KvClient
-//! 2. Client routes to Raft leader via cluster controller
-//! 3. Raft replicates operation to majority quorum
-//! 4. State machine applies operation to SQLite backend
-//! 5. Response returned to client with linearizable semantics
+//! The node module orchestrates the entire distributed system stack:
+//! 1. Initializes metadata store for node registry
+//! 2. Creates Iroh P2P endpoint for inter-node communication
+//! 3. Starts Raft consensus with SQLite/InMemory state machine
+//! 4. Establishes actor supervision trees for fault tolerance
+//! 5. Provides client interface to the distributed key-value store
 //!
 //! # Tiger Style
 //!
@@ -33,19 +34,17 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen::kv::KvServiceBuilder;
+//! use aspen::node::NodeBuilder;
 //! use aspen::raft::storage::StorageBackend;
 //!
 //! // Start a node
-//! let service = KvServiceBuilder::new(1, "./data/node-1")
-//!     .storage_backend(StorageBackend::Sqlite)
-//!     .raft_addr("127.0.0.1:5301".parse()?)
-//!     .iroh_bind_port(4301)
-//!     .build()
+//! let node = NodeBuilder::new(1, "./data/node-1")
+//!     .with_storage(StorageBackend::Sqlite)
+//!     .start()
 //!     .await?;
 //!
 //! // Use the client
-//! let client = service.client();
+//! let client = node.client();
 //! client.write("key".to_string(), b"value".to_vec()).await?;
 //! let value = client.read("key".to_string()).await?;
 //! ```
@@ -58,44 +57,44 @@ use std::path::PathBuf;
 use anyhow::Result;
 use iroh::EndpointAddr;
 
-pub use self::client::KvClient;
+pub use self::client::NodeClient;
 pub use self::types::NodeId;
 
 use crate::cluster::bootstrap::{BootstrapHandle, bootstrap_node};
 use crate::cluster::config::ClusterBootstrapConfig;
 use crate::raft::storage::StorageBackend;
 
-/// Builds a KV service with full cluster bootstrap.
+/// Builds an Aspen node with full cluster bootstrap.
 ///
 /// This builder provides a programmatic API for starting Aspen nodes,
 /// wiring together all the components: Raft consensus, Iroh P2P networking,
-/// gossip discovery, and actor supervision.
+/// gossip discovery, actor supervision, and distributed storage.
 ///
 /// # Example
 ///
 /// ```no_run
-/// use aspen::kv::KvServiceBuilder;
+/// use aspen::node::NodeBuilder;
 /// use aspen::raft::storage::StorageBackend;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> anyhow::Result<()> {
-/// let service = KvServiceBuilder::new(1, "./data/node-1")
+/// let node = NodeBuilder::new(1, "./data/node-1")
 ///     .with_storage(StorageBackend::InMemory)
 ///     .with_gossip(true)
 ///     .start()
 ///     .await?;
 ///
-/// // Use the service...
+/// // Use the node...
 ///
-/// service.shutdown().await?;
+/// node.shutdown().await?;
 /// # Ok(())
 /// # }
 /// ```
-pub struct KvServiceBuilder {
+pub struct NodeBuilder {
     config: ClusterBootstrapConfig,
 }
 
-impl KvServiceBuilder {
+impl NodeBuilder {
     /// Create a new builder for the given node ID and data directory.
     pub fn new(node_id: NodeId, data_dir: impl Into<PathBuf>) -> Self {
         let config = ClusterBootstrapConfig {
@@ -161,7 +160,7 @@ impl KvServiceBuilder {
         self
     }
 
-    /// Start the KV service by bootstrapping a full cluster node.
+    /// Start the node by bootstrapping a full Aspen cluster node.
     ///
     /// This initializes all components:
     /// - Metadata store
@@ -171,22 +170,22 @@ impl KvServiceBuilder {
     /// - IRPC server for Raft RPCs
     /// - Optional gossip discovery
     ///
-    /// Returns a handle that can be used to shut down the service gracefully.
-    pub async fn start(self) -> Result<KvService> {
+    /// Returns a handle that can be used to shut down the node gracefully.
+    pub async fn start(self) -> Result<Node> {
         let handle = bootstrap_node(self.config).await?;
-        Ok(KvService { handle })
+        Ok(Node { handle })
     }
 }
 
-/// Handle returned by [`KvServiceBuilder::start`].
+/// Handle returned by [`NodeBuilder::start`].
 ///
 /// Wraps a [`BootstrapHandle`] and provides convenient access to the
 /// node's components for integration testing and programmatic usage.
-pub struct KvService {
+pub struct Node {
     handle: BootstrapHandle,
 }
 
-impl KvService {
+impl Node {
     /// Get the node ID.
     pub fn node_id(&self) -> NodeId {
         self.handle.config.node_id.into()
@@ -215,15 +214,15 @@ impl KvService {
         &self.handle
     }
 
-    /// Create a KV client for this node.
+    /// Create a client for this node.
     ///
-    /// The client can be used to perform read/write operations through
-    /// the Raft consensus layer.
-    pub fn client(&self) -> KvClient {
-        KvClient::new(self.handle.raft_actor.clone())
+    /// The client can be used to perform distributed key-value operations
+    /// and cluster management through the Raft consensus layer.
+    pub fn client(&self) -> NodeClient {
+        NodeClient::new(self.handle.raft_actor.clone())
     }
 
-    /// Gracefully shutdown the KV service.
+    /// Gracefully shutdown the node.
     ///
     /// Shuts down all components in reverse order of startup:
     /// 1. Gossip discovery (if enabled)

@@ -2,25 +2,25 @@ use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 
-use aspen::KvServiceBuilder;
-use aspen::kv::types::NodeId;
+use aspen::NodeBuilder;
+use aspen::node::types::NodeId;
 
-const ID_ENV: &str = "ASPEN_KV_NODE_ID";
-const DATA_DIR_ENV: &str = "ASPEN_KV_DATA_DIR";
-const PEERS_ENV: &str = "ASPEN_KV_PEERS";
+const ID_ENV: &str = "ASPEN_NODE_ID";
+const DATA_DIR_ENV: &str = "ASPEN_NODE_DATA_DIR";
+const PEERS_ENV: &str = "ASPEN_NODE_PEERS";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let config = EnvConfig::from_env()?;
     let peer_count = config.peer_count;
-    let service = config.into_builder().start().await?;
+    let node = config.into_builder().start().await?;
     println!(
-        "KvNode {} ready at {:?} with {} configured peers",
-        service.node_id(),
-        service.endpoint_addr(),
+        "Node {} ready at {:?} with {} configured peers",
+        node.node_id(),
+        node.endpoint_addr(),
         peer_count
     );
-    println!("Client handle acquired for node {}", service.node_id());
+    println!("Client handle acquired for node {}", node.node_id());
 
     Ok(())
 }
@@ -46,8 +46,8 @@ impl EnvConfig {
         })
     }
 
-    fn into_builder(self) -> KvServiceBuilder {
-        KvServiceBuilder::new(self.node_id, self.data_dir).with_peers(self.peers)
+    fn into_builder(self) -> NodeBuilder {
+        NodeBuilder::new(self.node_id, self.data_dir).with_peers(self.peers)
     }
 }
 

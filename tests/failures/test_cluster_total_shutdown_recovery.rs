@@ -30,7 +30,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 
@@ -96,7 +96,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Write test data
-    let kv = KvClient::new(handles[0].raft_actor.clone());
+    let kv = NodeClient::new(handles[0].raft_actor.clone());
     let write_req = WriteRequest {
         command: WriteCommand::Set {
             key: "recovery-test".to_string(),
@@ -171,7 +171,7 @@ async fn test_cluster_total_shutdown_and_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Phase 5: Verify cluster is operational
-    let kv_new = KvClient::new(new_handles[0].raft_actor.clone());
+    let kv_new = NodeClient::new(new_handles[0].raft_actor.clone());
 
     // With in-memory storage, old data is lost
     let read_req = ReadRequest {
@@ -251,7 +251,7 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Write data
-    let kv = KvClient::new(handle.raft_actor.clone());
+    let kv = NodeClient::new(handle.raft_actor.clone());
     let write_req = WriteRequest {
         command: WriteCommand::Set {
             key: "test".to_string(),
@@ -281,7 +281,7 @@ async fn test_single_node_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Verify node is operational
-    let kv_new = KvClient::new(new_handle.raft_actor.clone());
+    let kv_new = NodeClient::new(new_handle.raft_actor.clone());
     let write_req = WriteRequest {
         command: WriteCommand::Set {
             key: "new-test".to_string(),
@@ -351,7 +351,7 @@ async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Write data
-    let kv = KvClient::new(handle.raft_actor.clone());
+    let kv = NodeClient::new(handle.raft_actor.clone());
     let write_req = WriteRequest {
         command: WriteCommand::Set {
             key: "test".to_string(),
@@ -372,7 +372,7 @@ async fn test_single_node_restart_sqlite() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Verify old data is still accessible (SQLite persisted it)
-    let kv_new = KvClient::new(new_handle.raft_actor.clone());
+    let kv_new = NodeClient::new(new_handle.raft_actor.clone());
     let read_req = ReadRequest {
         key: "test".to_string(),
     };

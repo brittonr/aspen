@@ -27,7 +27,7 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
-use aspen::kv::KvClient;
+use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
 use tokio::task::JoinSet;
@@ -91,7 +91,7 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Pre-populate keys
-    let kv = KvClient::with_timeout(handles[0].raft_actor.clone(), 5000);
+    let kv = NodeClient::with_timeout(handles[0].raft_actor.clone(), 5000);
 
     println!("Pre-populating {} keys...", NUM_KEYS);
     for i in 0..NUM_KEYS {
@@ -248,7 +248,7 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Pre-populate keys
-    let kv = KvClient::with_timeout(handle.raft_actor.clone(), 5000);
+    let kv = NodeClient::with_timeout(handle.raft_actor.clone(), 5000);
     for i in 0..NUM_KEYS {
         let write_req = WriteRequest {
             command: WriteCommand::Set {

@@ -1,10 +1,10 @@
-/// Property-based tests for InMemory storage (StateMachineStore) using proptest.
+/// Property-based tests for InMemory storage (InMemoryStateMachine) using proptest.
 ///
 /// This module verifies state machine invariants, monotonic properties,
 /// and snapshot correctness through comprehensive property testing.
 use std::io;
 
-use aspen::raft::storage::StateMachineStore;
+use aspen::raft::storage::InMemoryStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
 use openraft::LogId;
@@ -35,7 +35,7 @@ proptest! {
         // Property: After applying N entries, last_applied index increases monotonically
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             let mut last_index = 0u64;
             for i in 0..num_entries {
@@ -82,7 +82,7 @@ proptest! {
         // Property: Snapshot must contain all key-value pairs that were applied
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             // Apply all entries
             for (i, (key, value)) in entries.iter().enumerate() {
@@ -142,7 +142,7 @@ proptest! {
         // Property: Applying same log entry twice should not corrupt state
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                 make_log_id(1, 1, 1),
@@ -191,7 +191,7 @@ proptest! {
         // Property: Concurrent reads should not block or see partial writes
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             // Apply initial entries
             for (i, (key, value)) in write_entries.iter().enumerate() {
@@ -245,7 +245,7 @@ proptest! {
         // Property: InMemory storage should handle large values correctly
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             let key = "large_key".to_string();
             let value = "x".repeat(value_size);
@@ -288,7 +288,7 @@ proptest! {
         // Property: SetMulti should atomically apply all key-value pairs
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = StateMachineStore::new();
+            let mut sm = InMemoryStateMachine::new();
 
             let pairs: Vec<(String, String)> = (0..num_pairs)
                 .map(|i| (format!("multi_key_{}", i), format!("multi_value_{}", i)))
