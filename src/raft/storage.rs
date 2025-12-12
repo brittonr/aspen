@@ -68,10 +68,9 @@ use crate::utils::ensure_disk_space_available;
 
 /// Storage backend selection for Raft log and state machine.
 ///
-/// Aspen supports three storage backends:
-/// - **Sqlite**: Persistent ACID storage using SQLite (default, recommended for production)
+/// Aspen supports two storage backends:
+/// - **Sqlite**: Persistent storage using redb for logs and SQLite for state machine (default, production)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
-/// - **Redb**: Persistent ACID storage using embedded redb (deprecated, use Sqlite)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
@@ -79,12 +78,9 @@ pub enum StorageBackend {
     /// In-memory storage using BTreeMap. Data is lost on restart.
     /// Use for: unit tests, madsim simulations, development.
     InMemory,
-    /// Persistent storage using redb. Data survives restarts.
-    /// Deprecated: Use Sqlite instead for new deployments.
-    #[deprecated(note = "Use Sqlite instead for new deployments")]
-    Redb,
-    /// Persistent storage using SQLite. Data survives restarts.
+    /// Persistent storage using SQLite for state machine and redb for logs.
     /// Default storage backend for production deployments and integration tests.
+    /// Uses redb for the append-only Raft log and SQLite for the state machine.
     #[default]
     Sqlite,
 }
@@ -95,11 +91,9 @@ impl std::str::FromStr for StorageBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "inmemory" | "in-memory" | "memory" => Ok(StorageBackend::InMemory),
-            #[allow(deprecated)]
-            "redb" | "persistent" | "disk" => Ok(StorageBackend::Redb),
-            "sqlite" | "sql" => Ok(StorageBackend::Sqlite),
+            "sqlite" | "sql" | "persistent" | "disk" | "redb" => Ok(StorageBackend::Sqlite),
             _ => Err(format!(
-                "Invalid storage backend '{}'. Valid options: inmemory, redb, sqlite",
+                "Invalid storage backend '{}'. Valid options: inmemory, sqlite",
                 s
             )),
         }
@@ -110,8 +104,6 @@ impl std::fmt::Display for StorageBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StorageBackend::InMemory => write!(f, "inmemory"),
-            #[allow(deprecated)]
-            StorageBackend::Redb => write!(f, "redb"),
             StorageBackend::Sqlite => write!(f, "sqlite"),
         }
     }

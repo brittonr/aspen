@@ -680,10 +680,6 @@ async fn setup_raft_storage(
         StorageBackend::InMemory => {
             create_inmemory_storage(config.node_id, validated_config, network_factory).await
         }
-        #[allow(deprecated)]
-        StorageBackend::Redb => {
-            create_redb_storage(config, validated_config, network_factory).await
-        }
         StorageBackend::Sqlite => {
             create_sqlite_storage(config, validated_config, network_factory).await
         }
@@ -825,55 +821,6 @@ async fn create_inmemory_storage(
     ))
 }
 
-/// Create redb persistent storage backend for Raft (deprecated).
-///
-/// Uses redb for log storage and SQLite for state machine.
-/// This backend is deprecated in favor of Sqlite.
-async fn create_redb_storage(
-    config: &ClusterBootstrapConfig,
-    validated_config: Arc<RaftConfig>,
-    network_factory: &Arc<IrpcRaftNetworkFactory>,
-) -> Result<(
-    openraft::Raft<AppTypeConfig>,
-    StateMachineVariant,
-    Option<RedbLogStore>,
-)> {
-    info!("Using redb persistent storage backend");
-
-    // Determine paths for redb files
-    let data_dir = config.data_dir();
-    let log_path = config
-        .redb_log_path
-        .clone()
-        .unwrap_or_else(|| data_dir.join("raft-log.redb"));
-    let sm_path = config
-        .redb_sm_path
-        .clone()
-        .unwrap_or_else(|| data_dir.join("state-machine.redb"));
-
-    info!(
-        log_path = %log_path.display(),
-        sm_path = %sm_path.display(),
-        "Initializing redb storage"
-    );
-
-    let log_store = RedbLogStore::new(&log_path).context("failed to create redb log store")?;
-    let state_machine =
-        SqliteStateMachine::new(&sm_path).context("failed to create sqlite state machine")?;
-
-    let raft = openraft::Raft::new(
-        config.node_id,
-        validated_config,
-        network_factory.as_ref().clone(),
-        log_store,
-        state_machine.clone(),
-    )
-    .await
-    .context("failed to initialize raft with redb storage")?;
-
-    Ok((raft, StateMachineVariant::Redb(state_machine), None))
-}
-
 /// Create sqlite persistent storage backend for Raft (default).
 ///
 /// Uses redb for log storage and SQLite for state machine.
@@ -889,25 +836,37 @@ async fn create_sqlite_storage(
 )> {
     info!("Using sqlite persistent storage backend");
 
-    // Determine paths for sqlite files
+    // Determine paths for storage files
     let data_dir = config.data_dir();
+
+    // Support both legacy redb paths and new sqlite paths for backwards compatibility
+    // Redb is still used for the log store (append-optimized), SQLite for state machine
     let log_path = config
         .sqlite_log_path
         .clone()
-        .unwrap_or_else(|| data_dir.join("raft-log.db"));
+        .or_else(|| config.redb_log_path.clone())
+        .unwrap_or_else(|| data_dir.join("raft-log.redb"));
+
     let sm_path = config
         .sqlite_sm_path
         .clone()
+        .or_else(|| {
+            config.redb_sm_path.clone().map(|p| {
+                // If using legacy redb path, change extension to .db for SQLite
+                let mut path = p;
+                path.set_extension("db");
+                path
+            })
+        })
         .unwrap_or_else(|| data_dir.join("state-machine.db"));
 
     info!(
         log_path = %log_path.display(),
         sm_path = %sm_path.display(),
-        "Initializing sqlite storage"
+        "Initializing storage (redb for logs, sqlite for state machine)"
     );
 
-    // For now, we're only migrating the state machine to SQLite
-    // The log store still uses redb (will be migrated later if needed)
+    // Use redb for the log store (optimized for append-only operations)
     let log_store = RedbLogStore::new(&log_path).context("failed to create redb log store")?;
     let state_machine =
         SqliteStateMachine::new(&sm_path).context("failed to create sqlite state machine")?;

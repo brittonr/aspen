@@ -16,8 +16,7 @@ use tracing::{debug, error, info, warn};
 use crate::cluster::IrohEndpointManager;
 use crate::raft::connection_pool::RaftConnectionPool;
 use crate::raft::constants::{
-    IROH_READ_TIMEOUT, MAX_PEERS,
-    MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
+    IROH_READ_TIMEOUT, MAX_PEERS, MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
@@ -202,7 +201,8 @@ impl IrpcRaftNetwork {
             .context("peer address not found in peer map")?;
 
         // Get or create connection from pool
-        let peer_connection = self.connection_pool
+        let peer_connection = self
+            .connection_pool
             .get_or_connect(self.target, peer_addr)
             .await
             .inspect_err(|_err| {
@@ -298,7 +298,10 @@ impl IrpcRaftNetwork {
         let (raft_status, iroh_status) = if err.to_string().contains("connection pool")
             || err.to_string().contains("peer address not found")
         {
-            (ConnectionStatus::Disconnected, ConnectionStatus::Disconnected)
+            (
+                ConnectionStatus::Disconnected,
+                ConnectionStatus::Disconnected,
+            )
         } else if err.to_string().contains("stream") {
             (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
         } else {

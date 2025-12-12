@@ -1923,16 +1923,6 @@ async fn list_vaults(
             })?
         }
         aspen::raft::StateMachineVariant::InMemory(sm) => sm.scan_keys_with_prefix(VAULT_PREFIX),
-        #[allow(deprecated)]
-        aspen::raft::StateMachineVariant::Redb(sm) => {
-            // Redb variant is deprecated but shares SqliteStateMachine type
-            sm.scan_keys_with_prefix(VAULT_PREFIX).map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to scan vault keys: {}", e),
-                )
-            })?
-        }
     };
 
     // Group keys by vault name
@@ -1991,16 +1981,6 @@ async fn get_vault_keys(
             })?
         }
         aspen::raft::StateMachineVariant::InMemory(sm) => sm.scan_kv_with_prefix(&prefix),
-        #[allow(deprecated)]
-        aspen::raft::StateMachineVariant::Redb(sm) => {
-            // Redb variant is deprecated but shares SqliteStateMachine type
-            sm.scan_kv_with_prefix(&prefix).map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to scan vault keys: {}", e),
-                )
-            })?
-        }
     };
 
     // Convert to response format

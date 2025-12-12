@@ -784,7 +784,7 @@ mod tests {
                 pkarr_relay_url: Some("https://pkarr.example.com".into()),
             },
             peers: vec!["peer1".into()],
-            storage_backend: crate::raft::storage::StorageBackend::Redb,
+            storage_backend: crate::raft::storage::StorageBackend::Sqlite,
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
             sqlite_log_path: None,

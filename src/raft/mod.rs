@@ -78,7 +78,7 @@ use crate::raft::storage::StateMachineStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
 
-/// State machine variant that can hold either in-memory, redb-backed, or sqlite-backed storage.
+/// State machine variant that can hold either in-memory or sqlite-backed storage.
 ///
 /// This enum allows the RaftActor to read from the same state machine that
 /// receives writes through the Raft core, fixing the NotFound bug where reads
@@ -86,7 +86,6 @@ use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
 #[derive(Clone, Debug)]
 pub enum StateMachineVariant {
     InMemory(Arc<StateMachineStore>),
-    Redb(Arc<SqliteStateMachine>),
     Sqlite(Arc<SqliteStateMachine>),
 }
 
@@ -100,9 +99,6 @@ impl StateMachineVariant {
     pub async fn get(&self, key: &str) -> Result<Option<String>, KeyValueStoreError> {
         match self {
             Self::InMemory(sm) => Ok(sm.get(key).await),
-            Self::Redb(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
-                reason: format!("redb storage read error: {}", err),
-            }),
             Self::Sqlite(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
                 reason: format!("sqlite storage read error: {}", err),
             }),
@@ -129,15 +125,6 @@ impl StateMachineVariant {
         match self {
             Self::InMemory(sm) => {
                 let kv_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
-                Self::build_scan_result(kv_pairs, &start_after, limit)
-            }
-            Self::Redb(sm) => {
-                let kv_pairs = sm
-                    .scan_kv_with_prefix_async(&request.prefix)
-                    .await
-                    .map_err(|err| KeyValueStoreError::Failed {
-                        reason: format!("redb storage scan error: {}", err),
-                    })?;
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
             Self::Sqlite(sm) => {

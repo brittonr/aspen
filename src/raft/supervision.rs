@@ -698,7 +698,6 @@ impl RaftSupervisor {
     /// Tiger Style: Fail-fast on validation errors to prevent restarting with corrupt state.
     async fn validate_storage(&self, state: &RaftSupervisorState) -> Result<(), String> {
         use crate::raft::StateMachineVariant;
-        use crate::raft::storage_validation::validate_raft_storage;
 
         let node_id = state.raft_actor_config.node_id;
 
@@ -710,37 +709,6 @@ impl RaftSupervisor {
                     "skipping storage validation for in-memory backend"
                 );
                 Ok(())
-            }
-            #[allow(deprecated)]
-            StateMachineVariant::Redb(state_machine) => {
-                let storage_path = state_machine.path();
-
-                debug!(
-                    node_id = node_id,
-                    path = %storage_path.display(),
-                    "validating redb storage before restart"
-                );
-
-                match validate_raft_storage(node_id, storage_path) {
-                    Ok(report) => {
-                        info!(
-                            node_id = node_id,
-                            checks_passed = report.checks_passed,
-                            last_log_index = ?report.last_log_index,
-                            validation_duration_ms = report.validation_duration.as_millis(),
-                            "storage validation passed"
-                        );
-                        Ok(())
-                    }
-                    Err(err) => {
-                        error!(
-                            node_id = node_id,
-                            error = %err,
-                            "storage validation failed"
-                        );
-                        Err(format!("storage validation failed: {}", err))
-                    }
-                }
             }
             StateMachineVariant::Sqlite(state_machine) => {
                 let storage_path = state_machine.path();

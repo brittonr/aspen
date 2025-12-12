@@ -25,11 +25,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use iroh::endpoint::{Connection, SendStream, RecvStream};
 use iroh::EndpointAddr;
+use iroh::endpoint::{Connection, RecvStream, SendStream};
 use tokio::sync::{Mutex as AsyncMutex, RwLock, Semaphore};
 use tokio::task::JoinHandle;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::constants::{
@@ -108,7 +108,8 @@ impl PeerConnection {
         }
 
         // Acquire stream permit (bounded concurrency)
-        let permit = self.stream_semaphore
+        let permit = self
+            .stream_semaphore
             .clone()
             .try_acquire_owned()
             .map_err(|_| {
@@ -127,13 +128,11 @@ impl PeerConnection {
         );
 
         // Open bidirectional stream with timeout
-        let stream_result = tokio::time::timeout(
-            IROH_STREAM_OPEN_TIMEOUT,
-            self.connection.open_bi()
-        )
-        .await
-        .context("timeout opening stream")?
-        .context("failed to open stream");
+        let stream_result =
+            tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, self.connection.open_bi())
+                .await
+                .context("timeout opening stream")?
+                .context("failed to open stream");
 
         // Handle stream open result
         match stream_result {
@@ -172,14 +171,18 @@ impl PeerConnection {
                 let mut health = self.health.lock().await;
                 match *health {
                     ConnectionHealth::Healthy => {
-                        *health = ConnectionHealth::Degraded { consecutive_failures: 1 };
+                        *health = ConnectionHealth::Degraded {
+                            consecutive_failures: 1,
+                        };
                         warn!(
                             node_id = self.node_id,
                             error = %err,
                             "connection degraded after stream failure"
                         );
                     }
-                    ConnectionHealth::Degraded { consecutive_failures } => {
+                    ConnectionHealth::Degraded {
+                        consecutive_failures,
+                    } => {
                         if consecutive_failures >= MAX_CONNECTION_RETRIES {
                             *health = ConnectionHealth::Failed;
                             error!(
@@ -189,7 +192,7 @@ impl PeerConnection {
                             );
                         } else {
                             *health = ConnectionHealth::Degraded {
-                                consecutive_failures: consecutive_failures + 1
+                                consecutive_failures: consecutive_failures + 1,
                             };
                         }
                     }
@@ -325,7 +328,9 @@ impl RaftConnectionPool {
 
             let connect_result = tokio::time::timeout(
                 IROH_CONNECT_TIMEOUT,
-                self.endpoint_manager.endpoint().connect(peer_addr.clone(), b"raft-rpc"),
+                self.endpoint_manager
+                    .endpoint()
+                    .connect(peer_addr.clone(), b"raft-rpc"),
             )
             .await
             .context("timeout connecting to peer")?;
@@ -334,7 +339,7 @@ impl RaftConnectionPool {
                 Ok(conn) => break conn,
                 Err(err) if attempts < MAX_CONNECTION_RETRIES => {
                     let backoff = Duration::from_millis(
-                        CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1))
+                        CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)),
                     );
                     warn!(
                         node_id,
@@ -442,7 +447,10 @@ impl RaftConnectionPool {
                 }
 
                 if !connections.is_empty() {
-                    debug!(pool_size = connections.len(), "connection pool cleanup complete");
+                    debug!(
+                        pool_size = connections.len(),
+                        "connection pool cleanup complete"
+                    );
                 }
             }
         });
@@ -464,7 +472,10 @@ impl RaftConnectionPool {
         let mut connections = self.connections.write().await;
         let count = connections.len();
         connections.clear();
-        debug!(connections_closed = count, "cleared connection pool during shutdown");
+        debug!(
+            connections_closed = count,
+            "cleared connection pool during shutdown"
+        );
     }
 
     /// Get metrics about the connection pool.
