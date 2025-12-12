@@ -13,7 +13,7 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
@@ -62,26 +62,56 @@ async fn test_follower_clear_restart_recover_seed_2001() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone(), config.clone()).await;
-    let raft1 = create_raft_node(1, router.clone(), injector.clone(), config.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone(), config.clone()).await;
+    let raft0 = create_raft_node(
+        NodeId::from(0),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft1 = create_raft_node(
+        NodeId::from(1),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node(
+        NodeId::from(2),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(0, "127.0.0.1:27000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:27000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
     router
-        .register_node(1, "127.0.0.1:27001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:27001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:27002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:27002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 0");
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, create_test_aspen_node(0));
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     raft0
         .initialize(nodes)
         .await
@@ -110,15 +140,25 @@ async fn test_follower_clear_restart_recover_seed_2001() {
     ));
 
     artifact = artifact.add_event("failure: mark node 1 as failed (simulating shutdown)");
-    router.mark_node_failed(1, true);
+    router.mark_node_failed(NodeId::from(1), true);
 
     artifact = artifact.add_event("create: restart node 1 with empty log and state machine");
-    let raft1_new = create_raft_node(1, router.clone(), injector.clone(), config.clone()).await;
+    let raft1_new = create_raft_node(
+        NodeId::from(1),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
 
     // Replace the node registration with the fresh instance (simulating restart with cleared state)
-    router.mark_node_failed(1, false); // Mark as healthy again
+    router.mark_node_failed(NodeId::from(1), false); // Mark as healthy again
     router
-        .register_node(1, "127.0.0.1:27001".to_string(), raft1_new.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:27001".to_string(),
+            raft1_new.clone(),
+        )
         .expect("failed to re-register node 1");
 
     artifact = artifact.add_event("wait: for node 1 to restart (1s)");
@@ -196,26 +236,56 @@ async fn test_append_entries_backoff_seed_2002() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone(), config.clone()).await;
-    let raft1 = create_raft_node(1, router.clone(), injector.clone(), config.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone(), config.clone()).await;
+    let raft0 = create_raft_node(
+        NodeId::from(0),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft1 = create_raft_node(
+        NodeId::from(1),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node(
+        NodeId::from(2),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(0, "127.0.0.1:29000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:29000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
     router
-        .register_node(1, "127.0.0.1:29001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:29001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:29002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:29002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 0");
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, create_test_aspen_node(0));
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     raft0
         .initialize(nodes)
         .await
@@ -226,7 +296,7 @@ async fn test_append_entries_backoff_seed_2002() {
 
     // Mark node 2 as unreachable
     artifact = artifact.add_event("failure: mark node 2 as unreachable");
-    router.mark_node_failed(2, true);
+    router.mark_node_failed(NodeId::from(2), true);
 
     // Write multiple entries with node 2 down
     artifact = artifact.add_event("write: 10 entries with node 2 unreachable");

@@ -14,7 +14,7 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
@@ -64,30 +64,70 @@ async fn test_enable_heartbeat_seed_3001() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 4 raft nodes (3 voters + 1 learner)");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone(), config.clone()).await;
-    let raft1 = create_raft_node(1, router.clone(), injector.clone(), config.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone(), config.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone(), config.clone()).await;
+    let raft0 = create_raft_node(
+        NodeId::from(0),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft1 = create_raft_node(
+        NodeId::from(1),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node(
+        NodeId::from(2),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
+    let raft3 = create_raft_node(
+        NodeId::from(3),
+        router.clone(),
+        injector.clone(),
+        config.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(0, "127.0.0.1:28000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:28000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
     router
-        .register_node(1, "127.0.0.1:28001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:28001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:28002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:28002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:28003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:28003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize cluster with 3 voters on node 0");
     let mut voters = BTreeMap::new();
-    voters.insert(0, create_test_aspen_node(0));
-    voters.insert(1, create_test_aspen_node(1));
-    voters.insert(2, create_test_aspen_node(2));
+    voters.insert(NodeId::from(0), create_test_raft_member_info(0));
+    voters.insert(NodeId::from(1), create_test_raft_member_info(1));
+    voters.insert(NodeId::from(2), create_test_raft_member_info(2));
     raft0
         .initialize(voters)
         .await
@@ -97,7 +137,11 @@ async fn test_enable_heartbeat_seed_3001() {
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
     // Find the actual leader
-    let all_nodes = [(0, &raft0), (1, &raft1), (2, &raft2)];
+    let all_nodes = [
+        (NodeId::from(0), &raft0),
+        (NodeId::from(1), &raft1),
+        (NodeId::from(2), &raft2),
+    ];
     let mut leader_id = None;
     let mut leader_raft = None;
     for (id, raft) in all_nodes.iter() {
@@ -115,7 +159,7 @@ async fn test_enable_heartbeat_seed_3001() {
     // Add node 3 as learner via the actual leader
     artifact = artifact.add_event("membership: add node 3 as learner");
     leader_raft
-        .add_learner(3, create_test_aspen_node(3), true)
+        .add_learner(NodeId::from(3), create_test_raft_member_info(3), true)
         .await
         .expect("failed to add learner");
 

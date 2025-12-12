@@ -14,7 +14,7 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
@@ -53,36 +53,56 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 5 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
-    let raft4 = create_raft_node(4, router.clone(), injector.clone()).await;
-    let raft5 = create_raft_node(5, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
+    let raft4 = create_raft_node(NodeId::from(4), router.clone(), injector.clone()).await;
+    let raft5 = create_raft_node(NodeId::from(5), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all 5 nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
     router
-        .register_node(4, "127.0.0.1:26004".to_string(), raft4.clone())
+        .register_node(
+            NodeId::from(4),
+            "127.0.0.1:26004".to_string(),
+            raft4.clone(),
+        )
         .expect("failed to register node 4");
     router
-        .register_node(5, "127.0.0.1:26005".to_string(), raft5.clone())
+        .register_node(
+            NodeId::from(5),
+            "127.0.0.1:26005".to_string(),
+            raft5.clone(),
+        )
         .expect("failed to register node 5");
 
     artifact = artifact.add_event("init: initialize 5-node cluster on node 1");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
-    nodes.insert(4, create_test_aspen_node(4));
-    nodes.insert(5, create_test_aspen_node(5));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
+    nodes.insert(NodeId::from(4), create_test_raft_member_info(4));
+    nodes.insert(NodeId::from(5), create_test_raft_member_info(5));
     raft1
         .initialize(nodes)
         .await
@@ -100,7 +120,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     ));
 
     artifact = artifact.add_event("write: first write before failures");
-    let leader_raft = match initial_leader {
+    let leader_raft = match initial_leader.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -119,7 +139,11 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
 
     artifact = artifact.add_event("failure: crash 2 follower nodes simultaneously");
     // Find two followers to crash (not the leader)
-    let followers: Vec<u64> = (1..=5).filter(|id| *id != initial_leader).take(2).collect();
+    let followers: Vec<NodeId> = (1..=5)
+        .map(NodeId::from)
+        .filter(|id| *id != initial_leader)
+        .take(2)
+        .collect();
     router.mark_node_failed(followers[0], true);
     router.mark_node_failed(followers[1], true);
     artifact = artifact.add_event(format!(
@@ -166,26 +190,38 @@ async fn test_rolling_failures_seed_123() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -195,22 +231,22 @@ async fn test_rolling_failures_seed_123() {
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
 
     artifact = artifact.add_event("failure: crash node 1");
-    router.mark_node_failed(1, true);
+    router.mark_node_failed(NodeId::from(1), true);
 
     artifact = artifact.add_event("wait: for re-election after node 1 crash");
     madsim::time::sleep(std::time::Duration::from_millis(3000)).await;
 
     artifact = artifact.add_event("recovery: node 1 recovers");
-    router.mark_node_failed(1, false);
+    router.mark_node_failed(NodeId::from(1), false);
 
     artifact = artifact.add_event("failure: crash node 2");
-    router.mark_node_failed(2, true);
+    router.mark_node_failed(NodeId::from(2), true);
 
     artifact = artifact.add_event("wait: for re-election after node 2 crash");
     madsim::time::sleep(std::time::Duration::from_millis(3000)).await;
 
     artifact = artifact.add_event("recovery: node 2 recovers");
-    router.mark_node_failed(2, false);
+    router.mark_node_failed(NodeId::from(2), false);
 
     artifact = artifact.add_event("wait: for cluster stabilization");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
@@ -247,26 +283,38 @@ async fn test_asymmetric_partition_seed_456() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -277,8 +325,8 @@ async fn test_asymmetric_partition_seed_456() {
 
     artifact = artifact.add_event("failure: create asymmetric partition (node 1 ↔ node 2 blocked)");
     // Create triangle partition: node 3 can talk to both 1 and 2, but 1 and 2 cannot talk to each other
-    injector.set_message_drop(1, 2, true);
-    injector.set_message_drop(2, 1, true);
+    injector.set_message_drop(NodeId::from(1), NodeId::from(2), true);
+    injector.set_message_drop(NodeId::from(2), NodeId::from(1), true);
 
     artifact = artifact.add_event("wait: for partition effects");
     madsim::time::sleep(std::time::Duration::from_millis(3000)).await;
@@ -286,7 +334,7 @@ async fn test_asymmetric_partition_seed_456() {
     artifact = artifact.add_event("write: attempt write in asymmetric partition");
     let metrics1 = raft1.metrics().borrow().clone();
     if let Some(leader_id) = metrics1.current_leader {
-        let leader_raft = match leader_id {
+        let leader_raft = match leader_id.0 {
             1 => &raft1,
             2 => &raft2,
             3 => &raft3,
@@ -335,26 +383,38 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -366,7 +426,7 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
     artifact = artifact.add_event("metrics: identify leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -375,10 +435,10 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
 
     artifact = artifact.add_event("failure: inject network delays");
     // Add delays to simulate slow network
-    injector.set_network_delay(1, 2, 500);
-    injector.set_network_delay(2, 1, 500);
-    injector.set_network_delay(2, 3, 500);
-    injector.set_network_delay(3, 2, 500);
+    injector.set_network_delay(NodeId::from(1), NodeId::from(2), 500);
+    injector.set_network_delay(NodeId::from(2), NodeId::from(1), 500);
+    injector.set_network_delay(NodeId::from(2), NodeId::from(3), 500);
+    injector.set_network_delay(NodeId::from(3), NodeId::from(2), 500);
 
     artifact = artifact.add_event("write: concurrent writes with network delays");
     // Submit multiple writes concurrently

@@ -11,11 +11,10 @@
 /// - All nodes agree on final membership
 ///
 /// Tiger Style: Fixed membership sizes and timeouts with deterministic behavior.
-use aspen::raft::types::*;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
-
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -71,7 +70,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Wait for initial leader
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let initial_leader = router
@@ -84,7 +83,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         let key = format!("before-membership-{}", i);
         let value = format!("value-{}", i);
         router
-            .write(&initial_leader, key.clone(), value.clone())
+            .write(initial_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
@@ -92,7 +91,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Wait for baseline to commit (log index 1 for init + 3 writes = index 4)
     router
-        .wait(&initial_leader, Some(Duration::from_millis(1000)))
+        .wait(initial_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline committed")
         .await?;
     events.push("baseline-committed: 3 writes".into());
@@ -103,28 +102,30 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
     events.push("new-nodes-created: 3, 4".into());
 
     // Add learners via the leader
-    let raft = router.get_raft_handle(&initial_leader)?;
-    raft.add_learner(3, create_test_aspen_node(3), true).await?;
-    raft.add_learner(4, create_test_aspen_node(4), true).await?;
+    let raft = router.get_raft_handle(initial_leader)?;
+    raft.add_learner(NodeId(3), create_test_raft_member_info(3), true)
+        .await?;
+    raft.add_learner(NodeId(4), create_test_raft_member_info(4), true)
+        .await?;
     events.push("learners-added: nodes 3, 4".into());
 
     // Wait for learners to catch up (2 add_learner ops = index 6)
     router
-        .wait(&3, Some(Duration::from_millis(2000)))
+        .wait(3, Some(Duration::from_millis(2000)))
         .applied_index(Some(6), "learner 3 caught up")
         .await?;
     router
-        .wait(&4, Some(Duration::from_millis(2000)))
+        .wait(4, Some(Duration::from_millis(2000)))
         .applied_index(Some(6), "learner 4 caught up")
         .await?;
     events.push("learners-synced: caught up to index 6".into());
 
     // Start membership change to add nodes 3,4 as voters
     // This enters joint consensus: C-old={0,1,2} → C-old,new={0,1,2,3,4}
-    let new_members: BTreeSet<NodeId> = vec![0, 1, 2, 3, 4].into_iter().collect();
+    let new_members: BTreeSet<NodeId> = vec![0, 1, 2, 3, 4].into_iter().map(NodeId).collect();
 
     // Start the membership change in the background
-    let raft_handle = router.get_raft_handle(&initial_leader)?;
+    let raft_handle = router.get_raft_handle(initial_leader)?;
     let membership_future =
         tokio::spawn(async move { raft_handle.change_membership(new_members, false).await });
     events.push("membership-change-started: adding nodes 3,4 as voters".into());
@@ -161,7 +162,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Check if we need to retry the membership change
     let current_membership = {
-        let raft = router.get_raft_handle(&new_leader)?;
+        let raft = router.get_raft_handle(new_leader)?;
         let metrics = raft.metrics().borrow().clone();
         metrics
             .membership_config
@@ -173,8 +174,8 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         // Membership change was aborted, retry it
         events.push("membership-change-aborted: retrying with new leader".into());
 
-        let raft = router.get_raft_handle(&new_leader)?;
-        let new_members: BTreeSet<NodeId> = vec![0, 1, 2, 3, 4].into_iter().collect();
+        let raft = router.get_raft_handle(new_leader)?;
+        let new_members: BTreeSet<NodeId> = vec![0, 1, 2, 3, 4].into_iter().map(NodeId).collect();
         raft.change_membership(new_members.clone(), false).await?;
 
         // Wait for completion - membership changes create 2 log entries
@@ -197,7 +198,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Verify new configuration on all nodes
     for node_id in 0..5 {
-        let raft = router.get_raft_handle(&node_id)?;
+        let raft = router.get_raft_handle(node_id)?;
         let metrics = raft.metrics().borrow().clone();
         let voters = metrics
             .membership_config
@@ -213,7 +214,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         }
 
         for expected_voter in 0..5 {
-            if !voters.contains(&expected_voter) {
+            if !voters.contains(&NodeId(expected_voter)) {
                 anyhow::bail!(
                     "node {} missing voter {} in configuration",
                     node_id,
@@ -229,7 +230,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         let key = format!("new-config-{}", i);
         let value = format!("five-voters-{}", i);
         router
-            .write(&new_leader, key.clone(), value.clone())
+            .write(new_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("new-config-write: {}={}", key, value));
@@ -246,7 +247,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         for i in 0..3 {
             let key = format!("before-membership-{}", i);
             let expected = format!("value-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(
@@ -265,7 +266,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         for i in 0..3 {
             let key = format!("new-config-{}", i);
             let expected = format!("five-voters-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(

@@ -1,3 +1,4 @@
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
@@ -54,7 +55,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     events.push("cluster-initialized: node 0".into());
 
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let initial_leader = router
@@ -67,7 +68,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("before-crash-{}", i);
         let value = format!("value-{}", i);
         router
-            .write(&initial_leader, key.clone(), value.clone())
+            .write(initial_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
@@ -75,7 +76,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
     router
-        .wait(&initial_leader, Some(Duration::from_millis(1000)))
+        .wait(initial_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed")
         .await?;
     events.push("baseline-committed: 3 writes".into());
@@ -90,7 +91,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Check all node states after election
     for node_id in 0..3 {
-        if let Ok(raft) = router.get_raft_handle(&node_id) {
+        if let Ok(raft) = router.get_raft_handle(node_id) {
             let metrics = raft.metrics().borrow().clone();
             events.push(format!(
                 "node-{}-state: {:?}, term: {}, current_leader: {:?}",
@@ -118,7 +119,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("after-crash-{}", i);
         let value = format!("new-leader-{}", i);
         router
-            .write(&new_leader, key.clone(), value.clone())
+            .write(new_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("post-crash-write: {}={}", key, value));
@@ -127,7 +128,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Wait for post-crash writes to be committed
     // New leader writes blank entry on election (index 5), then 3 writes (indices 6,7,8)
     router
-        .wait(&new_leader, Some(Duration::from_millis(2000)))
+        .wait(new_leader, Some(Duration::from_millis(2000)))
         .applied_index(Some(8), "post-crash writes committed")
         .await?;
     events.push("post-crash-committed: 3 writes".into());
@@ -139,7 +140,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Wait for recovered node to catch up
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     router
-        .wait(&initial_leader, Some(Duration::from_millis(3000)))
+        .wait(initial_leader, Some(Duration::from_millis(3000)))
         .applied_index(Some(8), "recovered node synced")
         .await?;
     events.push("recovered-node-synced: caught up to log index 8".into());
@@ -150,7 +151,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("before-crash-{}", i);
             let expected = format!("value-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(
@@ -169,7 +170,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("after-crash-{}", i);
             let expected = format!("new-leader-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(

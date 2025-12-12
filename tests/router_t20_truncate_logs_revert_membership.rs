@@ -46,7 +46,7 @@ fn timeout() -> Option<Duration> {
 /// 4. Verify node 0 adopts node 2's history including membership
 #[tokio::test]
 async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
-    use aspen::raft::types::AppTypeConfig;
+    use aspen::raft::types::{AppTypeConfig, NodeId};
     use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
     use openraft::testing::{blank_ent, membership_ent};
 
@@ -73,7 +73,8 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 
     // Node 0: Has logs at term 2 up to index 10 with older membership
     {
-        sto0.save_vote(&openraft::Vote::new(2, 0)).await?;
+        sto0.save_vote(&openraft::Vote::new(2, NodeId::from(0)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=10 {
@@ -85,7 +86,8 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
     // Node 1: Has logs at term 3 up to index 8 (same as node 2)
     // This allows node 2 to win election with votes from itself and node 1
     {
-        sto1.save_vote(&openraft::Vote::new(3, 1)).await?;
+        sto1.save_vote(&openraft::Vote::new(3, NodeId::from(1)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=8 {
@@ -96,7 +98,8 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 
     // Node 2: Has logs at term 3 up to index 8 (will become leader)
     {
-        sto2.save_vote(&openraft::Vote::new(3, 2)).await?;
+        sto2.save_vote(&openraft::Vote::new(3, NodeId::from(2)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=8 {
@@ -115,11 +118,11 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 
     tracing::info!("--- electing node 2 as leader (has higher term)");
     {
-        let node2 = router.get_raft_handle(&2)?;
+        let node2 = router.get_raft_handle(2)?;
         node2.trigger().elect().await?;
 
         router
-            .wait(&2, timeout())
+            .wait(2, timeout())
             .state(ServerState::Leader, "node 2 becomes leader")
             .await?;
     }
@@ -129,14 +132,14 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
     // Node 0 should truncate its logs from index 9 onward (had up to index 10)
     // and adopt node 2's shorter log from term 3
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(9), "node 0 syncs with leader")
         .await?;
 
     tracing::info!("--- verifying node 0 truncated its extra entries");
     {
-        let metrics0 = router.get_raft_handle(&0)?.metrics().borrow().clone();
-        let metrics2 = router.get_raft_handle(&2)?.metrics().borrow().clone();
+        let metrics0 = router.get_raft_handle(0)?.metrics().borrow().clone();
+        let metrics2 = router.get_raft_handle(2)?.metrics().borrow().clone();
 
         tracing::info!("node 0 last_log_index: {:?}", metrics0.last_log_index);
         tracing::info!("node 2 last_log_index: {:?}", metrics2.last_log_index);
@@ -166,7 +169,7 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 /// 3. Node with stale entries must truncate and sync
 #[tokio::test]
 async fn test_simple_log_truncation() -> Result<()> {
-    use aspen::raft::types::AppTypeConfig;
+    use aspen::raft::types::{AppTypeConfig, NodeId};
     use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
     use openraft::testing::{blank_ent, membership_ent};
 
@@ -192,7 +195,8 @@ async fn test_simple_log_truncation() -> Result<()> {
 
     // Node 0: Has 6 entries at term 2
     {
-        sto0.save_vote(&openraft::Vote::new(2, 0)).await?;
+        sto0.save_vote(&openraft::Vote::new(2, NodeId::from(0)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=6 {
@@ -203,7 +207,8 @@ async fn test_simple_log_truncation() -> Result<()> {
 
     // Node 1: Has 4 entries at term 3 (will become leader)
     {
-        sto1.save_vote(&openraft::Vote::new(3, 1)).await?;
+        sto1.save_vote(&openraft::Vote::new(3, NodeId::from(1)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=4 {
@@ -214,7 +219,8 @@ async fn test_simple_log_truncation() -> Result<()> {
 
     // Node 2: Has 4 entries at term 3 (same as node 1)
     {
-        sto2.save_vote(&openraft::Vote::new(3, 2)).await?;
+        sto2.save_vote(&openraft::Vote::new(3, NodeId::from(2)))
+            .await?;
         let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
         entries.push(membership_ent(1, 0, 1, membership_012.clone()));
         for i in 2..=4 {
@@ -230,11 +236,11 @@ async fn test_simple_log_truncation() -> Result<()> {
 
     tracing::info!("--- node 1 becomes leader");
     {
-        let node1 = router.get_raft_handle(&1)?;
+        let node1 = router.get_raft_handle(1)?;
         node1.trigger().elect().await?;
 
         router
-            .wait(&1, timeout())
+            .wait(1, timeout())
             .state(ServerState::Leader, "node 1 is leader")
             .await?;
     }
@@ -243,14 +249,14 @@ async fn test_simple_log_truncation() -> Result<()> {
     // Node 1 becomes leader and appends blank entry at index 5
     // Node 0 must truncate its entries from index 5 onward
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(5), "node 0 synced")
         .await?;
 
     tracing::info!("--- verifying truncation occurred");
     {
-        let metrics0 = router.get_raft_handle(&0)?.metrics().borrow().clone();
-        let metrics1 = router.get_raft_handle(&1)?.metrics().borrow().clone();
+        let metrics0 = router.get_raft_handle(0)?.metrics().borrow().clone();
+        let metrics1 = router.get_raft_handle(1)?.metrics().borrow().clone();
 
         assert_eq!(
             metrics0.last_log_index, metrics1.last_log_index,

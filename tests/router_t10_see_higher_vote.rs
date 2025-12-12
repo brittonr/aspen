@@ -9,8 +9,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::storage::RaftLogStorage;
 use openraft::{Config, ServerState, Vote};
 
@@ -47,15 +48,15 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     // Initialize node-0 as single-node cluster
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = std::collections::BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
     }
 
     // Wait for node-0 to become leader
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 becomes leader")
         .await?;
 
@@ -64,7 +65,7 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     // Wait for learner to be added
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .state(ServerState::Learner, "node-1 becomes learner")
         .await?;
 
@@ -75,7 +76,7 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
     n1.shutdown().await?;
 
     // Save a higher vote (term 10 > current term)
-    sto1.save_vote(&Vote::new(10, 1)).await?;
+    sto1.save_vote(&Vote::new(10, NodeId::from(1))).await?;
 
     // Re-add node-1 with the modified storage
     router.new_raft_node_with_storage(1, sto1, sm1).await?;
@@ -84,12 +85,12 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     // First write triggers replication, which causes leader to see higher vote
     let _ = router
-        .write(&0, "trigger".to_string(), "value".to_string())
+        .write(0, "trigger".to_string(), "value".to_string())
         .await;
 
     // Wait for node-0 to step down after seeing higher vote from node-1
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(
             ServerState::Follower,
             "node-0 steps down after seeing higher vote",
@@ -98,7 +99,7 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     // Now verify that subsequent writes fail
     let write_result = router
-        .write(&0, "key1".to_string(), "value1".to_string())
+        .write(0, "key1".to_string(), "value1".to_string())
         .await;
 
     // The write should fail because the leader has stepped down
@@ -111,7 +112,7 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
 
     // Node-0 should now be a follower after seeing higher vote
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(
             ServerState::Follower,
             "node-0 becomes follower after seeing higher vote",
@@ -119,12 +120,12 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
         .await?;
 
     // Verify node-0 has stored the higher vote
-    let n0 = router.get_raft_handle(&0)?;
+    let n0 = router.get_raft_handle(0)?;
     let metrics = n0.metrics().borrow().clone();
 
     assert_eq!(
         metrics.vote,
-        Vote::new(10, 1),
+        Vote::new(10, NodeId::from(1)),
         "node-0 should have updated to the higher vote"
     );
 

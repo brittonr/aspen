@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::testing::AspenRouter;
 use openraft::raft::AppendEntriesRequest;
 use openraft::storage::{RaftLogReader, RaftLogStorage};
@@ -35,7 +35,7 @@ async fn check_logs(
     let want: Vec<Entry<AppTypeConfig>> = terms
         .iter()
         .enumerate()
-        .map(|(i, term)| blank_ent::<AppTypeConfig>(*term, 0, i as u64))
+        .map(|(i, term)| blank_ent::<AppTypeConfig>(*term, NodeId::from(0), i as u64))
         .collect();
 
     let w = format!("{:?}", &want);
@@ -70,11 +70,11 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- wait for init node to ready");
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(None, "empty")
         .await?;
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Learner, "empty")
         .await?;
 
@@ -84,10 +84,10 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- case 0: prev_log_id == None, no logs");
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: None,
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -98,10 +98,10 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- case 0: prev_log_id == None, 1 logs");
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: None,
-        entries: vec![blank_ent::<AppTypeConfig>(0, 0, 0)],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        entries: vec![blank_ent::<AppTypeConfig>(0, NodeId::from(0), 0)],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -111,10 +111,10 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- case 0: prev_log_id == 1-1, 0 logs");
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(0, 0, 0)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(0, NodeId::from(0), 0)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -126,16 +126,16 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- case 0: prev_log_id.index == 0");
 
     let req = || AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(0, 0, 0)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(0, NodeId::from(0), 0)),
         entries: vec![
-            blank_ent::<AppTypeConfig>(1, 0, 1),
-            blank_ent::<AppTypeConfig>(1, 0, 2),
-            blank_ent::<AppTypeConfig>(1, 0, 3),
-            blank_ent::<AppTypeConfig>(1, 0, 4),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 1),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 2),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 3),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 4),
         ],
         // this sets last_applied to 2
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req()).await?;
@@ -156,10 +156,10 @@ async fn test_append_conflicts() -> Result<()> {
     tracing::info!("--- case 1: 0 < prev_log_id.index < commit_index");
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 1)),
-        entries: vec![blank_ent::<AppTypeConfig>(1, 0, 2)],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 1)),
+        entries: vec![blank_ent::<AppTypeConfig>(1, NodeId::from(0), 2)],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -173,11 +173,11 @@ async fn test_append_conflicts() -> Result<()> {
     );
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
-        entries: vec![blank_ent::<AppTypeConfig>(2, 0, 3)],
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
+        entries: vec![blank_ent::<AppTypeConfig>(2, NodeId::from(0), 3)],
         // this sets last_applied to 2
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -188,10 +188,10 @@ async fn test_append_conflicts() -> Result<()> {
 
     // check last_log_id is updated:
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2000)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2000)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -205,10 +205,10 @@ async fn test_append_conflicts() -> Result<()> {
     );
 
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(3, 0, 3)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(3, NodeId::from(0), 3)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -222,14 +222,14 @@ async fn test_append_conflicts() -> Result<()> {
     );
     // refill logs
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
         entries: vec![
-            blank_ent::<AppTypeConfig>(2, 0, 3),
-            blank_ent::<AppTypeConfig>(2, 0, 4),
-            blank_ent::<AppTypeConfig>(2, 0, 5),
+            blank_ent::<AppTypeConfig>(2, NodeId::from(0), 3),
+            blank_ent::<AppTypeConfig>(2, NodeId::from(0), 4),
+            blank_ent::<AppTypeConfig>(2, NodeId::from(0), 5),
         ],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -241,10 +241,10 @@ async fn test_append_conflicts() -> Result<()> {
 
     // prev_log_id matches
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(2, 0, 3)),
-        entries: vec![blank_ent::<AppTypeConfig>(3, 0, 4)],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(2, NodeId::from(0), 3)),
+        entries: vec![blank_ent::<AppTypeConfig>(3, NodeId::from(0), 4)],
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -257,10 +257,10 @@ async fn test_append_conflicts() -> Result<()> {
 
     // refill logs
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 2),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 200)),
+        vote: Vote::new_committed(1, NodeId::from(2)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 200)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;

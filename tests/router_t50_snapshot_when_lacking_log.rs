@@ -10,8 +10,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState, SnapshotPolicy};
 
 fn timeout() -> Option<Duration> {
@@ -50,15 +52,15 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Initialize as single-node cluster
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
     }
 
     // Wait for leadership
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 becomes leader")
         .await?;
 
@@ -69,7 +71,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     // Write entries to reach snapshot threshold
     for i in 0..(snapshot_threshold - 1) {
         router
-            .write(&0, format!("key{}", i), format!("value{}", i))
+            .write(0, format!("key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -83,7 +85,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     let start = std::time::Instant::now();
     loop {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let metrics = n0.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
@@ -109,7 +111,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     // Write additional entries beyond snapshot
     for i in 0..11 {
         router
-            .write(&0, format!("key_after_{}", i), format!("value_after_{}", i))
+            .write(0, format!("key_after_{}", i), format!("value_after_{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -117,7 +119,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Verify these entries are applied
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(log_index), "additional entries applied")
         .await?;
 
@@ -130,7 +132,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Wait for learner to become ready
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .state(ServerState::Learner, "node-1 becomes learner")
         .await?;
 
@@ -140,7 +142,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     // Since logs before the snapshot are purged, the learner must receive a snapshot
     let start = std::time::Instant::now();
     loop {
-        let n1 = router.get_raft_handle(&1)?;
+        let n1 = router.get_raft_handle(1)?;
         let metrics = n1.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
@@ -163,19 +165,19 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
 
     // Verify learner has caught up to latest log
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "learner caught up to latest")
         .await?;
 
     // Verify data integrity - learner should have all data from snapshot + new entries
-    let val = router.read(&1, "key0").await;
+    let val = router.read(1, "key0").await;
     assert_eq!(
         val,
         Some("value0".to_string()),
         "data from snapshot should be present"
     );
 
-    let val = router.read(&1, "key_after_0").await;
+    let val = router.read(1, "key_after_0").await;
     assert_eq!(
         val,
         Some("value_after_0".to_string()),

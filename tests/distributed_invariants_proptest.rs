@@ -68,7 +68,7 @@ proptest! {
             // Perform writes to leader
             for (key, value) in &writes {
                 router
-                    .write(&leader, key.clone(), value.clone())
+                    .write(leader, key.clone(), value.clone())
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -85,7 +85,7 @@ proptest! {
             // Wait for all nodes to reach expected index
             for node_id in 0..3 {
                 router
-                    .wait(&node_id, Some(Duration::from_millis(5000)))
+                    .wait(node_id, Some(Duration::from_millis(5000)))
                     .applied_index(Some(expected_index), "all writes replicated")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -94,7 +94,7 @@ proptest! {
             // Verify all nodes have identical data
             for node_id in 0..3 {
                 for (key, expected_value) in &expected {
-                    let stored = router.read(&node_id, key).await;
+                    let stored = router.read(node_id, key).await;
                     prop_assert_eq!(
                         stored,
                         Some(expected_value.clone()),
@@ -132,7 +132,7 @@ proptest! {
                 let value = format!("value_{}", i);
 
                 router
-                    .write(&initial_leader, key, value)
+                    .write(initial_leader, key, value)
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
 
@@ -176,7 +176,7 @@ proptest! {
                 keys.push((key.clone(), value.clone()));
 
                 router
-                    .write(&leader, key, value)
+                    .write(leader, key, value)
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -187,7 +187,7 @@ proptest! {
             // Wait for all nodes to converge
             for node_id in 0..3 {
                 router
-                    .wait(&node_id, Some(Duration::from_millis(5000)))
+                    .wait(node_id, Some(Duration::from_millis(5000)))
                     .applied_index(Some(expected_index), "logs replicated")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -196,7 +196,7 @@ proptest! {
             // Verify all nodes have identical logs
             for node_id in 0..3 {
                 for (key, value) in &keys {
-                    let stored = router.read(&node_id, key).await;
+                    let stored = router.read(node_id, key).await;
                     prop_assert_eq!(
                         stored,
                         Some(value.clone()),
@@ -232,7 +232,7 @@ proptest! {
             // Write same key with different values sequentially
             for value in &values {
                 router
-                    .write(&leader, key.clone(), value.clone())
+                    .write(leader, key.clone(), value.clone())
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -246,7 +246,7 @@ proptest! {
             // Wait for all nodes to apply all writes
             for node_id in 0..3 {
                 router
-                    .wait(&node_id, Some(Duration::from_millis(5000)))
+                    .wait(node_id, Some(Duration::from_millis(5000)))
                     .applied_index(Some(expected_index), "all commands applied")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -254,7 +254,7 @@ proptest! {
 
             // All nodes must have same final value
             for node_id in 0..3 {
-                let stored = router.read(&node_id, &key).await;
+                let stored = router.read(node_id, &key).await;
                 prop_assert_eq!(
                     stored,
                     Some(expected_final_value.clone()),
@@ -287,7 +287,7 @@ proptest! {
             // Perform writes
             for (key, value) in &writes {
                 router
-                    .write(&leader, key.clone(), value.clone())
+                    .write(leader, key.clone(), value.clone())
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -305,7 +305,7 @@ proptest! {
             // This ensures writes are fully replicated across the cluster
             for node_id in 0..3 {
                 router
-                    .wait(&node_id, Some(Duration::from_millis(5000)))
+                    .wait(node_id, Some(Duration::from_millis(5000)))
                     .applied_index(Some(expected_index), "writes replicated")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -315,7 +315,7 @@ proptest! {
             for (key, expected_value) in &expected {
                 let mut replica_count = 0u32;
                 for node_id in 0..3 {
-                    if let Some(value) = router.read(&node_id, key).await && value == *expected_value {
+                    if let Some(value) = router.read(node_id, key).await && value == *expected_value {
                         replica_count += 1;
                     }
                 }
@@ -353,7 +353,7 @@ proptest! {
             // Perform writes
             for (key, value) in &writes {
                 router
-                    .write(&leader, key.clone(), value.clone())
+                    .write(leader, key.clone(), value.clone())
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -370,7 +370,7 @@ proptest! {
             // Wait for convergence
             for node_id in 0..3 {
                 router
-                    .wait(&node_id, Some(Duration::from_millis(5000)))
+                    .wait(node_id, Some(Duration::from_millis(5000)))
                     .applied_index(Some(expected_index), "converged")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -380,7 +380,7 @@ proptest! {
             for (key, expected_value) in &expected {
                 let mut values = Vec::new();
                 for node_id in 0..3 {
-                    let value = router.read(&node_id, key).await;
+                    let value = router.read(node_id, key).await;
                     values.push(value);
                 }
 

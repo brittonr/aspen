@@ -12,7 +12,7 @@ use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance with SQLite backend for madsim testing.
@@ -81,16 +81,20 @@ async fn test_sqlite_single_node_initialization_seed_42() {
     let _injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: raft node 1 with SQLite backend");
-    let raft1 = create_raft_node_sqlite(1, "init_seed_42").await;
+    let raft1 = create_raft_node_sqlite(NodeId::from(1), "init_seed_42").await;
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     raft1
         .initialize(nodes)
         .await
@@ -104,7 +108,7 @@ async fn test_sqlite_single_node_initialization_seed_42() {
     let metrics = raft1.metrics().borrow().clone();
     assert_eq!(
         metrics.current_leader,
-        Some(1),
+        Some(NodeId::from(1)),
         "node 1 should be leader with SQLite backend"
     );
 
@@ -128,16 +132,20 @@ async fn test_sqlite_single_node_initialization_seed_123() {
     let _injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: raft node 1 with SQLite backend");
-    let raft1 = create_raft_node_sqlite(1, "init_seed_123").await;
+    let raft1 = create_raft_node_sqlite(NodeId::from(1), "init_seed_123").await;
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     raft1
         .initialize(nodes)
         .await
@@ -150,7 +158,7 @@ async fn test_sqlite_single_node_initialization_seed_123() {
     let metrics = raft1.metrics().borrow().clone();
     assert_eq!(
         metrics.current_leader,
-        Some(1),
+        Some(NodeId::from(1)),
         "node 1 should be leader with SQLite backend"
     );
 

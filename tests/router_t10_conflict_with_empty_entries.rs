@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::testing::AspenRouter;
 use openraft::raft::AppendEntriesRequest;
 use openraft::storage::{RaftLogReader, RaftLogStorage};
@@ -45,7 +45,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     // Verify it's in learner state
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Learner, "node-0 is learner")
         .await?;
 
@@ -56,8 +56,8 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     // Test 1: Empty entries + non-existent prev_log_id → conflict
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 5)),
+        vote: Vote::new_committed(1, NodeId::from(1)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 5)),
         entries: vec![],
         leader_commit: None,
     };
@@ -77,14 +77,14 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     // Add 3 logs
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),
+        vote: Vote::new_committed(1, NodeId::from(1)),
         prev_log_id: None,
         entries: vec![
-            blank_ent::<AppTypeConfig>(0, 0, 0),
-            blank_ent::<AppTypeConfig>(1, 0, 1),
-            blank_ent::<AppTypeConfig>(1, 0, 2),
+            blank_ent::<AppTypeConfig>(0, NodeId::from(0), 0),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 1),
+            blank_ent::<AppTypeConfig>(1, NodeId::from(0), 2),
         ],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -101,10 +101,10 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     // Test 2: Empty entries + out-of-bounds prev_log_id → conflict
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 1, 3)),
+        vote: Vote::new_committed(1, NodeId::from(1)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 3)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;
@@ -122,10 +122,10 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     // Test 3: Empty entries + matching prev_log_id → success
     let req = AppendEntriesRequest {
-        vote: Vote::new_committed(1, 1),
-        prev_log_id: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        vote: Vote::new_committed(1, NodeId::from(1)),
+        prev_log_id: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
         entries: vec![],
-        leader_commit: Some(log_id::<AppTypeConfig>(1, 0, 2)),
+        leader_commit: Some(log_id::<AppTypeConfig>(1, NodeId::from(0), 2)),
     };
 
     let resp = r0.append_entries(req).await?;

@@ -15,7 +15,8 @@ use proptest::prelude::*;
 
 // Helper function to create a log ID with given term, node, and index
 fn make_log_id(term: u64, node: u64, index: u64) -> LogId<AppTypeConfig> {
-    log_id::<AppTypeConfig>(term, node, index)
+    use aspen::raft::types::NodeId;
+    log_id::<AppTypeConfig>(term, NodeId::from(node), index)
 }
 
 // Generators for test data

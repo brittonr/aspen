@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use openraft::{Config, ServerState};
 
@@ -50,7 +51,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Verify initial leader
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 is initial leader")
         .await?;
 
@@ -72,19 +73,19 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Manually trigger election on node-1
     {
-        let n1 = router.get_raft_handle(&1)?;
+        let n1 = router.get_raft_handle(1)?;
         n1.trigger().elect().await?;
     }
 
     // Wait for node-1 to become leader
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .state(ServerState::Leader, "node-1 becomes new leader")
         .await?;
 
     // Verify node-2 recognizes node-1 as leader
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .current_leader(1, "node-2 sees node-1 as leader")
         .await?;
 
@@ -95,7 +96,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     let mut new_log_index = log_index + 1;
     for i in 0..10 {
         router
-            .write(&1, format!("key{}", i), format!("value{}", i))
+            .write(1, format!("key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         new_log_index += 1;
@@ -103,7 +104,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Verify entries are replicated to node-2
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .applied_index(Some(new_log_index), "node-2 replicated entries")
         .await?;
 
@@ -117,13 +118,13 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Wait for node-0 to catch up via replication
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(new_log_index), "node-0 catches up via replication")
         .await?;
 
     // Verify node-0 recognizes node-1 as leader
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .current_leader(1, "node-0 sees node-1 as leader")
         .await?;
 

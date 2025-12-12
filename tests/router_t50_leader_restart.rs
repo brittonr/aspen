@@ -15,8 +15,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
 
 fn timeout() -> Option<Duration> {
@@ -44,18 +46,18 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
 
     tracing::info!("--- initialize single-node cluster");
     {
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "initialized")
             .await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .state(ServerState::Leader, "node 0 is leader")
             .await?;
     }
@@ -63,23 +65,23 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
     tracing::info!("--- write some log entries");
     {
         router
-            .write(&0, "key1".to_string(), "value1".to_string())
+            .write(0, "key1".to_string(), "value1".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         router
-            .write(&0, "key2".to_string(), "value2".to_string())
+            .write(0, "key2".to_string(), "value2".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(3), "wrote 2 entries")
             .await?;
     }
 
     tracing::info!("--- verify data is persisted");
     {
-        let val = router.read(&0, "key1").await;
+        let val = router.read(0, "key1").await;
         assert_eq!(val, Some("value1".to_string()), "key1 should be persisted");
     }
 
@@ -98,7 +100,7 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
             .await?;
 
         // Verify the fresh node has no data
-        let val = router.read(&3, "key1").await;
+        let val = router.read(3, "key1").await;
         assert_eq!(val, None, "fresh node should have no data");
     }
 
@@ -117,13 +119,13 @@ async fn test_follower_restart() -> Result<()> {
     tracing::info!("--- create and initialize single-node cluster");
     router.new_raft_node(0).await?;
     {
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "initialized")
             .await?;
     }
@@ -131,26 +133,26 @@ async fn test_follower_restart() -> Result<()> {
     tracing::info!("--- write data to cluster");
     {
         router
-            .write(&0, "persistent".to_string(), "data".to_string())
+            .write(0, "persistent".to_string(), "data".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(2), "data written")
             .await?;
     }
 
     tracing::info!("--- verify data persisted");
     {
-        let val = router.read(&0, "persistent").await;
+        let val = router.read(0, "persistent").await;
         assert_eq!(val, Some("data".to_string()));
     }
 
     tracing::info!("--- simulate restart by creating new node with same storage");
     {
         // Get the existing storage
-        let metrics = router.get_raft_handle(&0)?.metrics().borrow().clone();
+        let metrics = router.get_raft_handle(0)?.metrics().borrow().clone();
         tracing::info!(
             "node 0 before restart - state: {:?}, log index: {:?}",
             metrics.state,
@@ -164,7 +166,7 @@ async fn test_follower_restart() -> Result<()> {
             .new_raft_node_with_storage(1, fresh_log, fresh_sm)
             .await?;
 
-        let val = router.read(&1, "persistent").await;
+        let val = router.read(1, "persistent").await;
         assert_eq!(val, None, "fresh node has no data until it joins cluster");
     }
 

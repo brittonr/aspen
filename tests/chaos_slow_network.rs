@@ -1,3 +1,4 @@
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
@@ -46,7 +47,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     events.push("cluster-initialized: node 0".into());
 
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
     let leader = router
@@ -59,7 +60,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("normal-latency-{}", i);
         let value = format!("value-{}", i);
         router
-            .write(&leader, key.clone(), value.clone())
+            .write(leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("baseline-write: {}={}", key, value));
@@ -67,7 +68,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
     router
-        .wait(&leader, Some(Duration::from_millis(1000)))
+        .wait(leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed")
         .await?;
     events.push("baseline-committed: 3 writes at normal latency".into());
@@ -82,7 +83,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Verify cluster still has a leader despite slow network
     router
-        .wait(&0, Some(Duration::from_millis(5000)))
+        .wait(0, Some(Duration::from_millis(5000)))
         .current_leader(leader, "leader stable despite latency")
         .await?;
     let slow_leader = router
@@ -98,7 +99,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("high-latency-{}", i);
         let value = format!("slow-{}", i);
         router
-            .write(&slow_leader, key.clone(), value.clone())
+            .write(slow_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("slow-write: {}={}", key, value));
@@ -107,7 +108,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Increased timeout for slow network: 200ms latency * 2 (RTT) * 2 (quorum) + overhead
     // Use 10 seconds to account for CI slowness and multiple round trips
     router
-        .wait(&slow_leader, Some(Duration::from_millis(10000)))
+        .wait(slow_leader, Some(Duration::from_millis(10000)))
         .applied_index(Some(7), "slow writes committed")
         .await
         .map_err(|e| {
@@ -130,7 +131,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("restored-{}", i);
         let value = format!("fast-again-{}", i);
         router
-            .write(&slow_leader, key.clone(), value.clone())
+            .write(slow_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("fast-write: {}={}", key, value));
@@ -139,7 +140,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Fast commits again (3 more writes = index 10)
     // Increased timeout for CI reliability
     router
-        .wait(&slow_leader, Some(Duration::from_millis(2000)))
+        .wait(slow_leader, Some(Duration::from_millis(2000)))
         .applied_index(Some(10), "restored writes committed")
         .await?;
     events.push("restored-writes-committed: 3 writes at normal latency".into());
@@ -150,7 +151,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("normal-latency-{}", i);
             let expected = format!("value-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(
@@ -169,7 +170,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("high-latency-{}", i);
             let expected = format!("slow-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(
@@ -188,7 +189,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         for i in 0..3 {
             let key = format!("restored-{}", i);
             let expected = format!("fast-again-{}", i);
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
                     anyhow::bail!(

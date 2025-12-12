@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
 use openraft::{Config, RaftLogReader, ServerState};
@@ -69,18 +69,18 @@ async fn test_append_entries_three_membership() -> Result<()> {
     router.new_raft_node(0).await?;
 
     {
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "node-0 initialized")
             .await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .state(ServerState::Leader, "node-0 is leader")
             .await?;
     }
@@ -90,7 +90,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
     router.new_raft_node(5).await?;
 
     router
-        .wait(&5, timeout())
+        .wait(5, timeout())
         .state(ServerState::Learner, "node-5 starts as learner")
         .await?;
 
@@ -106,7 +106,8 @@ async fn test_append_entries_three_membership() -> Result<()> {
 
     // Set up node-5 with initial log state
     // Initial vote (following term 1, leader 0)
-    sto5.save_vote(&openraft::Vote::new_committed(1, 0)).await?;
+    sto5.save_vote(&openraft::Vote::new_committed(1, NodeId::from(0)))
+        .await?;
 
     // Initial log: just the membership entry at index 1 for {0}
     let initial_membership = vec![BTreeSet::from([0])];
@@ -126,11 +127,11 @@ async fn test_append_entries_three_membership() -> Result<()> {
     // - prev_log_id points to index 1 (initial membership)
     // - entries contain: blank entry + 3 membership changes
 
-    let node5 = router.get_raft_handle(&5)?;
+    let node5 = router.get_raft_handle(5)?;
 
     // Build the append-entries request
     let append_entries_req = openraft::raft::AppendEntriesRequest {
-        vote: openraft::Vote::new_committed(1, 0),
+        vote: openraft::Vote::new_committed(1, NodeId::from(0)),
         prev_log_id: Some(openraft::testing::log_id::<AppTypeConfig>(1, 0, 1)),
         entries: vec![
             blank_ent::<AppTypeConfig>(1, 0, 2), // Blank entry at index 2
@@ -153,7 +154,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
 
     // Wait for entries to be applied
     router
-        .wait(&5, timeout())
+        .wait(5, timeout())
         .applied_index(Some(5), "all entries applied")
         .await?;
 
@@ -161,7 +162,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
 
     // Node-5 should now be a Follower since it's in the effective membership {4, 5}
     router
-        .wait(&5, timeout())
+        .wait(5, timeout())
         .state(ServerState::Follower, "node-5 is now follower")
         .await?;
 

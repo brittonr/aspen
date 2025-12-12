@@ -41,7 +41,7 @@ async fn create_raft_node(
 
 /// Helper to create LogId for AppTypeConfig
 fn make_log_id(term: u64, node_id: u64, index: u64) -> LogId<AppTypeConfig> {
-    log_id::<AppTypeConfig>(term, node_id, index)
+    log_id::<AppTypeConfig>(term, NodeId::from(node_id), index)
 }
 
 /// Test append-entries response in every case.
@@ -63,11 +63,15 @@ async fn test_append_conflicts_seed_1001() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: single learner node");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone()).await;
+    let raft0 = create_raft_node(NodeId::from(0), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(0, "127.0.0.1:26000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:26000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
@@ -82,7 +86,7 @@ async fn test_append_conflicts_seed_1001() {
     // Case 0: prev_log_id == None, no logs
     artifact = artifact.add_event("case_0: prev_log_id=None, entries=[]");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: None,
         entries: vec![],
         leader_commit: Some(make_log_id(1, 0, 2)),
@@ -94,9 +98,9 @@ async fn test_append_conflicts_seed_1001() {
     // Case 1: prev_log_id == None, 1 log entry
     artifact = artifact.add_event("case_1: prev_log_id=None, entries=[blank(0,0,0)]");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: None,
-        entries: vec![blank_ent(0, 0, 0)],
+        entries: vec![blank_ent(0, NodeId::from(0), 0)],
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
@@ -106,7 +110,7 @@ async fn test_append_conflicts_seed_1001() {
     // Case 2: prev_log_id matches, 0 entries
     artifact = artifact.add_event("case_2: prev_log_id=make_log_id(0,0,0), entries=[]");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(0, 0, 0)),
         entries: vec![],
         leader_commit: Some(make_log_id(1, 0, 2)),
@@ -121,13 +125,13 @@ async fn test_append_conflicts_seed_1001() {
     // Case 3: prev_log_id.index == 0, append multiple entries
     artifact = artifact.add_event("case_3: prev_log_id=make_log_id(0,0,0), entries=[1,2,3,4]");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(0, 0, 0)),
         entries: vec![
-            blank_ent(1, 0, 1),
-            blank_ent(1, 0, 2),
-            blank_ent(1, 0, 3),
-            blank_ent(1, 0, 4),
+            blank_ent(1, NodeId::from(0), 1),
+            blank_ent(1, NodeId::from(0), 2),
+            blank_ent(1, NodeId::from(0), 3),
+            blank_ent(1, NodeId::from(0), 4),
         ],
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
@@ -141,13 +145,13 @@ async fn test_append_conflicts_seed_1001() {
     // Case 4: Resend same entries (idempotent)
     artifact = artifact.add_event("case_4: resend same entries (idempotent check)");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(0, 0, 0)),
         entries: vec![
-            blank_ent(1, 0, 1),
-            blank_ent(1, 0, 2),
-            blank_ent(1, 0, 3),
-            blank_ent(1, 0, 4),
+            blank_ent(1, NodeId::from(0), 1),
+            blank_ent(1, NodeId::from(0), 2),
+            blank_ent(1, NodeId::from(0), 3),
+            blank_ent(1, NodeId::from(0), 4),
         ],
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
@@ -158,9 +162,9 @@ async fn test_append_conflicts_seed_1001() {
     // Case 5: prev_log_id.index < commit_index (should succeed without changes)
     artifact = artifact.add_event("case_5: prev_log_id.index=1 < commit_index=2");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(1, 0, 1)),
-        entries: vec![blank_ent(1, 0, 2)],
+        entries: vec![blank_ent(1, NodeId::from(0), 2)],
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
@@ -173,9 +177,9 @@ async fn test_append_conflicts_seed_1001() {
     // Case 6: prev_log_id == last_applied, truncate inconsistent entries
     artifact = artifact.add_event("case_6: truncate inconsistent entries at index 3");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(1, 0, 2)),
-        entries: vec![blank_ent(2, 0, 3)], // Term 2 differs from existing term 1
+        entries: vec![blank_ent(2, NodeId::from(0), 3)], // Term 2 differs from existing term 1
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
@@ -188,7 +192,7 @@ async fn test_append_conflicts_seed_1001() {
     // Case 7: prev_log_id mismatch (index too high) - should conflict
     artifact = artifact.add_event("case_7: prev_log_id.index=2000 > last_log (conflict)");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(1, 0, 2000)),
         entries: vec![],
         leader_commit: Some(make_log_id(1, 0, 2)),
@@ -200,7 +204,7 @@ async fn test_append_conflicts_seed_1001() {
     // Case 8: prev_log_id term mismatch - should conflict and truncate
     artifact = artifact.add_event("case_8: prev_log_id term mismatch at index 3");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(3, 0, 3)), // Expecting term 3, but we have term 2
         entries: vec![],
         leader_commit: Some(make_log_id(1, 0, 2)),
@@ -212,9 +216,13 @@ async fn test_append_conflicts_seed_1001() {
     // Case 9: Refill logs and test matching prev_log_id
     artifact = artifact.add_event("case_9: refill logs with consistent entries");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(1, 0, 2)),
-        entries: vec![blank_ent(2, 0, 3), blank_ent(2, 0, 4), blank_ent(2, 0, 5)],
+        entries: vec![
+            blank_ent(2, NodeId::from(0), 3),
+            blank_ent(2, NodeId::from(0), 4),
+            blank_ent(2, NodeId::from(0), 5),
+        ],
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
@@ -224,9 +232,9 @@ async fn test_append_conflicts_seed_1001() {
     // Case 10: Matching prev_log_id, truncate later entries
     artifact = artifact.add_event("case_10: prev_log_id matches, truncate from index 4");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(2, 0, 3)),
-        entries: vec![blank_ent(3, 0, 4)], // Different term at index 4
+        entries: vec![blank_ent(3, NodeId::from(0), 4)], // Different term at index 4
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
@@ -239,7 +247,7 @@ async fn test_append_conflicts_seed_1001() {
     // Case 11: prev_log_id.index > last_log_id.index - should conflict
     artifact = artifact.add_event("case_11: prev_log_id.index=200 beyond last_log");
     let req = AppendEntriesRequest::<AppTypeConfig> {
-        vote: Vote::new_committed(1, 2),
+        vote: Vote::new_committed(1, NodeId::from(2)),
         prev_log_id: Some(make_log_id(1, 0, 200)),
         entries: vec![],
         leader_commit: Some(make_log_id(1, 0, 2)),
@@ -276,11 +284,15 @@ async fn test_stream_append_success_seed_1002() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: single learner node");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone()).await;
+    let raft0 = create_raft_node(NodeId::from(0), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(0, "127.0.0.1:26000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:26000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
@@ -289,21 +301,27 @@ async fn test_stream_append_success_seed_1002() {
     artifact = artifact.add_event("stream: create append_entries request stream");
     let requests = vec![
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: None,
-            entries: vec![blank_ent(0, 0, 0), blank_ent(1, 1, 1)],
+            entries: vec![
+                blank_ent(0, NodeId::from(0), 0),
+                blank_ent(1, NodeId::from(1), 1),
+            ],
             leader_commit: None,
         },
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: Some(make_log_id(1, 1, 1)),
-            entries: vec![blank_ent(1, 1, 2), blank_ent(1, 1, 3)],
+            entries: vec![
+                blank_ent(1, NodeId::from(1), 2),
+                blank_ent(1, NodeId::from(1), 3),
+            ],
             leader_commit: None,
         },
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: Some(make_log_id(1, 1, 3)),
-            entries: vec![blank_ent(1, 1, 4)],
+            entries: vec![blank_ent(1, NodeId::from(1), 4)],
             leader_commit: Some(make_log_id(1, 1, 4)),
         },
     ];
@@ -351,11 +369,15 @@ async fn test_stream_append_conflict_seed_1003() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: single learner node");
-    let raft0 = create_raft_node(0, router.clone(), injector.clone()).await;
+    let raft0 = create_raft_node(NodeId::from(0), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(0, "127.0.0.1:26000".to_string(), raft0.clone())
+        .register_node(
+            NodeId::from(0),
+            "127.0.0.1:26000".to_string(),
+            raft0.clone(),
+        )
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
@@ -364,23 +386,26 @@ async fn test_stream_append_conflict_seed_1003() {
     artifact = artifact.add_event("stream: create requests with conflicting prev_log_id");
     let requests = vec![
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: None,
-            entries: vec![blank_ent(0, 0, 0), blank_ent(1, 1, 1)],
+            entries: vec![
+                blank_ent(0, NodeId::from(0), 0),
+                blank_ent(1, NodeId::from(1), 1),
+            ],
             leader_commit: None,
         },
         // This will conflict: prev_log_id at index 5 doesn't exist
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: Some(make_log_id(1, 1, 5)),
-            entries: vec![blank_ent(1, 1, 6)],
+            entries: vec![blank_ent(1, NodeId::from(1), 6)],
             leader_commit: None,
         },
         // This should never be processed because stream terminates on conflict
         AppendEntriesRequest::<AppTypeConfig> {
-            vote: Vote::new_committed(1, 1),
+            vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: Some(make_log_id(1, 1, 6)),
-            entries: vec![blank_ent(1, 1, 7)],
+            entries: vec![blank_ent(1, NodeId::from(1), 7)],
             leader_commit: None,
         },
     ];

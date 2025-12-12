@@ -18,6 +18,7 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use openraft::raft::VoteRequest;
 use openraft::testing::log_id;
@@ -81,16 +82,19 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
             .await?;
     }
 
-    let node0 = router.get_raft_handle(&0)?;
-    let node1 = router.get_raft_handle(&1)?;
+    let node0 = router.get_raft_handle(0)?;
+    let node1 = router.get_raft_handle(1)?;
 
     tracing::info!(log_index, "--- leader lease rejects vote request");
     {
         let res = node1
-            .vote(VoteRequest::new(Vote::new(10, 2), Some(log_id(10, 1, 10))))
+            .vote(VoteRequest::new(
+                Vote::new(10, NodeId::from(2)),
+                Some(log_id(10, 1, 10)),
+            ))
             .await?;
         assert!(
-            !res.is_granted_to(&Vote::new(10, 2)),
+            !res.is_granted_to(&Vote::new(10, NodeId::from(2))),
             "vote is rejected while leader lease active"
         );
     }
@@ -100,7 +104,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
         // This verifies that blank-log heartbeats (if any) don't write extra log entries
         sleep(Duration::from_millis(1500)).await;
         router
-            .wait(&1, timeout())
+            .wait(1, timeout())
             .applied_index(Some(log_index), "no log is written")
             .await?;
     }
@@ -114,15 +118,18 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
         sleep(Duration::from_millis(1500)).await;
 
         router
-            .wait(&1, timeout())
+            .wait(1, timeout())
             .applied_index(Some(log_index), "no log is written")
             .await?;
 
         let res = node1
-            .vote(VoteRequest::new(Vote::new(10, 2), Some(log_id(10, 1, 10))))
+            .vote(VoteRequest::new(
+                Vote::new(10, NodeId::from(2)),
+                Some(log_id(10, 1, 10)),
+            ))
             .await?;
         assert!(
-            res.is_granted_to(&Vote::new(10, 2)),
+            res.is_granted_to(&Vote::new(10, NodeId::from(2))),
             "vote is granted after leader lease expired"
         );
     }

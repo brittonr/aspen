@@ -117,7 +117,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     events.push(format!("majority-leader: node {}", majority_leader));
 
     // Verify majority leader is in majority partition
-    if !majority_nodes.contains(&majority_leader) {
+    if !majority_nodes.contains(&majority_leader.0) {
         anyhow::bail!(
             "leader {} not in majority partition {:?}",
             majority_leader,
@@ -128,7 +128,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Verify writes still work in majority partition
     router
         .write(
-            &majority_leader,
+            majority_leader,
             "during-partition".to_string(),
             "test".to_string(),
         )

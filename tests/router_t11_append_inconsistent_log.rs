@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::{AppTypeConfig, NodeId};
 use aspen::testing::AspenRouter;
 use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
 use openraft::testing::{blank_ent, membership_ent};
@@ -50,28 +50,33 @@ async fn test_append_inconsistent_log() -> Result<()> {
     let (mut sto2, sm2) = router.new_store();
 
     // Initial membership configuration
-    let membership = vec![BTreeSet::from([0, 1, 2])];
+    let membership = vec![BTreeSet::from([
+        NodeId::from(0),
+        NodeId::from(1),
+        NodeId::from(2),
+    ])];
     let initial_log_index = 5u64;
 
     tracing::info!("--- section 2: create divergent log histories");
 
     // Node-0: Has logs up to index 100 at term 2
     {
-        sto0.save_vote(&openraft::Vote::new(2, 0)).await?;
+        sto0.save_vote(&openraft::Vote::new(2, NodeId::from(0)))
+            .await?;
 
         // Initial logs
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId::from(0), 0)];
         for i in 1..=initial_log_index {
             if i == 1 {
-                entries.push(membership_ent(1, 0, i, membership.clone()));
+                entries.push(membership_ent(1, NodeId::from(0), i, membership.clone()));
             } else {
-                entries.push(blank_ent::<AppTypeConfig>(1, 0, i));
+                entries.push(blank_ent::<AppTypeConfig>(1, NodeId::from(0), i));
             }
         }
 
         // Add conflicting logs at term 2
         for i in initial_log_index + 1..=100 {
-            entries.push(blank_ent::<AppTypeConfig>(2, 0, i));
+            entries.push(blank_ent::<AppTypeConfig>(2, NodeId::from(0), i));
         }
 
         sto0.blocking_append(entries).await?;
@@ -79,14 +84,15 @@ async fn test_append_inconsistent_log() -> Result<()> {
 
     // Node-1: Has logs only up to initial point (will be isolated)
     {
-        sto1.save_vote(&openraft::Vote::new(1, 1)).await?;
+        sto1.save_vote(&openraft::Vote::new(1, NodeId::from(1)))
+            .await?;
 
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId::from(0), 0)];
         for i in 1..=initial_log_index {
             if i == 1 {
-                entries.push(membership_ent(1, 0, i, membership.clone()));
+                entries.push(membership_ent(1, NodeId::from(0), i, membership.clone()));
             } else {
-                entries.push(blank_ent::<AppTypeConfig>(1, 0, i));
+                entries.push(blank_ent::<AppTypeConfig>(1, NodeId::from(0), i));
             }
         }
 
@@ -95,20 +101,21 @@ async fn test_append_inconsistent_log() -> Result<()> {
 
     // Node-2: Has logs up to index 100 at term 3 (will become leader)
     {
-        sto2.save_vote(&openraft::Vote::new(3, 2)).await?;
+        sto2.save_vote(&openraft::Vote::new(3, NodeId::from(2)))
+            .await?;
 
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId::from(0), 0)];
         for i in 1..=initial_log_index {
             if i == 1 {
-                entries.push(membership_ent(1, 0, i, membership.clone()));
+                entries.push(membership_ent(1, NodeId::from(0), i, membership.clone()));
             } else {
-                entries.push(blank_ent::<AppTypeConfig>(1, 0, i));
+                entries.push(blank_ent::<AppTypeConfig>(1, NodeId::from(0), i));
             }
         }
 
         // Add different logs at term 3
         for i in initial_log_index + 1..=100 {
-            entries.push(blank_ent::<AppTypeConfig>(3, 2, i));
+            entries.push(blank_ent::<AppTypeConfig>(3, NodeId::from(2), i));
         }
 
         sto2.blocking_append(entries).await?;
@@ -128,13 +135,13 @@ async fn test_append_inconsistent_log() -> Result<()> {
 
     // Manually trigger election on node-2
     {
-        let n2 = router.get_raft_handle(&2)?;
+        let n2 = router.get_raft_handle(2)?;
         n2.trigger().elect().await?;
     }
 
     // Wait for node-2 to become leader
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .state(ServerState::Leader, "node-2 becomes leader with term 3")
         .await?;
 
@@ -146,7 +153,7 @@ async fn test_append_inconsistent_log() -> Result<()> {
     // Wait for node-0 to sync with leader's log
     // Note: Leader appends a blank log entry when elected, so applied_index will be 101
     router
-        .wait(&0, Some(Duration::from_secs(5)))
+        .wait(0, Some(Duration::from_secs(5)))
         .applied_index(
             Some(101),
             "node-0 syncs to leader's log including blank leader entry",
@@ -187,17 +194,17 @@ async fn test_append_inconsistent_log() -> Result<()> {
 
     // Write new data to verify cluster continues functioning
     router
-        .write(&2, "test_key".to_string(), "test_value".to_string())
+        .write(2, "test_key".to_string(), "test_value".to_string())
         .await
         .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
 
     // Verify replication still works
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(102), "node-0 applies new entry")
         .await?;
 
-    let val = router.read(&0, "test_key").await;
+    let val = router.read(0, "test_key").await;
     assert_eq!(
         val,
         Some("test_value".to_string()),

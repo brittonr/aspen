@@ -97,9 +97,10 @@ async fn test_sqlite_crash_recovery_preserves_committed_data() {
     {
         let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
+        use aspen::raft::types::NodeId;
         for i in 0..100 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("crash_test_key_{}", i),
                     value: format!("crash_test_value_{}", i),
@@ -145,7 +146,7 @@ async fn test_sqlite_crash_recovery_preserves_committed_data() {
         let (last_applied, _) = sm_mut.applied_state().await.unwrap();
         assert_eq!(
             last_applied,
-            Some(log_id::<AppTypeConfig>(1, 1, 99)),
+            Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 99)),
             "last_applied_log should be preserved after crash"
         );
     }
@@ -165,7 +166,7 @@ async fn test_sqlite_recovers_from_partial_write() {
     // Phase 1: Write 50 entries successfully
     for i in 0..50 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId::from(1), i),
             AppRequest::Set {
                 key: format!("valid_key_{}", i),
                 value: format!("valid_value_{}", i),
@@ -184,7 +185,7 @@ async fn test_sqlite_recovers_from_partial_write() {
         .collect();
 
     let invalid_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 50),
+        log_id::<AppTypeConfig>(1, NodeId::from(1), 50),
         AppRequest::SetMulti {
             pairs: too_many_pairs,
         },
@@ -225,7 +226,7 @@ async fn test_sqlite_recovers_from_partial_write() {
 
     // Phase 5: Verify can continue writing after failed operation
     let recovery_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 51),
+        log_id::<AppTypeConfig>(1, NodeId::from(1), 51),
         AppRequest::Set {
             key: "recovery_key".into(),
             value: "recovery_value".into(),
@@ -260,7 +261,7 @@ async fn test_sqlite_detects_wal_corruption() {
 
         for i in 0..20 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("wal_key_{}", i),
                     value: format!("wal_value_{}", i),
@@ -328,7 +329,7 @@ async fn test_sqlite_detects_database_corruption() {
 
         for i in 0..30 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("db_key_{}", i),
                     value: format!("db_value_{}", i),
@@ -397,7 +398,7 @@ async fn test_sqlite_handles_disk_full_gracefully() {
 
     for i in 0..10000 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId::from(1), i),
             AppRequest::Set {
                 key: format!("disk_full_key_{}", i),
                 value: "x".repeat(100), // 100 bytes per entry
@@ -451,7 +452,7 @@ async fn test_sqlite_handles_disk_full_gracefully() {
 
     // Should be able to write again
     let recovery_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 10001),
+        log_id::<AppTypeConfig>(1, NodeId::from(1), 10001),
         AppRequest::Set {
             key: "recovery_after_full".into(),
             value: "recovery_value".into(),
@@ -480,7 +481,7 @@ async fn test_sqlite_handles_concurrent_write_conflict() {
     // Apply an entry to ensure database is actively used
     let mut sm1_mut = Arc::clone(&sm1);
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId::from(1), 0),
         AppRequest::Set {
             key: "node1_key".into(),
             value: "node1_value".into(),
@@ -532,7 +533,7 @@ async fn test_snapshot_install_rollback_on_error() {
     // Phase 1: Bootstrap node with data
     for i in 0..10 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId::from(1), i),
             AppRequest::Set {
                 key: format!("original_key_{}", i),
                 value: format!("original_value_{}", i),
@@ -604,7 +605,7 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
     let entries_999: Vec<_> = (0..999)
         .map(|i| {
             <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("batch_key_{}", i),
                     value: format!("batch_value_{}", i),
@@ -624,7 +625,7 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
     let entries_1001: Vec<_> = (0..1001)
         .map(|i| {
             <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(2, 1, i),
+                log_id::<AppTypeConfig>(2, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("overflow_key_{}", i),
                     value: format!("overflow_value_{}", i),
@@ -674,7 +675,7 @@ async fn test_apply_rollback_on_batch_limit_exceeded() {
 
     // Verify we can still write after the error
     let recovery_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(3, 1, 0),
+        log_id::<AppTypeConfig>(3, NodeId::from(1), 0),
         AppRequest::Set {
             key: "post_error_key".into(),
             value: "post_error_value".into(),
@@ -706,7 +707,7 @@ async fn test_wal_checkpoint_corruption_during_heavy_writes() {
         // Write 500 entries to generate substantial WAL content
         for i in 0..500 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("heavy_write_key_{:05}", i),
                     // Use larger values to grow WAL faster
@@ -802,7 +803,7 @@ async fn test_wal_frame_header_corruption() {
         // Write entries - SQLite uses PASSIVE checkpoint which may leave WAL intact
         for i in 0..50 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("frame_key_{}", i),
                     value: format!("frame_value_{}", i),
@@ -870,7 +871,7 @@ async fn test_wal_truncation_at_non_page_boundary() {
 
         for i in 0..100 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("truncation_key_{:03}", i),
                     // Larger values to ensure multiple WAL pages
@@ -942,7 +943,7 @@ async fn test_wal_header_corruption_severe() {
 
         for i in 0..30 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("header_key_{}", i),
                     value: format!("header_value_{}", i),
@@ -1012,7 +1013,7 @@ async fn test_auto_checkpoint_threshold_corruption() {
         // Write enough data to trigger auto-checkpoint threshold (use 1KB threshold)
         for i in 0..200 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("autockpt_key_{:03}", i),
                     value: format!("autockpt_value_{:03}_{}", i, "z".repeat(50)),
@@ -1097,7 +1098,7 @@ async fn test_snapshot_metadata_corruption_detection() {
         // Write 20 entries
         for i in 0..20 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("snap_key_{}", i),
                     value: format!("snap_value_{}", i),
@@ -1186,7 +1187,7 @@ async fn test_snapshot_index_exceeds_applied_state() {
         // Write 10 entries
         for i in 0..10 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("index_key_{}", i),
                     value: format!("index_value_{}", i),
@@ -1259,7 +1260,7 @@ async fn test_empty_snapshot_with_nonzero_entries() {
         // Write entries
         for i in 0..15 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("empty_key_{}", i),
                     value: format!("empty_value_{}", i),
@@ -1328,7 +1329,7 @@ async fn test_snapshot_data_state_mismatch() {
 
         for i in 0..25 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("mismatch_key_{}", i),
                     value: format!("mismatch_value_{}", i),
@@ -1409,7 +1410,7 @@ async fn test_cross_storage_corruption_log_state_divergence() {
         // Write 20 entries to both log and state machine
         for i in 0..20_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("cross_key_{}", i),
                     value: format!("cross_value_{}", i),
@@ -1429,7 +1430,7 @@ async fn test_cross_storage_corruption_log_state_divergence() {
 
         // Set committed index to 19
         log_store
-            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 19)))
+            .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 19)))
             .await
             .expect("failed to save committed");
 
@@ -1456,7 +1457,7 @@ async fn test_cross_storage_corruption_log_state_divergence() {
 
         // Serialize a log_id with index 100 (beyond committed)
         let future_log_id: Option<openraft::LogId<AppTypeConfig>> =
-            Some(log_id::<AppTypeConfig>(1, 1, 100));
+            Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 100));
         let corrupted_bytes = bincode::serialize(&future_log_id).expect("failed to serialize");
 
         conn.execute(
@@ -1507,7 +1508,7 @@ async fn test_cross_storage_term_mismatch_detection() {
 
         for i in 0..10_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(5, 1, i), // Term 5
+                log_id::<AppTypeConfig>(5, NodeId::from(1), i), // Term 5
                 AppRequest::Set {
                     key: format!("term_key_{}", i),
                     value: format!("term_value_{}", i),
@@ -1521,14 +1522,14 @@ async fn test_cross_storage_term_mismatch_detection() {
         }
 
         // Save vote for term 5
-        let vote = openraft::Vote::new(5, 1);
+        let vote = openraft::Vote::new(5, NodeId::from(1));
         log_store
             .save_vote(&vote)
             .await
             .expect("failed to save vote");
 
         log_store
-            .save_committed(Some(log_id::<AppTypeConfig>(5, 1, 9)))
+            .save_committed(Some(log_id::<AppTypeConfig>(5, NodeId::from(1), 9)))
             .await
             .expect("failed to save committed");
 
@@ -1541,7 +1542,7 @@ async fn test_cross_storage_term_mismatch_detection() {
 
         for i in 0..10_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(10, 1, i), // Term 10 (mismatched!)
+                log_id::<AppTypeConfig>(10, NodeId::from(1), i), // Term 10 (mismatched!)
                 AppRequest::Set {
                     key: format!("term_key_{}", i),
                     value: format!("term_value_{}", i),
@@ -1610,7 +1611,7 @@ async fn test_cross_storage_recovery_after_log_corruption() {
 
         for i in 0..30_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("recovery_key_{}", i),
                     value: format!("recovery_value_{}", i),
@@ -1627,7 +1628,7 @@ async fn test_cross_storage_recovery_after_log_corruption() {
         }
 
         log_store
-            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 29)))
+            .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 29)))
             .await
             .expect("failed to save committed");
 
@@ -1704,7 +1705,7 @@ async fn test_both_storage_components_corrupted() {
 
         for i in 0..20_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 AppRequest::Set {
                     key: format!("both_key_{}", i),
                     value: format!("both_value_{}", i),
@@ -1721,7 +1722,7 @@ async fn test_both_storage_components_corrupted() {
         }
 
         log_store
-            .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 19)))
+            .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 19)))
             .await
             .expect("failed to save committed");
 

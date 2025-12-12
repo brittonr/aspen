@@ -27,8 +27,9 @@ async fn test_sqlite_validation_passes_on_healthy_storage() {
     // Create a state machine and apply some entries
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
+    use aspen::raft::types::NodeId;
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId::from(1), 0),
         AppRequest::Set {
             key: "test_key".into(),
             value: "test_value".into(),
@@ -62,9 +63,10 @@ async fn test_sqlite_validation_with_multiple_entries() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     // Apply multiple entries
+    use aspen::raft::types::NodeId;
     for i in 0..10 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId::from(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),

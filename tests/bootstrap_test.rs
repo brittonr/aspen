@@ -43,6 +43,7 @@ async fn test_bootstrap_single_node() {
     assert_eq!(metadata.status, NodeStatus::Online);
 
     // Verify Raft core is initialized
+    use aspen::raft::types::NodeId;
     let metrics = handle.raft_core.metrics().borrow().clone();
     assert_eq!(metrics.id, NodeId(100));
 

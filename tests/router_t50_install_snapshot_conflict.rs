@@ -11,8 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState, SnapshotPolicy};
 
 fn timeout() -> Option<Duration> {
@@ -58,14 +60,14 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     // Initialize node 0 as leader
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
     }
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 becomes leader")
         .await?;
 
@@ -74,35 +76,35 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     router.add_learner(0, 2).await?;
 
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .state(ServerState::Learner, "node-1 becomes learner")
         .await?;
 
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .state(ServerState::Learner, "node-2 becomes learner")
         .await?;
 
     // Change membership to make it a full cluster
     let voters: std::collections::BTreeSet<u64> = [0, 1, 2].into_iter().collect();
-    let n0 = router.get_raft_handle(&0)?;
+    let n0 = router.get_raft_handle(0)?;
     n0.change_membership(voters, false).await?;
 
     // Wait for all nodes to apply the membership change
     let mut log_index = 1u64 + 2 + 2; // init + 2 add_learner + 2 change_membership
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(log_index), "node-0 applied membership")
         .await?;
 
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "node-1 applied membership")
         .await?;
 
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .applied_index(Some(log_index), "node-2 applied membership")
         .await?;
 
@@ -111,7 +113,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     // Write a few entries that replicate to all nodes
     for i in 0..5 {
         router
-            .write(&0, format!("initial_key{}", i), format!("value{}", i))
+            .write(0, format!("initial_key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -119,17 +121,17 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     // Ensure all nodes have these entries
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(log_index), "node-0 applied initial entries")
         .await?;
 
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "node-1 applied initial entries")
         .await?;
 
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .applied_index(Some(log_index), "node-2 applied initial entries")
         .await?;
 
@@ -143,7 +145,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     // These will NOT replicate to node 2 (it's partitioned)
     for i in 0..snapshot_threshold {
         router
-            .write(&0, format!("majority_key{}", i), format!("value{}", i))
+            .write(0, format!("majority_key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -153,7 +155,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     let start = std::time::Instant::now();
     loop {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let metrics = n0.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
@@ -174,12 +176,12 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     // Verify nodes 0 and 1 are up to date
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(log_index), "node-0 applied all entries")
         .await?;
 
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "node-1 applied all entries")
         .await?;
 
@@ -192,7 +194,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     // it must receive a snapshot
     let start = std::time::Instant::now();
     loop {
-        let n2 = router.get_raft_handle(&2)?;
+        let n2 = router.get_raft_handle(2)?;
         let metrics = n2.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
@@ -217,7 +219,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
         }
 
         if start.elapsed() > Duration::from_secs(15) {
-            let n2 = router.get_raft_handle(&2)?;
+            let n2 = router.get_raft_handle(2)?;
             let metrics = n2.metrics().borrow().clone();
             panic!(
                 "timeout waiting for node-2 to receive snapshot. State: {:?}, Applied: {:?}, Snapshot: {:?}",
@@ -232,14 +234,14 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     // Wait for node 2 to catch up to the latest log index
     router
-        .wait(&2, timeout())
+        .wait(2, timeout())
         .applied_index(Some(log_index), "node-2 caught up after snapshot")
         .await?;
 
     tracing::info!("--- section 8: verify data consistency across all nodes");
 
     // Verify data from before partition (should be in snapshot)
-    let val = router.read(&2, "initial_key0").await;
+    let val = router.read(2, "initial_key0").await;
     assert_eq!(
         val,
         Some("value0".to_string()),
@@ -247,7 +249,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     );
 
     // Verify data from after partition (should be replicated after snapshot)
-    let val = router.read(&2, "majority_key0").await;
+    let val = router.read(2, "majority_key0").await;
     assert_eq!(
         val,
         Some("value0".to_string()),
@@ -255,9 +257,9 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     );
 
     // Cross-check: verify all nodes have the same state
-    let val_n0 = router.read(&0, "majority_key5").await;
-    let val_n1 = router.read(&1, "majority_key5").await;
-    let val_n2 = router.read(&2, "majority_key5").await;
+    let val_n0 = router.read(0, "majority_key5").await;
+    let val_n1 = router.read(1, "majority_key5").await;
+    let val_n2 = router.read(2, "majority_key5").await;
 
     assert_eq!(val_n0, val_n1, "node-0 and node-1 should match");
     assert_eq!(val_n1, val_n2, "node-1 and node-2 should match");
@@ -291,14 +293,14 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
     router.new_raft_node(0).await?;
 
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
     }
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 becomes leader")
         .await?;
 
@@ -308,7 +310,7 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
 
     for i in 0..snapshot_threshold {
         router
-            .write(&0, format!("key{}", i), format!("value{}", i))
+            .write(0, format!("key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -318,7 +320,7 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
 
     let start = std::time::Instant::now();
     let _snapshot_index = loop {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let metrics = n0.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
@@ -337,14 +339,14 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
 
     for i in 0..5 {
         router
-            .write(&0, format!("after_key{}", i), format!("value{}", i))
+            .write(0, format!("after_key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
     }
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .applied_index(Some(log_index), "all entries applied")
         .await?;
 
@@ -355,18 +357,18 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
     log_index += 1;
 
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .state(ServerState::Learner, "node-1 becomes learner")
         .await?;
 
     // Wait for learner to catch up
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "node-1 caught up")
         .await?;
 
     // Verify learner has the snapshot
-    let val = router.read(&1, "key0").await;
+    let val = router.read(1, "key0").await;
     assert_eq!(
         val,
         Some("value0".to_string()),
@@ -374,7 +376,7 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
     );
 
     // Verify learner has post-snapshot data
-    let val = router.read(&1, "after_key0").await;
+    let val = router.read(1, "after_key0").await;
     assert_eq!(
         val,
         Some("value0".to_string()),

@@ -73,9 +73,10 @@ async fn test_redb_log_gap_detection() {
         let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
 
         // Write 50 log entries
+        use aspen::raft::types::NodeId;
         for i in 0..50_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId::from(1), i),
                 aspen::raft::types::AppRequest::Set {
                     key: format!("key-{}", i),
                     value: format!("value-{}", i),

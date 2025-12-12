@@ -14,8 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState, SnapshotPolicy};
 
 fn timeout() -> Option<Duration> {
@@ -50,13 +52,13 @@ async fn test_build_snapshot() -> Result<()> {
     tracing::info!("--- creating and initializing single-node cluster");
     router.new_raft_node(0).await?;
 
-    let node0 = router.get_raft_handle(&0)?;
+    let node0 = router.get_raft_handle(0)?;
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, create_test_aspen_node(0));
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
     node0.initialize(nodes).await?;
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node 0 is leader")
         .await?;
 
@@ -73,7 +75,7 @@ async fn test_build_snapshot() -> Result<()> {
 
         for i in 0..num_writes {
             router
-                .write(&0, format!("key{}", i), format!("value{}", i))
+                .write(0, format!("key{}", i), format!("value{}", i))
                 .await
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
@@ -84,7 +86,7 @@ async fn test_build_snapshot() -> Result<()> {
 
         // Wait for all writes to be applied
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .applied_index(Some(log_index), "writes applied")
             .await?;
 
@@ -121,10 +123,10 @@ async fn test_build_snapshot() -> Result<()> {
     tracing::info!("--- verifying data is readable");
     {
         // Verify some of the written data
-        let val0 = router.read(&0, "key0").await;
+        let val0 = router.read(0, "key0").await;
         assert_eq!(val0, Some("value0".to_string()), "key0 should be persisted");
 
-        let val10 = router.read(&0, "key10").await;
+        let val10 = router.read(0, "key10").await;
         assert_eq!(
             val10,
             Some("value10".to_string()),
@@ -154,13 +156,13 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
     let mut router = AspenRouter::new(config.clone());
     router.new_raft_node(0).await?;
 
-    let node0 = router.get_raft_handle(&0)?;
+    let node0 = router.get_raft_handle(0)?;
     let mut nodes = BTreeMap::new();
-    nodes.insert(0, create_test_aspen_node(0));
+    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
     node0.initialize(nodes).await?;
 
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node 0 is leader")
         .await?;
 
@@ -169,14 +171,14 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
         // Write fewer entries than threshold
         for i in 0..5 {
             router
-                .write(&0, format!("key{}", i), format!("value{}", i))
+                .write(0, format!("key{}", i), format!("value{}", i))
                 .await
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
 
         // Wait for writes to be applied
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .applied_index(Some(6), "writes applied") // 1 init + 5 writes
             .await?;
 
@@ -195,13 +197,13 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
         // Write enough to reach threshold (need 4 more writes: 1 init + 5 + 4 = 10)
         for i in 5..9 {
             router
-                .write(&0, format!("key{}", i), format!("value{}", i))
+                .write(0, format!("key{}", i), format!("value{}", i))
                 .await
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .applied_index(Some(10), "writes applied to threshold")
             .await?;
 

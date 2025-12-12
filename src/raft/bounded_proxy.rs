@@ -544,7 +544,8 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_rejects_excessive_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let result = BoundedRaftActorProxy::with_capacity(actor_ref, MAX_CAPACITY + 1, 1);
+        let result =
+            BoundedRaftActorProxy::with_capacity(actor_ref, MAX_CAPACITY + 1, NodeId::from(1));
 
         assert!(result.is_err(), "excessive capacity should be rejected");
         assert!(matches!(

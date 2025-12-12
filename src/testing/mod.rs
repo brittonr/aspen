@@ -7,7 +7,7 @@
 /// - `AspenRouter`: Manages multiple in-memory Raft nodes with simulated networking
 /// - Wait helpers: Metrics-based assertions via OpenRaft's `Wait` API
 /// - Network simulation: Configurable delays, failures, and partitions
-/// - `create_test_aspen_node`: Helper for creating test node metadata
+/// - `create_test_raft_member_info`: Helper for creating test node metadata
 ///
 /// ## VM-Based Testing (Realistic, Isolated)
 ///

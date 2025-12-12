@@ -11,8 +11,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
 
 fn timeout() -> Option<Duration> {
@@ -40,18 +42,18 @@ async fn test_network_partition_simulation() -> Result<()> {
 
     tracing::info!("--- initialize cluster");
     {
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "initialized")
             .await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .state(ServerState::Leader, "node 0 is leader")
             .await?;
     }
@@ -59,19 +61,19 @@ async fn test_network_partition_simulation() -> Result<()> {
     tracing::info!("--- write some data");
     {
         router
-            .write(&0, "key1".to_string(), "value1".to_string())
+            .write(0, "key1".to_string(), "value1".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(2), "data written")
             .await?;
     }
 
     tracing::info!("--- verify data persisted");
     {
-        let val = router.read(&0, "key1").await;
+        let val = router.read(0, "key1").await;
         assert_eq!(val, Some("value1".to_string()));
     }
 
@@ -96,16 +98,16 @@ async fn test_network_partition_simulation() -> Result<()> {
         // After recovery, node 0 should be reachable again
         // Verify by writing more data
         router
-            .write(&0, "key2".to_string(), "value2".to_string())
+            .write(0, "key2".to_string(), "value2".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(3), "data written after recovery")
             .await?;
 
-        let val = router.read(&0, "key2").await;
+        let val = router.read(0, "key2").await;
         assert_eq!(val, Some("value2".to_string()));
     }
 
@@ -124,13 +126,13 @@ async fn test_network_delay() -> Result<()> {
 
     tracing::info!("--- initialize cluster");
     {
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "initialized")
             .await?;
     }
@@ -142,7 +144,7 @@ async fn test_network_delay() -> Result<()> {
         // Write should still work but be slower
         let start = std::time::Instant::now();
         router
-            .write(&0, "slow".to_string(), "data".to_string())
+            .write(0, "slow".to_string(), "data".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         let elapsed = start.elapsed();
@@ -150,7 +152,7 @@ async fn test_network_delay() -> Result<()> {
         tracing::info!("write took {:?} with 50ms delay", elapsed);
 
         // Verify data written despite delay
-        let val = router.read(&0, "slow").await;
+        let val = router.read(0, "slow").await;
         assert_eq!(val, Some("data".to_string()));
     }
 
@@ -160,11 +162,11 @@ async fn test_network_delay() -> Result<()> {
 
         // Write should be fast again
         router
-            .write(&0, "fast".to_string(), "data".to_string())
+            .write(0, "fast".to_string(), "data".to_string())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
-        let val = router.read(&0, "fast").await;
+        let val = router.read(0, "fast").await;
         assert_eq!(val, Some("data".to_string()));
     }
 

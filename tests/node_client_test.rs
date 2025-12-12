@@ -15,7 +15,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
@@ -54,7 +54,7 @@ async fn test_single_node_write_read() {
     let init_req = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(
             1000,
-            create_test_aspen_node(1000).iroh_addr,
+            create_test_raft_member_info(1000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -257,7 +257,7 @@ async fn test_read_nonexistent_key() {
     let init_req = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(
             3000,
-            create_test_aspen_node(3000).iroh_addr,
+            create_test_raft_member_info(3000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -312,7 +312,7 @@ async fn test_multiple_operations() {
     let init_req = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(
             4000,
-            create_test_aspen_node(4000).iroh_addr,
+            create_test_raft_member_info(4000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();
@@ -517,7 +517,7 @@ async fn test_setmulti_operations() {
     let init_req = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(
             6000,
-            create_test_aspen_node(6000).iroh_addr,
+            create_test_raft_member_info(6000).iroh_addr,
         )],
     };
     cluster_client.init(init_req).await.unwrap();

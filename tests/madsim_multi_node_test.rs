@@ -12,7 +12,7 @@ use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimR
 use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance for madsim testing.
@@ -50,26 +50,38 @@ async fn test_three_node_cluster_seed_42() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -102,7 +114,7 @@ async fn test_three_node_cluster_seed_42() {
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -158,26 +170,38 @@ async fn test_three_node_cluster_seed_123() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -208,7 +232,7 @@ async fn test_three_node_cluster_seed_123() {
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -263,26 +287,38 @@ async fn test_three_node_cluster_seed_456() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes");
-    let raft1 = create_raft_node(1, router.clone(), injector.clone()).await;
-    let raft2 = create_raft_node(2, router.clone(), injector.clone()).await;
-    let raft3 = create_raft_node(3, router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -313,7 +349,7 @@ async fn test_three_node_cluster_seed_456() {
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
 
     artifact = artifact.add_event("write: submit proposal to leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,

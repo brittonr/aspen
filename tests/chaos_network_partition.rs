@@ -1,3 +1,4 @@
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 
@@ -47,7 +48,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for leader election
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "leader elected")
         .await?;
     let leader = router
@@ -60,7 +61,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("key{}", i);
         let value = format!("value{}", i);
         router
-            .write(&leader, key.clone(), value.clone())
+            .write(leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("write: {}={}", key, value));
@@ -68,7 +69,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for writes to be committed (log index starts at 1 after init, so 5 writes = index 6)
     router
-        .wait(&leader, Some(Duration::from_millis(1000)))
+        .wait(leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(6), "baseline writes committed")
         .await?;
     events.push("baseline-writes-committed: 5 writes".into());
@@ -86,7 +87,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // The majority partition (0, 1, 2) should still have a leader
     // Check a node in the majority partition
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .current_leader(leader, "majority partition maintains leader")
         .await?;
     let majority_leader = router
@@ -94,7 +95,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("majority partition lost leadership"))?;
 
     // Verify majority leader is in majority partition
-    if majority_leader == 3 || majority_leader == 4 {
+    if majority_leader == NodeId(3) || majority_leader == NodeId(4) {
         anyhow::bail!(
             "leader should be in majority partition (0,1,2), got node {}",
             majority_leader
@@ -107,7 +108,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("key{}", i);
         let value = format!("during-partition-{}", i);
         router
-            .write(&majority_leader, key.clone(), value.clone())
+            .write(majority_leader, key.clone(), value.clone())
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         events.push(format!("partition-write: {}={}", key, value));
@@ -117,7 +118,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // However, a blank log entry may be added during partition healing, resulting in index 12
     // Use at_least to handle both cases
     let partition_index = {
-        let raft = router.get_raft_handle(&majority_leader)?;
+        let raft = router.get_raft_handle(majority_leader)?;
         let metrics = raft.metrics().borrow().clone();
         metrics
             .last_applied
@@ -125,7 +126,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("leader has no applied index"))?
     };
     router
-        .wait(&majority_leader, Some(Duration::from_millis(1000)))
+        .wait(majority_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(partition_index), "partition writes committed")
         .await?;
     events.push(format!(
@@ -143,7 +144,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Check that we still have a leader after healing
     router
-        .wait(&0, Some(Duration::from_millis(2000)))
+        .wait(0, Some(Duration::from_millis(2000)))
         .current_leader(majority_leader, "leader stable after healing")
         .await?;
 
@@ -151,7 +152,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Increased timeout to 3000ms for partition recovery and CI reliability
     // Query the actual final index after healing (may have additional blank entries from term changes)
     let final_index = {
-        let raft = router.get_raft_handle(&majority_leader)?;
+        let raft = router.get_raft_handle(majority_leader)?;
         let metrics = raft.metrics().borrow().clone();
         metrics
             .last_applied
@@ -161,7 +162,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     for node_id in 0..5 {
         router
-            .wait(&node_id, Some(Duration::from_millis(3000)))
+            .wait(node_id, Some(Duration::from_millis(3000)))
             .applied_index(Some(final_index), "all nodes synchronized")
             .await?;
     }
@@ -180,7 +181,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                 format!("during-partition-{}", i)
             };
 
-            match router.read(&node_id, &key).await {
+            match router.read(node_id, &key).await {
                 Some(value) if value == expected => {
                     // Expected value found
                 }

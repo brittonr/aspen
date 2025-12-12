@@ -12,8 +12,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
 
 fn timeout() -> Option<Duration> {
@@ -44,7 +45,7 @@ async fn test_cluster_initialization() -> Result<()> {
 
     // Verify nodes are not initialized
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let inited = n0.is_initialized().await?;
         assert!(!inited, "node 0 should not be initialized");
     }
@@ -52,7 +53,7 @@ async fn test_cluster_initialization() -> Result<()> {
     // Assert all nodes are in learner state
     for node_id in [0, 1, 2] {
         router
-            .wait(&node_id, timeout())
+            .wait(node_id, timeout())
             .state(ServerState::Learner, "empty")
             .await?;
     }
@@ -60,14 +61,14 @@ async fn test_cluster_initialization() -> Result<()> {
     // Initialize just node 0 as a single-node cluster (avoids multi-node timing issues)
     tracing::info!("--- initializing single node cluster");
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
 
         // Wait for initialization
         router
-            .wait(&0, timeout())
+            .wait(0, timeout())
             .log_index_at_least(Some(1), "init")
             .await?;
 
@@ -78,7 +79,7 @@ async fn test_cluster_initialization() -> Result<()> {
 
     // Verify node 0 became leader (single-node cluster)
     tracing::info!("--- verifying leader state");
-    let metrics = router.get_raft_handle(&0)?.metrics().borrow().clone();
+    let metrics = router.get_raft_handle(0)?.metrics().borrow().clone();
     assert_eq!(
         metrics.state,
         ServerState::Leader,
@@ -87,7 +88,11 @@ async fn test_cluster_initialization() -> Result<()> {
 
     // Verify leader ID
     let leader_id = router.leader();
-    assert_eq!(leader_id, Some(0), "node 0 should be the leader");
+    assert_eq!(
+        leader_id,
+        Some(NodeId::from(0)),
+        "node 0 should be the leader"
+    );
     tracing::info!("cluster leader: {:?}", leader_id);
 
     Ok(())
@@ -104,16 +109,16 @@ async fn test_initialize_err_target_not_in_membership() -> Result<()> {
     // Verify nodes are in learner state
     for node_id in [0, 1] {
         router
-            .wait(&node_id, timeout())
+            .wait(node_id, timeout())
             .state(ServerState::Learner, "empty")
             .await?;
     }
 
     // Try to initialize with membership that doesn't include the node
     for node_id in [0, 1] {
-        let n = router.get_raft_handle(&node_id)?;
+        let n = router.get_raft_handle(node_id)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(9, create_test_aspen_node(9)); // Node 9 doesn't exist
+        nodes.insert(NodeId::from(9), create_test_raft_member_info(9)); // Node 9 doesn't exist
 
         let res = n.initialize(nodes).await;
         assert!(
@@ -139,16 +144,16 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
 
     // Verify node is in learner state
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Learner, "empty")
         .await?;
 
     // Initialize node 0
     tracing::info!("--- initializing node 0");
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
 
         n0.wait(timeout())
@@ -159,9 +164,9 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
     // Try to initialize again - should fail
     tracing::info!("--- attempting second initialization (should fail)");
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(0, create_test_aspen_node(0));
+        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
 
         let res = n0.initialize(nodes).await;
         assert!(res.is_err(), "second initialization should be rejected");

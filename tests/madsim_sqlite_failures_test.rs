@@ -15,7 +15,7 @@ use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance with SQLite backend for madsim failure testing.
@@ -73,29 +73,56 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 =
-        create_raft_node_sqlite(1, "leader_crash_seed_42", router.clone(), injector.clone()).await;
-    let raft2 =
-        create_raft_node_sqlite(2, "leader_crash_seed_42", router.clone(), injector.clone()).await;
-    let raft3 =
-        create_raft_node_sqlite(3, "leader_crash_seed_42", router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node_sqlite(
+        NodeId::from(1),
+        "leader_crash_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node_sqlite(
+        NodeId::from(2),
+        "leader_crash_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft3 = create_raft_node_sqlite(
+        NodeId::from(3),
+        "leader_crash_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -113,7 +140,7 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     ));
 
     artifact = artifact.add_event("write: submit write before leader crash");
-    let leader_raft = match initial_leader {
+    let leader_raft = match initial_leader.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -143,7 +170,7 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
 
     let mut new_leader = None;
     for (id, raft) in remaining_nodes.iter() {
-        if *id != initial_leader {
+        if NodeId::from(*id) != initial_leader {
             let metrics = raft.metrics().borrow().clone();
             if let Some(leader) = metrics.current_leader {
                 new_leader = Some(leader);
@@ -186,29 +213,56 @@ async fn test_sqlite_network_partition_seed_123() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 =
-        create_raft_node_sqlite(1, "partition_seed_123", router.clone(), injector.clone()).await;
-    let raft2 =
-        create_raft_node_sqlite(2, "partition_seed_123", router.clone(), injector.clone()).await;
-    let raft3 =
-        create_raft_node_sqlite(3, "partition_seed_123", router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node_sqlite(
+        NodeId::from(1),
+        "partition_seed_123",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node_sqlite(
+        NodeId::from(2),
+        "partition_seed_123",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft3 = create_raft_node_sqlite(
+        NodeId::from(3),
+        "partition_seed_123",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -226,14 +280,14 @@ async fn test_sqlite_network_partition_seed_123() {
 
     artifact = artifact.add_event("failure: partition node 3 from nodes 1 and 2");
     // Partition: node 3 cannot communicate with nodes 1 and 2
-    injector.set_message_drop(3, 1, true);
-    injector.set_message_drop(3, 2, true);
-    injector.set_message_drop(1, 3, true);
-    injector.set_message_drop(2, 3, true);
+    injector.set_message_drop(NodeId::from(3), NodeId::from(1), true);
+    injector.set_message_drop(NodeId::from(3), NodeId::from(2), true);
+    injector.set_message_drop(NodeId::from(1), NodeId::from(3), true);
+    injector.set_message_drop(NodeId::from(2), NodeId::from(3), true);
 
     artifact = artifact.add_event("write: submit write to majority partition");
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -311,20 +365,32 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -338,7 +404,7 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     let leader_id = metrics1.current_leader.expect("no leader");
 
     artifact = artifact.add_event("write: first write before failure");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -355,7 +421,11 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
 
     artifact = artifact.add_event("failure: crash a follower node");
     // Find a follower to crash
-    let follower_id = if leader_id == 1 { 2 } else { 1 };
+    let follower_id = if leader_id == NodeId::from(1) {
+        NodeId::from(2)
+    } else {
+        NodeId::from(1)
+    };
     router.mark_node_failed(follower_id, true);
     artifact = artifact.add_event(format!("failure: node {} crashed (follower)", follower_id));
 
@@ -374,14 +444,18 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     artifact =
         artifact.add_event("validation: writes succeeded with SQLite despite follower crash");
     // Check that the leader and remaining follower have both entries
-    let remaining_follower_id = if follower_id == 1 {
-        if leader_id == 2 { 3 } else { 2 }
-    } else if leader_id == 1 {
-        3
+    let remaining_follower_id = if follower_id == NodeId::from(1) {
+        if leader_id == NodeId::from(2) {
+            NodeId::from(3)
+        } else {
+            NodeId::from(2)
+        }
+    } else if leader_id == NodeId::from(1) {
+        NodeId::from(3)
     } else {
-        1
+        NodeId::from(1)
     };
-    let remaining_follower = match remaining_follower_id {
+    let remaining_follower = match remaining_follower_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -447,20 +521,32 @@ async fn test_sqlite_concurrent_writes_seed_789() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -472,7 +558,7 @@ async fn test_sqlite_concurrent_writes_seed_789() {
     artifact = artifact.add_event("write: first write before failure");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -488,7 +574,11 @@ async fn test_sqlite_concurrent_writes_seed_789() {
         .expect("first write should succeed");
 
     artifact = artifact.add_event("failure: crash a follower node");
-    let follower_id = if leader_id == 1 { 2 } else { 1 };
+    let follower_id = if leader_id == NodeId::from(1) {
+        NodeId::from(2)
+    } else {
+        NodeId::from(1)
+    };
     router.mark_node_failed(follower_id, true);
     artifact = artifact.add_event(format!("failure: node {} crashed", follower_id));
 
@@ -507,8 +597,12 @@ async fn test_sqlite_concurrent_writes_seed_789() {
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
     artifact = artifact.add_event("validation: concurrent writes succeeded with SQLite");
-    let remaining_follower_id = if follower_id == 1 { 3 } else { 1 };
-    let remaining_follower = match remaining_follower_id {
+    let remaining_follower_id = if follower_id == NodeId::from(1) {
+        NodeId::from(3)
+    } else {
+        NodeId::from(1)
+    };
+    let remaining_follower = match remaining_follower_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,

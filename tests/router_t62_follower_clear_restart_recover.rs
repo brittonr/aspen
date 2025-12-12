@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use openraft::{Config, ServerState};
 
@@ -49,7 +50,7 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Verify node-0 is leader
     router
-        .wait(&0, timeout())
+        .wait(0, timeout())
         .state(ServerState::Leader, "node-0 is leader")
         .await?;
 
@@ -58,7 +59,7 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     // Write test data
     for i in 0..10 {
         router
-            .write(&0, format!("key{}", i), format!("value{}", i))
+            .write(0, format!("key{}", i), format!("value{}", i))
             .await
             .map_err(|e| anyhow::anyhow!("Write failed: {}", e))?;
         log_index += 1;
@@ -94,7 +95,7 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Manually trigger heartbeat from leader to detect follower's state loss
     {
-        let n0 = router.get_raft_handle(&0)?;
+        let n0 = router.get_raft_handle(0)?;
         n0.trigger().heartbeat().await?;
     }
 
@@ -105,13 +106,13 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Wait for node-1 to recover its log
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .log_index(Some(log_index), "node-1 log recovered")
         .await?;
 
     // Wait for node-1 to apply recovered entries
     router
-        .wait(&1, timeout())
+        .wait(1, timeout())
         .applied_index(Some(log_index), "node-1 state machine recovered")
         .await?;
 
@@ -120,7 +121,7 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     // Verify node-1 has recovered all data
     for i in 0..10 {
         let key = format!("key{}", i);
-        let val = router.read(&1, &key).await;
+        let val = router.read(1, &key).await;
         assert_eq!(
             val,
             Some(format!("value{}", i)),
@@ -131,10 +132,10 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Verify node-1's metrics match other nodes
     // Note: applied_index is already validated via Wait API above (lines 109-112)
-    let n1 = router.get_raft_handle(&1)?;
+    let n1 = router.get_raft_handle(1)?;
     let metrics1 = n1.metrics().borrow().clone();
 
-    let n0 = router.get_raft_handle(&0)?;
+    let n0 = router.get_raft_handle(0)?;
     let metrics0 = n0.metrics().borrow().clone();
 
     assert_eq!(

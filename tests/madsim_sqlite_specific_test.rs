@@ -15,7 +15,7 @@ use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use aspen::simulation::SimulationArtifactBuilder;
-use aspen::testing::create_test_aspen_node;
+use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, Raft};
 
 /// Helper to create a Raft instance with SQLite backend for madsim testing.
@@ -71,29 +71,56 @@ async fn test_sqlite_restart_recovery_seed_42() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 =
-        create_raft_node_sqlite(1, "restart_seed_42", router.clone(), injector.clone()).await;
-    let raft2 =
-        create_raft_node_sqlite(2, "restart_seed_42", router.clone(), injector.clone()).await;
-    let raft3 =
-        create_raft_node_sqlite(3, "restart_seed_42", router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node_sqlite(
+        NodeId::from(1),
+        "restart_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node_sqlite(
+        NodeId::from(2),
+        "restart_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft3 = create_raft_node_sqlite(
+        NodeId::from(3),
+        "restart_seed_42",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -105,7 +132,7 @@ async fn test_sqlite_restart_recovery_seed_42() {
     artifact = artifact.add_event("write: submit writes before restart");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -132,9 +159,9 @@ async fn test_sqlite_restart_recovery_seed_42() {
     artifact = artifact.add_event("restart: simulate node 1 restart");
     // In a real restart, the SQLite database would persist
     // For this test, we verify the cluster can continue
-    router.mark_node_failed(1, true);
+    router.mark_node_failed(NodeId::from(1), true);
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
-    router.mark_node_failed(1, false);
+    router.mark_node_failed(NodeId::from(1), false);
 
     artifact = artifact.add_event("wait: for cluster to stabilize after restart");
     madsim::time::sleep(std::time::Duration::from_millis(3000)).await;
@@ -207,20 +234,32 @@ async fn test_sqlite_wal_checkpoint_seed_123() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -232,7 +271,7 @@ async fn test_sqlite_wal_checkpoint_seed_123() {
     artifact = artifact.add_event("write: heavy write load to trigger WAL growth");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
@@ -312,12 +351,16 @@ async fn test_sqlite_large_dataset_seed_456() {
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     raft1
         .initialize(nodes)
         .await
@@ -385,29 +428,56 @@ async fn test_sqlite_database_isolation_seed_789() {
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
     // Each node gets its own isolated SQLite database via unique test_name
-    let raft1 =
-        create_raft_node_sqlite(1, "isolation_seed_789", router.clone(), injector.clone()).await;
-    let raft2 =
-        create_raft_node_sqlite(2, "isolation_seed_789", router.clone(), injector.clone()).await;
-    let raft3 =
-        create_raft_node_sqlite(3, "isolation_seed_789", router.clone(), injector.clone()).await;
+    let raft1 = create_raft_node_sqlite(
+        NodeId::from(1),
+        "isolation_seed_789",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft2 = create_raft_node_sqlite(
+        NodeId::from(2),
+        "isolation_seed_789",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
+    let raft3 = create_raft_node_sqlite(
+        NodeId::from(3),
+        "isolation_seed_789",
+        router.clone(),
+        injector.clone(),
+    )
+    .await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(1, "127.0.0.1:26001".to_string(), raft1.clone())
+        .register_node(
+            NodeId::from(1),
+            "127.0.0.1:26001".to_string(),
+            raft1.clone(),
+        )
         .expect("failed to register node 1");
     router
-        .register_node(2, "127.0.0.1:26002".to_string(), raft2.clone())
+        .register_node(
+            NodeId::from(2),
+            "127.0.0.1:26002".to_string(),
+            raft2.clone(),
+        )
         .expect("failed to register node 2");
     router
-        .register_node(3, "127.0.0.1:26003".to_string(), raft3.clone())
+        .register_node(
+            NodeId::from(3),
+            "127.0.0.1:26003".to_string(),
+            raft3.clone(),
+        )
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
     let mut nodes = BTreeMap::new();
-    nodes.insert(1, create_test_aspen_node(1));
-    nodes.insert(2, create_test_aspen_node(2));
-    nodes.insert(3, create_test_aspen_node(3));
+    nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
+    nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
+    nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     raft1
         .initialize(nodes)
         .await
@@ -419,7 +489,7 @@ async fn test_sqlite_database_isolation_seed_789() {
     artifact = artifact.add_event("write: submit writes to test isolation");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no leader");
-    let leader_raft = match leader_id {
+    let leader_raft = match leader_id.0 {
         1 => &raft1,
         2 => &raft2,
         3 => &raft3,
