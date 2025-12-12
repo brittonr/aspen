@@ -38,9 +38,9 @@
 //!
 //! ```ignore
 //! use aspen::cluster::bootstrap::bootstrap_node;
-//! use aspen::cluster::config::ClusterBootstrapConfig;
+//! use aspen::cluster::config::NodeConfig;
 //!
-//! let config = ClusterBootstrapConfig {
+//! let config = NodeConfig {
 //!     node_id: 1,
 //!     data_dir: Some("./data/node-1".into()),
 //!     raft_addr: "127.0.0.1:5301".parse()?,
@@ -63,7 +63,7 @@ use openraft::Config as RaftConfig;
 use ractor::{Actor, ActorRef};
 use tracing::{info, instrument};
 
-use crate::cluster::config::ClusterBootstrapConfig;
+use crate::cluster::config::NodeConfig;
 use crate::cluster::gossip_actor::{GossipActor, GossipActorArgs, GossipMessage};
 use crate::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
@@ -78,13 +78,13 @@ use crate::raft::supervision::{
 use crate::raft::types::{AppTypeConfig, NodeId};
 use crate::raft::{RaftActorConfig, RaftActorMessage, StateMachineVariant};
 
-/// Handle to a bootstrapped cluster node.
+/// Handle to a running cluster node.
 ///
 /// Contains all the resources needed to run and shutdown a node cleanly.
 /// Uses actor references for RPC server and gossip discovery instead of raw handles.
-pub struct BootstrapHandle {
+pub struct NodeHandle {
     /// Node configuration.
-    pub config: ClusterBootstrapConfig,
+    pub config: NodeConfig,
     /// Metadata store for cluster nodes.
     pub metadata_store: Arc<MetadataStore>,
     /// Iroh endpoint manager.
@@ -115,7 +115,7 @@ pub struct BootstrapHandle {
     pub health_monitor: Option<Arc<HealthMonitor>>,
 }
 
-impl BootstrapHandle {
+impl NodeHandle {
     /// Gracefully shutdown the node.
     ///
     /// Shuts down components in reverse order of startup:
@@ -230,10 +230,10 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
 /// 5. Launches Raft actor
 /// 6. Registers node in metadata store
 ///
-/// Returns a `BootstrapHandle` that can be used to access node resources
+/// Returns a `NodeHandle` that can be used to access node resources
 /// and perform graceful shutdown.
 #[instrument(skip(config), fields(node_id = config.node_id, storage_backend = ?config.storage_backend))]
-pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapHandle> {
+pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // Validate configuration
     config.validate().context("invalid configuration")?;
 
@@ -300,7 +300,7 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
-    Ok(BootstrapHandle {
+    Ok(NodeHandle {
         config,
         metadata_store,
         iroh_manager,
@@ -327,16 +327,13 @@ pub async fn bootstrap_node(config: ClusterBootstrapConfig) -> Result<BootstrapH
 /// 3. Configuration overrides (typically from CLI args)
 ///
 /// Returns the merged configuration.
-pub fn load_config(
-    toml_path: Option<&Path>,
-    overrides: ClusterBootstrapConfig,
-) -> Result<ClusterBootstrapConfig> {
+pub fn load_config(toml_path: Option<&Path>, overrides: NodeConfig) -> Result<NodeConfig> {
     // Start with environment variables
-    let mut config = ClusterBootstrapConfig::from_env();
+    let mut config = NodeConfig::from_env();
 
     // Merge TOML file if provided
     if let Some(path) = toml_path {
-        let toml_config = ClusterBootstrapConfig::from_toml_file(path)
+        let toml_config = NodeConfig::from_toml_file(path)
             .with_context(|| format!("failed to load config from {}", path.display()))?;
         config.merge(toml_config);
     }
@@ -374,7 +371,7 @@ mod tests {
         std::fs::write(&toml_path, toml_content).unwrap();
 
         // CLI overrides
-        let cli_config = ClusterBootstrapConfig {
+        let cli_config = NodeConfig {
             node_id: 2, // This should override TOML
             data_dir: None,
             host: "127.0.0.1".into(),
@@ -489,7 +486,7 @@ mod tests {
 /// Initialize the metadata store for the cluster node.
 ///
 /// Creates a redb-backed metadata store at `<data_dir>/metadata.redb`.
-fn setup_metadata_store(config: &ClusterBootstrapConfig) -> Result<Arc<MetadataStore>> {
+fn setup_metadata_store(config: &NodeConfig) -> Result<Arc<MetadataStore>> {
     let metadata_path = config.data_dir().join("metadata.redb");
     let metadata_store =
         Arc::new(MetadataStore::new(&metadata_path).context("failed to create metadata store")?);
@@ -507,7 +504,7 @@ fn setup_metadata_store(config: &ClusterBootstrapConfig) -> Result<Arc<MetadataS
 /// - Relay URL (if provided)
 /// - Gossip protocol
 /// - Discovery services (mDNS, DNS, pkarr)
-async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<IrohEndpointManager>> {
+async fn setup_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
     let mut iroh_config = IrohEndpointConfig::new();
 
     // Parse secret key if provided
@@ -562,7 +559,7 @@ async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<Iroh
 ///
 /// Returns (None, None) if gossip is disabled.
 async fn setup_gossip_discovery(
-    config: &ClusterBootstrapConfig,
+    config: &NodeConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
 ) -> Result<(
@@ -620,7 +617,7 @@ async fn setup_gossip_discovery(
 /// Launch the ractor NodeServer for distributed actor communication.
 ///
 /// The NodeServer provides the transport layer for ractor_cluster.
-async fn setup_node_server(config: &ClusterBootstrapConfig) -> Result<NodeServerHandle> {
+async fn setup_node_server(config: &NodeConfig) -> Result<NodeServerHandle> {
     let node_server = NodeServerConfig::new(
         format!("node-{}", config.node_id),
         config.host.clone(),
@@ -647,7 +644,7 @@ async fn setup_node_server(config: &ClusterBootstrapConfig) -> Result<NodeServer
 ///
 /// Returns (Raft core, state machine variant, optional log store).
 async fn setup_raft_storage(
-    config: &ClusterBootstrapConfig,
+    config: &NodeConfig,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
 ) -> Result<(
     openraft::Raft<AppTypeConfig>,
@@ -686,7 +683,7 @@ async fn setup_raft_storage(
 ///
 /// Returns (supervisor, supervisor task, raft actor, health monitor).
 async fn spawn_raft_supervisor(
-    config: &ClusterBootstrapConfig,
+    config: &NodeConfig,
     raft_core: openraft::Raft<AppTypeConfig>,
     state_machine: StateMachineVariant,
     log_store_opt: Option<RedbLogStore>,
@@ -749,7 +746,7 @@ async fn spawn_raft_supervisor(
 /// - Online status
 /// - Last updated timestamp
 fn register_node_metadata(
-    config: &ClusterBootstrapConfig,
+    config: &NodeConfig,
     metadata_store: &Arc<MetadataStore>,
     iroh_manager: &Arc<IrohEndpointManager>,
 ) -> Result<()> {
@@ -817,7 +814,7 @@ async fn create_inmemory_storage(
 /// Uses redb for log storage and SQLite for state machine.
 /// This is the recommended production storage backend.
 async fn create_sqlite_storage(
-    config: &ClusterBootstrapConfig,
+    config: &NodeConfig,
     validated_config: Arc<RaftConfig>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
 ) -> Result<(

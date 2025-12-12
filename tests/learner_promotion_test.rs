@@ -7,13 +7,13 @@ use std::time::Duration;
 
 use aspen::api::{ClusterController, ClusterNode, InitRequest};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::raft::RaftControlClient;
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
 
 /// Helper to create a test config with minimal required fields.
-fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> ClusterBootstrapConfig {
-    ClusterBootstrapConfig {
+fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> NodeConfig {
+    NodeConfig {
         node_id,
         data_dir: Some(temp_dir.to_path_buf()),
         host: "127.0.0.1".into(),

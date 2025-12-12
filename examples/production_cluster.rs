@@ -66,7 +66,7 @@ use aspen::api::{
     KeyValueStore, ReadRequest, WriteCommand, WriteRequest,
 };
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use std::env;
@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
     };
 
     // Configure nodes with production settings
-    let config1 = ClusterBootstrapConfig {
+    let config1 = NodeConfig {
         node_id: 1,
         data_dir: Some(data_dir1),
         host: "127.0.0.1".into(),
@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
         raft_mailbox_capacity: 1000,
     };
 
-    let config2 = ClusterBootstrapConfig {
+    let config2 = NodeConfig {
         node_id: 2,
         data_dir: Some(data_dir2),
         host: "127.0.0.1".into(),
@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
         raft_mailbox_capacity: 1000,
     };
 
-    let config3 = ClusterBootstrapConfig {
+    let config3 = NodeConfig {
         node_id: 3,
         data_dir: Some(data_dir3),
         host: "127.0.0.1".into(),

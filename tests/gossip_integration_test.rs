@@ -11,15 +11,15 @@ mod support;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
 use support::mock_gossip::MockGossip;
 use tokio::time::timeout;
 
-fn create_test_config(node_id: u64, enable_gossip: bool) -> ClusterBootstrapConfig {
-    ClusterBootstrapConfig {
+fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
+    NodeConfig {
         node_id,
         data_dir: Some(std::env::temp_dir().join(format!("aspen-test-{}", node_id))),
         host: "127.0.0.1".into(),
@@ -283,7 +283,7 @@ async fn test_mock_gossip_topic_isolation() -> Result<()> {
 
 #[test]
 fn test_cluster_bootstrap_config_merge_gossip_fields() {
-    let mut base = ClusterBootstrapConfig {
+    let mut base = NodeConfig {
         node_id: 1,
         data_dir: None,
         host: "127.0.0.1".into(),
@@ -313,7 +313,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         raft_mailbox_capacity: 1000,
     };
 
-    let override_config = ClusterBootstrapConfig {
+    let override_config = NodeConfig {
         node_id: 0,
         data_dir: None,
         host: "127.0.0.1".into(),

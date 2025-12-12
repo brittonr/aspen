@@ -15,7 +15,7 @@ use aspen::api::{
     WriteCommand, WriteRequest,
 };
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use tempfile::TempDir;
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     info!("📁 Data directory: {}", data_dir.display());
 
     // Configure the node
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 100,
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),

@@ -81,8 +81,8 @@ use aspen::api::{
     DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
     KeyValueStoreError, ReadRequest, WriteRequest,
 };
-use aspen::cluster::bootstrap::{BootstrapHandle, bootstrap_node, load_config};
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::bootstrap::{NodeHandle, bootstrap_node, load_config};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
@@ -441,8 +441,8 @@ fn init_tracing() {
 /// Build cluster configuration from CLI arguments.
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
-fn build_cluster_config(args: &Args) -> ClusterBootstrapConfig {
-    ClusterBootstrapConfig {
+fn build_cluster_config(args: &Args) -> NodeConfig {
+    NodeConfig {
         node_id: args.node_id.unwrap_or(0),
         data_dir: args.data_dir.clone(),
         storage_backend: args
@@ -483,8 +483,8 @@ fn build_cluster_config(args: &Args) -> ClusterBootstrapConfig {
 ///
 /// Tiger Style: Single responsibility for controller initialization logic.
 fn setup_controllers(
-    config: &ClusterBootstrapConfig,
-    handle: &BootstrapHandle,
+    config: &NodeConfig,
+    handle: &NodeHandle,
 ) -> (
     ClusterControllerHandle,
     KeyValueStoreHandle,
@@ -519,8 +519,8 @@ fn setup_controllers(
 ///
 /// Tiger Style: Focused state construction function.
 fn create_app_state(
-    config: &ClusterBootstrapConfig,
-    handle: &BootstrapHandle,
+    config: &NodeConfig,
+    handle: &NodeHandle,
     controller: ClusterControllerHandle,
     kv_store: KeyValueStoreHandle,
     promotion_coordinator: Option<Arc<LearnerPromotionCoordinator<RaftControlClient>>>,

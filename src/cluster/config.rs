@@ -7,7 +7,7 @@
 //!
 //! # Key Components
 //!
-//! - `ClusterBootstrapConfig`: Top-level node configuration (node_id, data_dir, addresses)
+//! - `NodeConfig`: Top-level node configuration (node_id, data_dir, addresses)
 //! - `ControlBackend`: Control plane backend (Raft)
 //! - `IrohConfig`: P2P networking configuration (endpoint addresses, tickets)
 //! - `StorageBackend`: Log and state machine backend selection
@@ -51,13 +51,13 @@
 //! # Example Usage
 //!
 //! ```ignore
-//! use aspen::cluster::config::ClusterBootstrapConfig;
+//! use aspen::cluster::config::NodeConfig;
 //!
 //! // From TOML
-//! let config: ClusterBootstrapConfig = toml::from_str(&toml_str)?;
+//! let config: NodeConfig = toml::from_str(&toml_str)?;
 //!
 //! // Programmatic
-//! let config = ClusterBootstrapConfig {
+//! let config = NodeConfig {
 //!     node_id: 1,
 //!     raft_addr: "127.0.0.1:5301".parse()?,
 //!     ..Default::default()
@@ -74,7 +74,7 @@ use snafu::{ResultExt, Snafu};
 use crate::raft::storage::StorageBackend;
 use crate::raft::supervision::SupervisionConfig;
 
-/// Bootstrap configuration for an Aspen cluster node.
+/// Configuration for an Aspen cluster node.
 ///
 /// Configuration is loaded in layers with the following precedence (lowest to highest):
 /// 1. Environment variables (ASPEN_*)
@@ -83,7 +83,7 @@ use crate::raft::supervision::SupervisionConfig;
 ///
 /// This means CLI args override TOML config, which overrides environment variables.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClusterBootstrapConfig {
+pub struct NodeConfig {
     /// Logical Raft node identifier.
     pub node_id: u64,
 
@@ -275,7 +275,7 @@ impl FromStr for ControlBackend {
     }
 }
 
-impl ClusterBootstrapConfig {
+impl NodeConfig {
     /// Load configuration from a TOML file.
     pub fn from_toml_file(path: &std::path::Path) -> Result<Self, ConfigError> {
         let content = std::fs::read_to_string(path).context(ReadFileSnafu { path })?;
@@ -637,7 +637,7 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = ClusterBootstrapConfig {
+        let config = NodeConfig {
             node_id: 1,
             data_dir: None,
             host: default_host(),
@@ -665,7 +665,7 @@ mod tests {
 
     #[test]
     fn test_validation_node_id_zero() {
-        let config = ClusterBootstrapConfig {
+        let config = NodeConfig {
             node_id: 0,
             data_dir: None,
             host: default_host(),
@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_validation_election_timeout() {
-        let config = ClusterBootstrapConfig {
+        let config = NodeConfig {
             node_id: 1,
             data_dir: None,
             host: default_host(),
@@ -720,7 +720,7 @@ mod tests {
     #[test]
     #[allow(deprecated)]
     fn test_merge() {
-        let mut base = ClusterBootstrapConfig {
+        let mut base = NodeConfig {
             node_id: 1,
             data_dir: None,
             host: default_host(),
@@ -742,7 +742,7 @@ mod tests {
             raft_mailbox_capacity: 1000,
         };
 
-        let override_config = ClusterBootstrapConfig {
+        let override_config = NodeConfig {
             node_id: 2,
             data_dir: Some(PathBuf::from("/custom/data")),
             host: "192.168.1.1".into(),

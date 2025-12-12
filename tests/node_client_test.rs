@@ -12,7 +12,7 @@ use aspen::api::{
     KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest,
 };
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
@@ -24,7 +24,7 @@ use tokio::time::sleep;
 async fn test_single_node_write_read() {
     let temp_dir = TempDir::new().unwrap();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 1000,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -92,7 +92,7 @@ async fn test_two_node_replication() {
     let temp_dir1 = TempDir::new().unwrap();
     let temp_dir2 = TempDir::new().unwrap();
 
-    let config1 = ClusterBootstrapConfig {
+    let config1 = NodeConfig {
         node_id: 2001,
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -114,7 +114,7 @@ async fn test_two_node_replication() {
         raft_mailbox_capacity: 1000,
     };
 
-    let config2 = ClusterBootstrapConfig {
+    let config2 = NodeConfig {
         node_id: 2002,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -227,7 +227,7 @@ async fn test_two_node_replication() {
 async fn test_read_nonexistent_key() {
     let temp_dir = TempDir::new().unwrap();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 3000,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -282,7 +282,7 @@ async fn test_read_nonexistent_key() {
 async fn test_multiple_operations() {
     let temp_dir = TempDir::new().unwrap();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 4000,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -348,7 +348,7 @@ async fn test_add_learner_and_replicate() {
     let temp_dir1 = TempDir::new().unwrap();
     let temp_dir2 = TempDir::new().unwrap();
 
-    let config1 = ClusterBootstrapConfig {
+    let config1 = NodeConfig {
         node_id: 5001,
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -370,7 +370,7 @@ async fn test_add_learner_and_replicate() {
         raft_mailbox_capacity: 1000,
     };
 
-    let config2 = ClusterBootstrapConfig {
+    let config2 = NodeConfig {
         node_id: 5002,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -487,7 +487,7 @@ async fn test_add_learner_and_replicate() {
 async fn test_setmulti_operations() {
     let temp_dir = TempDir::new().unwrap();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 6000,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),

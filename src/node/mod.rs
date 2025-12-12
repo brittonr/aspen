@@ -60,8 +60,8 @@ use iroh::EndpointAddr;
 pub use self::client::NodeClient;
 pub use self::types::NodeId;
 
-use crate::cluster::bootstrap::{BootstrapHandle, bootstrap_node};
-use crate::cluster::config::ClusterBootstrapConfig;
+use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
+use crate::cluster::config::NodeConfig;
 use crate::raft::storage::StorageBackend;
 
 /// Builds an Aspen node with full cluster bootstrap.
@@ -91,13 +91,13 @@ use crate::raft::storage::StorageBackend;
 /// # }
 /// ```
 pub struct NodeBuilder {
-    config: ClusterBootstrapConfig,
+    config: NodeConfig,
 }
 
 impl NodeBuilder {
     /// Create a new builder for the given node ID and data directory.
     pub fn new(node_id: NodeId, data_dir: impl Into<PathBuf>) -> Self {
-        let config = ClusterBootstrapConfig {
+        let config = NodeConfig {
             node_id: node_id.into(),
             data_dir: Some(data_dir.into()),
             storage_backend: StorageBackend::Sqlite,
@@ -179,10 +179,10 @@ impl NodeBuilder {
 
 /// Handle returned by [`NodeBuilder::start`].
 ///
-/// Wraps a [`BootstrapHandle`] and provides convenient access to the
+/// Wraps a [`NodeHandle`] and provides convenient access to the
 /// node's components for integration testing and programmatic usage.
 pub struct Node {
-    handle: BootstrapHandle,
+    handle: NodeHandle,
 }
 
 impl Node {
@@ -206,11 +206,11 @@ impl Node {
         &self.handle.raft_core
     }
 
-    /// Get the bootstrap handle for advanced operations.
+    /// Get the node handle for advanced operations.
     ///
     /// This provides access to all internal components including metadata store,
     /// network factory, health monitor, etc.
-    pub fn handle(&self) -> &BootstrapHandle {
+    pub fn handle(&self) -> &NodeHandle {
         &self.handle
     }
 

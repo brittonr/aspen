@@ -26,7 +26,7 @@ use aspen::api::{
     WriteRequest,
 };
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
 use aspen::testing::create_test_aspen_node;
@@ -51,7 +51,7 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
         (2, temp_dir2.path()),
         (3, temp_dir3.path()),
     ] {
-        let config = ClusterBootstrapConfig {
+        let config = NodeConfig {
             node_id,
             control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
@@ -211,7 +211,7 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
     // Single-node cluster for faster test
     let temp_dir = tempfile::tempdir()?;
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 1,
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),

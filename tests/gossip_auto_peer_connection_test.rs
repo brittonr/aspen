@@ -7,13 +7,13 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use tempfile::TempDir;
 use tokio::time::sleep;
 
 /// Helper to create a test configuration for a node.
-fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> ClusterBootstrapConfig {
-    ClusterBootstrapConfig {
+fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> NodeConfig {
+    NodeConfig {
         node_id,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -181,7 +181,7 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
     let temp_dir2 = TempDir::new()?;
 
     // Node 1 with gossip disabled
-    let config1 = ClusterBootstrapConfig {
+    let config1 = NodeConfig {
         node_id: 10,
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -217,7 +217,7 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
     let addr1 = handle1.iroh_manager.node_addr();
     let peer_spec = format!("10@{}", addr1.id);
 
-    let config2 = ClusterBootstrapConfig {
+    let config2 = NodeConfig {
         node_id: 11,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),

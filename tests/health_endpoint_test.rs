@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use aspen::api::{ClusterController, KeyValueStore};
 use aspen::cluster::bootstrap::bootstrap_node;
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::raft::RaftActorMessage;
 use axum::{Router, routing::get};
 use ractor::ActorRef;
@@ -222,7 +222,7 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
     // Start a single node
     let temp_dir = tempfile::tempdir()?;
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 1,
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
@@ -353,7 +353,7 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
     // Start a node with data directory
     let temp_dir = tempfile::tempdir()?;
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 2,
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),

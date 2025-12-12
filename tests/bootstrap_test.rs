@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use aspen::cluster::bootstrap::{bootstrap_node, load_config};
-use aspen::cluster::config::{ClusterBootstrapConfig, ControlBackend, IrohConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::cluster::metadata::NodeStatus;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -12,7 +12,7 @@ async fn test_bootstrap_single_node() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().to_path_buf();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 100, // Use high node ID to avoid collision with other tests
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),
@@ -57,7 +57,7 @@ async fn test_bootstrap_multiple_nodes() {
     let temp_dir2 = TempDir::new().unwrap();
     let temp_dir3 = TempDir::new().unwrap();
 
-    let config1 = ClusterBootstrapConfig {
+    let config1 = NodeConfig {
         node_id: 201, // Use high node IDs to avoid collision
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -79,7 +79,7 @@ async fn test_bootstrap_multiple_nodes() {
         raft_mailbox_capacity: 1000,
     };
 
-    let config2 = ClusterBootstrapConfig {
+    let config2 = NodeConfig {
         node_id: 202,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -101,7 +101,7 @@ async fn test_bootstrap_multiple_nodes() {
         raft_mailbox_capacity: 1000,
     };
 
-    let config3 = ClusterBootstrapConfig {
+    let config3 = NodeConfig {
         node_id: 203,
         data_dir: Some(temp_dir3.path().to_path_buf()),
         host: "127.0.0.1".into(),
@@ -188,7 +188,7 @@ fn test_load_config_from_toml() {
 
     // Load with default CLI config (no explicit overrides)
     // Note: control_backend defaults to RaftActor in config.rs
-    let cli_config = ClusterBootstrapConfig {
+    let cli_config = NodeConfig {
         node_id: 0, // No explicit override, TOML will provide value
         data_dir: None,
         host: "127.0.0.1".into(),      // Default value
@@ -238,7 +238,7 @@ fn test_config_precedence() {
     std::fs::write(&config_path, toml_content).unwrap();
 
     // CLI overrides
-    let cli_config = ClusterBootstrapConfig {
+    let cli_config = NodeConfig {
         node_id: 2, // CLI override
         data_dir: None,
         host: "127.0.0.1".into(),
@@ -275,7 +275,7 @@ async fn test_shutdown_updates_status() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().to_path_buf();
 
-    let config = ClusterBootstrapConfig {
+    let config = NodeConfig {
         node_id: 300, // Use high node ID to avoid collision
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),
