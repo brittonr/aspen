@@ -452,7 +452,7 @@ src/
 | --------- | --------- | ------------- |
 | `node_id` | (required) | Unique Raft node identifier (non-zero u64) |
 | `data_dir` | `./data/node-{id}` | Persistent storage directory |
-| `storage_backend` | `Sqlite` | Storage: `Sqlite`, `InMemory`, or `Redb` (deprecated) |
+| `storage_backend` | `Sqlite` | Storage: `Sqlite` or `InMemory` |
 | `http_addr` | `127.0.0.1:8080` | HTTP control API address |
 | `ractor_port` | `26000` | Ractor cluster port |
 | `cookie` | `aspen-cookie` | Cluster authentication token |

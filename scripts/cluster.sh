@@ -9,7 +9,7 @@
 #   ASPEN_COOKIE      - Cluster authentication cookie (default: aspen-cluster)
 #   ASPEN_LOG_LEVEL   - Log level for nodes (default: info)
 #   ASPEN_DATA_DIR    - Base data directory (default: /tmp/aspen-cluster)
-#   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
+#   ASPEN_STORAGE     - Storage backend: inmemory, sqlite (default: sqlite)
 #   ASPEN_NO_INIT     - If set, don't auto-initialize the cluster
 #   ASPEN_NO_VAULTS   - If set, don't create default vaults with sample data
 set -euo pipefail
