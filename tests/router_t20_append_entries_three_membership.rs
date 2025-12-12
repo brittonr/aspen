@@ -110,10 +110,10 @@ async fn test_append_entries_three_membership() -> Result<()> {
         .await?;
 
     // Initial log: just the membership entry at index 1 for {0}
-    let initial_membership = vec![BTreeSet::from([0])];
+    let initial_membership = vec![BTreeSet::from([NodeId(0)])];
     let entries = vec![
-        blank_ent::<AppTypeConfig>(0, 0, 0), // Entry at index 0
-        membership_ent(1, 0, 1, initial_membership.clone()), // Entry at index 1: membership {0}
+        blank_ent::<AppTypeConfig>(0, NodeId(0), 0), // Entry at index 0
+        membership_ent(1, NodeId(0), 1, initial_membership.clone()), // Entry at index 1: membership {0}
     ];
 
     sto5.blocking_append(entries).await?;
@@ -132,14 +132,29 @@ async fn test_append_entries_three_membership() -> Result<()> {
     // Build the append-entries request
     let append_entries_req = openraft::raft::AppendEntriesRequest {
         vote: openraft::Vote::new_committed(1, NodeId::from(0)),
-        prev_log_id: Some(openraft::testing::log_id::<AppTypeConfig>(1, 0, 1)),
+        prev_log_id: Some(openraft::testing::log_id::<AppTypeConfig>(1, NodeId(0), 1)),
         entries: vec![
-            blank_ent::<AppTypeConfig>(1, 0, 2), // Blank entry at index 2
-            membership_ent(1, 0, 3, vec![BTreeSet::from([0, 1])]), // Membership {0, 1}
-            membership_ent(1, 0, 4, vec![BTreeSet::from([3, 4])]), // Membership {3, 4}
-            membership_ent(1, 0, 5, vec![BTreeSet::from([4, 5])]), // Membership {4, 5}
+            blank_ent::<AppTypeConfig>(1, NodeId(0), 2), // Blank entry at index 2
+            membership_ent(
+                1,
+                NodeId(0),
+                3,
+                vec![BTreeSet::from([NodeId(0), NodeId(1)])],
+            ), // Membership {0, 1}
+            membership_ent(
+                1,
+                NodeId(0),
+                4,
+                vec![BTreeSet::from([NodeId(3), NodeId(4)])],
+            ), // Membership {3, 4}
+            membership_ent(
+                1,
+                NodeId(0),
+                5,
+                vec![BTreeSet::from([NodeId(4), NodeId(5)])],
+            ), // Membership {4, 5}
         ],
-        leader_commit: Some(openraft::testing::log_id::<AppTypeConfig>(1, 0, 5)),
+        leader_commit: Some(openraft::testing::log_id::<AppTypeConfig>(1, NodeId(0), 5)),
     };
 
     let resp = node5.append_entries(append_entries_req).await?;
@@ -182,7 +197,7 @@ async fn test_append_entries_three_membership() -> Result<()> {
     let voters: Vec<_> = metrics.membership_config.voter_ids().collect();
     assert_eq!(voters.len(), 2, "effective membership should have 2 voters");
     assert!(
-        voters.contains(&4) && voters.contains(&5),
+        voters.contains(&NodeId(4)) && voters.contains(&NodeId(5)),
         "effective membership should be {{4, 5}}, got {:?}",
         voters
     );

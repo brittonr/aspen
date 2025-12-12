@@ -15,6 +15,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
+use aspen::raft::types::NodeId;
 use aspen::testing::create_test_raft_member_info;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -149,11 +150,11 @@ async fn test_two_node_replication() {
 
     handle1
         .network_factory
-        .add_peer(config2.node_id, addr2.clone())
+        .add_peer(NodeId::from(config2.node_id), addr2.clone())
         .await;
     handle2
         .network_factory
-        .add_peer(config1.node_id, addr1.clone())
+        .add_peer(NodeId::from(config1.node_id), addr1.clone())
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());
@@ -405,11 +406,11 @@ async fn test_add_learner_and_replicate() {
 
     handle1
         .network_factory
-        .add_peer(config2.node_id, addr2.clone())
+        .add_peer(NodeId::from(config2.node_id), addr2.clone())
         .await;
     handle2
         .network_factory
-        .add_peer(config1.node_id, addr1.clone())
+        .add_peer(NodeId::from(config1.node_id), addr1.clone())
         .await;
 
     let cluster_client1 = RaftControlClient::new(handle1.raft_actor.clone());

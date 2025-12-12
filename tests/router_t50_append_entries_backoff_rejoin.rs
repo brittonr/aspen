@@ -46,7 +46,10 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
     // Create cluster with nodes {0, 1, 2}
     let log_index = router
-        .new_cluster(BTreeSet::from([0, 1, 2]), BTreeSet::new())
+        .new_cluster(
+            BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)]),
+            BTreeSet::new(),
+        )
         .await?;
 
     // Verify initial leader
@@ -86,7 +89,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     // Verify node-2 recognizes node-1 as leader
     router
         .wait(2, timeout())
-        .current_leader(1, "node-2 sees node-1 as leader")
+        .current_leader(NodeId(1), "node-2 sees node-1 as leader")
         .await?;
 
     tracing::info!("--- section 4: write entries while node-0 is partitioned");
@@ -125,7 +128,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     // Verify node-0 recognizes node-1 as leader
     router
         .wait(0, timeout())
-        .current_leader(1, "node-0 sees node-1 as leader")
+        .current_leader(NodeId(1), "node-0 sees node-1 as leader")
         .await?;
 
     tracing::info!("--- section 6: verify data consistency");
@@ -135,8 +138,8 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
         let key = format!("key{}", i);
         let expected_value = format!("value{}", i);
 
-        for node_id in [0, 1, 2] {
-            let val = router.read(&node_id, &key).await;
+        for node_id in [NodeId(0), NodeId(1), NodeId(2)] {
+            let val = router.read(node_id, &key).await;
             assert_eq!(
                 val,
                 Some(expected_value.clone()),
@@ -148,9 +151,9 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     }
 
     // Verify all nodes have same applied index
-    for node_id in [0, 1, 2] {
+    for node_id in [NodeId(0), NodeId(1), NodeId(2)] {
         router
-            .wait(&node_id, timeout())
+            .wait(node_id, timeout())
             .applied_index(
                 Some(new_log_index),
                 &format!(

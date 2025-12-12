@@ -211,21 +211,21 @@ async fn test_sqlite_wal_checkpoint_seed_123() {
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
     let raft1 = create_raft_node_sqlite(
-        1,
+        NodeId(1),
         "wal_checkpoint_seed_123",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft2 = create_raft_node_sqlite(
-        2,
+        NodeId(2),
         "wal_checkpoint_seed_123",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft3 = create_raft_node_sqlite(
-        3,
+        NodeId(3),
         "wal_checkpoint_seed_123",
         router.clone(),
         injector.clone(),
@@ -342,7 +342,7 @@ async fn test_sqlite_large_dataset_seed_456() {
 
     artifact = artifact.add_event("create: single raft node with SQLite backend");
     let raft1 = create_raft_node_sqlite(
-        1,
+        NodeId(1),
         "large_dataset_seed_456",
         router.clone(),
         injector.clone(),

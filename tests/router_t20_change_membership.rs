@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::raft::types::NodeId;
-use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
@@ -78,7 +77,7 @@ async fn test_add_learner_and_promote() -> Result<()> {
 
         let leader = router.get_raft_handle(0)?;
         leader
-            .add_learner(1, create_test_raft_member_info(1), false)
+            .add_learner(NodeId(1), create_test_raft_member_info(NodeId(1)), false)
             .await?;
 
         // Wait for learner to be added (log entry written)
@@ -104,7 +103,9 @@ async fn test_add_learner_and_promote() -> Result<()> {
     {
         let leader = router.get_raft_handle(0)?;
         // change_membership takes an array of node IDs
-        leader.change_membership([0, 1], false).await?;
+        leader
+            .change_membership([NodeId(0), NodeId(1)], false)
+            .await?;
 
         // Wait for membership change to be applied
         // Membership change takes 2 log entries (joint config + final config)
@@ -177,7 +178,9 @@ async fn test_change_membership_without_learner() -> Result<()> {
     {
         let leader = router.get_raft_handle(0)?;
         // Try to add node 1 as voter without first adding as learner
-        let res = leader.change_membership([0, 1], false).await;
+        let res = leader
+            .change_membership([NodeId(0), NodeId(1)], false)
+            .await;
         assert!(
             res.is_err(),
             "change_membership should fail without adding learner first"

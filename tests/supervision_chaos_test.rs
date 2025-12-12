@@ -76,7 +76,7 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
 
     artifact = artifact.add_event("create: supervised raft node");
     let raft_actor_config =
-        create_supervised_raft_config(1, router.clone(), injector.clone()).await;
+        create_supervised_raft_config(NodeId::from(1), router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
@@ -106,7 +106,7 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
     madsim::time::sleep(Duration::from_millis(200)).await;
 
     artifact = artifact.add_event("failure: inject network partition (drop messages)");
-    injector.set_message_drop(1, 1, true); // Drop messages from node to itself
+    injector.set_message_drop(NodeId::from(1), NodeId::from(1), true); // Drop messages from node to itself
 
     artifact = artifact.add_event("action: trigger manual restart during partition");
     let _ = supervisor_ref.cast(SupervisorMessage::ManualRestart);
@@ -115,7 +115,7 @@ async fn test_supervised_restart_during_network_partition_seed_1000() {
     madsim::time::sleep(Duration::from_secs(2)).await;
 
     artifact = artifact.add_event("cleanup: clear partition");
-    injector.set_message_drop(1, 1, false);
+    injector.set_message_drop(NodeId::from(1), NodeId::from(1), false);
 
     artifact = artifact.add_event("validation: supervisor handles restart during partition");
 
@@ -143,7 +143,7 @@ async fn test_meltdown_detection_with_chaos_seed_2000() {
 
     artifact = artifact.add_event("create: supervised raft node");
     let raft_actor_config =
-        create_supervised_raft_config(2, router.clone(), injector.clone()).await;
+        create_supervised_raft_config(NodeId::from(2), router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
@@ -214,7 +214,7 @@ async fn test_supervised_restart_with_message_delays_seed_3000() {
 
     artifact = artifact.add_event("create: supervised raft node");
     let raft_actor_config =
-        create_supervised_raft_config(3, router.clone(), injector.clone()).await;
+        create_supervised_raft_config(NodeId::from(3), router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig::default();
 
@@ -236,7 +236,7 @@ async fn test_supervised_restart_with_message_delays_seed_3000() {
     madsim::time::sleep(Duration::from_millis(100)).await;
 
     artifact = artifact.add_event("failure: inject 500ms message delay");
-    injector.set_network_delay(3, 3, 500); // 500ms delay
+    injector.set_network_delay(NodeId(3), NodeId(3), 500); // 500ms delay
 
     artifact = artifact.add_event("action: trigger restart with delayed messages");
     let _ = supervisor_ref.cast(SupervisorMessage::ManualRestart);
@@ -271,9 +271,12 @@ async fn test_multiple_supervised_actors_chaos_seed_4000() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 supervised raft nodes");
-    let raft_config_1 = create_supervised_raft_config(10, router.clone(), injector.clone()).await;
-    let raft_config_2 = create_supervised_raft_config(11, router.clone(), injector.clone()).await;
-    let raft_config_3 = create_supervised_raft_config(12, router.clone(), injector.clone()).await;
+    let raft_config_1 =
+        create_supervised_raft_config(NodeId::from(10), router.clone(), injector.clone()).await;
+    let raft_config_2 =
+        create_supervised_raft_config(NodeId::from(11), router.clone(), injector.clone()).await;
+    let raft_config_3 =
+        create_supervised_raft_config(NodeId::from(12), router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
@@ -323,10 +326,10 @@ async fn test_multiple_supervised_actors_chaos_seed_4000() {
     madsim::time::sleep(Duration::from_millis(200)).await;
 
     artifact = artifact.add_event("chaos: inject partition on node 10 only");
-    injector.set_message_drop(10, 10, true);
+    injector.set_message_drop(NodeId(10), NodeId(10), true);
 
     artifact = artifact.add_event("chaos: inject delay on node 11 only");
-    injector.set_network_delay(11, 11, 200); // 200ms delay
+    injector.set_network_delay(NodeId(11), NodeId(11), 200); // 200ms delay
 
     artifact = artifact.add_event("action: trigger restarts on all supervisors");
     let _ = sup1_ref.cast(SupervisorMessage::ManualRestart);
@@ -366,7 +369,7 @@ async fn test_backoff_under_network_instability_seed_5000() {
 
     artifact = artifact.add_event("create: supervised raft node");
     let raft_actor_config =
-        create_supervised_raft_config(4, router.clone(), injector.clone()).await;
+        create_supervised_raft_config(NodeId::from(4), router.clone(), injector.clone()).await;
 
     let supervision_config = SupervisionConfig {
         enable_auto_restart: true,
@@ -397,7 +400,7 @@ async fn test_backoff_under_network_instability_seed_5000() {
 
     artifact = artifact.add_event("chaos: intermittent network instability");
     // Create fluctuating network conditions
-    injector.set_network_delay(4, 4, 100); // 100ms delay
+    injector.set_network_delay(NodeId(4), NodeId(4), 100); // 100ms delay
 
     artifact = artifact.add_event("action: trigger first restart");
     let _ = supervisor_ref.cast(SupervisorMessage::ManualRestart);

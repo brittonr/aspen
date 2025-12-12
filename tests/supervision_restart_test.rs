@@ -87,9 +87,10 @@ async fn create_test_raft_config(node_id: u64) -> RaftActorConfig {
     let network = MockNetworkFactory;
 
     let state_machine_arc = Arc::new(state_machine);
+    let node_id_typed = NodeId::from(node_id);
 
     let raft = openraft::Raft::new(
-        node_id,
+        node_id_typed,
         raft_config,
         network,
         log_store,
@@ -99,7 +100,7 @@ async fn create_test_raft_config(node_id: u64) -> RaftActorConfig {
     .expect("failed to create raft");
 
     RaftActorConfig {
-        node_id,
+        node_id: node_id_typed,
         raft,
         state_machine: StateMachineVariant::InMemory(state_machine_arc),
         log_store: None,

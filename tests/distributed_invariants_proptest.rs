@@ -25,6 +25,7 @@ fn arbitrary_key_value() -> impl Strategy<Value = (String, String)> {
 
 // Helper to initialize a 3-node cluster
 async fn init_three_node_cluster() -> anyhow::Result<(AspenRouter, u64)> {
+    use aspen::raft::types::NodeId;
     use std::collections::BTreeSet;
 
     let config = Arc::new(
@@ -39,9 +40,9 @@ async fn init_three_node_cluster() -> anyhow::Result<(AspenRouter, u64)> {
 
     // Create 3-node cluster with all voters
     let mut voter_ids = BTreeSet::new();
-    voter_ids.insert(0);
-    voter_ids.insert(1);
-    voter_ids.insert(2);
+    voter_ids.insert(NodeId::from(0));
+    voter_ids.insert(NodeId::from(1));
+    voter_ids.insert(NodeId::from(2));
     let learners = BTreeSet::new();
 
     let log_index = router.new_cluster(voter_ids, learners).await?;

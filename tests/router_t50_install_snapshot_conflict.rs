@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::raft::types::NodeId;
-use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState, SnapshotPolicy};
@@ -54,40 +53,41 @@ async fn test_install_snapshot_conflict() -> Result<()> {
 
     tracing::info!("--- section 1: initialize 3-node cluster");
 
-    router.new_raft_node(0).await?;
-    router.new_raft_node(1).await?;
-    router.new_raft_node(2).await?;
+    router.new_raft_node(NodeId(0)).await?;
+    router.new_raft_node(NodeId(1)).await?;
+    router.new_raft_node(NodeId(2)).await?;
 
     // Initialize node 0 as leader
     {
-        let n0 = router.get_raft_handle(0)?;
+        let n0 = router.get_raft_handle(NodeId(0))?;
         let mut nodes = BTreeMap::new();
-        nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+        nodes.insert(NodeId(0), create_test_raft_member_info(NodeId(0)));
         n0.initialize(nodes).await?;
     }
 
     router
-        .wait(0, timeout())
+        .wait(NodeId(0), timeout())
         .state(ServerState::Leader, "node-0 becomes leader")
         .await?;
 
     // Add nodes 1 and 2 as learners
-    router.add_learner(0, 1).await?;
-    router.add_learner(0, 2).await?;
+    router.add_learner(NodeId(0), NodeId(1)).await?;
+    router.add_learner(NodeId(0), NodeId(2)).await?;
 
     router
-        .wait(1, timeout())
+        .wait(NodeId(1), timeout())
         .state(ServerState::Learner, "node-1 becomes learner")
         .await?;
 
     router
-        .wait(2, timeout())
+        .wait(NodeId(2), timeout())
         .state(ServerState::Learner, "node-2 becomes learner")
         .await?;
 
     // Change membership to make it a full cluster
-    let voters: std::collections::BTreeSet<u64> = [0, 1, 2].into_iter().collect();
-    let n0 = router.get_raft_handle(0)?;
+    let voters: std::collections::BTreeSet<NodeId> =
+        [NodeId(0), NodeId(1), NodeId(2)].into_iter().collect();
+    let n0 = router.get_raft_handle(NodeId(0))?;
     n0.change_membership(voters, false).await?;
 
     // Wait for all nodes to apply the membership change

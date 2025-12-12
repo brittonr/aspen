@@ -69,16 +69,16 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
     let (mut sto2, sm2) = router.new_store();
 
     // All nodes start with membership: [0, 1, 2]
-    let membership_012 = vec![BTreeSet::from([0, 1, 2])];
+    let membership_012 = vec![BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)])];
 
     // Node 0: Has logs at term 2 up to index 10 with older membership
     {
         sto0.save_vote(&openraft::Vote::new(2, NodeId::from(0)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=10 {
-            entries.push(blank_ent::<AppTypeConfig>(2, 0, i));
+            entries.push(blank_ent::<AppTypeConfig>(2, NodeId(0), i));
         }
         sto0.blocking_append(entries).await?;
     }
@@ -88,10 +88,10 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
     {
         sto1.save_vote(&openraft::Vote::new(3, NodeId::from(1)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=8 {
-            entries.push(blank_ent::<AppTypeConfig>(3, 1, i));
+            entries.push(blank_ent::<AppTypeConfig>(3, NodeId(1), i));
         }
         sto1.blocking_append(entries).await?;
     }
@@ -100,10 +100,10 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
     {
         sto2.save_vote(&openraft::Vote::new(3, NodeId::from(2)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=8 {
-            entries.push(blank_ent::<AppTypeConfig>(3, 2, i));
+            entries.push(blank_ent::<AppTypeConfig>(3, NodeId(2), i));
         }
         sto2.blocking_append(entries).await?;
     }
@@ -191,16 +191,16 @@ async fn test_simple_log_truncation() -> Result<()> {
     let (mut sto1, sm1) = router.new_store();
     let (mut sto2, sm2) = router.new_store();
 
-    let membership_012 = vec![BTreeSet::from([0, 1, 2])];
+    let membership_012 = vec![BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)])];
 
     // Node 0: Has 6 entries at term 2
     {
         sto0.save_vote(&openraft::Vote::new(2, NodeId::from(0)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=6 {
-            entries.push(blank_ent::<AppTypeConfig>(2, 0, i));
+            entries.push(blank_ent::<AppTypeConfig>(2, NodeId(0), i));
         }
         sto0.blocking_append(entries).await?;
     }
@@ -209,10 +209,10 @@ async fn test_simple_log_truncation() -> Result<()> {
     {
         sto1.save_vote(&openraft::Vote::new(3, NodeId::from(1)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=4 {
-            entries.push(blank_ent::<AppTypeConfig>(3, 1, i));
+            entries.push(blank_ent::<AppTypeConfig>(3, NodeId(1), i));
         }
         sto1.blocking_append(entries).await?;
     }
@@ -221,10 +221,10 @@ async fn test_simple_log_truncation() -> Result<()> {
     {
         sto2.save_vote(&openraft::Vote::new(3, NodeId::from(2)))
             .await?;
-        let mut entries = vec![blank_ent::<AppTypeConfig>(0, 0, 0)];
-        entries.push(membership_ent(1, 0, 1, membership_012.clone()));
+        let mut entries = vec![blank_ent::<AppTypeConfig>(0, NodeId(0), 0)];
+        entries.push(membership_ent(1, NodeId(0), 1, membership_012.clone()));
         for i in 2..=4 {
-            entries.push(blank_ent::<AppTypeConfig>(3, 2, i));
+            entries.push(blank_ent::<AppTypeConfig>(3, NodeId(2), i));
         }
         sto2.blocking_append(entries).await?;
     }

@@ -51,7 +51,10 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
     sleep(Duration::from_millis(1)).await;
 
     let log_index = router
-        .new_cluster(BTreeSet::from([0, 1, 2]), BTreeSet::from([3]))
+        .new_cluster(
+            BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)]),
+            BTreeSet::from([NodeId(3)]),
+        )
         .await?;
 
     let vote_modified_time = Arc::new(StdMutex::new(Some(TokioInstant::now())));
@@ -90,7 +93,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
         let res = node1
             .vote(VoteRequest::new(
                 Vote::new(10, NodeId::from(2)),
-                Some(log_id(10, 1, 10)),
+                Some(log_id(10, NodeId(1), 10)),
             ))
             .await?;
         assert!(
@@ -125,7 +128,7 @@ async fn test_heartbeat_reject_vote() -> Result<()> {
         let res = node1
             .vote(VoteRequest::new(
                 Vote::new(10, NodeId::from(2)),
-                Some(log_id(10, 1, 10)),
+                Some(log_id(10, NodeId(1), 10)),
             ))
             .await?;
         assert!(

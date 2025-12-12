@@ -8,6 +8,7 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
+use aspen::raft::types::NodeId;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
@@ -152,12 +153,30 @@ async fn test_three_node_auto_discovery() -> Result<()> {
     );
 
     // Verify correct peer IDs
-    assert!(peers1.contains_key(&2), "node 1 should know about node 2");
-    assert!(peers1.contains_key(&3), "node 1 should know about node 3");
-    assert!(peers2.contains_key(&1), "node 2 should know about node 1");
-    assert!(peers2.contains_key(&3), "node 2 should know about node 3");
-    assert!(peers3.contains_key(&1), "node 3 should know about node 1");
-    assert!(peers3.contains_key(&2), "node 3 should know about node 2");
+    assert!(
+        peers1.contains_key(&NodeId(2)),
+        "node 1 should know about node 2"
+    );
+    assert!(
+        peers1.contains_key(&NodeId(3)),
+        "node 1 should know about node 3"
+    );
+    assert!(
+        peers2.contains_key(&NodeId(1)),
+        "node 2 should know about node 1"
+    );
+    assert!(
+        peers2.contains_key(&NodeId(3)),
+        "node 2 should know about node 3"
+    );
+    assert!(
+        peers3.contains_key(&NodeId(1)),
+        "node 3 should know about node 1"
+    );
+    assert!(
+        peers3.contains_key(&NodeId(2)),
+        "node 3 should know about node 2"
+    );
 
     // Cleanup
     handle1.shutdown().await?;
@@ -256,7 +275,10 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         1,
         "node 2 should have 1 manually configured peer"
     );
-    assert!(peers2.contains_key(&10), "node 2 should know about node 10");
+    assert!(
+        peers2.contains_key(&NodeId(10)),
+        "node 2 should know about node 10"
+    );
 
     // Verify gossip is None (disabled)
     assert!(

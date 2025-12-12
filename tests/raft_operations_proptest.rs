@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState};
@@ -24,8 +25,6 @@ fn arbitrary_key_value() -> impl Strategy<Value = (String, String)> {
 
 // Helper to initialize a single-node cluster
 async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
-    use aspen::raft::types::NodeId;
-
     let config = Arc::new(
         Config {
             enable_tick: false,
@@ -35,15 +34,15 @@ async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
     );
 
     let mut router = AspenRouter::new(config);
-    router.new_raft_node(0).await?;
+    router.new_raft_node(NodeId(0)).await?;
 
-    let node0 = router.get_raft_handle(0)?;
+    let node0 = router.get_raft_handle(NodeId(0))?;
     let mut nodes = BTreeMap::new();
-    nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
+    nodes.insert(NodeId(0), create_test_raft_member_info(NodeId(0)));
     node0.initialize(nodes).await?;
 
     router
-        .wait(0, Some(Duration::from_millis(2000)))
+        .wait(NodeId(0), Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "node 0 becomes leader")
         .await?;
 
@@ -66,7 +65,7 @@ proptest! {
             // Perform all writes
             for (key, value) in &writes {
                 router
-                    .write(0, key.clone(), value.clone())
+                    .write(NodeId(0), key.clone(), value.clone())
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
             }
@@ -74,7 +73,7 @@ proptest! {
             // Wait for all writes to be applied
             let expected_index = (writes.len() + 1) as u64; // +1 for init
             router
-                .wait(0, Some(Duration::from_millis(2000)))
+                .wait(NodeId(0), Some(Duration::from_millis(2000)))
                 .applied_index(Some(expected_index), "all writes applied")
                 .await
                 .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -88,7 +87,7 @@ proptest! {
 
             // Verify all writes are present
             for (key, expected_value) in &expected {
-                let stored = router.read(0, key).await;
+                let stored = router.read(NodeId(0), key).await;
                 prop_assert_eq!(
                     stored,
                     Some(expected_value.clone()),
@@ -120,14 +119,14 @@ proptest! {
                 let value = format!("value_{}", i);
 
                 router
-                    .write(0, key, value)
+                    .write(NodeId(0), key, value)
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
 
                 // Wait for this specific write to be applied
                 let expected_index = (i + 2) as u64; // +1 for init, +1 for this write
                 router
-                    .wait(0, Some(Duration::from_millis(1000)))
+                    .wait(NodeId(0), Some(Duration::from_millis(1000)))
                     .applied_index(Some(expected_index), "write applied")
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
@@ -153,7 +152,7 @@ proptest! {
 
             // Verify leader at start
             let initial_leader = router.leader();
-            prop_assert_eq!(initial_leader, Some(0), "Initial leader should be node 0");
+            prop_assert_eq!(initial_leader, Some(NodeId(0)), "Initial leader should be node 0");
 
             // Perform writes
             for i in 0..num_writes {
@@ -161,7 +160,7 @@ proptest! {
                 let value = format!("stable_value_{}", i);
 
                 router
-                    .write(0, key, value)
+                    .write(NodeId(0), key, value)
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
 
@@ -169,7 +168,7 @@ proptest! {
                 let current_leader = router.leader();
                 prop_assert_eq!(
                     current_leader,
-                    Some(0),
+                    Some(NodeId(0)),
                     "Leader changed during stable operation"
                 );
             }

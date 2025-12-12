@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig};
+use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use futures::stream;
 use openraft::entry::RaftEntry;
 use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};
@@ -97,7 +97,6 @@ async fn test_sqlite_crash_recovery_preserves_committed_data() {
     {
         let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
-        use aspen::raft::types::NodeId;
         for i in 0..100 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                 log_id::<AppTypeConfig>(1, NodeId::from(1), i),

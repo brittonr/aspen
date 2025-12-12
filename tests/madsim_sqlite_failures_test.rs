@@ -342,21 +342,21 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
     let raft1 = create_raft_node_sqlite(
-        1,
+        NodeId(1),
         "follower_crash_seed_456",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft2 = create_raft_node_sqlite(
-        2,
+        NodeId(2),
         "follower_crash_seed_456",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft3 = create_raft_node_sqlite(
-        3,
+        NodeId(3),
         "follower_crash_seed_456",
         router.clone(),
         injector.clone(),
@@ -498,21 +498,21 @@ async fn test_sqlite_concurrent_writes_seed_789() {
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
     let raft1 = create_raft_node_sqlite(
-        1,
+        NodeId(1),
         "concurrent_writes_seed_789",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft2 = create_raft_node_sqlite(
-        2,
+        NodeId(2),
         "concurrent_writes_seed_789",
         router.clone(),
         injector.clone(),
     )
     .await;
     let raft3 = create_raft_node_sqlite(
-        3,
+        NodeId(3),
         "concurrent_writes_seed_789",
         router.clone(),
         injector.clone(),

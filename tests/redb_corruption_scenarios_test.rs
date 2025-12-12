@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_validation::{StorageValidationError, validate_raft_storage};
+use aspen::raft::types::NodeId;
 use openraft::RaftLogReader;
 use openraft::entry::RaftEntry;
 use openraft::storage::{IOFlushed, RaftLogStorage};
@@ -156,7 +157,7 @@ async fn test_redb_vote_corruption_detection() {
         let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
 
         // Save a vote
-        let vote = openraft::Vote::new(5, 1);
+        let vote = openraft::Vote::new(5, NodeId::from(1));
         log_store
             .save_vote(&vote)
             .await
@@ -231,7 +232,7 @@ async fn test_redb_prevents_restart_with_corrupted_log() {
         // Write 30 log entries
         for i in 0..30_u64 {
             let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId(1), i),
                 aspen::raft::types::AppRequest::Set {
                     key: format!("key-{}", i),
                     value: format!("value-{}", i),

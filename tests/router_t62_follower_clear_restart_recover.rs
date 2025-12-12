@@ -45,7 +45,10 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
 
     // Create cluster with nodes {0, 1, 2}
     let mut log_index = router
-        .new_cluster(BTreeSet::from([0, 1, 2]), BTreeSet::new())
+        .new_cluster(
+            BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)]),
+            BTreeSet::new(),
+        )
         .await?;
 
     // Verify node-0 is leader
@@ -66,9 +69,9 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     }
 
     // Wait for replication to all nodes
-    for node_id in [0, 1, 2] {
+    for node_id in [NodeId(0), NodeId(1), NodeId(2)] {
         router
-            .wait(&node_id, timeout())
+            .wait(node_id, timeout())
             .applied_index(
                 Some(log_index),
                 &format!("node-{} has initial data", node_id),
@@ -148,7 +151,7 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     // Write more data to ensure cluster continues functioning
     router
         .write(
-            &0,
+            0,
             "post_recovery_key".to_string(),
             "post_recovery_value".to_string(),
         )
@@ -157,16 +160,16 @@ async fn test_follower_clear_restart_recover() -> Result<()> {
     log_index += 1;
 
     // Verify replication works normally after recovery
-    for node_id in [0, 1, 2] {
+    for node_id in [NodeId(0), NodeId(1), NodeId(2)] {
         router
-            .wait(&node_id, timeout())
+            .wait(node_id, timeout())
             .applied_index(
                 Some(log_index),
                 &format!("node-{} applied post-recovery write", node_id),
             )
             .await?;
 
-        let val = router.read(&node_id, "post_recovery_key").await;
+        let val = router.read(node_id, "post_recovery_key").await;
         assert_eq!(
             val,
             Some("post_recovery_value".to_string()),

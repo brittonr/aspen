@@ -69,6 +69,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::node::NodeClient;
 use aspen::raft::RaftControlClient;
+use aspen::raft::types::NodeId;
 use std::env;
 use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
@@ -259,12 +260,30 @@ async fn main() -> Result<()> {
     info!("\n🔄 Fallback: Manual peer exchange for example purposes");
     info!("   (In production with working discovery, this wouldn't be needed)");
 
-    handle1.network_factory.add_peer(2, addr2.clone()).await;
-    handle1.network_factory.add_peer(3, addr3.clone()).await;
-    handle2.network_factory.add_peer(1, addr1.clone()).await;
-    handle2.network_factory.add_peer(3, addr3.clone()).await;
-    handle3.network_factory.add_peer(1, addr1.clone()).await;
-    handle3.network_factory.add_peer(2, addr2.clone()).await;
+    handle1
+        .network_factory
+        .add_peer(NodeId(2), addr2.clone())
+        .await;
+    handle1
+        .network_factory
+        .add_peer(NodeId(3), addr3.clone())
+        .await;
+    handle2
+        .network_factory
+        .add_peer(NodeId(1), addr1.clone())
+        .await;
+    handle2
+        .network_factory
+        .add_peer(NodeId(3), addr3.clone())
+        .await;
+    handle3
+        .network_factory
+        .add_peer(NodeId(1), addr1.clone())
+        .await;
+    handle3
+        .network_factory
+        .add_peer(NodeId(2), addr2.clone())
+        .await;
 
     info!("✅ Peer connectivity established");
 

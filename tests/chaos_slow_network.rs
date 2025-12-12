@@ -1,4 +1,3 @@
-use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 

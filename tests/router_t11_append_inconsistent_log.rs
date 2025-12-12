@@ -181,7 +181,8 @@ async fn test_append_inconsistent_log() -> Result<()> {
         "log at index 60 should be from term 3 (leader's term), not term 2"
     );
     assert_eq!(
-        entry_60.log_id.leader_id.node_id, 2,
+        entry_60.log_id.leader_id.node_id,
+        NodeId(2),
         "log at index 60 should be from node-2 (the leader)"
     );
 

@@ -15,7 +15,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::raft::types::NodeId;
-use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use openraft::{Config, ServerState, SnapshotPolicy};

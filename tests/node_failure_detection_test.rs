@@ -8,6 +8,7 @@ use std::time::Duration;
 use aspen::raft::node_failure_detection::{
     AlertManager, ConnectionStatus, FailureType, NodeFailureDetector,
 };
+use aspen::raft::types::NodeId;
 
 /// Test classification truth table for all connection status combinations.
 #[test]
@@ -50,7 +51,7 @@ fn test_classification_truth_table() {
 #[test]
 fn test_detect_actor_crash_scenario() {
     let mut detector = NodeFailureDetector::default_timeout();
-    let node_id = 42;
+    let node_id = NodeId(42);
 
     // Initial state: healthy
     assert_eq!(detector.get_failure_type(node_id), FailureType::Healthy);
@@ -83,7 +84,7 @@ fn test_detect_actor_crash_scenario() {
 #[test]
 fn test_detect_node_crash_scenario() {
     let mut detector = NodeFailureDetector::default_timeout();
-    let node_id = 99;
+    let node_id = NodeId(99);
 
     // Simulate node crash: both fail
     detector.update_node_status(
@@ -111,7 +112,7 @@ fn test_detect_node_crash_scenario() {
 #[test]
 fn test_recovery_clears_unreachable_state() {
     let mut detector = NodeFailureDetector::default_timeout();
-    let node_id = 7;
+    let node_id = NodeId(7);
 
     // Node fails (either type)
     detector.update_node_status(
@@ -150,7 +151,7 @@ fn test_recovery_clears_unreachable_state() {
 #[test]
 fn test_alert_fires_after_threshold() {
     let mut detector = NodeFailureDetector::new(Duration::from_millis(100));
-    let node_id = 5;
+    let node_id = NodeId(5);
 
     // Node fails
     detector.update_node_status(
@@ -185,7 +186,7 @@ fn test_alert_fires_after_threshold() {
 #[test]
 fn test_failure_type_transition() {
     let mut detector = NodeFailureDetector::default_timeout();
-    let node_id = 123;
+    let node_id = NodeId(123);
 
     // Start with NodeCrash (both down)
     detector.update_node_status(
@@ -224,7 +225,7 @@ fn test_failure_type_transition() {
 #[test]
 fn test_timestamp_preserved_across_updates() {
     let mut detector = NodeFailureDetector::default_timeout();
-    let node_id = 456;
+    let node_id = NodeId(456);
 
     // Initial failure
     detector.update_node_status(
@@ -265,7 +266,7 @@ fn test_max_unreachable_nodes_bounded() {
     // We'll add 1050 nodes
     for node_id in 0..1050 {
         detector.update_node_status(
-            node_id as u64,
+            NodeId(node_id),
             ConnectionStatus::Disconnected,
             ConnectionStatus::Disconnected,
         );
@@ -284,7 +285,7 @@ fn test_max_unreachable_nodes_bounded() {
 fn test_alert_manager_fires_once_per_node() {
     let mut detector = NodeFailureDetector::new(Duration::from_millis(50));
     let mut alert_mgr = AlertManager::new();
-    let node_id = 10;
+    let node_id = NodeId(10);
 
     // Node fails
     detector.update_node_status(
@@ -319,7 +320,7 @@ fn test_alert_manager_fires_once_per_node() {
 fn test_alert_manager_clears_on_recovery() {
     let mut detector = NodeFailureDetector::new(Duration::from_millis(50));
     let mut alert_mgr = AlertManager::new();
-    let node_id = 20;
+    let node_id = NodeId(20);
 
     // Node fails
     detector.update_node_status(
@@ -356,7 +357,7 @@ fn test_alert_manager_multiple_nodes() {
     let mut alert_mgr = AlertManager::new();
 
     // Three nodes fail
-    for node_id in [30, 31, 32] {
+    for node_id in [NodeId(30), NodeId(31), NodeId(32)] {
         detector.update_node_status(
             node_id,
             ConnectionStatus::Disconnected,
@@ -376,7 +377,11 @@ fn test_alert_manager_multiple_nodes() {
     );
 
     // One node recovers
-    detector.update_node_status(30, ConnectionStatus::Connected, ConnectionStatus::Connected);
+    detector.update_node_status(
+        NodeId(30),
+        ConnectionStatus::Connected,
+        ConnectionStatus::Connected,
+    );
 
     // Should have 2 active alerts remaining
     alert_mgr.check_and_alert(&detector);
@@ -392,7 +397,7 @@ fn test_alert_manager_multiple_nodes() {
 async fn test_integration_actor_crash_detection() {
     let mut detector = NodeFailureDetector::new(Duration::from_secs(5));
     let mut alert_mgr = AlertManager::new();
-    let node_id = 100;
+    let node_id = NodeId(100);
 
     // Scenario: RaftActor crashes but node is still reachable via Iroh
     // This represents a local process crash that could be auto-restarted
@@ -435,7 +440,7 @@ async fn test_integration_actor_crash_detection() {
 async fn test_integration_node_crash_detection() {
     let mut detector = NodeFailureDetector::new(Duration::from_secs(5));
     let mut alert_mgr = AlertManager::new();
-    let node_id = 200;
+    let node_id = NodeId(200);
 
     // Scenario: Entire node becomes unreachable (network partition, hardware failure, etc.)
     // This requires operator intervention for promotion/replacement
@@ -477,7 +482,7 @@ async fn test_integration_node_crash_detection() {
 #[test]
 fn test_flapping_node_detection() {
     let mut detector = NodeFailureDetector::new(Duration::from_millis(100));
-    let node_id = 300;
+    let node_id = NodeId(300);
 
     // Node starts healthy
     detector.update_node_status(

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig};
+use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
 use futures::stream;
 use openraft::entry::RaftEntry;
 use openraft::storage::{RaftLogStorage, RaftStateMachine};
@@ -27,7 +27,6 @@ async fn test_sqlite_validation_passes_on_healthy_storage() {
     // Create a state machine and apply some entries
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
-    use aspen::raft::types::NodeId;
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId::from(1), 0),
         AppRequest::Set {
@@ -44,7 +43,7 @@ async fn test_sqlite_validation_passes_on_healthy_storage() {
     assert!(result.is_ok(), "validation should pass on healthy storage");
 
     let report = result.unwrap();
-    assert_eq!(report.node_id, 1);
+    assert_eq!(report.node_id, NodeId(1));
     assert_eq!(
         report.checks_passed, 2,
         "should pass integrity check and schema check"
@@ -63,7 +62,6 @@ async fn test_sqlite_validation_with_multiple_entries() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     // Apply multiple entries
-    use aspen::raft::types::NodeId;
     for i in 0..10 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
             log_id::<AppTypeConfig>(1, NodeId::from(1), i),
@@ -82,7 +80,7 @@ async fn test_sqlite_validation_with_multiple_entries() {
     assert!(result.is_ok());
 
     let report = result.unwrap();
-    assert_eq!(report.node_id, 42);
+    assert_eq!(report.node_id, NodeId(42));
     assert_eq!(report.checks_passed, 2);
 }
 
@@ -103,7 +101,7 @@ fn test_sqlite_validation_on_empty_database() {
     assert!(result.is_ok(), "empty database should be valid");
 
     let report = result.unwrap();
-    assert_eq!(report.node_id, 1);
+    assert_eq!(report.node_id, NodeId(1));
     assert_eq!(report.checks_passed, 2);
 }
 
@@ -140,7 +138,7 @@ fn test_sqlite_validation_report_structure() {
     let report = result.unwrap();
 
     // Verify report structure
-    assert_eq!(report.node_id, 99);
+    assert_eq!(report.node_id, NodeId(99));
     assert!(report.checks_passed > 0);
     assert!(report.validation_duration.as_micros() > 0);
 
@@ -215,7 +213,7 @@ async fn test_sqlite_validation_after_many_operations() {
     // Apply many entries
     for i in 0..100 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -247,7 +245,7 @@ async fn test_sqlite_validation_multiple_times() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -306,7 +304,7 @@ async fn test_apply_batch_size_at_limit_succeeds() {
     let entries: Vec<_> = (0..1000)
         .map(|i| {
             <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId(1), i),
                 AppRequest::Set {
                     key: format!("key{}", i),
                     value: format!("value{}", i),
@@ -335,7 +333,7 @@ async fn test_apply_batch_size_exceeds_limit_fails() {
     let entries: Vec<_> = (0..1001)
         .map(|i| {
             <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId(1), i),
                 AppRequest::Set {
                     key: format!("key{}", i),
                     value: format!("value{}", i),
@@ -371,7 +369,7 @@ async fn test_setmulti_at_limit_succeeds() {
         .collect();
 
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::SetMulti { pairs },
     );
 
@@ -397,7 +395,7 @@ async fn test_setmulti_exceeds_limit_fails() {
         .collect();
 
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::SetMulti { pairs },
     );
 
@@ -429,7 +427,7 @@ async fn test_batch_limit_error_is_fail_fast() {
     let entries: Vec<_> = (0..1001)
         .map(|i| {
             <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                log_id::<AppTypeConfig>(1, 1, i),
+                log_id::<AppTypeConfig>(1, NodeId(1), i),
                 AppRequest::Set {
                     key: format!("key{}", i),
                     value: format!("value{}", i),
@@ -468,7 +466,7 @@ async fn test_setmulti_limit_prevents_transaction_commit() {
         .collect();
 
     let valid_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::SetMulti { pairs: valid_pairs },
     );
 
@@ -483,7 +481,7 @@ async fn test_setmulti_limit_prevents_transaction_commit() {
         .collect();
 
     let invalid_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 1),
+        log_id::<AppTypeConfig>(1, NodeId(1), 1),
         AppRequest::SetMulti {
             pairs: invalid_pairs,
         },
@@ -520,7 +518,7 @@ async fn test_sqlite_validation_consistency_across_restarts() {
         let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, 0),
+            log_id::<AppTypeConfig>(1, NodeId(1), 0),
             AppRequest::Set {
                 key: "persistent".into(),
                 value: "data".into(),
@@ -556,7 +554,7 @@ async fn test_transaction_guard_rollback_on_error() {
 
     // Apply a valid entry first
     let entry1 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::Set {
             key: "key1".into(),
             value: "value1".into(),
@@ -575,7 +573,7 @@ async fn test_transaction_guard_rollback_on_error() {
         .collect();
 
     let entry2 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 1),
+        log_id::<AppTypeConfig>(1, NodeId(1), 1),
         AppRequest::SetMulti {
             pairs: too_many_pairs,
         },
@@ -615,7 +613,7 @@ async fn test_transaction_guard_commit_on_success() {
     // Apply multiple entries successfully - TransactionGuard should commit each one
     for i in 0..10 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -655,14 +653,14 @@ async fn test_cross_storage_validation_happy_path() {
     // Create log store and set committed index
     let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
     log_store
-        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 10)))
+        .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId(1), 10)))
         .await
         .expect("failed to save committed");
 
     // Create state machine with last_applied < committed
     let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 5),
+        log_id::<AppTypeConfig>(1, NodeId(1), 5),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -690,14 +688,14 @@ async fn test_cross_storage_validation_detects_corruption() {
     // Create log store with committed index = 5
     let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
     log_store
-        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 5)))
+        .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId(1), 5)))
         .await
         .expect("failed to save committed");
 
     // Create state machine with last_applied = 10 (CORRUPTED STATE)
     let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 10),
+        log_id::<AppTypeConfig>(1, NodeId(1), 10),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -737,14 +735,14 @@ async fn test_cross_storage_validation_edge_case_equal() {
     // Create log store with committed index = 10
     let mut log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
     log_store
-        .save_committed(Some(log_id::<AppTypeConfig>(1, 1, 10)))
+        .save_committed(Some(log_id::<AppTypeConfig>(1, NodeId(1), 10)))
         .await
         .expect("failed to save committed");
 
     // Create state machine with last_applied = 10 (equal)
     let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 10),
+        log_id::<AppTypeConfig>(1, NodeId(1), 10),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -797,7 +795,7 @@ async fn test_cross_storage_validation_no_committed() {
     // Create state machine with entries applied
     let mut sm = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 5),
+        log_id::<AppTypeConfig>(1, NodeId(1), 5),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -840,7 +838,7 @@ async fn test_wal_file_size_reports_size_after_writes() {
     // Apply some entries to generate WAL activity
     for i in 0..100 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -869,7 +867,7 @@ async fn test_manual_checkpoint_succeeds() {
     // Apply entries to create WAL activity
     for i in 0..50 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -897,7 +895,7 @@ async fn test_checkpoint_reduces_wal_size() {
     // Apply many entries to ensure WAL growth
     for i in 0..200 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -937,7 +935,7 @@ async fn test_auto_checkpoint_triggers_at_threshold() {
     // Apply entries to create WAL activity
     for i in 0..100 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),
@@ -973,7 +971,7 @@ async fn test_auto_checkpoint_skips_below_threshold() {
 
     // Apply one entry
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-        log_id::<AppTypeConfig>(1, 1, 0),
+        log_id::<AppTypeConfig>(1, NodeId(1), 0),
         AppRequest::Set {
             key: "test".into(),
             value: "value".into(),
@@ -1006,7 +1004,7 @@ async fn test_checkpoint_preserves_data_integrity() {
     // Apply test data
     for i in 0..50 {
         let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-            log_id::<AppTypeConfig>(1, 1, i),
+            log_id::<AppTypeConfig>(1, NodeId(1), i),
             AppRequest::Set {
                 key: format!("key{}", i),
                 value: format!("value{}", i),

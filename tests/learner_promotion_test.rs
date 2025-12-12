@@ -10,6 +10,7 @@ use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::raft::RaftControlClient;
 use aspen::raft::learner_promotion::{LearnerPromotionCoordinator, PromotionRequest};
+use aspen::raft::types::NodeId;
 
 /// Helper to create a test config with minimal required fields.
 fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> NodeConfig {
@@ -66,7 +67,7 @@ async fn test_promote_learner_basic() {
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
-                let peer_id = NODE_ID_BASE + (j as u64) + 1;
+                let peer_id = NodeId(NODE_ID_BASE + (j as u64) + 1);
                 handle.network_factory.add_peer(peer_id, addr.clone()).await;
             }
         }
@@ -93,7 +94,7 @@ async fn test_promote_learner_basic() {
     loop {
         let metrics = controller_1.get_metrics().await.unwrap();
 
-        let is_leader = metrics.current_leader == Some(NODE_ID_BASE + 1);
+        let is_leader = metrics.current_leader == Some(NodeId(NODE_ID_BASE + 1));
         let membership_log_id = metrics.membership_config.log_id();
         let last_applied = metrics.last_applied.as_ref().map(|log_id| log_id.index);
 
@@ -127,9 +128,9 @@ async fn test_promote_learner_basic() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -151,7 +152,7 @@ async fn test_promote_learner_basic() {
 
     // Promote learner to voter
     let promotion_request = PromotionRequest {
-        learner_id: NODE_ID_BASE + 4,
+        learner_id: NodeId(NODE_ID_BASE + 4),
         replace_node: None,
         force: false,
     };
@@ -160,18 +161,22 @@ async fn test_promote_learner_basic() {
     assert!(result.is_ok(), "Promotion should succeed: {:?}", result);
 
     let promotion_result = result.unwrap();
-    assert_eq!(promotion_result.learner_id, NODE_ID_BASE + 4);
+    assert_eq!(promotion_result.learner_id, NodeId(NODE_ID_BASE + 4));
     assert_eq!(
         promotion_result.previous_voters,
-        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]
+        vec![
+            NodeId(NODE_ID_BASE + 1),
+            NodeId(NODE_ID_BASE + 2),
+            NodeId(NODE_ID_BASE + 3)
+        ]
     );
     assert_eq!(
         promotion_result.new_voters,
         vec![
-            NODE_ID_BASE + 1,
-            NODE_ID_BASE + 2,
-            NODE_ID_BASE + 3,
-            NODE_ID_BASE + 4
+            NodeId(NODE_ID_BASE + 1),
+            NodeId(NODE_ID_BASE + 2),
+            NodeId(NODE_ID_BASE + 3),
+            NodeId(NODE_ID_BASE + 4)
         ]
     );
 
@@ -224,7 +229,7 @@ async fn test_promote_learner_replace_voter() {
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
-                let peer_id = NODE_ID_BASE + (j as u64) + 1;
+                let peer_id = NodeId(NODE_ID_BASE + (j as u64) + 1);
                 handle.network_factory.add_peer(peer_id, addr.clone()).await;
             }
         }
@@ -251,7 +256,7 @@ async fn test_promote_learner_replace_voter() {
     loop {
         let metrics = controller_1.get_metrics().await.unwrap();
 
-        let is_leader = metrics.current_leader == Some(NODE_ID_BASE + 1);
+        let is_leader = metrics.current_leader == Some(NodeId(NODE_ID_BASE + 1));
         let membership_log_id = metrics.membership_config.log_id();
         let last_applied = metrics.last_applied.as_ref().map(|log_id| log_id.index);
 
@@ -285,9 +290,9 @@ async fn test_promote_learner_replace_voter() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -309,8 +314,8 @@ async fn test_promote_learner_replace_voter() {
 
     // Promote learner to replace node 2003
     let promotion_request = PromotionRequest {
-        learner_id: NODE_ID_BASE + 4,
-        replace_node: Some(NODE_ID_BASE + 3),
+        learner_id: NodeId(NODE_ID_BASE + 4),
+        replace_node: Some(NodeId(NODE_ID_BASE + 3)),
         force: false,
     };
 
@@ -318,14 +323,22 @@ async fn test_promote_learner_replace_voter() {
     assert!(result.is_ok(), "Promotion should succeed: {:?}", result);
 
     let promotion_result = result.unwrap();
-    assert_eq!(promotion_result.learner_id, NODE_ID_BASE + 4);
+    assert_eq!(promotion_result.learner_id, NodeId(NODE_ID_BASE + 4));
     assert_eq!(
         promotion_result.previous_voters,
-        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 3]
+        vec![
+            NodeId(NODE_ID_BASE + 1),
+            NodeId(NODE_ID_BASE + 2),
+            NodeId(NODE_ID_BASE + 3)
+        ]
     );
     assert_eq!(
         promotion_result.new_voters,
-        vec![NODE_ID_BASE + 1, NODE_ID_BASE + 2, NODE_ID_BASE + 4]
+        vec![
+            NodeId(NODE_ID_BASE + 1),
+            NodeId(NODE_ID_BASE + 2),
+            NodeId(NODE_ID_BASE + 4)
+        ]
     );
 
     // Verify cluster state
@@ -372,7 +385,7 @@ async fn test_membership_cooldown_enforced() {
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
-                let peer_id = NODE_ID_BASE + (j as u64) + 1;
+                let peer_id = NodeId(NODE_ID_BASE + (j as u64) + 1);
                 handle.network_factory.add_peer(peer_id, addr.clone()).await;
             }
         }
@@ -399,7 +412,7 @@ async fn test_membership_cooldown_enforced() {
     loop {
         let metrics = controller_1.get_metrics().await.unwrap();
 
-        let is_leader = metrics.current_leader == Some(NODE_ID_BASE + 1);
+        let is_leader = metrics.current_leader == Some(NodeId(NODE_ID_BASE + 1));
         let membership_log_id = metrics.membership_config.log_id();
         let last_applied = metrics.last_applied.as_ref().map(|log_id| log_id.index);
 
@@ -433,9 +446,9 @@ async fn test_membership_cooldown_enforced() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -457,7 +470,7 @@ async fn test_membership_cooldown_enforced() {
 
     // First promotion should succeed
     let promotion_request = PromotionRequest {
-        learner_id: NODE_ID_BASE + 4,
+        learner_id: NodeId(NODE_ID_BASE + 4),
         replace_node: None,
         force: false,
     };
@@ -479,9 +492,9 @@ async fn test_membership_cooldown_enforced() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 5), learner_addr_5.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle_5
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -490,11 +503,11 @@ async fn test_membership_cooldown_enforced() {
     // Also connect node 3004 and node 3005 to each other
     learner_handle_5
         .network_factory
-        .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+        .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
         .await;
     learner_handle
         .network_factory
-        .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+        .add_peer(NodeId(NODE_ID_BASE + 5), learner_addr_5.clone())
         .await;
 
     // Use REAL Iroh address from running learner node
@@ -509,7 +522,7 @@ async fn test_membership_cooldown_enforced() {
 
     // Immediate second promotion should fail (cooldown not elapsed)
     let promotion_request_2 = PromotionRequest {
-        learner_id: NODE_ID_BASE + 5,
+        learner_id: NodeId(NODE_ID_BASE + 5),
         replace_node: None,
         force: false,
     };
@@ -571,7 +584,7 @@ async fn test_force_bypasses_cooldown() {
     for (i, handle) in handles.iter().enumerate() {
         for (j, addr) in addrs.iter().enumerate() {
             if i != j {
-                let peer_id = NODE_ID_BASE + (j as u64) + 1;
+                let peer_id = NodeId(NODE_ID_BASE + (j as u64) + 1);
                 handle.network_factory.add_peer(peer_id, addr.clone()).await;
             }
         }
@@ -598,7 +611,7 @@ async fn test_force_bypasses_cooldown() {
     loop {
         let metrics = controller_1.get_metrics().await.unwrap();
 
-        let is_leader = metrics.current_leader == Some(NODE_ID_BASE + 1);
+        let is_leader = metrics.current_leader == Some(NodeId(NODE_ID_BASE + 1));
         let membership_log_id = metrics.membership_config.log_id();
         let last_applied = metrics.last_applied.as_ref().map(|log_id| log_id.index);
 
@@ -632,9 +645,9 @@ async fn test_force_bypasses_cooldown() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -656,7 +669,7 @@ async fn test_force_bypasses_cooldown() {
 
     // First promotion
     let promotion_request = PromotionRequest {
-        learner_id: NODE_ID_BASE + 4,
+        learner_id: NodeId(NODE_ID_BASE + 4),
         replace_node: None,
         force: false,
     };
@@ -678,9 +691,9 @@ async fn test_force_bypasses_cooldown() {
     for (i, handle) in handles.iter().enumerate() {
         handle
             .network_factory
-            .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+            .add_peer(NodeId(NODE_ID_BASE + 5), learner_addr_5.clone())
             .await;
-        let peer_id = NODE_ID_BASE + (i as u64) + 1;
+        let peer_id = NodeId(NODE_ID_BASE + (i as u64) + 1);
         learner_handle_5
             .network_factory
             .add_peer(peer_id, addrs[i].clone())
@@ -689,11 +702,11 @@ async fn test_force_bypasses_cooldown() {
     // Also connect node 4004 and node 4005 to each other
     learner_handle_5
         .network_factory
-        .add_peer(NODE_ID_BASE + 4, learner_addr.clone())
+        .add_peer(NodeId(NODE_ID_BASE + 4), learner_addr.clone())
         .await;
     learner_handle
         .network_factory
-        .add_peer(NODE_ID_BASE + 5, learner_addr_5.clone())
+        .add_peer(NodeId(NODE_ID_BASE + 5), learner_addr_5.clone())
         .await;
 
     // Use REAL Iroh address from running learner node
@@ -708,7 +721,7 @@ async fn test_force_bypasses_cooldown() {
 
     // Immediate second promotion with force=true should succeed
     let promotion_request_2 = PromotionRequest {
-        learner_id: NODE_ID_BASE + 5,
+        learner_id: NodeId(NODE_ID_BASE + 5),
         replace_node: None,
         force: true, // Force flag set
     };

@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use openraft::Config;
 
@@ -52,9 +53,9 @@ async fn init_soak_cluster() -> anyhow::Result<(AspenRouter, u64)> {
 
     // Create 3-node cluster with all voters
     let mut voter_ids = BTreeSet::new();
-    voter_ids.insert(0);
-    voter_ids.insert(1);
-    voter_ids.insert(2);
+    voter_ids.insert(NodeId(0));
+    voter_ids.insert(NodeId(1));
+    voter_ids.insert(NodeId(2));
     let learners = BTreeSet::new();
 
     let log_index = router.new_cluster(voter_ids, learners).await?;
@@ -89,7 +90,7 @@ async fn run_soak_workload(
                 let value = format!("value-{}-{}", key_id, i);
                 let start = std::time::Instant::now();
 
-                match router.write(&leader, key.clone(), value.clone()).await {
+                match router.write(leader, key.clone(), value.clone()).await {
                     Ok(_) => {
                         let latency_us = start.elapsed().as_micros() as u64;
                         metrics.record_write_success(latency_us);
@@ -104,7 +105,7 @@ async fn run_soak_workload(
                 let start = std::time::Instant::now();
 
                 // Read the value (None is valid - key may not exist yet)
-                let _ = router.read(&leader, &key).await;
+                let _ = router.read(leader, &key).await;
                 let latency_us = start.elapsed().as_micros() as u64;
                 metrics.record_read_success(latency_us);
             }
@@ -130,7 +131,7 @@ async fn run_soak_workload(
     // Verify data consistency across all nodes
     for (key, expected_value) in &key_values {
         for node_id in 0..3 {
-            let stored = router.read(&node_id, key).await;
+            let stored = router.read(NodeId(node_id), key).await;
             if stored != Some(expected_value.clone()) {
                 anyhow::bail!(
                     "Data inconsistency: node {} has {:?}, expected {:?} for key {}",
