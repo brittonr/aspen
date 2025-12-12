@@ -13,7 +13,7 @@ The Aspen project is a **production-ready** distributed systems foundation with 
 ### Overall Assessment Scores
 
 | Category | Score | Status |
-|----------|-------|--------|
+| -------- | ----- | ------ |
 | **Architecture Quality** | 9.4/10 | Excellent |
 | **Code Quality** | 9.2/10 | Excellent |
 | **Test Coverage** | 7.5/10 | Good |
@@ -111,7 +111,6 @@ src/
 - **tokio 1.48.0**: Latest stable async runtime
 - **iroh 0.95.1**: Active P2P development
 - **redb 2.0.0**: Mature storage engine
-- **hiqlite 0.11.0**: Distributed database wrapper
 - **openraft 0.10.0**: Vendored with local modifications
 
 ### Security Status
@@ -124,8 +123,7 @@ src/
 ### Recommendations
 
 1. **Immediate**: Document openraft vendoring rationale
-2. **Short-term**: Monitor hiqlite 0.12.0 release
-3. **Medium-term**: Consolidate windows-sys versions
+2. **Medium-term**: Consolidate windows-sys versions
 
 ---
 
@@ -134,7 +132,7 @@ src/
 ### Tiger Style Compliance
 
 | Principle | Status | Details |
-|-----------|--------|---------|
+| ----------- | -------- | --------- |
 | **Safety** | ✓ Excellent | Bounded resources, explicit types |
 | **Performance** | ✓ Excellent | Optimized batching, resource prioritization |
 | **Developer Experience** | ✓ Good | Clear naming, comprehensive docs |
@@ -172,7 +170,7 @@ src/
 ### Test Categories
 
 | Type | Files | Tests | Coverage |
-|------|-------|-------|----------|
+| ------ | ------- | ------- | ---------- |
 | Madsim | 12 | 47 | Excellent |
 | Chaos/Failure | 5 | Multiple | Good |
 | Property-based | 4 | Multiple | Good |
@@ -303,7 +301,6 @@ src/
    - Create cascading failure test suite
 
 6. **Update dependencies**
-   - Monitor hiqlite 0.12.0 release
    - Plan axum 0.7→0.8 migration
 
 ### Low Priority (Future)

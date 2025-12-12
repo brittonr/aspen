@@ -20,7 +20,7 @@ Each artifact is stored as a JSON file with the naming pattern:
 Example:
 
 ```
-hiqlite_flow_simulation_tracks_transport_metrics-seed42-20251202-175136.json
+madsim_multi_node_test-seed42-20251202-175136.json
 ```
 
 ## Artifact Schema

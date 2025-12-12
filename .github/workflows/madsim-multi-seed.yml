@@ -39,21 +39,13 @@ jobs:
       - name: Run madsim test with seed ${{ matrix.seed }}
         id: madsim-test
         run: |
-          # NOTE: The hiqlite_flow test currently uses a hardcoded seed (42).
-          # To properly support parameterized seeds, the test needs modification to:
-          # 1. Read MADSIM_TEST_SEED environment variable, OR
-          # 2. Accept seed as a parameter to the test function
-          #
-          # For now, this runs the test multiple times to verify determinism
-          # and collect artifacts, but all runs use seed 42.
-          #
-          # TODO: Modify tests/hiqlite_flow.rs to accept MADSIM_TEST_SEED env var
-
+          # Run all madsim simulation tests with the specified seed
+          # These tests verify deterministic behavior across different execution orders
           export MADSIM_TEST_SEED=${{ matrix.seed }}
-          echo "Running with MADSIM_TEST_SEED=${MADSIM_TEST_SEED}"
+          echo "Running madsim tests with MADSIM_TEST_SEED=${MADSIM_TEST_SEED}"
 
-          # Run the hiqlite_flow simulation test
-          nix develop -c cargo nextest run hiqlite_flow_simulation_tracks_transport_metrics
+          # Run all madsim simulation tests
+          nix develop -c cargo nextest run --filter-expr 'test(~madsim)'
         continue-on-error: true
 
       - name: Collect simulation artifacts

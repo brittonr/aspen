@@ -15,7 +15,6 @@ The codebase recently underwent a major refactoring to decouple and restructure 
 - **rusqlite**: SQLite-based state machine storage (ACID transactions, queryable)
 - **iroh**: Peer-to-peer networking and content-addressed communication
 - **ractor/ractor_cluster**: Actor-based concurrency and distributed computing primitives
-- **hiqlite**: SQLite-based distributed database with cache and distributed lock features
 - **madsim**: Deterministic simulator for distributed systems testing
 - **snafu/anyhow**: Error handling (snafu for library errors, anyhow for application errors)
 - **proptest**: Property-based testing
@@ -163,12 +162,6 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 ```bash
 # Run Aspen cluster smoke test (3-node cluster with Raft operations)
 ./scripts/aspen-cluster-smoke.sh
-
-# Run Hiqlite cluster smoke test
-./scripts/aspen-hiqlite-smoke.sh
-
-# Launch Hiqlite cluster manually
-./scripts/run-hiqlite-cluster.sh
 ```
 
 ### Nix Development
@@ -238,7 +231,7 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 ## Important Notes
 
 - The codebase previously had richer integration between openraft, Iroh, and ractor. Those modules were removed for a deliberate rebuild with cleaner boundaries.
-- Keep Iroh P2P and Hiqlite database coupling as-is; these are core infrastructure services
+- Keep Iroh P2P coupling as-is; it's a core infrastructure service
 - Backwards compatibility is not a concern; prioritize clean, modern solutions
 - The project contains a vendored/embedded `openraft` directory with local modifications
 - Edition is set to `2024` in Cargo.toml (Rust 2024 edition)
