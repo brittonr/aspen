@@ -14,8 +14,9 @@ use tokio::select;
 use tracing::{debug, error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::connection_pool::RaftConnectionPool;
 use crate::raft::constants::{
-    IROH_CONNECT_TIMEOUT, IROH_READ_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_PEERS,
+    IROH_READ_TIMEOUT, MAX_PEERS,
     MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
@@ -42,7 +43,8 @@ use tokio::sync::RwLock;
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 #[derive(Clone)]
 pub struct IrpcRaftNetworkFactory {
-    endpoint_manager: Arc<IrohEndpointManager>,
+    /// Connection pool for reusable QUIC connections.
+    connection_pool: Arc<RaftConnectionPool>,
     /// Fallback map of NodeId to Iroh EndpointAddr.
     ///
     /// Used as a fallback when addresses aren't available from Raft membership.
@@ -64,10 +66,22 @@ impl IrpcRaftNetworkFactory {
         endpoint_manager: Arc<IrohEndpointManager>,
         peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
     ) -> Self {
+        let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
+        let connection_pool = Arc::new(RaftConnectionPool::new(
+            Arc::clone(&endpoint_manager),
+            Arc::clone(&failure_detector),
+        ));
+
+        // Start the background cleanup task for idle connections
+        let pool_clone = Arc::clone(&connection_pool);
+        tokio::spawn(async move {
+            pool_clone.start_cleanup_task().await;
+        });
+
         Self {
-            endpoint_manager,
+            connection_pool,
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
-            failure_detector: Arc::new(RwLock::new(NodeFailureDetector::default_timeout())),
+            failure_detector,
         }
     }
 
@@ -147,7 +161,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
         );
 
         IrpcRaftNetwork {
-            endpoint_manager: Arc::clone(&self.endpoint_manager),
+            connection_pool: Arc::clone(&self.connection_pool),
             peer_addr,
             target,
             failure_detector: Arc::clone(&self.failure_detector),
@@ -160,9 +174,9 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
 /// Tiger Style:
 /// - Explicit error handling for connection failures
 /// - Fail fast if peer address is missing
-/// - Bounded retries handled by IRPC/Iroh layers
+/// - Connection pooling for efficient stream multiplexing
 pub struct IrpcRaftNetwork {
-    endpoint_manager: Arc<IrohEndpointManager>,
+    connection_pool: Arc<RaftConnectionPool>,
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
@@ -174,43 +188,54 @@ impl IrpcRaftNetwork {
     /// Tiger Style: Fail fast if peer address is unknown.
     ///
     /// This implements a simple request-response pattern:
-    /// 1. Serialize the protocol enum (request without channels)
-    /// 2. Send it over Iroh bidirectional stream
-    /// 3. Wait for response on the same stream
-    /// 4. Deserialize and return the response
+    /// 1. Get or create connection from pool
+    /// 2. Acquire a stream from the pooled connection
+    /// 3. Serialize and send the request
+    /// 4. Wait for response on the same stream
+    /// 5. Deserialize and return the response
     ///
-    /// Updates failure detector based on RPC success/failure and Iroh connection status.
+    /// Updates failure detector based on RPC success/failure.
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self
             .peer_addr
             .as_ref()
             .context("peer address not found in peer map")?;
 
-        let endpoint = self.endpoint_manager.endpoint();
+        // Get or create connection from pool
+        let peer_connection = self.connection_pool
+            .get_or_connect(self.target, peer_addr)
+            .await
+            .inspect_err(|_err| {
+                // Update failure detector on connection failure
+                let failure_detector_clone = Arc::clone(&self.failure_detector);
+                let target = self.target;
+                tokio::spawn(async move {
+                    failure_detector_clone.write().await.update_node_status(
+                        target,
+                        ConnectionStatus::Disconnected,
+                        ConnectionStatus::Disconnected,
+                    );
+                });
+            })
+            .context("failed to get connection from pool")?;
 
-        // Open a connection to the peer (with timeout)
-        let connection_result = tokio::time::timeout(
-            IROH_CONNECT_TIMEOUT,
-            endpoint.connect(peer_addr.clone(), b"raft-rpc"),
-        )
-        .await
-        .context("timeout connecting to peer")?;
-
-        // Determine Iroh connection status based on connect attempt
-        let iroh_status = if connection_result.is_ok() {
-            ConnectionStatus::Connected
-        } else {
-            ConnectionStatus::Disconnected
-        };
-
-        let connection = connection_result.context("failed to connect to peer")?;
-
-        // Open bidirectional stream (with timeout)
-        let (mut send_stream, mut recv_stream) =
-            tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, connection.open_bi())
-                .await
-                .context("timeout opening bidirectional stream")?
-                .context("failed to open bidirectional stream")?;
+        // Acquire a stream from the pooled connection
+        let (mut send_stream, mut recv_stream) = peer_connection
+            .acquire_stream()
+            .await
+            .inspect_err(|_err| {
+                // Update failure detector on stream failure (connection exists but stream failed)
+                let failure_detector_clone = Arc::clone(&self.failure_detector);
+                let target = self.target;
+                tokio::spawn(async move {
+                    failure_detector_clone.write().await.update_node_status(
+                        target,
+                        ConnectionStatus::Disconnected,
+                        ConnectionStatus::Connected, // Connection exists but Raft actor might be down
+                    );
+                });
+            })
+            .context("failed to acquire stream from connection")?;
 
         // Serialize and send the request
         let serialized =
@@ -250,11 +275,11 @@ impl IrpcRaftNetwork {
             })
             .context("failed to deserialize RPC response")?;
 
-        // Update failure detector: RPC succeeded, Iroh connection succeeded
+        // Update failure detector: RPC succeeded with both connection and Raft working
         self.failure_detector.write().await.update_node_status(
             self.target,
             ConnectionStatus::Connected,
-            iroh_status,
+            ConnectionStatus::Connected,
         );
 
         Ok(response)
@@ -263,23 +288,27 @@ impl IrpcRaftNetwork {
     /// Update failure detector when RPC fails.
     ///
     /// Called by RPC methods when send_rpc returns an error.
-    /// Assumes Iroh connection status based on error type.
+    /// The connection pool already updates failure detector for connection/stream errors,
+    /// so this is mainly for RPC-level failures (timeouts, deserialization, etc.)
     async fn update_failure_on_rpc_error(&self, err: &anyhow::Error) {
-        // Determine Iroh status from error message
-        // Connection/stream errors suggest Iroh is down
-        // Other errors (serialization, etc.) suggest Iroh is up but Raft is down
-        let iroh_status = if err.to_string().contains("connect")
-            || err.to_string().contains("stream")
+        // Determine connection status from error message
+        // Connection pool errors suggest connection is down
+        // Stream errors suggest connection is up but Raft is down
+        // Other errors (serialization, timeout) suggest both might be up but RPC failed
+        let (raft_status, iroh_status) = if err.to_string().contains("connection pool")
             || err.to_string().contains("peer address not found")
         {
-            ConnectionStatus::Disconnected
+            (ConnectionStatus::Disconnected, ConnectionStatus::Disconnected)
+        } else if err.to_string().contains("stream") {
+            (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
         } else {
-            ConnectionStatus::Connected
+            // Timeout or other RPC-level error - assume connection is ok but Raft is having issues
+            (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
         };
 
         self.failure_detector.write().await.update_node_status(
             self.target,
-            ConnectionStatus::Disconnected,
+            raft_status,
             iroh_status,
         );
     }

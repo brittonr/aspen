@@ -42,6 +42,7 @@
 //! ```
 
 pub mod bounded_proxy;
+pub mod connection_pool;
 pub mod constants;
 pub mod learner_promotion;
 pub mod madsim_network;
