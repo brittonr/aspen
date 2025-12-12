@@ -55,7 +55,6 @@ async fn test_mixed_workload_1000_ops() -> anyhow::Result<()> {
             control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
             http_addr: format!("127.0.0.1:{}", 38000 + node_id as u16).parse()?,
-            ractor_port: 0, // OS-assigned
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "mixed-workload".to_string(),
             heartbeat_interval_ms: 500,
@@ -241,7 +240,6 @@ async fn test_mixed_workload_100_ops() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:48000".parse()?,
-        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "mixed-workload-small".to_string(),
         heartbeat_interval_ms: 500,
@@ -362,7 +360,6 @@ async fn test_mixed_workload_100_ops_sqlite() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:48001".parse()?,
-        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "mixed-workload-small-sqlite".to_string(),
         heartbeat_interval_ms: 500,

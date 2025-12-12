@@ -11,7 +11,7 @@ use ratatui::{
 };
 
 use crate::app::{ActiveView, App, InputMode};
-use crate::client::NodeStatus;
+use crate::types::NodeStatus;
 
 /// Main draw function.
 ///
@@ -177,7 +177,7 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
                 Span::raw("Role: "),
                 Span::raw(if node.is_leader { "Leader" } else { "Follower" }),
             ]),
-            Line::from(vec![Span::raw("Address: "), Span::raw(&node.http_addr)]),
+            Line::from(vec![Span::raw("Address: "), Span::raw(&node.addr)]),
         ];
 
         if let Some(term) = node.current_term {

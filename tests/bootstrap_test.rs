@@ -16,7 +16,6 @@ async fn test_bootstrap_single_node() {
         node_id: 100, // Use high node ID to avoid collision with other tests
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),
-        ractor_port: 0, // OS-assigned port
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,
@@ -62,7 +61,6 @@ async fn test_bootstrap_multiple_nodes() {
         node_id: 201, // Use high node IDs to avoid collision
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,
@@ -84,7 +82,6 @@ async fn test_bootstrap_multiple_nodes() {
         node_id: 202,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,
@@ -106,7 +103,6 @@ async fn test_bootstrap_multiple_nodes() {
         node_id: 203,
         data_dir: Some(temp_dir3.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,
@@ -193,7 +189,6 @@ fn test_load_config_from_toml() {
         node_id: 0, // No explicit override, TOML will provide value
         data_dir: None,
         host: "127.0.0.1".into(),      // Default value
-        ractor_port: 26000,            // Default value
         cookie: "aspen-cookie".into(), // Default value
         http_addr: "127.0.0.1:8080".parse().unwrap(),
         control_backend: ControlBackend::default(), // Use actual default
@@ -216,7 +211,6 @@ fn test_load_config_from_toml() {
     // TOML values should override defaults
     assert_eq!(config.node_id, 42);
     assert_eq!(config.host, "192.168.1.1");
-    assert_eq!(config.ractor_port, 27000);
     assert_eq!(config.cookie, "production-cookie");
     assert_eq!(config.control_backend, ControlBackend::RaftActor);
     assert_eq!(config.heartbeat_interval_ms, 1000);
@@ -243,7 +237,6 @@ fn test_config_precedence() {
         node_id: 2, // CLI override
         data_dir: None,
         host: "127.0.0.1".into(),
-        ractor_port: 26000, // Default, should be overridden by TOML
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:8080".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,
@@ -267,7 +260,6 @@ fn test_config_precedence() {
     assert_eq!(config.node_id, 2);
 
     // TOML should override default for ractor_port
-    assert_eq!(config.ractor_port, 26001);
 }
 
 /// Test graceful shutdown updates node status.
@@ -280,7 +272,6 @@ async fn test_shutdown_updates_status() {
         node_id: 300, // Use high node ID to avoid collision
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "test-cookie".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::Deterministic,

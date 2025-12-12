@@ -144,7 +144,7 @@ struct Args {
     #[arg(long)]
     redb_sm_path: Option<PathBuf>,
 
-    /// Hostname recorded in the NodeServer's identity (informational).
+    /// Hostname for informational purposes.
     #[arg(long)]
     host: Option<String>,
 
@@ -413,7 +413,6 @@ struct AppState {
     node_id: u64,
     raft_actor: ActorRef<RaftActorMessage>,
     // Note: raft_core removed - all Raft operations go through RaftActor for proper actor supervision
-    _ractor_port: u16,
     controller: ClusterControllerHandle,
     kv: KeyValueStoreHandle,
     network_factory: Arc<IrpcRaftNetworkFactory>,
@@ -455,7 +454,6 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         sqlite_log_path: None,
         sqlite_sm_path: None,
         host: args.host.clone().unwrap_or_else(|| "127.0.0.1".into()),
-        ractor_port: args.port.unwrap_or(26000),
         cookie: args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into()),
         http_addr: args.http_addr.unwrap_or(DEFAULT_HTTP_ADDR),
         control_backend: args.control_backend.unwrap_or_default(),
@@ -528,7 +526,6 @@ fn create_app_state(
     AppState {
         node_id: config.node_id,
         raft_actor: handle.raft_actor.clone(),
-        _ractor_port: config.ractor_port,
         controller,
         kv: kv_store,
         network_factory: handle.network_factory.clone(),
@@ -549,7 +546,6 @@ fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
-        .route("/node-info", get(node_info))
         .route("/cluster-ticket", get(cluster_ticket))
         .route("/cluster-ticket-combined", get(cluster_ticket_combined))
         .route("/init", post(init_cluster))
@@ -1411,13 +1407,6 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, body)
 }
 
-async fn node_info(State(ctx): State<AppState>) -> impl IntoResponse {
-    Json(json!({
-        "node_id": ctx.node_id,
-        "endpoint_addr": ctx.iroh_manager.node_addr(),
-    }))
-}
-
 async fn cluster_ticket(State(ctx): State<AppState>) -> impl IntoResponse {
     use aspen::cluster::ticket::AspenClusterTicket;
     use iroh_gossip::proto::TopicId;
@@ -1582,89 +1571,14 @@ async fn promote_learner(
 
 type ApiResult<T> = Result<T, ApiError>;
 
-/// Response from `/node-info` endpoint used for peer discovery.
-#[derive(Debug, serde::Deserialize)]
-struct NodeInfoResponse {
-    #[allow(dead_code)]
-    node_id: u64,
-    endpoint_addr: iroh::EndpointAddr,
-}
-
-/// Fetch peer endpoint addresses from their HTTP APIs and add to network factory.
-///
-/// This is called before Raft initialization to ensure all peer addresses are
-/// known to the network layer before leader election begins.
-///
-/// Tiger Style: Bounded timeout (2s per peer), fail-fast on errors.
-async fn discover_peer_addresses(
-    state: &AppState,
-    members: &[aspen::api::ClusterNode],
-) -> Result<(), anyhow::Error> {
-    use tokio::time::{Duration, timeout};
-
-    let client = reqwest::Client::new();
-    let self_node_id = state.node_id;
-
-    for member in members {
-        // Skip self - we don't need to discover our own address
-        if member.id == self_node_id {
-            continue;
-        }
-
-        let url = format!("http://{}/node-info", member.addr);
-        info!(
-            node_id = member.id,
-            url = %url,
-            "fetching peer endpoint address"
-        );
-
-        // Fetch with timeout (Tiger Style: bounded wait)
-        let response = timeout(Duration::from_secs(2), client.get(&url).send())
-            .await
-            .map_err(|_| anyhow::anyhow!("timeout fetching node-info from {}", url))?
-            .map_err(|e| anyhow::anyhow!("failed to fetch node-info from {}: {}", url, e))?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "node-info request to {} returned status {}",
-                url,
-                response.status()
-            ));
-        }
-
-        let node_info: NodeInfoResponse = response
-            .json()
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to parse node-info from {}: {}", url, e))?;
-
-        // Add peer to network factory
-        state
-            .network_factory
-            .add_peer(member.id.into(), node_info.endpoint_addr.clone())
-            .await;
-
-        info!(
-            node_id = member.id,
-            endpoint_id = %node_info.endpoint_addr.id,
-            "added peer endpoint address to network factory"
-        );
-    }
-
-    Ok(())
-}
-
 #[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
 async fn init_cluster(
     State(state): State<AppState>,
     Json(request): Json<InitRequest>,
 ) -> ApiResult<impl IntoResponse> {
-    // First, discover peer addresses so the network layer can communicate
-    // with other nodes during leader election (which starts immediately after init)
-    if let Err(e) = discover_peer_addresses(&state, &request.initial_members).await {
-        warn!(error = %e, "failed to discover some peer addresses, continuing anyway");
-        // Continue anyway - gossip may discover peers, or some may have been found
-    }
-
+    // Note: Peer discovery now happens through Iroh gossip protocol,
+    // not through HTTP endpoints. The network factory will learn about
+    // peers as they announce themselves via gossip.
     let result = state.controller.init(request).await?;
     Ok(Json(result))
 }

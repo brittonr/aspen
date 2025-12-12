@@ -106,7 +106,6 @@ impl NodeBuilder {
             sqlite_log_path: None,
             sqlite_sm_path: None,
             host: "localhost".to_string(),
-            ractor_port: 0,
             cookie: "aspen-cluster".to_string(),
             http_addr: "127.0.0.1:8080".parse().unwrap(),
             control_backend: Default::default(),

@@ -42,7 +42,6 @@ async fn main() -> Result<()> {
         node_id: 100,
         data_dir: Some(data_dir.clone()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "kv-operations-example".into(),
         http_addr: "127.0.0.1:0".parse()?,
         control_backend: ControlBackend::RaftActor,

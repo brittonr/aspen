@@ -67,7 +67,7 @@ use crate::cluster::config::NodeConfig;
 use crate::cluster::gossip_actor::{GossipActor, GossipActorArgs, GossipMessage};
 use crate::cluster::metadata::{MetadataStore, NodeMetadata, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
-use crate::cluster::{IrohEndpointConfig, IrohEndpointManager, NodeServerConfig, NodeServerHandle};
+use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::server_actor::{RaftRpcServerActor, RaftRpcServerActorArgs, RaftRpcServerMessage};
 use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
@@ -89,8 +89,6 @@ pub struct NodeHandle {
     pub metadata_store: Arc<MetadataStore>,
     /// Iroh endpoint manager.
     pub iroh_manager: Arc<IrohEndpointManager>,
-    /// Ractor node server handle.
-    pub node_server: NodeServerHandle,
     /// Raft actor reference (managed by supervisor).
     pub raft_actor: ActorRef<RaftActorMessage>,
     /// Raft supervisor reference.
@@ -152,9 +150,6 @@ impl NodeHandle {
 
         info!("shutting down Iroh endpoint");
         self.iroh_manager.shutdown().await?;
-
-        info!("shutting down node server");
-        self.node_server.shutdown().await?;
 
         info!("shutting down Raft supervisor");
         self.raft_supervisor.stop(Some("bootstrap-shutdown".into()));
@@ -263,9 +258,6 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     let (gossip_actor, gossip_task) =
         setup_gossip_discovery(&config, &iroh_manager, &network_factory).await?;
 
-    // Launch NodeServer
-    let node_server = setup_node_server(&config).await?;
-
     // Create Raft storage backend and core
     let (raft_core, state_machine_variant, log_store_opt) =
         setup_raft_storage(&config, &network_factory).await?;
@@ -304,7 +296,6 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         config,
         metadata_store,
         iroh_manager,
-        node_server,
         raft_actor,
         raft_supervisor,
         supervisor_task,
@@ -375,7 +366,6 @@ mod tests {
             node_id: 2, // This should override TOML
             data_dir: None,
             host: "127.0.0.1".into(),
-            ractor_port: 26002, // This should override TOML
             cookie: "test-cookie".into(),
             http_addr: "127.0.0.1:8080".parse().unwrap(),
             control_backend: ControlBackend::RaftActor,
@@ -395,9 +385,8 @@ mod tests {
 
         let config = load_config(Some(&toml_path), cli_config).unwrap();
 
-        // CLI should win for node_id and ractor_port
+        // CLI should win for node_id
         assert_eq!(config.node_id, 2);
-        assert_eq!(config.ractor_port, 26002);
 
         // TOML should override default heartbeat_interval_ms
         assert_eq!(config.heartbeat_interval_ms, 1000);
@@ -614,27 +603,6 @@ async fn setup_gossip_discovery(
     Ok((Some(gossip_actor), Some(gossip_task)))
 }
 
-/// Launch the ractor NodeServer for distributed actor communication.
-///
-/// The NodeServer provides the transport layer for ractor_cluster.
-async fn setup_node_server(config: &NodeConfig) -> Result<NodeServerHandle> {
-    let node_server = NodeServerConfig::new(
-        format!("node-{}", config.node_id),
-        config.host.clone(),
-        config.ractor_port,
-        config.cookie.clone(),
-    )
-    .launch()
-    .await
-    .context("failed to launch node server")?;
-    info!(
-        label = %node_server.label(),
-        addr = %node_server.addr(),
-        "node server online"
-    );
-    Ok(node_server)
-}
-
 /// Create Raft storage backend and initialize the Raft core.
 ///
 /// Supports three storage backends:
@@ -758,7 +726,7 @@ fn register_node_metadata(
     let node_metadata = NodeMetadata {
         node_id: config.node_id,
         endpoint_id: iroh_manager.endpoint().id().to_string(),
-        raft_addr: format!("{}:{}", config.host, config.ractor_port),
+        raft_addr: config.host.clone(), // Raft now uses Iroh, not TCP
         status: NodeStatus::Online,
         last_updated_secs,
     };

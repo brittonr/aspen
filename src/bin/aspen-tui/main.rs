@@ -30,10 +30,10 @@
 //! - Clean shutdown with resource cleanup
 
 mod app;
-mod client;
 mod client_trait;
 mod event;
 mod iroh_client;
+mod types;
 mod ui;
 
 use std::io;

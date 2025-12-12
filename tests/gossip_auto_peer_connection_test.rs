@@ -18,7 +18,6 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> NodeCon
         node_id,
         data_dir: Some(temp_dir.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0, // OS-assigned port
         cookie: cookie.into(),
         http_addr: format!("127.0.0.1:{}", 8080 + node_id).parse().unwrap(),
         control_backend: ControlBackend::RaftActor,
@@ -204,7 +203,6 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         node_id: 10,
         data_dir: Some(temp_dir1.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "manual-peers-test".into(),
         http_addr: "127.0.0.1:9010".parse()?,
         control_backend: ControlBackend::RaftActor,
@@ -240,7 +238,6 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         node_id: 11,
         data_dir: Some(temp_dir2.path().to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "manual-peers-test".into(),
         http_addr: "127.0.0.1:9011".parse()?,
         control_backend: ControlBackend::RaftActor,

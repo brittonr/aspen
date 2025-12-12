@@ -120,16 +120,11 @@ pub struct NodeConfig {
     /// Defaults to "{data_dir}/state-machine.db" if not specified.
     pub sqlite_sm_path: Option<PathBuf>,
 
-    /// Hostname recorded in the NodeServer's identity (informational).
+    /// Hostname for informational purposes.
     #[serde(default = "default_host")]
     pub host: String,
 
-    /// Port for the Ractor node listener.
-    /// Use 0 to request an OS-assigned port.
-    #[serde(default = "default_ractor_port")]
-    pub ractor_port: u16,
-
-    /// Shared cookie for authenticating Ractor nodes.
+    /// Shared cookie for cluster authentication.
     #[serde(default = "default_cookie")]
     pub cookie: String,
 
@@ -297,7 +292,6 @@ impl NodeConfig {
             sqlite_log_path: parse_env("ASPEN_SQLITE_LOG_PATH"),
             sqlite_sm_path: parse_env("ASPEN_SQLITE_SM_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
-            ractor_port: parse_env("ASPEN_RACTOR_PORT").unwrap_or_else(default_ractor_port),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
             http_addr: parse_env("ASPEN_HTTP_ADDR").unwrap_or_else(default_http_addr),
             control_backend: parse_env("ASPEN_CONTROL_BACKEND")
@@ -339,9 +333,6 @@ impl NodeConfig {
         }
         if other.host != default_host() {
             self.host = other.host;
-        }
-        if other.ractor_port != default_ractor_port() {
-            self.ractor_port = other.ractor_port;
         }
         if other.cookie != default_cookie() {
             self.cookie = other.cookie;
@@ -527,13 +518,6 @@ impl NodeConfig {
             );
         }
 
-        if self.ractor_port == 26000 {
-            warn!(
-                ractor_port = self.ractor_port,
-                "using default ractor port 26000 (may conflict in production)"
-            );
-        }
-
         // Iroh secret key validation
         if let Some(ref key_hex) = self.iroh.secret_key {
             if key_hex.len() != 64 {
@@ -562,10 +546,6 @@ impl NodeConfig {
 // Default value functions
 fn default_host() -> String {
     "127.0.0.1".into()
-}
-
-fn default_ractor_port() -> u16 {
-    26000
 }
 
 fn default_cookie() -> String {
@@ -641,7 +621,6 @@ mod tests {
             node_id: 1,
             data_dir: None,
             host: default_host(),
-            ractor_port: default_ractor_port(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
             control_backend: ControlBackend::default(),
@@ -669,7 +648,6 @@ mod tests {
             node_id: 0,
             data_dir: None,
             host: default_host(),
-            ractor_port: default_ractor_port(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
             control_backend: ControlBackend::default(),
@@ -696,7 +674,6 @@ mod tests {
             node_id: 1,
             data_dir: None,
             host: default_host(),
-            ractor_port: default_ractor_port(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
             control_backend: ControlBackend::default(),
@@ -724,7 +701,6 @@ mod tests {
             node_id: 1,
             data_dir: None,
             host: default_host(),
-            ractor_port: default_ractor_port(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
             control_backend: ControlBackend::Deterministic,
@@ -746,7 +722,6 @@ mod tests {
             node_id: 2,
             data_dir: Some(PathBuf::from("/custom/data")),
             host: "192.168.1.1".into(),
-            ractor_port: 26001,
             cookie: "custom-cookie".into(),
             http_addr: "0.0.0.0:9090".parse().unwrap(),
             control_backend: ControlBackend::RaftActor,
@@ -777,7 +752,6 @@ mod tests {
         assert_eq!(base.node_id, 2);
         assert_eq!(base.data_dir, Some(PathBuf::from("/custom/data")));
         assert_eq!(base.host, "192.168.1.1");
-        assert_eq!(base.ractor_port, 26001);
         assert_eq!(base.cookie, "custom-cookie");
         assert_eq!(base.http_addr, "0.0.0.0:9090".parse().unwrap());
         assert_eq!(base.control_backend, ControlBackend::RaftActor);

@@ -18,7 +18,6 @@ fn create_test_config(node_id: u64, temp_dir: &std::path::Path) -> NodeConfig {
         node_id,
         data_dir: Some(temp_dir.to_path_buf()),
         host: "127.0.0.1".into(),
-        ractor_port: 0,
         cookie: "learner-promotion-test".into(),
         http_addr: "127.0.0.1:0".parse().unwrap(),
         control_backend: ControlBackend::RaftActor,

@@ -108,7 +108,6 @@ pub struct VmConfig {
     /// HTTP API port.
     pub http_port: u16,
     /// Ractor cluster port.
-    pub ractor_port: u16,
     /// Cloud Hypervisor socket path (for API access).
     pub ch_socket_path: PathBuf,
 }
@@ -125,7 +124,6 @@ impl VmConfig {
             mac_address: format!("02:00:00:01:01:{:02x}", node_id as u8),
             ip_address: format!("10.100.0.{}", 10 + node_id),
             http_port: 8300 + node_id as u16,
-            ractor_port: 26000 + node_id as u16,
             ch_socket_path: state_dir.join("cloud-hypervisor.sock"),
         }
     }
@@ -606,7 +604,6 @@ mod tests {
         assert_eq!(config.node_id, 1);
         assert_eq!(config.ip_address, "10.100.0.11");
         assert_eq!(config.http_port, 8301);
-        assert_eq!(config.ractor_port, 26001);
         assert_eq!(config.tap_device, "aspen-1");
         assert_eq!(config.mac_address, "02:00:00:01:01:01");
     }

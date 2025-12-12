@@ -56,7 +56,6 @@ async fn test_concurrent_read_100_readers() -> anyhow::Result<()> {
             control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
             http_addr: format!("127.0.0.1:{}", 37000 + node_id as u16).parse()?,
-            ractor_port: 0, // OS-assigned
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "concurrent-read-load".to_string(),
             heartbeat_interval_ms: 500,
@@ -216,7 +215,6 @@ async fn test_concurrent_read_10_readers() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:47000".parse()?,
-        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "concurrent-read-small".to_string(),
         heartbeat_interval_ms: 500,

@@ -54,7 +54,6 @@ async fn test_sustained_write_1000_ops() -> anyhow::Result<()> {
             control_backend: ControlBackend::RaftActor,
             host: "127.0.0.1".to_string(),
             http_addr: format!("127.0.0.1:{}", 36000 + node_id as u16).parse()?,
-            ractor_port: 0, // OS-assigned
             data_dir: Some(data_dir.to_path_buf()),
             cookie: "sustained-write-load".to_string(),
             heartbeat_interval_ms: 500,
@@ -168,7 +167,6 @@ async fn test_sustained_write_100_ops() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:46000".parse()?,
-        ractor_port: 0, // OS-assigned
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "sustained-write-small".to_string(),
         heartbeat_interval_ms: 500,

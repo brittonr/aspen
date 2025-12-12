@@ -19,7 +19,8 @@
       "Bash(done)",
       "WebFetch(domain:iroh.computer)",
       "Bash(cargo nextest run:*)",
-      "WebFetch(domain:lib.rs)"
+      "WebFetch(domain:lib.rs)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": [],

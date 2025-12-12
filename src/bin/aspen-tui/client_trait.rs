@@ -1,11 +1,11 @@
-//! Common client trait for both HTTP and Iroh connections.
+//! Common client trait for Iroh connections.
 
 use aspen::tui_rpc::NodeDescriptor;
 use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
 
-use crate::client::{ClusterMetrics, NodeInfo, NodeStatus};
+use crate::types::{ClusterMetrics, NodeInfo, NodeStatus};
 
 /// Trait for Aspen cluster clients.
 ///
@@ -81,7 +81,6 @@ pub struct VaultKeyEntry {
 
 /// Wrapper enum for different client types.
 pub enum ClientImpl {
-    Http(crate::client::AspenClient),
     Iroh(crate::iroh_client::IrohClient),
     MultiNode(crate::iroh_client::MultiNodeClient),
     Disconnected(DisconnectedClient),
@@ -151,7 +150,6 @@ fn anyhow_to_eyre(err: anyhow::Error) -> color_eyre::Report {
 impl ClusterClient for ClientImpl {
     async fn get_discovered_nodes(&self) -> Result<Vec<NodeDescriptor>> {
         match self {
-            Self::Http(_) => Ok(vec![]), // HTTP doesn't support discovery yet
             Self::Iroh(_) => Ok(vec![]), // Single Iroh client doesn't discover
             Self::MultiNode(client) => {
                 // MultiNodeClient can discover peers
@@ -163,7 +161,6 @@ impl ClusterClient for ClientImpl {
 
     async fn get_node_info(&self) -> Result<NodeInfo> {
         match self {
-            Self::Http(client) => client.get_node_info().await,
             Self::Iroh(client) => {
                 let info = client.get_node_info().await.map_err(anyhow_to_eyre)?;
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
@@ -177,18 +174,12 @@ impl ClusterClient for ClientImpl {
 
                 Ok(NodeInfo {
                     node_id: info.node_id,
-                    status: if health.status == "healthy" {
-                        NodeStatus::Healthy
-                    } else if health.status == "degraded" {
-                        NodeStatus::Degraded
-                    } else {
-                        NodeStatus::Unhealthy
-                    },
+                    status: NodeStatus::from_str(&health.status),
                     is_leader,
                     last_applied_index: metrics.as_ref().and_then(|m| m.last_applied_index),
                     current_term: metrics.as_ref().map(|m| m.current_term),
                     uptime_secs: Some(health.uptime_seconds),
-                    http_addr: format!("iroh://{}", info.endpoint_addr),
+                    addr: format!("iroh://{}", info.endpoint_addr),
                 })
             }
             Self::MultiNode(client) => {
@@ -204,18 +195,12 @@ impl ClusterClient for ClientImpl {
 
                 Ok(NodeInfo {
                     node_id: info.node_id,
-                    status: if health.status == "healthy" {
-                        NodeStatus::Healthy
-                    } else if health.status == "degraded" {
-                        NodeStatus::Degraded
-                    } else {
-                        NodeStatus::Unhealthy
-                    },
+                    status: NodeStatus::from_str(&health.status),
                     is_leader,
                     last_applied_index: metrics.as_ref().and_then(|m| m.last_applied_index),
                     current_term: metrics.as_ref().map(|m| m.current_term),
                     uptime_secs: Some(health.uptime_seconds),
-                    http_addr: format!("iroh://{}", info.endpoint_addr),
+                    addr: format!("iroh://{}", info.endpoint_addr),
                 })
             }
             Self::Disconnected(client) => client.get_node_info().await,
@@ -224,7 +209,6 @@ impl ClusterClient for ClientImpl {
 
     async fn get_metrics(&self) -> Result<ClusterMetrics> {
         match self {
-            Self::Http(client) => client.get_metrics().await,
             Self::Iroh(client) => {
                 let metrics = client.get_raft_metrics().await.map_err(anyhow_to_eyre)?;
                 Ok(ClusterMetrics {
@@ -257,7 +241,6 @@ impl ClusterClient for ClientImpl {
 
     async fn is_healthy(&self) -> Result<bool> {
         match self {
-            Self::Http(client) => client.is_healthy().await,
             Self::Iroh(client) => {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 Ok(health.status == "healthy")
@@ -272,10 +255,6 @@ impl ClusterClient for ClientImpl {
 
     async fn init_cluster(&self) -> Result<()> {
         match self {
-            Self::Http(client) => {
-                client.init_cluster().await.map_err(|e| eyre!("{}", e))?;
-                Ok(())
-            }
             Self::Iroh(client) => {
                 let result = client.init_cluster().await.map_err(anyhow_to_eyre)?;
                 if !result.success {
@@ -304,13 +283,6 @@ impl ClusterClient for ClientImpl {
 
     async fn add_learner(&self, node_id: u64, addr: String) -> Result<()> {
         match self {
-            Self::Http(client) => {
-                client
-                    .add_learner(node_id, &addr)
-                    .await
-                    .map_err(|e| eyre!("{}", e))?;
-                Ok(())
-            }
             Self::Iroh(client) => {
                 let result = client
                     .add_learner(node_id, addr)
@@ -345,13 +317,6 @@ impl ClusterClient for ClientImpl {
 
     async fn change_membership(&self, members: Vec<u64>) -> Result<()> {
         match self {
-            Self::Http(client) => {
-                client
-                    .change_membership(members)
-                    .await
-                    .map_err(|e| eyre!("{}", e))?;
-                Ok(())
-            }
             Self::Iroh(client) => {
                 let result = client
                     .change_membership(members)
@@ -386,7 +351,6 @@ impl ClusterClient for ClientImpl {
 
     async fn write(&self, key: String, value: Vec<u8>) -> Result<()> {
         match self {
-            Self::Http(client) => client.write(key, value).await,
             Self::Iroh(client) => {
                 let result = client.write_key(key, value).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
@@ -415,7 +379,6 @@ impl ClusterClient for ClientImpl {
 
     async fn read(&self, key: String) -> Result<Option<Vec<u8>>> {
         match self {
-            Self::Http(client) => client.read(key).await,
             Self::Iroh(client) => {
                 let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
                 Ok(result.value)
@@ -430,13 +393,6 @@ impl ClusterClient for ClientImpl {
 
     async fn trigger_snapshot(&self) -> Result<()> {
         match self {
-            Self::Http(client) => {
-                client
-                    .trigger_snapshot()
-                    .await
-                    .map_err(|e| eyre!("{}", e))?;
-                Ok(())
-            }
             Self::Iroh(client) => {
                 let result = client.trigger_snapshot().await.map_err(anyhow_to_eyre)?;
                 if !result.success {
@@ -465,7 +421,6 @@ impl ClusterClient for ClientImpl {
 
     async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
         match self {
-            Self::Http(client) => client.list_vaults().await,
             Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
             Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
             Self::Disconnected(client) => client.list_vaults().await,
@@ -474,7 +429,6 @@ impl ClusterClient for ClientImpl {
 
     async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
         match self {
-            Self::Http(client) => client.list_vault_keys(vault).await,
             Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
             Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
             Self::Disconnected(client) => client.list_vault_keys(vault).await,

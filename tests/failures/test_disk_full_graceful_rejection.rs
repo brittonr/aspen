@@ -67,7 +67,6 @@ async fn test_disk_full_error_handling() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:0".parse()?,
-        ractor_port: 0,
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "disk-full-test".to_string(),
         heartbeat_interval_ms: 500,

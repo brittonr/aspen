@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 use color_eyre::Result;
 use tracing::{info, warn};
 
-use crate::client::{AspenClient, ClusterMetrics, NodeInfo, NodeStatus};
 use crate::client_trait::{ClientImpl, ClusterClient};
 use crate::event::Event;
 use crate::iroh_client::{MultiNodeClient, parse_cluster_ticket};
+use crate::types::{ClusterMetrics, NodeInfo, NodeStatus};
 
 /// Active view/tab in the TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -173,15 +173,11 @@ impl App {
     /// Create new application state with HTTP client.
     ///
     /// Tiger Style: Explicit initialization of all fields.
-    pub fn new(node_urls: Vec<String>, debug_mode: bool, max_display_nodes: usize) -> Self {
-        // Use the first node URL for now
-        let url = node_urls
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
-
-        let client = AspenClient::new(url);
-        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Http(client));
+    pub fn new(_node_urls: Vec<String>, debug_mode: bool, max_display_nodes: usize) -> Self {
+        // Start with disconnected client - use connect command or ticket to connect
+        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Disconnected(
+            crate::client_trait::DisconnectedClient,
+        ));
 
         Self {
             should_quit: false,
@@ -507,21 +503,13 @@ impl App {
                 }
                 KeyCode::Enter => {
                     // Check if we're doing a connection operation based on status message
-                    let is_http_connect = self
-                        .status_message
-                        .as_ref()
-                        .map(|(msg, _)| msg.contains("Enter HTTP node"))
-                        .unwrap_or(false);
                     let is_ticket_connect = self
                         .status_message
                         .as_ref()
                         .map(|(msg, _)| msg.contains("Paste Iroh cluster ticket"))
                         .unwrap_or(false);
 
-                    if is_http_connect {
-                        // Connect to HTTP nodes
-                        self.connect_http_nodes(&self.input_buffer.clone()).await;
-                    } else if is_ticket_connect {
+                    if is_ticket_connect {
                         // Connect via Iroh ticket
                         self.connect_iroh_ticket(&self.input_buffer.clone()).await;
                     } else {
@@ -557,9 +545,6 @@ impl App {
         // First, get info from the connected node
         match self.client.get_node_info().await {
             Ok(info) => {
-                let connected_node_id = info.node_id;
-                let is_http = info.http_addr.starts_with("http://");
-                let is_iroh = info.http_addr.starts_with("iroh://");
                 new_nodes.insert(info.node_id, info);
 
                 // Try to get metrics - this also triggers discovery for MultiNode client
@@ -567,7 +552,7 @@ impl App {
                     self.cluster_metrics = Some(metrics.clone());
 
                     // For MultiNode (Iroh) client, populate all discovered nodes
-                    if is_iroh {
+                    {
                         // Use the trait method to get discovered nodes
                         match self.client.get_discovered_nodes().await {
                             Ok(discovered_nodes) if !discovered_nodes.is_empty() => {
@@ -587,7 +572,7 @@ impl App {
                                         last_applied_index: None, // Will be updated on next metrics call
                                         current_term: Some(metrics.term),
                                         uptime_secs: None,
-                                        http_addr: format!("iroh://{}", node_desc.endpoint_addr),
+                                        addr: format!("iroh://{}", node_desc.endpoint_addr),
                                     };
                                     new_nodes.insert(node_desc.node_id, node_info);
                                 }
@@ -607,25 +592,6 @@ impl App {
                             }
                         }
                     }
-                }
-
-                // For HTTP client, try to query other nodes using standard ports
-                // This is a temporary solution until we have proper node discovery
-                if is_http {
-                    // Try standard cluster ports (21001, 21002, 21003)
-                    for port in 21001..=21003 {
-                        let node_id = port - 21000; // Assume node IDs 1, 2, 3
-                        if node_id != connected_node_id {
-                            // Create a temporary client for this node
-                            let temp_client =
-                                AspenClient::new(format!("http://127.0.0.1:{}", port));
-                            if let Ok(node_info) = temp_client.get_node_info().await {
-                                info!(node_id = node_info.node_id, "discovered node");
-                                new_nodes.insert(node_info.node_id, node_info);
-                            }
-                        }
-                    }
-                    info!(total_nodes = new_nodes.len(), "nodes discovered via HTTP");
                 }
 
                 // For Iroh MultiNode client, we already got the cluster state from get_metrics()
@@ -738,48 +704,6 @@ impl App {
             }
             Err(e) => {
                 self.set_status(&format!("Write failed: {}", e));
-            }
-        }
-    }
-
-    /// Connect to HTTP nodes.
-    async fn connect_http_nodes(&mut self, input: &str) {
-        // Parse input - could be single node or space-separated list
-        let urls: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
-
-        if urls.is_empty() {
-            self.set_status("No nodes specified");
-            return;
-        }
-
-        // For now, use the first URL
-        // TODO: Support multiple HTTP nodes later
-        let url = urls[0].clone();
-
-        // Validate URL format
-        if !url.starts_with("http://") && !url.starts_with("https://") {
-            self.set_status("Invalid URL format - must start with http:// or https://");
-            return;
-        }
-
-        // Create new HTTP client
-        let client = AspenClient::new(url.clone());
-        let new_client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Http(client));
-
-        // Test the connection
-        match new_client.get_node_info().await {
-            Ok(node_info) => {
-                // Connection successful, replace the client
-                self.client = new_client;
-                self.set_status(&format!(
-                    "Connected to node {} at {}",
-                    node_info.node_id, url
-                ));
-                // Immediately refresh to populate nodes
-                self.refresh_cluster_state().await;
-            }
-            Err(e) => {
-                self.set_status(&format!("Failed to connect: {}", e));
             }
         }
     }

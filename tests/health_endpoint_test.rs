@@ -19,7 +19,6 @@ async fn start_test_server(
     http_addr: std::net::SocketAddr,
     node_id: u64,
     raft_actor: ActorRef<RaftActorMessage>,
-    ractor_port: u16,
     controller: Arc<dyn ClusterController>,
     kv: Arc<dyn KeyValueStore>,
     network_factory: Arc<aspen::raft::network::IrpcRaftNetworkFactory>,
@@ -31,7 +30,6 @@ async fn start_test_server(
     struct AppState {
         node_id: u64,
         raft_actor: ActorRef<RaftActorMessage>,
-        _ractor_port: u16,
         controller: Arc<dyn ClusterController>,
         _kv: Arc<dyn KeyValueStore>,
         _network_factory: Arc<aspen::raft::network::IrpcRaftNetworkFactory>,
@@ -42,7 +40,6 @@ async fn start_test_server(
     let app_state = AppState {
         node_id,
         raft_actor,
-        _ractor_port: ractor_port,
         controller,
         _kv: kv,
         _network_factory: network_factory,
@@ -227,7 +224,6 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:49000".parse()?, // Fixed port for testing
-        ractor_port: 0,
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "health-test".to_string(),
         heartbeat_interval_ms: 500,
@@ -258,7 +254,6 @@ async fn test_health_endpoint_detailed_response() -> anyhow::Result<()> {
         config.http_addr,
         config.node_id,
         handle.raft_actor.clone(),
-        config.ractor_port,
         controller,
         kv,
         handle.network_factory.clone(),
@@ -358,7 +353,6 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
         control_backend: ControlBackend::RaftActor,
         host: "127.0.0.1".to_string(),
         http_addr: "127.0.0.1:49001".parse()?, // Fixed port for testing
-        ractor_port: 0,
         data_dir: Some(temp_dir.path().to_path_buf()),
         cookie: "health-disk-test".to_string(),
         heartbeat_interval_ms: 500,
@@ -389,7 +383,6 @@ async fn test_health_endpoint_disk_space_check() -> anyhow::Result<()> {
         config.http_addr,
         config.node_id,
         handle.raft_actor.clone(),
-        config.ractor_port,
         controller,
         kv,
         handle.network_factory.clone(),

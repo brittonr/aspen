@@ -23,7 +23,6 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
         node_id,
         data_dir: Some(std::env::temp_dir().join(format!("aspen-test-{}", node_id))),
         host: "127.0.0.1".into(),
-        ractor_port: 0, // OS-assigned port
         cookie: "test-cluster".into(),
         http_addr: format!("127.0.0.1:{}", 8080 + node_id).parse().unwrap(),
         control_backend: ControlBackend::RaftActor,
@@ -287,7 +286,6 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 1,
         data_dir: None,
         host: "127.0.0.1".into(),
-        ractor_port: 26000,
         cookie: "base-cookie".into(),
         http_addr: "127.0.0.1:8080".parse().unwrap(),
         control_backend: ControlBackend::RaftActor,
@@ -317,7 +315,6 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 0,
         data_dir: None,
         host: "127.0.0.1".into(),
-        ractor_port: 26000,
         cookie: "base-cookie".into(),
         http_addr: "127.0.0.1:8080".parse().unwrap(),
         control_backend: ControlBackend::RaftActor,
