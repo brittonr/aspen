@@ -8,7 +8,7 @@
 //! # Key Components
 //!
 //! - `bootstrap_node`: Main orchestration function for node startup
-//! - `BootstrapHandle`: Resource handle for graceful shutdown and monitoring
+//! - `NodeHandle`: Resource handle for graceful shutdown and monitoring
 //! - `load_config`: Multi-layer configuration loading (env, TOML, CLI)
 //! - Component initialization: Metadata store, Iroh endpoint, Raft actor, RPC server
 //! - Supervision tree: Raft supervisor with health monitoring
@@ -422,8 +422,8 @@ mod tests {
 
         let addrs = result.unwrap();
         assert_eq!(addrs.len(), 2);
-        assert!(addrs.contains_key(&1));
-        assert!(addrs.contains_key(&2));
+        assert!(addrs.contains_key(&NodeId(1)));
+        assert!(addrs.contains_key(&NodeId(2)));
     }
 
     #[test]
@@ -448,7 +448,7 @@ mod tests {
 
         let addrs = result.unwrap();
         assert_eq!(addrs.len(), 1);
-        assert!(addrs.contains_key(&1));
+        assert!(addrs.contains_key(&NodeId(1)));
     }
 
     #[test]
@@ -599,7 +599,7 @@ async fn setup_gossip_discovery(
     // Spawn gossip actor with network factory for automatic peer connection
     let gossip_args = GossipActorArgs {
         topic_id,
-        node_id: config.node_id,
+        node_id: config.node_id.into(),
         endpoint_manager: Arc::clone(iroh_manager),
         network_factory: Some(Arc::clone(network_factory)),
     };
@@ -666,7 +666,7 @@ async fn setup_raft_storage(
     // Select storage backend based on configuration
     match config.storage_backend {
         StorageBackend::InMemory => {
-            create_inmemory_storage(config.node_id, validated_config, network_factory).await
+            create_inmemory_storage(config.node_id.into(), validated_config, network_factory).await
         }
         StorageBackend::Sqlite => {
             create_sqlite_storage(config, validated_config, network_factory).await
@@ -694,7 +694,7 @@ async fn spawn_raft_supervisor(
     Option<Arc<HealthMonitor>>,
 )> {
     let raft_actor_config = RaftActorConfig {
-        node_id: config.node_id,
+        node_id: config.node_id.into(),
         raft: raft_core,
         state_machine,
         log_store: log_store_opt,
@@ -860,7 +860,7 @@ async fn create_sqlite_storage(
         SqliteStateMachine::new(&sm_path).context("failed to create sqlite state machine")?;
 
     let raft = openraft::Raft::new(
-        config.node_id,
+        config.node_id.into(),
         validated_config,
         network_factory.as_ref().clone(),
         log_store.clone(),

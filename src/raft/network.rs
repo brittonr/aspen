@@ -23,15 +23,15 @@ use crate::raft::rpc::{
     RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
     RaftVoteRequest,
 };
-use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
+use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
-/// With the introduction of `AspenNode`, peer addresses are now stored directly
+/// With the introduction of `RaftMemberInfo`, peer addresses are now stored directly
 /// in the Raft membership state. The network factory receives addresses via
-/// the `new_client()` method's `node` parameter, which contains the `AspenNode`
+/// the `new_client()` method's `node` parameter, which contains the `RaftMemberInfo`
 /// with the Iroh `EndpointAddr`.
 ///
 /// The `peer_addrs` map is retained as a fallback/cache for:
@@ -49,7 +49,7 @@ pub struct IrpcRaftNetworkFactory {
     /// Used as a fallback when addresses aren't available from Raft membership.
     /// Initially populated from CLI args/config manual peers.
     ///
-    /// With `AspenNode`, the primary source of peer addresses is now the
+    /// With `RaftMemberInfo`, the primary source of peer addresses is now the
     /// Raft membership state, passed to `new_client()` via the `node` parameter.
     ///
     /// Uses Arc<RwLock> to allow concurrent peer addition during runtime.
@@ -141,8 +141,8 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
     type Network = IrpcRaftNetwork;
 
     #[tracing::instrument(level = "debug", skip_all, fields(target = %target))]
-    async fn new_client(&mut self, target: NodeId, node: &AspenNode) -> Self::Network {
-        // Primary source: Get address from AspenNode (stored in Raft membership)
+    async fn new_client(&mut self, target: NodeId, node: &RaftMemberInfo) -> Self::Network {
+        // Primary source: Get address from RaftMemberInfo (stored in Raft membership)
         let peer_addr = Some(node.iroh_addr.clone());
 
         // Update the fallback cache with this address for future reference

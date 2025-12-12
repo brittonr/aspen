@@ -168,9 +168,10 @@ impl ValidationReport {
 /// - Uses read-only transactions (no writes, no lock contention)
 /// - Closes database after validation (no resource leaks)
 pub fn validate_raft_storage(
-    node_id: NodeId,
+    node_id: impl Into<NodeId>,
     storage_path: &Path,
 ) -> Result<ValidationReport, StorageValidationError> {
+    let node_id = node_id.into();
     let start = Instant::now();
     let mut checks_passed: u32 = 0;
 
@@ -439,7 +440,7 @@ mod tests {
                 .expect("failed to open table");
 
             for i in 0..num_entries {
-                let log_id = log_id::<AppTypeConfig>(1, 1, i.into());
+                let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), i.into());
                 let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                     log_id,
                     AppRequest::Set {
@@ -469,7 +470,7 @@ mod tests {
         assert!(result.is_ok(), "validation should pass: {:?}", result);
 
         let report = result.unwrap();
-        assert_eq!(report.node_id, 1);
+        assert_eq!(report.node_id, NodeId::from(1));
         assert_eq!(report.checks_passed, 5);
         assert_eq!(report.last_log_index, Some(9));
         assert!(report.validation_duration.as_millis() < 100);
@@ -529,7 +530,7 @@ mod tests {
         assert!(result.is_ok());
 
         let report = result.unwrap();
-        assert_eq!(report.node_id, 42);
+        assert_eq!(report.node_id, NodeId::from(42));
         assert_eq!(report.last_log_index, Some(99));
         assert!(report.validation_duration.as_millis() < 100);
     }

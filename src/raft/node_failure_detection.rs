@@ -97,10 +97,11 @@ impl NodeFailureDetector {
     /// Tiger Style: Bounded map size, fail fast if limit exceeded.
     pub fn update_node_status(
         &mut self,
-        node_id: NodeId,
+        node_id: impl Into<NodeId>,
         raft_heartbeat: ConnectionStatus,
         iroh_connection: ConnectionStatus,
     ) {
+        let node_id = node_id.into();
         let failure_type = self.classify_failure(raft_heartbeat, iroh_connection);
 
         match failure_type {
@@ -108,7 +109,7 @@ impl NodeFailureDetector {
                 // Node recovered, remove from unreachable map
                 if let Some(info) = self.unreachable_nodes.remove(&node_id) {
                     tracing::info!(
-                        node_id = node_id,
+                        node_id = %node_id,
                         unreachable_duration_ms = info.first_failed_at.elapsed().as_millis(),
                         previous_failure_type = ?info.failure_type,
                         "node recovered"
@@ -142,7 +143,7 @@ impl NodeFailureDetector {
                     })
                     .or_insert_with(|| {
                         tracing::warn!(
-                            node_id = node_id,
+                            node_id = %node_id,
                             failure_type = ?failure_type,
                             raft_heartbeat = ?raft_heartbeat,
                             iroh_connection = ?iroh_connection,
@@ -199,7 +200,8 @@ impl NodeFailureDetector {
     /// Get current failure type for a node.
     ///
     /// Returns Healthy if the node is not in the unreachable map.
-    pub fn get_failure_type(&self, node_id: NodeId) -> FailureType {
+    pub fn get_failure_type(&self, node_id: impl Into<NodeId>) -> FailureType {
+        let node_id = node_id.into();
         self.unreachable_nodes
             .get(&node_id)
             .map(|info| info.failure_type)
@@ -209,7 +211,8 @@ impl NodeFailureDetector {
     /// Get unreachable duration for a node.
     ///
     /// Returns None if the node is not currently unreachable.
-    pub fn get_unreachable_duration(&self, node_id: NodeId) -> Option<Duration> {
+    pub fn get_unreachable_duration(&self, node_id: impl Into<NodeId>) -> Option<Duration> {
+        let node_id = node_id.into();
         self.unreachable_nodes
             .get(&node_id)
             .map(|info| info.first_failed_at.elapsed())
@@ -268,7 +271,7 @@ impl AlertManager {
             if !self.alerted_nodes.contains(&node_id) {
                 // Fire alert (log for now, could integrate with PagerDuty/Slack/etc)
                 tracing::error!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     failure_type = ?failure_type,
                     unreachable_duration_s = duration.as_secs(),
                     "ALERT: Node has been unreachable beyond threshold. Operator intervention required."
@@ -418,7 +421,7 @@ mod tests {
     #[test]
     fn test_alert_threshold() {
         let mut detector = NodeFailureDetector::new(Duration::from_millis(100));
-        let node_id = 5;
+        let node_id: NodeId = 5.into();
 
         // Node fails
         detector.update_node_status(
@@ -448,7 +451,7 @@ mod tests {
         // Fill beyond max capacity
         for node_id in 0..MAX_UNREACHABLE_NODES + 10 {
             detector.update_node_status(
-                node_id as NodeId,
+                node_id as u64,
                 ConnectionStatus::Disconnected,
                 ConnectionStatus::Disconnected,
             );

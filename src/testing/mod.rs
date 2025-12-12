@@ -75,9 +75,9 @@ pub use network_utils::{NetworkBridge, TapDevice};
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::{ManagedVm, NetworkConfig, VmConfig, VmManager, VmState};
 
-use crate::raft::types::{AspenNode, NodeId};
+use crate::raft::types::{NodeId, RaftMemberInfo};
 
-/// Create a test `AspenNode` with a deterministic Iroh address derived from the node ID.
+/// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///
 /// This is used in tests where we don't have real Iroh endpoints.
 /// The address is deterministically generated from the node ID to ensure consistency.
@@ -85,25 +85,26 @@ use crate::raft::types::{AspenNode, NodeId};
 /// # Example
 ///
 /// ```ignore
-/// use aspen::testing::create_test_aspen_node;
+/// use aspen::testing::create_test_raft_member_info;
 /// use std::collections::BTreeMap;
 ///
 /// let mut nodes = BTreeMap::new();
-/// nodes.insert(0, create_test_aspen_node(0));
-/// nodes.insert(1, create_test_aspen_node(1));
+/// nodes.insert(0, create_test_raft_member_info(0));
+/// nodes.insert(1, create_test_raft_member_info(1));
 /// raft.initialize(nodes).await?;
 /// ```
-pub fn create_test_aspen_node(node_id: NodeId) -> AspenNode {
+pub fn create_test_raft_member_info(node_id: impl Into<NodeId>) -> RaftMemberInfo {
     use iroh::{EndpointAddr, EndpointId, SecretKey};
 
+    let node_id = node_id.into();
     // Generate a deterministic secret key from the node ID
     let mut seed = [0u8; 32];
-    seed[..8].copy_from_slice(&node_id.to_le_bytes());
+    seed[..8].copy_from_slice(&node_id.0.to_le_bytes());
     let secret_key = SecretKey::from(seed);
     let endpoint_id: EndpointId = secret_key.public();
 
     // Create an EndpointAddr with just the ID (no relay URLs or direct addresses for tests)
     let endpoint_addr = EndpointAddr::new(endpoint_id);
 
-    AspenNode::new(endpoint_addr)
+    RaftMemberInfo::new(endpoint_addr)
 }

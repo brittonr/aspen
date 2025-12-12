@@ -227,9 +227,9 @@ where
         let new_voters =
             self.build_new_membership(&current_voters, request.learner_id, request.replace_node)?;
 
-        // Execute membership change
+        // Execute membership change (convert NodeId to u64 for API boundary)
         let change_request = ChangeMembershipRequest {
-            members: new_voters.clone(),
+            members: new_voters.iter().map(|id| (*id).into()).collect(),
         };
 
         self.cluster_controller
@@ -243,7 +243,7 @@ where
         *self.last_membership_change.write().await = Some(Instant::now());
 
         tracing::info!(
-            learner_id = request.learner_id,
+            learner_id = %request.learner_id,
             replaced_node = ?request.replace_node,
             previous_voters = ?current_voters,
             new_voters = ?new_voters,
@@ -275,7 +275,11 @@ where
     /// Verify learner is healthy and reachable.
     ///
     /// Queries NodeFailureDetector if available, otherwise succeeds.
-    async fn verify_learner_healthy(&self, learner_id: NodeId) -> Result<(), PromotionError> {
+    async fn verify_learner_healthy(
+        &self,
+        learner_id: impl Into<NodeId>,
+    ) -> Result<(), PromotionError> {
+        let learner_id = learner_id.into();
         if let Some(ref detector) = self.failure_detector {
             let detector_guard = detector.read().await;
             let failure_type = detector_guard.get_failure_type(learner_id);
@@ -392,10 +396,12 @@ mod tests {
         let controller = Arc::new(DeterministicClusterController::new());
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
-        let current = vec![1, 2, 3];
-        let new = coordinator.build_new_membership(&current, 4, None).unwrap();
+        let current = vec![1.into(), 2.into(), 3.into()];
+        let new = coordinator
+            .build_new_membership(&current, 4.into(), None)
+            .unwrap();
 
-        assert_eq!(new, vec![1, 2, 3, 4]);
+        assert_eq!(new, vec![1.into(), 2.into(), 3.into(), 4.into()]);
     }
 
     #[tokio::test]
@@ -403,12 +409,12 @@ mod tests {
         let controller = Arc::new(DeterministicClusterController::new());
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
-        let current = vec![1, 2, 3];
+        let current = vec![1.into(), 2.into(), 3.into()];
         let new = coordinator
-            .build_new_membership(&current, 4, Some(2))
+            .build_new_membership(&current, 4.into(), Some(2.into()))
             .unwrap();
 
-        assert_eq!(new, vec![1, 3, 4]);
+        assert_eq!(new, vec![1.into(), 3.into(), 4.into()]);
     }
 
     #[tokio::test]
@@ -417,11 +423,14 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         // Learner is already in voter set (edge case)
-        let current = vec![1, 2, 3, 4];
-        let new = coordinator.build_new_membership(&current, 4, None).unwrap();
+        let current: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
+        let new = coordinator
+            .build_new_membership(&current, 4.into(), None)
+            .unwrap();
 
         // Should not add duplicate
-        assert_eq!(new, vec![1, 2, 3, 4]);
+        let expected: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
+        assert_eq!(new, expected);
     }
 
     #[tokio::test]
@@ -460,10 +469,10 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         // Create membership at max capacity
-        let current: Vec<NodeId> = (1..=MAX_VOTERS as u64).collect();
+        let current: Vec<NodeId> = (1..=MAX_VOTERS as u64).map(NodeId::from).collect();
 
         // Try to add one more voter
-        let result = coordinator.build_new_membership(&current, 999, None);
+        let result = coordinator.build_new_membership(&current, 999.into(), None);
 
         assert!(matches!(result, Err(PromotionError::MaxVotersExceeded)));
     }
@@ -474,10 +483,10 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         // 5-node cluster (quorum = 3)
-        let voters = vec![1, 2, 3, 4, 5];
+        let voters: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into(), 5.into()];
 
         // Replacing one node should still maintain quorum
-        let result = coordinator.verify_quorum(&voters, Some(5)).await;
+        let result = coordinator.verify_quorum(&voters, Some(5.into())).await;
         assert!(result.is_ok());
     }
 
@@ -487,19 +496,19 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         // 3-node cluster (quorum = 2)
-        let voters = vec![1, 2, 3];
+        let voters: Vec<NodeId> = vec![1.into(), 2.into(), 3.into()];
 
         // Replacing one node leaves 2 nodes, which is exactly quorum
         // This should pass since we still have quorum
-        let result = coordinator.verify_quorum(&voters, Some(3)).await;
+        let result = coordinator.verify_quorum(&voters, Some(3.into())).await;
         assert!(result.is_ok());
 
         // 2-node cluster (quorum = 2)
-        let voters = vec![1, 2];
+        let voters: Vec<NodeId> = vec![1.into(), 2.into()];
 
         // Replacing one node leaves 1 node, which is less than quorum (2)
         // This should fail
-        let result = coordinator.verify_quorum(&voters, Some(2)).await;
+        let result = coordinator.verify_quorum(&voters, Some(2.into())).await;
         assert!(matches!(
             result,
             Err(PromotionError::NoQuorumWithoutFailedNode { .. })

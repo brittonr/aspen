@@ -484,7 +484,7 @@ impl SqliteStateMachine {
         drop(conn); // Release connection to pool
 
         Ok(crate::raft::storage_validation::ValidationReport {
-            node_id,
+            node_id: node_id.into(),
             checks_passed: 2, // Integrity check + schema check
             last_log_index: None,
             last_snapshot_index: None,

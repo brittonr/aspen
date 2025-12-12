@@ -490,7 +490,7 @@ async fn process_tui_request(
             Ok(TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: ctx.node_id,
                 state: format!("{:?}", metrics.state),
-                current_leader: metrics.current_leader,
+                current_leader: metrics.current_leader.map(|id| id.0),
                 current_term: metrics.current_term,
                 last_log_index: metrics.last_log_index,
                 last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
@@ -673,7 +673,7 @@ async fn process_tui_request(
                             let peer_map: std::collections::HashMap<u64, String> = peers
                                 .into_iter()
                                 .map(|peer: PeerInfo| {
-                                    (peer.node_id, format!("{:?}", peer.endpoint_addr))
+                                    (peer.node_id.into(), format!("{:?}", peer.endpoint_addr))
                                 })
                                 .collect();
                             info!(

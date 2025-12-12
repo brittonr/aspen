@@ -52,7 +52,7 @@ use parking_lot::Mutex as SyncMutex;
 use tracing::debug;
 
 use crate::raft::constants::MAX_CONNECTIONS_PER_NODE;
-use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
+use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
 
 /// Madsim-compatible Raft network factory for deterministic simulation.
 ///
@@ -88,7 +88,7 @@ impl RaftNetworkFactory<AppTypeConfig> for MadsimNetworkFactory {
     type Network = MadsimRaftNetwork;
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn new_client(&mut self, target: NodeId, _node: &AspenNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, _node: &RaftMemberInfo) -> Self::Network {
         MadsimRaftNetwork::new(
             self.source_node_id,
             target,
@@ -327,7 +327,7 @@ impl MadsimRaftRouter {
             node.raft.clone()
         };
 
-        debug!(source, target, "dispatching append_entries RPC");
+        debug!(%source, %target, "dispatching append_entries RPC");
 
         // Dispatch RPC directly to Raft core
         raft.append_entries(rpc)
@@ -376,7 +376,7 @@ impl MadsimRaftRouter {
             node.raft.clone()
         };
 
-        debug!(source, target, "dispatching vote RPC");
+        debug!(%source, %target, "dispatching vote RPC");
 
         // Dispatch RPC directly to Raft core
         raft.vote(rpc)
@@ -424,7 +424,7 @@ impl MadsimRaftRouter {
             node.raft.clone()
         };
 
-        debug!(source, target, snapshot_meta = ?snapshot.meta, "dispatching snapshot RPC");
+        debug!(%source, %target, snapshot_meta = ?snapshot.meta, "dispatching snapshot RPC");
 
         // Tiger Style: Direct dispatch to Raft core (Phase 2 implementation)
         // This validates integration; future work can add real madsim TCP streaming

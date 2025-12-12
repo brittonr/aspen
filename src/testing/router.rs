@@ -26,11 +26,11 @@ use rand::Rng;
 use tokio::time::sleep;
 
 use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
-use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode as RaftAspenNode, NodeId};
+use crate::raft::types::{AppRequest, AppTypeConfig, NodeId, RaftMemberInfo};
 
 /// A Raft node managed by the router, including its storage and Raft handle.
 /// Note: This is a test-specific wrapper around a Raft node, distinct from
-/// `crate::raft::types::AspenNode` which represents node metadata in Raft membership.
+/// `crate::raft::types::RaftMemberInfo` which represents node metadata in Raft membership.
 pub struct TestNode {
     pub id: NodeId,
     pub raft: Raft<AppTypeConfig>,
@@ -55,7 +55,7 @@ impl InMemoryNetworkFactory {
 impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFactory {
     type Network = InMemoryNetwork;
 
-    async fn new_client(&mut self, target: NodeId, _node: &RaftAspenNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, _node: &RaftMemberInfo) -> Self::Network {
         InMemoryNetwork {
             source: self.source,
             target,
@@ -371,10 +371,10 @@ impl AspenRouter {
     ///
     /// Returns a reference to the created node. The node starts in Learner state
     /// and must be initialized or added to a cluster via `initialize()` or membership changes.
-    pub async fn new_raft_node(&mut self, id: NodeId) -> Result<()> {
+    pub async fn new_raft_node(&mut self, id: impl Into<NodeId>) -> Result<()> {
         let log_store = InMemoryLogStore::default();
         let state_machine = InMemoryStateMachine::new();
-        self.new_raft_node_with_storage(id, log_store, state_machine)
+        self.new_raft_node_with_storage(id.into(), log_store, state_machine)
             .await
     }
 
@@ -395,10 +395,11 @@ impl AspenRouter {
     /// ```
     pub async fn new_raft_node_with_storage(
         &mut self,
-        id: NodeId,
+        id: impl Into<NodeId>,
         log_store: InMemoryLogStore,
         state_machine: Arc<InMemoryStateMachine>,
     ) -> Result<()> {
+        let id = id.into();
         let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
         let raft = Raft::new(
@@ -434,10 +435,11 @@ impl AspenRouter {
     /// Get a handle to the Raft instance for the given node.
     ///
     /// Useful for calling Raft APIs directly like `initialize()`, `write()`, etc.
-    pub fn get_raft_handle(&self, node_id: &NodeId) -> Result<Raft<AppTypeConfig>> {
+    pub fn get_raft_handle(&self, node_id: impl Into<NodeId>) -> Result<Raft<AppTypeConfig>> {
+        let node_id = node_id.into();
         let nodes = self.inner.nodes.lock().unwrap();
         let node = nodes
-            .get(node_id)
+            .get(&node_id)
             .with_context(|| format!("node {} not found", node_id))?;
         Ok(node.raft.clone())
     }
@@ -448,18 +450,25 @@ impl AspenRouter {
     ///
     /// ```ignore
     /// // Wait for log index 5 to be applied
-    /// router.wait(&0, Some(Duration::from_secs(5)))
+    /// router.wait(0, Some(Duration::from_secs(5)))
     ///     .applied_index(Some(5), "entries committed")
     ///     .await?;
     ///
     /// // Wait for leader election
-    /// router.wait(&0, Some(Duration::from_secs(10)))
+    /// router.wait(0, Some(Duration::from_secs(10)))
     ///     .current_leader(Some(0), "leader elected")
     ///     .await?;
     /// ```
-    pub fn wait(&self, node_id: &NodeId, timeout: Option<Duration>) -> Wait<AppTypeConfig> {
+    pub fn wait(
+        &self,
+        node_id: impl Into<NodeId>,
+        timeout: Option<Duration>,
+    ) -> Wait<AppTypeConfig> {
+        let node_id = node_id.into();
         let nodes = self.inner.nodes.lock().unwrap();
-        let node = nodes.get(node_id).expect("node not found in routing table");
+        let node = nodes
+            .get(&node_id)
+            .expect("node not found in routing table");
         node.raft.wait(timeout)
     }
 
@@ -479,9 +488,14 @@ impl AspenRouter {
     /// // Node 2 → Node 1: 50ms latency (asymmetric)
     /// router.set_network_delay(2, 1, 50);
     /// ```
-    pub fn set_network_delay(&mut self, source: NodeId, target: NodeId, delay_ms: u64) {
+    pub fn set_network_delay(
+        &mut self,
+        source: impl Into<NodeId>,
+        target: impl Into<NodeId>,
+        delay_ms: u64,
+    ) {
         let mut delays = self.inner.delays.lock().unwrap();
-        delays.insert((source, target), delay_ms);
+        delays.insert((source.into(), target.into()), delay_ms);
     }
 
     /// Set global network delay for all node pairs. Convenience method.
@@ -532,10 +546,15 @@ impl AspenRouter {
     /// // Simulate 20% packet loss from node 1 to node 2
     /// router.set_message_drop_rate(1, 2, 20);
     /// ```
-    pub fn set_message_drop_rate(&mut self, source: NodeId, target: NodeId, drop_rate: u32) {
+    pub fn set_message_drop_rate(
+        &mut self,
+        source: impl Into<NodeId>,
+        target: impl Into<NodeId>,
+        drop_rate: u32,
+    ) {
         let clamped_rate = drop_rate.min(100);
         let mut drop_rates = self.inner.drop_rates.lock().unwrap();
-        drop_rates.insert((source, target), clamped_rate);
+        drop_rates.insert((source.into(), target.into()), clamped_rate);
     }
 
     /// Set global message drop rate for all node pairs. Convenience method.
@@ -571,15 +590,15 @@ impl AspenRouter {
     /// Mark a node as failed. All RPCs to this node will return Unreachable errors.
     ///
     /// Useful for simulating node crashes and network partitions.
-    pub fn fail_node(&mut self, node_id: NodeId) {
+    pub fn fail_node(&mut self, node_id: impl Into<NodeId>) {
         let mut failed = self.inner.failed_nodes.lock().unwrap();
-        failed.insert(node_id, true);
+        failed.insert(node_id.into(), true);
     }
 
     /// Recover a previously failed node. RPCs to this node will succeed again.
-    pub fn recover_node(&mut self, node_id: NodeId) {
+    pub fn recover_node(&mut self, node_id: impl Into<NodeId>) {
         let mut failed = self.inner.failed_nodes.lock().unwrap();
-        failed.insert(node_id, false);
+        failed.insert(node_id.into(), false);
     }
 
     /// Get the current leader node ID by checking metrics across all nodes.
@@ -623,7 +642,7 @@ impl AspenRouter {
     /// the current leader first, or use `write_to_leader()` which handles routing.
     pub async fn write(
         &self,
-        node_id: &NodeId,
+        node_id: impl Into<NodeId>,
         key: String,
         value: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -638,47 +657,54 @@ impl AspenRouter {
     /// Note: This reads directly from the state machine without going through Raft,
     /// so it may return stale data if the node is behind. For linearizable reads,
     /// use the Raft read API.
-    pub async fn read(&self, node_id: &NodeId, key: &str) -> Option<String> {
+    pub async fn read(&self, node_id: impl Into<NodeId>, key: &str) -> Option<String> {
+        let node_id = node_id.into();
         let state_machine = {
             let nodes = self.inner.nodes.lock().unwrap();
-            let node = nodes.get(node_id)?;
+            let node = nodes.get(&node_id)?;
             node.state_machine.clone() // Clone the Arc before awaiting
         }; // Lock released here
         state_machine.get(key).await
     }
 
     /// Initialize a single-node cluster with the given node as the leader.
-    pub async fn initialize(&self, node_id: NodeId) -> Result<()> {
+    pub async fn initialize(&self, node_id: impl Into<NodeId>) -> Result<()> {
         use std::collections::BTreeMap;
+        let node_id = node_id.into();
 
-        let members: BTreeMap<NodeId, RaftAspenNode> = {
+        let members: BTreeMap<NodeId, RaftMemberInfo> = {
             let nodes = self.inner.nodes.lock().unwrap();
             nodes
                 .keys()
-                .map(|id| (*id, create_test_aspen_node(*id)))
+                .map(|id| (*id, create_test_raft_member_info(*id)))
                 .collect()
         };
 
-        let raft = self.get_raft_handle(&node_id)?;
+        let raft = self.get_raft_handle(node_id)?;
         raft.initialize(members).await?;
         Ok(())
     }
 
     /// Add a learner node to the cluster.
-    pub async fn add_learner(&self, leader: NodeId, target: NodeId) -> Result<()> {
-        let raft = self.get_raft_handle(&leader)?;
-        raft.add_learner(target, create_test_aspen_node(target), true)
+    pub async fn add_learner(
+        &self,
+        leader: impl Into<NodeId>,
+        target: impl Into<NodeId>,
+    ) -> Result<()> {
+        let target = target.into();
+        let raft = self.get_raft_handle(leader)?;
+        raft.add_learner(target, create_test_raft_member_info(target), true)
             .await
             .map_err(|e| e.into_api_error().unwrap())?;
         Ok(())
     }
 
     /// Execute a callback with read-only access to the internal Raft state.
-    pub async fn external_request<F>(&self, target: NodeId, req: F) -> Result<()>
+    pub async fn external_request<F>(&self, target: impl Into<NodeId>, req: F) -> Result<()>
     where
         F: FnOnce(&openraft::RaftState<AppTypeConfig>) + Send + 'static,
     {
-        let raft = self.get_raft_handle(&target)?;
+        let raft = self.get_raft_handle(target)?;
         raft.external_request(req)
             .await
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
@@ -693,21 +719,21 @@ impl AspenRouter {
     ) -> Result<u64> {
         use openraft::ServerState;
 
-        let leader_id = 0;
+        let leader_id: NodeId = 0.into();
         assert!(
             voter_ids.contains(&leader_id),
             "voter_ids must contain node 0"
         );
 
         self.new_raft_node(leader_id).await?;
-        self.wait(&leader_id, Some(Duration::from_secs(10)))
+        self.wait(leader_id, Some(Duration::from_secs(10)))
             .applied_index(None, "empty")
             .await?;
 
         self.initialize(leader_id).await?;
         let mut log_index = 1_u64;
 
-        self.wait(&leader_id, Some(Duration::from_secs(10)))
+        self.wait(leader_id, Some(Duration::from_secs(10)))
             .applied_index(Some(log_index), "init")
             .await?;
 
@@ -719,24 +745,24 @@ impl AspenRouter {
             self.add_learner(leader_id, *id).await?;
             log_index += 1;
 
-            self.wait(id, Some(Duration::from_secs(10)))
+            self.wait(*id, Some(Duration::from_secs(10)))
                 .state(ServerState::Learner, "empty node")
                 .await?;
         }
 
         for id in voter_ids.iter() {
-            self.wait(id, Some(Duration::from_secs(10)))
+            self.wait(*id, Some(Duration::from_secs(10)))
                 .applied_index(Some(log_index), &format!("learners of {:?}", voter_ids))
                 .await?;
         }
 
         if voter_ids.len() > 1 {
-            let raft = self.get_raft_handle(&leader_id)?;
+            let raft = self.get_raft_handle(leader_id)?;
             raft.change_membership(voter_ids.clone(), false).await?;
             log_index += 2;
 
             for id in voter_ids.iter() {
-                self.wait(id, Some(Duration::from_secs(10)))
+                self.wait(*id, Some(Duration::from_secs(10)))
                     .applied_index(Some(log_index), &format!("cluster of {:?}", voter_ids))
                     .await?;
             }
@@ -749,7 +775,7 @@ impl AspenRouter {
         }
 
         for id in learners.iter() {
-            self.wait(id, Some(Duration::from_secs(10)))
+            self.wait(*id, Some(Duration::from_secs(10)))
                 .applied_index(Some(log_index), &format!("learners of {:?}", learners))
                 .await?;
         }
@@ -763,35 +789,36 @@ impl AspenRouter {
     /// going through the network layer.
     pub fn remove_node(
         &mut self,
-        node_id: NodeId,
+        node_id: impl Into<NodeId>,
     ) -> Option<(
         Raft<AppTypeConfig>,
         InMemoryLogStore,
         Arc<InMemoryStateMachine>,
     )> {
+        let node_id = node_id.into();
         let mut nodes = self.inner.nodes.lock().unwrap();
         let node = nodes.remove(&node_id)?;
         Some((node.raft, node.log_store, node.state_machine))
     }
 }
 
-/// Create a test `AspenNode` with a deterministic Iroh address derived from the node ID.
+/// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///
 /// This is used in the in-memory test router where we don't have real Iroh endpoints.
 /// The address is deterministically generated from the node ID to ensure consistency.
-fn create_test_aspen_node(node_id: NodeId) -> RaftAspenNode {
+fn create_test_raft_member_info(node_id: NodeId) -> RaftMemberInfo {
     use iroh::{EndpointAddr, EndpointId, SecretKey};
 
     // Generate a deterministic secret key from the node ID
     let mut seed = [0u8; 32];
-    seed[..8].copy_from_slice(&node_id.to_le_bytes());
+    seed[..8].copy_from_slice(&node_id.0.to_le_bytes());
     let secret_key = SecretKey::from(seed);
     let endpoint_id: EndpointId = secret_key.public();
 
     // Create an EndpointAddr with just the ID (no relay URLs or direct addresses for tests)
     let endpoint_addr = EndpointAddr::new(endpoint_id);
 
-    RaftAspenNode::new(endpoint_addr)
+    RaftMemberInfo::new(endpoint_addr)
 }
 
 #[cfg(test)]
@@ -809,12 +836,12 @@ mod tests {
         router.new_raft_node(2).await?;
 
         // Verify nodes were created
-        assert!(router.get_raft_handle(&0).is_ok());
-        assert!(router.get_raft_handle(&1).is_ok());
-        assert!(router.get_raft_handle(&2).is_ok());
+        assert!(router.get_raft_handle(0).is_ok());
+        assert!(router.get_raft_handle(1).is_ok());
+        assert!(router.get_raft_handle(2).is_ok());
 
         // Verify read/write operations
-        let node0 = router.get_raft_handle(&0)?;
+        let node0 = router.get_raft_handle(0)?;
         assert!(node0.is_initialized().await.is_ok());
 
         Ok(())
@@ -832,8 +859,8 @@ mod tests {
         router.set_global_network_delay(10); // Small delay to avoid test flakiness
 
         // Verify nodes still work with delay configured
-        assert!(router.get_raft_handle(&0).is_ok());
-        assert!(router.get_raft_handle(&1).is_ok());
+        assert!(router.get_raft_handle(0).is_ok());
+        assert!(router.get_raft_handle(1).is_ok());
 
         Ok(())
     }
@@ -856,7 +883,7 @@ mod tests {
         router.recover_node(1);
 
         // Node 1 should work again
-        let node1 = router.get_raft_handle(&1)?;
+        let node1 = router.get_raft_handle(1)?;
         let _ = node1.is_initialized().await; // Should not panic
 
         Ok(())

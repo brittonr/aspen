@@ -66,7 +66,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for leader election
     router
-        .wait(&0, Some(Duration::from_secs(2)))
+        .wait(0, Some(Duration::from_secs(2)))
         .state(ServerState::Leader, "leader elected")
         .await?;
     let initial_leader = router
@@ -79,7 +79,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         let key = format!("baseline-{}", i);
         let value = format!("value-{}", i);
         router
-            .write(&initial_leader, key.clone(), value)
+            .write(initial_leader, key.clone(), value)
             .await
             .map_err(|e| anyhow::anyhow!("baseline write failed: {}", e))?;
         events.push(format!("baseline-write: {}", key));
@@ -87,7 +87,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for baseline writes to commit
     router
-        .wait(&initial_leader, Some(Duration::from_millis(1000)))
+        .wait(initial_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed") // 1 blank + 3 writes
         .await?;
     events.push("baseline-committed: 3 writes".into());
@@ -107,7 +107,7 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
 
     // Wait for majority to have a leader
     router
-        .wait(&0, Some(Duration::from_secs(2)))
+        .wait(0, Some(Duration::from_secs(2)))
         .state(ServerState::Leader, "majority maintains leader")
         .await?;
 
@@ -161,14 +161,14 @@ async fn run_split_brain_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Verify all nodes converge to same leader
     for i in 0..5 {
         router
-            .wait(&i, Some(Duration::from_secs(2)))
+            .wait(i, Some(Duration::from_secs(2)))
             .current_leader(final_leader, "nodes converged to single leader")
             .await?;
     }
     events.push("convergence: all nodes agree on single leader".into());
 
     // Verify reads work on leader
-    let result = router.read(&final_leader, "during-partition").await;
+    let result = router.read(final_leader, "during-partition").await;
     if result.is_some() {
         events.push(format!(
             "read-validation: leader {} operational",
@@ -197,7 +197,7 @@ async fn test_minimal_quorum_partition() -> anyhow::Result<()> {
 
     // Wait for leader election
     router
-        .wait(&0, Some(Duration::from_secs(2)))
+        .wait(0, Some(Duration::from_secs(2)))
         .state(ServerState::Leader, "leader elected")
         .await?;
     let leader = router
@@ -211,7 +211,7 @@ async fn test_minimal_quorum_partition() -> anyhow::Result<()> {
 
     // Verify cluster still operational (2 nodes = quorum)
     router
-        .write(&leader, "test-key".to_string(), "test-value".to_string())
+        .write(leader, "test-key".to_string(), "test-value".to_string())
         .await
         .map_err(|e| anyhow::anyhow!("write failed with 2-node quorum: {}", e))?;
 
@@ -222,7 +222,7 @@ async fn test_minimal_quorum_partition() -> anyhow::Result<()> {
     // Verify all nodes converge to same leader
     for i in 0..3 {
         router
-            .wait(&i, Some(Duration::from_secs(2)))
+            .wait(i, Some(Duration::from_secs(2)))
             .current_leader(leader, "nodes converged to leader")
             .await?;
     }

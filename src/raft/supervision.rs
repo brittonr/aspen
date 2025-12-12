@@ -705,7 +705,7 @@ impl RaftSupervisor {
             StateMachineVariant::InMemory(_) => {
                 // In-memory storage cannot be corrupted on disk
                 debug!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     "skipping storage validation for in-memory backend"
                 );
                 Ok(())
@@ -714,16 +714,16 @@ impl RaftSupervisor {
                 let storage_path = state_machine.path();
 
                 debug!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     path = %storage_path.display(),
                     "validating sqlite storage before restart"
                 );
 
                 // First, validate SQLite database integrity
-                match state_machine.validate(node_id) {
+                match state_machine.validate(node_id.into()) {
                     Ok(report) => {
                         info!(
-                            node_id = node_id,
+                            node_id = %node_id,
                             checks_passed = report.checks_passed,
                             validation_duration_ms = report.validation_duration.as_millis(),
                             "sqlite storage validation passed"
@@ -731,7 +731,7 @@ impl RaftSupervisor {
                     }
                     Err(err) => {
                         error!(
-                            node_id = node_id,
+                            node_id = %node_id,
                             error = %err,
                             "sqlite storage validation failed"
                         );
@@ -742,18 +742,18 @@ impl RaftSupervisor {
                 // Second, validate cross-storage consistency (last_applied <= committed)
                 if let Some(log_store) = &state.raft_actor_config.log_store {
                     debug!(
-                        node_id = node_id,
+                        node_id = %node_id,
                         "validating cross-storage consistency (sqlite state machine vs redb log)"
                     );
 
                     match state_machine.validate_consistency_with_log(log_store).await {
                         Ok(()) => {
-                            info!(node_id = node_id, "cross-storage validation passed");
+                            info!(node_id = %node_id, "cross-storage validation passed");
                             Ok(())
                         }
                         Err(err) => {
                             error!(
-                                node_id = node_id,
+                                node_id = %node_id,
                                 error = %err,
                                 "cross-storage validation failed"
                             );
@@ -762,7 +762,7 @@ impl RaftSupervisor {
                     }
                 } else {
                     warn!(
-                        node_id = node_id,
+                        node_id = %node_id,
                         "no log store available for cross-storage validation"
                     );
                     Ok(())
@@ -784,7 +784,7 @@ impl RaftSupervisor {
         let node_id = state.raft_actor_config.node_id;
 
         error!(
-            node_id = node_id,
+            node_id = %node_id,
             error = %err,
             "raft actor failed"
         );
@@ -800,7 +800,7 @@ impl RaftSupervisor {
         // Validate storage before restart
         if let Err(validation_err) = self.validate_storage(state).await {
             error!(
-                node_id = node_id,
+                node_id = %node_id,
                 error = %validation_err,
                 "storage validation failed, restart aborted"
             );
@@ -812,7 +812,7 @@ impl RaftSupervisor {
         let backoff_duration = self.apply_restart_backoff(state).await;
 
         // Attempt to respawn RaftActor
-        info!(node_id = node_id, "attempting to restart raft actor");
+        info!(node_id = %node_id, "attempting to restart raft actor");
 
         match self
             .spawn_raft_actor(myself.clone(), &state.raft_actor_config)
@@ -846,7 +846,7 @@ impl RaftSupervisor {
         // Check if auto-restart is enabled
         if !state.config.enable_auto_restart {
             warn!(
-                node_id = node_id,
+                node_id = %node_id,
                 "auto-restart disabled, actor will not be restarted"
             );
             self.clear_actor_state(state);
@@ -860,7 +860,7 @@ impl RaftSupervisor {
         if !self.should_allow_restart(state) {
             let restarts_in_window = self.count_restarts_in_window(state);
             error!(
-                node_id = node_id,
+                node_id = %node_id,
                 circuit_state = ?state.circuit_breaker_state,
                 restarts_in_window = restarts_in_window,
                 window_secs = state.config.restart_window_secs,
@@ -889,13 +889,13 @@ impl RaftSupervisor {
         let was_stable = actor_uptime_duration >= state.config.actor_stability_duration();
         if was_stable {
             info!(
-                node_id = node_id,
+                node_id = %node_id,
                 uptime_secs = actor_uptime_duration.as_secs(),
                 "actor was stable before failure"
             );
         } else {
             warn!(
-                node_id = node_id,
+                node_id = %node_id,
                 uptime_secs = actor_uptime_duration.as_secs(),
                 stability_threshold_secs = state.config.actor_stability_duration_secs,
                 "actor failed before reaching stability threshold"
@@ -917,7 +917,7 @@ impl RaftSupervisor {
         let backoff_duration = self.calculate_backoff(restarts_in_window);
 
         info!(
-            node_id = node_id,
+            node_id = %node_id,
             backoff_secs = backoff_duration.as_secs(),
             restarts_in_window = restarts_in_window,
             "applying exponential backoff before restart"
@@ -942,7 +942,7 @@ impl RaftSupervisor {
     ) {
         let node_id = state.raft_actor_config.node_id;
 
-        info!(node_id = node_id, "raft actor restarted successfully");
+        info!(node_id = %node_id, "raft actor restarted successfully");
 
         // Stop old health monitor task if it exists
         if let Some(task) = state.health_monitor_task.take() {
@@ -957,7 +957,7 @@ impl RaftSupervisor {
         let health_monitor_task = health_monitor.clone().start();
 
         info!(
-            node_id = node_id,
+            node_id = %node_id,
             "health monitor restarted for new raft actor"
         );
 
@@ -985,7 +985,7 @@ impl RaftSupervisor {
         let node_id = state.raft_actor_config.node_id;
 
         error!(
-            node_id = node_id,
+            node_id = %node_id,
             error = %spawn_err,
             circuit_state = ?state.circuit_breaker_state,
             "failed to restart raft actor"
@@ -994,7 +994,7 @@ impl RaftSupervisor {
         // If restart failed in HalfOpen state, transition back to Open
         if state.circuit_breaker_state == CircuitBreakerState::HalfOpen {
             warn!(
-                node_id = node_id,
+                node_id = %node_id,
                 circuit_state = "HalfOpen -> Open",
                 "restart failed in half-open state, reopening circuit"
             );
@@ -1027,7 +1027,7 @@ impl Actor for RaftSupervisor {
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let node_id = args.raft_actor_config.node_id;
-        info!(node_id = node_id, "raft supervisor starting");
+        info!(node_id = %node_id, "raft supervisor starting");
 
         // Spawn initial RaftActor using spawn_linked
         let (raft_actor, _task) = self
@@ -1036,7 +1036,7 @@ impl Actor for RaftSupervisor {
             .map_err(|err| ActorProcessingErr::from(err.to_string()))?;
 
         info!(
-            node_id = node_id,
+            node_id = %node_id,
             "initial raft actor spawned under supervision"
         );
 
@@ -1047,7 +1047,7 @@ impl Actor for RaftSupervisor {
         ));
         let health_monitor_task = health_monitor.clone().start();
 
-        info!(node_id = node_id, "health monitor started for raft actor");
+        info!(node_id = %node_id, "health monitor started for raft actor");
 
         Ok(RaftSupervisorState {
             restart_history: VecDeque::with_capacity(
@@ -1105,7 +1105,7 @@ impl Actor for RaftSupervisor {
             SupervisorMessage::ManualRestart => {
                 let node_id = state.raft_actor_config.node_id;
                 warn!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     "manual restart requested (bypasses meltdown check)"
                 );
 
@@ -1148,7 +1148,7 @@ impl Actor for RaftSupervisor {
             SupervisionEvent::ActorTerminated(_cell, _, reason) => {
                 let node_id = state.raft_actor_config.node_id;
                 info!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     reason = ?reason,
                     "raft actor terminated normally"
                 );
@@ -1433,7 +1433,7 @@ pub enum HealthCheckError {
 mod health_monitor_tests {
     use super::*;
     use crate::raft::storage::InMemoryStateMachine;
-    use crate::raft::types::{AppTypeConfig, AspenNode, NodeId};
+    use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
     use crate::raft::{RaftActor, RaftActorConfig, StateMachineVariant};
     use openraft::Config as RaftConfig;
     use openraft::error::{RPCError, Unreachable};
@@ -1447,7 +1447,7 @@ mod health_monitor_tests {
     impl RaftNetworkFactory<AppTypeConfig> for MockNetworkFactory {
         type Network = MockNetwork;
 
-        async fn new_client(&mut self, _target: NodeId, _node: &AspenNode) -> Self::Network {
+        async fn new_client(&mut self, _target: NodeId, _node: &RaftMemberInfo) -> Self::Network {
             MockNetwork
         }
     }
@@ -1499,7 +1499,7 @@ mod health_monitor_tests {
         use crate::raft::storage::InMemoryLogStore;
         use openraft::Raft;
 
-        let node_id = 1;
+        let node_id = NodeId(1);
         let config = Arc::new(RaftConfig::default());
         let log_store = InMemoryLogStore::default();
         let state_machine = InMemoryStateMachine::default();

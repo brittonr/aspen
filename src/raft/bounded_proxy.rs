@@ -511,28 +511,28 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_creation_with_default_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::new(actor_ref, 1);
+        let proxy = BoundedRaftActorProxy::new(actor_ref, 1.into());
 
         assert_eq!(proxy.capacity(), DEFAULT_CAPACITY);
         assert_eq!(proxy.mailbox_depth(), 0);
-        assert_eq!(proxy.node_id(), 1);
+        assert_eq!(proxy.node_id(), 1.into());
     }
 
     #[tokio::test]
     async fn test_proxy_creation_with_custom_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 2)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 2.into())
             .expect("valid capacity should succeed");
 
         assert_eq!(proxy.capacity(), 500);
         assert_eq!(proxy.mailbox_depth(), 0);
-        assert_eq!(proxy.node_id(), 2);
+        assert_eq!(proxy.node_id(), 2.into());
     }
 
     #[tokio::test]
     async fn test_proxy_rejects_zero_capacity() {
         let actor_ref = create_test_raft_actor().await;
-        let result = BoundedRaftActorProxy::with_capacity(actor_ref, 0, 1);
+        let result = BoundedRaftActorProxy::with_capacity(actor_ref, 0, 1.into());
 
         assert!(result.is_err(), "zero capacity should be rejected");
         assert!(matches!(
@@ -556,7 +556,7 @@ mod tests {
     #[tokio::test]
     async fn test_try_send_succeeds_when_capacity_available() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1.into())
             .expect("valid capacity should succeed");
 
         // Send a ping message
@@ -573,7 +573,7 @@ mod tests {
     #[tokio::test]
     async fn test_mailbox_depth_tracking() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 100, 1)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 100, 1.into())
             .expect("valid capacity should succeed");
 
         assert_eq!(proxy.mailbox_depth(), 0, "initial depth should be 0");
@@ -599,7 +599,7 @@ mod tests {
     #[tokio::test]
     async fn test_blocking_send_succeeds() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 10, 1.into())
             .expect("valid capacity should succeed");
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -617,7 +617,7 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_is_cloneable() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy1 = BoundedRaftActorProxy::new(actor_ref, 1);
+        let proxy1 = BoundedRaftActorProxy::new(actor_ref, 1.into());
         let proxy2 = proxy1.clone();
 
         // Both proxies should share the same semaphore
@@ -640,7 +640,7 @@ mod tests {
     async fn test_inner_access() {
         let actor_ref = create_test_raft_actor().await;
         let actor_id = actor_ref.get_id();
-        let proxy = BoundedRaftActorProxy::new(actor_ref, 1);
+        let proxy = BoundedRaftActorProxy::new(actor_ref, 1.into());
 
         // Verify we can access the inner ActorRef
         let inner = proxy.inner();
@@ -650,7 +650,7 @@ mod tests {
     #[tokio::test]
     async fn test_debug_formatting() {
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 3)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 500, 3.into())
             .expect("valid capacity should succeed");
 
         let debug_str = format!("{:?}", proxy);
@@ -674,7 +674,7 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         let actor_ref = create_test_raft_actor().await;
-        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 5, 1)
+        let proxy = BoundedRaftActorProxy::with_capacity(actor_ref, 5, 1.into())
             .expect("valid capacity should succeed");
 
         let success_count = Arc::new(AtomicU32::new(0));

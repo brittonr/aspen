@@ -122,7 +122,7 @@ impl PeerConnection {
         // Track active streams
         let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed) + 1;
         debug!(
-            node_id = self.node_id,
+            node_id = %self.node_id,
             active_streams = active_count,
             "acquiring stream from connection"
         );
@@ -143,7 +143,7 @@ impl PeerConnection {
                 // Reset health to healthy on successful stream open
                 let mut health = self.health.lock().await;
                 if !matches!(*health, ConnectionHealth::Healthy) {
-                    debug!(node_id = self.node_id, "connection health recovered");
+                    debug!(node_id = %self.node_id, "connection health recovered");
                     *health = ConnectionHealth::Healthy;
                 }
 
@@ -175,7 +175,7 @@ impl PeerConnection {
                             consecutive_failures: 1,
                         };
                         warn!(
-                            node_id = self.node_id,
+                            node_id = %self.node_id,
                             error = %err,
                             "connection degraded after stream failure"
                         );
@@ -186,7 +186,7 @@ impl PeerConnection {
                         if consecutive_failures >= MAX_CONNECTION_RETRIES {
                             *health = ConnectionHealth::Failed;
                             error!(
-                                node_id = self.node_id,
+                                node_id = %self.node_id,
                                 failures = consecutive_failures + 1,
                                 "connection marked as failed after repeated stream failures"
                             );
@@ -282,7 +282,7 @@ impl RaftConnectionPool {
                 let health = conn.health().await;
                 if health != ConnectionHealth::Failed {
                     debug!(
-                        node_id,
+                        %node_id,
                         health = ?health,
                         active_streams = conn.active_stream_count(),
                         "reusing existing connection"
@@ -316,7 +316,7 @@ impl RaftConnectionPool {
         }
 
         info!(
-            node_id,
+            %node_id,
             endpoint_id = %peer_addr.id,
             "creating new connection to peer"
         );
@@ -342,7 +342,7 @@ impl RaftConnectionPool {
                         CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)),
                     );
                     warn!(
-                        node_id,
+                        %node_id,
                         attempt = attempts,
                         backoff_ms = backoff.as_millis(),
                         error = %err,
@@ -352,7 +352,7 @@ impl RaftConnectionPool {
                 }
                 Err(err) => {
                     error!(
-                        node_id,
+                        %node_id,
                         attempts,
                         error = %err,
                         "failed to connect after retries"
@@ -378,7 +378,7 @@ impl RaftConnectionPool {
             let mut connections = self.connections.write().await;
             connections.insert(node_id, Arc::clone(&peer_conn));
             info!(
-                node_id,
+                %node_id,
                 pool_size = connections.len(),
                 "added connection to pool"
             );
@@ -419,7 +419,7 @@ impl RaftConnectionPool {
                     if should_remove {
                         to_remove.push(*node_id);
                         debug!(
-                            node_id = *node_id,
+                            node_id = %node_id,
                             health = ?health,
                             active_streams,
                             "removing connection from pool"
@@ -433,7 +433,7 @@ impl RaftConnectionPool {
                         // Note: We can't close the connection directly here because it's behind an Arc
                         // The connection will be closed when all Arc references are dropped
                         debug!(
-                            node_id,
+                            %node_id,
                             "removed connection from pool (will close when all references dropped)"
                         );
 

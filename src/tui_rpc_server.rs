@@ -285,7 +285,7 @@ async fn process_tui_request(
             Ok(TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: ctx.node_id,
                 state: format!("{:?}", metrics.state),
-                current_leader: metrics.current_leader,
+                current_leader: metrics.current_leader.map(|id| id.0),
                 current_term: metrics.current_term,
                 last_log_index: metrics.last_log_index,
                 last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),

@@ -1540,15 +1540,15 @@ async fn promote_learner(
     })?;
 
     let promotion_request = PromotionRequest {
-        learner_id: req.learner_id,
-        replace_node: req.replace_node,
+        learner_id: req.learner_id.into(),
+        replace_node: req.replace_node.map(|id| id.into()),
         force: req.force,
     };
 
     match coordinator.promote_learner(promotion_request).await {
         Ok(result) => {
             info!(
-                learner_id = result.learner_id,
+                learner_id = %result.learner_id,
                 previous_voters = ?result.previous_voters,
                 new_voters = ?result.new_voters,
                 "learner promoted successfully"
@@ -1556,9 +1556,13 @@ async fn promote_learner(
 
             Ok(Json(PromoteLearnerResponse {
                 success: true,
-                learner_id: result.learner_id,
-                previous_voters: result.previous_voters,
-                new_voters: result.new_voters,
+                learner_id: result.learner_id.into(),
+                previous_voters: result
+                    .previous_voters
+                    .iter()
+                    .map(|id| (*id).into())
+                    .collect(),
+                new_voters: result.new_voters.iter().map(|id| (*id).into()).collect(),
                 message: format!(
                     "Learner {} promoted to voter successfully",
                     result.learner_id
@@ -1636,7 +1640,7 @@ async fn discover_peer_addresses(
         // Add peer to network factory
         state
             .network_factory
-            .add_peer(member.id, node_info.endpoint_addr.clone())
+            .add_peer(member.id.into(), node_info.endpoint_addr.clone())
             .await;
 
         info!(
@@ -1740,7 +1744,7 @@ async fn add_peer(
     Json(req): Json<AddPeerRequest>,
 ) -> impl IntoResponse {
     ctx.network_factory
-        .add_peer(req.node_id, req.endpoint_addr)
+        .add_peer(req.node_id.into(), req.endpoint_addr)
         .await;
     StatusCode::OK
 }

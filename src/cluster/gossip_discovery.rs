@@ -247,7 +247,7 @@ impl GossipPeerDiscovery {
                                 //    membership is explicitly controlled by operators.
                                 //
                                 // 4. Address Persistence: Addresses ARE persisted! When a peer is
-                                //    added via add_learner(), their AspenNode (with iroh_addr) is
+                                //    added via add_learner(), their RaftMemberInfo (with iroh_addr) is
                                 //    stored in Raft membership and persisted to the state machine.
                                 //    On restart, these addresses are recovered automatically.
                                 //
@@ -403,7 +403,7 @@ mod tests {
     fn test_peer_announcement_serialize_deserialize() {
         let node_id = 123u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement = PeerAnnouncement::new(node_id, addr).unwrap();
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
 
         let bytes = announcement.to_bytes().unwrap();
         let deserialized = PeerAnnouncement::from_bytes(&bytes).unwrap();
@@ -417,11 +417,11 @@ mod tests {
     fn test_peer_announcement_timestamp() {
         let node_id = 456u64;
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
-        let announcement1 = PeerAnnouncement::new(node_id, addr.clone()).unwrap();
+        let announcement1 = PeerAnnouncement::new(node_id.into(), addr.clone()).unwrap();
 
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        let announcement2 = PeerAnnouncement::new(node_id, addr).unwrap();
+        let announcement2 = PeerAnnouncement::new(node_id.into(), addr).unwrap();
 
         // Second announcement should have a later timestamp
         assert!(announcement2.timestamp_micros > announcement1.timestamp_micros);

@@ -5,27 +5,90 @@
 //!
 //! # Type Configuration
 //!
-//! - **NodeId**: `u64` - Unique identifier for cluster nodes
-//! - **Node**: `AspenNode` - Custom node type storing Iroh P2P addresses
+//! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
+//! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
 //!
 //! # Tiger Style
 //!
 //! - Explicitly sized types: `u64` for NodeId (not usize for portability)
+//! - Newtype pattern: Prevents accidental mixing with log indices, terms, ports
 //! - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
 
 use std::fmt;
+use std::num::ParseIntError;
+use std::str::FromStr;
 
 use iroh::EndpointAddr;
 use openraft::declare_raft_types;
 use serde::{Deserialize, Serialize};
 
-pub type NodeId = u64;
-
-/// Custom node type for Aspen that stores Iroh P2P addresses.
+/// Type-safe node identifier for Raft cluster nodes.
 ///
-/// Unlike `BasicNode` which stores a simple address string, `AspenNode`
+/// This newtype wrapper around `u64` prevents accidental mixing with other
+/// numeric types like log indices, term numbers, or port numbers. The compiler
+/// enforces correct usage at type-check time rather than runtime.
+///
+/// # Tiger Style
+///
+/// - Zero overhead: Compiles to bare `u64`, no runtime cost
+/// - Ergonomic conversions: `From`/`Into` traits for seamless integration
+/// - String parsing: `FromStr` with explicit error handling
+/// - Ordering: Derived `PartialOrd`/`Ord` for deterministic sorting
+///
+/// # Example
+///
+/// ```ignore
+/// use aspen::raft::types::NodeId;
+///
+/// let node_id = NodeId::new(1);
+/// let node_id: NodeId = 42.into();
+/// let node_id: NodeId = "123".parse()?;
+/// let raw: u64 = node_id.into();
+/// ```
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
+pub struct NodeId(pub u64);
+
+impl NodeId {
+    /// Create a new `NodeId` from a raw `u64`.
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u64> for NodeId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<NodeId> for u64 {
+    fn from(value: NodeId) -> Self {
+        value.0
+    }
+}
+
+impl FromStr for NodeId {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u64>().map(NodeId)
+    }
+}
+
+/// Raft membership metadata containing Iroh P2P connection information.
+///
+/// This type is stored in Raft's membership set alongside each `NodeId`. Unlike
+/// openraft's `BasicNode` which stores a simple address string, `RaftMemberInfo`
 /// stores the full Iroh `EndpointAddr` containing:
 /// - Endpoint ID (public key identifier)
 /// - Relay URLs for NAT traversal
@@ -35,24 +98,24 @@ pub type NodeId = u64;
 /// persisted in the state machine, and recovered on restart without
 /// requiring gossip rediscovery.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AspenNode {
+pub struct RaftMemberInfo {
     /// The Iroh endpoint address for connecting to this node.
     pub iroh_addr: EndpointAddr,
 }
 
-impl AspenNode {
-    /// Creates a new `AspenNode` with the given Iroh endpoint address.
+impl RaftMemberInfo {
+    /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
     pub fn new(iroh_addr: EndpointAddr) -> Self {
         Self { iroh_addr }
     }
 }
 
-impl Default for AspenNode {
-    /// Creates a default `AspenNode` with a zero endpoint ID.
+impl Default for RaftMemberInfo {
+    /// Creates a default `RaftMemberInfo` with a zero endpoint ID.
     ///
     /// This is primarily used by testing utilities (e.g., openraft's `membership_ent`)
-    /// that require nodes to implement `Default`. In production, use `AspenNode::new()`
-    /// or `create_test_aspen_node()` to create nodes with proper endpoint addresses.
+    /// that require nodes to implement `Default`. In production, use `RaftMemberInfo::new()`
+    /// or `create_test_raft_member_info()` to create nodes with proper endpoint addresses.
     fn default() -> Self {
         use iroh::{EndpointId, SecretKey};
 
@@ -66,9 +129,9 @@ impl Default for AspenNode {
     }
 }
 
-impl fmt::Display for AspenNode {
+impl fmt::Display for RaftMemberInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AspenNode({})", self.iroh_addr.id)
+        write!(f, "RaftMemberInfo({})", self.iroh_addr.id)
     }
 }
 
@@ -122,5 +185,5 @@ declare_raft_types!(
         D = AppRequest,
         R = AppResponse,
         NodeId = NodeId,
-        Node = AspenNode,
+        Node = RaftMemberInfo,
 );

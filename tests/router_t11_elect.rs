@@ -93,7 +93,7 @@ async fn test_elect_compare_last_log() -> Result<()> {
     let leader_id = router.leader();
     assert_eq!(
         leader_id,
-        Some(0),
+        Some(0.into()),
         "node 0 should be leader (higher term in last log)"
     );
 

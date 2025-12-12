@@ -76,7 +76,7 @@ use crate::api::{
 use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use crate::raft::storage::InMemoryStateMachine;
 use crate::raft::storage_sqlite::SqliteStateMachine;
-use crate::raft::types::{AppRequest, AppTypeConfig, AspenNode};
+use crate::raft::types::{AppRequest, AppTypeConfig, NodeId, RaftMemberInfo};
 
 /// State machine variant that can hold either in-memory or sqlite-backed storage.
 ///
@@ -189,7 +189,7 @@ impl StateMachineVariant {
 /// Configuration used to initialize a Raft actor instance.
 #[derive(Clone, Debug)]
 pub struct RaftActorConfig {
-    pub node_id: u64,
+    pub node_id: NodeId,
     pub raft: Raft<AppTypeConfig>,
     pub state_machine: StateMachineVariant,
     /// Log store reference for cross-storage validation (only set for SQLite backend)
@@ -201,7 +201,7 @@ pub struct RaftActor;
 
 #[derive(Debug)]
 pub struct RaftActorState {
-    node_id: u64,
+    node_id: NodeId,
     raft: Raft<AppTypeConfig>,
     state_machine: StateMachineVariant,
     // cluster_state removed - always derive from Raft metrics
@@ -272,7 +272,7 @@ impl Actor for RaftActor {
         _myself: ActorRef<Self::Msg>,
         config: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        info!(node_id = config.node_id, "raft actor starting");
+        info!(node_id = %config.node_id, "raft actor starting");
         Ok(RaftActorState {
             node_id: config.node_id,
             raft: config.raft,
@@ -289,7 +289,7 @@ impl Actor for RaftActor {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             RaftActorMessage::GetNodeId(reply) => {
-                let _ = reply.send(state.node_id);
+                let _ = reply.send(state.node_id.into());
             }
             RaftActorMessage::Ping(reply) => {
                 // Immediately respond to health check ping (actor is alive)
@@ -388,7 +388,7 @@ impl Actor for RaftActor {
                 let _ = reply.send(result);
             }
             RaftActorMessage::Shutdown => {
-                warn!(node_id = state.node_id, "raft actor shutting down");
+                warn!(node_id = %state.node_id, "raft actor shutting down");
                 myself.stop(Some("raft-actor-shutdown".into()));
             }
         }
@@ -433,19 +433,20 @@ fn build_cluster_state_from_metrics(state: &RaftActorState) -> ClusterState {
     let mut members = Vec::new();
 
     // Get voter IDs first
-    let voter_ids: std::collections::HashSet<u64> = membership.membership().voter_ids().collect();
+    let voter_ids: std::collections::HashSet<NodeId> =
+        membership.membership().voter_ids().collect();
 
-    // Get all nodes from membership (includes AspenNode with Iroh addresses)
-    for (node_id, aspen_node) in membership.membership().nodes() {
+    // Get all nodes from membership (includes RaftMemberInfo with Iroh addresses)
+    for (node_id, member_info) in membership.membership().nodes() {
         let cluster_node = ClusterNode {
-            id: *node_id,
-            addr: aspen_node.iroh_addr.id.to_string(),
+            id: (*node_id).into(),
+            addr: member_info.iroh_addr.id.to_string(),
             raft_addr: None,
-            iroh_addr: Some(aspen_node.iroh_addr.clone()),
+            iroh_addr: Some(member_info.iroh_addr.clone()),
         };
 
         if voter_ids.contains(node_id) {
-            members.push(*node_id);
+            members.push((*node_id).into());
             nodes.push(cluster_node);
         } else {
             learners.push(cluster_node);
@@ -461,7 +462,7 @@ fn build_cluster_state_from_metrics(state: &RaftActorState) -> ClusterState {
 
 /// Ensure the node has an Iroh address for Raft communication.
 ///
-/// With the introduction of `AspenNode`, the primary address source is `iroh_addr`.
+/// With the introduction of `RaftMemberInfo`, the primary address source is `iroh_addr`.
 /// The legacy `raft_addr` is no longer required.
 fn ensure_iroh_addr(node: &ClusterNode) -> Result<&EndpointAddr, ControlPlaneError> {
     node.iroh_addr
@@ -474,7 +475,7 @@ fn ensure_iroh_addr(node: &ClusterNode) -> Result<&EndpointAddr, ControlPlaneErr
         })
 }
 
-#[instrument(skip(state), fields(node_id = state.node_id, members = request.initial_members.len()))]
+#[instrument(skip(state), fields(node_id = %state.node_id, members = request.initial_members.len()))]
 async fn handle_init(
     state: &mut RaftActorState,
     request: InitRequest,
@@ -485,11 +486,14 @@ async fn handle_init(
         });
     }
 
-    // Build AspenNode map from ClusterNodes with Iroh addresses
-    let mut nodes = BTreeMap::new();
+    // Build RaftMemberInfo map from ClusterNodes with Iroh addresses
+    let mut nodes: BTreeMap<NodeId, RaftMemberInfo> = BTreeMap::new();
     for cluster_node in &request.initial_members {
         let iroh_addr = ensure_iroh_addr(cluster_node)?;
-        nodes.insert(cluster_node.id, AspenNode::new(iroh_addr.clone()));
+        nodes.insert(
+            cluster_node.id.into(),
+            RaftMemberInfo::new(iroh_addr.clone()),
+        );
     }
 
     state
@@ -506,14 +510,14 @@ async fn handle_init(
     Ok(build_cluster_state_from_metrics(state))
 }
 
-#[instrument(skip(state), fields(node_id = state.node_id, learner_id = request.learner.id))]
+#[instrument(skip(state), fields(node_id = %state.node_id, learner_id = request.learner.id))]
 async fn handle_add_learner(
     state: &mut RaftActorState,
     request: AddLearnerRequest,
 ) -> Result<ClusterState, ControlPlaneError> {
     let learner = request.learner;
     let iroh_addr = ensure_iroh_addr(&learner)?;
-    let node = AspenNode::new(iroh_addr.clone());
+    let node = RaftMemberInfo::new(iroh_addr.clone());
 
     info!(
         learner_id = learner.id,
@@ -523,7 +527,7 @@ async fn handle_add_learner(
 
     state
         .raft
-        .add_learner(learner.id, node, true)
+        .add_learner(learner.id.into(), node, true)
         .await
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
@@ -534,7 +538,7 @@ async fn handle_add_learner(
     Ok(build_cluster_state_from_metrics(state))
 }
 
-#[instrument(skip(state), fields(node_id = state.node_id, new_members = ?request.members))]
+#[instrument(skip(state), fields(node_id = %state.node_id, new_members = ?request.members))]
 async fn handle_change_membership(
     state: &mut RaftActorState,
     request: ChangeMembershipRequest,
@@ -544,7 +548,7 @@ async fn handle_change_membership(
             reason: "members must include at least one voter".into(),
         });
     }
-    let members: BTreeSet<u64> = request.members.iter().copied().collect();
+    let members: BTreeSet<NodeId> = request.members.iter().map(|&id| id.into()).collect();
 
     state
         .raft
@@ -592,7 +596,7 @@ fn validate_batch_size(size: usize) -> Result<(), KeyValueStoreError> {
     Ok(())
 }
 
-#[instrument(skip(state, request), fields(node_id = state.node_id, command = ?request.command))]
+#[instrument(skip(state, request), fields(node_id = %state.node_id, command = ?request.command))]
 async fn handle_write(
     state: &mut RaftActorState,
     request: WriteRequest,
@@ -641,7 +645,7 @@ async fn handle_write(
     Ok(WriteResult { command: cmd })
 }
 
-#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
+#[instrument(skip(state), fields(node_id = %state.node_id, key = %request.key))]
 async fn handle_delete(
     state: &mut RaftActorState,
     request: DeleteRequest,
@@ -671,7 +675,7 @@ async fn handle_delete(
     })
 }
 
-#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
+#[instrument(skip(state), fields(node_id = %state.node_id, key = %request.key))]
 async fn handle_read(
     state: &RaftActorState,
     request: ReadRequest,
@@ -730,7 +734,7 @@ impl RaftControlClient {
     /// * `actor` - The RaftActor reference to wrap
     /// * `node_id` - Node ID for logging and debugging
     pub fn new_bounded(actor: ActorRef<RaftActorMessage>, node_id: u64) -> Self {
-        let proxy = bounded_proxy::BoundedRaftActorProxy::new(actor.clone(), node_id);
+        let proxy = bounded_proxy::BoundedRaftActorProxy::new(actor.clone(), node_id.into());
         Self {
             actor,
             proxy: Some(proxy),
@@ -753,8 +757,11 @@ impl RaftControlClient {
         capacity: u32,
         node_id: u64,
     ) -> Result<Self, bounded_proxy::BoundedMailboxError> {
-        let proxy =
-            bounded_proxy::BoundedRaftActorProxy::with_capacity(actor.clone(), capacity, node_id)?;
+        let proxy = bounded_proxy::BoundedRaftActorProxy::with_capacity(
+            actor.clone(),
+            capacity,
+            node_id.into(),
+        )?;
         Ok(Self {
             actor,
             proxy: Some(proxy),

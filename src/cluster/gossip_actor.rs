@@ -191,7 +191,7 @@ impl GossipActorState {
 
         info!(
             topic_id = ?self.args.topic_id,
-            node_id = self.args.node_id,
+            node_id = %self.args.node_id,
             "starting gossip discovery"
         );
 
@@ -242,7 +242,7 @@ impl GossipActorState {
                 .map(|(id, _)| *id)
             {
                 warn!(
-                    removed_peer = oldest_id,
+                    removed_peer = %oldest_id,
                     max_peers = self.max_peers,
                     "peer limit reached, removing oldest peer"
                 );
@@ -299,7 +299,7 @@ impl Actor for GossipActor {
     ) -> Result<Self::State, ActorProcessingErr> {
         info!(
             topic_id = ?args.topic_id,
-            node_id = args.node_id,
+            node_id = %args.node_id,
             "GossipActor starting"
         );
 
@@ -339,7 +339,7 @@ impl Actor for GossipActor {
             GossipMessage::PeerDiscovered(peer) => {
                 let node_id = peer.node_id;
                 info!(
-                    node_id = node_id,
+                    node_id = %node_id,
                     endpoint_id = ?peer.endpoint_addr.id,
                     "peer discovered via gossip"
                 );
@@ -507,13 +507,13 @@ mod tests {
     fn test_peer_info_creation() {
         let addr = EndpointAddr::new(iroh::SecretKey::from([1u8; 32]).public());
         let peer = PeerInfo {
-            node_id: 123,
+            node_id: NodeId(123),
             endpoint_addr: addr.clone(),
             last_seen_secs_ago: 0,
             announcement_count: 1,
         };
 
-        assert_eq!(peer.node_id, 123);
+        assert_eq!(peer.node_id, NodeId(123));
         assert_eq!(peer.endpoint_addr, addr);
         assert_eq!(peer.last_seen_secs_ago, 0);
         assert_eq!(peer.announcement_count, 1);
@@ -540,7 +540,7 @@ mod tests {
     fn test_peer_info_serialization() {
         let addr = EndpointAddr::new(iroh::SecretKey::from([2u8; 32]).public());
         let peer = PeerInfo {
-            node_id: 456,
+            node_id: NodeId(456),
             endpoint_addr: addr,
             last_seen_secs_ago: 30,
             announcement_count: 5,
@@ -553,7 +553,7 @@ mod tests {
 
         // Should deserialize back
         let deserialized: PeerInfo = serde_json::from_str(&json).expect("deserialization failed");
-        assert_eq!(deserialized.node_id, 456);
+        assert_eq!(deserialized.node_id, NodeId(456));
         assert_eq!(deserialized.announcement_count, 5);
     }
 }

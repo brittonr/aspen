@@ -177,7 +177,3 @@ path = "tests/vm/failure_tests.rs"
 required-features = ["testing"]
 
 # Benchmarks
-[[bench]]
-name = "storage_read_concurrency"
-path = "benches/storage_read_concurrency.rs"
-harness = false

@@ -44,7 +44,7 @@ async fn test_bootstrap_single_node() {
 
     // Verify Raft core is initialized
     let metrics = handle.raft_core.metrics().borrow().clone();
-    assert_eq!(metrics.id, 100);
+    assert_eq!(metrics.id, NodeId(100));
 
     // Shutdown gracefully
     handle.shutdown().await.unwrap();

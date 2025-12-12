@@ -132,7 +132,7 @@ pub trait ClusterController: Send + Sync {
     /// Returns None if no leader is elected or leadership is unknown.
     /// This is a convenience method that extracts current_leader from metrics.
     async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
-        Ok(self.get_metrics().await?.current_leader)
+        Ok(self.get_metrics().await?.current_leader.map(|id| id.0))
     }
 }
 
