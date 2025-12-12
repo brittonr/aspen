@@ -298,7 +298,7 @@ Aspen uses Iroh for QUIC-based peer-to-peer networking with automatic discovery.
 Nodes find each other automatically through multiple methods:
 
 | Method | Default | Use Case | Description |
-|--------|---------|----------|-------------|
+| -------- | --------- | ---------- | ------------- |
 | **mDNS** | ON | Local dev | Zero-config LAN discovery |
 | **Gossip** | ON | All | Topic from blake3(cookie), announces every 10s |
 | **DNS** | OFF | Production | Internet-scale via iroh.link |
@@ -449,7 +449,7 @@ src/
 ### Default Values
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --------- | --------- | ------------- |
 | `node_id` | (required) | Unique Raft node identifier (non-zero u64) |
 | `data_dir` | `./data/node-{id}` | Persistent storage directory |
 | `storage_backend` | `Sqlite` | Storage: `Sqlite`, `InMemory`, or `Redb` (deprecated) |
@@ -464,7 +464,7 @@ src/
 ### Iroh Discovery Defaults
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --------- | --------- | ------------- |
 | `enable_gossip` | `true` | Automatic peer discovery via gossip |
 | `enable_mdns` | `true` | Local network discovery (dev/testing) |
 | `enable_dns_discovery` | `false` | DNS-based discovery (production) |
@@ -473,7 +473,7 @@ src/
 ### Supervision Defaults
 
 | Setting | Default | Description |
-|---------|---------|-------------|
+| --------- | --------- | ------------- |
 | `max_restart_count` | `3` | Max restarts per window |
 | `restart_window_secs` | `600` | 10-minute window |
 | `actor_stability_duration_secs` | `300` | 5 minutes uptime required |
@@ -549,7 +549,7 @@ nix run .#aspen-tui -- --refresh 500 --debug
 ### TUI Navigation
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `Tab` / `Shift+Tab` | Next/Previous view |
 | `↑` / `↓` | Navigate node list |
 | `Enter` | Select/Confirm |
@@ -599,33 +599,11 @@ nix run .#aspen-tui -- --refresh 500 --debug
 ### Building
 
 ```bash
-# Build without S3 support (default)
+# Build the project
 nix develop -c cargo build --release
 
-# Build with S3 support
-nix develop -c cargo build --release --features s3
-
 # Using Nix
-nix build .#aspen          # Without S3
-nix build .#aspen-full     # With S3 support
-nix build .#aspen-s3       # Just the S3 server binary
-```
-
-### Optional Features
-
-| Feature | Description               | Dependencies              |
-|---------|---------------------------|---------------------------|
-| `s3`    | S3-compatible API server  | s3s, s3s-aws, md5, hyper  |
-
-When the `s3` feature is enabled, you can run an S3-compatible server:
-
-```bash
-# Build and run S3 server
-nix develop -c cargo build --bin aspen-s3 --features s3
-./target/release/aspen-s3 --node-id 1 --s3-addr 127.0.0.1:9000
-
-# Or using Nix
-nix run .#aspen-s3 -- --node-id 1 --s3-addr 127.0.0.1:9000
+nix build .#aspen
 ```
 
 ### Single Node
@@ -699,7 +677,7 @@ ASPEN_NODE_COUNT=5 ASPEN_STORAGE=sqlite nix run .#cluster
 ## HTTP API Reference
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/health` | GET | Node health, leader, supervision status |
 | `/metrics` | GET | Prometheus-format metrics |
 | `/raft-metrics` | GET | Detailed Raft metrics (JSON) |
@@ -754,7 +732,7 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 ### Test Categories
 
 | Category | Count | Framework |
-|----------|-------|-----------|
+| ---------- | ------- | ----------- |
 | Madsim Integration | 9+ | madsim |
 | Property-Based | 6+ | proptest |
 | Router Tests | 25 | AspenRouter |
@@ -782,7 +760,7 @@ See `plan.md` for detailed implementation history and roadmap.
 Aspen provides two main binaries:
 
 | Binary | Purpose | Usage |
-|--------|---------|-------|
+| ------------- | ------------------- | ------------------------------------------------ |
 | `aspen-node` | Cluster node daemon | `aspen-node --node-id 1 --cookie cluster-name` |
 | `aspen-tui` | Terminal UI client | `aspen-tui --nodes http://localhost:8080` |
 

@@ -13,8 +13,6 @@ pub mod cluster;
 pub mod kv;
 pub mod protocol_handlers;
 pub mod raft;
-#[cfg(feature = "s3")]
-pub mod s3;
 pub mod simulation;
 pub mod tui_rpc;
 pub mod tui_rpc_server;
