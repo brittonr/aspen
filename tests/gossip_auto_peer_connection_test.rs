@@ -26,14 +26,12 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
         election_timeout_max_ms: 3000,
         iroh: IrohConfig {
             secret_key: None,
-            relay_url: None,
             enable_gossip: true,
             gossip_ticket: None,
             enable_mdns: true, // Enable mDNS for local network discovery
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
-            pkarr_relay_url: None,
         },
         peers: vec![], // No manual peers - rely on gossip!
         storage_backend: aspen::raft::storage::StorageBackend::default(),
@@ -73,7 +71,6 @@ fn create_node_config(node_id: u64, temp_dir: &TempDir, cookie: &str) -> Cluster
 /// 2. **Production testing (cloud/multi-region):**
 ///    - Enable DNS discovery: `enable_dns_discovery: true`
 ///    - Enable Pkarr: `enable_pkarr: true`
-///    - Configure relay: `relay_url: "https://relay.example.com"`
 ///    - See `examples/production_cluster.rs` for configuration
 ///
 /// 3. **Integration testing without infrastructure:**
@@ -197,14 +194,12 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig {
             secret_key: None,
-            relay_url: None,
             enable_gossip: false, // Gossip DISABLED
             gossip_ticket: None,
             enable_mdns: false,
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
-            pkarr_relay_url: None,
         },
         peers: vec![],
         storage_backend: aspen::raft::storage::StorageBackend::default(),
@@ -235,14 +230,12 @@ async fn test_gossip_disabled_uses_manual_peers() -> Result<()> {
         election_timeout_max_ms: 3000,
         iroh: IrohConfig {
             secret_key: None,
-            relay_url: None,
             enable_gossip: false,
             gossip_ticket: None,
             enable_mdns: false,
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
-            pkarr_relay_url: None,
         },
         peers: vec![peer_spec], // Manual peer configuration
         storage_backend: aspen::raft::storage::StorageBackend::default(),

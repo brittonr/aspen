@@ -186,7 +186,7 @@ impl BootstrapHandle {
 ///
 /// ```text
 /// "1@12D3KooWGdBx..."
-/// "1@{\"node_id\":\"12D3KooWGdBx...\",\"relay_url\":\"https://relay.example.com\"}"
+/// "1@{\"node_id\":\"12D3KooWGdBx...\"}"
 /// ```
 ///
 /// Returns a HashMap mapping NodeId to EndpointAddr.
@@ -522,12 +522,6 @@ async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<Iroh
         iroh_config = iroh_config.with_secret_key(key);
     }
 
-    // Parse relay URL if provided
-    if let Some(relay_url_str) = &config.iroh.relay_url {
-        let relay_url = relay_url_str.parse().context("invalid iroh relay URL")?;
-        iroh_config = iroh_config.with_relay_url(relay_url)?;
-    }
-
     // Configure gossip if enabled
     iroh_config = iroh_config.with_gossip(config.iroh.enable_gossip);
 
@@ -538,9 +532,6 @@ async fn setup_iroh_endpoint(config: &ClusterBootstrapConfig) -> Result<Arc<Iroh
         iroh_config = iroh_config.with_dns_discovery_url(dns_url.clone());
     }
     iroh_config = iroh_config.with_pkarr(config.iroh.enable_pkarr);
-    if let Some(ref pkarr_url) = config.iroh.pkarr_relay_url {
-        iroh_config = iroh_config.with_pkarr_relay_url(pkarr_url.clone());
-    }
 
     // Configure ALPNs for the endpoint.
     // Since we use use_router=false in the RPC server actor, we must configure

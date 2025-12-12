@@ -180,10 +180,6 @@ struct Args {
     #[arg(long)]
     iroh_secret_key: Option<String>,
 
-    /// Optional Iroh relay server URL.
-    #[arg(long)]
-    iroh_relay_url: Option<String>,
-
     /// Disable iroh-gossip for automatic peer discovery.
     /// When disabled, only manual peers (from --peers) are used.
     /// Default: gossip is enabled.
@@ -218,12 +214,7 @@ struct Args {
     #[arg(long)]
     enable_pkarr: bool,
 
-    /// Custom Pkarr relay URL.
-    /// Only relevant when --enable-pkarr is set.
-    #[arg(long)]
-    pkarr_relay_url: Option<String>,
-
-    /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<relay-url>:<direct-addrs>"
+    /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<direct-addrs>"
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
     peers: Vec<String>,
@@ -473,14 +464,12 @@ fn build_cluster_config(args: &Args) -> ClusterBootstrapConfig {
         election_timeout_max_ms: args.election_timeout_max_ms.unwrap_or(3000),
         iroh: IrohConfig {
             secret_key: args.iroh_secret_key.clone(),
-            relay_url: args.iroh_relay_url.clone(),
             enable_gossip: !args.disable_gossip,
             gossip_ticket: args.ticket.clone(),
             enable_mdns: !args.disable_mdns,
             enable_dns_discovery: args.enable_dns_discovery,
             dns_discovery_url: args.dns_discovery_url.clone(),
             enable_pkarr: args.enable_pkarr,
-            pkarr_relay_url: args.pkarr_relay_url.clone(),
         },
         peers: args.peers.clone(),
         supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
@@ -560,7 +549,6 @@ fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
-        .route("/iroh-metrics", get(iroh_metrics))
         .route("/node-info", get(node_info))
         .route("/cluster-ticket", get(cluster_ticket))
         .route("/cluster-ticket-combined", get(cluster_ticket_combined))
@@ -1421,13 +1409,6 @@ async fn metrics(State(ctx): State<AppState>) -> impl IntoResponse {
     }
 
     (StatusCode::OK, body)
-}
-
-async fn iroh_metrics(State(_ctx): State<AppState>) -> impl IntoResponse {
-    // Note: We don't have direct access to IrohEndpointManager in AppState anymore.
-    // This endpoint would need to be restructured to access it from BootstrapHandle.
-    // For now, return NOT_FOUND.
-    StatusCode::NOT_FOUND.into_response()
 }
 
 async fn node_info(State(ctx): State<AppState>) -> impl IntoResponse {

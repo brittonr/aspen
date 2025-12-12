@@ -203,8 +203,6 @@ dependencies = [
  "iroh",
  "iroh-base",
  "iroh-gossip",
- "iroh-metrics",
- "iroh-relay",
  "iroh-tickets",
  "irpc",
  "libc",

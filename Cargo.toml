@@ -7,6 +7,7 @@ license = "Apache-2.0 OR MIT"
 [[bin]]
 name = "aspen-tui"
 path = "src/bin/aspen-tui/main.rs"
+required-features = ["tui"]
 
 [workspace]
 members = [".", "scripts/tutorial-verify"]
@@ -61,8 +62,6 @@ iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-p
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
 iroh-tickets = "0.2"
-iroh-relay = "0.95"
-iroh-metrics = "0.37"
 blake3 = "1.5"
 bytes = "1.7"
 rand = "0.8"
@@ -106,13 +105,13 @@ parking_lot = "0.12"
 # base64 is used by core modules
 base64 = "0.22"
 
-# TUI dependencies
-ratatui = { version = "0.28", features = ["crossterm"] }
-crossterm = { version = "0.28", features = ["event-stream"] }
-color-eyre = "0.6"
-tui-logger = { version = "0.13", features = ["tracing-support"] }
-log = "0.4"
-mime = "0.3.17"
+# TUI dependencies (optional)
+ratatui = { version = "0.28", features = ["crossterm"], optional = true }
+crossterm = { version = "0.28", features = ["event-stream"], optional = true }
+color-eyre = { version = "0.6", optional = true }
+tui-logger = { version = "0.13", features = ["tracing-support"], optional = true }
+log = { version = "0.4", optional = true }
+mime = { version = "0.3.17", optional = true }
 
 [dev-dependencies]
 proptest = "1.0"
@@ -130,6 +129,7 @@ cloud-hypervisor-client = "0.3"
 [features]
 default = []
 testing = []
+tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

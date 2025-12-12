@@ -99,15 +99,12 @@ async fn main() -> Result<()> {
     info!("📡 Configuration: DNS + Pkarr + Relay + Gossip");
 
     // Production configuration from environment
-    let relay_url = env_or_default("ASPEN_RELAY_URL", "https://relay.iroh.link");
     let dns_url = env_or_default("ASPEN_DNS_URL", "https://dns.iroh.link");
-    let pkarr_url = env_or_default("ASPEN_PKARR_URL", "https://pkarr.iroh.link");
     let disable_mdns = env_bool("ASPEN_DISABLE_MDNS");
 
     info!("\n📋 Discovery Configuration:");
-    info!("   Relay Server: {}", relay_url);
     info!("   DNS Discovery: {}", dns_url);
-    info!("   Pkarr Relay: {}", pkarr_url);
+    info!("   Pkarr: enabled (using default n0 service)");
     info!(
         "   mDNS: {}",
         if disable_mdns { "disabled" } else { "enabled" }
@@ -130,15 +127,13 @@ async fn main() -> Result<()> {
 
     // Production Iroh configuration
     let iroh_config = IrohConfig {
-        secret_key: None, // Let Iroh generate a key
-        relay_url: Some(relay_url),
+        secret_key: None,           // Let Iroh generate a key
         enable_gossip: true,        // Announce Raft metadata
         gossip_ticket: None,        // First node doesn't need a ticket
         enable_mdns: !disable_mdns, // Disable in production, useful for dev
         enable_dns_discovery: true, // Primary discovery mechanism
         dns_discovery_url: Some(dns_url),
         enable_pkarr: true, // DHT-based discovery for resilience
-        pkarr_relay_url: Some(pkarr_url),
     };
 
     // Configure nodes with production settings
@@ -253,18 +248,11 @@ async fn main() -> Result<()> {
     warn!("\n⚠️  NOTE: This example requires external services (relay, DNS, Pkarr)");
     warn!("   If discovery fails, verify:");
     warn!(
-        "   1. Relay server is reachable: curl {}",
-        iroh_config.relay_url.as_ref().unwrap()
-    );
-    warn!(
-        "   2. DNS service is operational: curl {}",
+        "   1. DNS service is operational: curl {}",
         iroh_config.dns_discovery_url.as_ref().unwrap()
     );
-    warn!(
-        "   3. Pkarr relay is available: curl {}",
-        iroh_config.pkarr_relay_url.as_ref().unwrap()
-    );
-    warn!("   4. Network allows outbound HTTPS (port 443) and QUIC (UDP)");
+    warn!("   2. Network allows outbound HTTPS (port 443) and QUIC (UDP)");
+    warn!("   3. Default Iroh relay and Pkarr services are accessible");
 
     // For this example, fall back to manual peer exchange
     // In production, discovery would handle this automatically

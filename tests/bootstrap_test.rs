@@ -183,7 +183,6 @@ fn test_load_config_from_toml() {
 
         [iroh]
         secret_key = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-        relay_url = "https://relay.example.com"
     "#;
     std::fs::write(&config_path, toml_content).unwrap();
 

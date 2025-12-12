@@ -74,7 +74,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use iroh::protocol::Router;
-use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, RelayUrl, SecretKey};
+use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, SecretKey};
 use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex as SyncMutex;
@@ -363,8 +363,6 @@ impl NodeServerHandle {
 pub struct IrohEndpointConfig {
     /// Optional secret key for the endpoint. If None, a new key is generated.
     pub secret_key: Option<SecretKey>,
-    /// Relay server URLs for NAT traversal (max 4 relays).
-    pub relay_urls: Vec<RelayUrl>,
     /// Bind port for the QUIC socket (0 = random port).
     pub bind_port: u16,
     /// Enable gossip-based peer discovery (default: true).
@@ -379,8 +377,6 @@ pub struct IrohEndpointConfig {
     pub dns_discovery_url: Option<String>,
     /// Enable Pkarr publisher (default: false).
     pub enable_pkarr: bool,
-    /// Custom Pkarr relay URL (None = use n0's service).
-    pub pkarr_relay_url: Option<String>,
     /// ALPNs to accept on this endpoint.
     ///
     /// Required when NOT using an Iroh Router for ALPN dispatching.
@@ -393,7 +389,6 @@ impl Default for IrohEndpointConfig {
     fn default() -> Self {
         Self {
             secret_key: None,
-            relay_urls: Vec::new(),
             bind_port: 0,
             enable_gossip: true,
             gossip_topic: None,
@@ -401,7 +396,6 @@ impl Default for IrohEndpointConfig {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
-            pkarr_relay_url: None,
             alpns: Vec::new(),
         }
     }
@@ -416,16 +410,6 @@ impl IrohEndpointConfig {
     pub fn with_secret_key(mut self, key: SecretKey) -> Self {
         self.secret_key = Some(key);
         self
-    }
-
-    /// Add a relay server URL (max 4 relays enforced).
-    pub fn with_relay_url(mut self, url: RelayUrl) -> Result<Self> {
-        const MAX_RELAY_URLS: u32 = 4;
-        if self.relay_urls.len() >= MAX_RELAY_URLS as usize {
-            anyhow::bail!("cannot add more than {} relay URLs", MAX_RELAY_URLS);
-        }
-        self.relay_urls.push(url);
-        Ok(self)
     }
 
     /// Set the bind port for the QUIC socket.
@@ -467,12 +451,6 @@ impl IrohEndpointConfig {
     /// Enable or disable Pkarr publisher.
     pub fn with_pkarr(mut self, enable: bool) -> Self {
         self.enable_pkarr = enable;
-        self
-    }
-
-    /// Set custom Pkarr relay URL.
-    pub fn with_pkarr_relay_url(mut self, url: String) -> Self {
-        self.pkarr_relay_url = Some(url);
         self
     }
 
@@ -535,14 +513,8 @@ impl IrohEndpointManager {
         }
 
         // Configure relay mode based on relay URLs
-        if config.relay_urls.is_empty() {
-            builder = builder.relay_mode(RelayMode::Disabled);
-        } else {
-            // Use default relay mode (RelayMode::Default) when relay URLs are provided
-            // Note: In Iroh 0.95.1, relay URLs are configured differently - this may need
-            // additional configuration via discovery or other mechanisms
-            builder = builder.relay_mode(RelayMode::Default);
-        }
+        // Use default relay mode for NAT traversal
+        builder = builder.relay_mode(RelayMode::Default);
 
         // Configure ALPNs if provided.
         // When using Router (spawn_router()), ALPNs are set automatically via .accept() calls.
@@ -582,21 +554,9 @@ impl IrohEndpointManager {
 
         // Pkarr Publisher: Publish node addresses to DHT-based relay
         if config.enable_pkarr {
-            let pkarr_builder = if let Some(ref url) = config.pkarr_relay_url {
-                iroh::discovery::pkarr::PkarrPublisher::builder(
-                    url.parse().context("invalid Pkarr relay URL")?,
-                )
-            } else {
-                iroh::discovery::pkarr::PkarrPublisher::n0_dns()
-            };
+            let pkarr_builder = iroh::discovery::pkarr::PkarrPublisher::n0_dns();
             builder = builder.discovery(pkarr_builder);
-            tracing::info!(
-                "Pkarr publisher enabled with relay: {}",
-                config
-                    .pkarr_relay_url
-                    .as_deref()
-                    .unwrap_or("n0 Pkarr service")
-            );
+            tracing::info!("Pkarr publisher enabled with n0 Pkarr service");
         }
 
         let endpoint = builder
