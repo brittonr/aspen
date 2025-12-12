@@ -19,11 +19,10 @@
 //! 2. Initialize metadata store (redb) for node registry
 //! 3. Create Iroh P2P endpoint with optional ticket-based discovery
 //! 4. Initialize storage backends (redb log + SQLite state machine)
-//! 5. Start ractor_cluster node server for actor communication
-//! 6. Create Raft actor with configured supervision
-//! 7. Start gossip peer discovery (if enabled)
-//! 8. Register RPC endpoints for Raft communication
-//! 9. Return handle with all resources for coordinated shutdown
+//! 5. Create Raft actor with configured supervision
+//! 6. Start gossip peer discovery (if enabled)
+//! 7. Register RPC endpoints for Raft communication
+//! 8. Return handle with all resources for coordinated shutdown
 //!
 //! # Tiger Style
 //!
@@ -221,7 +220,7 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
 /// 1. Validates configuration
 /// 2. Initializes metadata store
 /// 3. Creates Iroh endpoint
-/// 4. Spawns NodeServer
+/// 4. Creates and supervises Raft actor
 /// 5. Launches Raft actor
 /// 6. Registers node in metadata store
 ///

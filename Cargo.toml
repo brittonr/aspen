@@ -95,7 +95,7 @@ irpc = { version = "0.11.0", features = ["derive"] }
 madsim = { version = "0.2.34", features = ["macros"] }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a" }
 ractor = { version = "0.15.9", features = ["cluster", "async-trait"] }
-ractor_cluster = { version = "0.15.9", features = ["async-trait"] }
+# ractor_cluster = { version = "0.15.9", features = ["async-trait"] } # Not used - all inter-node communication uses Iroh
 ractor_actors = { git = "https://github.com/slawlor/ractor_actors", rev = "9a10ec53244767ed025d8b21edbda2bd53c97034", default-features = false, features = ["async-trait"] }
 futures = "0.3.31"
 toml = "0.8"

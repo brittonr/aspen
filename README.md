@@ -199,12 +199,12 @@ Aspen uses a **hybrid actor-task architecture** where long-living actors manage 
 - **Health Check**: Every 5s, expects response within 25ms
 - **Circuit Breaker**: Prevents restart storms (>3 restarts/10min)
 
-##### 3. **NodeServer** (Actor System Root)
+##### 3. **Actor Supervision** (Local Concurrency)
 
-- **Purpose**: Ractor cluster node, manages actor hierarchy
-- **Spawned by**: bootstrap_node() via `NodeServerConfig`
-- **Transport**: Can use Iroh P2P or custom transports
-- **Role**: Parent of all local actors, enables remoting
+- **Purpose**: Manages actor lifecycle and supervision trees
+- **Spawned by**: bootstrap_node() for each actor (RaftActor, RaftRpcServerActor, GossipActor)
+- **Transport**: All inter-node communication uses Iroh P2P exclusively
+- **Role**: Provides fault tolerance via supervision and restart policies
 
 #### Long-Living Manager Actors (New Pattern)
 
@@ -365,27 +365,22 @@ Bootstrap Sequence:
    - Bind QUIC socket (port auto-assigned)
    - Start discovery services (mDNS, DNS, Pkarr)
    ↓
-3. Spawn NodeServer (Actor System Root)
-   - ractor_cluster::NodeServer
-   - Manages actor hierarchy
-   - Enables actor remoting
-   ↓
-4. Spawn RaftSupervisor Actor
+3. Spawn RaftSupervisor Actor
    - Monitors RaftActor health
    - Implements circuit breaker
    ↓
-5. RaftSupervisor spawns RaftActor
+4. RaftSupervisor spawns RaftActor
    - Via spawn_linked (supervised)
    - Owns OpenRaft instance
    - Bounded mailbox (1000 msgs)
    ↓
-6. Start Background Tasks
+5. Start Background Tasks
    - Health Monitor (tokio::spawn)
    - Gossip Announcer (10s interval)
    - Gossip Receiver (continuous)
    - IRPC Server (connection acceptor)
    ↓
-7. HTTP API Ready
+6. HTTP API Ready
    - Routes to RaftActor via ractor messages
    - /health includes supervision status
 ```
@@ -393,9 +388,8 @@ Bootstrap Sequence:
 Actor Hierarchy:
 
 ```
-NodeServer (root)
-    └── RaftSupervisor
-            └── RaftActor (spawn_linked)
+RaftSupervisor (root)
+    └── RaftActor (spawn_linked)
 
 Background Tasks (tokio::spawn):
 - Health Monitor

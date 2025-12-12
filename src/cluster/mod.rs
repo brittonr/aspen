@@ -3,8 +3,8 @@
 //! This module provides the infrastructure for distributed cluster coordination,
 //! including:
 //!
-//! - **Ractor Cluster**: Actor-based node communication via NodeServer
-//! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal
+//! - **Ractor Actors**: Actor-based supervision and local concurrency
+//! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal (exclusive inter-node transport)
 //! - **Gossip-based Peer Discovery**: Automatic node discovery via iroh-gossip (default)
 //! - **Cluster Tickets**: Compact bootstrap information for joining clusters
 //! - **Manual Peer Configuration**: Explicit peer list as fallback when gossip is disabled
@@ -53,7 +53,7 @@
 //!
 //! ```text
 //! ┌─────────────────┐
-//! │  NodeServer     │  Ractor cluster coordination
+//! │  Raft Actor     │  Ractor supervision for Raft consensus
 //! │  (ractor)       │
 //! └────────┬────────┘
 //!          │
