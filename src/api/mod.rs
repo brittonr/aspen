@@ -1,3 +1,41 @@
+//! Core API traits and types for Aspen cluster operations.
+//!
+//! This module defines the primary interfaces for cluster control and key-value storage,
+//! enabling different backend implementations (Raft-based for production, in-memory for testing).
+//!
+//! # Key Traits
+//!
+//! - `ClusterController`: Cluster membership management (init, add learner, change membership)
+//! - `KeyValueStore`: Distributed key-value operations (read, write, delete, scan)
+//!
+//! # Tiger Style
+//!
+//! - Fixed limits on scan results (MAX_SCAN_RESULTS = 10,000)
+//! - Explicit error types with actionable context
+//! - Size validation on keys and values (prevents memory exhaustion)
+//! - Pagination support for bounded memory usage
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::api::{KeyValueStore, WriteRequest, WriteCommand, ReadRequest};
+//!
+//! async fn example(store: &impl KeyValueStore) -> Result<(), anyhow::Error> {
+//!     // Write a key-value pair
+//!     store.write(WriteRequest {
+//!         command: WriteCommand::Set {
+//!             key: "user:123".into(),
+//!             value: "Alice".into(),
+//!         },
+//!     }).await?;
+//!
+//!     // Read it back
+//!     let result = store.read(ReadRequest { key: "user:123".into() }).await?;
+//!     assert_eq!(result.value, "Alice");
+//!     Ok(())
+//! }
+//! ```
+
 use async_trait::async_trait;
 use iroh::EndpointAddr;
 use serde::{Deserialize, Serialize};
@@ -275,9 +313,44 @@ pub const MAX_SCAN_RESULTS: u32 = 10_000;
 /// Default number of keys returned in a scan if limit is not specified.
 pub const DEFAULT_SCAN_LIMIT: u32 = 1_000;
 
+/// Distributed key-value store interface.
+///
+/// Provides linearizable read/write access to a distributed key-value store
+/// backed by Raft consensus. All write operations are replicated to the cluster
+/// and return only after the write is committed to a quorum of nodes.
+///
+/// Tiger Style: Operations have bounded size limits to prevent resource exhaustion.
 #[async_trait]
 pub trait KeyValueStore: Send + Sync {
+    /// Write one or more key-value pairs to the store.
+    ///
+    /// Supports single key writes and batch operations via `WriteCommand`:
+    /// - `Set { key, value }`: Write a single key-value pair
+    /// - `SetMulti { pairs }`: Write multiple key-value pairs atomically
+    /// - `Delete { key }`: Delete a single key
+    /// - `DeleteMulti { keys }`: Delete multiple keys atomically
+    ///
+    /// # Errors
+    ///
+    /// - `KeyTooLarge`: Key exceeds MAX_KEY_SIZE bytes
+    /// - `ValueTooLarge`: Value exceeds MAX_VALUE_SIZE bytes
+    /// - `BatchTooLarge`: SetMulti/DeleteMulti exceeds MAX_BATCH_SIZE keys
+    /// - `Timeout`: Operation did not complete within timeout
+    /// - `Failed`: Raft replication or other internal error
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
+
+    /// Read a value by key.
+    ///
+    /// Returns the current committed value for the specified key.
+    /// Read consistency depends on the backend implementation:
+    /// - Raft backend: Linearizable reads (leader-only or read index)
+    /// - In-memory backend: Local reads (for testing)
+    ///
+    /// # Errors
+    ///
+    /// - `NotFound`: Key does not exist in the store
+    /// - `Timeout`: Read did not complete within timeout
+    /// - `Failed`: Internal error
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
 
     /// Delete a key from the store.

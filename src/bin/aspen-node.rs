@@ -78,8 +78,8 @@ use std::time::Instant;
 use anyhow::Result;
 use aspen::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ControlPlaneError,
-    DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
-    KeyValueStoreError, ReadRequest, WriteRequest,
+    DeleteRequest, DeterministicClusterController, DeterministicKeyValueStore, InitRequest,
+    KeyValueStore, KeyValueStoreError, ReadRequest, ScanRequest, WriteRequest,
 };
 use aspen::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
@@ -143,11 +143,7 @@ struct Args {
     #[arg(long)]
     host: Option<String>,
 
-    /// Port for the Ractor node listener. Use 0 to request an OS-assigned port.
-    #[arg(long, alias = "ractor-port")]
-    port: Option<u16>,
-
-    /// Shared cookie for authenticating Ractor nodes.
+    /// Shared cookie for cluster authentication.
     #[arg(long)]
     cookie: Option<String>,
 
@@ -413,8 +409,6 @@ struct AppState {
     iroh_manager: Arc<aspen::cluster::IrohEndpointManager>,
     cluster_cookie: String,
     data_dir: Option<std::path::PathBuf>,
-    // TODO: Promotion coordinator needs to be updated for direct API
-    _promotion_coordinator: Option<Arc<()>>,
     health_monitor: Arc<aspen::raft::node::RaftNodeHealth>,
     start_time: Instant,
     state_machine: aspen::raft::StateMachineVariant,
@@ -479,22 +473,16 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 fn setup_controllers(
     config: &NodeConfig,
     handle: &SimpleNodeHandle,
-) -> (
-    ClusterControllerHandle,
-    KeyValueStoreHandle,
-    Option<Arc<()>>,
-) {
+) -> (ClusterControllerHandle, KeyValueStoreHandle) {
     match config.control_backend {
         ControlBackend::Deterministic => (
             DeterministicClusterController::new(),
             DeterministicKeyValueStore::new(),
-            None,
         ),
         ControlBackend::RaftActor => {
             // Use RaftNode directly as both controller and KV store
             let raft_node = handle.raft_node.clone();
-            // TODO: Promotion coordinator needs to be updated for direct API
-            (raft_node.clone(), raft_node, None)
+            (raft_node.clone(), raft_node)
         }
     }
 }
@@ -507,7 +495,6 @@ fn create_app_state(
     handle: &SimpleNodeHandle,
     controller: ClusterControllerHandle,
     kv_store: KeyValueStoreHandle,
-    promotion_coordinator: Option<Arc<()>>,
 ) -> AppState {
     AppState {
         node_id: config.node_id,
@@ -518,7 +505,6 @@ fn create_app_state(
         iroh_manager: handle.iroh_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         data_dir: config.data_dir.clone(),
-        _promotion_coordinator: promotion_coordinator,
         health_monitor: handle.health_monitor.clone(),
         start_time: Instant::now(),
         state_machine: handle.raft_node.state_machine().clone(),
@@ -540,6 +526,8 @@ fn build_router(app_state: AppState) -> Router {
         .route("/add-peer", post(add_peer))
         .route("/write", post(write_value))
         .route("/read", post(read_value))
+        .route("/delete", post(delete_value))
+        .route("/scan", post(scan_keys))
         .route("/raft-metrics", get(raft_metrics))
         .route("/leader", get(get_leader))
         .route("/trigger-snapshot", post(trigger_snapshot))
@@ -575,16 +563,10 @@ async fn main() -> Result<()> {
     let handle = bootstrap_node_simple(config.clone()).await?;
 
     // Build controller and KV store based on control backend
-    let (controller, kv_store, promotion_coordinator) = setup_controllers(&config, &handle);
+    let (controller, kv_store) = setup_controllers(&config, &handle);
 
     // Create application state
-    let app_state = create_app_state(
-        &config,
-        &handle,
-        controller.clone(),
-        kv_store.clone(),
-        promotion_coordinator,
-    );
+    let app_state = create_app_state(&config, &handle, controller.clone(), kv_store.clone());
 
     // Spawn Iroh Router with protocol handlers for ALPN-based dispatching
     // This eliminates the race condition where TUI and Raft servers compete for connections
@@ -598,7 +580,6 @@ async fn main() -> Result<()> {
         endpoint_manager: handle.iroh_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         start_time: app_state.start_time,
-        gossip_actor: None, // TODO: Gossip needs to be migrated from actor
     };
     let tui_handler = TuiProtocolHandler::new(tui_context);
 
@@ -1299,9 +1280,10 @@ fn append_failure_detection_metrics(
 /// Append health monitoring metrics (Raft node health status).
 ///
 /// Tiger Style: Focused function for health tracking metrics.
+///
+/// Future enhancement: Add detailed metrics from RaftNodeHealth (failure counts, thresholds).
 fn append_health_monitoring_metrics(body: &mut String, node_id: u64) {
-    // Simplified health monitoring - just report as healthy for now
-    // TODO: Add more detailed health metrics from RaftNodeHealth
+    // Simplified health monitoring - reports healthy for now
     body.push_str("# TYPE aspen_raft_node_health_status gauge\n");
     body.push_str(
         "# HELP aspen_raft_node_health_status Raft node health status (0=unhealthy, 1=healthy)\n",
@@ -1679,6 +1661,49 @@ async fn read_value(
     })?;
 
     // Record read latency
+    let latency_us = start.elapsed().as_micros() as u64;
+    metrics_collector().record_read_latency(latency_us);
+
+    Ok(Json(result))
+}
+
+/// Delete a key from the distributed key-value store.
+///
+/// Returns deleted=true if the key existed, false otherwise (idempotent).
+#[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
+async fn delete_value(
+    State(state): State<AppState>,
+    Json(request): Json<DeleteRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let start = Instant::now();
+
+    let result = state.kv.delete(request).await.inspect_err(|_e| {
+        metrics_collector().record_rpc_error();
+    })?;
+
+    // Record write latency (deletes are writes)
+    let latency_us = start.elapsed().as_micros() as u64;
+    metrics_collector().record_write_latency(latency_us);
+
+    Ok(Json(result))
+}
+
+/// Scan keys matching a prefix with pagination support.
+///
+/// Returns keys in sorted order (lexicographic). Use continuation_token
+/// from response to fetch next page. Max limit: 10,000 keys.
+#[instrument(skip(state), fields(node_id = state.node_id, prefix = %request.prefix))]
+async fn scan_keys(
+    State(state): State<AppState>,
+    Json(request): Json<ScanRequest>,
+) -> ApiResult<impl IntoResponse> {
+    let start = Instant::now();
+
+    let result = state.kv.scan(request).await.inspect_err(|_e| {
+        metrics_collector().record_rpc_error();
+    })?;
+
+    // Record read latency (scans are reads)
     let latency_us = start.elapsed().as_micros() as u64;
     metrics_collector().record_read_latency(latency_us);
 

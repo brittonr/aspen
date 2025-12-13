@@ -1,3 +1,47 @@
+//! IRPC-based Raft network layer over Iroh P2P transport.
+//!
+//! Provides the network factory and client implementations for Raft RPC communication
+//! between cluster nodes using Iroh's QUIC-based P2P networking. Includes connection
+//! pooling for efficient stream multiplexing and failure detection for distinguishing
+//! between actor crashes and node failures.
+//!
+//! # Key Components
+//!
+//! - `IrpcRaftNetworkFactory`: Factory for creating per-peer network clients
+//! - `IrpcRaftNetwork`: Single-peer network client for sending Raft RPCs
+//! - Connection pooling via `RaftConnectionPool` for stream reuse
+//! - `NodeFailureDetector` integration for health monitoring
+//!
+//! # Tiger Style
+//!
+//! - Bounded peer map (MAX_PEERS) prevents Sybil attacks and memory exhaustion
+//! - Explicit error handling with failure detector updates
+//! - Connection pooling with idle cleanup for resource efficiency
+//! - Fixed timeouts (IROH_READ_TIMEOUT) for bounded operation
+//! - Size limits (MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE) for memory safety
+//!
+//! # Architecture
+//!
+//! ```text
+//! RaftNode
+//!    |
+//!    v
+//! IrpcRaftNetworkFactory
+//!    |
+//!    +---> IrpcRaftNetwork (peer 1) ---> RaftConnectionPool ---> Iroh QUIC
+//!    +---> IrpcRaftNetwork (peer 2) ---> RaftConnectionPool ---> Iroh QUIC
+//!    +---> IrpcRaftNetwork (peer 3) ---> RaftConnectionPool ---> Iroh QUIC
+//! ```
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen::raft::network::IrpcRaftNetworkFactory;
+//!
+//! let factory = IrpcRaftNetworkFactory::new(endpoint_manager, peer_addrs);
+//! // Factory is passed to openraft::Raft::new() for network creation
+//! ```
+
 use std::collections::HashMap;
 use std::future::Future;
 

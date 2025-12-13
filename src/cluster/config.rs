@@ -532,6 +532,22 @@ impl NodeConfig {
             }
         }
 
+        // Tiger Style: Validate bounded mailbox capacity
+        const MAX_RAFT_MAILBOX_CAPACITY: u32 = 10000;
+        if self.raft_mailbox_capacity == 0 {
+            return Err(ConfigError::Validation {
+                message: "raft_mailbox_capacity must be greater than 0".into(),
+            });
+        }
+        if self.raft_mailbox_capacity > MAX_RAFT_MAILBOX_CAPACITY {
+            return Err(ConfigError::Validation {
+                message: format!(
+                    "raft_mailbox_capacity {} exceeds maximum of {}",
+                    self.raft_mailbox_capacity, MAX_RAFT_MAILBOX_CAPACITY
+                ),
+            });
+        }
+
         Ok(())
     }
 

@@ -421,16 +421,18 @@ impl ClusterClient for ClientImpl {
 
     async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
         match self {
-            Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
-            Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
+            // Vault listing requires scan RPC which is not yet in TUI protocol
+            Self::Iroh(_) => Ok(vec![]),
+            Self::MultiNode(_) => Ok(vec![]),
             Self::Disconnected(client) => client.list_vaults().await,
         }
     }
 
     async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
         match self {
-            Self::Iroh(_) => Ok(vec![]),      // TODO: implement for Iroh
-            Self::MultiNode(_) => Ok(vec![]), // TODO: implement for MultiNode
+            // Vault key listing requires scan RPC which is not yet in TUI protocol
+            Self::Iroh(_) => Ok(vec![]),
+            Self::MultiNode(_) => Ok(vec![]),
             Self::Disconnected(client) => client.list_vault_keys(vault).await,
         }
     }

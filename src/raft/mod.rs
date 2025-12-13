@@ -45,7 +45,6 @@ pub mod node;
 pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
-pub mod server_actor;
 pub mod simple_supervisor;
 pub mod storage;
 pub mod storage_sqlite;
