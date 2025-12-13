@@ -9,7 +9,7 @@
 //! - `NodeBuilder`: Fluent builder for node configuration and bootstrap
 //! - `Node`: Handle to a running Aspen node with all its subsystems
 //! - `NodeId`: Type-safe wrapper for u64 node identifiers
-//! - Bootstrap integration: Delegates to cluster::bootstrap_simple for full node startup
+//! - Bootstrap integration: Delegates to cluster::bootstrap for full node startup
 //!
 //! # Architecture
 //!
@@ -55,7 +55,7 @@ use iroh::EndpointAddr;
 pub use self::types::NodeId;
 
 use crate::api::{ClusterController, KeyValueStore};
-use crate::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple};
+use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
 use crate::cluster::config::NodeConfig;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
@@ -165,17 +165,17 @@ impl NodeBuilder {
     ///
     /// Returns a handle that can be used to shut down the node gracefully.
     pub async fn start(self) -> Result<Node> {
-        let handle = bootstrap_node_simple(self.config).await?;
+        let handle = bootstrap_node(self.config).await?;
         Ok(Node { handle })
     }
 }
 
 /// Handle returned by [`NodeBuilder::start`].
 ///
-/// Wraps a [`SimpleNodeHandle`] and provides convenient access to the
+/// Wraps a [`NodeHandle`] and provides convenient access to the
 /// node's components for integration testing and programmatic usage.
 pub struct Node {
-    handle: SimpleNodeHandle,
+    handle: NodeHandle,
 }
 
 impl Node {
@@ -206,7 +206,7 @@ impl Node {
     ///
     /// This provides access to all internal components including metadata store,
     /// network factory, health monitor, etc.
-    pub fn handle(&self) -> &SimpleNodeHandle {
+    pub fn handle(&self) -> &NodeHandle {
         &self.handle
     }
 

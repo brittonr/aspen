@@ -35,16 +35,16 @@ use crate::raft::StateMachineVariant;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
 use crate::raft::server::RaftRpcServer;
-use crate::raft::simple_supervisor::SimpleSupervisor;
+use crate::raft::supervisor::Supervisor;
 use crate::raft::storage::RedbLogStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::NodeId;
 
-/// Handle to a running cluster node (simplified version).
+/// Handle to a running cluster node.
 ///
 /// Contains all the resources needed to run and shutdown a node cleanly
-/// without the overhead of actor message passing.
-pub struct SimpleNodeHandle {
+/// using direct async APIs.
+pub struct NodeHandle {
     /// Node configuration.
     pub config: NodeConfig,
     /// Metadata store for cluster nodes.
@@ -64,7 +64,7 @@ pub struct SimpleNodeHandle {
     /// RPC server for handling incoming Raft RPCs.
     pub rpc_server: RaftRpcServer,
     /// Supervisor for automatic restarts.
-    pub supervisor: Arc<SimpleSupervisor>,
+    pub supervisor: Arc<Supervisor>,
     /// Health monitor.
     pub health_monitor: Arc<RaftNodeHealth>,
     /// Cancellation token for shutdown.
@@ -76,7 +76,7 @@ pub struct SimpleNodeHandle {
     pub gossip_topic_id: Option<TopicId>,
 }
 
-impl SimpleNodeHandle {
+impl NodeHandle {
     /// Gracefully shutdown the node.
     pub async fn shutdown(self) -> Result<()> {
         info!("shutting down node {}", self.config.node_id);
@@ -127,7 +127,7 @@ impl SimpleNodeHandle {
 /// This replaces the actor-based bootstrap with direct async APIs,
 /// removing the overhead of message passing while maintaining the
 /// same functionality.
-pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandle> {
+pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     info!(
         node_id = config.node_id,
         "bootstrapping node with simplified architecture"
@@ -308,7 +308,7 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
     ));
 
     // Create supervisor for tracking health failures
-    let supervisor = SimpleSupervisor::new(format!("raft-node-{}", config.node_id));
+    let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));
 
     // Create health monitor with supervisor integration
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
@@ -372,7 +372,7 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
             .as_secs(),
     })?;
 
-    Ok(SimpleNodeHandle {
+    Ok(NodeHandle {
         config,
         metadata_store,
         iroh_manager,

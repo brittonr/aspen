@@ -8,7 +8,7 @@
 //! - **RaftNode**: Direct wrapper around OpenRaft implementing ClusterController and KeyValueStore
 //! - **Storage**: Hybrid storage backend (redb for log, SQLite for state machine)
 //! - **Network**: IRPC-based network transport over Iroh P2P connections
-//! - **SimpleSupervisor**: Lightweight task supervision with restart logic
+//! - **Supervisor**: Lightweight task supervision with restart logic
 //!
 //! # Key Components
 //!
@@ -26,10 +26,10 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use aspen::cluster::bootstrap_simple::bootstrap_node_simple;
+//! use aspen::cluster::bootstrap::bootstrap_node;
 //!
-//! // Bootstrap node with simplified architecture
-//! let handle = bootstrap_node_simple(config).await?;
+//! // Bootstrap node with direct async architecture
+//! let handle = bootstrap_node(config).await?;
 //!
 //! // Use RaftNode directly for operations
 //! handle.raft_node.init(init_request).await?;
@@ -45,7 +45,7 @@ pub mod node;
 pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
-pub mod simple_supervisor;
+pub mod supervisor;
 pub mod storage;
 pub mod storage_sqlite;
 pub mod storage_validation;

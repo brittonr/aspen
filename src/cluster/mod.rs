@@ -76,7 +76,7 @@ use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, SecretKey};
 use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
 use iroh_gossip::proto::TopicId;
 
-pub mod bootstrap_simple;
+pub mod bootstrap;
 pub mod config;
 pub mod gossip_discovery;
 pub mod metadata;

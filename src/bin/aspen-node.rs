@@ -81,7 +81,7 @@ use aspen::api::{
     DeleteRequest, DeterministicClusterController, DeterministicKeyValueStore, InitRequest,
     KeyValueStore, KeyValueStoreError, ReadRequest, ScanRequest, WriteRequest,
 };
-use aspen::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple, load_config};
+use aspen::cluster::bootstrap::{NodeHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
 use aspen::raft::network::IrpcRaftNetworkFactory;
@@ -472,7 +472,7 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 /// Tiger Style: Single responsibility for controller initialization logic.
 fn setup_controllers(
     config: &NodeConfig,
-    handle: &SimpleNodeHandle,
+    handle: &NodeHandle,
 ) -> (ClusterControllerHandle, KeyValueStoreHandle) {
     match config.control_backend {
         ControlBackend::Deterministic => (
@@ -492,7 +492,7 @@ fn setup_controllers(
 /// Tiger Style: Focused state construction function.
 fn create_app_state(
     config: &NodeConfig,
-    handle: &SimpleNodeHandle,
+    handle: &NodeHandle,
     controller: ClusterControllerHandle,
     kv_store: KeyValueStoreHandle,
 ) -> AppState {
@@ -560,7 +560,7 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node with simplified architecture
-    let handle = bootstrap_node_simple(config.clone()).await?;
+    let handle = bootstrap_node(config.clone()).await?;
 
     // Build controller and KV store based on control backend
     let (controller, kv_store) = setup_controllers(&config, &handle);

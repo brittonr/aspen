@@ -2,19 +2,18 @@
 //!
 //! This module provides a minimal `SupervisionConfig` for backward compatibility
 //! with existing configuration files and tests. The actual actor-based supervision
-//! has been replaced by `SimpleSupervisor` in `simple_supervisor.rs`.
+//! has been replaced by `Supervisor` in `supervisor.rs`.
 //!
 //! # Migration
 //!
-//! New code should use `bootstrap_simple::bootstrap_node_simple()` instead of
-//! the actor-based `bootstrap::bootstrap_node()`.
+//! New code should use `bootstrap::bootstrap_node()` directly.
 
 use serde::{Deserialize, Serialize};
 
 /// Configuration for Raft actor supervision (deprecated).
 ///
 /// This struct is kept for backward compatibility with existing configuration
-/// files. The actual supervision is now handled by `SimpleSupervisor`.
+/// files. The actual supervision is now handled by `Supervisor`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisionConfig {
     /// Maximum number of restarts before giving up.

@@ -25,10 +25,10 @@ const BACKOFF_DURATIONS: [Duration; 3] = [
     Duration::from_secs(10),
 ];
 
-/// Simple supervisor for async tasks.
+/// Supervisor for async tasks.
 ///
 /// Provides automatic restart with exponential backoff and circuit breaker.
-pub struct SimpleSupervisor {
+pub struct Supervisor {
     /// Name of the supervised task (for logging).
     name: String,
 
@@ -45,7 +45,7 @@ pub struct SimpleSupervisor {
     cancel: CancellationToken,
 }
 
-impl SimpleSupervisor {
+impl Supervisor {
     /// Create a new supervisor.
     pub fn new(name: impl Into<String>) -> Arc<Self> {
         Arc::new(Self {
@@ -195,12 +195,12 @@ impl SimpleSupervisor {
 pub async fn run_raft_with_supervision<F, Fut>(
     name: String,
     task_factory: F,
-) -> Arc<SimpleSupervisor>
+) -> Arc<Supervisor>
 where
     F: FnMut() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = Result<(), String>> + Send + 'static,
 {
-    let supervisor = SimpleSupervisor::new(name);
+    let supervisor = Supervisor::new(name);
     let supervisor_clone = supervisor.clone();
 
     tokio::spawn(async move {
