@@ -17,9 +17,11 @@ use tracing::{error, info};
 use crate::cluster::config::NodeConfig;
 use crate::cluster::metadata::{MetadataStore, NodeStatus};
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
+use crate::protocol_handlers::RAFT_ALPN;
 use crate::raft::StateMachineVariant;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
+use crate::raft::server::RaftRpcServer;
 use crate::raft::simple_supervisor::SimpleSupervisor;
 use crate::raft::storage::RedbLogStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
@@ -44,8 +46,7 @@ pub struct SimpleNodeHandle {
     // TODO: Implement gossip without actors
     // pub gossip_discovery: Option<Arc<GossipPeerDiscovery>>,
     /// RPC server for handling incoming Raft RPCs.
-    // TODO: Implement RPC server without actor dependencies
-    // pub rpc_server: Arc<RaftRpcServer>,
+    pub rpc_server: RaftRpcServer,
     /// Supervisor for automatic restarts.
     pub supervisor: Arc<SimpleSupervisor>,
     /// Health monitor.
@@ -66,7 +67,9 @@ impl SimpleNodeHandle {
 
         // Stop RPC server
         info!("shutting down RPC server");
-        // Server will stop when cancellation token fires
+        if let Err(err) = self.rpc_server.shutdown().await {
+            error!(error = ?err, "failed to shutdown RPC server gracefully");
+        }
 
         // Stop supervisor
         info!("shutting down supervisor");
@@ -118,11 +121,13 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
     // Create Iroh endpoint configuration
+    // IMPORTANT: Configure ALPN to accept raft-rpc connections
     let iroh_config = IrohEndpointConfig::default()
         .with_gossip(config.iroh.enable_gossip)
         .with_mdns(config.iroh.enable_mdns)
         .with_dns_discovery(config.iroh.enable_dns_discovery)
-        .with_pkarr(config.iroh.enable_pkarr);
+        .with_pkarr(config.iroh.enable_pkarr)
+        .with_alpn(RAFT_ALPN.to_vec());
 
     let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
         iroh_config.with_dns_discovery_url(dns_url.clone())
@@ -172,12 +177,16 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
     let sqlite_state_machine = SqliteStateMachine::new(&state_machine_path)?;
     let state_machine_variant = StateMachineVariant::Sqlite(sqlite_state_machine.clone());
 
-    // Create Raft config
+    // Create Raft config with custom timeouts from NodeConfig
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
+        heartbeat_interval: config.heartbeat_interval_ms,
+        election_timeout_min: config.election_timeout_min_ms,
+        election_timeout_max: config.election_timeout_max_ms,
         replication_lag_threshold: 10000,
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
         max_in_snapshot_log_to_keep: 100,
+        enable_tick: true, // Ensure automatic elections are enabled
         ..RaftConfig::default()
     });
 
@@ -216,9 +225,9 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         }
     });
 
-    // TODO: Create and start RPC server without actor dependencies
-    // The RPC server needs to be reimplemented to work without actors
-    // For now, Raft RPCs are handled through the existing network layer
+    // Start RPC server for handling incoming Raft RPCs
+    let rpc_server = RaftRpcServer::spawn(iroh_manager.clone(), raft.as_ref().clone());
+    info!(node_id = config.node_id, "started Raft RPC server");
 
     // Create supervisor (but don't use it for now - Raft is stable)
     let supervisor = SimpleSupervisor::new(format!("raft-node-{}", config.node_id));
@@ -243,7 +252,7 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         raft_node,
         network_factory,
         // gossip_discovery,
-        // rpc_server,
+        rpc_server,
         supervisor,
         health_monitor,
         shutdown_token: shutdown,

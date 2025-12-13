@@ -121,13 +121,14 @@ impl PeerConnection {
 
         // Track active streams
         let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed) + 1;
-        debug!(
+        info!(
             node_id = %self.node_id,
             active_streams = active_count,
             "acquiring stream from connection"
         );
 
         // Open bidirectional stream with timeout
+        info!(node_id = %self.node_id, "opening bi stream with timeout");
         let stream_result =
             tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, self.connection.open_bi())
                 .await
@@ -137,6 +138,7 @@ impl PeerConnection {
         // Handle stream open result
         match stream_result {
             Ok(stream) => {
+                info!(node_id = %self.node_id, "stream opened successfully");
                 // Update last used timestamp on success
                 *self.last_used.lock().await = Instant::now();
 

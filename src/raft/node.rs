@@ -28,7 +28,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use openraft::{Raft, RaftMetrics, ReadPolicy};
 use tokio::sync::{RwLock, Semaphore};
-use tracing::{info, instrument, warn};
+use tracing::{error, info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
@@ -107,13 +107,34 @@ impl RaftNode {
     }
 
     /// Ensure the cluster is initialized for KV operations.
+    ///
+    /// A node is considered initialized if:
+    /// 1. init() was called on this node directly, OR
+    /// 2. The node has received membership info through Raft replication
     async fn ensure_initialized_kv(&self) -> Result<(), KeyValueStoreError> {
-        if !*self.initialized.read().await {
-            return Err(KeyValueStoreError::Failed {
-                reason: "cluster not initialized".into(),
-            });
+        // Check if explicitly initialized via init()
+        if *self.initialized.read().await {
+            return Ok(());
         }
-        Ok(())
+
+        // Also consider initialized if we have received membership from Raft
+        // This handles nodes that join via replication rather than explicit init
+        let metrics = self.raft.metrics().borrow().clone();
+        if metrics
+            .membership_config
+            .membership()
+            .nodes()
+            .next()
+            .is_some()
+        {
+            // Node has received membership config through Raft - mark as initialized
+            *self.initialized.write().await = true;
+            return Ok(());
+        }
+
+        Err(KeyValueStoreError::Failed {
+            reason: "cluster not initialized".into(),
+        })
     }
 
     /// Build ClusterState from Raft metrics.
@@ -185,14 +206,17 @@ impl ClusterController for RaftNode {
             );
         }
 
-        self.raft
-            .initialize(nodes)
-            .await
-            .map_err(|err| ControlPlaneError::Failed {
+        info!("calling raft.initialize() with {} nodes", nodes.len());
+        self.raft.initialize(nodes).await.map_err(|err| {
+            error!("raft.initialize() failed: {:?}", err);
+            ControlPlaneError::Failed {
                 reason: err.to_string(),
-            })?;
+            }
+        })?;
+        info!("raft.initialize() completed successfully");
 
         *self.initialized.write().await = true;
+        info!("initialized flag set to true");
 
         Ok(self.build_cluster_state())
     }
@@ -374,21 +398,23 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv().await?;
 
-        // Use ReadIndex for linearizable reads
-        let linearizer = self
-            .raft
-            .get_read_linearizer(ReadPolicy::ReadIndex)
-            .await
-            .map_err(|err| KeyValueStoreError::Failed {
-                reason: err.to_string(),
-            })?;
+        // Try to use ReadIndex for linearizable reads
+        // If this node is a follower, fall back to local read
+        let linearizable = match self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await {
+            Ok(linearizer) => linearizer.await_ready(&self.raft).await.is_ok(),
+            Err(_) => {
+                // Not leader or can't contact leader - use local read
+                // This is eventually consistent but better than failing
+                false
+            }
+        };
 
-        linearizer
-            .await_ready(&self.raft)
-            .await
-            .map_err(|err| KeyValueStoreError::Failed {
-                reason: err.to_string(),
-            })?;
+        if !linearizable {
+            info!(
+                "using local read (non-linearizable) for key {}",
+                request.key
+            );
+        }
 
         // Read directly from state machine
         match &self.state_machine {

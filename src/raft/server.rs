@@ -19,7 +19,7 @@ use openraft::Raft;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::constants::{
@@ -106,6 +106,11 @@ async fn run_server(
                     break;
                 };
 
+                info!(
+                    remote_addr = ?incoming.remote_address(),
+                    "received incoming connection"
+                );
+
                 // We'll check ALPN after accepting the connection
                 // Note: In Iroh, connections are already filtered by ALPN at the endpoint level,
                 // but we should handle this gracefully if there's a race condition
@@ -143,22 +148,28 @@ async fn handle_connection(
     connecting: iroh::endpoint::Incoming,
     raft_core: Raft<AppTypeConfig>,
 ) -> Result<()> {
+    info!("awaiting incoming connection completion");
     let connection = connecting.await.context("failed to accept connection")?;
     let remote_node_id = connection.remote_id();
 
-    debug!(remote_node = %remote_node_id, "accepted connection");
+    info!(remote_node = %remote_node_id, "accepted connection, waiting for streams");
 
     // Tiger Style: Fixed limit on concurrent streams per connection
     let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
     let active_streams = Arc::new(AtomicU32::new(0));
 
     // Accept bidirectional streams from this connection
+    info!(remote_node = %remote_node_id, "starting accept_bi loop");
     loop {
+        info!(remote_node = %remote_node_id, "waiting for stream via accept_bi");
         let stream = match connection.accept_bi().await {
-            Ok(stream) => stream,
+            Ok(stream) => {
+                info!(remote_node = %remote_node_id, "accepted bidirectional stream");
+                stream
+            }
             Err(err) => {
                 // Connection closed or error
-                debug!(remote_node = %remote_node_id, error = %err, "connection closed");
+                info!(remote_node = %remote_node_id, error = %err, "connection closed");
                 break;
             }
         };
@@ -201,17 +212,20 @@ async fn handle_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     raft_core: Raft<AppTypeConfig>,
 ) -> Result<()> {
+    info!("handle_rpc_stream started, reading RPC message");
     // Read the RPC message with size limit
     let buffer = recv
         .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
         .await
         .context("failed to read RPC message")?;
 
+    info!(buffer_size = buffer.len(), "read RPC message bytes");
+
     // Deserialize the RPC request (protocol enum without channels)
     let request: RaftRpcProtocol =
         postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
-    debug!(request_type = ?request, "received RPC request");
+    info!(request_type = ?request, "received and deserialized RPC request");
 
     // Process the RPC and create response
     let response = match request {
@@ -258,14 +272,14 @@ async fn handle_rpc_stream(
     let response_bytes =
         postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
 
-    debug!(response_size = response_bytes.len(), "sending RPC response");
+    info!(response_size = response_bytes.len(), "sending RPC response");
 
     send.write_all(&response_bytes)
         .await
         .context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
 
-    debug!("RPC response sent successfully");
+    info!("RPC response sent successfully");
 
     Ok(())
 }

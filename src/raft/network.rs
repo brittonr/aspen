@@ -11,7 +11,7 @@ use openraft::type_config::alias::VoteOf;
 use openraft::{OptionalSend, Snapshot, StorageError};
 use tokio::io::AsyncReadExt;
 use tokio::select;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::connection_pool::RaftConnectionPool;
@@ -257,7 +257,7 @@ impl IrpcRaftNetwork {
         .context("timeout reading RPC response")?
         .context("failed to read RPC response")?;
 
-        debug!(
+        info!(
             response_size = response_buf.len(),
             "received RPC response bytes"
         );
