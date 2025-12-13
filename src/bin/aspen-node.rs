@@ -382,8 +382,8 @@ struct SupervisionHealth {
 
 #[derive(Serialize)]
 struct HealthChecks {
-    /// Raft actor is responsive
-    raft_actor: HealthCheckStatus,
+    /// Raft node is responsive
+    raft_node: HealthCheckStatus,
     /// Has Raft cluster leader (self or other)
     raft_cluster: HealthCheckStatus,
     /// Disk space is available (< 95%)
@@ -466,7 +466,8 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
             enable_pkarr: args.enable_pkarr,
         },
         peers: args.peers.clone(),
-        supervision_config: aspen::raft::supervision::SupervisionConfig::default(),
+        // These are kept for NodeConfig compatibility but unused in simplified architecture
+        supervision_config: Default::default(),
         raft_mailbox_capacity: 1000,
     }
 }
@@ -825,7 +826,7 @@ fn check_wal_file_health(
 /// Tiger Style: Focused function for response construction.
 #[allow(clippy::too_many_arguments)]
 fn build_health_response(
-    raft_actor_check: HealthCheckStatus,
+    raft_node_check: HealthCheckStatus,
     raft_cluster_check: HealthCheckStatus,
     disk_space_check: HealthCheckStatus,
     storage_check: HealthCheckStatus,
@@ -847,7 +848,7 @@ fn build_health_response(
         .as_ref()
         .is_some_and(|w| w.status == "warning");
 
-    let is_critical_failure = raft_actor_check.status == "error"
+    let is_critical_failure = raft_node_check.status == "error"
         || disk_space_check.status == "error"
         || supervision_unhealthy
         || wal_critical;
@@ -868,7 +869,7 @@ fn build_health_response(
     let response = DetailedHealthResponse {
         status: overall_status,
         checks: HealthChecks {
-            raft_actor: raft_actor_check,
+            raft_node: raft_node_check,
             raft_cluster: raft_cluster_check,
             disk_space: disk_space_check,
             storage: storage_check,
