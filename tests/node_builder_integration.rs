@@ -102,9 +102,9 @@ async fn test_custom_raft_timeouts() {
     service.shutdown().await.expect("failed to shutdown");
 }
 
-/// Test creating a KV client from the service.
+/// Test accessing RaftNode from the service.
 #[tokio::test]
-async fn test_client_creation() {
+async fn test_raft_node_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-6");
 
@@ -114,15 +114,15 @@ async fn test_client_creation() {
         .await
         .expect("failed to start service");
 
-    // Client creation should succeed
-    let _client = service.client();
+    // RaftNode access should succeed
+    let _raft_node = service.raft_node();
 
     service.shutdown().await.expect("failed to shutdown");
 }
 
-/// Test accessing Raft core for direct operations.
+/// Test accessing Raft metrics for direct operations.
 #[tokio::test]
-async fn test_raft_core_access() {
+async fn test_raft_metrics_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-7");
 
@@ -132,9 +132,9 @@ async fn test_raft_core_access() {
         .await
         .expect("failed to start service");
 
-    // Access Raft core
-    let raft_core = service.raft_core();
-    let metrics = raft_core.metrics().borrow().clone();
+    // Access Raft node and get metrics
+    let raft_node = service.raft_node();
+    let metrics = raft_node.raft().metrics().borrow().clone();
 
     // Should have basic Raft state (follower, leader, or learner are all valid initial states)
     assert!(
@@ -150,7 +150,7 @@ async fn test_raft_core_access() {
 #[tokio::test]
 async fn test_bootstrap_handle_access() {
     let temp_dir = TempDir::new().unwrap();
-    let data_dir = temp_dir.path().join("node-8");
+    let data_dir = temp_dir.path().join("node-88");
 
     let service = NodeBuilder::new(NodeId(8), &data_dir)
         .with_storage(StorageBackend::InMemory)

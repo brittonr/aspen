@@ -29,5 +29,6 @@ pub mod testing;
 /// with fixed thresholds and fail-fast semantics.
 pub mod utils;
 
-pub use node::{NodeBuilder, NodeClient};
-pub use raft::RaftControlClient;
+pub use node::NodeBuilder;
+// Note: NodeClient removed - use RaftNode directly from bootstrap_simple
+// Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple

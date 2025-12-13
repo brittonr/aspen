@@ -108,7 +108,14 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         .data_dir
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
-    let metadata_store = Arc::new(MetadataStore::new(data_dir)?);
+
+    // Ensure data directory exists
+    std::fs::create_dir_all(data_dir)
+        .with_context(|| format!("failed to create data directory: {}", data_dir.display()))?;
+
+    // MetadataStore expects a path to the database file, not directory
+    let metadata_db_path = data_dir.join("metadata.redb");
+    let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
     // Create Iroh endpoint configuration
     let iroh_config = IrohEndpointConfig::default()
@@ -241,6 +248,39 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         health_monitor,
         shutdown_token: shutdown,
     })
+}
+
+/// Load configuration from multiple sources with proper precedence.
+///
+/// Configuration is loaded in the following order (lowest to highest precedence):
+/// 1. Environment variables (ASPEN_*)
+/// 2. TOML configuration file (if path provided)
+/// 3. Configuration overrides (typically from CLI args)
+///
+/// Returns the merged configuration.
+pub fn load_config(
+    toml_path: Option<&std::path::Path>,
+    overrides: NodeConfig,
+) -> Result<NodeConfig> {
+    // Start with environment variables
+    let mut config = NodeConfig::from_env();
+
+    // Merge TOML file if provided
+    if let Some(path) = toml_path {
+        let toml_config = NodeConfig::from_toml_file(path)
+            .with_context(|| format!("failed to load config from {}", path.display()))?;
+        config.merge(toml_config);
+    }
+
+    // Merge overrides (typically from CLI args)
+    config.merge(overrides);
+
+    // Validate final configuration
+    config
+        .validate()
+        .context("configuration validation failed")?;
+
+    Ok(config)
 }
 
 /// Parse peer addresses from CLI arguments.

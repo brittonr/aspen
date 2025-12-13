@@ -81,8 +81,7 @@ use aspen::api::{
     DeterministicClusterController, DeterministicKeyValueStore, InitRequest, KeyValueStore,
     KeyValueStoreError, ReadRequest, WriteRequest,
 };
-use aspen::cluster::bootstrap::load_config;
-use aspen::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple};
+use aspen::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
 use aspen::raft::network::IrpcRaftNetworkFactory;

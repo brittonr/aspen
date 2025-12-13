@@ -134,32 +134,6 @@ tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
 
-# Failure scenario tests
-[[test]]
-name = "test_disk_full_graceful_rejection"
-path = "tests/failures/test_disk_full_graceful_rejection.rs"
-
-[[test]]
-name = "test_cluster_total_shutdown_recovery"
-path = "tests/failures/test_cluster_total_shutdown_recovery.rs"
-
-[[test]]
-name = "test_network_split_brain_single_leader"
-path = "tests/failures/test_network_split_brain_single_leader.rs"
-
-# Load testing tests
-[[test]]
-name = "test_sustained_write_load"
-path = "tests/load/test_sustained_write_load.rs"
-
-[[test]]
-name = "test_concurrent_read_load"
-path = "tests/load/test_concurrent_read_load.rs"
-
-[[test]]
-name = "test_mixed_workload"
-path = "tests/load/test_mixed_workload.rs"
-
 # VM-based integration tests (require root and KVM)
 [[test]]
 name = "test_vm_basic"

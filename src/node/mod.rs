@@ -1,18 +1,15 @@
-//! Node orchestration and distributed system client API.
+//! Node orchestration and distributed system API.
 //!
 //! Provides a high-level API for building and operating Aspen nodes. This module
 //! orchestrates the complete node bootstrap sequence, wiring together Raft consensus,
-//! Iroh P2P networking, actor supervision, and distributed storage. The builder
-//! (NodeBuilder) handles node configuration and startup, while the client (NodeClient)
-//! provides access to the distributed key-value store and cluster operations.
+//! Iroh P2P networking, and distributed storage using direct async APIs (no actors).
 //!
 //! # Key Components
 //!
 //! - `NodeBuilder`: Fluent builder for node configuration and bootstrap
 //! - `Node`: Handle to a running Aspen node with all its subsystems
-//! - `NodeClient`: Client API for key-value operations (read, write, scan, delete)
 //! - `NodeId`: Type-safe wrapper for u64 node identifiers
-//! - Bootstrap integration: Delegates to cluster::bootstrap for full node startup
+//! - Bootstrap integration: Delegates to cluster::bootstrap_simple for full node startup
 //!
 //! # Architecture
 //!
@@ -20,8 +17,7 @@
 //! 1. Initializes metadata store for node registry
 //! 2. Creates Iroh P2P endpoint for inter-node communication
 //! 3. Starts Raft consensus with SQLite/InMemory state machine
-//! 4. Establishes actor supervision trees for fault tolerance
-//! 5. Provides client interface to the distributed key-value store
+//! 4. Provides direct async API to the distributed key-value store via RaftNode
 //!
 //! # Tiger Style
 //!
@@ -43,32 +39,32 @@
 //!     .start()
 //!     .await?;
 //!
-//! // Use the client
-//! let client = node.client();
-//! client.write("key".to_string(), b"value".to_vec()).await?;
-//! let value = client.read("key".to_string()).await?;
+//! // Use the RaftNode directly for KV operations
+//! let raft_node = node.raft_node();
+//! // raft_node implements both ClusterController and KeyValueStore traits
 //! ```
 
-pub mod client;
 pub mod types;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use iroh::EndpointAddr;
 
-pub use self::client::NodeClient;
 pub use self::types::NodeId;
 
-use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
+use crate::api::{ClusterController, KeyValueStore};
+use crate::cluster::bootstrap_simple::{SimpleNodeHandle, bootstrap_node_simple};
 use crate::cluster::config::NodeConfig;
+use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
 /// Builds an Aspen node with full cluster bootstrap.
 ///
 /// This builder provides a programmatic API for starting Aspen nodes,
 /// wiring together all the components: Raft consensus, Iroh P2P networking,
-/// gossip discovery, actor supervision, and distributed storage.
+/// gossip discovery, and distributed storage.
 ///
 /// # Example
 ///
@@ -164,24 +160,22 @@ impl NodeBuilder {
     /// This initializes all components:
     /// - Metadata store
     /// - Iroh P2P endpoint
-    /// - Ractor cluster node server
-    /// - Raft actor with supervision
-    /// - IRPC server for Raft RPCs
+    /// - RaftNode with direct async API
     /// - Optional gossip discovery
     ///
     /// Returns a handle that can be used to shut down the node gracefully.
     pub async fn start(self) -> Result<Node> {
-        let handle = bootstrap_node(self.config).await?;
+        let handle = bootstrap_node_simple(self.config).await?;
         Ok(Node { handle })
     }
 }
 
 /// Handle returned by [`NodeBuilder::start`].
 ///
-/// Wraps a [`NodeHandle`] and provides convenient access to the
+/// Wraps a [`SimpleNodeHandle`] and provides convenient access to the
 /// node's components for integration testing and programmatic usage.
 pub struct Node {
-    handle: NodeHandle,
+    handle: SimpleNodeHandle,
 }
 
 impl Node {
@@ -200,25 +194,30 @@ impl Node {
         self.handle.iroh_manager.node_addr().clone()
     }
 
-    /// Get a reference to the Raft core for direct Raft operations.
-    pub fn raft_core(&self) -> &openraft::Raft<crate::raft::types::AppTypeConfig> {
-        &self.handle.raft_core
+    /// Get the RaftNode for direct Raft and KV operations.
+    ///
+    /// The RaftNode implements both `ClusterController` and `KeyValueStore` traits,
+    /// providing a unified interface for cluster management and key-value operations.
+    pub fn raft_node(&self) -> &Arc<RaftNode> {
+        &self.handle.raft_node
     }
 
     /// Get the node handle for advanced operations.
     ///
     /// This provides access to all internal components including metadata store,
     /// network factory, health monitor, etc.
-    pub fn handle(&self) -> &NodeHandle {
+    pub fn handle(&self) -> &SimpleNodeHandle {
         &self.handle
     }
 
-    /// Create a client for this node.
-    ///
-    /// The client can be used to perform distributed key-value operations
-    /// and cluster management through the Raft consensus layer.
-    pub fn client(&self) -> NodeClient {
-        NodeClient::new(self.handle.raft_actor.clone())
+    /// Access the ClusterController interface for cluster management operations.
+    pub fn cluster_controller(&self) -> &dyn ClusterController {
+        self.handle.raft_node.as_ref()
+    }
+
+    /// Access the KeyValueStore interface for key-value operations.
+    pub fn kv_store(&self) -> &dyn KeyValueStore {
+        self.handle.raft_node.as_ref()
     }
 
     /// Gracefully shutdown the node.
@@ -227,8 +226,7 @@ impl Node {
     /// 1. Gossip discovery (if enabled)
     /// 2. IRPC server
     /// 3. Iroh endpoint
-    /// 4. Node server
-    /// 5. Raft actor
+    /// 4. RaftNode
     pub async fn shutdown(self) -> Result<()> {
         self.handle.shutdown().await
     }
