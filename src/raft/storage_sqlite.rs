@@ -1033,6 +1033,14 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
     {
         let mut batch_count: u32 = 0;
 
+        // Note: This implementation commits each entry individually for safety.
+        // While this means entries are not atomically batched, it ensures:
+        // 1. The write lock is not held across await points (avoiding Send issues)
+        // 2. Each entry is durably committed before responding
+        // 3. Partial progress is preserved on failures
+        //
+        // For true atomic batch operations, consider buffering entries first,
+        // then applying them synchronously within a single transaction.
         while let Some((entry, responder)) = entries.try_next().await? {
             batch_count += 1;
             if batch_count > MAX_BATCH_SIZE {

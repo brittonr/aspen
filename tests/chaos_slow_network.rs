@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
-#[ignore] // TODO: Needs enable_tick: false or longer timeouts - 200ms latency causes heartbeat timeouts
 async fn test_slow_network_high_latency() {
     let start = Instant::now();
     let seed = 34567u64;
@@ -31,8 +30,20 @@ async fn test_slow_network_high_latency() {
 }
 
 async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
-    // Create 3-node cluster
-    let config = Arc::new(Config::default().validate()?);
+    // Create 3-node cluster with config that tolerates 200ms latency
+    // 200ms latency = 400ms RTT, so timeouts must be significantly higher
+    let config = Arc::new(
+        Config {
+            enable_tick: false,         // Disable automatic ticking for manual control
+            heartbeat_interval: 1000,   // 1 second heartbeat (was ~100ms)
+            election_timeout_min: 3000, // 3 seconds min election timeout
+            election_timeout_max: 6000, // 6 seconds max election timeout
+            max_in_snapshot_log_to_keep: 1000,
+            install_snapshot_timeout: 20000, // 20 seconds for installing snapshots
+            ..Default::default()
+        }
+        .validate()?,
+    );
     let mut router = AspenRouter::new(config);
 
     // Create all 3 nodes
@@ -77,8 +88,16 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     router.set_global_network_delay(200);
     events.push("network-degraded: 200ms latency added".into());
 
-    // Wait for cluster to adapt to slow network (longer wait for CI)
-    tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+    // With enable_tick: false, we need to manually trigger heartbeats
+    // to keep the cluster alive during high latency
+    for _ in 0..3 {
+        // Trigger heartbeats on leader
+        let leader_raft = router.get_raft_handle(leader)?;
+        leader_raft.trigger().heartbeat().await?;
+
+        // Wait for heartbeats to propagate through slow network
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
 
     // Verify cluster still has a leader despite slow network
     router

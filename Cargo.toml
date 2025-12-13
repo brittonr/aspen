@@ -9,6 +9,11 @@ name = "aspen-tui"
 path = "src/bin/aspen-tui/main.rs"
 required-features = ["tui"]
 
+[[bin]]
+name = "sqlite-crash-helper"
+path = "tests/sqlite_crash_helper.rs"
+required-features = ["testing"]
+
 [workspace]
 members = [".", "scripts/tutorial-verify"]
 

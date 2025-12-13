@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::testing::AspenRouter;
-use openraft::Config;
+use openraft::{Config, ServerState};
 use proptest::prelude::*;
 
 // Helper to create key-value generators
@@ -137,15 +137,53 @@ proptest! {
                     .await
                     .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
 
-                // Check leader uniqueness by checking if leader() returns at most one value
+                // Check leader uniqueness: all nodes must agree on the same leader
                 let current_leader = router.leader();
 
-                // Property: leader() returns either None or Some(node_id), never multiple
-                // This inherently guarantees at most one leader
+                // Get metrics from all three nodes to verify they agree on the leader
+                let mut reported_leaders = Vec::new();
+                let mut leader_count = 0;
+
+                // Check each node's metrics
+                for node_id in 0..3 {
+                    let node_handle = router.get_raft_handle(node_id)
+                        .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("failed to get node {}: {}", node_id, e)))?;
+
+                    let metrics = node_handle.metrics().borrow().clone();
+                    reported_leaders.push((node_id, metrics.current_leader));
+
+                    // Count nodes that claim to be leader (via state)
+                    if metrics.state == ServerState::Leader {
+                        leader_count += 1;
+                    }
+                }
+
+                // Property 1: At most one node should claim to be leader
                 prop_assert!(
-                    current_leader.is_none() || current_leader.is_some(),
-                    "Leader state inconsistent"
+                    leader_count <= 1,
+                    "Multiple nodes claiming leadership! Count: {}, Details: {:?}",
+                    leader_count,
+                    reported_leaders
                 );
+
+                // Property 2: All nodes should agree on who the leader is
+                let first_leader = reported_leaders[0].1;
+                for (node_id, reported_leader) in &reported_leaders {
+                    prop_assert_eq!(
+                        *reported_leader, first_leader,
+                        "Node {} disagrees on leader: reports {:?} but node 0 reports {:?}",
+                        node_id, reported_leader, first_leader
+                    );
+                }
+
+                // Property 3: The router's leader() should match what nodes report
+                if let Some(router_leader) = current_leader {
+                    prop_assert_eq!(
+                        first_leader, Some(router_leader),
+                        "Router reports leader {} but nodes report {:?}",
+                        router_leader, first_leader
+                    );
+                }
             }
 
             Ok::<(), proptest::test_runner::TestCaseError>(())

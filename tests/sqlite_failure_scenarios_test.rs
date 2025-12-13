@@ -152,6 +152,90 @@ async fn test_sqlite_crash_recovery_preserves_committed_data() {
 }
 
 // ====================================================================================
+// Test 1b: Real Crash Recovery - Using subprocess that aborts without cleanup
+// ====================================================================================
+
+#[tokio::test]
+async fn test_sqlite_real_crash_recovery() {
+    use std::process::Command;
+
+    let temp_dir = create_temp_dir();
+    let db_path = create_db_path(&temp_dir, "real_crash");
+    let db_path_str = db_path.to_string_lossy();
+
+    // Phase 1: Build the crash helper binary
+    let build_status = Command::new("cargo")
+        .args([
+            "build",
+            "--bin",
+            "sqlite-crash-helper",
+            "--features",
+            "testing",
+        ])
+        .status()
+        .expect("Failed to build crash helper");
+    assert!(build_status.success(), "Failed to build crash helper");
+
+    // Phase 2: Run crash helper subprocess that will write data and abort
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "--bin",
+            "sqlite-crash-helper",
+            "--features",
+            "testing",
+            "--",
+            &db_path_str,
+            "50", // Write 50 entries
+        ])
+        .output()
+        .expect("Failed to execute crash helper");
+
+    // The subprocess should have aborted (non-zero exit)
+    assert!(
+        !output.status.success(),
+        "Subprocess should have aborted/crashed"
+    );
+
+    // Verify subprocess wrote data before crashing
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Successfully wrote 50 entries"),
+        "Subprocess should have written all entries before crashing"
+    );
+
+    // Phase 3: Open database and verify data survived the crash
+    let sm = SqliteStateMachine::new(&db_path).expect("Failed to reopen after crash");
+
+    // Verify all 50 entries are present
+    assert_eq!(
+        sm.count_kv_pairs().unwrap(),
+        50,
+        "All 50 entries should survive the crash"
+    );
+
+    // Verify data integrity
+    for i in 0..50 {
+        let value = sm.get(&format!("crash_key_{}", i)).await.unwrap();
+        assert_eq!(
+            value,
+            Some(format!("crash_value_{}", i)),
+            "Entry {} should survive crash with correct value",
+            i
+        );
+    }
+
+    // Verify metadata survived
+    let mut sm_mut = Arc::clone(&sm);
+    let (last_applied, _) = sm_mut.applied_state().await.unwrap();
+    assert_eq!(
+        last_applied,
+        Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 49)),
+        "last_applied_log should be preserved after crash"
+    );
+}
+
+// ====================================================================================
 // Test 2: Partial Write Recovery - Verify failed operations don't corrupt state
 // ====================================================================================
 

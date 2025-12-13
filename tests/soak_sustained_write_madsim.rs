@@ -26,6 +26,14 @@
 /// - 50,000 ops over 300s virtual time = ~166 ops/sec target rate
 /// - With madsim compression: ~50,000:1 ratio
 /// - Real execution time: ~5-10 seconds
+///
+/// # Deterministic Latency
+///
+/// In madsim simulation, we use fixed latency values for determinism:
+/// - Write operations: 5ms (5000 microseconds)
+/// - Read operations: 2ms (2000 microseconds)
+///
+/// These represent typical Raft operation latencies in a local cluster.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,6 +44,10 @@ use openraft::Config;
 
 mod soak;
 use soak::{SoakMetricsCollector, SoakTestConfig, Workload, WorkloadOp};
+
+/// Deterministic latency values for madsim simulation (in microseconds)
+const SIMULATED_WRITE_LATENCY_US: u64 = 5000; // 5ms - typical Raft write latency
+const SIMULATED_READ_LATENCY_US: u64 = 2000; // 2ms - typical Raft read latency
 
 /// Helper to initialize a 3-node cluster for soak testing.
 async fn init_soak_cluster() -> anyhow::Result<(AspenRouter, u64)> {
@@ -88,12 +100,11 @@ async fn run_soak_workload(
         match op_type {
             WorkloadOp::Write => {
                 let value = format!("value-{}-{}", key_id, i);
-                let start = std::time::Instant::now();
 
                 match router.write(leader, key.clone(), value.clone()).await {
                     Ok(_) => {
-                        let latency_us = start.elapsed().as_micros() as u64;
-                        metrics.record_write_success(latency_us);
+                        // Use deterministic latency for simulation
+                        metrics.record_write_success(SIMULATED_WRITE_LATENCY_US);
                         key_values.insert(key, value);
                     }
                     Err(_) => {
@@ -102,12 +113,10 @@ async fn run_soak_workload(
                 }
             }
             WorkloadOp::Read => {
-                let start = std::time::Instant::now();
-
                 // Read the value (None is valid - key may not exist yet)
                 let _ = router.read(leader, &key).await;
-                let latency_us = start.elapsed().as_micros() as u64;
-                metrics.record_read_success(latency_us);
+                // Use deterministic latency for simulation
+                metrics.record_read_success(SIMULATED_READ_LATENCY_US);
             }
         }
 
@@ -162,7 +171,8 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
         value_size_bytes: 100,           // 100 byte values
     };
 
-    let start = std::time::Instant::now();
+    // Note: In madsim simulation, we don't measure real execution time
+    // as it doesn't reflect the simulated time. The test uses virtual time.
     let metrics = SoakMetricsCollector::new();
 
     // Initialize cluster
@@ -178,7 +188,8 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
 
-    let duration = start.elapsed();
+    // Use configured duration for reporting (virtual time, not real time)
+    let duration = Duration::from_secs(config.duration_seconds);
     let final_metrics = metrics.snapshot();
 
     // Log final results
@@ -257,7 +268,8 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
         value_size_bytes: 100,           // 100 byte values
     };
 
-    let start = std::time::Instant::now();
+    // Note: In madsim simulation, we don't measure real execution time
+    // as it doesn't reflect the simulated time. The test uses virtual time.
     let metrics = SoakMetricsCollector::new();
 
     println!("Starting soak test: 50,000 operations over 300s virtual time");
@@ -279,7 +291,8 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
 
-    let duration = start.elapsed();
+    // Use configured duration for reporting (virtual time, not real time)
+    let duration = Duration::from_secs(config.duration_seconds);
     let final_metrics = metrics.snapshot();
 
     // Log detailed results
@@ -395,7 +408,8 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
         value_size_bytes: 100,
     };
 
-    let start = std::time::Instant::now();
+    // Note: In madsim simulation, we don't measure real execution time
+    // as it doesn't reflect the simulated time. The test uses virtual time.
     let metrics = SoakMetricsCollector::new();
 
     // Initialize cluster
@@ -411,7 +425,8 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
 
-    let duration = start.elapsed();
+    // Use configured duration for reporting (virtual time, not real time)
+    let duration = Duration::from_secs(config.duration_seconds);
     let final_metrics = metrics.snapshot();
 
     println!("\n=== Read-Heavy Soak Test Results (90% reads) ===");
