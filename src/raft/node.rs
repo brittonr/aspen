@@ -32,8 +32,9 @@ use tracing::{error, info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError,
-    ReadRequest, ReadResult, ScanRequest, ScanResult, WriteRequest, WriteResult,
+    ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
+    KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
+    ScanResult, WriteRequest, WriteResult,
 };
 use crate::raft::StateMachineVariant;
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
@@ -418,12 +419,13 @@ impl KeyValueStore for RaftNode {
 
         // Read directly from state machine
         match &self.state_machine {
-            StateMachineVariant::InMemory(_sm) => {
-                // TODO: InMemory state machine needs public read method
-                Err(KeyValueStoreError::Failed {
-                    reason: "InMemory state machine read not implemented".into(),
-                })
-            }
+            StateMachineVariant::InMemory(sm) => match sm.get(&request.key).await {
+                Some(value) => Ok(ReadResult {
+                    key: request.key,
+                    value,
+                }),
+                None => Err(KeyValueStoreError::NotFound { key: request.key }),
+            },
             StateMachineVariant::Sqlite(sm) => match sm.get(&request.key).await {
                 Ok(Some(value)) => Ok(ReadResult {
                     key: request.key,
@@ -503,22 +505,79 @@ impl KeyValueStore for RaftNode {
             })?;
 
         // Scan directly from state machine
+        // Apply default limit if not specified
+        let limit = _request
+            .limit
+            .unwrap_or(DEFAULT_SCAN_LIMIT)
+            .min(MAX_SCAN_RESULTS) as usize;
+
         match &self.state_machine {
-            StateMachineVariant::InMemory(_sm) => {
-                // TODO: InMemory state machine needs public scan method
-                Err(KeyValueStoreError::Failed {
-                    reason: "InMemory state machine scan not implemented".into(),
+            StateMachineVariant::InMemory(sm) => {
+                // Get all KV pairs matching prefix
+                let all_pairs = sm.scan_kv_with_prefix_async(&_request.prefix).await;
+
+                // Handle pagination via continuation token
+                let start_key = _request.continuation_token.as_deref();
+                let filtered: Vec<_> = all_pairs
+                    .into_iter()
+                    .filter(|(k, _)| {
+                        // If we have a continuation token, skip keys before it
+                        start_key.is_none_or(|start| k.as_str() > start)
+                    })
+                    .collect();
+
+                // Take limit+1 to check if there are more results
+                let is_truncated = filtered.len() > limit;
+                let entries: Vec<ScanEntry> = filtered
+                    .into_iter()
+                    .take(limit)
+                    .map(|(key, value)| ScanEntry { key, value })
+                    .collect();
+
+                let continuation_token = if is_truncated {
+                    entries.last().map(|e| e.key.clone())
+                } else {
+                    None
+                };
+
+                Ok(ScanResult {
+                    count: entries.len() as u32,
+                    entries,
+                    is_truncated,
+                    continuation_token,
                 })
             }
-            StateMachineVariant::Sqlite(_sm) => {
-                // TODO: SqliteStateMachine needs public scan method
-                // For now, we'll just return an empty result
-                Ok(ScanResult {
-                    entries: vec![],
-                    count: 0,
-                    is_truncated: false,
-                    continuation_token: None,
-                })
+            StateMachineVariant::Sqlite(sm) => {
+                // SQLite scan with pagination
+                let start_key = _request.continuation_token.as_deref();
+                let all_pairs = sm.scan(&_request.prefix, start_key, Some(limit + 1)).await;
+
+                match all_pairs {
+                    Ok(pairs) => {
+                        let is_truncated = pairs.len() > limit;
+                        let entries: Vec<ScanEntry> = pairs
+                            .into_iter()
+                            .take(limit)
+                            .map(|(key, value)| ScanEntry { key, value })
+                            .collect();
+
+                        let continuation_token = if is_truncated {
+                            entries.last().map(|e| e.key.clone())
+                        } else {
+                            None
+                        };
+
+                        Ok(ScanResult {
+                            count: entries.len() as u32,
+                            entries,
+                            is_truncated,
+                            continuation_token,
+                        })
+                    }
+                    Err(err) => Err(KeyValueStoreError::Failed {
+                        reason: err.to_string(),
+                    }),
+                }
             }
         }
     }
@@ -527,14 +586,49 @@ impl KeyValueStore for RaftNode {
 /// Health monitor for RaftNode.
 ///
 /// Provides periodic health checks without actor overhead.
+/// Can be connected to a supervisor for automatic recovery actions.
 pub struct RaftNodeHealth {
     node: Arc<RaftNode>,
+    /// Consecutive failed health checks
+    consecutive_failures: std::sync::atomic::AtomicU32,
+    /// Threshold before triggering recovery actions
+    failure_threshold: u32,
+}
+
+/// Health check result with detailed status.
+#[derive(Debug, Clone)]
+pub struct HealthStatus {
+    /// Whether the node is considered healthy overall.
+    pub healthy: bool,
+    /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
+    pub state: openraft::ServerState,
+    /// Current leader ID, if known.
+    pub leader: Option<u64>,
+    /// Number of consecutive health check failures.
+    pub consecutive_failures: u32,
+    /// Whether the node is in shutdown state.
+    pub is_shutdown: bool,
+    /// Whether the node has a committed membership.
+    pub has_membership: bool,
 }
 
 impl RaftNodeHealth {
     /// Create a new health monitor.
     pub fn new(node: Arc<RaftNode>) -> Self {
-        Self { node }
+        Self {
+            node,
+            consecutive_failures: std::sync::atomic::AtomicU32::new(0),
+            failure_threshold: 3, // 3 consecutive failures triggers alert
+        }
+    }
+
+    /// Create a health monitor with custom failure threshold.
+    pub fn with_threshold(node: Arc<RaftNode>, threshold: u32) -> Self {
+        Self {
+            node,
+            consecutive_failures: std::sync::atomic::AtomicU32::new(0),
+            failure_threshold: threshold,
+        }
     }
 
     /// Check if the node is healthy.
@@ -546,16 +640,99 @@ impl RaftNodeHealth {
         !matches!(&borrowed.state, openraft::ServerState::Shutdown)
     }
 
-    /// Run periodic health monitoring.
-    pub async fn monitor(&self, interval_secs: u64) {
+    /// Get detailed health status.
+    pub async fn status(&self) -> HealthStatus {
+        let metrics = self.node.raft.metrics();
+        let borrowed = metrics.borrow();
+
+        let state = borrowed.state;
+        let is_shutdown = matches!(state, openraft::ServerState::Shutdown);
+        let leader = borrowed.current_leader.map(|id| id.0);
+        let has_membership = borrowed
+            .membership_config
+            .membership()
+            .voter_ids()
+            .next()
+            .is_some();
+
+        let consecutive_failures = self
+            .consecutive_failures
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        HealthStatus {
+            healthy: !is_shutdown && (has_membership || state == openraft::ServerState::Learner),
+            state,
+            leader,
+            consecutive_failures,
+            is_shutdown,
+            has_membership,
+        }
+    }
+
+    /// Reset the failure counter (call after recovery).
+    pub fn reset_failures(&self) {
+        self.consecutive_failures
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Run periodic health monitoring with optional supervisor callback.
+    ///
+    /// When the failure threshold is exceeded, the callback is invoked to
+    /// allow the supervisor to take action (e.g., restart services).
+    pub async fn monitor_with_callback<F>(&self, interval_secs: u64, mut on_failure: F)
+    where
+        F: FnMut(HealthStatus) + Send,
+    {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
 
         loop {
             interval.tick().await;
 
-            if !self.is_healthy().await {
-                warn!(node_id = %self.node.node_id, "node health check failed");
+            let status = self.status().await;
+
+            if !status.healthy {
+                let failures = self
+                    .consecutive_failures
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+
+                warn!(
+                    node_id = %self.node.node_id,
+                    consecutive_failures = failures,
+                    state = ?status.state,
+                    "node health check failed"
+                );
+
+                if failures >= self.failure_threshold {
+                    error!(
+                        node_id = %self.node.node_id,
+                        failures = failures,
+                        threshold = self.failure_threshold,
+                        "health failure threshold exceeded, triggering callback"
+                    );
+                    on_failure(status);
+                }
+            } else {
+                // Reset failure counter on successful check
+                let prev_failures = self
+                    .consecutive_failures
+                    .swap(0, std::sync::atomic::Ordering::Relaxed);
+                if prev_failures > 0 {
+                    info!(
+                        node_id = %self.node.node_id,
+                        previous_failures = prev_failures,
+                        "node recovered, resetting failure count"
+                    );
+                }
             }
         }
+    }
+
+    /// Run periodic health monitoring (simple version without callback).
+    pub async fn monitor(&self, interval_secs: u64) {
+        self.monitor_with_callback(interval_secs, |_| {
+            // No-op callback - just log the failure
+        })
+        .await
     }
 }

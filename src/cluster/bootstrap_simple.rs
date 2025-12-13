@@ -4,18 +4,31 @@
 //! direct async APIs instead of actor message passing. The bootstrap
 //! process creates and initializes all necessary components for a
 //! functioning Raft cluster node.
+//!
+//! # Gossip Discovery
+//!
+//! When gossip is enabled (`config.iroh.enable_gossip = true`), the bootstrap
+//! automatically spawns a `GossipPeerDiscovery` instance that:
+//! 1. Derives a topic ID from the cluster cookie (or uses a ticket's topic ID)
+//! 2. Broadcasts this node's ID and EndpointAddr every 10 seconds
+//! 3. Receives peer announcements and adds them to the network factory
+//!
+//! This enables automatic peer discovery without manual configuration.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, ensure};
 use iroh::EndpointAddr;
+use iroh_gossip::proto::TopicId;
 use openraft::{Config as RaftConfig, Raft};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::cluster::config::NodeConfig;
+use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeStatus};
+use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::protocol_handlers::RAFT_ALPN;
 use crate::raft::StateMachineVariant;
@@ -43,8 +56,11 @@ pub struct SimpleNodeHandle {
     /// IRPC network factory for dynamic peer addition.
     pub network_factory: Arc<IrpcRaftNetworkFactory>,
     /// Gossip discovery service (if enabled).
-    // TODO: Implement gossip without actors
-    // pub gossip_discovery: Option<Arc<GossipPeerDiscovery>>,
+    ///
+    /// Automatically broadcasts this node's presence and discovers peers
+    /// via iroh-gossip. Discovered peers are added to the network factory
+    /// for Raft RPC routing.
+    pub gossip_discovery: Option<GossipPeerDiscovery>,
     /// RPC server for handling incoming Raft RPCs.
     pub rpc_server: RaftRpcServer,
     /// Supervisor for automatic restarts.
@@ -53,6 +69,11 @@ pub struct SimpleNodeHandle {
     pub health_monitor: Arc<RaftNodeHealth>,
     /// Cancellation token for shutdown.
     pub shutdown_token: CancellationToken,
+    /// Gossip topic ID used for peer discovery.
+    ///
+    /// Derived from the cluster cookie (hash) or provided via a cluster ticket.
+    /// Exposed for generating cluster tickets via HTTP API.
+    pub gossip_topic_id: Option<TopicId>,
 }
 
 impl SimpleNodeHandle {
@@ -63,7 +84,13 @@ impl SimpleNodeHandle {
         // Signal shutdown to all components
         self.shutdown_token.cancel();
 
-        // TODO: Stop gossip discovery when implemented
+        // Stop gossip discovery if enabled
+        if let Some(gossip_discovery) = self.gossip_discovery {
+            info!("shutting down gossip discovery");
+            if let Err(err) = gossip_discovery.shutdown().await {
+                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
+            }
+        }
 
         // Stop RPC server
         info!("shutting down RPC server");
@@ -166,8 +193,77 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         peer_addrs,
     ));
 
-    // TODO: Setup gossip discovery without actors
-    // For now, gossip is disabled in the simplified version
+    // Setup gossip discovery if enabled
+    //
+    // Gossip discovery automatically:
+    // 1. Subscribes to a topic derived from the cluster cookie (or ticket)
+    // 2. Broadcasts this node's ID and EndpointAddr every 10 seconds
+    // 3. Receives peer announcements and adds them to the network factory
+    //
+    // This enables automatic peer discovery without manual configuration.
+    let (gossip_discovery, gossip_topic_id) = if config.iroh.enable_gossip {
+        // Determine topic ID: from ticket if provided, otherwise derive from cookie
+        let topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
+            match AspenClusterTicket::deserialize(ticket_str) {
+                Ok(ticket) => {
+                    info!(
+                        cluster_id = %ticket.cluster_id,
+                        bootstrap_peers = ticket.bootstrap.len(),
+                        "using topic ID from cluster ticket"
+                    );
+                    ticket.topic_id
+                }
+                Err(err) => {
+                    warn!(
+                        error = %err,
+                        "failed to parse gossip ticket, falling back to cookie-derived topic"
+                    );
+                    derive_topic_id_from_cookie(&config.cookie)
+                }
+            }
+        } else {
+            derive_topic_id_from_cookie(&config.cookie)
+        };
+
+        info!(
+            node_id = config.node_id,
+            topic_id = %hex::encode(topic_id.as_bytes()),
+            "starting gossip discovery"
+        );
+
+        match GossipPeerDiscovery::spawn(
+            topic_id,
+            config.node_id.into(),
+            &iroh_manager,
+            Some(network_factory.clone()),
+        )
+        .await
+        {
+            Ok(discovery) => {
+                info!(
+                    node_id = config.node_id,
+                    topic_id = %hex::encode(topic_id.as_bytes()),
+                    "gossip discovery started successfully"
+                );
+                (Some(discovery), Some(topic_id))
+            }
+            Err(err) => {
+                // Gossip failure is non-fatal - node can still work with manual peers
+                warn!(
+                    error = %err,
+                    node_id = config.node_id,
+                    "failed to start gossip discovery, continuing without it"
+                );
+                (None, None)
+            }
+        }
+    } else {
+        info!(
+            node_id = config.node_id,
+            "gossip discovery disabled by configuration"
+        );
+        (None, None)
+    };
 
     // Create Raft storage
     let log_path = data_dir.join(format!("node_{}.db", config.node_id));
@@ -211,16 +307,50 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         state_machine_variant,
     ));
 
-    // Create health monitor
+    // Create supervisor for tracking health failures
+    let supervisor = SimpleSupervisor::new(format!("raft-node-{}", config.node_id));
+
+    // Create health monitor with supervisor integration
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
 
-    // Start health monitoring in background
+    // Start health monitoring in background, wired to supervisor
     let health_clone = health_monitor.clone();
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
+    let supervisor_for_health = supervisor.clone();
+    let node_id_for_health = config.node_id;
     tokio::spawn(async move {
+        // Create a channel to communicate failures from the sync callback to async supervisor
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(16);
+
+        // Spawn a task to process health failures and record them with supervisor
+        let supervisor_clone = supervisor_for_health.clone();
+        tokio::spawn(async move {
+            while let Some(reason) = rx.recv().await {
+                supervisor_clone.record_health_failure(&reason).await;
+
+                // Check if we should give up (too many failures)
+                if !supervisor_clone.should_attempt_recovery().await {
+                    error!(
+                        node_id = node_id_for_health,
+                        "too many health failures, supervisor circuit breaker triggered"
+                    );
+                    // Cancel the supervisor which will propagate shutdown
+                    supervisor_clone.stop();
+                    break;
+                }
+            }
+        });
+
         tokio::select! {
-            _ = health_clone.monitor(5) => {}
+            _ = health_clone.monitor_with_callback(5, move |status| {
+                let reason = format!(
+                    "health check failed: state={:?}, failures={}",
+                    status.state, status.consecutive_failures
+                );
+                // Non-blocking send - if channel is full, drop the message
+                let _ = tx.try_send(reason);
+            }) => {}
             _ = shutdown_clone.cancelled() => {}
         }
     });
@@ -228,9 +358,6 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
     // Start RPC server for handling incoming Raft RPCs
     let rpc_server = RaftRpcServer::spawn(iroh_manager.clone(), raft.as_ref().clone());
     info!(node_id = config.node_id, "started Raft RPC server");
-
-    // Create supervisor (but don't use it for now - Raft is stable)
-    let supervisor = SimpleSupervisor::new(format!("raft-node-{}", config.node_id));
 
     // Register node in metadata store
     use crate::cluster::metadata::NodeMetadata;
@@ -251,12 +378,25 @@ pub async fn bootstrap_node_simple(config: NodeConfig) -> Result<SimpleNodeHandl
         iroh_manager,
         raft_node,
         network_factory,
-        // gossip_discovery,
+        gossip_discovery,
         rpc_server,
         supervisor,
         health_monitor,
         shutdown_token: shutdown,
+        gossip_topic_id,
     })
+}
+
+/// Derive a gossip topic ID from the cluster cookie.
+///
+/// Uses blake3 hash of the cookie string to create a deterministic
+/// 32-byte topic ID. All nodes with the same cookie will join the
+/// same gossip topic.
+///
+/// Tiger Style: Fixed-size output (32 bytes), deterministic.
+fn derive_topic_id_from_cookie(cookie: &str) -> TopicId {
+    let hash = blake3::hash(cookie.as_bytes());
+    TopicId::from_bytes(*hash.as_bytes())
 }
 
 /// Load configuration from multiple sources with proper precedence.

@@ -157,6 +157,36 @@ impl SimpleSupervisor {
     pub fn restart_count(&self) -> u32 {
         self.restart_count.load(Ordering::Acquire)
     }
+
+    /// Record an external health failure.
+    ///
+    /// This is called by health monitors to inform the supervisor of failures
+    /// that might require intervention. Tracks failures for rate limiting.
+    pub async fn record_health_failure(&self, reason: &str) {
+        let mut times = self.restart_times.lock().await;
+        times.push(Instant::now());
+
+        let count = self.restart_count.fetch_add(1, Ordering::AcqRel) + 1;
+        error!(
+            name = %self.name,
+            restart_count = count,
+            reason = %reason,
+            "health failure recorded"
+        );
+    }
+
+    /// Check if we should take recovery action based on failure count.
+    ///
+    /// Returns true if we're within acceptable failure limits and should
+    /// attempt recovery. Returns false if too many failures have occurred.
+    pub async fn should_attempt_recovery(&self) -> bool {
+        self.should_restart().await
+    }
+
+    /// Get cancellation token for coordinating shutdown.
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancel.clone()
+    }
 }
 
 /// Run a Raft node with supervision.

@@ -586,6 +586,68 @@ impl SqliteStateMachine {
         self.scan_kv_with_prefix(prefix)
     }
 
+    /// Scan keys matching a prefix with pagination support.
+    ///
+    /// # Arguments
+    /// * `prefix` - Key prefix to match (empty string matches all)
+    /// * `after_key` - Optional continuation token (exclusive start key)
+    /// * `limit` - Optional maximum number of results (defaults to MAX_BATCH_SIZE)
+    ///
+    /// # Tiger Style
+    /// - Fixed limits prevent unbounded memory usage
+    /// - Cursor-based pagination for stable iteration
+    pub async fn scan(
+        &self,
+        prefix: &str,
+        after_key: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<(String, String)>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let limit = limit
+            .unwrap_or(MAX_BATCH_SIZE as usize)
+            .min(MAX_BATCH_SIZE as usize);
+        let end_prefix = format!("{}\u{10000}", prefix);
+
+        // Different query based on whether we have a continuation token
+        let kv_pairs = if let Some(start) = after_key {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT key, value FROM state_machine_kv \
+                     WHERE key > ?1 AND key >= ?2 AND key < ?3 \
+                     ORDER BY key LIMIT ?4",
+                )
+                .context(QuerySnafu)?;
+
+            stmt.query_map(params![start, prefix, end_prefix, limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|(k, _)| k.starts_with(prefix))
+            .collect()
+        } else {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT key, value FROM state_machine_kv \
+                     WHERE key >= ?1 AND key < ?2 \
+                     ORDER BY key LIMIT ?3",
+                )
+                .context(QuerySnafu)?;
+
+            stmt.query_map(params![prefix, end_prefix, limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|(k, _)| k.starts_with(prefix))
+            .collect()
+        };
+
+        Ok(kv_pairs)
+    }
+
     /// Validates that the SQLite state machine is consistent with the redb log.
     ///
     /// Returns error if last_applied exceeds the log's committed index, which

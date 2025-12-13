@@ -1459,23 +1459,152 @@ struct PromoteLearnerResponse {
 /// Body: { "learner_id": 4, "replace_node": 2, "force": false }
 ///
 /// Safety checks (unless force=true):
-/// - Membership cooldown elapsed (300s)
-/// - Learner is healthy and reachable
+/// - Learner exists in current membership
 /// - Learner is caught up on log (<100 entries behind)
 /// - Cluster maintains quorum after change
+///
+/// The promotion is done via change_membership, which atomically updates
+/// the voter set in the Raft cluster.
 #[instrument(skip(state), fields(node_id = state.node_id, learner_id = req.learner_id, replace_node = ?req.replace_node, force = req.force))]
 async fn promote_learner(
     State(state): State<AppState>,
     Json(req): Json<PromoteLearnerRequest>,
 ) -> Result<Json<PromoteLearnerResponse>, (StatusCode, String)> {
-    // TODO: Learner promotion needs to be reimplemented for direct API
-    // For now, return not implemented
-    let _state = state; // Silence unused warning
-    let _req = req; // Silence unused warning
-    Err((
-        StatusCode::NOT_IMPLEMENTED,
-        "Learner promotion needs to be reimplemented for direct API architecture".to_string(),
-    ))
+    // Get current cluster state to find existing voters and verify learner exists
+    let current_state = state
+        .controller
+        .current_state()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let previous_voters: Vec<u64> = current_state.members.clone();
+    let learner_ids: Vec<u64> = current_state.learners.iter().map(|l| l.id).collect();
+
+    // Verify learner exists in current membership
+    if !learner_ids.contains(&req.learner_id) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "node {} is not a learner, current learners: {:?}",
+                req.learner_id, learner_ids
+            ),
+        ));
+    }
+
+    // Safety checks (skip if force=true)
+    if !req.force {
+        // Check if learner is caught up by examining Raft metrics
+        let metrics = state
+            .controller
+            .get_metrics()
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Only leader has replication state to check
+        // replication is BTreeMap<NodeId, Option<LogId>> where Option<LogId> is the matched log
+        if let Some(ref replication) = metrics.replication {
+            if let Some(matched_log_id) = replication.get(&req.learner_id.into()) {
+                // Check if learner is too far behind (>100 entries)
+                const MAX_LAG_ENTRIES: u64 = 100;
+                if let (Some(leader_last_log), Some(matched)) =
+                    (metrics.last_log_index, matched_log_id)
+                {
+                    let lag = leader_last_log.saturating_sub(matched.index);
+                    if lag > MAX_LAG_ENTRIES {
+                        return Err((
+                            StatusCode::PRECONDITION_FAILED,
+                            format!(
+                                "learner {} is {} entries behind (max allowed: {}), wait for catch-up",
+                                req.learner_id, lag, MAX_LAG_ENTRIES
+                            ),
+                        ));
+                    }
+                }
+            } else {
+                // Learner has no replication tracking - likely not syncing yet
+                return Err((
+                    StatusCode::PRECONDITION_FAILED,
+                    format!(
+                        "learner {} has no replication progress - not yet syncing with leader",
+                        req.learner_id
+                    ),
+                ));
+            }
+        }
+
+        // Quorum check: ensure we maintain majority after adding voter
+        let new_voter_count = if req.replace_node.is_some() {
+            previous_voters.len() // Same count if replacing
+        } else {
+            previous_voters.len() + 1 // One more voter
+        };
+        // Odd number of voters is recommended for clean majority
+        if new_voter_count > 1 && new_voter_count % 2 == 0 {
+            tracing::warn!(
+                new_voter_count,
+                "promoting learner will result in even number of voters (not recommended)"
+            );
+        }
+    }
+
+    // Build new voter set
+    let mut new_voters: Vec<u64> = previous_voters.clone();
+
+    // Remove replaced node if specified
+    if let Some(replace_id) = req.replace_node {
+        if !new_voters.contains(&replace_id) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "cannot replace node {} - not in current voters: {:?}",
+                    replace_id, new_voters
+                ),
+            ));
+        }
+        new_voters.retain(|&id| id != replace_id);
+    }
+
+    // Add learner to voters
+    if !new_voters.contains(&req.learner_id) {
+        new_voters.push(req.learner_id);
+    }
+
+    // Sort for consistent membership representation
+    new_voters.sort();
+
+    tracing::info!(
+        learner_id = req.learner_id,
+        replace_node = ?req.replace_node,
+        previous_voters = ?previous_voters,
+        new_voters = ?new_voters,
+        "promoting learner to voter"
+    );
+
+    // Execute membership change via ClusterController
+    let change_result = state
+        .controller
+        .change_membership(ChangeMembershipRequest {
+            members: new_voters.clone(),
+        })
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let message = if let Some(replace_id) = req.replace_node {
+        format!(
+            "learner {} promoted to voter, replacing node {}",
+            req.learner_id, replace_id
+        )
+    } else {
+        format!("learner {} promoted to voter", req.learner_id)
+    };
+
+    Ok(Json(PromoteLearnerResponse {
+        success: true,
+        learner_id: req.learner_id,
+        previous_voters,
+        new_voters: change_result.members,
+        message,
+    }))
 }
 
 type ApiResult<T> = Result<T, ApiError>;
