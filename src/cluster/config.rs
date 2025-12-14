@@ -157,7 +157,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub peers: Vec<String>,
 
-
     /// RaftActor mailbox capacity (bounded mailbox size).
     /// Prevents memory exhaustion under high load by enforcing backpressure.
     /// Default: 1000 messages

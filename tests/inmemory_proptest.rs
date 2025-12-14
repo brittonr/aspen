@@ -184,6 +184,8 @@ proptest! {
 }
 
 // Test 4: Concurrent Reads During Writes
+// This test verifies that reads always see a consistent snapshot of the state,
+// even when writes are being applied concurrently.
 proptest! {
     #[test]
     fn test_concurrent_reads_during_writes(
@@ -194,8 +196,12 @@ proptest! {
         rt.block_on(async {
             let mut sm = InMemoryStateMachine::new();
 
-            // Apply initial entries
-            for (i, (key, value)) in write_entries.iter().enumerate() {
+            // Apply initial entries that we'll read during concurrent writes
+            let initial_entries: Vec<(String, String)> = (0..10)
+                .map(|i| (format!("init_key_{}", i), format!("init_value_{}", i)))
+                .collect();
+
+            for (i, (key, value)) in initial_entries.iter().enumerate() {
                 let index = (i + 1) as u64;
                 let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                     make_log_id(1, 1, index),
@@ -211,26 +217,53 @@ proptest! {
                 sm.apply(entries_stream).await.unwrap();
             }
 
-            // Build expected final state (last value wins for duplicate keys)
-            let mut expected_state: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
-            for (key, value) in &write_entries {
-                expected_state.insert(key.clone(), value.clone());
-            }
+            // Clone state machine for concurrent reading
+            let sm_clone = sm.clone();
 
-            // Spawn concurrent reads
-            let sm_arc = sm.clone();
-            let expected_state_clone = expected_state.clone();
-
+            // Start a read task that runs concurrently with writes
             let read_task = tokio::spawn(async move {
-                for (key, expected_value) in expected_state_clone.iter() {
-                    let value = sm_arc.get(key).await;
-                    assert_eq!(value.as_ref(), Some(expected_value));
+                let mut read_count = 0;
+                for _ in 0..50 {
+                    for i in 0..10 {
+                        let key = format!("init_key_{}", i);
+                        let value = sm_clone.get(&key).await;
+                        // Initial values should always be consistent
+                        assert_eq!(
+                            value,
+                            Some(format!("init_value_{}", i)),
+                            "Read should see consistent value for key {}", key
+                        );
+                        read_count += 1;
+                    }
+                    // Yield to allow write task to progress
+                    tokio::task::yield_now().await;
                 }
+                read_count
             });
 
-            // Wait for reads to complete
-            read_task.await.unwrap();
+            // Apply write_entries concurrently with reads
+            for (i, (key, value)) in write_entries.iter().enumerate() {
+                let index = (i + 11) as u64;
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(2, 1, index),
+                    AppRequest::Set {
+                        key: key.clone(),
+                        value: value.clone(),
+                    },
+                );
+
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
+                sm.apply(entries_stream).await.unwrap();
+
+                // Yield to allow read task to progress
+                tokio::task::yield_now().await;
+            }
+
+            // Wait for reads to complete and verify some reads happened
+            let read_count = read_task.await.unwrap();
+            prop_assert!(read_count > 0, "Should have completed concurrent reads");
 
             Ok::<(), TestCaseError>(())
         })?;

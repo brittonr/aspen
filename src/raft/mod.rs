@@ -45,10 +45,10 @@ pub mod node;
 pub mod node_failure_detection;
 pub mod rpc;
 pub mod server;
-pub mod supervisor;
 pub mod storage;
 pub mod storage_sqlite;
 pub mod storage_validation;
+pub mod supervisor;
 // supervision module removed - was legacy from actor-based architecture
 pub mod types;
 

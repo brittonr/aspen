@@ -63,6 +63,9 @@ echo "Killing any existing nodes"
 kill_nodes
 sleep 1
 
+echo "Cleaning up old data directories"
+rm -rf "$ROOT/data"
+
 wait_for_http_port() {
     local port=$1
     local attempts=0
@@ -84,21 +87,23 @@ PY
 start_node() {
     local id=$1
     local http=$2
-    local cluster_port=$3
-    local log_file=$4
+    local log_file=$3
     printf -v secret "%064x" "$((1000 + id))"
     local cmd=( "$BIN"
         --node-id "$id"
         --http-addr "127.0.0.1:$http"
         --host "127.0.0.1"
-        --port "$cluster_port"
         --cookie "aspen-dev-cookie"
         --iroh-secret-key "$secret"
         --control-backend "deterministic"
+        --data-dir "$ROOT/data/node-$id"
+        --storage-backend "sqlite"
     )
     if (( ${#EXTRA_NODE_ARGS[@]} > 0 )); then
         cmd+=("${EXTRA_NODE_ARGS[@]}")
     fi
+    # Create data directory
+    mkdir -p "$ROOT/data/node-$id"
     nohup "${cmd[@]}" >"$log_file" 2>&1 &
     sleep 1
     wait_for_http_port "$http"
@@ -106,11 +111,11 @@ start_node() {
 }
 
 echo "Starting 5 nodes..."
-start_node 1 21001 26001 "$ROOT/n1.log"
-start_node 2 21002 26002 "$ROOT/n2.log"
-start_node 3 21003 26003 "$ROOT/n3.log"
-start_node 4 21004 26004 "$ROOT/n4.log"
-start_node 5 21005 26005 "$ROOT/n5.log"
+start_node 1 21001 "$ROOT/n1.log"
+start_node 2 21002 "$ROOT/n2.log"
+start_node 3 21003 "$ROOT/n3.log"
+start_node 4 21004 "$ROOT/n4.log"
+start_node 5 21005 "$ROOT/n5.log"
 
 echo "Initializing nodes 1-3 as a cluster"
 rpc 21001/init '{"initial_members":[{"id":1,"addr":"127.0.0.1:21001"},{"id":2,"addr":"127.0.0.1:21002"},{"id":3,"addr":"127.0.0.1:21003"}]}'

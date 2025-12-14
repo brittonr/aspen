@@ -52,7 +52,7 @@ async fn init_three_node_cluster() -> anyhow::Result<(AspenRouter, u64)> {
 
 // Test 1: Eventual Consistency Across All Nodes
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_eventual_consistency_multi_node(
         writes in prop::collection::vec(arbitrary_key_value(), 3..10)
@@ -113,7 +113,7 @@ proptest! {
 
 // Test 2: Leader Uniqueness
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_at_most_one_leader(
         num_writes in 1usize..8usize
@@ -193,7 +193,7 @@ proptest! {
 
 // Test 3: Log Replication Invariant
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_log_replication_consistency(
         num_writes in 3usize..12usize
@@ -253,7 +253,7 @@ proptest! {
 
 // Test 4: State Machine Safety
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(8))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_state_machine_safety(
         key in "[a-z][a-z0-9_]{0,10}",
@@ -309,7 +309,7 @@ proptest! {
 
 // Test 5: Full Replication After Convergence
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(8))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_quorum_write_durability(
         writes in prop::collection::vec(arbitrary_key_value(), 2..8)
@@ -375,7 +375,7 @@ proptest! {
 
 // Test 6: Concurrent Reads Consistency
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(8))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_concurrent_reads_consistency(
         writes in prop::collection::vec(arbitrary_key_value(), 3..10)
@@ -429,6 +429,199 @@ proptest! {
                         value,
                         &Some(expected_value.clone()),
                         "Node {} read inconsistent value for key {}",
+                        node_id,
+                        key
+                    );
+                }
+            }
+
+            Ok::<(), proptest::test_runner::TestCaseError>(())
+        })?;
+    }
+}
+
+// Test 7: Leader Completeness Property
+// Raft's Leader Completeness property: if a log entry is committed in a given term,
+// then that entry will be present in the logs of the leaders for all higher-numbered terms.
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+    #[test]
+    fn test_leader_completeness_property(
+        writes in prop::collection::vec(arbitrary_key_value(), 5..15)
+    ) {
+        // Property: Committed entries are never lost, even after leader changes
+        // We simulate this by writing entries to the leader, ensuring they're committed,
+        // then verifying they remain accessible from all nodes.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            use aspen::raft::types::NodeId;
+
+            let (router, initial_log_index) = init_three_node_cluster().await
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+
+            let leader = router.leader()
+                .ok_or_else(|| proptest::test_runner::TestCaseError::fail("no leader".to_string()))?;
+
+            // Phase 1: Write all entries to the leader
+            for (key, value) in &writes {
+                router
+                    .write(leader, key.clone(), value.clone())
+                    .await
+                    .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
+            }
+
+            // Build expected state
+            let mut expected: HashMap<String, String> = HashMap::new();
+            for (key, value) in &writes {
+                expected.insert(key.clone(), value.clone());
+            }
+
+            // Expected index: initial cluster setup + writes
+            let expected_index = initial_log_index + (writes.len() as u64);
+
+            // Phase 2: Wait for all entries to be committed on majority (quorum)
+            // The write calls return after commitment, so entries are already committed.
+            // Wait for full replication to all nodes.
+            for node_id in 0..3 {
+                router
+                    .wait(node_id, Some(Duration::from_millis(5000)))
+                    .applied_index(Some(expected_index), "entries committed")
+                    .await
+                    .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+            }
+
+            // Phase 3: Verify the leader has all committed entries
+            // This is the core of the Leader Completeness property
+            let leader_node = router.get_raft_handle(leader)
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("failed to get leader: {}", e)))?;
+
+            let leader_metrics = leader_node.metrics().borrow().clone();
+
+            // The leader must have all committed entries
+            prop_assert!(
+                leader_metrics.last_applied.is_some(),
+                "Leader must have applied entries"
+            );
+
+            let leader_applied_index = leader_metrics.last_applied.unwrap().index;
+            prop_assert!(
+                leader_applied_index >= expected_index,
+                "Leader applied index {} must be >= expected {}",
+                leader_applied_index,
+                expected_index
+            );
+
+            // Phase 4: Verify all data is accessible from the leader
+            for (key, expected_value) in &expected {
+                let stored = router.read(leader, key).await;
+                prop_assert_eq!(
+                    stored,
+                    Some(expected_value.clone()),
+                    "Leader must have committed entry for key {}",
+                    key
+                );
+            }
+
+            // Phase 5: All followers must also have the same data (replication complete)
+            // This verifies that the committed entries were properly replicated
+            for node_id in [NodeId::from(0), NodeId::from(1), NodeId::from(2)] {
+                for (key, expected_value) in &expected {
+                    let stored = router.read(node_id, key).await;
+                    prop_assert_eq!(
+                        stored,
+                        Some(expected_value.clone()),
+                        "Node {} must have committed entry for key {}",
+                        node_id,
+                        key
+                    );
+                }
+            }
+
+            Ok::<(), proptest::test_runner::TestCaseError>(())
+        })?;
+    }
+}
+
+// Test 8: Log Matching Property
+// If two logs contain an entry with the same index and term, then the logs
+// are identical in all entries up through the given index.
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+    #[test]
+    fn test_log_matching_property(
+        num_writes in 5usize..20usize
+    ) {
+        // Property: All nodes that have applied the same index have identical state
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (router, initial_log_index) = init_three_node_cluster().await
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+
+            let leader = router.leader()
+                .ok_or_else(|| proptest::test_runner::TestCaseError::fail("no leader".to_string()))?;
+
+            // Write entries sequentially
+            let mut keys = Vec::new();
+            for i in 0..num_writes {
+                let key = format!("log_match_key_{}", i);
+                let value = format!("log_match_value_{}", i);
+                keys.push((key.clone(), value.clone()));
+
+                router
+                    .write(leader, key, value)
+                    .await
+                    .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("write failed: {}", e)))?;
+            }
+
+            // Expected index: initial cluster setup + writes
+            let expected_index = initial_log_index + (num_writes as u64);
+
+            // Wait for all nodes to reach the same applied index
+            for node_id in 0..3 {
+                router
+                    .wait(node_id, Some(Duration::from_millis(5000)))
+                    .applied_index(Some(expected_index), "logs matched")
+                    .await
+                    .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+            }
+
+            // Verify all nodes have the same last_applied index
+            let mut applied_indices = Vec::new();
+            for node_id in 0..3 {
+                let node_handle = router.get_raft_handle(node_id)
+                    .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("failed to get node {}: {}", node_id, e)))?;
+
+                let metrics = node_handle.metrics().borrow().clone();
+                if let Some(last_applied) = metrics.last_applied {
+                    applied_indices.push((node_id, last_applied.index, last_applied.leader_id));
+                }
+            }
+
+            // All nodes should have the same applied index
+            let first_index = applied_indices[0].1;
+            for (node_id, index, _) in &applied_indices {
+                prop_assert_eq!(
+                    *index, first_index,
+                    "Node {} applied index {} differs from expected {}",
+                    node_id, index, first_index
+                );
+            }
+
+            // If logs match at the same index, the state should be identical
+            // Verify by checking all keys have the same values across all nodes
+            for (key, expected_value) in &keys {
+                let mut values = Vec::new();
+                for node_id in 0..3 {
+                    let value = router.read(node_id, key).await;
+                    values.push(value);
+                }
+
+                // All nodes should return the same value
+                for (node_id, value) in values.iter().enumerate() {
+                    prop_assert_eq!(
+                        value,
+                        &Some(expected_value.clone()),
+                        "Node {} has inconsistent value for key {} (log matching violation)",
                         node_id,
                         key
                     );

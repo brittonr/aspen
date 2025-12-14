@@ -35,9 +35,9 @@ use crate::raft::StateMachineVariant;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
 use crate::raft::server::RaftRpcServer;
-use crate::raft::supervisor::Supervisor;
 use crate::raft::storage::RedbLogStore;
 use crate::raft::storage_sqlite::SqliteStateMachine;
+use crate::raft::supervisor::Supervisor;
 use crate::raft::types::NodeId;
 
 /// Handle to a running cluster node.

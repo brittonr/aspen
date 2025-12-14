@@ -222,39 +222,58 @@ proptest! {
     }
 }
 
-// Test 5: Empty Key Writes Are Rejected
+// Test 5: Empty Key Behavior
+// Note: This test verifies the system's consistent handling of empty keys.
+// The current implementation allows empty keys (they are valid strings),
+// so we test that empty key writes round-trip correctly.
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_empty_key_behavior(
         value in prop::string::string_regex("[a-zA-Z0-9]{1,20}").unwrap()
     ) {
-        // Property: System behavior with empty keys should be consistent
+        // Property: Empty key writes should round-trip consistently
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let router = init_single_node_cluster().await
                 .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
 
-            // Attempt to write with empty key
-            let result = router.write(0, String::new(), value).await;
+            // Write with empty key
+            let result = router.write(0, String::new(), value.clone()).await;
 
-            // Either it succeeds or fails, but it should be consistent
-            // (This tests the system's handling of edge cases)
-            match result {
-                Ok(_) => {
-                    // If it succeeds, we should be able to read it back
-                    let stored = router.read(0, "").await;
-                    prop_assert!(stored.is_some(), "Empty key write succeeded but not readable");
-                }
-                Err(_) => {
-                    // If it fails, that's also acceptable behavior
-                    // Just verify the system is still functional
-                    router
-                        .write(0, "test_key".to_string(), "test_value".to_string())
-                        .await
-                        .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("subsequent write failed: {}", e)))?;
-                }
-            }
+            // Since the AspenRouter/testing infrastructure allows empty keys,
+            // verify the write succeeds and the value can be read back
+            result.map_err(|e| {
+                proptest::test_runner::TestCaseError::fail(format!("empty key write failed: {}", e))
+            })?;
+
+            // Wait for the write to be applied
+            router
+                .wait(NodeId(0), Some(std::time::Duration::from_millis(2000)))
+                .applied_index(Some(2), "empty key write applied")
+                .await
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(e.to_string()))?;
+
+            // Verify we can read back the empty key
+            let stored = router.read(0, "").await;
+            prop_assert_eq!(
+                stored,
+                Some(value),
+                "Empty key should be readable after write"
+            );
+
+            // Verify the system is still functional for normal keys
+            router
+                .write(0, "normal_key".to_string(), "normal_value".to_string())
+                .await
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("normal write failed: {}", e)))?;
+
+            let normal_stored = router.read(0, "normal_key").await;
+            prop_assert_eq!(
+                normal_stored,
+                Some("normal_value".to_string()),
+                "Normal key should work alongside empty key"
+            );
 
             Ok::<(), proptest::test_runner::TestCaseError>(())
         })?;

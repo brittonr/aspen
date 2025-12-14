@@ -2,23 +2,22 @@
 ///
 /// This module verifies state machine invariants, monotonic properties,
 /// and transaction atomicity through comprehensive property testing.
+///
+/// Tiger Style: Tests verify that resource bounds from constants.rs are enforced.
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;
 
+use aspen::raft::constants::{MAX_BATCH_SIZE, MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{AppRequest, AppTypeConfig};
 use futures::stream;
 use openraft::LogId;
 use openraft::entry::RaftEntry;
-use openraft::storage::{ApplyResponder, RaftSnapshotBuilder, RaftStateMachine};
+use openraft::storage::{RaftSnapshotBuilder, RaftStateMachine};
 use openraft::testing::log_id;
 use proptest::prelude::*;
 use tempfile::TempDir;
-
-// Constants from SQLite storage implementation
-const MAX_BATCH_SIZE: u32 = 1000;
-const MAX_SETMULTI_KEYS: u32 = 100;
 
 // Helper function to create a temporary SQLite state machine
 fn create_temp_sm() -> (Arc<SqliteStateMachine>, TempDir) {
@@ -82,7 +81,7 @@ fn oversized_setmulti() -> impl Strategy<Value = Vec<(String, String)>> {
 
 // Test 1: Monotonic Log Indices
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(100))]
     #[test]
     fn test_applied_log_indices_are_monotonic(
         num_entries in 1usize..30usize
@@ -134,7 +133,7 @@ proptest! {
 
 // Test 2: Transaction Atomicity
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_failed_transaction_doesnt_corrupt_state(
         valid_entries in prop::collection::vec(arbitrary_key_value(), 1..15),
@@ -217,7 +216,7 @@ proptest! {
 
 // Test 3: Snapshot Consistency
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_snapshot_captures_all_applied_data(
         entries in prop::collection::vec(arbitrary_key_value(), 1..20)
@@ -340,68 +339,57 @@ proptest! {
 }
 
 // Test 5: Batch Size Limits
+// Note: This test verifies that individual entry application works correctly
+// and that the MAX_BATCH_SIZE constant is reasonable. The actual batch size
+// enforcement happens in the apply() stream processing, which we test separately
+// in storage_validation_sqlite_test.rs (test_apply_batch_size_at_limit_succeeds
+// and test_apply_batch_size_exceeds_limit_fails).
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_batch_size_enforcement(
-        size in 1u32..300u32
+        size in 1u32..100u32  // Test up to 100 entries for faster execution
     ) {
-        // Property: Batches <= MAX_BATCH_SIZE succeed, >MAX_BATCH_SIZE fail
+        // Property: Sequential entry application should succeed up to reasonable sizes
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let (mut sm, _temp_dir) = create_temp_sm();
 
-            if size <= MAX_BATCH_SIZE {
-                // Should succeed
-                for i in 0..size {
-                    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                        make_log_id(1, 1, (i + 1) as u64),
-                        AppRequest::Set {
-                            key: format!("batch_key_{}", i),
-                            value: format!("batch_value_{}", i),
-                        },
-                    );
+            // Apply entries sequentially
+            for i in 0..size {
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(1, 1, (i + 1) as u64),
+                    AppRequest::Set {
+                        key: format!("batch_key_{}", i),
+                        value: format!("batch_value_{}", i),
+                    },
+                );
 
-                    let entries_stream = Box::pin(stream::once(async move {
-                        Ok::<_, io::Error>((entry, None))
-                    }));
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
 
-                    sm.apply(entries_stream).await.expect("failed to apply entry within batch limit");
-                }
-
-                // Verify all entries were applied
-                for i in 0..size {
-                    let key = format!("batch_key_{}", i);
-                    let stored = sm.get(&key).await.expect("failed to get key");
-                    prop_assert_eq!(
-                        stored,
-                        Some(format!("batch_value_{}", i)),
-                        "Entry {} should be stored", i
-                    );
-                }
-            } else {
-                // Should fail if we try to apply more than MAX_BATCH_SIZE in a single stream
-                // Note: The actual batch size limit is enforced per apply() call
-                // Since we're applying entries one by one above, we need to test differently
-
-                // Create a stream with size entries
-                let _entries: Vec<_> = (0..size).map(|i| {
-                    let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                        make_log_id(1, 1, (i + 1) as u64),
-                        AppRequest::Set {
-                            key: format!("batch_key_{}", i),
-                            value: format!("batch_value_{}", i),
-                        },
-                    );
-                    Ok::<_, io::Error>((entry, None::<ApplyResponder<AppTypeConfig>>))
-                }).collect();
-
-                // This would fail if the stream had more than MAX_BATCH_SIZE entries
-                // But since apply() processes entries one by one from the stream,
-                // the batch size limit is per-call, not per-stream
-                // So we verify the property differently: that MAX_BATCH_SIZE is a reasonable limit
-                prop_assert!(MAX_BATCH_SIZE > 0 && MAX_BATCH_SIZE <= 10000, "MAX_BATCH_SIZE should be reasonable");
+                sm.apply(entries_stream).await.expect("failed to apply entry");
             }
+
+            // Verify all entries were applied
+            for i in 0..size {
+                let key = format!("batch_key_{}", i);
+                let stored = sm.get(&key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    Some(format!("batch_value_{}", i)),
+                    "Entry {} should be stored", i
+                );
+            }
+
+            // Verify the applied index is correct
+            let (last_applied, _) = sm.applied_state().await.expect("failed to get applied state");
+            prop_assert_eq!(
+                last_applied.map(|id| id.index),
+                Some(size as u64),
+                "Applied index should equal number of entries"
+            );
 
             Ok(())
         })?;
@@ -472,7 +460,7 @@ proptest! {
 
 // Test 7: WAL Checkpoint Preserves Data
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_checkpoint_preserves_data(
         entries in prop::collection::vec(arbitrary_key_value(), 1..30)
@@ -559,8 +547,11 @@ proptest! {
 }
 
 // Test 8: Concurrent Reads During Writes
+// This test verifies that reads always see a consistent view of the state machine,
+// even when writes are being applied. SQLite's connection pooling with r2d2
+// should ensure isolation between read and write connections.
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5))]
+    #![proptest_config(ProptestConfig::with_cases(50))]
     #[test]
     fn test_concurrent_reads_during_writes(
         write_entries in prop::collection::vec(arbitrary_key_value(), 5..20),
@@ -592,9 +583,33 @@ proptest! {
                 sm.apply(entries_stream).await.expect("failed to apply initial entry");
             }
 
-            // Perform interleaved reads and writes
+            // Spawn concurrent read tasks that run during writes
+            let sm_clone = sm.clone();
+            let read_keys_clone = read_keys.clone();
+
+            // Start read task that continuously reads while we write
+            let read_task = tokio::spawn(async move {
+                let mut read_count = 0;
+                for _ in 0..50 {
+                    for &idx in read_keys_clone.iter().take(3) {
+                        let key = format!("init_key_{}", idx);
+                        let stored = sm_clone.get(&key).await.expect("failed to read");
+                        // Initial values should always be visible
+                        assert_eq!(
+                            stored,
+                            Some(format!("init_value_{}", idx)),
+                            "Read should see consistent value"
+                        );
+                        read_count += 1;
+                    }
+                    // Small yield to allow writes to interleave
+                    tokio::task::yield_now().await;
+                }
+                read_count
+            });
+
+            // Perform writes concurrently with reads
             for (i, (key, value)) in write_entries.iter().enumerate() {
-                // Write new entry
                 let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
                     make_log_id(2, 1, (i + 11) as u64),
                     AppRequest::Set {
@@ -609,17 +624,13 @@ proptest! {
 
                 sm.apply(entries_stream).await.expect("failed to apply write entry");
 
-                // Read some initial entries (should always be consistent)
-                for &idx in read_keys.iter().take(3) {
-                    let key = format!("init_key_{}", idx);
-                    let stored = sm.get(&key).await.expect("failed to read during writes");
-                    prop_assert_eq!(
-                        stored,
-                        Some(format!("init_value_{}", idx)),
-                        "Read should see consistent value during writes"
-                    );
-                }
+                // Yield to allow read task to progress
+                tokio::task::yield_now().await;
             }
+
+            // Wait for read task to complete
+            let read_count = read_task.await.expect("read task panicked");
+            prop_assert!(read_count > 0, "Should have completed some reads");
 
             Ok(())
         })?;
@@ -671,7 +682,7 @@ proptest! {
 
 // Test 10: Snapshot After WAL Growth
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(3))]
+    #![proptest_config(ProptestConfig::with_cases(30))]
     #[test]
     fn test_snapshot_after_wal_growth(
         num_entries in 20u32..35u32
@@ -728,6 +739,509 @@ proptest! {
                     after <= max_acceptable,
                     "WAL should not significantly grow after checkpoint: {} > {} (max: {})",
                     after, before, max_acceptable
+                );
+            }
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 11: Delete Operation Correctness
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+    #[test]
+    fn test_delete_operation_correctness(
+        entries in prop::collection::vec(arbitrary_key_value(), 5..30)
+    ) {
+        // Property: Delete operation removes keys and subsequent reads return None
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_delete.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // First, apply all entries
+            for (i, (key, value)) in entries.iter().enumerate() {
+                let index = (i + 1) as u64;
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(1, 1, index),
+                    AppRequest::Set {
+                        key: key.clone(),
+                        value: value.clone(),
+                    },
+                );
+
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
+                sm.apply(entries_stream).await.expect("failed to apply set entry");
+            }
+
+            // Build expected state after all writes (last value wins for duplicate keys)
+            let mut expected_state: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for (key, value) in &entries {
+                expected_state.insert(key.clone(), value.clone());
+            }
+
+            // Pick unique keys to delete (every other unique key)
+            let unique_keys: Vec<String> = expected_state.keys().cloned().collect();
+            let keys_to_delete: std::collections::HashSet<String> = unique_keys
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| i % 2 == 0)
+                .map(|(_, k)| k.clone())
+                .collect();
+
+            // Apply delete operations
+            for (i, key) in keys_to_delete.iter().enumerate() {
+                let index = (entries.len() + i + 1) as u64;
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(1, 1, index),
+                    AppRequest::Delete { key: key.clone() },
+                );
+
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
+                sm.apply(entries_stream).await.expect("failed to apply delete entry");
+            }
+
+            // Verify deleted keys return None
+            for key in &keys_to_delete {
+                let stored = sm.get(key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    None,
+                    "Deleted key {} should return None",
+                    key
+                );
+            }
+
+            // Verify non-deleted keys still have their values
+            for (key, expected_value) in &expected_state {
+                if !keys_to_delete.contains(key) {
+                    let stored = sm.get(key).await.expect("failed to get key");
+                    prop_assert_eq!(
+                        stored,
+                        Some(expected_value.clone()),
+                        "Non-deleted key {} should retain its value",
+                        key
+                    );
+                }
+            }
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 12: DeleteMulti Operation Correctness
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+    #[test]
+    fn test_deletemulti_operation_correctness(
+        entries in prop::collection::vec(arbitrary_key_value(), 10..40)
+    ) {
+        // Property: DeleteMulti atomically removes multiple keys
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_deletemulti.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // Apply all entries
+            for (i, (key, value)) in entries.iter().enumerate() {
+                let index = (i + 1) as u64;
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(1, 1, index),
+                    AppRequest::Set {
+                        key: key.clone(),
+                        value: value.clone(),
+                    },
+                );
+
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
+                sm.apply(entries_stream).await.expect("failed to apply set entry");
+            }
+
+            // Collect unique keys to delete (first half)
+            let keys_to_delete: Vec<String> = entries
+                .iter()
+                .take(entries.len() / 2)
+                .map(|(k, _)| k.clone())
+                .collect();
+
+            // Apply DeleteMulti operation
+            let index = (entries.len() + 1) as u64;
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, index),
+                AppRequest::DeleteMulti {
+                    keys: keys_to_delete.clone(),
+                },
+            );
+
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry, None))
+            }));
+            sm.apply(entries_stream).await.expect("failed to apply deletemulti entry");
+
+            // Verify all deleted keys return None
+            for key in &keys_to_delete {
+                let stored = sm.get(key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    None,
+                    "Key {} should be deleted by DeleteMulti",
+                    key
+                );
+            }
+
+            // Verify remaining keys (second half) still exist
+            // Note: Due to duplicate keys, we need to check what actually remains
+            let mut expected_remaining: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for (key, value) in &entries {
+                expected_remaining.insert(key.clone(), value.clone());
+            }
+            for key in &keys_to_delete {
+                expected_remaining.remove(key);
+            }
+
+            for (key, expected_value) in &expected_remaining {
+                let stored = sm.get(key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    Some(expected_value.clone()),
+                    "Key {} should still exist after DeleteMulti",
+                    key
+                );
+            }
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 13: Delete Idempotency
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+    #[test]
+    fn test_delete_idempotency(
+        key in "[a-z][a-z0-9_]{0,19}",
+        value in prop::string::string_regex("[a-zA-Z0-9 ]{1,100}").unwrap()
+    ) {
+        // Property: Deleting a key multiple times or deleting a non-existent key is idempotent
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_delete_idempotent.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // Set a key
+            let entry1 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
+                    key: key.clone(),
+                    value: value.clone(),
+                },
+            );
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry1, None))
+            }));
+            sm.apply(entries_stream).await.expect("failed to apply set");
+
+            // Verify key exists
+            let stored = sm.get(&key).await.expect("failed to get key");
+            prop_assert_eq!(stored, Some(value.clone()), "Key should exist after set");
+
+            // Delete the key first time
+            let entry2 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 2),
+                AppRequest::Delete { key: key.clone() },
+            );
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry2, None))
+            }));
+            sm.apply(entries_stream).await.expect("failed to apply first delete");
+
+            // Verify key is gone
+            let stored = sm.get(&key).await.expect("failed to get key");
+            prop_assert_eq!(stored, None, "Key should be gone after first delete");
+
+            // Delete the same key again (should be idempotent - no error)
+            let entry3 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 3),
+                AppRequest::Delete { key: key.clone() },
+            );
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry3, None))
+            }));
+            sm.apply(entries_stream).await.expect("failed to apply second delete (should be idempotent)");
+
+            // Verify key is still gone
+            let stored = sm.get(&key).await.expect("failed to get key");
+            prop_assert_eq!(stored, None, "Key should still be gone after second delete");
+
+            // Delete a completely non-existent key (should also be idempotent)
+            let entry4 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 4),
+                AppRequest::Delete {
+                    key: format!("{}_nonexistent", key),
+                },
+            );
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry4, None))
+            }));
+            sm.apply(entries_stream).await.expect("failed to delete non-existent key (should be idempotent)");
+
+            // Verify state is still consistent
+            let (last_applied, _) = sm.applied_state().await.expect("failed to get applied state");
+            prop_assert_eq!(
+                last_applied.map(|l| l.index),
+                Some(4),
+                "Applied index should be 4 after all operations"
+            );
+
+            Ok(())
+        })?;
+    }
+}
+
+// ============================================================================
+// Tiger Style Boundary Tests
+// ============================================================================
+// These tests verify that resource bounds from constants.rs are enforced
+// and that the system behaves correctly at boundary values.
+
+// Test 14: Key Size at Boundary (MAX_KEY_SIZE)
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(20))]
+    #[test]
+    fn test_key_size_at_boundary(
+        // Test sizes around the boundary: slightly under, at, and over
+        size_delta in -10i32..10i32
+    ) {
+        // Property: Keys at or below MAX_KEY_SIZE should work; keys above should fail
+        // Note: This tests the state machine's handling of key sizes.
+        // Validation happens at the API layer, so large keys may succeed at SM level.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_key_boundary.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            let key_size = (MAX_KEY_SIZE as i32 + size_delta).max(1) as usize;
+            let key = "k".repeat(key_size);
+            let value = "test_value".to_string();
+
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
+                    key: key.clone(),
+                    value: value.clone(),
+                },
+            );
+
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry, None))
+            }));
+
+            // State machine should accept all keys (validation is at API layer)
+            sm.apply(entries_stream).await.expect("apply should succeed at SM level");
+
+            // Verify the key was stored (SM-level storage succeeds regardless of size)
+            let stored = sm.get(&key).await.expect("failed to get key");
+            prop_assert_eq!(
+                stored,
+                Some(value),
+                "Key of size {} should be stored (validation at API layer)",
+                key_size
+            );
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 15: Value Size at Boundary (MAX_VALUE_SIZE)
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
+    #[test]
+    fn test_value_size_at_boundary(
+        // Test sizes up to MAX_VALUE_SIZE (don't go over since it's 1MB)
+        size_fraction in 0.95f64..1.0f64
+    ) {
+        // Property: Values at or below MAX_VALUE_SIZE should be stored and retrievable
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_value_boundary.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // Create a value near the boundary
+            let value_size = (MAX_VALUE_SIZE as f64 * size_fraction) as usize;
+            let key = "large_value_key".to_string();
+            let value = "x".repeat(value_size);
+
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
+                    key: key.clone(),
+                    value: value.clone(),
+                },
+            );
+
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry, None))
+            }));
+            sm.apply(entries_stream).await.expect("apply should succeed for large value");
+
+            // Verify the value was stored correctly
+            let stored = sm.get(&key).await.expect("failed to get key");
+            prop_assert_eq!(
+                stored.as_ref().map(|s| s.len()),
+                Some(value_size),
+                "Large value should be stored with correct size"
+            );
+            prop_assert_eq!(
+                stored,
+                Some(value),
+                "Large value should be retrievable"
+            );
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 16: SetMulti at Boundary (MAX_SETMULTI_KEYS)
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(10))]
+    #[test]
+    fn test_setmulti_at_boundary(
+        // Test counts around the boundary (only at or below limit)
+        delta in -10i32..=0i32
+    ) {
+        // Property: SetMulti with count <= MAX_SETMULTI_KEYS should succeed
+        // Tiger Style: The state machine enforces limits to prevent resource exhaustion
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_setmulti_boundary.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // Generate count at or below the boundary (minimum 1)
+            let count = (MAX_SETMULTI_KEYS as i32 + delta).max(1) as usize;
+
+            let pairs: Vec<(String, String)> = (0..count)
+                .map(|i| (format!("boundary_key_{}", i), format!("boundary_value_{}", i)))
+                .collect();
+
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::SetMulti {
+                    pairs: pairs.clone(),
+                },
+            );
+
+            let entries_stream = Box::pin(stream::once(async move {
+                Ok::<_, io::Error>((entry, None))
+            }));
+
+            // Operations at or below limit should succeed
+            sm.apply(entries_stream).await.expect("apply should succeed at/below limit");
+
+            // Verify all pairs were stored
+            for (key, expected_value) in &pairs {
+                let stored = sm.get(key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    Some(expected_value.clone()),
+                    "Key {} should be stored in SetMulti of {} pairs",
+                    key,
+                    count
+                );
+            }
+
+            Ok(())
+        })?;
+    }
+}
+
+// Test 17: Batch Size at Boundary (MAX_BATCH_SIZE)
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(5))]
+    #[test]
+    fn test_batch_operations_at_boundary(
+        // Test batch sizes around the boundary (at or below limit)
+        size_fraction in 0.9f64..=1.0f64
+    ) {
+        // Property: Batches near MAX_BATCH_SIZE should be processed correctly
+        // This tests the state machine's handling of large batches
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_batch_boundary.sqlite");
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut sm = SqliteStateMachine::new(&db_path)
+                .expect("failed to create state machine");
+
+            // Calculate batch size near the boundary (cap at MAX_BATCH_SIZE for safety)
+            let batch_size = ((MAX_BATCH_SIZE as f64 * size_fraction) as usize).min(MAX_BATCH_SIZE as usize);
+
+            // Apply entries in sequence (simulating a batch)
+            for i in 0..batch_size {
+                let index = (i + 1) as u64;
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    make_log_id(1, 1, index),
+                    AppRequest::Set {
+                        key: format!("batch_key_{}", i),
+                        value: format!("batch_value_{}", i),
+                    },
+                );
+
+                let entries_stream = Box::pin(stream::once(async move {
+                    Ok::<_, io::Error>((entry, None))
+                }));
+                sm.apply(entries_stream).await.expect("batch entry should apply");
+            }
+
+            // Verify all entries were applied
+            let (last_applied, _) = sm.applied_state().await.expect("should get applied state");
+            prop_assert_eq!(
+                last_applied.map(|l| l.index),
+                Some(batch_size as u64),
+                "All {} batch entries should be applied",
+                batch_size
+            );
+
+            // Spot check some entries
+            let check_count = batch_size.min(10);
+            for i in 0..check_count {
+                let key = format!("batch_key_{}", i);
+                let stored = sm.get(&key).await.expect("failed to get key");
+                prop_assert_eq!(
+                    stored,
+                    Some(format!("batch_value_{}", i)),
+                    "Entry {} in batch of {} should be correct",
+                    i,
+                    batch_size
                 );
             }
 

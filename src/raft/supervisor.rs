@@ -192,10 +192,7 @@ impl Supervisor {
 /// Run a Raft node with supervision.
 ///
 /// This replaces the actor-based supervision with a simpler approach.
-pub async fn run_raft_with_supervision<F, Fut>(
-    name: String,
-    task_factory: F,
-) -> Arc<Supervisor>
+pub async fn run_raft_with_supervision<F, Fut>(name: String, task_factory: F) -> Arc<Supervisor>
 where
     F: FnMut() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = Result<(), String>> + Send + 'static,
