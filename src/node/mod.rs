@@ -93,26 +93,17 @@ pub struct NodeBuilder {
 impl NodeBuilder {
     /// Create a new builder for the given node ID and data directory.
     pub fn new(node_id: NodeId, data_dir: impl Into<PathBuf>) -> Self {
-        let config = NodeConfig {
-            node_id: node_id.into(),
-            data_dir: Some(data_dir.into()),
-            storage_backend: StorageBackend::Sqlite,
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
-            host: "localhost".to_string(),
-            cookie: "aspen-cluster".to_string(),
-            http_addr: "127.0.0.1:8080".parse().unwrap(),
-            control_backend: Default::default(),
-            heartbeat_interval_ms: 1000,
-            election_timeout_min_ms: 3000,
-            election_timeout_max_ms: 6000,
-            iroh: Default::default(),
-            peers: Vec::new(),
-            supervision_config: Default::default(),
-            raft_mailbox_capacity: 1000,
-        };
+        let mut config = NodeConfig::from_env();
+        config.node_id = node_id.into();
+        config.data_dir = Some(data_dir.into());
+        config.storage_backend = StorageBackend::Sqlite;
+        config.host = "localhost".to_string();
+        config.cookie = "aspen-cluster".to_string();
+        config.http_addr = "127.0.0.1:8080".parse().unwrap();
+        config.heartbeat_interval_ms = 1000;
+        config.election_timeout_min_ms = 3000;
+        config.election_timeout_max_ms = 6000;
+        config.raft_mailbox_capacity = 1000;
         Self { config }
     }
 

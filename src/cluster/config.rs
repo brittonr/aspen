@@ -72,7 +72,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
 use crate::raft::storage::StorageBackend;
-use crate::raft::supervision::SupervisionConfig;
+// SupervisionConfig removed - was legacy from actor-based architecture
 
 /// Configuration for an Aspen cluster node.
 ///
@@ -157,9 +157,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub peers: Vec<String>,
 
-    /// Supervision configuration for RaftActor.
-    #[serde(default)]
-    pub supervision_config: SupervisionConfig,
 
     /// RaftActor mailbox capacity (bounded mailbox size).
     /// Prevents memory exhaustion under high load by enforcing backpressure.
@@ -314,7 +311,6 @@ impl NodeConfig {
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: parse_env("ASPEN_RAFT_MAILBOX_CAPACITY")
                 .unwrap_or_else(default_raft_mailbox_capacity),
         }
@@ -390,8 +386,7 @@ impl NodeConfig {
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
-        // Always merge supervision config
-        self.supervision_config = other.supervision_config;
+        // supervision_config removed - was legacy from actor-based architecture
     }
 
     /// Validate configuration on startup.
@@ -650,7 +645,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
 
@@ -672,7 +666,6 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
@@ -703,7 +696,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
 
@@ -730,7 +722,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
 
@@ -759,7 +750,6 @@ mod tests {
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            supervision_config: SupervisionConfig::default(),
             raft_mailbox_capacity: 1000,
         };
 

@@ -430,39 +430,37 @@ fn init_tracing() {
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
 fn build_cluster_config(args: &Args) -> NodeConfig {
-    NodeConfig {
-        node_id: args.node_id.unwrap_or(0),
-        data_dir: args.data_dir.clone(),
-        storage_backend: args
-            .storage_backend
-            .as_deref()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_default(),
-        redb_log_path: args.redb_log_path.clone(),
-        redb_sm_path: args.redb_sm_path.clone(),
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
-        host: args.host.clone().unwrap_or_else(|| "127.0.0.1".into()),
-        cookie: args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into()),
-        http_addr: args.http_addr.unwrap_or(DEFAULT_HTTP_ADDR),
-        control_backend: args.control_backend.unwrap_or_default(),
-        heartbeat_interval_ms: args.heartbeat_interval_ms.unwrap_or(500),
-        election_timeout_min_ms: args.election_timeout_min_ms.unwrap_or(1500),
-        election_timeout_max_ms: args.election_timeout_max_ms.unwrap_or(3000),
-        iroh: IrohConfig {
-            secret_key: args.iroh_secret_key.clone(),
-            enable_gossip: !args.disable_gossip,
-            gossip_ticket: args.ticket.clone(),
-            enable_mdns: !args.disable_mdns,
-            enable_dns_discovery: args.enable_dns_discovery,
-            dns_discovery_url: args.dns_discovery_url.clone(),
-            enable_pkarr: args.enable_pkarr,
-        },
-        peers: args.peers.clone(),
-        // These are kept for NodeConfig compatibility but unused in simplified architecture
-        supervision_config: Default::default(),
-        raft_mailbox_capacity: 1000,
-    }
+    let mut config = NodeConfig::from_env();
+    config.node_id = args.node_id.unwrap_or(0);
+    config.data_dir = args.data_dir.clone();
+    config.storage_backend = args
+        .storage_backend
+        .as_deref()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_default();
+    config.redb_log_path = args.redb_log_path.clone();
+    config.redb_sm_path = args.redb_sm_path.clone();
+    config.sqlite_log_path = None;
+    config.sqlite_sm_path = None;
+    config.host = args.host.clone().unwrap_or_else(|| "127.0.0.1".into());
+    config.cookie = args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into());
+    config.http_addr = args.http_addr.unwrap_or(DEFAULT_HTTP_ADDR);
+    config.control_backend = args.control_backend.unwrap_or_default();
+    config.heartbeat_interval_ms = args.heartbeat_interval_ms.unwrap_or(500);
+    config.election_timeout_min_ms = args.election_timeout_min_ms.unwrap_or(1500);
+    config.election_timeout_max_ms = args.election_timeout_max_ms.unwrap_or(3000);
+    config.iroh = IrohConfig {
+        secret_key: args.iroh_secret_key.clone(),
+        enable_gossip: !args.disable_gossip,
+        gossip_ticket: args.ticket.clone(),
+        enable_mdns: !args.disable_mdns,
+        enable_dns_discovery: args.enable_dns_discovery,
+        dns_discovery_url: args.dns_discovery_url.clone(),
+        enable_pkarr: args.enable_pkarr,
+    };
+    config.peers = args.peers.clone();
+    config.raft_mailbox_capacity = 1000;
+    config
 }
 
 /// Setup controllers based on control backend configuration.
