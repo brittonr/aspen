@@ -1431,6 +1431,28 @@ After implementation, the test suite should achieve:
 - `test_tester_crash_recovery_persistence` - Single node crash/restart
 - `test_tester_multiple_crash_recovery` - Multiple nodes crash/restart
 
+### Phase 2.1: Membership Change Testing - COMPLETE
+
+**Implementation Location**: `src/testing/madsim_tester.rs` (lines 848-1002)
+
+**Features Added**:
+
+1. **add_learner()** - Add a non-voting learner node to the cluster
+2. **change_membership()** - Reconfigure the voting members set
+3. **get_membership()** - Query current voters and learners
+4. **wait_for_log_sync()** - Wait for all nodes to reach consensus on log index
+
+**Metrics Added**:
+
+- `membership_changes` counter in SimulationMetrics
+
+**Tests Created**:
+
+- `test_tester_add_learner` - Verify learner addition and replication
+- `test_tester_promote_learner_to_voter` - Test learner promotion workflow
+- `test_tester_scale_down` - Safely reduce cluster size
+- `test_tester_membership_change_with_leader_crash` - Test membership changes during failures
+
 ### Phase 3.1: CI Matrix Enhancement - COMPLETE
 
 **Implementation Location**: `.github/workflows/madsim-multi-seed.yml`

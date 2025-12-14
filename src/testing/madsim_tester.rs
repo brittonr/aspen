@@ -38,7 +38,7 @@
 //! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY inspiration
 //! - [RisingWave DST](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -162,6 +162,8 @@ pub struct SimulationMetrics {
     pub network_partitions: u32,
     /// Number of Byzantine message corruptions.
     pub byzantine_corruptions: u64,
+    /// Number of membership changes (add learner, change membership).
+    pub membership_changes: u32,
 }
 
 /// Storage paths for a persistent node.
@@ -184,6 +186,7 @@ enum TestNode {
     /// Persistent node (for crash recovery testing).
     Persistent {
         raft: Raft<AppTypeConfig>,
+        #[allow(dead_code)]
         state_machine: Arc<SqliteStateMachine>,
         connected: AtomicBool,
         storage_paths: NodeStoragePaths,
@@ -842,6 +845,154 @@ impl AspenRaftTester {
         };
         Ok(value)
     }
+
+    // =========================================================================
+    // Membership Change Operations (Phase 2.1)
+    // =========================================================================
+
+    /// Add a learner node to the cluster.
+    ///
+    /// Learners replicate data but don't participate in consensus votes.
+    /// This is typically used before promoting a node to voter.
+    ///
+    /// # Arguments
+    /// * `node_idx` - 0-based index of the node to add as learner
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Add node 3 as a learner (it must already exist in the tester)
+    /// t.add_learner(3).await?;
+    /// ```
+    pub async fn add_learner(&mut self, node_idx: usize) -> Result<()> {
+        assert!(node_idx < self.nodes.len(), "Invalid node index");
+
+        let leader_idx = self
+            .check_one_leader()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("No leader available for add_learner"))?;
+
+        let node_id = NodeId::from(node_idx as u64 + 1);
+        let member_info = create_test_raft_member_info(node_id);
+
+        self.nodes[leader_idx]
+            .raft()
+            .add_learner(node_id, member_info, true)
+            .await
+            .map_err(|e| anyhow::anyhow!("add_learner failed: {}", e))?;
+
+        self.metrics.membership_changes += 1;
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("membership: added node {} as learner", node_idx));
+
+        Ok(())
+    }
+
+    /// Change cluster membership to a new set of voters.
+    ///
+    /// This reconfigures the Raft cluster to use a new set of voting members.
+    /// The change is applied through joint consensus for safety.
+    ///
+    /// # Arguments
+    /// * `voter_indices` - 0-based indices of nodes that should become voters
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Change membership to nodes 0, 1, 2, 4 (removing node 3)
+    /// t.change_membership(&[0, 1, 2, 4]).await?;
+    /// ```
+    pub async fn change_membership(&mut self, voter_indices: &[usize]) -> Result<()> {
+        assert!(!voter_indices.is_empty(), "Must have at least one voter");
+        for &idx in voter_indices {
+            assert!(idx < self.nodes.len(), "Invalid node index: {}", idx);
+        }
+
+        let leader_idx = self
+            .check_one_leader()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("No leader available for change_membership"))?;
+
+        let members: BTreeSet<NodeId> = voter_indices
+            .iter()
+            .map(|&i| NodeId::from(i as u64 + 1))
+            .collect();
+
+        self.nodes[leader_idx]
+            .raft()
+            .change_membership(members.clone(), false)
+            .await
+            .map_err(|e| anyhow::anyhow!("change_membership failed: {}", e))?;
+
+        self.metrics.membership_changes += 1;
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("membership: changed voters to {:?}", voter_indices));
+
+        Ok(())
+    }
+
+    /// Get the current cluster membership state.
+    ///
+    /// Returns a tuple of (voters, learners) as 0-based node indices.
+    pub fn get_membership(&self) -> (Vec<usize>, Vec<usize>) {
+        // Find a connected node to query
+        for node in &self.nodes {
+            if node.connected().load(Ordering::Relaxed) {
+                let metrics = node.raft().metrics().borrow().clone();
+                let membership = metrics.membership_config.membership();
+                let voters: Vec<usize> = membership
+                    .voter_ids()
+                    .map(|id| (id.0 - 1) as usize)
+                    .collect();
+                let learners: Vec<usize> = membership
+                    .learner_ids()
+                    .map(|id| (id.0 - 1) as usize)
+                    .collect();
+                return (voters, learners);
+            }
+        }
+        (vec![], vec![])
+    }
+
+    /// Wait for all connected nodes to reach the same log index.
+    ///
+    /// This is useful after membership changes to ensure replication.
+    ///
+    /// # Arguments
+    /// * `timeout_secs` - Maximum time to wait for sync
+    pub async fn wait_for_log_sync(&mut self, timeout_secs: u64) -> Result<()> {
+        let deadline = Duration::from_secs(timeout_secs);
+        let start = std::time::Instant::now();
+
+        while start.elapsed() < deadline {
+            let mut indices: Vec<u64> = Vec::new();
+
+            for node in &self.nodes {
+                if node.connected().load(Ordering::Relaxed) {
+                    let metrics = node.raft().metrics().borrow().clone();
+                    if let Some(applied) = metrics.last_applied {
+                        indices.push(applied.index);
+                    }
+                }
+            }
+
+            // Check if all connected nodes have the same applied index
+            if !indices.is_empty() && indices.iter().all(|&i| i == indices[0]) {
+                self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+                    .add_event(format!("sync: all nodes at log index {}", indices[0]));
+                return Ok(());
+            }
+
+            madsim::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        anyhow::bail!(
+            "Timeout waiting for log sync after {} seconds",
+            timeout_secs
+        )
+    }
+
+    // =========================================================================
+    // Event Logging
+    // =========================================================================
 
     /// Add a custom event to the artifact trace.
     pub fn add_event(&mut self, event: impl Into<String>) {

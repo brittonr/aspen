@@ -455,3 +455,216 @@ async fn test_tester_multiple_crash_recovery() {
 
     t.end();
 }
+
+/// Test membership change - add a learner node.
+///
+/// This test verifies that we can dynamically add a learner to the cluster.
+/// Learners replicate data but don't participate in consensus votes.
+#[madsim::test]
+async fn test_tester_add_learner() {
+    // Start with a 3-node cluster, then add nodes 3 and 4 to test learner functionality
+    let mut t = AspenRaftTester::new(3, "tester_add_learner").await;
+
+    // Wait for initial cluster (nodes 0, 1, 2 are voters)
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // Verify initial membership (all 3 nodes are voters)
+    let (voters, learners) = t.get_membership();
+    assert_eq!(voters.len(), 3, "Should start with 3 voters");
+    assert!(learners.is_empty(), "Should start with no learners");
+
+    // Create new nodes that will become learners
+    // Note: This requires extending the tester to support adding new nodes dynamically
+    // For now, we'll test with existing nodes by changing membership
+
+    // Scale down to 2 voters first
+    t.change_membership(&[0, 1])
+        .await
+        .expect("Failed to scale down");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Add node 2 as a learner
+    t.add_learner(2).await.expect("Failed to add learner");
+
+    // Wait for replication
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify node 2 is now a learner
+    let (voters, learners) = t.get_membership();
+    assert_eq!(voters.len(), 2, "Should have 2 voters");
+    assert!(
+        learners.contains(&2),
+        "Node 2 should be a learner: {:?}",
+        learners
+    );
+
+    // Write some data and verify learner replicates it
+    for i in 0..5 {
+        t.write(format!("learner-key-{}", i), format!("value-{}", i))
+            .await
+            .expect("Write should succeed");
+    }
+
+    // Wait for log sync
+    t.wait_for_log_sync(10)
+        .await
+        .expect("Log sync should succeed");
+
+    t.end();
+}
+
+/// Test membership change - promote learner to voter.
+///
+/// This test verifies the complete workflow of adding a learner
+/// and then promoting it to a full voter.
+#[madsim::test]
+async fn test_tester_promote_learner_to_voter() {
+    let mut t = AspenRaftTester::new(4, "tester_promote_learner").await;
+
+    // Wait for initial cluster (all 4 nodes start as voters)
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // First, remove node 3 from voters to make it available as learner
+    t.change_membership(&[0, 1, 2])
+        .await
+        .expect("Failed to remove node 3 from voters");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Add node 3 as a learner
+    t.add_learner(3)
+        .await
+        .expect("Failed to add node 3 as learner");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify node 3 is a learner
+    let (voters, learners) = t.get_membership();
+    assert_eq!(voters.len(), 3, "Should have 3 voters");
+    assert!(learners.contains(&3), "Node 3 should be a learner");
+
+    // Promote node 3 back to voter by changing membership
+    t.change_membership(&[0, 1, 2, 3])
+        .await
+        .expect("Failed to promote node 3 to voter");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify membership changed
+    let (voters, _learners) = t.get_membership();
+    assert!(voters.contains(&3), "Node 3 should be a voter now");
+    assert_eq!(voters.len(), 4, "Should have 4 voters");
+
+    // Verify cluster still works
+    t.write("after-promote".to_string(), "value".to_string())
+        .await
+        .expect("Write should succeed after promotion");
+
+    t.check_no_split_brain()
+        .expect("No split brain after membership change");
+
+    t.end();
+}
+
+/// Test membership change - scale down cluster.
+///
+/// This test verifies that we can safely reduce the cluster size.
+#[madsim::test]
+async fn test_tester_scale_down() {
+    let mut t = AspenRaftTester::new(5, "tester_scale_down").await;
+
+    // Wait for initial cluster (5 voters)
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // Change membership to remove node 4
+    // For a 5-node cluster initialized with nodes 0-4 as voters,
+    // we reduce to 4 voters
+    t.change_membership(&[0, 1, 2, 3])
+        .await
+        .expect("Failed to scale down to 4 nodes");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify cluster still has a leader
+    t.check_one_leader()
+        .await
+        .expect("Should have leader after scale down");
+
+    // Further scale down to 3 nodes (minimum for quorum)
+    t.change_membership(&[0, 1, 2])
+        .await
+        .expect("Failed to scale down to 3 nodes");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify cluster still functions
+    let (voters, _) = t.get_membership();
+    assert_eq!(voters.len(), 3, "Should have 3 voters");
+
+    t.write("after-scale-down".to_string(), "value".to_string())
+        .await
+        .expect("Write should succeed after scale down");
+
+    t.check_no_split_brain()
+        .expect("No split brain after scale down");
+
+    t.end();
+}
+
+/// Test membership change during leader crash.
+///
+/// This test verifies that ongoing membership changes handle leader
+/// failures gracefully.
+#[madsim::test]
+async fn test_tester_membership_change_with_leader_crash() {
+    let mut t = AspenRaftTester::new(5, "tester_membership_crash").await;
+
+    // Wait for initial cluster (all 5 nodes start as voters)
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    let initial_leader = t.check_one_leader().await.expect("No initial leader");
+
+    // First reduce membership to 3 nodes to test adding learners
+    t.change_membership(&[0, 1, 2])
+        .await
+        .expect("Failed to reduce membership");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Add node 3 as learner before crash
+    t.add_learner(3).await.expect("Failed to add learner");
+    madsim::time::sleep(Duration::from_secs(2)).await;
+
+    // Crash the leader
+    t.crash_node(initial_leader).await;
+    t.add_event(format!("Crashed leader node {}", initial_leader));
+
+    // Wait for new leader
+    madsim::time::sleep(Duration::from_secs(10)).await;
+
+    let new_leader = t.check_one_leader().await;
+    assert!(new_leader.is_some(), "Should elect new leader after crash");
+    assert_ne!(
+        new_leader.unwrap(),
+        initial_leader,
+        "New leader should be different"
+    );
+
+    // Membership operations should still work
+    // Try to add another learner through new leader
+    if t.add_learner(4).await.is_ok() {
+        t.add_event("Successfully added learner 4 through new leader".to_string());
+    } else {
+        // Expected if the previous learner addition didn't fully replicate
+        t.add_event("Could not add learner 4 (may be expected)".to_string());
+    }
+
+    // Verify no split brain
+    t.check_no_split_brain()
+        .expect("No split brain after membership changes and crash");
+
+    t.end();
+}

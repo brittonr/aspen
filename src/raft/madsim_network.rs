@@ -647,6 +647,7 @@ pub enum ByzantineCorruptionMode {
 /// ```
 pub struct ByzantineFailureInjector {
     /// Per-link Byzantine configuration: (source, target) -> (mode, probability)
+    #[allow(clippy::type_complexity)]
     links: SyncMutex<HashMap<(NodeId, NodeId), Vec<(ByzantineCorruptionMode, f64)>>>,
     /// Statistics: count of corruptions per mode
     corruption_counts: SyncMutex<HashMap<ByzantineCorruptionMode, u64>>,
