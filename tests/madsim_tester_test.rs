@@ -668,3 +668,155 @@ async fn test_tester_membership_change_with_leader_crash() {
 
     t.end();
 }
+
+// =========================================================================
+// BUGGIFY Fault Injection Tests (Phase 2.2)
+// =========================================================================
+
+/// Test BUGGIFY-style fault injection with default probabilities.
+///
+/// This test enables BUGGIFY and runs for a period, verifying
+/// that the cluster maintains consensus despite injected faults.
+#[madsim::test]
+async fn test_tester_buggify_default() {
+
+    let mut t = AspenRaftTester::new(5, "tester_buggify_default").await;
+
+    // Wait for initial cluster formation
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // Enable BUGGIFY with default probabilities
+    t.enable_buggify(None);
+    t.add_event("Starting BUGGIFY fault injection test".to_string());
+
+    // Run with BUGGIFY for 20 seconds
+    for _ in 0..20 {
+        t.apply_buggify_faults().await;
+        madsim::time::sleep(Duration::from_secs(1)).await;
+
+        // Try to maintain some operations
+        let _ = t.write(
+            format!("buggify-key-{}", t.seed() % 1000),
+            "value".to_string()
+        ).await;
+    }
+
+    // Disable BUGGIFY and let cluster stabilize
+    t.disable_buggify();
+    madsim::time::sleep(Duration::from_secs(5)).await;
+
+    // Verify cluster is still functional
+    t.check_one_leader()
+        .await
+        .expect("Should have leader after BUGGIFY");
+
+    t.check_no_split_brain()
+        .expect("No split brain after BUGGIFY");
+
+    // Write should still work
+    t.write("post-buggify".to_string(), "value".to_string())
+        .await
+        .expect("Write should work after BUGGIFY");
+
+    let artifact = t.end();
+    eprintln!(
+        "BUGGIFY test completed with {} fault triggers",
+        serde_json::from_str::<serde_json::Value>(&artifact.metrics).ok()
+            .and_then(|v| v.get("buggify_triggers").and_then(|t| t.as_u64()))
+            .unwrap_or(0)
+    );
+}
+
+/// Test BUGGIFY with custom fault probabilities.
+///
+/// This test uses higher fault probabilities to stress test the cluster.
+#[madsim::test]
+async fn test_tester_buggify_custom_probs() {
+    use aspen::testing::BuggifyFault;
+    use std::collections::HashMap;
+
+    let mut t = AspenRaftTester::new(5, "tester_buggify_custom").await;
+
+    // Wait for initial cluster
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // Set aggressive fault probabilities
+    let mut probs = HashMap::new();
+    probs.insert(BuggifyFault::NetworkDelay, 0.20);     // 20% chance
+    probs.insert(BuggifyFault::NetworkDrop, 0.10);      // 10% chance
+    probs.insert(BuggifyFault::NodeCrash, 0.05);        // 5% chance
+    probs.insert(BuggifyFault::ElectionTimeout, 0.10);  // 10% chance
+    probs.insert(BuggifyFault::MessageCorruption, 0.05); // 5% chance
+
+    t.enable_buggify(Some(probs));
+
+    // Run with aggressive BUGGIFY for 15 seconds
+    t.run_with_buggify_loop(Duration::from_secs(15)).await;
+
+    // Let cluster recover
+    t.disable_buggify();
+    madsim::time::sleep(Duration::from_secs(10)).await;
+
+    // Verify recovery
+    t.check_one_leader()
+        .await
+        .expect("Should recover leader after aggressive BUGGIFY");
+
+    t.check_no_split_brain()
+        .expect("No split brain after recovery");
+
+    t.end();
+}
+
+/// Test BUGGIFY with focused fault types.
+///
+/// This test only enables specific fault types to test their individual impact.
+#[madsim::test]
+async fn test_tester_buggify_focused_faults() {
+    use aspen::testing::BuggifyFault;
+    use std::collections::HashMap;
+
+    let mut t = AspenRaftTester::new(3, "tester_buggify_focused").await;
+
+    // Wait for cluster
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    t.check_one_leader().await.expect("No initial leader");
+
+    // Test 1: Only network delays
+    let mut delay_probs = HashMap::new();
+    delay_probs.insert(BuggifyFault::NetworkDelay, 0.50); // 50% chance
+    t.enable_buggify(Some(delay_probs));
+
+    for _ in 0..10 {
+        t.apply_buggify_faults().await;
+        madsim::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    t.disable_buggify();
+    t.add_event("Completed network delay testing".to_string());
+
+    // Test 2: Only snapshot triggers
+    let mut snapshot_probs = HashMap::new();
+    snapshot_probs.insert(BuggifyFault::SnapshotTrigger, 0.30); // 30% chance
+    t.enable_buggify(Some(snapshot_probs));
+
+    for _ in 0..10 {
+        t.apply_buggify_faults().await;
+        madsim::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    t.disable_buggify();
+    t.add_event("Completed snapshot trigger testing".to_string());
+
+    // Verify cluster health
+    t.check_one_leader()
+        .await
+        .expect("Should maintain leader with focused faults");
+
+    t.check_no_split_brain()
+        .expect("No split brain with focused faults");
+
+    t.end();
+}

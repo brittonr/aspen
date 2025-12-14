@@ -38,9 +38,10 @@
 //! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY inspiration
 //! - [RisingWave DST](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -164,6 +165,117 @@ pub struct SimulationMetrics {
     pub byzantine_corruptions: u64,
     /// Number of membership changes (add learner, change membership).
     pub membership_changes: u32,
+    /// Number of BUGGIFY faults triggered.
+    pub buggify_triggers: u64,
+}
+
+// =========================================================================
+// BUGGIFY-Style Fault Injection (Phase 2.2)
+// =========================================================================
+
+/// Type of fault that can be injected via BUGGIFY.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum BuggifyFault {
+    /// Inject random network delays.
+    NetworkDelay,
+    /// Drop random network packets.
+    NetworkDrop,
+    /// Crash random nodes.
+    NodeCrash,
+    /// Inject slow disk operations.
+    SlowDisk,
+    /// Corrupt random messages.
+    MessageCorruption,
+    /// Force election timeouts.
+    ElectionTimeout,
+    /// Partition the network randomly.
+    NetworkPartition,
+    /// Trigger snapshot operations.
+    SnapshotTrigger,
+}
+
+/// BUGGIFY configuration for systematic fault injection.
+///
+/// Inspired by FoundationDB's BUGGIFY macro, this provides
+/// deterministic fault injection based on the test seed.
+#[derive(Clone)]
+pub struct BuggifyConfig {
+    /// Whether BUGGIFY is enabled globally.
+    enabled: Arc<AtomicBool>,
+    /// Base probability (0.0 to 1.0) for each fault type.
+    probabilities: Arc<Mutex<HashMap<BuggifyFault, f64>>>,
+    /// Count of triggers per fault type.
+    trigger_counts: Arc<Mutex<HashMap<BuggifyFault, u64>>>,
+    /// Seed for deterministic random generation.
+    seed: u64,
+}
+
+impl BuggifyConfig {
+    /// Create a new BUGGIFY configuration with default settings.
+    pub fn new(seed: u64) -> Self {
+        let mut default_probs = HashMap::new();
+        // Default probabilities for each fault type
+        default_probs.insert(BuggifyFault::NetworkDelay, 0.05);      // 5%
+        default_probs.insert(BuggifyFault::NetworkDrop, 0.02);       // 2%
+        default_probs.insert(BuggifyFault::NodeCrash, 0.01);         // 1%
+        default_probs.insert(BuggifyFault::SlowDisk, 0.05);          // 5%
+        default_probs.insert(BuggifyFault::MessageCorruption, 0.01); // 1%
+        default_probs.insert(BuggifyFault::ElectionTimeout, 0.02);   // 2%
+        default_probs.insert(BuggifyFault::NetworkPartition, 0.005); // 0.5%
+        default_probs.insert(BuggifyFault::SnapshotTrigger, 0.02);   // 2%
+
+        Self {
+            enabled: Arc::new(AtomicBool::new(false)),
+            probabilities: Arc::new(Mutex::new(default_probs)),
+            trigger_counts: Arc::new(Mutex::new(HashMap::new())),
+            seed,
+        }
+    }
+
+    /// Enable BUGGIFY with optional custom probabilities.
+    pub fn enable(&self, custom_probs: Option<HashMap<BuggifyFault, f64>>) {
+        if let Some(probs) = custom_probs {
+            *self.probabilities.lock().unwrap() = probs;
+        }
+        self.enabled.store(true, Ordering::SeqCst);
+    }
+
+    /// Disable BUGGIFY.
+    pub fn disable(&self) {
+        self.enabled.store(false, Ordering::SeqCst);
+    }
+
+    /// Check if a specific fault should be triggered.
+    ///
+    /// Uses deterministic randomness based on seed and trigger count.
+    pub fn should_trigger(&self, fault: BuggifyFault) -> bool {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        let mut counts = self.trigger_counts.lock().unwrap();
+        let count = counts.entry(fault).or_insert(0);
+        *count += 1;
+
+        let probs = self.probabilities.lock().unwrap();
+        let probability = probs.get(&fault).copied().unwrap_or(0.0);
+
+        // Deterministic hash based on seed, fault type, and count
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u64(self.seed);
+        hasher.write_u64(*count);
+        hasher.write_u64(fault as u64);
+        let hash = hasher.finish();
+
+        // Convert to probability check
+        let threshold = (probability * u64::MAX as f64) as u64;
+        hash < threshold
+    }
+
+    /// Get total trigger counts for metrics.
+    pub fn total_triggers(&self) -> u64 {
+        self.trigger_counts.lock().unwrap().values().sum()
+    }
 }
 
 /// Storage paths for a persistent node.
@@ -232,6 +344,8 @@ pub struct AspenRaftTester {
     injector: Arc<FailureInjector>,
     /// Byzantine failure injector for message corruption testing.
     byzantine_injector: Arc<ByzantineFailureInjector>,
+    /// BUGGIFY configuration for systematic fault injection.
+    buggify: Arc<BuggifyConfig>,
     /// All nodes in the cluster.
     nodes: Vec<TestNode>,
     /// Artifact builder for event trace capture.
@@ -413,10 +527,14 @@ impl AspenRaftTester {
 
         artifact = artifact.add_event("init: cluster initialized");
 
+        // Initialize BUGGIFY with the test seed
+        let buggify = Arc::new(BuggifyConfig::new(seed));
+
         Self {
             router,
             injector,
             byzantine_injector,
+            buggify,
             nodes,
             artifact,
             start_time: Instant::now(),
@@ -991,6 +1109,217 @@ impl AspenRaftTester {
     }
 
     // =========================================================================
+    // BUGGIFY Fault Injection Methods (Phase 2.2)
+    // =========================================================================
+
+    /// Enable BUGGIFY fault injection for this test.
+    ///
+    /// # Arguments
+    /// * `custom_probs` - Optional custom probabilities for each fault type
+    ///
+    /// # Example
+    /// ```ignore
+    /// t.enable_buggify(None);  // Use default probabilities
+    ///
+    /// // Or with custom probabilities
+    /// let mut probs = HashMap::new();
+    /// probs.insert(BuggifyFault::NetworkDelay, 0.10);  // 10% chance
+    /// probs.insert(BuggifyFault::NodeCrash, 0.02);     // 2% chance
+    /// t.enable_buggify(Some(probs));
+    /// ```
+    pub fn enable_buggify(&mut self, custom_probs: Option<HashMap<BuggifyFault, f64>>) {
+        self.buggify.enable(custom_probs);
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event("buggify: enabled with fault injection");
+    }
+
+    /// Disable BUGGIFY fault injection.
+    pub fn disable_buggify(&mut self) {
+        self.buggify.disable();
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event("buggify: disabled");
+    }
+
+    /// Apply BUGGIFY faults if they should trigger.
+    ///
+    /// This method checks each fault type and applies them if triggered.
+    /// Called periodically during test execution.
+    pub async fn apply_buggify_faults(&mut self) {
+        // Network delay
+        if self.buggify.should_trigger(BuggifyFault::NetworkDelay) {
+            let delay_ms = 50 + (self.seed % 200) as u64; // 50-250ms delay
+
+            // Apply delay to all node pairs
+            for i in 0..self.nodes.len() {
+                for j in 0..self.nodes.len() {
+                    if i != j {
+                        self.injector.set_network_delay(
+                            NodeId::from(i as u64 + 1),
+                            NodeId::from(j as u64 + 1),
+                            delay_ms
+                        );
+                    }
+                }
+            }
+
+            self.add_event(format!("buggify: injected {}ms network delay", delay_ms));
+            self.metrics.buggify_triggers += 1;
+        }
+
+        // Network packet drops
+        if self.buggify.should_trigger(BuggifyFault::NetworkDrop) {
+            // Apply packet loss to all links
+            for i in 0..self.nodes.len() {
+                for j in 0..self.nodes.len() {
+                    if i != j {
+                        self.injector.set_packet_loss_rate(
+                            NodeId::from(i as u64 + 1),
+                            NodeId::from(j as u64 + 1),
+                            0.1  // 10% loss rate
+                        );
+                    }
+                }
+            }
+
+            self.add_event("buggify: enabled 10% packet drop");
+            self.metrics.buggify_triggers += 1;
+
+            // Restore after some time
+            madsim::time::sleep(Duration::from_secs(2)).await;
+
+            // Clear packet loss
+            for i in 0..self.nodes.len() {
+                for j in 0..self.nodes.len() {
+                    if i != j {
+                        self.injector.set_packet_loss_rate(
+                            NodeId::from(i as u64 + 1),
+                            NodeId::from(j as u64 + 1),
+                            0.0
+                        );
+                    }
+                }
+            }
+
+            self.add_event("buggify: restored packet delivery");
+        }
+
+        // Random node crash
+        if self.buggify.should_trigger(BuggifyFault::NodeCrash) {
+            let connected_nodes: Vec<usize> = self.nodes.iter()
+                .enumerate()
+                .filter(|(_, n)| n.connected().load(Ordering::Relaxed))
+                .map(|(i, _)| i)
+                .collect();
+
+            if connected_nodes.len() > 2 {  // Keep at least 2 nodes alive
+                let victim = connected_nodes[self.seed as usize % connected_nodes.len()];
+                self.crash_node(victim).await;
+                self.add_event(format!("buggify: crashed node {}", victim));
+                self.metrics.buggify_triggers += 1;
+            }
+        }
+
+        // Message corruption
+        if self.buggify.should_trigger(BuggifyFault::MessageCorruption) {
+            // Pick a random Byzantine corruption mode
+            let modes = vec![
+                ByzantineCorruptionMode::FlipVote,
+                ByzantineCorruptionMode::IncrementTerm,
+                ByzantineCorruptionMode::DuplicateMessage,
+            ];
+            let mode = modes[self.seed as usize % modes.len()];
+
+            // Apply to a random node pair
+            let src = self.seed as usize % self.nodes.len();
+            let dst = (src + 1) % self.nodes.len();
+
+            self.byzantine_injector.set_byzantine_mode(
+                NodeId::from(src as u64 + 1),
+                NodeId::from(dst as u64 + 1),
+                mode,
+                0.5
+            );
+
+            self.add_event(format!("buggify: enabled {:?} corruption on link {}->{}", mode, src, dst));
+            self.metrics.buggify_triggers += 1;
+        }
+
+        // Election timeout (force re-election)
+        if self.buggify.should_trigger(BuggifyFault::ElectionTimeout) {
+            if let Some(leader_idx) = self.check_one_leader().await {
+                self.disconnect(leader_idx);
+                self.add_event(format!("buggify: partitioned leader {} to force re-election", leader_idx));
+                self.metrics.buggify_triggers += 1;
+
+                // Restore after election timeout
+                madsim::time::sleep(Duration::from_secs(5)).await;
+                self.connect(leader_idx);
+                self.add_event(format!("buggify: restored node {} connectivity", leader_idx));
+            }
+        }
+
+        // Network partition
+        if self.buggify.should_trigger(BuggifyFault::NetworkPartition) {
+            let mid = self.nodes.len() / 2;
+            for i in 0..mid {
+                self.disconnect(i);
+            }
+            self.add_event(format!("buggify: created network partition (nodes 0-{} isolated)", mid - 1));
+            self.metrics.buggify_triggers += 1;
+
+            // Heal after some time
+            madsim::time::sleep(Duration::from_secs(10)).await;
+            for i in 0..mid {
+                self.connect(i);
+            }
+            self.add_event("buggify: healed network partition");
+        }
+
+        // Trigger snapshot
+        if self.buggify.should_trigger(BuggifyFault::SnapshotTrigger) {
+            if let Some(_leader_idx) = self.check_one_leader().await {
+                // Note: trigger_snapshot is part of ClusterController trait, not directly on Raft
+                // For now we'll skip this as it would require refactoring the TestNode structure
+                // to expose the full ClusterController interface.
+                // TODO: Extend TestNode to support trigger_snapshot
+                self.add_event("buggify: snapshot trigger skipped (not yet implemented)");
+                self.metrics.buggify_triggers += 1;
+            }
+        }
+    }
+
+    /// Run a test loop with BUGGIFY enabled, periodically applying faults.
+    ///
+    /// This runs for the specified duration, applying BUGGIFY faults every second.
+    ///
+    /// # Example
+    /// ```ignore
+    /// t.enable_buggify(None);
+    ///
+    /// // Run with BUGGIFY for 30 seconds
+    /// t.run_with_buggify_loop(Duration::from_secs(30), async {
+    ///     // Check cluster health every 2 seconds
+    ///     loop {
+    ///         madsim::time::sleep(Duration::from_secs(2)).await;
+    ///         t.check_one_leader().await;
+    ///     }
+    /// }).await;
+    /// ```
+    pub async fn run_with_buggify_loop(&mut self, duration: Duration) {
+        let start = Instant::now();
+
+        while start.elapsed() < duration {
+            // Apply faults
+            self.apply_buggify_faults().await;
+
+            // Wait before next fault injection
+            madsim::time::sleep(Duration::from_secs(1)).await;
+        }
+
+        self.add_event(format!("buggify: completed {} seconds of fault injection", duration.as_secs()));
+    }
+
+    // =========================================================================
     // Event Logging
     // =========================================================================
 
@@ -1010,6 +1339,11 @@ impl AspenRaftTester {
         self.metrics.max_log_size = self.max_log_size();
         self.metrics.byzantine_corruptions = self.byzantine_injector.total_corruptions();
 
+        // Add BUGGIFY metrics if it was used
+        if self.buggify.total_triggers() > 0 {
+            self.metrics.buggify_triggers = self.buggify.total_triggers();
+        }
+
         // Collect final metrics as JSON
         let metrics_json =
             serde_json::to_string_pretty(&self.metrics).unwrap_or_else(|_| "{}".to_string());
@@ -1019,11 +1353,12 @@ impl AspenRaftTester {
             .build();
 
         eprintln!(
-            "Test '{}' finished in {:.2}s with {} nodes ({} byzantine corruptions)",
+            "Test '{}' finished in {:.2}s with {} nodes ({} byzantine corruptions, {} BUGGIFY triggers)",
             self.test_name,
             duration.as_secs_f64(),
             self.nodes.len(),
             self.metrics.byzantine_corruptions,
+            self.metrics.buggify_triggers,
         );
 
         // Persist artifact

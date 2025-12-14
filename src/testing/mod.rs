@@ -68,7 +68,10 @@ pub mod network_utils;
 #[cfg(any(test, feature = "testing"))]
 pub mod vm_manager;
 
-pub use madsim_tester::{AspenRaftTester, SimulationMetrics, TesterConfig};
+pub use madsim_tester::{
+    AspenRaftTester, SimulationMetrics, TesterConfig,
+    BuggifyFault, BuggifyConfig
+};
 pub use router::AspenRouter;
 
 // Re-export Byzantine types for testing
