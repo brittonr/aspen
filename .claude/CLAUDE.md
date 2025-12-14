@@ -233,6 +233,15 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
   - Each artifact includes: seed, event trace, metrics snapshot, duration, and status
   - Use `SimulationArtifactBuilder` from `src/simulation.rs` to instrument new simulation tests
   - Artifacts are gitignored but collected by CI for failed test debugging
+  - References:
+    - [FoundationDB Testing Approach](https://apple.github.io/foundationdb/testing.html) - Industry-leading deterministic simulation testing
+    - [Sled Simulation Testing](https://sled.rs/simulation.html) - Practical simulation testing for Rust databases
+    - [Deterministic Simulation: A New Era of Distributed System Testing](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/) - RisingWave's comprehensive guide to simulation testing
+    - [Applying Deterministic Simulation: The RisingWave Story](https://www.risingwave.com/blog/applying-deterministic-simulation-the-risingwave-story-part-2-of-2/) - Real-world implementation lessons from RisingWave
+    - [TigerBeetle VOPR](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/vopr.md) - Viewstamped Operation Protocol Replication design and testing methodology
+    - [TigerBeetle Architecture](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/ARCHITECTURE.md) - Financial database architecture with Tiger Style principles
+    - [TigerBeetle VSR](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/vsr.md) - Viewstamped Replication consensus protocol implementation
+    - [TigerBeetle Data File](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/data_file.md) - Storage engine design for deterministic performance
 - **Property-based testing**: Use `proptest` for exploring edge cases
 - **Test modifications**: Never modify, remove, or add tests unless explicitly asked
 

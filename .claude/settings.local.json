@@ -21,7 +21,10 @@
       "Bash(cargo nextest run:*)",
       "WebFetch(domain:lib.rs)",
       "Bash(git commit:*)",
-      "Bash(cargo tree:*)"
+      "Bash(cargo tree:*)",
+      "mcp__context7__resolve-library-id",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)"
     ],
     "deny": [],
     "ask": [],

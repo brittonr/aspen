@@ -57,6 +57,9 @@
 /// ```
 pub mod router;
 
+// Madsim-based deterministic testing
+pub mod madsim_tester;
+
 // VM-based testing modules (only available for testing)
 #[cfg(any(test, feature = "testing"))]
 pub mod fault_injection;
@@ -65,7 +68,11 @@ pub mod network_utils;
 #[cfg(any(test, feature = "testing"))]
 pub mod vm_manager;
 
+pub use madsim_tester::{AspenRaftTester, SimulationMetrics, TesterConfig};
 pub use router::AspenRouter;
+
+// Re-export Byzantine types for testing
+pub use crate::raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
 
 // Re-export VM testing types when available
 #[cfg(any(test, feature = "testing"))]

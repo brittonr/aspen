@@ -445,14 +445,20 @@ impl Default for MadsimRaftRouter {
 /// FailureInjector controls deterministic failure injection including:
 /// - Message drops (network failures)
 /// - Network delays (latency simulation)
+/// - Range-based delays with jitter
+/// - Packet loss rates (probabilistic drops)
 /// - Node failures (crash simulation)
 ///
 /// Tiger Style: All delays/timeouts are explicitly u64 milliseconds.
 pub struct FailureInjector {
     /// Network delay configuration (source, target) -> delay_ms
     delays: SyncMutex<HashMap<(NodeId, NodeId), u64>>,
+    /// Range-based delay configuration (source, target) -> (min_ms, max_ms)
+    delay_ranges: SyncMutex<HashMap<(NodeId, NodeId), (u64, u64)>>,
     /// Message drop configuration (source, target) -> should_drop
     drops: SyncMutex<HashMap<(NodeId, NodeId), bool>>,
+    /// Packet loss rate configuration (source, target) -> loss_rate (0.0-1.0)
+    loss_rates: SyncMutex<HashMap<(NodeId, NodeId), f64>>,
 }
 
 impl FailureInjector {
@@ -460,7 +466,9 @@ impl FailureInjector {
     pub fn new() -> Self {
         Self {
             delays: SyncMutex::new(HashMap::new()),
+            delay_ranges: SyncMutex::new(HashMap::new()),
             drops: SyncMutex::new(HashMap::new()),
+            loss_rates: SyncMutex::new(HashMap::new()),
         }
     }
 
@@ -472,6 +480,49 @@ impl FailureInjector {
         delays.insert((source, target), delay_ms);
     }
 
+    /// Configure range-based network delay between two nodes.
+    ///
+    /// Delay will be uniformly sampled from [min_ms, max_ms] for each message.
+    /// This simulates realistic network jitter patterns.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // 1-27ms latency like MadRaft
+    /// injector.set_network_delay_range(node1, node2, 1, 27);
+    /// ```
+    pub fn set_network_delay_range(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        min_ms: u64,
+        max_ms: u64,
+    ) {
+        assert!(min_ms <= max_ms, "min_ms must be <= max_ms");
+        let mut delay_ranges = self.delay_ranges.lock();
+        delay_ranges.insert((source, target), (min_ms, max_ms));
+    }
+
+    /// Configure packet loss rate between two nodes.
+    ///
+    /// Rate should be between 0.0 (no loss) and 1.0 (100% loss).
+    /// Messages are dropped probabilistically based on this rate.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // 10% packet loss
+    /// injector.set_packet_loss_rate(node1, node2, 0.1);
+    /// ```
+    pub fn set_packet_loss_rate(&self, source: NodeId, target: NodeId, rate: f64) {
+        assert!(
+            (0.0..=1.0).contains(&rate),
+            "loss rate must be between 0.0 and 1.0"
+        );
+        let mut loss_rates = self.loss_rates.lock();
+        loss_rates.insert((source, target), rate);
+    }
+
     /// Configure message drops between two nodes.
     ///
     /// When enabled, all messages from source to target will be dropped.
@@ -481,30 +532,272 @@ impl FailureInjector {
     }
 
     /// Check if a message should be dropped.
-    fn should_drop_message(&self, source: NodeId, target: NodeId) -> bool {
-        let drops = self.drops.lock();
-        drops.get(&(source, target)).copied().unwrap_or(false)
+    ///
+    /// Considers both explicit drops and probabilistic loss rates.
+    pub(crate) fn should_drop_message(&self, source: NodeId, target: NodeId) -> bool {
+        // Check explicit drops first
+        {
+            let drops = self.drops.lock();
+            if drops.get(&(source, target)).copied().unwrap_or(false) {
+                return true;
+            }
+        }
+
+        // Check packet loss rate
+        {
+            let loss_rates = self.loss_rates.lock();
+            if let Some(&rate) = loss_rates.get(&(source, target))
+                && rate > 0.0
+            {
+                // Use madsim's deterministic random
+                let random_value: f64 = (madsim::rand::random::<u64>() as f64) / (u64::MAX as f64);
+                if random_value < rate {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Get the configured network delay for a message, if any.
-    fn get_network_delay(&self, source: NodeId, target: NodeId) -> Option<Duration> {
-        let delays = self.delays.lock();
-        delays
-            .get(&(source, target))
-            .map(|&delay_ms| Duration::from_millis(delay_ms))
+    ///
+    /// Checks range-based delays first, then fixed delays.
+    /// For range-based delays, samples uniformly from the range.
+    pub(crate) fn get_network_delay(&self, source: NodeId, target: NodeId) -> Option<Duration> {
+        // Check range-based delays first
+        {
+            let delay_ranges = self.delay_ranges.lock();
+            if let Some(&(min_ms, max_ms)) = delay_ranges.get(&(source, target)) {
+                let delay_ms = if min_ms == max_ms {
+                    min_ms
+                } else {
+                    // Sample uniformly using madsim's deterministic random
+                    min_ms + (madsim::rand::random::<u64>() % (max_ms - min_ms + 1))
+                };
+                return Some(Duration::from_millis(delay_ms));
+            }
+        }
+
+        // Fall back to fixed delays
+        {
+            let delays = self.delays.lock();
+            delays
+                .get(&(source, target))
+                .map(|&delay_ms| Duration::from_millis(delay_ms))
+        }
     }
 
     /// Clear all failure injection configuration.
     pub fn clear_all(&self) {
         let mut delays = self.delays.lock();
+        let mut delay_ranges = self.delay_ranges.lock();
         let mut drops = self.drops.lock();
+        let mut loss_rates = self.loss_rates.lock();
         delays.clear();
+        delay_ranges.clear();
         drops.clear();
+        loss_rates.clear();
     }
 }
 
 impl Default for FailureInjector {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Byzantine failure injection type for testing consensus under Byzantine conditions.
+///
+/// These corruption modes simulate various Byzantine behaviors without creating
+/// actual malicious nodes. This enables testing Raft's behavior when messages
+/// are corrupted in transit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByzantineCorruptionMode {
+    /// Flip the vote_granted field in VoteResponse messages.
+    /// This tests whether Raft correctly handles conflicting vote responses.
+    FlipVote,
+
+    /// Increment the term in messages to simulate stale/future term attacks.
+    /// This tests term validation logic.
+    IncrementTerm,
+
+    /// Duplicate messages (send twice) to test idempotency.
+    /// This tests whether the system handles duplicate delivery.
+    DuplicateMessage,
+
+    /// Corrupt log entries by clearing the entries field.
+    /// This tests whether followers validate received entries.
+    ClearEntries,
+}
+
+/// Byzantine network wrapper that corrupts messages according to configured modes.
+///
+/// This wrapper sits between the Raft node and the underlying MadsimRaftNetwork,
+/// intercepting and potentially corrupting messages to test Byzantine fault tolerance.
+///
+/// **Note**: Raft does not provide Byzantine fault tolerance. This testing is useful for:
+/// 1. Verifying Raft's behavior under message corruption (e.g., from network bit flips)
+/// 2. Testing term validation and log consistency checks
+/// 3. Understanding failure modes
+///
+/// **Usage in AspenRaftTester**:
+/// ```ignore
+/// tester.enable_byzantine_mode(node_idx, ByzantineCorruptionMode::FlipVote, 0.3);
+/// ```
+pub struct ByzantineFailureInjector {
+    /// Per-link Byzantine configuration: (source, target) -> (mode, probability)
+    links: SyncMutex<HashMap<(NodeId, NodeId), Vec<(ByzantineCorruptionMode, f64)>>>,
+    /// Statistics: count of corruptions per mode
+    corruption_counts: SyncMutex<HashMap<ByzantineCorruptionMode, u64>>,
+}
+
+impl ByzantineFailureInjector {
+    /// Create a new Byzantine failure injector.
+    pub fn new() -> Self {
+        Self {
+            links: SyncMutex::new(HashMap::new()),
+            corruption_counts: SyncMutex::new(HashMap::new()),
+        }
+    }
+
+    /// Configure Byzantine behavior on a specific link.
+    ///
+    /// # Arguments
+    /// * `source` - Source node ID
+    /// * `target` - Target node ID
+    /// * `mode` - Type of Byzantine corruption
+    /// * `probability` - Probability of corruption (0.0 to 1.0)
+    pub fn set_byzantine_mode(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        mode: ByzantineCorruptionMode,
+        probability: f64,
+    ) {
+        assert!(
+            (0.0..=1.0).contains(&probability),
+            "probability must be between 0.0 and 1.0"
+        );
+        let mut links = self.links.lock();
+        let configs = links.entry((source, target)).or_default();
+        // Update existing or add new
+        if let Some(existing) = configs.iter_mut().find(|(m, _)| *m == mode) {
+            existing.1 = probability;
+        } else {
+            configs.push((mode, probability));
+        }
+    }
+
+    /// Clear all Byzantine configurations.
+    pub fn clear_all(&self) {
+        let mut links = self.links.lock();
+        links.clear();
+    }
+
+    /// Check if a particular corruption should be applied.
+    fn should_corrupt(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        mode: ByzantineCorruptionMode,
+    ) -> bool {
+        let links = self.links.lock();
+        if let Some(configs) = links.get(&(source, target)) {
+            for (m, prob) in configs {
+                if *m == mode {
+                    let random_value: f64 =
+                        (madsim::rand::random::<u64>() as f64) / (u64::MAX as f64);
+                    if random_value < *prob {
+                        // Record corruption
+                        drop(links); // Release lock before acquiring another
+                        let mut counts = self.corruption_counts.lock();
+                        *counts.entry(mode).or_insert(0) += 1;
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Potentially corrupt an AppendEntries request.
+    pub fn maybe_corrupt_append_entries(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        mut rpc: AppendEntriesRequest<AppTypeConfig>,
+    ) -> AppendEntriesRequest<AppTypeConfig> {
+        // IncrementTerm: Add 1 to term to simulate stale term attack
+        if self.should_corrupt(source, target, ByzantineCorruptionMode::IncrementTerm) {
+            rpc.vote.leader_id.term = rpc.vote.leader_id.term.saturating_add(1);
+            tracing::warn!(
+                %source, %target,
+                "BYZANTINE: Corrupted AppendEntries term to {}",
+                rpc.vote.leader_id.term
+            );
+        }
+
+        // ClearEntries: Remove all entries to test log validation
+        if self.should_corrupt(source, target, ByzantineCorruptionMode::ClearEntries) {
+            let original_len = rpc.entries.len();
+            rpc.entries.clear();
+            tracing::warn!(
+                %source, %target,
+                "BYZANTINE: Cleared {} entries from AppendEntries",
+                original_len
+            );
+        }
+
+        rpc
+    }
+
+    /// Potentially corrupt a Vote response.
+    pub fn maybe_corrupt_vote_response(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        mut resp: VoteResponse<AppTypeConfig>,
+    ) -> VoteResponse<AppTypeConfig> {
+        // FlipVote: Invert the vote_granted field
+        if self.should_corrupt(source, target, ByzantineCorruptionMode::FlipVote) {
+            resp.vote_granted = !resp.vote_granted;
+            tracing::warn!(
+                %source, %target,
+                "BYZANTINE: Flipped vote_granted to {}",
+                resp.vote_granted
+            );
+        }
+
+        resp
+    }
+
+    /// Check if a message should be duplicated.
+    pub fn should_duplicate(&self, source: NodeId, target: NodeId) -> bool {
+        self.should_corrupt(source, target, ByzantineCorruptionMode::DuplicateMessage)
+    }
+
+    /// Get corruption statistics.
+    pub fn get_corruption_stats(&self) -> HashMap<ByzantineCorruptionMode, u64> {
+        let counts = self.corruption_counts.lock();
+        counts.clone()
+    }
+
+    /// Get total corruption count.
+    pub fn total_corruptions(&self) -> u64 {
+        let counts = self.corruption_counts.lock();
+        counts.values().sum()
+    }
+}
+
+impl Default for ByzantineFailureInjector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::hash::Hash for ByzantineCorruptionMode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
     }
 }

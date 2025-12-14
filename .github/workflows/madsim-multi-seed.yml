@@ -3,6 +3,8 @@ name: Madsim Multi-Seed Testing
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -13,12 +15,30 @@ jobs:
   madsim:
     name: Test with Seed ${{ matrix.seed }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
-      # Don't cancel other seeds if one fails
+      # Don't cancel other seeds if one fails - we want full coverage data
       fail-fast: false
       matrix:
-        seed: [42, 123, 456, 789, 1024]
+        # 16 diverse seeds for comprehensive coverage
+        # See MADSIM_UPGRADE_PLAN_2025-12-14.md for rationale
+        seed:
+          - 0                      # Edge case: zero
+          - 42                     # Classic test seed
+          - 123456789              # Sequential digits
+          - 987654321              # Reverse sequential
+          - 18446744073709551615   # u64::MAX
+          - 1000000001             # Large round number
+          - 314159265              # Pi digits
+          - 271828182              # e digits
+          - 1111111111             # Repeated digits
+          - 2468101214             # Even pattern
+          - 1357911131             # Odd pattern
+          - 555555555              # All same digit
+          - 1234512345             # Repeating pattern
+          - 9876598765             # Palindromic pattern
+          - 1629626496             # Random looking
+          - 7777777777             # Lucky sevens
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,11 +61,14 @@ jobs:
         run: |
           # Run all madsim simulation tests with the specified seed
           # These tests verify deterministic behavior across different execution orders
-          export MADSIM_TEST_SEED=${{ matrix.seed }}
-          echo "Running madsim tests with MADSIM_TEST_SEED=${MADSIM_TEST_SEED}"
+          echo "Running madsim tests with seed ${MADSIM_TEST_SEED}"
+          echo "To reproduce locally: MADSIM_TEST_SEED=${MADSIM_TEST_SEED} cargo nextest run --filter-expr 'test(~madsim)'"
 
-          # Run all madsim simulation tests
-          nix develop -c cargo nextest run --filter-expr 'test(~madsim)'
+          # Run all madsim simulation tests with single thread for determinism
+          nix develop -c cargo nextest run --filter-expr 'test(~madsim)' --test-threads 1
+        env:
+          MADSIM_TEST_SEED: ${{ matrix.seed }}
+          ASPEN_TEST_SEED: ${{ matrix.seed }}
         continue-on-error: true
 
       - name: Collect simulation artifacts
@@ -78,8 +101,64 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.madsim-test.outcome }}" == "success" ]; then
-            echo "✅ Test passed with seed ${{ matrix.seed }}"
+            echo "Test passed with seed ${{ matrix.seed }}"
           else
-            echo "❌ Test failed with seed ${{ matrix.seed }}"
+            echo "Test failed with seed ${{ matrix.seed }}"
             exit 1
           fi
+
+  aggregate-results:
+    name: Aggregate Simulation Results
+    needs: madsim
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: simulation-artifacts-seed-*
+          path: all-artifacts/
+          merge-multiple: false
+
+      - name: Generate summary report
+        run: |
+          echo "# Madsim Multi-Seed Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Seeds Tested" >> $GITHUB_STEP_SUMMARY
+          echo "16 diverse seeds were tested for comprehensive coverage." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count artifacts per seed
+          echo "## Artifacts Collected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d all-artifacts ]; then
+            for dir in all-artifacts/simulation-artifacts-seed-*; do
+              if [ -d "$dir" ]; then
+                seed=$(basename "$dir" | sed 's/simulation-artifacts-seed-//')
+                count=$(find "$dir" -name "*.json" 2>/dev/null | wc -l)
+                echo "- Seed $seed: $count artifacts" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          else
+            echo "No artifacts directory found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Reproduction Commands" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To reproduce a specific seed locally:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo 'MADSIM_TEST_SEED=<seed> cargo nextest run --filter-expr "test(~madsim)" --test-threads 1' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload combined artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-simulation-artifacts
+          path: all-artifacts/
+          retention-days: 30
+          if-no-files-found: ignore

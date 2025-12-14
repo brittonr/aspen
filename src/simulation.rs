@@ -141,6 +141,47 @@ impl SimulationArtifactBuilder {
         }
     }
 
+    /// Create a new builder with automatic seed selection.
+    ///
+    /// Seed selection priority:
+    /// 1. `MADSIM_TEST_SEED` environment variable
+    /// 2. `ASPEN_TEST_SEED` environment variable
+    /// 3. Deterministic hash of test name
+    ///
+    /// This enables:
+    /// - CI matrix testing with diverse seeds via environment variable
+    /// - Reproducible failures: "MADSIM_TEST_SEED=42 cargo nextest run test_name"
+    /// - Consistent default behavior based on test name
+    pub fn new_with_auto_seed(test_name: impl Into<String>) -> (Self, u64) {
+        use std::hash::{Hash, Hasher};
+
+        let test_name = test_name.into();
+
+        // Priority order for seed selection
+        let seed = std::env::var("MADSIM_TEST_SEED")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .or_else(|| {
+                std::env::var("ASPEN_TEST_SEED")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+            })
+            .unwrap_or_else(|| {
+                // Deterministic seed from test name
+                let mut hasher = std::hash::DefaultHasher::new();
+                test_name.hash(&mut hasher);
+                hasher.finish()
+            });
+
+        eprintln!("Test '{}' using seed: {}", test_name, seed);
+        eprintln!(
+            "To reproduce: MADSIM_TEST_SEED={} cargo nextest run {}",
+            seed, test_name
+        );
+
+        (Self::new(test_name, seed), seed)
+    }
+
     /// Record the start time (call this at the beginning of the simulation).
     pub fn start(mut self) -> Self {
         self.start_time = Some(Utc::now());
