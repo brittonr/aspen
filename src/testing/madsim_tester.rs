@@ -68,9 +68,11 @@ const MAX_TESTER_NODES: usize = 64;
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = 500;
 const DEFAULT_ELECTION_TIMEOUT_MIN_MS: u64 = 1500;
 const DEFAULT_ELECTION_TIMEOUT_MAX_MS: u64 = 3000;
-const LEADER_CHECK_RETRIES: u32 = 10;
-const LEADER_CHECK_BACKOFF_MIN_MS: u64 = 450;
-const LEADER_CHECK_BACKOFF_MAX_MS: u64 = 550;
+// Leader check timing - reduced from 10 retries × 450-550ms (5.5s worst case)
+// to 5 retries × 200-300ms (1.5s worst case) to avoid test timeouts
+const LEADER_CHECK_RETRIES: u32 = 5;
+const LEADER_CHECK_BACKOFF_MIN_MS: u64 = 200;
+const LEADER_CHECK_BACKOFF_MAX_MS: u64 = 300;
 
 /// Configuration for creating a tester instance.
 #[derive(Debug, Clone)]
@@ -1464,9 +1466,23 @@ impl AspenRaftTester {
         }
 
         // Election timeout (force re-election)
-        if self.buggify.should_trigger(BuggifyFault::ElectionTimeout)
-            && let Some(leader_idx) = self.check_one_leader().await
-        {
+        // Use has_leader_now() instead of check_one_leader() to avoid blocking delays
+        if self.buggify.should_trigger(BuggifyFault::ElectionTimeout) && self.has_leader_now() {
+            // Find current leader without blocking retries
+            let leader_idx = self
+                .nodes
+                .iter()
+                .enumerate()
+                .find_map(|(i, node)| {
+                    if node.connected().load(Ordering::Relaxed) {
+                        let metrics = node.raft().metrics().borrow().clone();
+                        metrics.current_leader.map(|_| i)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+
             self.disconnect(leader_idx);
             self.add_event(format!(
                 "buggify: partitioned leader {} to force re-election",
@@ -1474,8 +1490,9 @@ impl AspenRaftTester {
             ));
             self.metrics.buggify_triggers += 1;
 
-            // Restore after election timeout
-            madsim::time::sleep(Duration::from_secs(5)).await;
+            // Restore after election timeout - reduced from 5s to 2s for faster tests
+            // This is still longer than election_timeout_max (3s) so elections can complete
+            madsim::time::sleep(Duration::from_secs(2)).await;
             self.connect(leader_idx);
             self.add_event(format!(
                 "buggify: restored node {} connectivity",

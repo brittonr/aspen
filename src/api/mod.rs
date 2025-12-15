@@ -380,7 +380,7 @@ pub trait KeyValueStore: Send + Sync {
 /// - Batch length (SetMulti/DeleteMulti) <= MAX_SETMULTI_KEYS
 pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStoreError> {
     let check_key = |key: &str| {
-        let len = key.as_bytes().len();
+        let len = key.len();
         if len > MAX_KEY_SIZE as usize {
             Err(KeyValueStoreError::KeyTooLarge {
                 size: len,
@@ -392,7 +392,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
     };
 
     let check_value = |value: &str| {
-        let len = value.as_bytes().len();
+        let len = value.len();
         if len > MAX_VALUE_SIZE as usize {
             Err(KeyValueStoreError::ValueTooLarge {
                 size: len,
