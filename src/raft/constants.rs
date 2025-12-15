@@ -251,3 +251,63 @@ pub const MAX_RESTART_HISTORY_SIZE: u32 = 100;
 /// Used in:
 /// - `supervision.rs`: Exponential backoff calculation (2^MAX_BACKOFF_SECONDS)
 pub const MAX_BACKOFF_SECONDS: u64 = 16;
+
+// ============================================================================
+// Clock Drift Detection Constants
+// ============================================================================
+// Note: Clock synchronization is NOT required for Raft consensus correctness.
+// Raft uses logical ordering (term + index) and monotonic clocks for timeouts.
+// These constants are for observational monitoring to help operators detect
+// NTP misconfiguration that could affect TLS certificates and debugging.
+
+/// Maximum number of nodes to track for clock drift observation (100).
+///
+/// Tiger Style: Bounded storage for clock drift tracking.
+/// Prevents unbounded growth of drift observation state.
+///
+/// Used in:
+/// - `clock_drift_detection.rs`: ClockDriftDetector storage bounds
+pub const MAX_DRIFT_OBSERVATIONS: u32 = 100;
+
+/// Clock drift warning threshold (100 milliseconds).
+///
+/// When estimated clock offset between nodes exceeds this value,
+/// a warning is logged. This is purely observational and does not
+/// affect Raft consensus (which uses monotonic clocks).
+///
+/// Typical NTP-synchronized machines have < 100ms drift.
+///
+/// Used in:
+/// - `clock_drift_detection.rs`: DriftSeverity classification
+pub const CLOCK_DRIFT_WARNING_THRESHOLD_MS: u64 = 100;
+
+/// Clock drift alert threshold (500 milliseconds).
+///
+/// When estimated clock offset between nodes exceeds this value,
+/// an alert-level log is emitted. This indicates potential NTP
+/// misconfiguration that should be investigated for operational health.
+///
+/// Used in:
+/// - `clock_drift_detection.rs`: DriftSeverity classification
+pub const CLOCK_DRIFT_ALERT_THRESHOLD_MS: u64 = 500;
+
+/// Exponential weighted moving average alpha for drift smoothing (0.1).
+///
+/// Controls how quickly drift estimates adapt to new observations.
+/// Lower values (like 0.1) provide more smoothing, reducing noise
+/// but slower adaptation. Value of 0.1 means ~10 samples for full weight.
+///
+/// Used in:
+/// - `clock_drift_detection.rs`: EWMA calculation
+pub const DRIFT_EWMA_ALPHA: f64 = 0.1;
+
+/// Minimum observations before reporting clock drift (3).
+///
+/// Prevents false positives from single outlier measurements.
+/// Drift is only reported after this many consistent observations.
+///
+/// Tiger Style: Explicit threshold prevents noisy alerts.
+///
+/// Used in:
+/// - `clock_drift_detection.rs`: Observation count validation
+pub const MIN_DRIFT_OBSERVATIONS: u32 = 3;

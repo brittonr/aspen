@@ -36,6 +36,7 @@
 //! handle.raft_node.write(write_request).await?;
 //! ```
 
+pub mod clock_drift_detection;
 pub mod connection_pool;
 pub mod constants;
 pub mod learner_promotion;

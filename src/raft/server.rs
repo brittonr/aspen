@@ -22,10 +22,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::clock_drift_detection::current_time_ms;
 use crate::raft::constants::{
     MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
 };
-use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
+use crate::raft::rpc::{
+    RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps, TimestampInfo,
+};
 use crate::raft::types::AppTypeConfig;
 
 /// IRPC server for handling Raft RPC requests.
@@ -219,6 +222,9 @@ async fn handle_rpc_stream(
         .await
         .context("failed to read RPC message")?;
 
+    // Record server receive time (t2) for clock drift detection
+    let server_recv_ms = current_time_ms();
+
     info!(buffer_size = buffer.len(), "read RPC message bytes");
 
     // Deserialize the RPC request (protocol enum without channels)
@@ -268,9 +274,21 @@ async fn handle_rpc_stream(
         }
     };
 
+    // Record server send time (t3) for clock drift detection
+    let server_send_ms = current_time_ms();
+
+    // Wrap response with timestamps for clock drift detection
+    let response_with_timestamps = RaftRpcResponseWithTimestamps {
+        inner: response,
+        timestamps: Some(TimestampInfo {
+            server_recv_ms,
+            server_send_ms,
+        }),
+    };
+
     // Serialize and send response
-    let response_bytes =
-        postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
+    let response_bytes = postcard::to_stdvec(&response_with_timestamps)
+        .context("failed to serialize RPC response")?;
 
     info!(response_size = response_bytes.len(), "sending RPC response");
 

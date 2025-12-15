@@ -58,14 +58,15 @@ use tokio::select;
 use tracing::{error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::clock_drift_detection::{ClockDriftDetector, current_time_ms};
 use crate::raft::connection_pool::RaftConnectionPool;
 use crate::raft::constants::{
     IROH_READ_TIMEOUT, MAX_PEERS, MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
-    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
-    RaftVoteRequest,
+    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps,
+    RaftSnapshotRequest, RaftVoteRequest,
 };
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
 use std::sync::Arc;
@@ -102,6 +103,11 @@ pub struct IrpcRaftNetworkFactory {
     ///
     /// Updated automatically based on Raft RPC success/failure and Iroh connection status.
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
+    /// Clock drift detector for monitoring peer clock synchronization.
+    ///
+    /// Purely observational - does NOT affect Raft consensus.
+    /// Used to detect NTP misconfiguration for operational health.
+    drift_detector: Arc<RwLock<ClockDriftDetector>>,
 }
 
 impl IrpcRaftNetworkFactory {
@@ -110,6 +116,7 @@ impl IrpcRaftNetworkFactory {
         peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
     ) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
+        let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
         let connection_pool = Arc::new(RaftConnectionPool::new(
             Arc::clone(&endpoint_manager),
             Arc::clone(&failure_detector),
@@ -125,12 +132,18 @@ impl IrpcRaftNetworkFactory {
             connection_pool,
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
             failure_detector,
+            drift_detector,
         }
     }
 
     /// Get a reference to the failure detector for metrics/monitoring.
     pub fn failure_detector(&self) -> Arc<RwLock<NodeFailureDetector>> {
         Arc::clone(&self.failure_detector)
+    }
+
+    /// Get a reference to the clock drift detector for metrics/monitoring.
+    pub fn drift_detector(&self) -> Arc<RwLock<ClockDriftDetector>> {
+        Arc::clone(&self.drift_detector)
     }
 
     /// Add a peer address for future connections.
@@ -208,6 +221,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
             peer_addr,
             target,
             failure_detector: Arc::clone(&self.failure_detector),
+            drift_detector: Arc::clone(&self.drift_detector),
         }
     }
 }
@@ -223,6 +237,7 @@ pub struct IrpcRaftNetwork {
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
+    drift_detector: Arc<RwLock<ClockDriftDetector>>,
 }
 
 impl IrpcRaftNetwork {
@@ -237,7 +252,7 @@ impl IrpcRaftNetwork {
     /// 4. Wait for response on the same stream
     /// 5. Deserialize and return the response
     ///
-    /// Updates failure detector based on RPC success/failure.
+    /// Updates failure detector and drift detector based on RPC success/failure.
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
         let peer_addr = self
             .peer_addr
@@ -281,6 +296,9 @@ impl IrpcRaftNetwork {
             })
             .context("failed to acquire stream from connection")?;
 
+        // Record client send time (t1) for clock drift detection
+        let client_send_ms = current_time_ms();
+
         // Serialize and send the request
         let serialized =
             postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
@@ -301,23 +319,44 @@ impl IrpcRaftNetwork {
         .context("timeout reading RPC response")?
         .context("failed to read RPC response")?;
 
+        // Record client receive time (t4) for clock drift detection
+        let client_recv_ms = current_time_ms();
+
         info!(
             response_size = response_buf.len(),
             "received RPC response bytes"
         );
 
-        // Deserialize response
-        let response: RaftRpcResponse = postcard::from_bytes(&response_buf)
-            .map_err(|e| {
-                error!(
-                    error = %e,
-                    bytes_len = response_buf.len(),
-                    first_bytes = ?response_buf.get(..20.min(response_buf.len())),
-                    "failed to deserialize RPC response"
+        // Try to deserialize as response with timestamps first (new format)
+        // Fall back to legacy format for backward compatibility
+        let response: RaftRpcResponse = if let Ok(response_with_ts) =
+            postcard::from_bytes::<RaftRpcResponseWithTimestamps>(&response_buf)
+        {
+            // Update clock drift detector if timestamps are present
+            if let Some(timestamps) = response_with_ts.timestamps {
+                self.drift_detector.write().await.record_observation(
+                    self.target,
+                    client_send_ms,
+                    timestamps.server_recv_ms,
+                    timestamps.server_send_ms,
+                    client_recv_ms,
                 );
-                e
-            })
-            .context("failed to deserialize RPC response")?;
+            }
+            response_with_ts.inner
+        } else {
+            // Fall back to legacy format (no timestamps)
+            postcard::from_bytes::<RaftRpcResponse>(&response_buf)
+                .map_err(|e| {
+                    error!(
+                        error = %e,
+                        bytes_len = response_buf.len(),
+                        first_bytes = ?response_buf.get(..20.min(response_buf.len())),
+                        "failed to deserialize RPC response"
+                    );
+                    e
+                })
+                .context("failed to deserialize RPC response")?
+        };
 
         // Update failure detector: RPC succeeded with both connection and Raft working
         self.failure_detector.write().await.update_node_status(

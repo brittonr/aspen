@@ -98,3 +98,36 @@ pub enum RaftRpcResponse {
     AppendEntries(AppendEntriesResponse<AppTypeConfig>),
     InstallSnapshot(Result<SnapshotResponse<AppTypeConfig>, RaftError<AppTypeConfig>>),
 }
+
+/// Server-side timestamps for clock drift detection.
+///
+/// Embedded in RPC responses to enable NTP-style clock offset estimation.
+/// The client records t1 (send) and t4 (receive), while the server provides
+/// t2 (receive) and t3 (send).
+///
+/// Clock offset = ((t2 - t1) + (t3 - t4)) / 2
+///
+/// Note: This is purely for observational monitoring. Clock synchronization
+/// is NOT required for Raft consensus correctness.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimestampInfo {
+    /// Server receive time (t2) in milliseconds since UNIX epoch.
+    /// Captured when the server receives the RPC request.
+    pub server_recv_ms: u64,
+    /// Server send time (t3) in milliseconds since UNIX epoch.
+    /// Captured just before the server sends the RPC response.
+    pub server_send_ms: u64,
+}
+
+/// Wire protocol response with timestamps for clock drift detection.
+///
+/// Wraps the actual RPC response with optional timestamp information.
+/// The timestamps field is optional to maintain backward compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RaftRpcResponseWithTimestamps {
+    /// The actual RPC response.
+    pub inner: RaftRpcResponse,
+    /// Optional server timestamps for clock drift detection.
+    /// May be None if the server doesn't support drift detection.
+    pub timestamps: Option<TimestampInfo>,
+}

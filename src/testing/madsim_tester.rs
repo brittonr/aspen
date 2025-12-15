@@ -890,6 +890,107 @@ impl AspenRaftTester {
         &self.byzantine_injector
     }
 
+    // =========================================================================
+    // Clock Drift Simulation Methods
+    // =========================================================================
+
+    /// Set clock drift for a specific node.
+    ///
+    /// Clock drift is simulated by adding asymmetric delays to messages:
+    /// - Positive drift (fast clock): Delays OUTGOING messages from this node
+    /// - Negative drift (slow clock): Delays INCOMING messages to this node
+    ///
+    /// This effectively simulates how Raft behaves when a node's clock runs
+    /// faster or slower than other nodes in the cluster.
+    ///
+    /// # Arguments
+    /// * `node_idx` - 0-based index of the node
+    /// * `drift_ms` - Signed drift in milliseconds. Positive = fast clock, negative = slow clock.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Node 1 has a clock that's 100ms "fast"
+    /// // Its heartbeats will appear to arrive late from other nodes' perspective
+    /// t.set_clock_drift(1, 100);
+    ///
+    /// // Node 2 has a clock that's 50ms "slow"
+    /// // Messages to it will appear delayed
+    /// t.set_clock_drift(2, -50);
+    /// ```
+    pub fn set_clock_drift(&mut self, node_idx: usize, drift_ms: i64) {
+        assert!(node_idx < self.nodes.len(), "Invalid node index");
+        let node_id = NodeId::from(node_idx as u64 + 1);
+
+        self.injector.set_clock_drift(node_id, drift_ms);
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("drift: node {} set to {}ms", node_idx, drift_ms));
+    }
+
+    /// Clear clock drift for a specific node.
+    ///
+    /// Returns the node's simulated clock to normal (no drift).
+    pub fn clear_clock_drift(&mut self, node_idx: usize) {
+        assert!(node_idx < self.nodes.len(), "Invalid node index");
+        let node_id = NodeId::from(node_idx as u64 + 1);
+
+        self.injector.clear_clock_drift(node_id);
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("drift: node {} cleared", node_idx));
+    }
+
+    /// Set clock drift for all nodes to simulate heterogeneous timing.
+    ///
+    /// # Arguments
+    /// * `drifts` - Slice of (node_idx, drift_ms) tuples
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Simulate realistic mixed clock drift across the cluster
+    /// t.set_cluster_clock_drifts(&[
+    ///     (0, 0),    // Reference clock
+    ///     (1, 50),   // 50ms fast
+    ///     (2, -30),  // 30ms slow
+    ///     (3, 75),   // 75ms fast
+    ///     (4, -20),  // 20ms slow
+    /// ]);
+    /// ```
+    pub fn set_cluster_clock_drifts(&mut self, drifts: &[(usize, i64)]) {
+        for &(node_idx, drift_ms) in drifts {
+            assert!(
+                node_idx < self.nodes.len(),
+                "Invalid node index: {}",
+                node_idx
+            );
+            let node_id = NodeId::from(node_idx as u64 + 1);
+            self.injector.set_clock_drift(node_id, drift_ms);
+        }
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("drift: set cluster drifts {:?}", drifts));
+    }
+
+    /// Clear clock drift for all nodes.
+    pub fn clear_all_clock_drifts(&mut self) {
+        for i in 0..self.nodes.len() {
+            let node_id = NodeId::from(i as u64 + 1);
+            self.injector.clear_clock_drift(node_id);
+        }
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event("drift: cleared all node drifts");
+    }
+
+    /// Get the configured clock drift for a node.
+    pub fn get_clock_drift(&self, node_idx: usize) -> Option<i64> {
+        assert!(node_idx < self.nodes.len(), "Invalid node index");
+        let node_id = NodeId::from(node_idx as u64 + 1);
+        self.injector.get_clock_drift(node_id)
+    }
+
     /// Enable Byzantine failure mode on a specific node.
     ///
     /// This configures the given node to potentially corrupt outgoing messages
