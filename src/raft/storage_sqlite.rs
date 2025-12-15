@@ -55,6 +55,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
+use tokio::task::JoinError;
 
 use crate::raft::constants::{
     DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
@@ -210,6 +211,11 @@ pub struct SqliteStateMachine {
     path: PathBuf,
     /// Snapshot index counter (for generating unique snapshot IDs)
     snapshot_idx: Arc<AtomicU64>,
+}
+
+/// Convert a JoinError from spawn_blocking into an io::Error.
+fn join_error_to_io(err: JoinError, operation: &'static str) -> io::Error {
+    io::Error::other(format!("{operation} task failed: {err}"))
 }
 
 /// Apply a batch of buffered entries in a single SQLite transaction.
@@ -635,6 +641,20 @@ impl SqliteStateMachine {
             hasher.update(&bytes);
         }
 
+        let membership_bytes: Option<Vec<u8>> = conn
+            .query_row(
+                "SELECT value FROM state_machine_meta WHERE key = 'last_membership'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        if let Some(bytes) = membership_bytes {
+            hasher.update(b"last_membership:");
+            hasher.update(&bytes);
+        }
+
         let hash = hasher.finalize();
         Ok(hash.to_hex().to_string())
     }
@@ -793,9 +813,12 @@ impl SqliteStateMachine {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
-        let limit = limit
-            .unwrap_or(MAX_BATCH_SIZE as usize)
-            .min(MAX_BATCH_SIZE as usize);
+        let requested_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize);
+        let bounded_limit = requested_limit.min(MAX_BATCH_SIZE as usize);
+        // Fetch one extra row to detect if more data exists for pagination.
+        let fetch_limit = bounded_limit
+            .saturating_add(1)
+            .min(MAX_BATCH_SIZE as usize + 1);
         let end_prefix = format!("{}\u{10000}", prefix);
 
         // Different query based on whether we have a continuation token
@@ -808,9 +831,10 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(params![start, prefix, end_prefix, limit as i64], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
+            stmt.query_map(
+                params![start, prefix, end_prefix, fetch_limit as i64],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix))
@@ -824,7 +848,7 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(params![prefix, end_prefix, limit as i64], |row| {
+            stmt.query_map(params![prefix, end_prefix, fetch_limit as i64], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
             })
             .context(QuerySnafu)?
@@ -898,11 +922,26 @@ impl SqliteStateMachine {
         }
     }
 
+    /// Computes the WAL file path for the configured database path.
+    ///
+    /// SQLite uses `<db>-wal` when there is no extension, otherwise `<db>.<ext>-wal`.
+    fn wal_path(db_path: &Path) -> PathBuf {
+        if db_path.extension().is_some() {
+            db_path.with_extension("db-wal")
+        } else if let Some(name) = db_path.file_name() {
+            let mut wal_name = name.to_os_string();
+            wal_name.push("-wal");
+            db_path.with_file_name(wal_name)
+        } else {
+            db_path.with_extension("db-wal")
+        }
+    }
+
     /// Returns the size of the WAL file in bytes, or None if WAL file doesn't exist.
     ///
     /// Tiger Style: Fail-fast on I/O errors accessing WAL file.
     pub fn wal_file_size(&self) -> Result<Option<u64>, SqliteStorageError> {
-        let wal_path = self.path.with_extension("db-wal");
+        let wal_path = Self::wal_path(&self.path);
 
         match std::fs::metadata(&wal_path) {
             Ok(metadata) => Ok(Some(metadata.len())),
@@ -1129,146 +1168,152 @@ impl SqliteStateMachine {
 
 impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
-        // Use read pool connection for snapshot build (non-blocking for writes)
-        let conn = self.read_pool.get().context(PoolSnafu)?;
-        SqliteStateMachine::reset_read_connection(&conn)?;
+        let state = Arc::clone(self);
+        tokio::task::spawn_blocking(move || {
+            // Use read pool connection for snapshot build (non-blocking for writes)
+            let conn = state.read_pool.get().context(PoolSnafu)?;
+            SqliteStateMachine::reset_read_connection(&conn)?;
 
-        // Read all KV data
-        let mut stmt = conn
-            .prepare("SELECT key, value FROM state_machine_kv")
-            .context(QuerySnafu)?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
-            .context(QuerySnafu)?;
+            // Read all KV data
+            let mut stmt = conn
+                .prepare("SELECT key, value FROM state_machine_kv")
+                .context(QuerySnafu)?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .context(QuerySnafu)?;
 
-        let mut data = BTreeMap::new();
-        let mut entry_count: u32 = 0;
-        for row in rows {
-            let (key, value) = row.context(QuerySnafu)?;
+            let mut data = BTreeMap::new();
+            let mut entry_count: u32 = 0;
+            for row in rows {
+                let (key, value) = row.context(QuerySnafu)?;
 
-            // Tiger Style: Check entry count BEFORE inserting to prevent unbounded growth
-            entry_count += 1;
-            if entry_count > MAX_SNAPSHOT_ENTRIES {
+                // Tiger Style: Check entry count BEFORE inserting to prevent unbounded growth
+                entry_count += 1;
+                if entry_count > MAX_SNAPSHOT_ENTRIES {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!(
+                            "snapshot exceeds maximum entry count of {} (current: {})",
+                            MAX_SNAPSHOT_ENTRIES, entry_count
+                        ),
+                    ));
+                }
+
+                data.insert(key, value);
+            }
+
+            drop(stmt); // Release statement
+
+            // Read metadata
+            let last_applied_log: Option<openraft::LogId<AppTypeConfig>> = {
+                let bytes: Option<Vec<u8>> = conn
+                    .query_row(
+                        "SELECT value FROM state_machine_meta WHERE key = ?1",
+                        params!["last_applied_log"],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .context(QuerySnafu)?;
+
+                match bytes {
+                    Some(bytes) => {
+                        let data: Option<openraft::LogId<AppTypeConfig>> =
+                            bincode::deserialize(&bytes).context(DeserializeSnafu)?;
+                        data
+                    }
+                    None => None,
+                }
+            };
+
+            let last_membership: StoredMembership<AppTypeConfig> = {
+                let bytes: Option<Vec<u8>> = conn
+                    .query_row(
+                        "SELECT value FROM state_machine_meta WHERE key = ?1",
+                        params!["last_membership"],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .context(QuerySnafu)?;
+
+                match bytes {
+                    Some(bytes) => bincode::deserialize(&bytes).context(DeserializeSnafu)?,
+                    None => StoredMembership::default(),
+                }
+            };
+
+            drop(conn); // Release connection to pool
+
+            // Serialize snapshot data
+            let snapshot_data = serde_json::to_vec(&data).context(JsonSerializeSnafu)?;
+
+            // Tiger Style: Validate size BEFORE storing to database
+            if snapshot_data.len() as u64 > MAX_SNAPSHOT_SIZE {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     format!(
-                        "snapshot exceeds maximum entry count of {} (current: {})",
-                        MAX_SNAPSHOT_ENTRIES, entry_count
+                        "serialized snapshot size {} bytes exceeds maximum of {} bytes",
+                        snapshot_data.len(),
+                        MAX_SNAPSHOT_SIZE
                     ),
                 ));
             }
 
-            data.insert(key, value);
-        }
-
-        drop(stmt); // Release statement
-
-        // Read metadata
-        let last_applied_log: Option<openraft::LogId<AppTypeConfig>> = {
-            let bytes: Option<Vec<u8>> = conn
-                .query_row(
-                    "SELECT value FROM state_machine_meta WHERE key = ?1",
-                    params!["last_applied_log"],
-                    |row| row.get(0),
-                )
-                .optional()
-                .context(QuerySnafu)?;
-
-            match bytes {
-                Some(bytes) => {
-                    let data: Option<openraft::LogId<AppTypeConfig>> =
-                        bincode::deserialize(&bytes).context(DeserializeSnafu)?;
-                    data
-                }
-                None => None,
-            }
-        };
-
-        let last_membership: StoredMembership<AppTypeConfig> = {
-            let bytes: Option<Vec<u8>> = conn
-                .query_row(
-                    "SELECT value FROM state_machine_meta WHERE key = ?1",
-                    params!["last_membership"],
-                    |row| row.get(0),
-                )
-                .optional()
-                .context(QuerySnafu)?;
-
-            match bytes {
-                Some(bytes) => bincode::deserialize(&bytes).context(DeserializeSnafu)?,
-                None => StoredMembership::default(),
-            }
-        };
-
-        drop(conn); // Release connection to pool
-
-        // Serialize snapshot data
-        let snapshot_data = serde_json::to_vec(&data).context(JsonSerializeSnafu)?;
-
-        // Tiger Style: Validate size BEFORE storing to database
-        if snapshot_data.len() as u64 > MAX_SNAPSHOT_SIZE {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
+            // Generate snapshot ID
+            let snapshot_idx = state.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
+            let snapshot_id = if let Some(last) = last_applied_log {
                 format!(
-                    "serialized snapshot size {} bytes exceeds maximum of {} bytes",
-                    snapshot_data.len(),
-                    MAX_SNAPSHOT_SIZE
-                ),
-            ));
-        }
+                    "{}-{}-{snapshot_idx}",
+                    last.committed_leader_id(),
+                    last.index()
+                )
+            } else {
+                format!("--{snapshot_idx}")
+            };
 
-        // Generate snapshot ID
-        let snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
-        let snapshot_id = if let Some(last) = last_applied_log {
-            format!(
-                "{}-{}-{snapshot_idx}",
-                last.committed_leader_id(),
-                last.index()
-            )
-        } else {
-            format!("--{snapshot_idx}")
-        };
+            let meta = openraft::SnapshotMeta {
+                last_log_id: last_applied_log,
+                last_membership,
+                snapshot_id: snapshot_id.clone(),
+            };
 
-        let meta = openraft::SnapshotMeta {
-            last_log_id: last_applied_log,
-            last_membership,
-            snapshot_id: snapshot_id.clone(),
-        };
+            // Store snapshot in database (write operation)
+            let snapshot_blob = bincode::serialize(&StoredSnapshot {
+                meta: meta.clone(),
+                data: snapshot_data.clone(),
+            })
+            .context(SerializeSnafu)?;
 
-        // Store snapshot in database (write operation)
-        let snapshot_blob = bincode::serialize(&StoredSnapshot {
-            meta: meta.clone(),
-            data: snapshot_data.clone(),
+            let write_conn =
+                state
+                    .write_conn
+                    .lock()
+                    .map_err(|_| SqliteStorageError::MutexPoisoned {
+                        operation: "snapshot_build",
+                    })?;
+
+            // Start transaction with RAII guard for automatic rollback on error
+            // Tiger Style: Atomic snapshot write, fail-fast with explicit error handling
+            let guard = TransactionGuard::new(&write_conn)?;
+
+            write_conn
+                .execute(
+                    "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
+                    params![snapshot_blob],
+                )
+                .context(ExecuteSnafu)?;
+
+            // Commit transaction - guard is consumed and dropped after commit
+            guard.commit()?;
+
+            Ok(Snapshot {
+                meta,
+                snapshot: Cursor::new(snapshot_data),
+            })
         })
-        .context(SerializeSnafu)?;
-
-        let write_conn = self
-            .write_conn
-            .lock()
-            .map_err(|_| SqliteStorageError::MutexPoisoned {
-                operation: "snapshot_build",
-            })?;
-
-        // Start transaction with RAII guard for automatic rollback on error
-        // Tiger Style: Atomic snapshot write, fail-fast with explicit error handling
-        let guard = TransactionGuard::new(&write_conn)?;
-
-        write_conn
-            .execute(
-                "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
-                params![snapshot_blob],
-            )
-            .context(ExecuteSnafu)?;
-
-        // Commit transaction - guard is consumed and dropped after commit
-        guard.commit()?;
-
-        Ok(Snapshot {
-            meta,
-            snapshot: Cursor::new(snapshot_data),
-        })
+        .await
+        .map_err(|err| join_error_to_io(err, "snapshot_build"))?
     }
 }
 
@@ -1329,13 +1374,25 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
 
             // Apply buffer when full to bound memory usage
             if buffer.len() >= BATCH_BUFFER_SIZE {
-                apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
+                let mut to_apply: Vec<EntryResponder<AppTypeConfig>> = Vec::new();
+                std::mem::swap(&mut to_apply, &mut buffer);
+                let write_conn = Arc::clone(&self.write_conn);
+                tokio::task::spawn_blocking(move || {
+                    apply_buffered_entries_impl(&write_conn, &mut to_apply)
+                })
+                .await
+                .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;
             }
         }
 
         // Apply remaining entries in buffer
         if !buffer.is_empty() {
-            apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
+            let write_conn = Arc::clone(&self.write_conn);
+            tokio::task::spawn_blocking(move || {
+                apply_buffered_entries_impl(&write_conn, &mut buffer)
+            })
+            .await
+            .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;
         }
 
         Ok(())
@@ -1369,67 +1426,75 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         meta: &openraft::SnapshotMeta<AppTypeConfig>,
         mut snapshot: Cursor<Vec<u8>>,
     ) -> Result<(), io::Error> {
-        // Read snapshot data
-        let mut snapshot_data = Vec::new();
-        std::io::copy(&mut snapshot, &mut snapshot_data)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        let state = Arc::clone(self);
+        let meta = meta.clone();
+        tokio::task::spawn_blocking(move || {
+            // Read snapshot data
+            let mut snapshot_data = Vec::new();
+            std::io::copy(&mut snapshot, &mut snapshot_data)
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
-        let new_data: BTreeMap<String, String> =
-            serde_json::from_slice(&snapshot_data).context(JsonDeserializeSnafu)?;
+            let new_data: BTreeMap<String, String> =
+                serde_json::from_slice(&snapshot_data).context(JsonDeserializeSnafu)?;
 
-        let conn = self.write_conn.lock().map_err(|_| {
-            io::Error::other(SqliteStorageError::MutexPoisoned {
-                operation: "snapshot_install",
-            })
-        })?;
+            let conn = state.write_conn.lock().map_err(|_| {
+                io::Error::other(SqliteStorageError::MutexPoisoned {
+                    operation: "snapshot_install",
+                })
+            })?;
 
-        // Start transaction with RAII guard for automatic rollback on error
-        let guard = TransactionGuard::new(&conn)?;
+            // Start transaction with RAII guard for automatic rollback on error
+            let guard = TransactionGuard::new(&conn)?;
 
-        // Clear existing KV data
-        conn.execute("DELETE FROM state_machine_kv", [])
-            .context(ExecuteSnafu)?;
+            // Clear existing KV data
+            conn.execute("DELETE FROM state_machine_kv", [])
+                .context(ExecuteSnafu)?;
 
-        // Install new data
-        for (key, value) in new_data {
+            // Install new data
+            for (key, value) in new_data {
+                conn.execute(
+                    "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![key, value],
+                )
+                .context(ExecuteSnafu)?;
+            }
+
+            // Update metadata
+            let last_applied_bytes =
+                bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
             conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                params![key, value],
+                "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
+                params![last_applied_bytes],
             )
             .context(ExecuteSnafu)?;
-        }
 
-        // Update metadata
-        let last_applied_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
-        conn.execute(
-            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
-            params![last_applied_bytes],
-        )
-        .context(ExecuteSnafu)?;
+            let membership_bytes =
+                bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
+                params![membership_bytes],
+            )
+            .context(ExecuteSnafu)?;
 
-        let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
-        conn.execute(
-            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
-            params![membership_bytes],
-        )
-        .context(ExecuteSnafu)?;
+            // Store snapshot
+            let snapshot_blob = bincode::serialize(&StoredSnapshot {
+                meta: meta.clone(),
+                data: snapshot_data,
+            })
+            .context(SerializeSnafu)?;
+            conn.execute(
+                "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
+                params![snapshot_blob],
+            )
+            .context(ExecuteSnafu)?;
 
-        // Store snapshot
-        let snapshot_blob = bincode::serialize(&StoredSnapshot {
-            meta: meta.clone(),
-            data: snapshot_data,
+            // Commit transaction - guard is consumed and dropped after commit
+            guard.commit()?;
+
+            Ok(())
         })
-        .context(SerializeSnafu)?;
-        conn.execute(
-            "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
-            params![snapshot_blob],
-        )
-        .context(ExecuteSnafu)?;
-
-        // Commit transaction - guard is consumed and dropped after commit
-        guard.commit()?;
-
-        Ok(())
+        .await
+        .map_err(|err| join_error_to_io(err, "snapshot_install"))?
     }
 
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {
@@ -1467,5 +1532,103 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
 
     async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
         self.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::ScanRequest;
+    use crate::raft::StateMachineVariant;
+    use crate::raft::constants::MAX_BATCH_SIZE;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn sqlite_scan_progresses_with_continuation() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            for i in 0..(MAX_BATCH_SIZE as usize + 10) {
+                let key = format!("k{:04}", i);
+                let value = format!("v{key}");
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![key, value],
+                )
+                .unwrap();
+            }
+            guard.commit().unwrap();
+        }
+
+        let state = StateMachineVariant::Sqlite(sm.clone());
+        let mut request = ScanRequest {
+            prefix: "k".into(),
+            limit: Some(200),
+            continuation_token: None,
+        };
+
+        let mut keys: Vec<String> = Vec::new();
+        loop {
+            let result = state.scan(&request).await.unwrap();
+            keys.extend(result.entries.iter().map(|e| e.key.clone()));
+            if let Some(token) = result.continuation_token {
+                request.continuation_token = Some(token);
+            } else {
+                break;
+            }
+        }
+
+        assert_eq!(keys.len(), MAX_BATCH_SIZE as usize + 10);
+        assert!(keys.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn wal_path_handles_extension_and_extensionless() {
+        let with_ext = PathBuf::from("/tmp/state.db");
+        let without_ext = PathBuf::from("/tmp/statefile");
+
+        let wal_with_ext = SqliteStateMachine::wal_path(&with_ext);
+        let wal_without_ext = SqliteStateMachine::wal_path(&without_ext);
+
+        assert_eq!(wal_with_ext.file_name().unwrap(), "state.db-wal");
+        assert_eq!(wal_without_ext.file_name().unwrap(), "statefile-wal");
+    }
+
+    #[tokio::test]
+    async fn checksum_changes_when_membership_changes() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('a', '1')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        let before = sm.state_machine_checksum().unwrap();
+
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
+                params![b"membership_bytes_v1"],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        let after = sm.state_machine_checksum().unwrap();
+        assert_ne!(before, after);
     }
 }

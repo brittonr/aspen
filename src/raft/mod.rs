@@ -57,6 +57,7 @@ use std::sync::Arc;
 use crate::api::{
     DEFAULT_SCAN_LIMIT, KeyValueStoreError, MAX_SCAN_RESULTS, ScanEntry, ScanRequest, ScanResult,
 };
+use crate::raft::constants::MAX_BATCH_SIZE;
 use crate::raft::storage::InMemoryStateMachine;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 
@@ -95,7 +96,9 @@ impl StateMachineVariant {
         let limit = request
             .limit
             .unwrap_or(DEFAULT_SCAN_LIMIT)
-            .min(MAX_SCAN_RESULTS) as usize;
+            .min(MAX_SCAN_RESULTS)
+            .min(MAX_BATCH_SIZE) as usize;
+        let fetch_limit = limit.saturating_add(1);
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {
@@ -111,7 +114,7 @@ impl StateMachineVariant {
             }
             Self::Sqlite(sm) => {
                 let kv_pairs = sm
-                    .scan_kv_with_prefix_async(&request.prefix)
+                    .scan(&request.prefix, start_after.as_deref(), Some(fetch_limit))
                     .await
                     .map_err(|err| KeyValueStoreError::Failed {
                         reason: format!("sqlite storage scan error: {}", err),
