@@ -193,6 +193,8 @@ pub struct ReadResultResponse {
     pub value: Option<Vec<u8>>,
     /// Whether the key was found.
     pub found: bool,
+    /// Optional error message when read fails (e.g., not leader).
+    pub error: Option<String>,
 }
 
 /// Write key result response.

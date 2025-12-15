@@ -989,6 +989,7 @@ impl SqliteStateMachine {
         .context(ExecuteSnafu)?;
         Ok(AppResponse {
             value: Some(value.to_string()),
+            deleted: None,
         })
     }
 
@@ -1021,7 +1022,10 @@ impl SqliteStateMachine {
         }
 
         drop(stmt); // Explicit drop (Tiger Style)
-        Ok(AppResponse { value: None })
+        Ok(AppResponse {
+            value: None,
+            deleted: None,
+        })
     }
 
     /// Apply a single key Delete operation.
@@ -1031,9 +1035,13 @@ impl SqliteStateMachine {
     ///
     /// Tiger Style: Single-purpose, idempotent (no error if key doesn't exist).
     fn apply_delete(conn: &Connection, key: &str) -> Result<AppResponse, io::Error> {
-        conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
+        let rows = conn
+            .execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
             .context(ExecuteSnafu)?;
-        Ok(AppResponse { value: None })
+        Ok(AppResponse {
+            value: None,
+            deleted: Some(rows > 0),
+        })
     }
 
     /// Apply a batched DeleteMulti operation.
@@ -1057,12 +1065,17 @@ impl SqliteStateMachine {
             .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
             .context(QuerySnafu)?;
 
+        let mut deleted_any = false;
         for key in keys {
-            stmt.execute(params![key]).context(ExecuteSnafu)?;
+            let rows = stmt.execute(params![key]).context(ExecuteSnafu)?;
+            deleted_any |= rows > 0;
         }
 
         drop(stmt); // Explicit drop (Tiger Style)
-        Ok(AppResponse { value: None })
+        Ok(AppResponse {
+            value: None,
+            deleted: Some(deleted_any),
+        })
     }
 
     /// Apply a membership change operation.
@@ -1081,7 +1094,10 @@ impl SqliteStateMachine {
             params![membership_bytes],
         )
         .context(ExecuteSnafu)?;
-        Ok(AppResponse { value: None })
+        Ok(AppResponse {
+            value: None,
+            deleted: None,
+        })
     }
 
     /// Apply an entry payload to the state machine.
@@ -1094,7 +1110,10 @@ impl SqliteStateMachine {
         log_id: &openraft::LogId<AppTypeConfig>,
     ) -> Result<AppResponse, io::Error> {
         match payload {
-            EntryPayload::Blank => Ok(AppResponse { value: None }),
+            EntryPayload::Blank => Ok(AppResponse {
+                value: None,
+                deleted: None,
+            }),
             EntryPayload::Normal(req) => match req {
                 AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
                 AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),

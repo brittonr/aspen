@@ -399,23 +399,25 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv().await?;
 
-        // Try to use ReadIndex for linearizable reads
-        // If this node is a follower, fall back to local read
-        let linearizable = match self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await {
-            Ok(linearizer) => linearizer.await_ready(&self.raft).await.is_ok(),
-            Err(_) => {
-                // Not leader or can't contact leader - use local read
-                // This is eventually consistent but better than failing
-                false
-            }
-        };
+        // Enforce linearizable reads; fail fast instead of silently degrading to local reads.
+        let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
 
-        if !linearizable {
-            info!(
-                "using local read (non-linearizable) for key {}",
-                request.key
-            );
-        }
+        let linearizer = self
+            .raft
+            .get_read_linearizer(ReadPolicy::ReadIndex)
+            .await
+            .map_err(|err| KeyValueStoreError::NotLeader {
+                leader: leader_hint,
+                reason: err.to_string(),
+            })?;
+
+        linearizer
+            .await_ready(&self.raft)
+            .await
+            .map_err(|err| KeyValueStoreError::NotLeader {
+                leader: leader_hint,
+                reason: err.to_string(),
+            })?;
 
         // Read directly from state machine
         match &self.state_machine {
@@ -460,11 +462,11 @@ impl KeyValueStore for RaftNode {
         let result = self.raft.client_write(app_request).await;
 
         match result {
-            Ok(_resp) => {
-                // Assume delete was successful (we'd need to check the response properly)
+            Ok(resp) => {
+                let deleted = resp.data.deleted.unwrap_or(false);
                 Ok(DeleteResult {
                     key: request.key,
-                    deleted: true,
+                    deleted,
                 })
             }
             Err(err) => {

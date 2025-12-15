@@ -2017,6 +2017,18 @@ impl IntoResponse for ApiError {
                 Json(json!({ "error": format!("key '{key}' not found") })),
             )
                 .into_response(),
+            ApiError::KeyValue(KeyValueStoreError::NotLeader { leader, reason }) => {
+                let mut body = serde_json::Map::new();
+                body.insert("error".to_string(), json!(format!("not leader: {reason}")));
+                if let Some(id) = leader {
+                    body.insert("leader".to_string(), json!(id));
+                }
+                (
+                    StatusCode::TEMPORARY_REDIRECT,
+                    Json(serde_json::Value::Object(body)),
+                )
+                    .into_response()
+            }
             ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
                 (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
             }

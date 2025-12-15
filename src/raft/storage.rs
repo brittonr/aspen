@@ -880,35 +880,53 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
         while let Some((entry, responder)) = entries.try_next().await? {
             sm.last_applied_log = Some(entry.log_id);
             let response = match entry.payload {
-                EntryPayload::Blank => AppResponse { value: None },
+                EntryPayload::Blank => AppResponse {
+                    value: None,
+                    deleted: None,
+                },
                 EntryPayload::Normal(ref req) => match req {
                     AppRequest::Set { key, value } => {
                         sm.data.insert(key.clone(), value.clone());
                         AppResponse {
                             value: Some(value.clone()),
+                            deleted: None,
                         }
                     }
                     AppRequest::SetMulti { pairs } => {
                         for (key, value) in pairs {
                             sm.data.insert(key.clone(), value.clone());
                         }
-                        AppResponse { value: None }
+                        AppResponse {
+                            value: None,
+                            deleted: None,
+                        }
                     }
                     AppRequest::Delete { key } => {
-                        sm.data.remove(key);
-                        AppResponse { value: None }
+                        let existed = sm.data.remove(key).is_some();
+                        AppResponse {
+                            value: None,
+                            deleted: Some(existed),
+                        }
                     }
                     AppRequest::DeleteMulti { keys } => {
+                        let mut deleted_any = false;
                         for key in keys {
+                            deleted_any |= sm.data.contains_key(key);
                             sm.data.remove(key);
                         }
-                        AppResponse { value: None }
+                        AppResponse {
+                            value: None,
+                            deleted: Some(deleted_any),
+                        }
                     }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =
                         StoredMembership::new(Some(entry.log_id), membership.clone());
-                    AppResponse { value: None }
+                    AppResponse {
+                        value: None,
+                        deleted: None,
+                    }
                 }
             };
             if let Some(responder) = responder {

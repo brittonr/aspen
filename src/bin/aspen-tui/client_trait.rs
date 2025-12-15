@@ -381,10 +381,16 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
+                if let Some(err) = result.error {
+                    return Err(eyre!("Read failed: {}", err));
+                }
                 Ok(result.value)
             }
             Self::MultiNode(client) => {
                 let result = client.read_key(key).await.map_err(anyhow_to_eyre)?;
+                if let Some(err) = result.error {
+                    return Err(eyre!("Read failed: {}", err));
+                }
                 Ok(result.value)
             }
             Self::Disconnected(client) => client.read(key).await,

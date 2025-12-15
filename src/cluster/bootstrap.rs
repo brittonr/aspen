@@ -35,10 +35,11 @@ use crate::raft::StateMachineVariant;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
 use crate::raft::server::RaftRpcServer;
-use crate::raft::storage::RedbLogStore;
+use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
 use crate::raft::types::NodeId;
+use iroh_gossip::net::GOSSIP_ALPN;
 
 /// Handle to a running cluster node.
 ///
@@ -148,13 +149,18 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
     // Create Iroh endpoint configuration
-    // IMPORTANT: Configure ALPN to accept raft-rpc connections
+    // IMPORTANT: Configure ALPNs to accept the protocols we serve
+    let mut alpns = vec![RAFT_ALPN.to_vec()];
+    if config.iroh.enable_gossip {
+        alpns.push(GOSSIP_ALPN.to_vec());
+    }
+
     let iroh_config = IrohEndpointConfig::default()
         .with_gossip(config.iroh.enable_gossip)
         .with_mdns(config.iroh.enable_mdns)
         .with_dns_discovery(config.iroh.enable_dns_discovery)
         .with_pkarr(config.iroh.enable_pkarr)
-        .with_alpn(RAFT_ALPN.to_vec());
+        .with_alpns(alpns);
 
     let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
         iroh_config.with_dns_discovery_url(dns_url.clone())
@@ -265,14 +271,6 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         (None, None)
     };
 
-    // Create Raft storage
-    let log_path = data_dir.join(format!("node_{}.db", config.node_id));
-    let log_store = Arc::new(RedbLogStore::new(&log_path)?);
-
-    let state_machine_path = data_dir.join(format!("node_{}_state.db", config.node_id));
-    let sqlite_state_machine = SqliteStateMachine::new(&state_machine_path)?;
-    let state_machine_variant = StateMachineVariant::Sqlite(sqlite_state_machine.clone());
-
     // Create Raft config with custom timeouts from NodeConfig
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
@@ -286,17 +284,44 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         ..RaftConfig::default()
     });
 
-    // Build OpenRaft instance
-    let raft = Arc::new(
-        Raft::new(
-            config.node_id.into(),
-            raft_config,
-            network_factory.as_ref().clone(),
-            log_store.as_ref().clone(),
-            sqlite_state_machine,
-        )
-        .await?,
-    );
+    // Build OpenRaft instance and state machine variant based on selected storage
+    let (raft, state_machine_variant) = match config.storage_backend {
+        StorageBackend::InMemory => {
+            let log_store = Arc::new(InMemoryLogStore::default());
+            let state_machine = InMemoryStateMachine::new();
+            let raft = Arc::new(
+                Raft::new(
+                    config.node_id.into(),
+                    raft_config.clone(),
+                    network_factory.as_ref().clone(),
+                    log_store.as_ref().clone(),
+                    state_machine.clone(),
+                )
+                .await?,
+            );
+            (raft, StateMachineVariant::InMemory(state_machine))
+        }
+        StorageBackend::Sqlite => {
+            let log_path = data_dir.join(format!("node_{}.db", config.node_id));
+            let log_store = Arc::new(RedbLogStore::new(&log_path)?);
+
+            let state_machine_path = data_dir.join(format!("node_{}_state.db", config.node_id));
+            let sqlite_state_machine = SqliteStateMachine::new(&state_machine_path)?;
+
+            let raft = Arc::new(
+                Raft::new(
+                    config.node_id.into(),
+                    raft_config.clone(),
+                    network_factory.as_ref().clone(),
+                    log_store.as_ref().clone(),
+                    sqlite_state_machine.clone(),
+                )
+                .await?,
+            );
+
+            (raft, StateMachineVariant::Sqlite(sqlite_state_machine))
+        }
+    };
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 

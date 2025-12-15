@@ -247,6 +247,8 @@ pub enum KeyValueStoreError {
     NotFound { key: String },
     #[error("operation failed: {reason}")]
     Failed { reason: String },
+    #[error("not leader; current leader: {leader:?}; {reason}")]
+    NotLeader { leader: Option<u64>, reason: String },
     #[error("key size {size} exceeds maximum of {max} bytes")]
     KeyTooLarge { size: usize, max: u32 },
     #[error("value size {size} exceeds maximum of {max} bytes")]

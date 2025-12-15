@@ -177,6 +177,9 @@ impl fmt::Display for AppRequest {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AppResponse {
     pub value: Option<String>,
+    /// Indicates whether a delete operation actually removed a key.
+    /// None for operations where deletion is not applicable.
+    pub deleted: Option<bool>,
 }
 
 declare_raft_types!(

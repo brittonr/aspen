@@ -555,11 +555,23 @@ async fn process_tui_request(
                 Ok(resp) => Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
                     value: Some(resp.value.into_bytes()),
                     found: true,
+                    error: None,
                 })),
-                Err(_e) => Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
-                    value: None,
-                    found: false,
-                })),
+                Err(e) => {
+                    let (found, error) = match e {
+                        crate::api::KeyValueStoreError::NotFound { .. } => (false, None),
+                        crate::api::KeyValueStoreError::NotLeader { leader, reason } => (
+                            false,
+                            Some(format!("not leader: {}; leader={:?}", reason, leader)),
+                        ),
+                        other => (false, Some(other.to_string())),
+                    };
+                    Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
+                        value: None,
+                        found,
+                        error,
+                    }))
+                }
             }
         }
 
