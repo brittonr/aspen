@@ -38,11 +38,11 @@
 //! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY inspiration
 //! - [RisingWave DST](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -215,14 +215,14 @@ impl BuggifyConfig {
     pub fn new(seed: u64) -> Self {
         let mut default_probs = HashMap::new();
         // Default probabilities for each fault type
-        default_probs.insert(BuggifyFault::NetworkDelay, 0.05);      // 5%
-        default_probs.insert(BuggifyFault::NetworkDrop, 0.02);       // 2%
-        default_probs.insert(BuggifyFault::NodeCrash, 0.01);         // 1%
-        default_probs.insert(BuggifyFault::SlowDisk, 0.05);          // 5%
+        default_probs.insert(BuggifyFault::NetworkDelay, 0.05); // 5%
+        default_probs.insert(BuggifyFault::NetworkDrop, 0.02); // 2%
+        default_probs.insert(BuggifyFault::NodeCrash, 0.01); // 1%
+        default_probs.insert(BuggifyFault::SlowDisk, 0.05); // 5%
         default_probs.insert(BuggifyFault::MessageCorruption, 0.01); // 1%
-        default_probs.insert(BuggifyFault::ElectionTimeout, 0.02);   // 2%
+        default_probs.insert(BuggifyFault::ElectionTimeout, 0.02); // 2%
         default_probs.insert(BuggifyFault::NetworkPartition, 0.005); // 0.5%
-        default_probs.insert(BuggifyFault::SnapshotTrigger, 0.02);   // 2%
+        default_probs.insert(BuggifyFault::SnapshotTrigger, 0.02); // 2%
 
         Self {
             enabled: Arc::new(AtomicBool::new(false)),
@@ -369,6 +369,13 @@ impl AspenRaftTester {
     /// 3. Deterministic hash of test name
     pub async fn new(n: usize, test_name: &str) -> Self {
         let config = TesterConfig::new(n, test_name);
+        Self::with_config(config).await
+    }
+
+    /// Create a new tester with an explicit seed for deterministic testing.
+    pub async fn new_with_seed(n: usize, test_name: &str, seed: u64) -> Self {
+        let mut config = TesterConfig::new(n, test_name);
+        config.seed = Some(seed);
         Self::with_config(config).await
     }
 
@@ -1147,7 +1154,7 @@ impl AspenRaftTester {
     pub async fn apply_buggify_faults(&mut self) {
         // Network delay
         if self.buggify.should_trigger(BuggifyFault::NetworkDelay) {
-            let delay_ms = 50 + (self.seed % 200) as u64; // 50-250ms delay
+            let delay_ms = 50 + (self.seed % 200); // 50-250ms delay
 
             // Apply delay to all node pairs
             for i in 0..self.nodes.len() {
@@ -1156,7 +1163,7 @@ impl AspenRaftTester {
                         self.injector.set_network_delay(
                             NodeId::from(i as u64 + 1),
                             NodeId::from(j as u64 + 1),
-                            delay_ms
+                            delay_ms,
                         );
                     }
                 }
@@ -1175,7 +1182,7 @@ impl AspenRaftTester {
                         self.injector.set_packet_loss_rate(
                             NodeId::from(i as u64 + 1),
                             NodeId::from(j as u64 + 1),
-                            0.1  // 10% loss rate
+                            0.1, // 10% loss rate
                         );
                     }
                 }
@@ -1194,7 +1201,7 @@ impl AspenRaftTester {
                         self.injector.set_packet_loss_rate(
                             NodeId::from(i as u64 + 1),
                             NodeId::from(j as u64 + 1),
-                            0.0
+                            0.0,
                         );
                     }
                 }
@@ -1205,13 +1212,16 @@ impl AspenRaftTester {
 
         // Random node crash
         if self.buggify.should_trigger(BuggifyFault::NodeCrash) {
-            let connected_nodes: Vec<usize> = self.nodes.iter()
+            let connected_nodes: Vec<usize> = self
+                .nodes
+                .iter()
                 .enumerate()
                 .filter(|(_, n)| n.connected().load(Ordering::Relaxed))
                 .map(|(i, _)| i)
                 .collect();
 
-            if connected_nodes.len() > 2 {  // Keep at least 2 nodes alive
+            if connected_nodes.len() > 2 {
+                // Keep at least 2 nodes alive
                 let victim = connected_nodes[self.seed as usize % connected_nodes.len()];
                 self.crash_node(victim).await;
                 self.add_event(format!("buggify: crashed node {}", victim));
@@ -1222,7 +1232,7 @@ impl AspenRaftTester {
         // Message corruption
         if self.buggify.should_trigger(BuggifyFault::MessageCorruption) {
             // Pick a random Byzantine corruption mode
-            let modes = vec![
+            let modes = [
                 ByzantineCorruptionMode::FlipVote,
                 ByzantineCorruptionMode::IncrementTerm,
                 ByzantineCorruptionMode::DuplicateMessage,
@@ -1237,25 +1247,34 @@ impl AspenRaftTester {
                 NodeId::from(src as u64 + 1),
                 NodeId::from(dst as u64 + 1),
                 mode,
-                0.5
+                0.5,
             );
 
-            self.add_event(format!("buggify: enabled {:?} corruption on link {}->{}", mode, src, dst));
+            self.add_event(format!(
+                "buggify: enabled {:?} corruption on link {}->{}",
+                mode, src, dst
+            ));
             self.metrics.buggify_triggers += 1;
         }
 
         // Election timeout (force re-election)
-        if self.buggify.should_trigger(BuggifyFault::ElectionTimeout) {
-            if let Some(leader_idx) = self.check_one_leader().await {
-                self.disconnect(leader_idx);
-                self.add_event(format!("buggify: partitioned leader {} to force re-election", leader_idx));
-                self.metrics.buggify_triggers += 1;
+        if self.buggify.should_trigger(BuggifyFault::ElectionTimeout)
+            && let Some(leader_idx) = self.check_one_leader().await
+        {
+            self.disconnect(leader_idx);
+            self.add_event(format!(
+                "buggify: partitioned leader {} to force re-election",
+                leader_idx
+            ));
+            self.metrics.buggify_triggers += 1;
 
-                // Restore after election timeout
-                madsim::time::sleep(Duration::from_secs(5)).await;
-                self.connect(leader_idx);
-                self.add_event(format!("buggify: restored node {} connectivity", leader_idx));
-            }
+            // Restore after election timeout
+            madsim::time::sleep(Duration::from_secs(5)).await;
+            self.connect(leader_idx);
+            self.add_event(format!(
+                "buggify: restored node {} connectivity",
+                leader_idx
+            ));
         }
 
         // Network partition
@@ -1264,7 +1283,10 @@ impl AspenRaftTester {
             for i in 0..mid {
                 self.disconnect(i);
             }
-            self.add_event(format!("buggify: created network partition (nodes 0-{} isolated)", mid - 1));
+            self.add_event(format!(
+                "buggify: created network partition (nodes 0-{} isolated)",
+                mid - 1
+            ));
             self.metrics.buggify_triggers += 1;
 
             // Heal after some time
@@ -1276,15 +1298,15 @@ impl AspenRaftTester {
         }
 
         // Trigger snapshot
-        if self.buggify.should_trigger(BuggifyFault::SnapshotTrigger) {
-            if let Some(_leader_idx) = self.check_one_leader().await {
-                // Note: trigger_snapshot is part of ClusterController trait, not directly on Raft
-                // For now we'll skip this as it would require refactoring the TestNode structure
-                // to expose the full ClusterController interface.
-                // TODO: Extend TestNode to support trigger_snapshot
-                self.add_event("buggify: snapshot trigger skipped (not yet implemented)");
-                self.metrics.buggify_triggers += 1;
-            }
+        if self.buggify.should_trigger(BuggifyFault::SnapshotTrigger)
+            && let Some(_leader_idx) = self.check_one_leader().await
+        {
+            // Note: trigger_snapshot is part of ClusterController trait, not directly on Raft
+            // For now we'll skip this as it would require refactoring the TestNode structure
+            // to expose the full ClusterController interface.
+            // TODO: Extend TestNode to support trigger_snapshot
+            self.add_event("buggify: snapshot trigger skipped (not yet implemented)");
+            self.metrics.buggify_triggers += 1;
         }
     }
 
@@ -1316,7 +1338,10 @@ impl AspenRaftTester {
             madsim::time::sleep(Duration::from_secs(1)).await;
         }
 
-        self.add_event(format!("buggify: completed {} seconds of fault injection", duration.as_secs()));
+        self.add_event(format!(
+            "buggify: completed {} seconds of fault injection",
+            duration.as_secs()
+        ));
     }
 
     // =========================================================================
@@ -1329,10 +1354,88 @@ impl AspenRaftTester {
             std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(event);
     }
 
+    /// Delete a key from the key-value store.
+    pub async fn delete(&mut self, key: String) -> Result<()> {
+        let leader_idx = self
+            .check_one_leader()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("No leader available"))?;
+
+        let req = AppRequest::Delete { key: key.clone() };
+
+        let res = self.nodes[leader_idx].raft().client_write(req).await?;
+
+        // Track event
+        self.artifact =
+            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
+                "Delete key '{}' via node {} (response: {:?})",
+                key, leader_idx, res.data
+            ));
+
+        Ok(())
+    }
+
+    /// Trigger an election on a specific node.
+    pub async fn trigger_election(&mut self, node_id: u64) -> Result<()> {
+        if node_id >= self.nodes.len() as u64 {
+            return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
+        }
+
+        self.nodes[node_id as usize]
+            .raft()
+            .trigger()
+            .elect()
+            .await?;
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("Triggered election on node {}", node_id));
+
+        Ok(())
+    }
+
+    /// Get metrics for a specific node.
+    pub fn get_metrics(&self, node_id: u64) -> Option<openraft::RaftMetrics<AppTypeConfig>> {
+        if node_id >= self.nodes.len() as u64 {
+            return None;
+        }
+        Some(
+            self.nodes[node_id as usize]
+                .raft()
+                .metrics()
+                .borrow()
+                .clone(),
+        )
+    }
+
     /// End the test and return the simulation artifact.
     ///
     /// This method persists the artifact to disk and returns it for
     /// optional additional processing.
+    /// Apply a specific BUGGIFY fault with 100% probability.
+    ///
+    /// This is useful for property-based testing where you want to inject
+    /// specific faults deterministically.
+    pub async fn apply_single_fault(&mut self, fault: BuggifyFault) {
+        if !self.buggify.enabled.load(Ordering::Relaxed) {
+            // Enable BUGGIFY if not already enabled
+            self.enable_buggify(None);
+        }
+
+        // Save current probabilities
+        let saved = self.buggify.probabilities.lock().unwrap().clone();
+
+        // Set 100% probability for this specific fault
+        let mut probs = HashMap::new();
+        probs.insert(fault, 1.0);
+        *self.buggify.probabilities.lock().unwrap() = probs;
+
+        // Apply the fault
+        self.apply_buggify_faults().await;
+
+        // Restore original probabilities
+        *self.buggify.probabilities.lock().unwrap() = saved;
+    }
+
     pub fn end(mut self) -> SimulationArtifact {
         let duration = self.start_time.elapsed();
         self.metrics.duration_ms = duration.as_millis() as u64;

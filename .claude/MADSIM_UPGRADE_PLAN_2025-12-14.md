@@ -9,9 +9,10 @@
 
 ## Implementation Status
 
-**Progress**: 8 of 11 phases complete (73%)
+**Progress**: 10 of 11 phases complete (91%)
 
 ### Completed Phases
+
 - ✅ Phase 0.1: AspenRaftTester abstraction (1000+ lines)
 - ✅ Phase 0.2: Seed management enhancement (env vars)
 - ✅ Phase 0.3: Byzantine failure injection (4 corruption modes)
@@ -19,11 +20,12 @@
 - ✅ Phase 1.2: Node restart with persistence (Redb/SQLite)
 - ✅ Phase 1.3: Structured metrics collection (JSON artifacts)
 - ✅ Phase 2.1: Membership change testing (4 new APIs, 4 tests)
+- ✅ Phase 2.2: BUGGIFY-style fault injection (8 fault types, 300+ lines)
 - ✅ Phase 3.1: CI matrix enhancement (16 seeds)
+- ✅ Phase 3.2: Property-based testing integration (473 lines, 6 test scenarios)
 
 ### Remaining Phases
-- ⏳ Phase 2.2: BUGGIFY-style fault injection (0%)
-- ⏳ Phase 3.2: Property-based testing integration (30%)
+
 - ⏳ Phase 3.3: Coverage matrix generation (0%)
 
 ---

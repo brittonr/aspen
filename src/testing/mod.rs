@@ -69,8 +69,7 @@ pub mod network_utils;
 pub mod vm_manager;
 
 pub use madsim_tester::{
-    AspenRaftTester, SimulationMetrics, TesterConfig,
-    BuggifyFault, BuggifyConfig
+    AspenRaftTester, BuggifyConfig, BuggifyFault, SimulationMetrics, TesterConfig,
 };
 pub use router::AspenRouter;
 

@@ -679,7 +679,6 @@ async fn test_tester_membership_change_with_leader_crash() {
 /// that the cluster maintains consensus despite injected faults.
 #[madsim::test]
 async fn test_tester_buggify_default() {
-
     let mut t = AspenRaftTester::new(5, "tester_buggify_default").await;
 
     // Wait for initial cluster formation
@@ -696,10 +695,12 @@ async fn test_tester_buggify_default() {
         madsim::time::sleep(Duration::from_secs(1)).await;
 
         // Try to maintain some operations
-        let _ = t.write(
-            format!("buggify-key-{}", t.seed() % 1000),
-            "value".to_string()
-        ).await;
+        let _ = t
+            .write(
+                format!("buggify-key-{}", t.seed() % 1000),
+                "value".to_string(),
+            )
+            .await;
     }
 
     // Disable BUGGIFY and let cluster stabilize
@@ -722,7 +723,8 @@ async fn test_tester_buggify_default() {
     let artifact = t.end();
     eprintln!(
         "BUGGIFY test completed with {} fault triggers",
-        serde_json::from_str::<serde_json::Value>(&artifact.metrics).ok()
+        serde_json::from_str::<serde_json::Value>(&artifact.metrics)
+            .ok()
             .and_then(|v| v.get("buggify_triggers").and_then(|t| t.as_u64()))
             .unwrap_or(0)
     );
@@ -744,10 +746,10 @@ async fn test_tester_buggify_custom_probs() {
 
     // Set aggressive fault probabilities
     let mut probs = HashMap::new();
-    probs.insert(BuggifyFault::NetworkDelay, 0.20);     // 20% chance
-    probs.insert(BuggifyFault::NetworkDrop, 0.10);      // 10% chance
-    probs.insert(BuggifyFault::NodeCrash, 0.05);        // 5% chance
-    probs.insert(BuggifyFault::ElectionTimeout, 0.10);  // 10% chance
+    probs.insert(BuggifyFault::NetworkDelay, 0.20); // 20% chance
+    probs.insert(BuggifyFault::NetworkDrop, 0.10); // 10% chance
+    probs.insert(BuggifyFault::NodeCrash, 0.05); // 5% chance
+    probs.insert(BuggifyFault::ElectionTimeout, 0.10); // 10% chance
     probs.insert(BuggifyFault::MessageCorruption, 0.05); // 5% chance
 
     t.enable_buggify(Some(probs));
