@@ -116,7 +116,12 @@ impl MetadataStore {
             std::fs::create_dir_all(parent).context(CreateDirectorySnafu { path: parent })?;
         }
 
-        let db = Database::create(&path).context(OpenDatabaseSnafu { path: &path })?;
+        // Open existing database without truncating, create if missing.
+        let db = if path.exists() {
+            Database::open(&path).context(OpenDatabaseSnafu { path: &path })?
+        } else {
+            Database::create(&path).context(OpenDatabaseSnafu { path: &path })?
+        };
 
         // Initialize the table
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;

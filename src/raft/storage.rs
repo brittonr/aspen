@@ -426,7 +426,12 @@ impl RedbLogStore {
             std::fs::create_dir_all(parent).context(CreateDirectorySnafu { path: parent })?;
         }
 
-        let db = Database::create(&path).context(OpenDatabaseSnafu { path: &path })?;
+        // Open existing database without truncating, create if missing.
+        let db = if path.exists() {
+            Database::open(&path).context(OpenDatabaseSnafu { path: &path })?
+        } else {
+            Database::create(&path).context(OpenDatabaseSnafu { path: &path })?
+        };
 
         // Initialize tables
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;
@@ -976,3 +981,29 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
 // - SQLite for state machine (ACID, queryable)
 //
 // See src/raft/storage_sqlite.rs for the SQLite state machine implementation.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::raft::types::NodeId;
+    use openraft::Vote;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn redb_log_store_preserves_vote_on_reopen() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("raft-log.redb");
+
+        let vote = Vote::new(1, NodeId::new(1));
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            store.save_vote(&vote).await.unwrap();
+        }
+
+        let mut reopened = RedbLogStore::new(&db_path).unwrap();
+        let recovered = reopened.read_vote().await.unwrap();
+
+        assert_eq!(recovered, Some(vote));
+    }
+}
