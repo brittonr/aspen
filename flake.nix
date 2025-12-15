@@ -21,13 +21,6 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
-
-    # MicroVM framework for VM-based integration testing
-    # Uses Cloud Hypervisor as the hypervisor backend for TAP networking
-    microvm = {
-      url = "github:astro/microvm.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   nixConfig = {
@@ -43,7 +36,6 @@
     flake-utils,
     advisory-db,
     rust-overlay,
-    microvm,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -57,28 +49,6 @@
 
         rustToolChain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolChain;
-
-        flawless = pkgs.stdenv.mkDerivation {
-          pname = "flawless";
-          version = "1.0.0-beta.3";
-          src = pkgs.fetchurl {
-            url = "https://downloads.flawless.dev/1.0.0-beta.3/x64-linux/flawless";
-            sha256 = "0p11baphc2s8rjhzn9v2sai52gvbn33y1xlqg2yais6dmf5mj4dm";
-          };
-          dontUnpack = true;
-          nativeBuildInputs = [
-            pkgs.autoPatchelfHook
-            pkgs.pkg-config
-            pkgs.openssl.dev
-            pkgs.lld # Linker for WASM targets
-            pkgs.stdenv.cc.cc
-          ];
-          installPhase = ''
-            mkdir -p $out/bin
-            cp $src $out/bin/flawless
-            chmod +x $out/bin/flawless
-          '';
-        };
 
         netwatchSrc = pkgs.fetchFromGitHub {
           owner = "n0-computer";
@@ -382,47 +352,6 @@
             # Convenience alias for the most commonly used dev build
             dev = dev-aspen-node;
           };
-
-        # Docker image for cluster testing (using streamLayeredImage for better caching)
-        dockerImage = pkgs.dockerTools.streamLayeredImage {
-          name = "aspen-cluster";
-          tag = "latest";
-
-          contents = [
-            aspen
-            flawless
-            pkgs.bash
-            pkgs.coreutils
-            pkgs.gettext # for envsubst
-            pkgs.cacert
-            # Add entrypoint scripts and config template
-            (pkgs.runCommand "aspen-extras" {} ''
-              mkdir -p $out/bin $out/etc
-              cp ${./docker-entrypoint.sh} $out/bin/docker-entrypoint.sh
-              cp ${./worker-entrypoint.sh} $out/bin/worker-entrypoint.sh
-              chmod +x $out/bin/docker-entrypoint.sh
-              chmod +x $out/bin/worker-entrypoint.sh
-            '')
-          ];
-
-          config = {
-            Cmd = [
-              "${pkgs.bash}/bin/sh"
-              "/bin/docker-entrypoint.sh"
-            ];
-            Env = [
-              "PATH=/bin"
-              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-            ];
-            ExposedPorts = {
-              "3020/tcp" = {};
-              "9000/tcp" = {};
-              "9001/tcp" = {};
-              "27288/tcp" = {};
-            };
-            WorkingDir = "/";
-          };
-        };
       in
         {
           # Formatter
@@ -451,19 +380,7 @@
               audit = craneLib.cargoAudit {
                 inherit src advisory-db;
               };
-
-              # NixOS cluster integration test (x86_64-linux only)
-              # Run with: nix build .#checks.x86_64-linux.cluster-test
             }
-            // (
-              if system == "x86_64-linux"
-              then {
-                cluster-test = import ./nix/checks/cluster-test.nix {
-                  inherit self nixpkgs system;
-                };
-              }
-              else {}
-            )
             // {
               # Run tests with cargo-nextest
               nextest = craneLib.cargoNextest (
@@ -502,101 +419,55 @@
             };
 
           # Base apps available on all systems
-          apps =
-            {
-              aspen-node = flake-utils.lib.mkApp {
-                drv = bins.aspen-node;
-                exePath = "/bin/aspen-node";
-              };
-
-              aspen-tui = flake-utils.lib.mkApp {
-                drv = bins.aspen-tui;
-                exePath = "/bin/aspen-tui";
-              };
-
-              # 3-node cluster launcher
-              # Usage: nix run .#cluster
-              # Environment variables:
-              #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
-              #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
-              #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
-              cluster = {
-                type = "app";
-                program = "${pkgs.writeShellScript "aspen-cluster" ''
-                  export PATH="${
-                    pkgs.lib.makeBinPath [
-                      bins.aspen-node
-                      pkgs.bash
-                      pkgs.coreutils
-                      pkgs.curl
-                      pkgs.netcat
-                      pkgs.gnugrep
-                    ]
-                  }:$PATH"
-                  export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-                  exec ${./scripts/cluster.sh} "$@"
-                ''}";
-              };
-
-              default = self.apps.${system}.aspen-node;
-            }
-            // (
-              if system == "x86_64-linux"
-              then let
-                testCluster = import ./nix/test-cluster.nix {
-                  inherit
-                    self
-                    nixpkgs
-                    microvm
-                    system
-                    ;
-                };
-              in {
-                vm-cluster = testCluster.apps.launch-cluster;
-                vm-setup-network = testCluster.apps.setup-network;
-                vm-teardown-network = testCluster.apps.teardown-network;
-                vm-inject-partition = testCluster.apps.inject-partition;
-                vm-heal-partition = testCluster.apps.heal-partition;
-              }
-              else {}
-            );
-
-          # VM-based cluster testing apps (x86_64-linux only)
-          # These use Cloud Hypervisor microVMs for true network isolation testing
-        }
-        // (
-          let
-            # Base packages available on all systems
-            basePackages = {
-              default = bins.aspen-node;
-              aspen-node = bins.aspen-node;
-              aspen-tui = bins.aspen-tui;
-              netwatch = netwatch;
-              vm-test-setup = vm-test-setup;
-              vm-test-run = vm-test-run;
+          apps = {
+            aspen-node = flake-utils.lib.mkApp {
+              drv = bins.aspen-node;
+              exePath = "/bin/aspen-node";
             };
-          in {
-            # Packages exposed by the flake
-            packages =
-              basePackages
-              // (
-                if system == "x86_64-linux"
-                then let
-                  testCluster = import ./nix/test-cluster.nix {
-                    inherit
-                      self
-                      nixpkgs
-                      microvm
-                      system
-                      ;
-                  };
-                in {
-                  vm-cluster = testCluster.packages.vm-cluster;
-                }
-                else {}
-              );
-          }
-        )
+
+            aspen-tui = flake-utils.lib.mkApp {
+              drv = bins.aspen-tui;
+              exePath = "/bin/aspen-tui";
+            };
+
+            # 3-node cluster launcher
+            # Usage: nix run .#cluster
+            # Environment variables:
+            #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
+            #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
+            #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
+            cluster = {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-cluster" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.curl
+                    pkgs.netcat
+                    pkgs.gnugrep
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                exec ${./scripts/cluster.sh} "$@"
+              ''}";
+            };
+
+            default = self.apps.${system}.aspen-node;
+          };
+        }
+        // {
+          # Packages exposed by the flake
+          packages = {
+            default = bins.aspen-node;
+            aspen-node = bins.aspen-node;
+            aspen-tui = bins.aspen-tui;
+            netwatch = netwatch;
+            vm-test-setup = vm-test-setup;
+            vm-test-run = vm-test-run;
+          };
+        }
         // {
           # Fuzzing development shell with nightly Rust
           # Usage: nix develop .#fuzz
@@ -640,7 +511,6 @@
             # Extra inputs can be added here; cargo and rustc are provided by default.
             packages = with pkgs;
               [
-                flawless
                 netwatch
                 litefs # Transparent SQLite replication via FUSE filesystem
                 bash
@@ -715,176 +585,5 @@
             '';
           };
         }
-    )
-    // {
-      # NixOS modules (system-independent)
-      nixosModules = {
-        # Aspen node service module
-        aspen-node = import ./nix/nixos-modules/aspen-node.nix;
-
-        # Default module that imports all Aspen modules
-        default = import ./nix/nixos-modules;
-      };
-
-      # MicroVM configurations for testing clusters
-      # These are Linux-only configurations using Cloud Hypervisor
-      nixosConfigurations = let
-        # Helper to create an Aspen node microVM configuration
-        makeAspenMicrovm = {
-          nodeId,
-          httpPort,
-          ractorPort,
-          macAddress,
-          system ? "x86_64-linux",
-          additionalModules ? [],
-        }: let
-          pkgs = import nixpkgs {inherit system;};
-        in
-          nixpkgs.lib.nixosSystem {
-            inherit system;
-            modules =
-              [
-                microvm.nixosModules.microvm
-                self.nixosModules.aspen-node
-                (
-                  {
-                    lib,
-                    config,
-                    ...
-                  }: {
-                    system.stateVersion = lib.trivial.release;
-
-                    # Basic system configuration
-                    networking.hostName = "aspen-node-${toString nodeId}";
-                    services.getty.autologinUser = "root";
-
-                    # MicroVM configuration using Cloud Hypervisor
-                    microvm = {
-                      hypervisor = "cloud-hypervisor";
-
-                      # VM resources
-                      vcpu = 2;
-                      mem = 512; # MB
-
-                      # Network interface with TAP device for true isolation
-                      interfaces = [
-                        {
-                          type = "tap";
-                          id = "aspen-${toString nodeId}";
-                          mac = macAddress;
-                        }
-                      ];
-
-                      # Shared /nix/store from host (read-only)
-                      shares = [
-                        {
-                          tag = "ro-store";
-                          source = "/nix/store";
-                          mountPoint = "/nix/.ro-store";
-                          proto = "virtiofs";
-                        }
-                      ];
-
-                      # Writable overlay for the store
-                      writableStoreOverlay = "/nix/.rw-store";
-                      volumes = [
-                        {
-                          image = "nix-store-overlay.img";
-                          mountPoint = config.microvm.writableStoreOverlay;
-                          size = 1024; # 1GB
-                        }
-                        {
-                          image = "data.img";
-                          mountPoint = "/var/lib/aspen";
-                          size = 512; # 512MB for Raft logs and state
-                        }
-                      ];
-                    };
-
-                    # Network configuration
-                    networking = {
-                      useDHCP = false;
-                      interfaces.eth0 = {
-                        useDHCP = true;
-                      };
-                      firewall = {
-                        enable = true;
-                        allowedTCPPorts = [
-                          httpPort
-                          ractorPort
-                          22
-                        ];
-                        allowedUDPPortRanges = [
-                          {
-                            from = 4000;
-                            to = 4100;
-                          } # Iroh QUIC ports
-                        ];
-                      };
-                    };
-
-                    # Enable SSH for debugging
-                    services.openssh = {
-                      enable = true;
-                      settings.PermitRootLogin = "yes";
-                    };
-
-                    # Aspen node service
-                    services.aspen-node = {
-                      enable = true;
-                      package = self.packages.${system}.aspen-node;
-                      inherit nodeId;
-                      httpAddr = "0.0.0.0:${toString httpPort}";
-                      ractorPort = ractorPort;
-                      dataDir = "/var/lib/aspen/node-${toString nodeId}";
-                      storageBackend = "sqlite";
-                      cookie = "aspen-test-cluster";
-
-                      # Enable mDNS for local discovery in the test network
-                      iroh.disableMdns = false;
-                      iroh.disableGossip = false;
-
-                      environment = {
-                        RUST_LOG = "info,aspen=debug";
-                        RUST_BACKTRACE = "1";
-                      };
-                    };
-                  }
-                )
-              ]
-              ++ additionalModules;
-          };
-      in {
-        # 3-node test cluster configurations
-        "x86_64-linux-aspen-node-1" = makeAspenMicrovm {
-          nodeId = 1;
-          httpPort = 8301;
-          ractorPort = 26001;
-          macAddress = "02:00:00:01:01:01";
-        };
-
-        "x86_64-linux-aspen-node-2" = makeAspenMicrovm {
-          nodeId = 2;
-          httpPort = 8302;
-          ractorPort = 26002;
-          macAddress = "02:00:00:01:01:02";
-        };
-
-        "x86_64-linux-aspen-node-3" = makeAspenMicrovm {
-          nodeId = 3;
-          httpPort = 8303;
-          ractorPort = 26003;
-          macAddress = "02:00:00:01:01:03";
-        };
-      };
-
-      # Overlay for microvm packages
-      overlays.microvm = final: prev: {
-        aspen-microvms = {
-          node1 = self.nixosConfigurations."x86_64-linux-aspen-node-1".config.microvm.declaredRunner;
-          node2 = self.nixosConfigurations."x86_64-linux-aspen-node-2".config.microvm.declaredRunner;
-          node3 = self.nixosConfigurations."x86_64-linux-aspen-node-3".config.microvm.declaredRunner;
-        };
-      };
-    };
+    );
 }
