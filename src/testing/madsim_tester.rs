@@ -91,6 +91,8 @@ pub struct TesterConfig {
     pub storage_backend: StorageBackend,
     /// Base directory for persistent storage (only used with Sqlite backend).
     pub storage_dir: Option<std::path::PathBuf>,
+    /// Liveness testing configuration (TigerBeetle-style two-phase testing).
+    pub liveness: LivenessConfig,
 }
 
 impl TesterConfig {
@@ -105,6 +107,7 @@ impl TesterConfig {
             election_timeout_max_ms: DEFAULT_ELECTION_TIMEOUT_MAX_MS,
             storage_backend: StorageBackend::InMemory, // Default to in-memory for tests
             storage_dir: None,
+            liveness: LivenessConfig::default(),
         }
     }
 
@@ -140,6 +143,32 @@ impl TesterConfig {
         self.storage_dir = Some(storage_dir.into());
         self
     }
+
+    /// Enable liveness testing (TigerBeetle-style two-phase testing).
+    ///
+    /// Liveness testing verifies that the cluster makes progress under
+    /// various failure conditions. This is separate from safety testing
+    /// which only verifies correctness invariants.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Strict liveness: cluster must always have a leader
+    /// let config = TesterConfig::new(3, "liveness_test")
+    ///     .with_liveness(LivenessConfig::strict());
+    ///
+    /// // Eventual liveness: cluster may temporarily lack leader
+    /// let config = TesterConfig::new(3, "liveness_test")
+    ///     .with_liveness(LivenessConfig::eventual());
+    ///
+    /// // Custom timeout: max 5 seconds without leader
+    /// let config = TesterConfig::new(3, "liveness_test")
+    ///     .with_liveness(LivenessConfig::with_timeout(5000));
+    /// ```
+    pub fn with_liveness(mut self, config: LivenessConfig) -> Self {
+        self.liveness = config;
+        self
+    }
 }
 
 /// Structured metrics captured during simulation.
@@ -167,6 +196,155 @@ pub struct SimulationMetrics {
     pub membership_changes: u32,
     /// Number of BUGGIFY faults triggered.
     pub buggify_triggers: u64,
+    /// Liveness metrics (populated when liveness mode is used).
+    #[serde(default)]
+    pub liveness: LivenessMetrics,
+}
+
+// =========================================================================
+// Liveness Mode Testing (TigerBeetle-Style Two-Phase Testing)
+// =========================================================================
+
+/// Metrics for liveness testing.
+///
+/// These metrics track the system's ability to make progress under
+/// various failure conditions.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct LivenessMetrics {
+    /// Total time (ms) the cluster had no leader.
+    pub leaderless_duration_ms: u64,
+    /// Number of times the cluster became leaderless.
+    pub leaderless_periods: u32,
+    /// Time (ms) for first leader election after cluster start.
+    pub first_election_ms: u64,
+    /// Maximum time (ms) to recover a leader after crash/partition.
+    pub max_leader_recovery_ms: u64,
+    /// Number of successful writes during liveness testing.
+    pub writes_completed: u64,
+    /// Number of failed writes due to no leader.
+    pub writes_blocked: u64,
+    /// Total time (ms) spent with operations blocked.
+    pub blocked_duration_ms: u64,
+    /// Number of liveness checks performed.
+    pub liveness_checks: u64,
+    /// Number of liveness checks that passed.
+    pub liveness_checks_passed: u64,
+}
+
+/// Liveness testing mode.
+///
+/// TigerBeetle uses a two-phase testing approach:
+/// 1. **Safety mode**: Run tests with strict invariant checking (no progress required)
+/// 2. **Liveness mode**: Re-run the same tests, requiring progress to be made
+///
+/// This allows testing both correctness (safety) and progress (liveness) guarantees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Default)]
+pub enum LivenessMode {
+    /// Disabled (default): Only check safety invariants, don't require progress.
+    #[default]
+    Disabled,
+    /// Strict: Cluster must always have a leader within timeout.
+    /// This is the strongest liveness guarantee.
+    Strict,
+    /// Eventual: Cluster may temporarily lack a leader, but must recover.
+    /// Allows transient unavailability during failures.
+    Eventual,
+    /// Custom timeout: Like Eventual, but with a custom recovery timeout.
+    /// The value is the maximum allowed leaderless duration in milliseconds.
+    CustomTimeout(u64),
+}
+
+/// Configuration for liveness testing.
+#[derive(Debug, Clone)]
+pub struct LivenessConfig {
+    /// Liveness mode to use.
+    pub mode: LivenessMode,
+    /// How often to check liveness (ms).
+    pub check_interval_ms: u64,
+    /// Maximum time to wait for leader recovery (ms).
+    /// Used when mode is Eventual.
+    pub recovery_timeout_ms: u64,
+    /// Whether to track detailed timing metrics.
+    pub track_timing: bool,
+}
+
+impl Default for LivenessConfig {
+    fn default() -> Self {
+        Self {
+            mode: LivenessMode::Disabled,
+            check_interval_ms: 100,      // Check every 100ms
+            recovery_timeout_ms: 30_000, // 30 second recovery timeout
+            track_timing: true,
+        }
+    }
+}
+
+impl LivenessConfig {
+    /// Create a strict liveness configuration.
+    pub fn strict() -> Self {
+        Self {
+            mode: LivenessMode::Strict,
+            check_interval_ms: 100,
+            recovery_timeout_ms: 10_000, // Strict = shorter timeout
+            track_timing: true,
+        }
+    }
+
+    /// Create an eventual liveness configuration.
+    pub fn eventual() -> Self {
+        Self {
+            mode: LivenessMode::Eventual,
+            ..Default::default()
+        }
+    }
+
+    /// Create a custom liveness configuration with specific timeout.
+    pub fn with_timeout(max_leaderless_ms: u64) -> Self {
+        Self {
+            mode: LivenessMode::CustomTimeout(max_leaderless_ms),
+            recovery_timeout_ms: max_leaderless_ms,
+            ..Default::default()
+        }
+    }
+}
+
+/// Report from liveness testing.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LivenessReport {
+    /// Overall liveness status.
+    pub passed: bool,
+    /// Liveness mode that was used.
+    pub mode: LivenessMode,
+    /// Detailed metrics from the test.
+    pub metrics: LivenessMetrics,
+    /// Any liveness violations detected.
+    pub violations: Vec<LivenessViolation>,
+    /// Summary message.
+    pub summary: String,
+}
+
+/// A liveness violation event.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LivenessViolation {
+    /// When the violation started (relative to test start, in ms).
+    pub started_at_ms: u64,
+    /// Duration of the violation (ms).
+    pub duration_ms: u64,
+    /// Type of violation.
+    pub violation_type: ViolationType,
+    /// Additional context.
+    pub context: String,
+}
+
+/// Types of liveness violations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum ViolationType {
+    /// Cluster had no leader for too long.
+    LeaderlessTimeout,
+    /// Operation was blocked for too long.
+    OperationBlocked,
+    /// Cluster failed to recover after failure injection.
+    RecoveryTimeout,
 }
 
 // =========================================================================
@@ -337,6 +515,7 @@ impl TestNode {
 /// - Artifact capture
 /// - Metrics collection
 /// - Byzantine failure injection
+/// - Liveness mode testing (TigerBeetle-style two-phase testing)
 pub struct AspenRaftTester {
     /// Router managing all nodes in the simulation.
     router: Arc<MadsimRaftRouter>,
@@ -358,6 +537,25 @@ pub struct AspenRaftTester {
     test_name: String,
     /// Metrics collected during simulation.
     metrics: SimulationMetrics,
+    /// Liveness testing configuration.
+    liveness_config: LivenessConfig,
+    /// Liveness tracking state.
+    liveness_state: LivenessState,
+}
+
+/// Internal state for liveness tracking.
+#[derive(Debug, Clone, Default)]
+struct LivenessState {
+    /// Whether liveness tracking is active.
+    active: bool,
+    /// When the cluster last had a leader.
+    last_leader_time: Option<Instant>,
+    /// When the cluster became leaderless (for tracking duration).
+    leaderless_since: Option<Instant>,
+    /// Accumulated violations.
+    violations: Vec<LivenessViolation>,
+    /// First election time (set once on first leader).
+    first_election_time: Option<Instant>,
 }
 
 impl AspenRaftTester {
@@ -537,6 +735,9 @@ impl AspenRaftTester {
         // Initialize BUGGIFY with the test seed
         let buggify = Arc::new(BuggifyConfig::new(seed));
 
+        // Determine if liveness tracking is enabled
+        let liveness_active = config.liveness.mode != LivenessMode::Disabled;
+
         Self {
             router,
             injector,
@@ -549,6 +750,11 @@ impl AspenRaftTester {
             test_name: config.test_name,
             metrics: SimulationMetrics {
                 node_count: config.node_count as u32,
+                ..Default::default()
+            },
+            liveness_config: config.liveness,
+            liveness_state: LivenessState {
+                active: liveness_active,
                 ..Default::default()
             },
         }
@@ -1434,6 +1640,312 @@ impl AspenRaftTester {
 
         // Restore original probabilities
         *self.buggify.probabilities.lock().unwrap() = saved;
+    }
+
+    // =========================================================================
+    // Liveness Mode Testing (TigerBeetle-Style Two-Phase Testing)
+    // =========================================================================
+
+    /// Enable liveness tracking at runtime.
+    ///
+    /// This allows enabling liveness mode after tester creation.
+    /// Useful for two-phase testing where you first run safety tests,
+    /// then re-run with liveness checking.
+    pub fn enable_liveness(&mut self, mode: LivenessMode) {
+        self.liveness_config.mode = mode;
+        self.liveness_state.active = mode != LivenessMode::Disabled;
+        self.add_event(format!("liveness: enabled mode {:?}", mode));
+    }
+
+    /// Disable liveness tracking.
+    pub fn disable_liveness(&mut self) {
+        self.liveness_config.mode = LivenessMode::Disabled;
+        self.liveness_state.active = false;
+        self.add_event("liveness: disabled");
+    }
+
+    /// Check if the cluster currently has a leader (quick check, no retries).
+    ///
+    /// Unlike `check_one_leader()` which waits with retries, this is a
+    /// point-in-time snapshot used for liveness tracking.
+    pub fn has_leader_now(&self) -> bool {
+        for node in self.nodes.iter() {
+            if node.connected().load(Ordering::Relaxed) {
+                let metrics = node.raft().metrics().borrow().clone();
+                if metrics.current_leader.is_some() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Perform a liveness check and update internal state.
+    ///
+    /// This should be called periodically during tests to track liveness.
+    /// Returns whether the cluster currently satisfies liveness requirements.
+    pub fn check_liveness_tick(&mut self) -> bool {
+        if !self.liveness_state.active {
+            return true; // Not tracking, always passes
+        }
+
+        let now = Instant::now();
+        let elapsed_from_start = now.duration_since(self.start_time).as_millis() as u64;
+        let has_leader = self.has_leader_now();
+
+        self.metrics.liveness.liveness_checks += 1;
+
+        if has_leader {
+            // Record first election time
+            if self.liveness_state.first_election_time.is_none() {
+                self.liveness_state.first_election_time = Some(now);
+                self.metrics.liveness.first_election_ms = elapsed_from_start;
+                self.add_event(format!(
+                    "liveness: first leader elected at {}ms",
+                    elapsed_from_start
+                ));
+            }
+
+            // If we were leaderless, record recovery time
+            if let Some(leaderless_start) = self.liveness_state.leaderless_since {
+                let recovery_time = now.duration_since(leaderless_start).as_millis() as u64;
+                self.metrics.liveness.leaderless_duration_ms += recovery_time;
+                self.metrics.liveness.max_leader_recovery_ms = self
+                    .metrics
+                    .liveness
+                    .max_leader_recovery_ms
+                    .max(recovery_time);
+                self.liveness_state.leaderless_since = None;
+                self.add_event(format!(
+                    "liveness: leader recovered after {}ms",
+                    recovery_time
+                ));
+            }
+
+            self.liveness_state.last_leader_time = Some(now);
+            self.metrics.liveness.liveness_checks_passed += 1;
+            true
+        } else {
+            // No leader currently
+            if self.liveness_state.leaderless_since.is_none() {
+                self.liveness_state.leaderless_since = Some(now);
+                self.metrics.liveness.leaderless_periods += 1;
+            }
+
+            // Check for violations based on mode
+            let leaderless_duration = self
+                .liveness_state
+                .leaderless_since
+                .map(|t| now.duration_since(t).as_millis() as u64)
+                .unwrap_or(0);
+
+            let violation_threshold = match self.liveness_config.mode {
+                LivenessMode::Disabled => u64::MAX, // Never violate
+                LivenessMode::Strict => self.liveness_config.check_interval_ms * 2, // Very short
+                LivenessMode::Eventual => self.liveness_config.recovery_timeout_ms,
+                LivenessMode::CustomTimeout(ms) => ms,
+            };
+
+            if leaderless_duration > violation_threshold {
+                self.liveness_state.violations.push(LivenessViolation {
+                    started_at_ms: elapsed_from_start - leaderless_duration,
+                    duration_ms: leaderless_duration,
+                    violation_type: ViolationType::LeaderlessTimeout,
+                    context: format!(
+                        "Cluster leaderless for {}ms (threshold: {}ms)",
+                        leaderless_duration, violation_threshold
+                    ),
+                });
+                self.add_event(format!(
+                    "liveness: VIOLATION - leaderless for {}ms",
+                    leaderless_duration
+                ));
+                false
+            } else {
+                self.metrics.liveness.liveness_checks_passed += 1;
+                true
+            }
+        }
+    }
+
+    /// Run a test with continuous liveness checking.
+    ///
+    /// This is the main entry point for TigerBeetle-style liveness testing.
+    /// Runs the provided test function while periodically checking liveness.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Create tester with liveness enabled
+    /// let config = TesterConfig::new(3, "liveness_test")
+    ///     .with_liveness(LivenessConfig::eventual());
+    /// let mut t = AspenRaftTester::with_config(config).await;
+    ///
+    /// // Run test with liveness checking
+    /// let report = t.run_with_liveness(Duration::from_secs(30), |t| async {
+    ///     // Inject faults
+    ///     t.crash_node(0).await;
+    ///     madsim::time::sleep(Duration::from_secs(5)).await;
+    ///     t.restart_node(0).await;
+    ///
+    ///     // Verify operations still work
+    ///     t.write("key".to_string(), "value".to_string()).await?;
+    ///     Ok(())
+    /// }).await;
+    ///
+    /// assert!(report.passed, "Liveness test failed: {}", report.summary);
+    /// ```
+    pub async fn run_with_liveness<F, Fut>(
+        &mut self,
+        duration: Duration,
+        test_fn: F,
+    ) -> LivenessReport
+    where
+        F: FnOnce(&mut Self) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        let start = Instant::now();
+        let check_interval = Duration::from_millis(self.liveness_config.check_interval_ms);
+
+        // Initial liveness check
+        self.check_liveness_tick();
+
+        // Run the test function
+        let test_result = test_fn(self).await;
+
+        // Continue checking until duration expires
+        while start.elapsed() < duration {
+            self.check_liveness_tick();
+            madsim::time::sleep(check_interval).await;
+        }
+
+        // Final check
+        self.check_liveness_tick();
+
+        // Generate report
+        self.generate_liveness_report(test_result)
+    }
+
+    /// Run a liveness test loop with BUGGIFY fault injection.
+    ///
+    /// Combines BUGGIFY fault injection with liveness checking.
+    /// This is the most comprehensive test mode.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let config = TesterConfig::new(3, "chaos_liveness")
+    ///     .with_liveness(LivenessConfig::eventual());
+    /// let mut t = AspenRaftTester::with_config(config).await;
+    ///
+    /// t.enable_buggify(None);
+    /// let report = t.run_with_liveness_and_buggify(Duration::from_secs(60)).await;
+    ///
+    /// assert!(report.passed, "Chaos liveness test failed");
+    /// ```
+    pub async fn run_with_liveness_and_buggify(&mut self, duration: Duration) -> LivenessReport {
+        let start = Instant::now();
+        let check_interval = Duration::from_millis(self.liveness_config.check_interval_ms);
+        let fault_interval = Duration::from_secs(1);
+        let mut last_fault_time = Instant::now();
+
+        self.add_event("liveness: starting combined BUGGIFY + liveness test");
+
+        while start.elapsed() < duration {
+            // Check liveness
+            self.check_liveness_tick();
+
+            // Apply BUGGIFY faults periodically
+            if last_fault_time.elapsed() >= fault_interval {
+                self.apply_buggify_faults().await;
+                last_fault_time = Instant::now();
+            }
+
+            madsim::time::sleep(check_interval).await;
+        }
+
+        // Final check
+        self.check_liveness_tick();
+
+        self.add_event("liveness: completed BUGGIFY + liveness test");
+
+        self.generate_liveness_report(Ok(()))
+    }
+
+    /// Generate a liveness report from current state.
+    fn generate_liveness_report(&mut self, test_result: Result<()>) -> LivenessReport {
+        let passed = self.liveness_state.violations.is_empty() && test_result.is_ok();
+
+        let summary = if passed {
+            format!(
+                "Liveness test PASSED: {} checks, {}ms leaderless total, {}ms max recovery",
+                self.metrics.liveness.liveness_checks,
+                self.metrics.liveness.leaderless_duration_ms,
+                self.metrics.liveness.max_leader_recovery_ms
+            )
+        } else {
+            let violation_count = self.liveness_state.violations.len();
+            let test_error = test_result.as_ref().err().map(|e| e.to_string());
+            format!(
+                "Liveness test FAILED: {} violations, test error: {:?}",
+                violation_count, test_error
+            )
+        };
+
+        self.add_event(format!("liveness: {}", summary));
+
+        // Copy metrics for report
+        let report_metrics = self.metrics.liveness.clone();
+        self.metrics.liveness = report_metrics.clone();
+
+        LivenessReport {
+            passed,
+            mode: self.liveness_config.mode,
+            metrics: report_metrics,
+            violations: self.liveness_state.violations.clone(),
+            summary,
+        }
+    }
+
+    /// Get current liveness metrics.
+    pub fn liveness_metrics(&self) -> &LivenessMetrics {
+        &self.metrics.liveness
+    }
+
+    /// Check if any liveness violations have occurred.
+    pub fn has_liveness_violations(&self) -> bool {
+        !self.liveness_state.violations.is_empty()
+    }
+
+    /// Get all liveness violations.
+    pub fn liveness_violations(&self) -> &[LivenessViolation] {
+        &self.liveness_state.violations
+    }
+
+    /// Perform a write with liveness tracking.
+    ///
+    /// If the write fails due to no leader, this is tracked as blocked time.
+    pub async fn write_with_liveness(&mut self, key: String, value: String) -> Result<()> {
+        let start = Instant::now();
+        let result = self.write(key.clone(), value).await;
+
+        if result.is_ok() {
+            self.metrics.liveness.writes_completed += 1;
+        } else {
+            let blocked_time = start.elapsed().as_millis() as u64;
+            self.metrics.liveness.writes_blocked += 1;
+            self.metrics.liveness.blocked_duration_ms += blocked_time;
+
+            if self.liveness_state.active {
+                let elapsed = Instant::now().duration_since(self.start_time).as_millis() as u64;
+                self.liveness_state.violations.push(LivenessViolation {
+                    started_at_ms: elapsed - blocked_time,
+                    duration_ms: blocked_time,
+                    violation_type: ViolationType::OperationBlocked,
+                    context: format!("Write blocked for {}ms on key '{}'", blocked_time, key),
+                });
+            }
+        }
+
+        result
     }
 
     pub fn end(mut self) -> SimulationArtifact {

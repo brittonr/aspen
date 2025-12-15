@@ -46,7 +46,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use futures::{Stream, TryStreamExt};
-use openraft::storage::{EntryResponder, RaftSnapshotBuilder, RaftStateMachine, Snapshot};
+use openraft::storage::{
+    ApplyResponder, EntryResponder, RaftSnapshotBuilder, RaftStateMachine, Snapshot,
+};
 use openraft::{EntryPayload, OptionalSend, StoredMembership};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -208,6 +210,73 @@ pub struct SqliteStateMachine {
     path: PathBuf,
     /// Snapshot index counter (for generating unique snapshot IDs)
     snapshot_idx: Arc<AtomicU64>,
+}
+
+/// Apply a batch of buffered entries in a single SQLite transaction.
+///
+/// This is the core optimization: instead of one transaction per entry,
+/// we batch up to BATCH_BUFFER_SIZE entries into a single atomic transaction.
+/// This reduces:
+/// - fsync operations from N to 1
+/// - Transaction overhead from N to 1
+/// - Lock acquisitions from N to 1
+/// - WAL checkpoint operations from N to 1
+///
+/// # Tiger Style
+/// - Fixed batch size limits prevent unbounded resource usage
+/// - RAII TransactionGuard ensures atomic commit/rollback
+/// - All responses sent after transaction commits for durability
+fn apply_buffered_entries_impl(
+    write_conn: &Arc<Mutex<Connection>>,
+    buffer: &mut Vec<EntryResponder<AppTypeConfig>>,
+) -> Result<(), io::Error> {
+    if buffer.is_empty() {
+        return Ok(());
+    }
+
+    let conn = write_conn.lock().map_err(|_| {
+        io::Error::other(SqliteStorageError::MutexPoisoned {
+            operation: "apply_batch",
+        })
+    })?;
+
+    // Start single transaction for entire batch
+    let guard = TransactionGuard::new(&conn)?;
+
+    // Collect responses to send after transaction commits
+    // ApplyResponder is an enum with send() method for the response
+    type ResponsePair = (Option<ApplyResponder<AppTypeConfig>>, AppResponse);
+    let mut responses: Vec<ResponsePair> = Vec::with_capacity(buffer.len());
+
+    // Apply all entries within the transaction
+    for (entry, responder) in buffer.drain(..) {
+        // Update last_applied_log for each entry (idempotent, only final value matters)
+        SqliteStateMachine::update_last_applied_log(&conn, &entry.log_id)?;
+
+        // Apply the payload
+        let response =
+            SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
+
+        responses.push((responder, response));
+    }
+
+    // Single COMMIT for entire batch - this is where durability is guaranteed
+    guard.commit()?;
+
+    // Force a single WAL checkpoint for the entire batch.
+    // This amortizes the checkpoint cost across all entries in the batch.
+    // Use PASSIVE mode which doesn't block writers.
+    let _ = conn.pragma_update(None, "wal_checkpoint", "PASSIVE");
+
+    // Send all responses after transaction is durably committed
+    // This ensures linearizability: responses only sent after data is durable
+    for (responder, response) in responses {
+        if let Some(r) = responder {
+            r.send(response);
+        }
+    }
+
+    Ok(())
 }
 
 impl SqliteStateMachine {
@@ -492,6 +561,125 @@ impl SqliteStateMachine {
             committed_index: None,
             validation_duration: start.elapsed(),
         })
+    }
+
+    /// Compute a Blake3 checksum of the entire state machine for replica verification.
+    ///
+    /// This allows comparing state machines across replicas to detect divergence.
+    /// The checksum includes:
+    /// - All key-value pairs (sorted by key for determinism)
+    /// - The last_applied_log metadata
+    ///
+    /// # TigerBeetle-Style Consistency Verification
+    ///
+    /// TigerBeetle uses checksums to verify replica consistency after operations.
+    /// This method enables similar verification in Aspen:
+    ///
+    /// ```ignore
+    /// // After replication settles, verify all replicas have identical state
+    /// let checksums: Vec<_> = nodes.iter().map(|n| n.state_machine_checksum()).collect();
+    /// assert!(checksums.windows(2).all(|w| w[0] == w[1]), "Replica divergence detected!");
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// This operation reads all key-value pairs, so it should be used judiciously:
+    /// - Good for periodic consistency checks in tests
+    /// - Good for debugging suspected divergence
+    /// - Avoid in hot paths or high-frequency operations
+    ///
+    /// # Returns
+    ///
+    /// A 32-byte Blake3 hash as a hex string, or error if database access fails.
+    pub fn state_machine_checksum(&self) -> Result<String, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let mut hasher = blake3::Hasher::new();
+
+        // Hash all key-value pairs in deterministic (sorted) order
+        // SQLite ORDER BY ensures consistent ordering across replicas
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM state_machine_kv ORDER BY key")
+            .context(QuerySnafu)?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                Ok((key, value))
+            })
+            .context(QuerySnafu)?;
+
+        for row in rows {
+            let (key, value) = row.context(QuerySnafu)?;
+            // Hash key length + key + value length + value for unambiguous parsing
+            hasher.update(&(key.len() as u64).to_le_bytes());
+            hasher.update(key.as_bytes());
+            hasher.update(&(value.len() as u64).to_le_bytes());
+            hasher.update(value.as_bytes());
+        }
+
+        // Include last_applied_log in checksum for complete state verification
+        let meta_bytes: Option<Vec<u8>> = conn
+            .query_row(
+                "SELECT value FROM state_machine_meta WHERE key = 'last_applied_log'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        if let Some(bytes) = meta_bytes {
+            hasher.update(b"last_applied_log:");
+            hasher.update(&bytes);
+        }
+
+        let hash = hasher.finalize();
+        Ok(hash.to_hex().to_string())
+    }
+
+    /// Compute a partial checksum for a range of keys.
+    ///
+    /// Useful for debugging divergence by narrowing down which keys differ.
+    ///
+    /// # Arguments
+    /// * `prefix` - Only include keys starting with this prefix
+    ///
+    /// # Returns
+    /// A Blake3 hash of matching key-value pairs as a hex string.
+    pub fn state_machine_checksum_prefix(
+        &self,
+        prefix: &str,
+    ) -> Result<String, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let mut hasher = blake3::Hasher::new();
+
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM state_machine_kv WHERE key LIKE ?1 ORDER BY key")
+            .context(QuerySnafu)?;
+
+        let pattern = format!("{}%", prefix);
+        let rows = stmt
+            .query_map([pattern], |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                Ok((key, value))
+            })
+            .context(QuerySnafu)?;
+
+        for row in rows {
+            let (key, value) = row.context(QuerySnafu)?;
+            hasher.update(&(key.len() as u64).to_le_bytes());
+            hasher.update(key.as_bytes());
+            hasher.update(&(value.len() as u64).to_le_bytes());
+            hasher.update(value.as_bytes());
+        }
+
+        let hash = hasher.finalize();
+        Ok(hash.to_hex().to_string())
     }
 
     /// Get a key-value pair from the state machine.
@@ -1093,53 +1281,42 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         Strm:
             Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
     {
-        let mut batch_count: u32 = 0;
+        // Tiger Style: Fixed batch size limit for memory and transaction bounds
+        const BATCH_BUFFER_SIZE: usize = 100;
 
-        // Note: This implementation commits each entry individually for safety.
-        // While this means entries are not atomically batched, it ensures:
-        // 1. The write lock is not held across await points (avoiding Send issues)
-        // 2. Each entry is durably committed before responding
-        // 3. Partial progress is preserved on failures
+        // Buffer entries for batch application within a single transaction.
+        // This significantly reduces fsync operations and lock contention.
+        // Per TigerBeetle design patterns: batch multiple operations into single
+        // atomic transaction for 30-90% write throughput improvement.
         //
-        // For true atomic batch operations, consider buffering entries first,
-        // then applying them synchronously within a single transaction.
-        while let Some((entry, responder)) = entries.try_next().await? {
-            batch_count += 1;
-            if batch_count > MAX_BATCH_SIZE {
+        // EntryResponder<C> is a type alias for (Entry<C>, Option<ApplyResponder<C>>)
+        let mut buffer: Vec<EntryResponder<AppTypeConfig>> = Vec::with_capacity(BATCH_BUFFER_SIZE);
+        let mut total_count: u32 = 0;
+
+        // Collect entries from stream into buffer
+        while let Some(entry_responder) = entries.try_next().await? {
+            total_count += 1;
+            if total_count > MAX_BATCH_SIZE {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     format!(
                         "Batch size {} exceeds maximum limit of {}",
-                        batch_count, MAX_BATCH_SIZE
+                        total_count, MAX_BATCH_SIZE
                     ),
                 ));
             }
-            let conn = self.write_conn.lock().map_err(|_| {
-                io::Error::other(SqliteStorageError::MutexPoisoned { operation: "apply" })
-            })?;
 
-            // Start transaction with RAII guard for automatic rollback on error
-            let guard = TransactionGuard::new(&conn)?;
+            buffer.push(entry_responder);
 
-            // Update last_applied_log
-            SqliteStateMachine::update_last_applied_log(&conn, &entry.log_id)?;
-
-            // Apply the payload
-            let response =
-                SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
-
-            // Commit transaction - guard is consumed and dropped after commit
-            guard.commit()?;
-
-            // Force a WAL checkpoint to ensure data is visible to other connections
-            // This is necessary because in WAL mode, readers can see stale snapshots
-            // until the WAL is checkpointed or they explicitly refresh.
-            // Use PASSIVE mode which doesn't block writers.
-            let _ = conn.pragma_update(None, "wal_checkpoint", "PASSIVE");
-
-            if let Some(responder) = responder {
-                responder.send(response);
+            // Apply buffer when full to bound memory usage
+            if buffer.len() >= BATCH_BUFFER_SIZE {
+                apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
             }
+        }
+
+        // Apply remaining entries in buffer
+        if !buffer.is_empty() {
+            apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
         }
 
         Ok(())

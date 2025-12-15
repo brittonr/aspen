@@ -598,6 +598,44 @@
           }
         )
         // {
+          # Fuzzing development shell with nightly Rust
+          # Usage: nix develop .#fuzz
+          devShells.fuzz = let
+            rustNightly = pkgs.rust-bin.nightly.latest.default.override {
+              extensions = ["rust-src" "llvm-tools-preview"];
+            };
+          in
+            pkgs.mkShell {
+              buildInputs = with pkgs; [
+                rustNightly
+                cargo-fuzz
+                llvmPackages_latest.llvm
+                llvmPackages_latest.libclang
+                pkg-config
+                openssl.dev
+              ];
+
+              LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
+              LLVM_COV = "${pkgs.llvmPackages_latest.llvm}/bin/llvm-cov";
+              LLVM_PROFDATA = "${pkgs.llvmPackages_latest.llvm}/bin/llvm-profdata";
+
+              shellHook = ''
+                echo "Fuzzing development environment ready!"
+                echo ""
+                echo "Available fuzz targets:"
+                echo "  cargo fuzz list"
+                echo ""
+                echo "Run a fuzz target:"
+                echo "  cargo fuzz run fuzz_raft_rpc -- -max_total_time=60"
+                echo ""
+                echo "Run without sanitizers (faster, for safe Rust):"
+                echo "  cargo fuzz run fuzz_raft_rpc --sanitizer none -- -max_total_time=60"
+                echo ""
+                echo "Generate coverage report:"
+                echo "  cargo fuzz coverage fuzz_raft_rpc"
+              '';
+            };
+
           devShells.default = craneLib.devShell {
             # Extra inputs can be added here; cargo and rustc are provided by default.
             packages = with pkgs;

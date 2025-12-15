@@ -1,0 +1,77 @@
+[package]
+name = "aspen-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+# Main crate with fuzzing feature
+aspen = { path = "..", features = ["fuzzing"] }
+
+# Serialization formats used by aspen
+postcard = { version = "1.0", features = ["alloc"] }
+bincode = "1.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# OpenRaft types for fuzzing Raft messages
+openraft = { path = "../openraft/openraft", features = ["serde", "type-alias"] }
+
+# Iroh gossip for cluster ticket fuzzing
+iroh-gossip = "0.95"
+
+[dev-dependencies]
+# None needed
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+# Fuzz targets - network/protocol parsing (highest priority)
+[[bin]]
+name = "fuzz_raft_rpc"
+path = "fuzz_targets/fuzz_raft_rpc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_snapshot_json"
+path = "fuzz_targets/fuzz_snapshot_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_log_entries"
+path = "fuzz_targets/fuzz_log_entries.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_http_api"
+path = "fuzz_targets/fuzz_http_api.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_gossip"
+path = "fuzz_targets/fuzz_gossip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_cluster_ticket"
+path = "fuzz_targets/fuzz_cluster_ticket.rs"
+test = false
+doc = false
+bench = false

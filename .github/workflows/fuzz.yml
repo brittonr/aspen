@@ -1,0 +1,143 @@
+name: Fuzzing
+
+on:
+  push:
+    branches: [main, v3]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run nightly fuzzing campaign at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  # Short fuzz time for PR checks, longer for nightly
+  FUZZ_TIME_PR: "300"      # 5 minutes
+  FUZZ_TIME_NIGHTLY: "3600" # 1 hour per target
+
+jobs:
+  # Quick smoke test on PRs - just verify fuzz targets build and run briefly
+  fuzz-smoke-test:
+    name: Fuzz Smoke Test (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_raft_rpc
+          - fuzz_snapshot_json
+          - fuzz_log_entries
+          - fuzz_http_api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nightly Rust
+        uses: dtolnay/rust-action@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build fuzz target
+        run: cargo fuzz build ${{ matrix.target }}
+
+      - name: Run fuzz target (smoke test - no sanitizer for speed)
+        run: |
+          cargo fuzz run ${{ matrix.target }} --sanitizer none -- \
+            -max_total_time=${{ env.FUZZ_TIME_PR }} \
+            -rss_limit_mb=4096
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 7
+
+  # Extended nightly fuzzing campaign
+  fuzz-nightly:
+    name: Nightly Fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_raft_rpc
+          - fuzz_snapshot_json
+          - fuzz_log_entries
+          - fuzz_http_api
+          - fuzz_gossip
+          - fuzz_cluster_ticket
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nightly Rust
+        uses: dtolnay/rust-action@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Restore corpus cache
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+
+      - name: Build fuzz target
+        run: cargo fuzz build ${{ matrix.target }}
+
+      - name: Run extended fuzzing (1 hour)
+        run: |
+          cargo fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ env.FUZZ_TIME_NIGHTLY }} \
+            -rss_limit_mb=8192 \
+            -jobs=2
+
+      - name: Minimize corpus
+        run: cargo fuzz cmin ${{ matrix.target }} || true
+
+      - name: Save corpus cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.sha }}
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 30
+
+      - name: Report corpus size
+        run: |
+          echo "Corpus size for ${{ matrix.target }}:"
+          find fuzz/corpus/${{ matrix.target }} -type f | wc -l || echo "0 files"

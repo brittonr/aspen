@@ -9,6 +9,7 @@ use std::time::Duration;
 
 /// Operation that can be performed on the Raft cluster
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum RaftOperation {
     Write { key: String, value: String },
     Read { key: String },
@@ -75,6 +76,7 @@ fn arb_buggify_fault() -> impl Strategy<Value = BuggifyFault> {
 
 /// Configuration for property-based tests
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TestConfig {
     operations: Vec<RaftOperation>,
     seed: u64,

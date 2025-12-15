@@ -134,6 +134,8 @@ cloud-hypervisor-client = "0.3"
 default = []
 testing = []
 tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
+# Fuzzing feature exposes internals for fuzz testing
+fuzzing = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
