@@ -2,11 +2,24 @@
 //!
 //! These tests demonstrate the reduced boilerplate achieved by the tester abstraction.
 //! Each test is now 5-15 lines instead of 40+ lines.
+//!
+//! # Coverage Matrix
+//!
+//! This file tests the following categories:
+//! - election:basic, election:timeout
+//! - crash:leader, crash:follower
+//! - network:partition, network:delay, network:loss
+//! - byzantine:vote_flip, byzantine:term_increment, byzantine:duplication
+//! - membership:add, membership:remove, membership:promote
+//! - buggify:enabled, buggify:fault_injection
+//! - scale:3node, scale:5node
+//! - replication:append
 
 use std::time::Duration;
 
 use aspen::testing::AspenRaftTester;
 
+// Coverage: election:basic, scale:3node
 /// Test basic cluster initialization and leader election.
 #[madsim::test]
 async fn test_tester_basic_initialization() {
@@ -23,6 +36,7 @@ async fn test_tester_basic_initialization() {
     t.end();
 }
 
+// Coverage: crash:leader, election:basic, scale:3node
 /// Test leader crash and re-election using the tester abstraction.
 #[madsim::test]
 async fn test_tester_leader_crash_reelection() {
