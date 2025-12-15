@@ -46,6 +46,7 @@ pub mod vault;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
 pub use vault::{VaultInfo, VaultKeyValue, VaultListRequest, VaultListResponse};
 
+use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 // Re-export OpenRaft types for observability
 pub use openraft::ServerState;
 pub use openraft::metrics::RaftMetrics;
@@ -369,6 +370,73 @@ pub trait KeyValueStore: Send + Sync {
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     /// Maximum limit is MAX_SCAN_RESULTS (10,000).
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError>;
+}
+
+/// Validate a write command against fixed size limits.
+///
+/// Enforces:
+/// - Key length <= MAX_KEY_SIZE bytes
+/// - Value length <= MAX_VALUE_SIZE bytes
+/// - Batch length (SetMulti/DeleteMulti) <= MAX_SETMULTI_KEYS
+pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStoreError> {
+    let check_key = |key: &str| {
+        let len = key.as_bytes().len();
+        if len > MAX_KEY_SIZE as usize {
+            Err(KeyValueStoreError::KeyTooLarge {
+                size: len,
+                max: MAX_KEY_SIZE,
+            })
+        } else {
+            Ok(())
+        }
+    };
+
+    let check_value = |value: &str| {
+        let len = value.as_bytes().len();
+        if len > MAX_VALUE_SIZE as usize {
+            Err(KeyValueStoreError::ValueTooLarge {
+                size: len,
+                max: MAX_VALUE_SIZE,
+            })
+        } else {
+            Ok(())
+        }
+    };
+
+    match command {
+        WriteCommand::Set { key, value } => {
+            check_key(key)?;
+            check_value(value)?;
+        }
+        WriteCommand::SetMulti { pairs } => {
+            if pairs.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: pairs.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            for (key, value) in pairs {
+                check_key(key)?;
+                check_value(value)?;
+            }
+        }
+        WriteCommand::Delete { key } => {
+            check_key(key)?;
+        }
+        WriteCommand::DeleteMulti { keys } => {
+            if keys.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: keys.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            for key in keys {
+                check_key(key)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Implement KeyValueStore for Arc<T> where T: KeyValueStore.

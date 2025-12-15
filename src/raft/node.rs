@@ -34,7 +34,7 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
     ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
     KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
-    ScanResult, WriteRequest, WriteResult,
+    ScanResult, WriteRequest, WriteResult, validate_write_command,
 };
 use crate::raft::StateMachineVariant;
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
@@ -351,6 +351,8 @@ impl KeyValueStore for RaftNode {
             })?;
 
         self.ensure_initialized_kv().await?;
+
+        validate_write_command(&request.command)?;
 
         // Convert WriteRequest to AppRequest
         use crate::raft::types::AppRequest;

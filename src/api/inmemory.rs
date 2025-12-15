@@ -8,7 +8,7 @@ use super::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
     DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
     KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
-    ScanResult, WriteCommand, WriteRequest, WriteResult,
+    ScanResult, WriteCommand, WriteRequest, WriteResult, validate_write_command,
 };
 
 #[derive(Clone, Default)]
@@ -98,6 +98,8 @@ impl DeterministicKeyValueStore {
 #[async_trait]
 impl KeyValueStore for DeterministicKeyValueStore {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        validate_write_command(&request.command)?;
+
         let mut inner = self.inner.lock().await;
         match request.command.clone() {
             WriteCommand::Set { key, value } => {

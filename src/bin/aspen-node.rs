@@ -87,7 +87,7 @@ use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProto
 use aspen::raft::network::IrpcRaftNetworkFactory;
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -106,6 +106,12 @@ const DEFAULT_HTTP_ADDR: SocketAddr = SocketAddr::new(
     std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
     8080,
 );
+
+/// Maximum HTTP request body size for write-heavy endpoints (bytes).
+///
+/// Bounded to 4x the per-value limit to allow small batches while preventing
+/// oversized payloads from exhausting memory.
+const MAX_REQUEST_BODY_BYTES: usize = (aspen::raft::constants::MAX_VALUE_SIZE as usize) * 4;
 
 #[derive(Parser, Debug)]
 #[command(name = "aspen-node")]
@@ -534,6 +540,7 @@ fn build_router(app_state: AppState) -> Router {
         // Vault endpoints
         .route("/vaults", get(list_vaults))
         .route("/vault/:vault_name", get(get_vault_keys))
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .with_state(app_state)
 }
 
