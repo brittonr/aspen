@@ -455,6 +455,85 @@
             };
 
             default = self.apps.${system}.aspen-node;
+
+            # Fuzzing commands - run with nix run .#fuzz, .#fuzz-quick, .#fuzz-intensive
+            fuzz = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-all" ''
+                set -e
+                cd ${toString ./.}
+
+                echo "Starting parallel fuzzing campaign on high-risk targets (1 hour each)..."
+                echo ""
+
+                # Enter the fuzzing devShell environment
+                nix develop .#fuzz --command bash -c '
+                  # Run high-risk targets in parallel
+                  cargo fuzz run fuzz_raft_rpc -- -max_total_time=3600 &
+                  cargo fuzz run fuzz_tui_rpc -- -max_total_time=3600 &
+                  cargo fuzz run fuzz_protocol_handler -- -max_total_time=3600 &
+                  cargo fuzz run fuzz_snapshot_json -- -max_total_time=3600 &
+                  wait
+                '
+              ''}";
+            };
+
+            fuzz-quick = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-quick" ''
+                set -e
+                cd ${toString ./.}
+
+                echo "Starting quick fuzzing smoke test (5 min per target)..."
+                echo ""
+
+                nix develop .#fuzz --command bash -c '
+                  for target in fuzz_raft_rpc fuzz_tui_rpc fuzz_snapshot_json; do
+                    echo "Fuzzing $target..."
+                    cargo fuzz run "$target" --sanitizer none -- -max_total_time=300
+                    echo ""
+                  done
+                '
+              ''}";
+            };
+
+            fuzz-intensive = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-intensive" ''
+                set -e
+                cd ${toString ./.}
+
+                echo "Starting intensive fuzzing campaign (6 hours per target)..."
+                echo ""
+
+                nix develop .#fuzz --command bash -c '
+                  targets=(fuzz_raft_rpc fuzz_tui_rpc fuzz_protocol_handler fuzz_snapshot_json
+                           fuzz_log_entries fuzz_gossip fuzz_differential fuzz_http_api)
+
+                  for target in "''${targets[@]}"; do
+                    echo "Starting $target (6 hours)..."
+                    cargo fuzz run "$target" -- -max_total_time=21600 -jobs=4
+                    echo ""
+                    echo "Minimizing corpus for $target..."
+                    cargo fuzz cmin "$target" || true
+                    echo ""
+                  done
+                '
+              ''}";
+            };
+
+            fuzz-corpus = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-corpus" ''
+                set -e
+                cd ${toString ./.}
+
+                echo "Generating fuzz corpus seeds..."
+                nix develop .#fuzz --command cargo run --bin generate_fuzz_corpus --features fuzzing
+                echo ""
+                echo "Corpus generation complete!"
+              ''}";
+            };
           };
         }
         // {

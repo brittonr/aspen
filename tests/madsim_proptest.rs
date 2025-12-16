@@ -154,21 +154,12 @@ async fn test_proptest_linearizability() {
 }
 
 /// Test leader safety: At most one leader per term
+///
+/// Runs 4 seeds (~80s total), requires 120s timeout configured in nextest.toml.
+/// Seeds with BUGGIFY enabled (seed % 3 == 0) take ~23s, others ~17s.
 #[madsim::test]
 async fn test_proptest_leader_safety() {
-    // Run seeds 0-3 (~17-23s each, ~58s total) - timing optimizations in madsim_tester.rs:
-    // - Reduced check_one_leader retries: 10 × 550ms → 5 × 300ms (5.5s → 1.5s)
-    // - Reduced ElectionTimeout fault sleep: 5s → 2s
-    // - Non-blocking leader check in fault injection
-    // Seed 162963 (index 3) now completes in ~23s (previously timed out)
     for seed in 0..4 {
-        // Skip seed 0 which triggers a known race condition in openraft
-        // See: openraft/openraft/src/engine/engine_impl.rs:826
-        // TODO: Fix the underlying race condition in openraft vote handling
-        if seed == 0 {
-            eprintln!("Skipping seed 0 due to known openraft vote invariant issue");
-            continue;
-        }
         let mut tester = AspenRaftTester::new_with_seed(
             3,
             &format!("proptest_leader_safety_{}", seed),

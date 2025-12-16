@@ -1,0 +1,48 @@
+# Dictionary for postcard fuzzing
+# Postcard uses varint encoding (LEB128-style)
+
+# Single-byte varint values
+"\x00"
+"\x01"
+"\x7f"
+
+# Two-byte varint (continuation bit set)
+"\x80\x01"
+"\x81\x01"
+"\xff\x01"
+
+# Three-byte varint
+"\x80\x80\x01"
+"\xff\xff\x01"
+
+# Four-byte varint
+"\x80\x80\x80\x01"
+"\xff\xff\xff\x01"
+
+# Five-byte varint (max for u32)
+"\x80\x80\x80\x80\x01"
+"\xff\xff\xff\xff\x0f"
+
+# Empty sequences
+"\x00"
+
+# Small length-prefixed data patterns
+"\x01\x00"
+"\x02\x00\x00"
+"\x03\x00\x00\x00"
+
+# Common struct patterns (enum discriminants)
+"\x00"
+"\x01"
+"\x02"
+"\x03"
+"\x04"
+"\x05"
+
+# Boolean values
+"\x00"
+"\x01"
+
+# Option<T> discriminants
+"\x00"
+"\x01"

@@ -29,13 +29,13 @@ index 9527089..958b677 100644
  use serde::{Deserialize, Serialize};
  use snafu::{ResultExt, Snafu};
 +use tokio::task::JoinError;
- 
+
  use crate::raft::constants::{
      DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
 @@ -212,6 +213,11 @@ pub struct SqliteStateMachine {
      snapshot_idx: Arc<AtomicU64>,
  }
- 
+
 +/// Convert a JoinError from spawn_blocking into an io::Error.
 +fn join_error_to_io(err: JoinError, operation: &'static str) -> io::Error {
 +    io::Error::other(format!("{operation} task failed: {err}"))
@@ -45,7 +45,7 @@ index 9527089..958b677 100644
  ///
  /// This is the core optimization: instead of one transaction per entry,
 @@ -1129,146 +1135,152 @@ impl SqliteStateMachine {
- 
+
  impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
      async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
 -        // Use read pool connection for snapshot build (non-blocking for writes)
@@ -56,7 +56,7 @@ index 9527089..958b677 100644
 +            // Use read pool connection for snapshot build (non-blocking for writes)
 +            let conn = state.read_pool.get().context(PoolSnafu)?;
 +            SqliteStateMachine::reset_read_connection(&conn)?;
- 
+
 -        // Read all KV data
 -        let mut stmt = conn
 -            .prepare("SELECT key, value FROM state_machine_kv")
@@ -75,7 +75,7 @@ index 9527089..958b677 100644
 +                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
 +                })
 +                .context(QuerySnafu)?;
- 
+
 -        let mut data = BTreeMap::new();
 -        let mut entry_count: u32 = 0;
 -        for row in rows {
@@ -96,7 +96,7 @@ index 9527089..958b677 100644
 +                        ),
 +                    ));
 +                }
- 
+
 -            // Tiger Style: Check entry count BEFORE inserting to prevent unbounded growth
 -            entry_count += 1;
 -            if entry_count > MAX_SNAPSHOT_ENTRIES {
@@ -160,7 +160,7 @@ index 9527089..958b677 100644
                      ),
                  ));
              }
- 
+
 -            data.insert(key, value);
 -        }
 -
@@ -243,7 +243,7 @@ index 9527089..958b677 100644
 -            }
 -        };
 +                .context(ExecuteSnafu)?;
- 
+
 -        drop(conn); // Release connection to pool
 -
 -        // Serialize snapshot data
@@ -280,7 +280,7 @@ index 9527089..958b677 100644
 -        };
 +            // Commit transaction - guard is consumed and dropped after commit
 +            guard.commit()?;
- 
+
 -        // Store snapshot in database (write operation)
 -        let snapshot_blob = bincode::serialize(&StoredSnapshot {
 -            meta: meta.clone(),
@@ -321,9 +321,9 @@ index 9527089..958b677 100644
 +        .map_err(|err| join_error_to_io(err, "snapshot_build"))?
      }
  }
- 
+
 @@ -1329,13 +1341,25 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
- 
+
              // Apply buffer when full to bound memory usage
              if buffer.len() >= BATCH_BUFFER_SIZE {
 -                apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
@@ -337,7 +337,7 @@ index 9527089..958b677 100644
 +                .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;
              }
          }
- 
+
          // Apply remaining entries in buffer
          if !buffer.is_empty() {
 -            apply_buffered_entries_impl(&self.write_conn, &mut buffer)?;
@@ -348,7 +348,7 @@ index 9527089..958b677 100644
 +            .await
 +            .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;
          }
- 
+
          Ok(())
 @@ -1369,67 +1393,75 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
          meta: &openraft::SnapshotMeta<AppTypeConfig>,
@@ -374,12 +374,12 @@ index 9527089..958b677 100644
 +                    operation: "snapshot_install",
 +                })
 +            })?;
- 
+
 -        let new_data: BTreeMap<String, String> =
 -            serde_json::from_slice(&snapshot_data).context(JsonDeserializeSnafu)?;
 +            // Start transaction with RAII guard for automatic rollback on error
 +            let guard = TransactionGuard::new(&conn)?;
- 
+
 -        let conn = self.write_conn.lock().map_err(|_| {
 -            io::Error::other(SqliteStorageError::MutexPoisoned {
 -                operation: "snapshot_install",
@@ -388,7 +388,7 @@ index 9527089..958b677 100644
 +            // Clear existing KV data
 +            conn.execute("DELETE FROM state_machine_kv", [])
 +                .context(ExecuteSnafu)?;
- 
+
 -        // Start transaction with RAII guard for automatic rollback on error
 -        let guard = TransactionGuard::new(&conn)?;
 +            // Install new data
@@ -399,7 +399,7 @@ index 9527089..958b677 100644
 +                )
 +                .context(ExecuteSnafu)?;
 +            }
- 
+
 -        // Clear existing KV data
 -        conn.execute("DELETE FROM state_machine_kv", [])
 +            // Update metadata
@@ -410,7 +410,7 @@ index 9527089..958b677 100644
 +                params![last_applied_bytes],
 +            )
              .context(ExecuteSnafu)?;
- 
+
 -        // Install new data
 -        for (key, value) in new_data {
 +            let membership_bytes =
@@ -423,7 +423,7 @@ index 9527089..958b677 100644
              )
              .context(ExecuteSnafu)?;
 -        }
- 
+
 -        // Update metadata
 -        let last_applied_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
 -        conn.execute(
@@ -442,7 +442,7 @@ index 9527089..958b677 100644
 +                params![snapshot_blob],
 +            )
 +            .context(ExecuteSnafu)?;
- 
+
 -        let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
 -        conn.execute(
 -            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
@@ -451,7 +451,7 @@ index 9527089..958b677 100644
 -        .context(ExecuteSnafu)?;
 +            // Commit transaction - guard is consumed and dropped after commit
 +            guard.commit()?;
- 
+
 -        // Store snapshot
 -        let snapshot_blob = bincode::serialize(&StoredSnapshot {
 -            meta: meta.clone(),
@@ -472,5 +472,5 @@ index 9527089..958b677 100644
 +        .await
 +        .map_err(|err| join_error_to_io(err, "snapshot_install"))?
      }
- 
+
      async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {

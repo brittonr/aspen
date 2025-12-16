@@ -1,0 +1,85 @@
+# Dictionary for JSON fuzzing
+# Contains structural tokens and common patterns
+
+# Structural characters
+"{"
+"}"
+"["
+"]"
+":"
+","
+
+# String delimiters
+"\""
+"'"
+
+# Whitespace
+" "
+"\t"
+"\n"
+"\r"
+
+# Escape sequences
+"\\\""
+"\\\\"
+"\\/"
+"\\b"
+"\\f"
+"\\n"
+"\\r"
+"\\t"
+"\\u0000"
+"\\u0001"
+"\\uffff"
+
+# Boolean values
+"true"
+"false"
+
+# Null
+"null"
+
+# Numbers
+"0"
+"1"
+"-1"
+"0.0"
+"1.0"
+"-1.0"
+"1e10"
+"1e-10"
+"1E10"
+"1E-10"
+"9007199254740991"
+"-9007199254740991"
+
+# Empty structures
+"{}"
+"[]"
+"\"\""
+
+# Common key patterns
+"\"key\":"
+"\"value\":"
+"\"id\":"
+"\"name\":"
+"\"type\":"
+
+# HTTP API request patterns
+"{\"key\":"
+"{\"value\":"
+"{\"command\":"
+"{\"members\":"
+"{\"initial_members\":"
+"{\"learner\":"
+
+# Nested structures
+"{{}}"
+"[[]]"
+"[{}]"
+"{[]}"
+
+# Edge cases
+"{\"\":"
+"{\"\"\":"
+"{\"\": \"\"}"

@@ -26,6 +26,14 @@ fn main() {
     generate_clock_drift_corpus(corpus_dir);
     generate_metadata_corpus(corpus_dir);
 
+    // High-risk targets with empty corpuses
+    generate_protocol_handler_corpus(corpus_dir);
+    generate_snapshot_json_corpus(corpus_dir);
+    generate_log_entries_corpus(corpus_dir);
+    generate_gossip_corpus(corpus_dir);
+    generate_differential_corpus(corpus_dir);
+    generate_roundtrip_corpus(corpus_dir);
+
     println!("Corpus generation complete!");
 }
 
@@ -367,5 +375,307 @@ fn generate_metadata_corpus(corpus_dir: &Path) {
     if let Ok(bytes) = bincode::serialize(&meta1) {
         fs::write(dir.join("node1"), &bytes).unwrap();
         println!("Created: {}/node1", dir.display());
+    }
+}
+
+fn generate_protocol_handler_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_protocol_handler");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Size boundary patterns - critical for protocol handlers
+    // These test size limit enforcement paths
+    let patterns: Vec<(&str, Vec<u8>)> = vec![
+        // Empty and minimal
+        ("empty", vec![]),
+        ("single_byte", vec![0]),
+        // Near TUI message size limit (1 MB)
+        ("tui_limit_under", vec![0x42; 1024 * 1024 - 1]),
+        ("tui_limit_exact", vec![0x42; 1024 * 1024]),
+        // Varint boundary patterns (postcard encoding)
+        ("varint_1byte", vec![0x7f]),
+        ("varint_2byte", vec![0x80, 0x01]),
+        ("varint_3byte", vec![0x80, 0x80, 0x01]),
+        ("varint_max", vec![0xff, 0xff, 0xff, 0xff, 0x0f]),
+        // Valid postcard enum discriminants
+        ("enum_0", vec![0x00]),
+        ("enum_1", vec![0x01]),
+        ("enum_2", vec![0x02]),
+        ("enum_3", vec![0x03]),
+        // Truncated message patterns
+        ("truncated_short", vec![0x01, 0x00]),
+        ("truncated_medium", vec![0x01, 0x00, 0x00, 0x00, 0x00]),
+    ];
+
+    for (name, bytes) in patterns {
+        fs::write(dir.join(name), &bytes).unwrap();
+        println!("Created: {}/{}", dir.display(), name);
+    }
+
+    // Also serialize actual TUI requests for valid baseline
+    let tui_requests: Vec<(&str, TuiRpcRequest)> = vec![
+        ("valid_ping", TuiRpcRequest::Ping),
+        ("valid_get_health", TuiRpcRequest::GetHealth),
+        ("valid_get_leader", TuiRpcRequest::GetLeader),
+    ];
+
+    for (name, req) in tui_requests {
+        if let Ok(bytes) = postcard::to_stdvec(&req) {
+            fs::write(dir.join(name), &bytes).unwrap();
+            println!("Created: {}/{}", dir.display(), name);
+        }
+    }
+}
+
+fn generate_snapshot_json_corpus(corpus_dir: &Path) {
+    use std::collections::BTreeMap;
+
+    let dir = corpus_dir.join("fuzz_snapshot_json");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Valid JSON BTreeMap structures
+    let empty_map: BTreeMap<String, String> = BTreeMap::new();
+    fs::write(
+        dir.join("empty_map"),
+        serde_json::to_vec(&empty_map).unwrap(),
+    )
+    .unwrap();
+
+    let single_key = BTreeMap::from([("key".to_string(), "value".to_string())]);
+    fs::write(
+        dir.join("single_key"),
+        serde_json::to_vec(&single_key).unwrap(),
+    )
+    .unwrap();
+
+    let multiple_keys = BTreeMap::from([
+        ("key1".to_string(), "value1".to_string()),
+        ("key2".to_string(), "value2".to_string()),
+        ("key3".to_string(), "value3".to_string()),
+    ]);
+    fs::write(
+        dir.join("multiple_keys"),
+        serde_json::to_vec(&multiple_keys).unwrap(),
+    )
+    .unwrap();
+
+    // Edge cases for JSON parsing
+    let edge_cases: Vec<(&str, &str)> = vec![
+        ("json_empty_object", "{}"),
+        ("json_empty_string_key", r#"{"": "value"}"#),
+        ("json_empty_string_value", r#"{"key": ""}"#),
+        ("json_unicode_key", r#"{"键": "value"}"#),
+        ("json_unicode_value", r#"{"key": "值"}"#),
+        ("json_escaped_chars", r#"{"key": "value\n\t\r"}"#),
+        ("json_special_chars", r#"{"key\"": "value\\"}"#),
+        // Malformed JSON - should be rejected gracefully
+        ("json_unclosed_brace", "{"),
+        ("json_unclosed_string", r#"{"key"#),
+        ("json_array_not_object", "[]"),
+        ("json_null", "null"),
+        ("json_number", "123"),
+        ("json_string", r#""string""#),
+        // Deeply nested (stress test)
+        ("json_deep_nested", r#"{"a":{"b":{"c":{"d":"e"}}}}"#),
+    ];
+
+    for (name, json) in edge_cases {
+        fs::write(dir.join(name), json.as_bytes()).unwrap();
+        println!("Created: {}/{}", dir.display(), name);
+    }
+}
+
+fn generate_log_entries_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_log_entries");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Raw byte patterns for bincode parsing
+    let patterns: Vec<(&str, Vec<u8>)> = vec![
+        // Empty
+        ("empty", vec![]),
+        // Minimal bincode
+        ("single_zero", vec![0]),
+        ("single_one", vec![1]),
+        // Common bincode patterns (length-prefixed data)
+        ("bincode_empty_vec", vec![0, 0, 0, 0, 0, 0, 0, 0]),
+        ("bincode_small_vec", vec![1, 0, 0, 0, 0, 0, 0, 0, 42]),
+        // u64 patterns (log index, term)
+        ("u64_zero", vec![0, 0, 0, 0, 0, 0, 0, 0]),
+        ("u64_one", vec![1, 0, 0, 0, 0, 0, 0, 0]),
+        ("u64_max", vec![0xff; 8]),
+        // Multiple u64s (typical log entry header)
+        (
+            "log_entry_header",
+            vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+        ),
+        // Truncated patterns
+        ("truncated_1", vec![0]),
+        ("truncated_4", vec![0, 0, 0, 0]),
+        ("truncated_7", vec![0, 0, 0, 0, 0, 0, 0]),
+        // Larger patterns
+        ("medium_entry", (0..64).collect::<Vec<u8>>()),
+    ];
+
+    for (name, bytes) in patterns {
+        fs::write(dir.join(name), &bytes).unwrap();
+        println!("Created: {}/{}", dir.display(), name);
+    }
+}
+
+fn generate_gossip_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_gossip");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Simplified peer announcement structure for fuzzing
+    #[derive(serde::Serialize)]
+    struct FuzzPeerAnnouncement {
+        node_id: u64,
+        endpoint_addr_bytes: Vec<u8>,
+        timestamp_micros: u64,
+    }
+
+    // Valid announcements
+    let announcements: Vec<(&str, FuzzPeerAnnouncement)> = vec![
+        (
+            "valid_node_1",
+            FuzzPeerAnnouncement {
+                node_id: 1,
+                endpoint_addr_bytes: vec![127, 0, 0, 1, 0x15, 0xb3], // 127.0.0.1:5555
+                timestamp_micros: 1700000000000000,
+            },
+        ),
+        (
+            "valid_node_max",
+            FuzzPeerAnnouncement {
+                node_id: u64::MAX,
+                endpoint_addr_bytes: vec![0, 0, 0, 0, 0, 0],
+                timestamp_micros: 0,
+            },
+        ),
+        (
+            "empty_addr",
+            FuzzPeerAnnouncement {
+                node_id: 1,
+                endpoint_addr_bytes: vec![],
+                timestamp_micros: 1000,
+            },
+        ),
+    ];
+
+    for (name, announcement) in announcements {
+        if let Ok(bytes) = postcard::to_stdvec(&announcement) {
+            fs::write(dir.join(name), &bytes).unwrap();
+            println!("Created: {}/{}", dir.display(), name);
+        }
+    }
+
+    // Raw NodeId patterns
+    let node_id_patterns: Vec<(&str, Vec<u8>)> = vec![
+        ("node_id_zero", 0u64.to_le_bytes().to_vec()),
+        ("node_id_one", 1u64.to_le_bytes().to_vec()),
+        ("node_id_max", u64::MAX.to_le_bytes().to_vec()),
+    ];
+
+    for (name, bytes) in node_id_patterns {
+        fs::write(dir.join(name), &bytes).unwrap();
+        println!("Created: {}/{}", dir.display(), name);
+    }
+}
+
+fn generate_differential_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_differential");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Operation sequences for differential testing
+    // We generate arbitrary-style input data
+
+    // The fuzz target uses #[derive(Arbitrary)] so we generate raw bytes
+    // that can be interpreted as operation sequences
+    let patterns: Vec<(&str, Vec<u8>)> = vec![
+        // Empty operation sequence
+        ("empty", vec![0, 0, 0, 0]),
+        // Single Set operation (enum variant 0)
+        (
+            "single_set",
+            vec![
+                1, 0, 0, 0, // 1 operation
+                0, // Set variant
+                4, // key length
+                b't', b'e', b's', b't', // "test"
+                5, 0, 0, 0, // value length
+                b'v', b'a', b'l', b'u', b'e', // "value"
+            ],
+        ),
+        // Single Delete operation (enum variant 1)
+        (
+            "single_delete",
+            vec![
+                1, 0, 0, 0, // 1 operation
+                1, // Delete variant
+                4, // key length
+                b't', b'e', b's', b't', // "test"
+            ],
+        ),
+        // Multiple operations
+        (
+            "multi_ops",
+            vec![3, 0, 0, 0, 0, 2, b'a', b'b', 2, 0, 0, 0, b'c', b'd'],
+        ),
+    ];
+
+    for (name, bytes) in patterns {
+        fs::write(dir.join(name), &bytes).unwrap();
+        println!("Created: {}/{}", dir.display(), name);
+    }
+}
+
+fn generate_roundtrip_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_roundtrip");
+    fs::create_dir_all(&dir).unwrap();
+
+    // Serialize valid messages for roundtrip testing
+    // TUI RPC messages
+    let tui_requests: Vec<(&str, TuiRpcRequest)> = vec![
+        ("tui_ping", TuiRpcRequest::Ping),
+        ("tui_get_health", TuiRpcRequest::GetHealth),
+        ("tui_get_leader", TuiRpcRequest::GetLeader),
+        ("tui_init_cluster", TuiRpcRequest::InitCluster),
+        (
+            "tui_read_key",
+            TuiRpcRequest::ReadKey {
+                key: "test".to_string(),
+            },
+        ),
+    ];
+
+    for (name, req) in tui_requests {
+        if let Ok(bytes) = postcard::to_stdvec(&req) {
+            fs::write(dir.join(name), &bytes).unwrap();
+            println!("Created: {}/{}", dir.display(), name);
+        }
+    }
+
+    let tui_responses: Vec<(&str, TuiRpcResponse)> = vec![
+        ("tui_resp_pong", TuiRpcResponse::Pong),
+        ("tui_resp_leader_some", TuiRpcResponse::Leader(Some(1))),
+        ("tui_resp_leader_none", TuiRpcResponse::Leader(None)),
+    ];
+
+    for (name, resp) in tui_responses {
+        if let Ok(bytes) = postcard::to_stdvec(&resp) {
+            fs::write(dir.join(name), &bytes).unwrap();
+            println!("Created: {}/{}", dir.display(), name);
+        }
+    }
+
+    // Cluster ticket for roundtrip
+    let ticket = AspenClusterTicket {
+        topic_id: TopicId::from_bytes([0u8; 32]),
+        bootstrap: BTreeSet::new(),
+        cluster_id: "roundtrip-test".to_string(),
+    };
+
+    if let Ok(bytes) = postcard::to_stdvec(&ticket) {
+        fs::write(dir.join("cluster_ticket"), &bytes).unwrap();
+        println!("Created: {}/cluster_ticket", dir.display());
     }
 }

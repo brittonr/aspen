@@ -59,8 +59,11 @@ pub mod fuzz_helpers {
     // API request types (HTTP attack surface)
     pub use crate::api::{
         AddLearnerRequest, ChangeMembershipRequest, DeleteRequest, InitRequest, ReadRequest,
-        ScanRequest, WriteRequest,
+        ScanRequest, WriteCommand, WriteRequest,
     };
+
+    // KV store traits and implementations for differential fuzzing
+    pub use crate::api::{DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError};
 
     // Cluster ticket type (user input attack surface)
     pub use crate::cluster::ticket::AspenClusterTicket;

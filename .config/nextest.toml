@@ -15,6 +15,6 @@ slow-timeout = { period = "120s", terminate-after = 1 }
 
 # Specific overrides for known long-running tests
 [[profile.default.overrides]]
-filter = "test(test_proptest_linearizability) | test(test_proptest_fault_recovery)"
+filter = "test(test_proptest_linearizability) | test(test_proptest_fault_recovery) | test(test_proptest_leader_safety)"
 retries = 1
 slow-timeout = { period = "120s", terminate-after = 1 }

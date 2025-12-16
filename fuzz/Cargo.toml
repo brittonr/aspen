@@ -30,6 +30,7 @@ iroh-gossip = "0.95"
 toml = "0.8"
 hex = "0.4"
 blake3 = "1.5"
+tokio = { version = "1.0", features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
 # None needed
@@ -136,6 +137,14 @@ bench = false
 [[bin]]
 name = "fuzz_metadata"
 path = "fuzz_targets/fuzz_metadata.rs"
+test = false
+doc = false
+bench = false
+
+# Phase 4: Model-guided Raft fuzzing
+[[bin]]
+name = "fuzz_raft_model_guided"
+path = "fuzz_targets/fuzz_raft_model_guided.rs"
 test = false
 doc = false
 bench = false

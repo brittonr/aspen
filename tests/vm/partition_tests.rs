@@ -394,13 +394,193 @@ async fn test_data_replication_after_partition_heals() {
 
 /// Test: Asymmetric partition (node can receive but not send).
 ///
-/// This tests more complex partition scenarios where traffic is blocked
-/// in only one direction.
+/// This tests scenarios where traffic is blocked in only one direction:
+/// - Node 1 can receive traffic but cannot send responses
+/// - This simulates network faults where ACKs are lost
+///
+/// Expected behavior:
+/// - Node 1 receives AppendEntries but can't respond
+/// - Other nodes timeout waiting for responses from node 1
+/// - Cluster should still function with nodes 2 and 3
 #[tokio::test]
 #[ignore = "requires root privileges and KVM"]
 async fn test_asymmetric_partition() {
-    // TODO: Implement asymmetric partition test
-    // This requires more sophisticated iptables rules
-    // For now, this is a placeholder for future implementation
-    todo!("Asymmetric partition test not yet implemented")
+    use aspen::testing::fault_injection::{AsymmetricPartition, PartitionDirection};
+
+    let runners = get_runner_paths().expect("microvm runners not found");
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+
+    // Configure and add nodes
+    for (i, runner) in runners.iter().enumerate() {
+        let node_id = (i + 1) as u64;
+        let mut config = VmConfig::for_node(node_id, temp_dir.path());
+        config.runner_path = runner.clone();
+        manager.add_vm(config).await.unwrap();
+    }
+
+    // Boot and initialize cluster
+    manager.start_all().await.unwrap();
+    manager.wait_for_all_healthy(VM_BOOT_TIMEOUT).await.unwrap();
+    manager.init_raft_cluster().await.unwrap();
+
+    // Wait for initial leader election
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    // Write initial data to verify cluster is working
+    let endpoint2 = manager.http_endpoint(2).await.unwrap();
+    let resp = client
+        .put(format!("{}/kv/before-partition", endpoint2))
+        .body("initial-value")
+        .send()
+        .await
+        .unwrap();
+    assert!(resp.status().is_success(), "Initial write should succeed");
+
+    // Create asymmetric partition: node 1 can receive but cannot send
+    // This means node 1 will get heartbeats but can't respond to them
+    let partition = AsymmetricPartition::create(
+        "10.100.0.11",
+        &["10.100.0.12", "10.100.0.13"],
+        PartitionDirection::OutboundOnly,
+    )
+    .expect("failed to create asymmetric partition");
+
+    // Wait for partition to take effect
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    // Nodes 2 and 3 should still form quorum and handle writes
+    // because they can communicate with each other
+    let resp = client
+        .put(format!("{}/kv/during-partition", endpoint2))
+        .body("value-during-partition")
+        .send()
+        .await;
+
+    assert!(
+        resp.is_ok() && resp.unwrap().status().is_success(),
+        "Majority partition (nodes 2,3) should still accept writes"
+    );
+
+    // Node 1 cannot send responses, so it will be considered unreachable
+    // by other nodes even though it can receive traffic
+
+    // Heal the partition
+    drop(partition);
+
+    // Wait for recovery
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    // Verify node 1 eventually catches up and can read the data
+    let endpoint1 = manager.http_endpoint(1).await.unwrap();
+
+    // Allow time for log replication to node 1
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let resp = client
+        .get(format!("{}/kv/during-partition", endpoint1))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(resp.status().is_success());
+    let body = resp.text().await.unwrap();
+    assert_eq!(
+        body, "value-during-partition",
+        "Node 1 should have replicated data after partition heals"
+    );
+
+    // Cleanup
+    manager.stop_all().await.unwrap();
+}
+
+/// Test: Asymmetric partition - inbound blocked (node can send but not receive).
+///
+/// This tests the inverse scenario where a node can send but cannot receive:
+/// - Node 1 sends requests but never gets responses
+/// - This simulates scenarios where outbound works but inbound is blocked
+#[tokio::test]
+#[ignore = "requires root privileges and KVM"]
+async fn test_asymmetric_partition_inbound_blocked() {
+    use aspen::testing::fault_injection::{AsymmetricPartition, PartitionDirection};
+
+    let runners = get_runner_paths().expect("microvm runners not found");
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+
+    // Configure and add nodes
+    for (i, runner) in runners.iter().enumerate() {
+        let node_id = (i + 1) as u64;
+        let mut config = VmConfig::for_node(node_id, temp_dir.path());
+        config.runner_path = runner.clone();
+        manager.add_vm(config).await.unwrap();
+    }
+
+    // Boot and initialize cluster
+    manager.start_all().await.unwrap();
+    manager.wait_for_all_healthy(VM_BOOT_TIMEOUT).await.unwrap();
+    manager.init_raft_cluster().await.unwrap();
+
+    // Wait for initial leader election
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    // Create asymmetric partition: node 1 can send but cannot receive
+    // Node 1's vote requests go out, but it never receives responses
+    let partition = AsymmetricPartition::create(
+        "10.100.0.11",
+        &["10.100.0.12", "10.100.0.13"],
+        PartitionDirection::InboundOnly,
+    )
+    .expect("failed to create asymmetric partition");
+
+    // Wait for partition to take effect
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    // Write via majority partition
+    let endpoint2 = manager.http_endpoint(2).await.unwrap();
+    let resp = client
+        .put(format!("{}/kv/inbound-test", endpoint2))
+        .body("inbound-blocked-value")
+        .send()
+        .await;
+
+    assert!(
+        resp.is_ok() && resp.unwrap().status().is_success(),
+        "Majority partition should accept writes"
+    );
+
+    // Heal the partition
+    drop(partition);
+
+    // Wait for recovery
+    tokio::time::sleep(LEADER_ELECTION_TIMEOUT).await;
+
+    // Verify cluster converges
+    let endpoint1 = manager.http_endpoint(1).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let resp = client
+        .get(format!("{}/kv/inbound-test", endpoint1))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(resp.status().is_success());
+    let body = resp.text().await.unwrap();
+    assert_eq!(body, "inbound-blocked-value");
+
+    // Cleanup
+    manager.stop_all().await.unwrap();
 }

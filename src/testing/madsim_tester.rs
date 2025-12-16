@@ -1257,8 +1257,8 @@ impl AspenRaftTester {
 
     /// Read a value from the leader's state machine.
     ///
-    /// Note: Only supports in-memory nodes for now. For persistent nodes,
-    /// reads would need to go through the Raft read API.
+    /// Reads directly from the state machine (bypassing Raft read API).
+    /// Works for both in-memory and persistent (SQLite) nodes.
     pub async fn read(&mut self, key: &str) -> Result<Option<String>> {
         let leader_idx = self
             .check_one_leader()
@@ -1268,11 +1268,9 @@ impl AspenRaftTester {
         // Read depends on the node type
         let value = match &self.nodes[leader_idx] {
             TestNode::InMemory { state_machine, .. } => state_machine.get(key).await,
-            TestNode::Persistent { .. } => {
-                // SqliteStateMachine doesn't expose a direct get method
-                // For testing crash recovery, we focus on writes being preserved
-                // TODO: Implement read support for persistent nodes
-                None
+            TestNode::Persistent { state_machine, .. } => {
+                // SqliteStateMachine.get returns Result<Option<String>, SqliteStorageError>
+                state_machine.get(key).await.unwrap_or(None)
             }
         };
         Ok(value)
@@ -1622,13 +1620,15 @@ impl AspenRaftTester {
 
         // Trigger snapshot
         if self.buggify.should_trigger(BuggifyFault::SnapshotTrigger)
-            && let Some(_leader_idx) = self.check_one_leader().await
+            && let Some(leader_idx) = self.check_one_leader().await
         {
-            // Note: trigger_snapshot is part of ClusterController trait, not directly on Raft
-            // For now we'll skip this as it would require refactoring the TestNode structure
-            // to expose the full ClusterController interface.
-            // TODO: Extend TestNode to support trigger_snapshot
-            self.add_event("buggify: snapshot trigger skipped (not yet implemented)");
+            // Use Raft::trigger().snapshot() to manually trigger snapshot on leader
+            let raft = self.nodes[leader_idx].raft();
+            if let Err(e) = raft.trigger().snapshot().await {
+                self.add_event(format!("buggify: snapshot trigger failed: {:?}", e));
+            } else {
+                self.add_event("buggify: triggered snapshot on leader");
+            }
             self.metrics.buggify_triggers += 1;
         }
     }
@@ -1712,6 +1712,27 @@ impl AspenRaftTester {
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
             .add_event(format!("Triggered election on node {}", node_id));
+
+        Ok(())
+    }
+
+    /// Trigger a snapshot on a specific node.
+    ///
+    /// This manually triggers the state machine to build a snapshot.
+    /// Typically called on the leader to force log compaction.
+    pub async fn trigger_snapshot(&mut self, node_id: u64) -> Result<()> {
+        if node_id >= self.nodes.len() as u64 {
+            return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
+        }
+
+        self.nodes[node_id as usize]
+            .raft()
+            .trigger()
+            .snapshot()
+            .await?;
+
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("Triggered snapshot on node {}", node_id));
 
         Ok(())
     }

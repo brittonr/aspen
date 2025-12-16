@@ -179,6 +179,179 @@ impl Drop for NetworkPartition {
     }
 }
 
+/// Direction of traffic blocking for asymmetric partitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartitionDirection {
+    /// Block outbound traffic only (source can receive but not send).
+    OutboundOnly,
+    /// Block inbound traffic only (source can send but not receive).
+    InboundOnly,
+}
+
+/// Asymmetric network partition fault injection.
+///
+/// Unlike `NetworkPartition`, this only blocks traffic in one direction,
+/// creating scenarios where a node can receive but not send (or vice versa).
+///
+/// This is useful for testing:
+/// - Nodes that hear heartbeats but can't respond to vote requests
+/// - Nodes that send requests but never receive responses
+/// - Split-brain scenarios with one-way communication
+#[derive(Debug)]
+pub struct AsymmetricPartition {
+    /// IP address of the affected node.
+    source_ip: String,
+    /// IP addresses of nodes affected by the partition.
+    target_ips: Vec<String>,
+    /// Direction of traffic blocking.
+    direction: PartitionDirection,
+    /// Whether the partition is currently active.
+    active: bool,
+}
+
+impl AsymmetricPartition {
+    /// Create a new asymmetric network partition.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_ip` - IP address of the node to apply partition to.
+    /// * `target_ips` - IP addresses of the other nodes.
+    /// * `direction` - Which direction to block traffic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the iptables rules cannot be created.
+    pub fn create(
+        source_ip: &str,
+        target_ips: &[&str],
+        direction: PartitionDirection,
+    ) -> Result<Self, FaultError> {
+        let mut partition = Self {
+            source_ip: source_ip.to_string(),
+            target_ips: target_ips.iter().map(|s| s.to_string()).collect(),
+            direction,
+            active: false,
+        };
+
+        partition.inject()?;
+        partition.active = true;
+        Ok(partition)
+    }
+
+    /// Inject the asymmetric network partition.
+    fn inject(&self) -> Result<(), FaultError> {
+        info!(
+            source = %self.source_ip,
+            targets = ?self.target_ips,
+            direction = ?self.direction,
+            "Injecting asymmetric network partition"
+        );
+
+        for target_ip in &self.target_ips {
+            match self.direction {
+                PartitionDirection::OutboundOnly => {
+                    // Block traffic from source to target (source can't send)
+                    run_iptables(&[
+                        "-I",
+                        "FORWARD",
+                        "-s",
+                        &self.source_ip,
+                        "-d",
+                        target_ip,
+                        "-j",
+                        "DROP",
+                    ])?;
+                }
+                PartitionDirection::InboundOnly => {
+                    // Block traffic from target to source (source can't receive)
+                    run_iptables(&[
+                        "-I",
+                        "FORWARD",
+                        "-s",
+                        target_ip,
+                        "-d",
+                        &self.source_ip,
+                        "-j",
+                        "DROP",
+                    ])?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Heal the asymmetric network partition.
+    pub fn heal(&mut self) -> Result<(), FaultError> {
+        if !self.active {
+            return Ok(());
+        }
+
+        info!(
+            source = %self.source_ip,
+            targets = ?self.target_ips,
+            direction = ?self.direction,
+            "Healing asymmetric network partition"
+        );
+
+        for target_ip in &self.target_ips {
+            match self.direction {
+                PartitionDirection::OutboundOnly => {
+                    let _ = run_iptables(&[
+                        "-D",
+                        "FORWARD",
+                        "-s",
+                        &self.source_ip,
+                        "-d",
+                        target_ip,
+                        "-j",
+                        "DROP",
+                    ]);
+                }
+                PartitionDirection::InboundOnly => {
+                    let _ = run_iptables(&[
+                        "-D",
+                        "FORWARD",
+                        "-s",
+                        target_ip,
+                        "-d",
+                        &self.source_ip,
+                        "-j",
+                        "DROP",
+                    ]);
+                }
+            }
+        }
+
+        self.active = false;
+        Ok(())
+    }
+
+    /// Check if the partition is currently active.
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    /// Get the direction of the partition.
+    pub fn direction(&self) -> PartitionDirection {
+        self.direction
+    }
+}
+
+impl Drop for AsymmetricPartition {
+    fn drop(&mut self) {
+        if self.active
+            && let Err(e) = self.heal()
+        {
+            warn!(
+                source = %self.source_ip,
+                error = %e,
+                "Failed to heal asymmetric partition during drop"
+            );
+        }
+    }
+}
+
 /// Latency injection fault.
 ///
 /// Adds artificial delay to network traffic using tc (traffic control).
@@ -465,6 +638,8 @@ pub enum FaultError {
 pub struct FaultScenario {
     /// Active network partitions.
     partitions: Vec<NetworkPartition>,
+    /// Active asymmetric partitions.
+    asymmetric_partitions: Vec<AsymmetricPartition>,
     /// Active latency injections.
     latencies: Vec<LatencyInjection>,
     /// Active packet loss injections.
@@ -485,6 +660,18 @@ impl FaultScenario {
     ) -> Result<Self, FaultError> {
         let partition = NetworkPartition::create(source_ip, target_ips)?;
         self.partitions.push(partition);
+        Ok(self)
+    }
+
+    /// Add an asymmetric network partition to the scenario.
+    pub fn with_asymmetric_partition(
+        mut self,
+        source_ip: &str,
+        target_ips: &[&str],
+        direction: PartitionDirection,
+    ) -> Result<Self, FaultError> {
+        let partition = AsymmetricPartition::create(source_ip, target_ips, direction)?;
+        self.asymmetric_partitions.push(partition);
         Ok(self)
     }
 
@@ -516,6 +703,9 @@ impl FaultScenario {
         for partition in &mut self.partitions {
             partition.heal()?;
         }
+        for partition in &mut self.asymmetric_partitions {
+            partition.heal()?;
+        }
         for latency in &mut self.latencies {
             latency.heal()?;
         }
@@ -528,6 +718,7 @@ impl FaultScenario {
     /// Check if any faults are currently active.
     pub fn has_active_faults(&self) -> bool {
         self.partitions.iter().any(|p| p.is_active())
+            || self.asymmetric_partitions.iter().any(|p| p.is_active())
             || self.latencies.iter().any(|l| l.is_active())
             || self.packet_losses.iter().any(|p| p.is_active())
     }

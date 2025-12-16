@@ -1,0 +1,75 @@
+# Dictionary for Raft protocol fuzzing
+# Contains field names and enum variants used in Aspen's Raft implementation
+
+# RaftRpcProtocol variants
+"Vote"
+"AppendEntries"
+"InstallSnapshot"
+"VoteResponse"
+"AppendEntriesResponse"
+"InstallSnapshotResponse"
+
+# Raft message fields
+"term"
+"leader_id"
+"prev_log_index"
+"prev_log_term"
+"commit_index"
+"last_log_index"
+"last_log_term"
+"vote_granted"
+"success"
+
+# AppRequest variants
+"Set"
+"Delete"
+"SetMulti"
+"DeleteMulti"
+
+# TUI RPC variants
+"Ping"
+"Pong"
+"GetHealth"
+"GetLeader"
+"GetRaftMetrics"
+"GetNodeInfo"
+"GetClusterTicket"
+"GetClusterState"
+"InitCluster"
+"ReadKey"
+"WriteKey"
+"TriggerSnapshot"
+"AddLearner"
+"ChangeMembership"
+
+# HTTP API fields
+"key"
+"value"
+"keys"
+"values"
+"prefix"
+"limit"
+"continuation_token"
+"members"
+"initial_members"
+"learner"
+"node_id"
+"addr"
+"raft_addr"
+"iroh_addr"
+
+# Common cluster identifiers
+"cluster_id"
+"topic_id"
+"bootstrap"
+"endpoint_id"
+
+# Storage backends
+"inmemory"
+"sqlite"
+"redb"
+
+# Status values
+"healthy"
+"degraded"
+"unknown"

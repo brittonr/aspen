@@ -40,7 +40,7 @@ index fccfea2..86b5044 100644
              &format!("proptest_leader_safety_{}", seed),
 @@ -171,21 +178,25 @@ async fn test_proptest_leader_safety() {
          let mut leaders_per_term = HashMap::new();
- 
+
          for i in 0..15 {
 -            // Trigger elections occasionally
 -            if i % 4 == 0 {
@@ -53,7 +53,7 @@ index fccfea2..86b5044 100644
 +                // Give time for election to complete
 +                madsim::time::sleep(Duration::from_millis(500)).await;
              }
- 
+
 -            // Apply faults
 -            if seed % 3 == 0 && i % 3 == 0 {
 +            // Apply faults less frequently to avoid race conditions
@@ -62,18 +62,18 @@ index fccfea2..86b5044 100644
                      .apply_single_fault(BuggifyFault::ElectionTimeout)
                      .await;
              }
- 
+
 -            // Let things settle
 -            madsim::time::sleep(Duration::from_millis(500)).await;
 +            // Let things settle longer to avoid race conditions
 +            madsim::time::sleep(Duration::from_millis(800)).await;
- 
+
              // Check leader uniqueness per term
              for node_id in 0..3 {
 @@ -236,12 +247,24 @@ async fn test_proptest_log_matching() {
              let value = format!("log_value_{}_{}", seed, i);
              let _ = tester.write(key, value).await;
- 
+
 -            // Add learners dynamically
 -            if i == 3 && seed % 2 == 0 {
 -                let _ = tester.add_learner(3).await;
@@ -99,7 +99,7 @@ index fccfea2..86b5044 100644
 +                }
              }
          }
- 
+
 @@ -298,11 +321,14 @@ async fn test_proptest_membership_safety() {
              // Perform membership changes
              match i % 4 {
