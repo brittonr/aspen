@@ -200,6 +200,176 @@ pub fn setmulti_at_limit() -> impl Strategy<Value = Vec<(String, String)>> {
 }
 
 // ============================================================================
+// NodeId String Parsing Generators
+// ============================================================================
+
+/// Generator for valid NodeId string representations.
+///
+/// NodeId uses u64 internally, so valid strings are numeric.
+pub fn arbitrary_node_id_string() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Small valid IDs
+        (0u64..100u64).prop_map(|n| n.to_string()),
+        // Large valid IDs
+        (u64::MAX - 1000..=u64::MAX).prop_map(|n| n.to_string()),
+        // Zero (edge case)
+        Just("0".to_string()),
+    ]
+}
+
+/// Generator for invalid NodeId strings (for rejection testing).
+///
+/// These should fail parsing when used with NodeId::from_str even when trimmed.
+pub fn invalid_node_id_string() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Empty string
+        Just("".to_string()),
+        // Negative numbers
+        (-1000i64..-1i64).prop_map(|n| n.to_string()),
+        // Non-numeric strings
+        "[a-zA-Z]{1,10}".prop_map(String::from),
+        // Overflow (larger than u64::MAX)
+        Just("18446744073709551616".to_string()), // u64::MAX + 1
+        // Mixed alphanumeric
+        "[0-9][a-z]{1,5}".prop_map(String::from),
+        // Decimal numbers
+        Just("123.456".to_string()),
+        // Hexadecimal notation (not accepted by u64 parse)
+        Just("0x123".to_string()),
+        // With non-digit characters
+        Just("123abc".to_string()),
+    ]
+}
+
+// ============================================================================
+// Log Store Generators
+// ============================================================================
+
+/// Generator for a sequence of log entries to append.
+///
+/// Returns (start_index, entries) where entries are contiguous from start_index.
+pub fn arbitrary_log_append_sequence(
+    max_entries: usize,
+) -> impl Strategy<Value = (u64, Vec<AppRequest>)> {
+    (
+        1u64..100u64,
+        prop::collection::vec(arbitrary_app_request(), 1..max_entries),
+    )
+}
+
+/// Generator for Raft vote tuples (term, voted_for).
+pub fn arbitrary_vote() -> impl Strategy<Value = (u64, NodeId)> {
+    (arbitrary_term(), arbitrary_node_id())
+}
+
+/// Generator for log truncation points within a given range.
+pub fn arbitrary_truncation_point(max_index: u64) -> impl Strategy<Value = u64> {
+    1u64..=max_index
+}
+
+/// Generator for purge boundaries (committed index up to which logs can be deleted).
+pub fn arbitrary_purge_point(max_committed: u64) -> impl Strategy<Value = u64> {
+    0u64..=max_committed
+}
+
+// ============================================================================
+// Network Simulation Generators
+// ============================================================================
+
+/// Network delay configuration for simulation testing.
+#[derive(Debug, Clone)]
+pub struct NetworkDelayConfig {
+    pub min_latency_ms: u64,
+    pub max_latency_ms: u64,
+    pub jitter_percent: u8,
+}
+
+/// Generator for network delay configurations.
+pub fn arbitrary_network_delay_config() -> impl Strategy<Value = NetworkDelayConfig> {
+    prop_oneof![
+        // Fast local network
+        Just(NetworkDelayConfig {
+            min_latency_ms: 0,
+            max_latency_ms: 5,
+            jitter_percent: 10,
+        }),
+        // Normal WAN
+        Just(NetworkDelayConfig {
+            min_latency_ms: 10,
+            max_latency_ms: 100,
+            jitter_percent: 20,
+        }),
+        // High latency (cross-continent)
+        Just(NetworkDelayConfig {
+            min_latency_ms: 100,
+            max_latency_ms: 300,
+            jitter_percent: 30,
+        }),
+        // Variable (random)
+        (0u64..50u64, 50u64..500u64, 0u8..50u8).prop_map(|(min, max, jitter)| {
+            NetworkDelayConfig {
+                min_latency_ms: min,
+                max_latency_ms: max.max(min + 1),
+                jitter_percent: jitter,
+            }
+        }),
+    ]
+}
+
+/// Operation sequence for testing concurrent operations.
+#[derive(Debug, Clone)]
+pub enum TestOperation {
+    Write(String, String),
+    Read(String),
+    Delete(String),
+    Scan(String, u32),
+}
+
+/// Generator for sequences of test operations.
+pub fn arbitrary_operation_sequence(max_ops: usize) -> impl Strategy<Value = Vec<TestOperation>> {
+    prop::collection::vec(
+        prop_oneof![
+            arbitrary_key_value().prop_map(|(k, v)| TestOperation::Write(k, v)),
+            "[a-z][a-z0-9_]{0,19}".prop_map(TestOperation::Read),
+            "[a-z][a-z0-9_]{0,19}".prop_map(TestOperation::Delete),
+            ("[a-z]{1,5}", 1u32..100u32)
+                .prop_map(|(prefix, limit)| TestOperation::Scan(prefix, limit)),
+        ],
+        1..max_ops,
+    )
+}
+
+// ============================================================================
+// Gossip Discovery Generators
+// ============================================================================
+
+/// Generator for peer announcement timestamps.
+///
+/// Returns milliseconds since epoch, biased towards recent times.
+pub fn arbitrary_timestamp_ms() -> impl Strategy<Value = u64> {
+    prop_oneof![
+        // Recent (within last hour)
+        Just(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64
+        ),
+        // Older timestamps
+        (1_700_000_000_000u64..1_800_000_000_000u64),
+        // Zero (edge case)
+        Just(0u64),
+    ]
+}
+
+/// Generator for endpoint addresses as strings.
+///
+/// These are NOT real Iroh endpoint addresses, just for serialization testing.
+pub fn arbitrary_endpoint_addr_bytes() -> impl Strategy<Value = Vec<u8>> {
+    prop::collection::vec(any::<u8>(), 32..64)
+}
+
+// ============================================================================
 // Distributed Systems Generators
 // ============================================================================
 
@@ -313,6 +483,58 @@ mod tests {
                 pairs.len() > MAX_SETMULTI_KEYS as usize,
                 "Oversized SetMulti should exceed limit"
             );
+        }
+
+        #[test]
+        fn test_arbitrary_node_id_string_produces_valid_numeric(
+            s in arbitrary_node_id_string()
+        ) {
+            let parsed: Result<u64, _> = s.parse();
+            prop_assert!(parsed.is_ok(), "Valid NodeId string should parse as u64: {}", s);
+        }
+
+        #[test]
+        fn test_invalid_node_id_string_fails_u64_parse(
+            s in invalid_node_id_string()
+        ) {
+            let parsed: Result<u64, _> = s.parse();
+            prop_assert!(parsed.is_err(), "Invalid NodeId string should fail u64 parse: {}", s);
+        }
+
+        #[test]
+        fn test_arbitrary_vote_produces_valid_term_and_node(
+            (term, node_id) in arbitrary_vote()
+        ) {
+            prop_assert!((1..100).contains(&term), "Term should be in valid range");
+            prop_assert!(u64::from(node_id) < 10, "NodeId should be in valid range");
+        }
+
+        #[test]
+        fn test_arbitrary_log_append_sequence_nonempty(
+            (start, entries) in arbitrary_log_append_sequence(20)
+        ) {
+            prop_assert!(start >= 1, "Start index should be >= 1");
+            prop_assert!(!entries.is_empty(), "Entries should not be empty");
+            prop_assert!(entries.len() < 20, "Entries should respect max");
+        }
+
+        #[test]
+        fn test_network_delay_config_valid_ranges(
+            config in arbitrary_network_delay_config()
+        ) {
+            prop_assert!(
+                config.max_latency_ms >= config.min_latency_ms,
+                "Max latency should be >= min latency"
+            );
+            prop_assert!(config.jitter_percent <= 100, "Jitter should be <= 100%");
+        }
+
+        #[test]
+        fn test_operation_sequence_nonempty(
+            ops in arbitrary_operation_sequence(50)
+        ) {
+            prop_assert!(!ops.is_empty(), "Operation sequence should not be empty");
+            prop_assert!(ops.len() < 50, "Operation sequence should respect max");
         }
     }
 }
