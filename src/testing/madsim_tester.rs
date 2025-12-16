@@ -38,7 +38,6 @@
 //! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY inspiration
 //! - [RisingWave DST](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -386,7 +385,10 @@ pub struct BuggifyConfig {
     probabilities: Arc<Mutex<HashMap<BuggifyFault, f64>>>,
     /// Count of triggers per fault type.
     trigger_counts: Arc<Mutex<HashMap<BuggifyFault, u64>>>,
-    /// Seed for deterministic random generation.
+    /// Seed used to initialize this BUGGIFY instance.
+    /// Note: Probability checking now uses madsim's RNG for uniform distribution,
+    /// but the seed is retained for debugging and metrics purposes.
+    #[allow(dead_code)]
     seed: u64,
 }
 
@@ -427,7 +429,8 @@ impl BuggifyConfig {
 
     /// Check if a specific fault should be triggered.
     ///
-    /// Uses deterministic randomness based on seed and trigger count.
+    /// Uses madsim's deterministic RNG for uniform probability distribution.
+    /// The simulation framework seeds the RNG, ensuring reproducibility.
     pub fn should_trigger(&self, fault: BuggifyFault) -> bool {
         if !self.enabled.load(Ordering::Relaxed) {
             return false;
@@ -440,16 +443,11 @@ impl BuggifyConfig {
         let probs = self.probabilities.lock().unwrap();
         let probability = probs.get(&fault).copied().unwrap_or(0.0);
 
-        // Deterministic hash based on seed, fault type, and count
-        let mut hasher = DefaultHasher::new();
-        hasher.write_u64(self.seed);
-        hasher.write_u64(*count);
-        hasher.write_u64(fault as u64);
-        let hash = hasher.finish();
-
-        // Convert to probability check
-        let threshold = (probability * u64::MAX as f64) as u64;
-        hash < threshold
+        // Use madsim's deterministic RNG for uniform distribution.
+        // This provides proper probability checking unlike DefaultHasher,
+        // which has poor distribution for probability thresholding.
+        let random_value: f64 = (madsim::rand::random::<u64>() as f64) / (u64::MAX as f64);
+        random_value < probability
     }
 
     /// Get total trigger counts for metrics.
@@ -1613,8 +1611,9 @@ impl AspenRaftTester {
             ));
             self.metrics.buggify_triggers += 1;
 
-            // Heal after some time
-            madsim::time::sleep(Duration::from_secs(10)).await;
+            // Heal after some time - reduced from 10s to 3s for faster tests
+            // while still being long enough to force leader re-election
+            madsim::time::sleep(Duration::from_secs(3)).await;
             for i in 0..mid {
                 self.connect(i);
             }

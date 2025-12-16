@@ -100,7 +100,7 @@ fn arb_test_config() -> impl Strategy<Value = TestConfig> {
 /// Test linearizability: All reads must see the last written value
 #[madsim::test]
 async fn test_proptest_linearizability() {
-    // Run multiple test cases with different seeds
+    // Run seeds 0-4 (~7-9s each, ~40s total)
     for seed in 0..5 {
         let mut tester = AspenRaftTester::new_with_seed(
             3,
