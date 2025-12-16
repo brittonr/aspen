@@ -7,6 +7,15 @@
 //!
 //! These tests complement the fuzz targets by verifying semantic correctness
 //! rather than just crash-freedom.
+//!
+//! TODO: Known flaky tests (as of 2025-12-16):
+//!   - test_bootstrap_peer_uniqueness: Intermittent assertion failures with peer count
+//!     mismatch (e.g., expected 9, got 8). May be related to BTreeSet iteration or
+//!     SecretKey generation determinism. Needs investigation.
+//!   - test_config_toml_roundtrip: Occasional failures in TOML serialization roundtrip.
+//!   - test_node_id_validity: Proptest regression file indicates past failures.
+//!
+//! These tests pass locally but fail intermittently in CI/coverage runs.
 
 use std::collections::BTreeSet;
 

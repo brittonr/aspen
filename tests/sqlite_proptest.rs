@@ -4,6 +4,12 @@
 /// and transaction atomicity through comprehensive property testing.
 ///
 /// Tiger Style: Tests verify that resource bounds from constants.rs are enforced.
+///
+/// TODO: Known flaky tests (as of 2025-12-16):
+///   - test_failed_transaction_doesnt_corrupt_state: Intermittent failures when testing
+///     that oversized SetMulti transactions fail gracefully without corrupting state.
+///     May be related to async runtime behavior or SQLite connection pooling under load.
+///     Needs investigation to determine root cause.
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;

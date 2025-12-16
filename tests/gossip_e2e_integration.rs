@@ -3,6 +3,15 @@
 //! This test verifies basic gossip configuration and ticket handling.
 //! Full gossip discovery is not yet implemented in the simplified bootstrap,
 //! so this test focuses on configuration and ticket serialization.
+//!
+//! TODO: Known flaky tests (as of 2025-12-16):
+//!   - test_cluster_formation_with_gossip_config: Timing-dependent test that waits for
+//!     leader election with fixed sleep() durations. Fails intermittently when election
+//!     takes longer than expected (common under CI load).
+//!   - test_multi_node_cluster_manual_config: Similar timing issues with cluster formation.
+//!
+//! Consider: Increase timeouts, add retry logic, or use condition-based waiting instead
+//! of fixed sleeps.
 
 use std::time::Duration;
 
