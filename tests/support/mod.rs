@@ -1,9 +1,11 @@
 //! Test support utilities for Aspen.
 //!
 //! This module provides testing infrastructure including:
+//! - Mock Iroh infrastructure for fast, deterministic networking tests
 //! - Mock gossip for fast, deterministic peer discovery tests
 //! - Test helpers for cluster bootstrap and configuration
 //! - Proptest generators for property-based testing
 
 pub mod mock_gossip;
+pub mod mock_iroh;
 pub mod proptest_generators;
