@@ -56,9 +56,13 @@ use openraft::{EntryPayload, LogState, OptionalSend, RaftLogReader, StoredMember
 use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
+use std::sync::RwLock as StdRwLock;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::raft::constants::MAX_BATCH_SIZE;
+use crate::raft::constants::{INTEGRITY_VERSION, MAX_BATCH_SIZE};
+use crate::raft::integrity::{
+    ChainHash, ChainTipState, GENESIS_HASH, compute_entry_hash, hash_to_hex,
+};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 use crate::utils::ensure_disk_space_available;
 
@@ -124,6 +128,22 @@ const RAFT_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("raft
 
 /// Snapshot storage
 const SNAPSHOT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("snapshots");
+
+/// Chain hash table: key = log index (u64), value = ChainHash (32 bytes).
+///
+/// Stores chain hashes separately from log entries to enable fast chain
+/// verification without deserializing entries. Each hash depends on the
+/// previous hash, creating an unbreakable integrity chain.
+const CHAIN_HASH_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("chain_hashes");
+
+/// Integrity metadata table: key = string identifier, value = serialized data.
+///
+/// Keys:
+/// - "integrity_version": Schema version for migration detection
+/// - "chain_tip_hash": Hash of the most recent entry
+/// - "chain_tip_index": Index of the most recent entry
+/// - "snapshot_chain_hash": Chain hash at last snapshot point
+const INTEGRITY_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("integrity_meta");
 
 // ====================================================================================
 // Redb Storage Errors
@@ -203,6 +223,21 @@ pub enum StorageError {
         path: PathBuf,
         source: std::io::Error,
     },
+
+    #[snafu(display(
+        "chain integrity violation at index {index}: expected {expected}, found {found}"
+    ))]
+    ChainIntegrityViolation {
+        index: u64,
+        expected: String,
+        found: String,
+    },
+
+    #[snafu(display("snapshot integrity verification failed: {reason}"))]
+    SnapshotIntegrityFailed { reason: String },
+
+    #[snafu(display("chain hash missing at index {index}"))]
+    ChainHashMissing { index: u64 },
 }
 
 impl From<StorageError> for io::Error {
@@ -398,26 +433,41 @@ where
 // Redb-backed Raft Log Store (Production Storage)
 // ====================================================================================
 
-/// Persistent Raft log backed by redb.
+/// Persistent Raft log backed by redb with chain hashing.
 ///
 /// Stores log entries, vote state, committed index, and last purged log id on disk.
 /// Provides ACID guarantees for all operations via redb transactions.
+///
+/// Each log entry has an associated chain hash computed as:
+/// ```text
+/// hash = blake3(prev_hash || log_index || term || entry_data)
+/// ```
+///
+/// This creates an unbreakable chain where modifying any entry invalidates all
+/// subsequent hashes, enabling detection of hardware corruption and tampering.
 ///
 /// Tiger Style compliance:
 /// - Explicitly sized types (u64 for log indices)
 /// - Fixed database size limit (configurable at creation)
 /// - Fail-fast on corruption (redb panics on invalid state)
 /// - Bounded operations (no unbounded iteration)
+/// - Chain hashing for integrity verification (32-byte Blake3)
 #[derive(Clone, Debug)]
 pub struct RedbLogStore {
     db: Arc<Database>,
     path: PathBuf,
+    /// Cached chain tip state for efficient appends.
+    /// Updated on each append, loaded on startup.
+    /// Uses std::sync::RwLock because operations are fast and we need
+    /// to access it from both sync (migration) and async (append) contexts.
+    chain_tip: Arc<StdRwLock<ChainTipState>>,
 }
 
 impl RedbLogStore {
     /// Create or open a redb-backed log store at the given path.
     ///
     /// Creates the database file and all required tables if they don't exist.
+    /// Also initializes chain hashing tables and migrates existing databases.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
 
@@ -433,7 +483,7 @@ impl RedbLogStore {
             Database::create(&path).context(OpenDatabaseSnafu { path: &path })?
         };
 
-        // Initialize tables
+        // Initialize tables (including chain hash tables)
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;
         {
             write_txn
@@ -445,13 +495,198 @@ impl RedbLogStore {
             write_txn
                 .open_table(SNAPSHOT_TABLE)
                 .context(OpenTableSnafu)?;
+            // Chain hashing tables
+            write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(INTEGRITY_META_TABLE)
+                .context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
-        Ok(Self {
-            db: Arc::new(db),
+        let db = Arc::new(db);
+
+        // Load chain tip from database (or use defaults for empty/migrating database)
+        let chain_tip = Self::load_chain_tip(&db)?;
+
+        let store = Self {
+            db,
             path,
-        })
+            chain_tip: Arc::new(StdRwLock::new(chain_tip)),
+        };
+
+        // Migrate if needed (one-time operation for existing databases)
+        store.migrate_if_needed()?;
+
+        Ok(store)
+    }
+
+    /// Load chain tip state from database.
+    ///
+    /// Returns the cached chain tip if available, otherwise computes it
+    /// by scanning the chain hash table (for migration scenarios).
+    fn load_chain_tip(db: &Arc<Database>) -> Result<ChainTipState, StorageError> {
+        let read_txn = db.begin_read().context(BeginReadSnafu)?;
+
+        // Try to read cached chain tip
+        let meta_table = read_txn
+            .open_table(INTEGRITY_META_TABLE)
+            .context(OpenTableSnafu)?;
+
+        let tip_hash = meta_table
+            .get("chain_tip_hash")
+            .context(GetSnafu)?
+            .and_then(|v| {
+                let bytes = v.value();
+                if bytes.len() == 32 {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(bytes);
+                    Some(hash)
+                } else {
+                    None
+                }
+            });
+
+        let tip_index: Option<u64> = meta_table
+            .get("chain_tip_index")
+            .context(GetSnafu)?
+            .and_then(|v| bincode::deserialize(v.value()).ok());
+
+        match (tip_hash, tip_index) {
+            (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),
+            _ => {
+                // Chain tip not cached, check if we have any chain hashes
+                let hash_table = read_txn
+                    .open_table(CHAIN_HASH_TABLE)
+                    .context(OpenTableSnafu)?;
+
+                // Get the last entry's hash
+                if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
+                    let (key, value) = last.context(GetSnafu)?;
+                    let index = key.value();
+                    let bytes = value.value();
+                    if bytes.len() == 32 {
+                        let mut hash = [0u8; 32];
+                        hash.copy_from_slice(bytes);
+                        return Ok(ChainTipState { hash, index });
+                    }
+                }
+
+                // Empty database or no chain hashes yet
+                Ok(ChainTipState::default())
+            }
+        }
+    }
+
+    /// Migrate existing database to chain hashing if needed.
+    ///
+    /// This is a one-time operation that computes chain hashes for all
+    /// existing log entries.
+    fn migrate_if_needed(&self) -> Result<(), StorageError> {
+        let current_version = self.read_integrity_version()?;
+        if current_version >= INTEGRITY_VERSION {
+            return Ok(());
+        }
+
+        tracing::info!(
+            current_version,
+            target_version = INTEGRITY_VERSION,
+            "migrating log storage to chain hashing"
+        );
+
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        let mut prev_hash = GENESIS_HASH;
+        let mut entry_count: u64 = 0;
+        let mut last_index: u64 = 0;
+
+        {
+            let log_table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
+
+            // Iterate all existing entries and compute chain hashes
+            for item in log_table.iter().context(RangeSnafu)? {
+                let (key, value) = item.context(GetSnafu)?;
+                let index = key.value();
+                let entry_bytes = value.value();
+
+                // Deserialize to get term
+                let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
+                    bincode::deserialize(entry_bytes).context(DeserializeSnafu)?;
+                let log_id = entry.log_id();
+                let term = log_id.leader_id.term;
+
+                // Compute chain hash
+                let entry_hash = compute_entry_hash(&prev_hash, index, term, entry_bytes);
+
+                hash_table
+                    .insert(index, entry_hash.as_slice())
+                    .context(InsertSnafu)?;
+
+                prev_hash = entry_hash;
+                last_index = index;
+                entry_count += 1;
+
+                if entry_count.is_multiple_of(10000) {
+                    tracing::info!(entry_count, "migration progress");
+                }
+            }
+
+            // Store migration version
+            let mut meta_table = write_txn
+                .open_table(INTEGRITY_META_TABLE)
+                .context(OpenTableSnafu)?;
+            let version_bytes = bincode::serialize(&INTEGRITY_VERSION).context(SerializeSnafu)?;
+            meta_table
+                .insert("integrity_version", version_bytes.as_slice())
+                .context(InsertSnafu)?;
+
+            // Store chain tip
+            meta_table
+                .insert("chain_tip_hash", prev_hash.as_slice())
+                .context(InsertSnafu)?;
+            let index_bytes = bincode::serialize(&last_index).context(SerializeSnafu)?;
+            meta_table
+                .insert("chain_tip_index", index_bytes.as_slice())
+                .context(InsertSnafu)?;
+        }
+        write_txn.commit().context(CommitSnafu)?;
+
+        // Update in-memory chain tip
+        {
+            let mut chain_tip = self.chain_tip.write().unwrap();
+            chain_tip.hash = prev_hash;
+            chain_tip.index = last_index;
+        }
+
+        tracing::info!(
+            entry_count,
+            chain_tip_hash = %hash_to_hex(&prev_hash),
+            "migration complete"
+        );
+
+        Ok(())
+    }
+
+    /// Read the current integrity schema version.
+    fn read_integrity_version(&self) -> Result<u32, StorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = match read_txn.open_table(INTEGRITY_META_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Ok(0), // Table doesn't exist = version 0
+        };
+
+        match table.get("integrity_version").context(GetSnafu)? {
+            Some(value) => {
+                let version: u32 = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                Ok(version)
+            }
+            None => Ok(0),
+        }
     }
 
     /// Get the path to the log store database file.
@@ -633,43 +868,90 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         // Tiger Style: Check disk space before write to prevent corruption on full disk
         ensure_disk_space_available(&self.path)?;
 
+        // Get current chain tip for hash computation
+        let mut prev_hash = {
+            let chain_tip = self.chain_tip.read().unwrap();
+            chain_tip.hash
+        };
+
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        let mut new_tip_hash = prev_hash;
+        let mut new_tip_index: u64 = 0;
+        let mut has_entries = false;
         {
-            let mut table = write_txn
+            let mut log_table = write_txn
                 .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
                 .context(OpenTableSnafu)?;
 
             // Performance optimization: Pre-serialize all entries before inserting
             // This reduces lock contention and allows redb to optimize bulk inserts
             // Tiger Style: Pre-allocate with MAX_BATCH_SIZE to avoid repeated reallocations
-            let mut serialized_entries = Vec::with_capacity(MAX_BATCH_SIZE as usize);
+            let mut serialized_entries: Vec<(u64, u64, Vec<u8>, ChainHash)> =
+                Vec::with_capacity(MAX_BATCH_SIZE as usize);
+
             for entry in entries {
-                let index = entry.log_id().index();
+                let log_id = entry.log_id();
+                let index = log_id.index();
+                let term = log_id.leader_id.term;
                 let data = bincode::serialize(&entry).context(SerializeSnafu)?;
-                serialized_entries.push((index, data));
+
+                // Compute chain hash
+                let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
+
+                serialized_entries.push((index, term, data, entry_hash));
+
+                // Update prev_hash for next entry in batch
+                prev_hash = entry_hash;
+                has_entries = true;
             }
 
-            // Bulk insert all serialized entries
-            for (index, data) in serialized_entries {
-                table.insert(index, data.as_slice()).context(InsertSnafu)?;
+            // Bulk insert all serialized entries and their hashes
+            for (index, _term, data, entry_hash) in &serialized_entries {
+                log_table
+                    .insert(*index, data.as_slice())
+                    .context(InsertSnafu)?;
+                hash_table
+                    .insert(*index, entry_hash.as_slice())
+                    .context(InsertSnafu)?;
+            }
+
+            // Update chain tip tracking
+            if let Some((index, _, _, hash)) = serialized_entries.last() {
+                new_tip_hash = *hash;
+                new_tip_index = *index;
             }
         }
         write_txn.commit().context(CommitSnafu)?;
+
+        // Update cached chain tip after successful commit
+        if has_entries {
+            let mut chain_tip = self.chain_tip.write().unwrap();
+            chain_tip.hash = new_tip_hash;
+            chain_tip.index = new_tip_index;
+        }
 
         callback.io_completed(Ok(()));
         Ok(())
     }
 
     async fn truncate(&mut self, log_id: LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
+        let truncate_from = log_id.index();
+
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
+            let mut log_table = write_txn
                 .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
                 .context(OpenTableSnafu)?;
 
             // Collect keys to remove (>= log_id.index())
-            let keys: Vec<u64> = table
-                .range(log_id.index()..)
+            let keys: Vec<u64> = log_table
+                .range(truncate_from..)
                 .context(RangeSnafu)?
                 .map(|item| {
                     let (key, _) = item.context(GetSnafu)?;
@@ -677,11 +959,30 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            for key in keys {
-                table.remove(key).context(RemoveSnafu)?;
+            for key in &keys {
+                log_table.remove(*key).context(RemoveSnafu)?;
+                hash_table.remove(*key).context(RemoveSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;
+
+        // Repair chain tip: read hash from entry at (truncate_from - 1)
+        let new_tip = if truncate_from > 0 {
+            self.read_chain_hash_at(truncate_from - 1)?
+                .map(|hash| ChainTipState {
+                    hash,
+                    index: truncate_from - 1,
+                })
+                .unwrap_or_default()
+        } else {
+            ChainTipState::default()
+        };
+
+        {
+            let mut chain_tip = self.chain_tip.write().unwrap();
+            *chain_tip = new_tip;
+        }
+
         Ok(())
     }
 
@@ -698,12 +999,15 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
+            let mut log_table = write_txn
                 .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
                 .context(OpenTableSnafu)?;
 
             // Collect keys to remove (<= log_id.index())
-            let keys: Vec<u64> = table
+            let keys: Vec<u64> = log_table
                 .range(..=log_id.index())
                 .context(RangeSnafu)?
                 .map(|item| {
@@ -712,8 +1016,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            for key in keys {
-                table.remove(key).context(RemoveSnafu)?;
+            for key in &keys {
+                log_table.remove(*key).context(RemoveSnafu)?;
+                hash_table.remove(*key).context(RemoveSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -736,6 +1041,156 @@ impl RedbLogStore {
         let committed: Option<LogIdOf<AppTypeConfig>> =
             self.read_meta("committed").map_err(io::Error::other)?;
         Ok(committed.map(|log_id| log_id.index))
+    }
+
+    /// Read chain hash at a specific log index.
+    ///
+    /// Returns `None` if no hash exists at that index.
+    fn read_chain_hash_at(&self, index: u64) -> Result<Option<ChainHash>, StorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn
+            .open_table(CHAIN_HASH_TABLE)
+            .context(OpenTableSnafu)?;
+
+        match table.get(index).context(GetSnafu)? {
+            Some(value) => {
+                let bytes = value.value();
+                if bytes.len() == 32 {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(bytes);
+                    Ok(Some(hash))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get the current chain tip for cross-replica verification.
+    ///
+    /// Returns (tip_index, tip_hash) which can be compared across replicas.
+    /// If chain tips match, logs are identical up to that point.
+    pub fn chain_tip_for_verification(&self) -> (u64, ChainHash) {
+        let chain_tip = self.chain_tip.read().unwrap();
+        (chain_tip.index, chain_tip.hash)
+    }
+
+    /// Get chain tip hash as hex string for logging/display.
+    pub fn chain_tip_hash_hex(&self) -> String {
+        let chain_tip = self.chain_tip.read().unwrap();
+        hash_to_hex(&chain_tip.hash)
+    }
+
+    /// Verify chain integrity for a batch of log entries.
+    ///
+    /// Returns Ok(true) if the batch is valid, Ok(false) if verification
+    /// cannot proceed (e.g., entries don't exist), or Err with corruption details.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_index` - First log index to verify
+    /// * `batch_size` - Number of entries to verify (bounded by CHAIN_VERIFY_BATCH_SIZE)
+    ///
+    /// # Tiger Style
+    ///
+    /// - Bounded batch size prevents unbounded verification
+    /// - Fail-fast on corruption detection
+    pub fn verify_chain_batch(
+        &self,
+        start_index: u64,
+        batch_size: u32,
+    ) -> Result<u64, StorageError> {
+        use crate::raft::integrity::verify_entry_hash;
+
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let log_table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
+        let hash_table = read_txn
+            .open_table(CHAIN_HASH_TABLE)
+            .context(OpenTableSnafu)?;
+
+        // Get previous hash (for chain linkage)
+        let mut prev_hash = if start_index == 0 || start_index == 1 {
+            GENESIS_HASH
+        } else {
+            let prev_index = start_index - 1;
+            match hash_table.get(prev_index).context(GetSnafu)? {
+                Some(h) if h.value().len() == 32 => {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(h.value());
+                    hash
+                }
+                _ => return Ok(0), // Previous hash not found, cannot verify
+            }
+        };
+
+        let end_index = start_index.saturating_add(batch_size as u64);
+        let mut verified_count: u64 = 0;
+
+        for index in start_index..end_index {
+            // Get entry
+            let entry_bytes = match log_table.get(index).context(GetSnafu)? {
+                Some(v) => v.value().to_vec(),
+                None => break, // No more entries
+            };
+
+            // Get stored hash
+            let stored_hash = match hash_table.get(index).context(GetSnafu)? {
+                Some(h) if h.value().len() == 32 => {
+                    let mut hash = [0u8; 32];
+                    hash.copy_from_slice(h.value());
+                    hash
+                }
+                _ => {
+                    return Err(StorageError::ChainHashMissing { index });
+                }
+            };
+
+            // Deserialize to get term
+            let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
+                bincode::deserialize(&entry_bytes).context(DeserializeSnafu)?;
+            let log_id = entry.log_id();
+            let term = log_id.leader_id.term;
+
+            // Verify hash
+            if !verify_entry_hash(&prev_hash, index, term, &entry_bytes, &stored_hash) {
+                let computed = compute_entry_hash(&prev_hash, index, term, &entry_bytes);
+                return Err(StorageError::ChainIntegrityViolation {
+                    index,
+                    expected: hash_to_hex(&stored_hash),
+                    found: hash_to_hex(&computed),
+                });
+            }
+
+            prev_hash = stored_hash;
+            verified_count += 1;
+        }
+
+        Ok(verified_count)
+    }
+
+    /// Get the range of log indices available for verification.
+    ///
+    /// Returns (first_index, last_index) or None if no entries exist.
+    pub fn verification_range(&self) -> Result<Option<(u64, u64)>, StorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let log_table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
+
+        let first = log_table.iter().context(RangeSnafu)?.next();
+        let last = log_table.iter().context(RangeSnafu)?.last();
+
+        match (first, last) {
+            (Some(first_result), Some(last_result)) => {
+                let (first_key, _) = first_result.context(GetSnafu)?;
+                let (last_key, _) = last_result.context(GetSnafu)?;
+                Ok(Some((first_key.value(), last_key.value())))
+            }
+            _ => Ok(None),
+        }
     }
 }
 

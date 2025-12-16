@@ -311,3 +311,44 @@ pub const DRIFT_EWMA_ALPHA: f64 = 0.1;
 /// Used in:
 /// - `clock_drift_detection.rs`: Observation count validation
 pub const MIN_DRIFT_OBSERVATIONS: u32 = 3;
+
+// ============================================================================
+// Chain Hashing / Integrity Verification Constants
+// ============================================================================
+// Chain hashing provides cryptographic integrity verification for Raft log
+// entries, detecting hardware corruption (bit flips, disk errors) and
+// Byzantine modification attempts.
+
+/// Background chain verification interval (300 seconds / 5 minutes).
+///
+/// Controls how often the background verification task runs to check chain
+/// integrity. Set to 5 minutes to balance corruption detection timeliness
+/// against CPU overhead.
+///
+/// Tiger Style: Fixed interval prevents runaway CPU usage while ensuring
+/// timely corruption detection.
+///
+/// Used in:
+/// - `integrity.rs`: Background chain verifier task scheduling
+pub const CHAIN_VERIFY_INTERVAL_SECS: u64 = 300;
+
+/// Number of entries to verify per background batch (1000).
+///
+/// Controls how many log entries are verified in each background verification
+/// cycle. Larger batches reduce verification overhead but increase per-cycle
+/// latency.
+///
+/// Tiger Style: Fixed batch size bounds memory and CPU per iteration.
+///
+/// Used in:
+/// - `integrity.rs`: Background chain verifier batch sizing
+pub const CHAIN_VERIFY_BATCH_SIZE: u32 = 1000;
+
+/// Integrity schema version for migration tracking (1).
+///
+/// Incremented when the chain hashing schema changes. Used to detect
+/// databases that need migration to add chain hashing support.
+///
+/// Used in:
+/// - `storage.rs`: Database migration for chain hashing
+pub const INTEGRITY_VERSION: u32 = 1;

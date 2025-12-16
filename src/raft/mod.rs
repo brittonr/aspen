@@ -39,6 +39,7 @@
 pub mod clock_drift_detection;
 pub mod connection_pool;
 pub mod constants;
+pub mod integrity;
 pub mod learner_promotion;
 pub mod madsim_network;
 pub mod network;

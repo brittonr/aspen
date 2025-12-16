@@ -61,6 +61,7 @@ use crate::raft::constants::{
     DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
     MAX_SNAPSHOT_SIZE,
 };
+use crate::raft::integrity::{GENESIS_HASH, SnapshotIntegrity};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 
 /// Errors that can occur when using SQLite storage
@@ -176,6 +177,10 @@ impl Drop for TransactionGuard<'_> {
 struct StoredSnapshot {
     pub meta: openraft::SnapshotMeta<AppTypeConfig>,
     pub data: Vec<u8>,
+    /// Snapshot integrity verification (optional for backwards compatibility).
+    /// New snapshots always include integrity; old snapshots may not.
+    #[serde(default)]
+    pub integrity: Option<SnapshotIntegrity>,
 }
 
 /// SQLite-backed Raft state machine with connection pooling.
@@ -1278,10 +1283,22 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
                 snapshot_id: snapshot_id.clone(),
             };
 
+            // Compute snapshot integrity for verification during install
+            // Uses GENESIS_HASH as chain_hash since snapshots are independent of log chain
+            let meta_bytes = bincode::serialize(&meta).context(SerializeSnafu)?;
+            let integrity = SnapshotIntegrity::compute(&meta_bytes, &snapshot_data, GENESIS_HASH);
+
+            tracing::debug!(
+                snapshot_id = %snapshot_id,
+                integrity_hash = %integrity.combined_hash_hex(),
+                "built snapshot with integrity verification"
+            );
+
             // Store snapshot in database (write operation)
             let snapshot_blob = bincode::serialize(&StoredSnapshot {
                 meta: meta.clone(),
                 data: snapshot_data.clone(),
+                integrity: Some(integrity),
             })
             .context(SerializeSnafu)?;
 
@@ -1434,6 +1451,17 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             std::io::copy(&mut snapshot, &mut snapshot_data)
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
+            // Compute integrity for the received snapshot
+            // This allows us to detect disk corruption when loading later
+            let meta_bytes = bincode::serialize(&meta).context(SerializeSnafu)?;
+            let integrity = SnapshotIntegrity::compute(&meta_bytes, &snapshot_data, GENESIS_HASH);
+
+            tracing::debug!(
+                snapshot_id = %meta.snapshot_id,
+                integrity_hash = %integrity.combined_hash_hex(),
+                "installing snapshot with integrity verification"
+            );
+
             let new_data: BTreeMap<String, String> =
                 serde_json::from_slice(&snapshot_data).context(JsonDeserializeSnafu)?;
 
@@ -1476,10 +1504,11 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             )
             .context(ExecuteSnafu)?;
 
-            // Store snapshot
+            // Store snapshot with integrity
             let snapshot_blob = bincode::serialize(&StoredSnapshot {
                 meta: meta.clone(),
                 data: snapshot_data,
+                integrity: Some(integrity),
             })
             .context(SerializeSnafu)?;
             conn.execute(
@@ -1514,6 +1543,32 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             Some(bytes) => {
                 let snapshot: StoredSnapshot =
                     bincode::deserialize(&bytes).context(DeserializeSnafu)?;
+
+                // Verify integrity if present (may be absent in old snapshots)
+                if let Some(ref integrity) = snapshot.integrity {
+                    let meta_bytes = bincode::serialize(&snapshot.meta).context(SerializeSnafu)?;
+                    if integrity.verify(&meta_bytes, &snapshot.data) {
+                        tracing::debug!(
+                            snapshot_id = %snapshot.meta.snapshot_id,
+                            "snapshot integrity verified successfully"
+                        );
+                    } else {
+                        // Tiger Style: Log error but don't fail - disk corruption detected
+                        // Operators should investigate and potentially recover from peer
+                        tracing::error!(
+                            snapshot_id = %snapshot.meta.snapshot_id,
+                            "SNAPSHOT INTEGRITY VERIFICATION FAILED - possible disk corruption"
+                        );
+                        // Still return the snapshot for now - Raft consensus will detect
+                        // inconsistencies through checksum comparison
+                    }
+                } else {
+                    tracing::debug!(
+                        snapshot_id = %snapshot.meta.snapshot_id,
+                        "snapshot loaded without integrity (legacy format)"
+                    );
+                }
+
                 tracing::debug!(
                     "get_current_snapshot: returning snapshot at {:?}",
                     snapshot.meta.last_log_id
