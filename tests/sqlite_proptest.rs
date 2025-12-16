@@ -243,6 +243,12 @@ proptest! {
                 sm.apply(entries_stream).await.expect("failed to apply entry");
             }
 
+            // Build expected final state (last value wins for duplicate keys)
+            let mut expected_state = BTreeMap::new();
+            for (key, value) in &entries {
+                expected_state.insert(key.clone(), value.clone());
+            }
+
             // Build snapshot
             let snapshot = sm.build_snapshot().await.expect("failed to build snapshot");
 
@@ -254,8 +260,8 @@ proptest! {
                 .await
                 .expect("failed to install snapshot");
 
-            // Verify all data matches between original and restored
-            for (key, value) in &entries {
+            // Verify all data matches between original and restored using deduplicated state
+            for (key, expected_value) in &expected_state {
                 let original = sm.get(key).await.expect("failed to get from original");
                 let restored = sm2.get(key).await.expect("failed to get from restored");
                 prop_assert_eq!(
@@ -264,7 +270,7 @@ proptest! {
                     key, original, restored
                 );
                 prop_assert_eq!(
-                    restored.as_ref(), Some(value),
+                    restored.as_ref(), Some(expected_value),
                     "Restored value mismatch for key '{}'",
                     key
                 );
