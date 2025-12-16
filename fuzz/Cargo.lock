@@ -251,12 +251,15 @@ dependencies = [
  "arbitrary",
  "aspen",
  "bincode",
+ "blake3",
+ "hex",
  "iroh-gossip",
  "libfuzzer-sys",
  "openraft",
  "postcard",
  "serde",
  "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]

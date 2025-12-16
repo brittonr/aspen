@@ -34,5 +34,6 @@ fuzz_target!(|data: &[u8]| {
     let _ = bincode::deserialize::<AppResponse>(data);
 
     // Also fuzz as raw openraft LogId for metadata corruption
-    let _ = bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::NodeId>>(data);
+    // LogId requires a full RaftTypeConfig, so we use AppTypeConfig
+    let _ = bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::AppTypeConfig>>(data);
 });
