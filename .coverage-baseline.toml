@@ -1,0 +1,217 @@
+# Coverage Baseline - Aspen Project
+# Generated: 2025-12-15
+# Tool: cargo-llvm-cov 0.6.20
+#
+# This file tracks coverage targets per module.
+# CI will fail if coverage drops below these thresholds.
+# Update this file when adding tests to raise the bar.
+
+[metadata]
+generated = "2025-12-16"
+total_lines = 9307
+covered_lines = 2603
+total_coverage = 27.97
+
+# Module coverage thresholds (percentage)
+# Format: module = { target = X, current = Y }
+# target: minimum acceptable coverage (CI fails below this)
+# current: last measured coverage (informational)
+
+[modules.api]
+target = 0
+current = 0
+note = "Traits - tested via implementations"
+
+[modules."api.inmemory"]
+target = 5
+current = 7.14
+note = "Test fixtures - used as mock, not tested directly"
+
+[modules."api.vault"]
+target = 95
+current = 100
+note = "Well tested - maintain high coverage"
+
+[modules."cluster.bootstrap"]
+target = 0
+current = 0
+note = "Integration tested via smoke tests"
+
+[modules."cluster.config"]
+target = 60
+current = 67.75
+note = "Good coverage - configuration validation"
+
+[modules."cluster.gossip_discovery"]
+target = 15
+current = 19.55
+note = "Needs more unit tests"
+
+[modules."cluster.metadata"]
+target = 90
+current = 97.98
+note = "Excellent coverage - maintain"
+
+[modules."cluster.mod"]
+target = 0
+current = 0
+note = "IrohEndpointManager - needs mocking"
+
+[modules."cluster.ticket"]
+target = 95
+current = 100
+note = "Well tested - maintain high coverage"
+
+[modules."node.mod"]
+target = 0
+current = 0
+note = "Integration tested via node_builder tests"
+
+[modules."raft.clock_drift_detection"]
+target = 70
+current = 75
+note = "Good coverage"
+
+[modules."raft.connection_pool"]
+target = 0
+current = 0
+note = "Needs Iroh endpoint mocking"
+
+[modules."raft.integrity"]
+target = 60
+current = 65.68
+note = "Cryptographic chain validation"
+
+[modules."raft.learner_promotion"]
+target = 65
+current = 68.97
+note = "Good coverage"
+
+[modules."raft.madsim_network"]
+target = 0
+current = 0
+note = "Simulation infrastructure"
+
+[modules."raft.mod"]
+target = 75
+current = 80.56
+note = "Good coverage"
+
+[modules."raft.network"]
+target = 0
+current = 0
+note = "Tested via madsim simulation"
+
+[modules."raft.node"]
+target = 0
+current = 0
+note = "Tested via router and direct API tests"
+
+[modules."raft.node_failure_detection"]
+target = 90
+current = 94.55
+note = "Excellent coverage - maintain"
+
+[modules."raft.server"]
+target = 0
+current = 0
+note = "Tested via integration tests"
+
+[modules."raft.storage"]
+target = 25
+current = 28.74
+note = "Needs persistence recovery tests"
+
+[modules."raft.storage_sqlite"]
+target = 25
+current = 29.56
+note = "Needs durability tests"
+
+[modules."raft.storage_validation"]
+target = 75
+current = 78.52
+note = "Good coverage"
+
+[modules."raft.supervisor"]
+target = 0
+current = 0
+note = "Supervisor infrastructure"
+
+[modules."raft.types"]
+target = 15
+current = 18
+note = "Basic types - needs serialization tests"
+
+[modules.protocol_handlers]
+target = 0
+current = 0
+note = "Tested via integration tests"
+
+[modules.simulation]
+target = 55
+current = 64.78
+note = "Simulation artifact builder"
+
+[modules."testing.fault_injection"]
+target = 5
+current = 6.20
+note = "VM-based testing infrastructure"
+
+[modules."testing.madsim_tester"]
+target = 0
+current = 0
+note = "Test infrastructure"
+
+[modules."testing.network_utils"]
+target = 0
+current = 0
+note = "Test utilities"
+
+[modules."testing.router"]
+target = 20
+current = 22.16
+note = "Test router infrastructure"
+
+[modules."testing.vm_manager"]
+target = 10
+current = 12.28
+note = "VM testing - requires KVM"
+
+[modules.tui_rpc]
+target = 0
+current = 0
+note = "TUI RPC client"
+
+[modules.tui_rpc_server]
+target = 0
+current = 0
+note = "TUI RPC server"
+
+[modules.utils]
+target = 75
+current = 80.28
+note = "Utility functions - good coverage"
+
+# Priority modules for coverage improvement
+# These modules have 0% coverage but are critical paths
+[priority]
+high = [
+    "raft.node",           # Core RaftNode implementation
+    "raft.network",        # Network layer
+    "cluster.bootstrap",   # Node bootstrap
+    "protocol_handlers",   # ALPN handlers
+]
+
+medium = [
+    "raft.connection_pool",
+    "raft.server",
+    "node.mod",
+    "cluster.mod",
+]
+
+low = [
+    "testing.madsim_tester",
+    "testing.network_utils",
+    "tui_rpc",
+    "tui_rpc_server",
+]

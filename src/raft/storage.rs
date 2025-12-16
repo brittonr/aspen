@@ -23,6 +23,21 @@
 //! - Error handling: Explicit SNAFU errors for each failure mode
 //! - Connection pooling: Bounded read pool (DEFAULT_READ_POOL_SIZE = 8)
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for RedbLogStore persistence:
+//!       - Log append and read across process restarts
+//!       - Vote persistence and recovery
+//!       - Log truncation edge cases (empty log, partial truncation)
+//!       - Batch append with MAX_BATCH_SIZE entries
+//!       Coverage: 28.74% line coverage - needs persistence recovery tests
+//!
+//! TODO: Add unit tests for InMemoryStateMachine:
+//!       - apply() with all AppRequest variants
+//!       - Snapshot build/install roundtrip
+//!       - Concurrent read operations
+//!       Coverage: Tested via router tests, needs dedicated unit tests
+//!
 //! # Example
 //!
 //! ```ignore

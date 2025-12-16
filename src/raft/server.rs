@@ -9,6 +9,16 @@
 //! - Bounded buffer sizes for stream reading
 //! - Fail fast on deserialization errors
 //! - Clean shutdown via cancellation token
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for RaftRpcServer:
+//!       - spawn() and shutdown() lifecycle
+//!       - VoteRequest/VoteResponse handling
+//!       - AppendEntriesRequest/Response handling
+//!       - SnapshotRequest handling with large payloads
+//!       - Connection limit enforcement (MAX_CONCURRENT_CONNECTIONS)
+//!       Coverage: 0% line coverage (tested via madsim and integration tests)
 
 use std::io::Cursor;
 use std::sync::Arc;

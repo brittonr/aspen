@@ -1,0 +1,97 @@
+# Codecov configuration for Aspen
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  # Overall project coverage settings
+  precision: 2
+  round: down
+  range: "20...80"  # Color scale: red at 20%, green at 80%
+
+  status:
+    # Project-level coverage check
+    project:
+      default:
+        target: auto  # Use coverage from base commit as target
+        threshold: 1% # Allow 1% decrease without failing
+        if_ci_failed: error
+        only_pulls: true
+
+    # Per-patch coverage (new/modified lines)
+    patch:
+      default:
+        target: 50%   # New code should have 50%+ coverage
+        threshold: 5% # Allow some variance
+        if_ci_failed: error
+
+# Ignore patterns - exclude from coverage reporting
+ignore:
+  - "tests/**/*"
+  - "examples/**/*"
+  - "openraft/**/*"           # Vendored dependency
+  - "src/bin/aspen-tui/**/*"  # TUI is hard to unit test
+  - "fuzz/**/*"               # Fuzz targets
+  - "**/*_test.rs"
+  - "**/tests.rs"
+
+# Component-based coverage tracking
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 2%
+
+  individual_components:
+    # Core API traits
+    - component_id: api
+      name: API Traits
+      paths:
+        - src/api/**
+
+    # Raft consensus
+    - component_id: raft
+      name: Raft Consensus
+      paths:
+        - src/raft/**
+
+    # Cluster coordination
+    - component_id: cluster
+      name: Cluster Coordination
+      paths:
+        - src/cluster/**
+
+    # Node orchestration
+    - component_id: node
+      name: Node Builder
+      paths:
+        - src/node/**
+
+    # Testing infrastructure
+    - component_id: testing
+      name: Testing Infrastructure
+      paths:
+        - src/testing/**
+
+# Comment configuration for PRs
+comment:
+  layout: "header, diff, components, tree"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+# Flag management for different test types
+flags:
+  unit:
+    paths:
+      - src/
+    carryforward: true
+
+  integration:
+    paths:
+      - tests/
+    carryforward: true
+
+# GitHub checks configuration
+github_checks:
+  annotations: true

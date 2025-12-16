@@ -457,23 +457,51 @@
             default = self.apps.${system}.aspen-node;
 
             # Fuzzing commands - run with nix run .#fuzz, .#fuzz-quick, .#fuzz-intensive
+            # NOTE: Must be run from the project root directory
             fuzz = {
               type = "app";
               program = "${pkgs.writeShellScript "fuzz-all" ''
                 set -e
-                cd ${toString ./.}
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
 
                 echo "Starting parallel fuzzing campaign on high-risk targets (1 hour each)..."
                 echo ""
 
+                mkdir -p fuzz/dictionaries
+
                 # Enter the fuzzing devShell environment
                 nix develop .#fuzz --command bash -c '
-                  # Run high-risk targets in parallel
-                  cargo fuzz run fuzz_raft_rpc -- -max_total_time=3600 &
-                  cargo fuzz run fuzz_tui_rpc -- -max_total_time=3600 &
-                  cargo fuzz run fuzz_protocol_handler -- -max_total_time=3600 &
-                  cargo fuzz run fuzz_snapshot_json -- -max_total_time=3600 &
+                  # Function to run fuzzer and capture dictionary
+                  run_and_capture() {
+                    local target=$1
+                    local output_file=$(mktemp)
+
+                    cargo fuzz run "$target" -- -max_total_time=3600 2>&1 | tee "$output_file"
+
+                    # Extract and save recommended dictionary
+                    if grep -q "Recommended dictionary" "$output_file"; then
+                      local dict_file="fuzz/dictionaries/$target-auto.dict"
+                      echo "# Auto-generated dictionary from fuzzing run on $(date -I)" > "$dict_file"
+                      sed -n "/^###### Recommended dictionary/,/^###### End of recommended dictionary/p" "$output_file" \
+                        | grep -v "^######" >> "$dict_file"
+                      echo "Saved dictionary to $dict_file"
+                    fi
+                    rm -f "$output_file"
+                  }
+
+                  # Run high-risk targets in parallel with dictionary capture
+                  run_and_capture fuzz_raft_rpc &
+                  run_and_capture fuzz_tui_rpc &
+                  run_and_capture fuzz_protocol_handler &
+                  run_and_capture fuzz_snapshot_json &
                   wait
+
+                  echo ""
+                  echo "Fuzzing complete. Dictionaries saved to fuzz/dictionaries/"
                 '
               ''}";
             };
@@ -482,15 +510,34 @@
               type = "app";
               program = "${pkgs.writeShellScript "fuzz-quick" ''
                 set -e
-                cd ${toString ./.}
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
 
                 echo "Starting quick fuzzing smoke test (5 min per target)..."
                 echo ""
 
+                mkdir -p fuzz/dictionaries
+
                 nix develop .#fuzz --command bash -c '
                   for target in fuzz_raft_rpc fuzz_tui_rpc fuzz_snapshot_json; do
                     echo "Fuzzing $target..."
-                    cargo fuzz run "$target" --sanitizer none -- -max_total_time=300
+
+                    # Capture output to extract dictionary
+                    output_file=$(mktemp)
+                    cargo fuzz run "$target" --sanitizer none -- -max_total_time=300 2>&1 | tee "$output_file"
+
+                    # Extract and save recommended dictionary
+                    if grep -q "Recommended dictionary" "$output_file"; then
+                      dict_file="fuzz/dictionaries/$target-auto.dict"
+                      echo "# Auto-generated dictionary from fuzzing run on $(date -I)" > "$dict_file"
+                      sed -n "/^###### Recommended dictionary/,/^###### End of recommended dictionary/p" "$output_file" \
+                        | grep -v "^######" >> "$dict_file"
+                      echo "Saved dictionary to $dict_file ($(wc -l < "$dict_file") entries)"
+                    fi
+                    rm -f "$output_file"
                     echo ""
                   done
                 '
@@ -501,10 +548,16 @@
               type = "app";
               program = "${pkgs.writeShellScript "fuzz-intensive" ''
                 set -e
-                cd ${toString ./.}
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
 
                 echo "Starting intensive fuzzing campaign (6 hours per target)..."
                 echo ""
+
+                mkdir -p fuzz/dictionaries
 
                 nix develop .#fuzz --command bash -c '
                   targets=(fuzz_raft_rpc fuzz_tui_rpc fuzz_protocol_handler fuzz_snapshot_json
@@ -512,7 +565,21 @@
 
                   for target in "''${targets[@]}"; do
                     echo "Starting $target (6 hours)..."
-                    cargo fuzz run "$target" -- -max_total_time=21600 -jobs=4
+
+                    # Capture output to extract dictionary
+                    output_file=$(mktemp)
+                    cargo fuzz run "$target" -- -max_total_time=21600 -jobs=4 2>&1 | tee "$output_file"
+
+                    # Extract and save recommended dictionary
+                    if grep -q "Recommended dictionary" "$output_file"; then
+                      dict_file="fuzz/dictionaries/$target-auto.dict"
+                      echo "# Auto-generated dictionary from fuzzing run on $(date -I)" > "$dict_file"
+                      sed -n "/^###### Recommended dictionary/,/^###### End of recommended dictionary/p" "$output_file" \
+                        | grep -v "^######" >> "$dict_file"
+                      echo "Saved dictionary to $dict_file ($(wc -l < "$dict_file") entries)"
+                    fi
+                    rm -f "$output_file"
+
                     echo ""
                     echo "Minimizing corpus for $target..."
                     cargo fuzz cmin "$target" || true
@@ -522,16 +589,217 @@
               ''}";
             };
 
+            fuzz-overnight = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-overnight" ''
+                set -e
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
+
+                echo "Starting overnight fuzzing campaign (8 hours, 4 targets in parallel)..."
+                echo "Estimated completion: $(date -d '+8 hours' '+%Y-%m-%d %H:%M')"
+                echo ""
+
+                mkdir -p fuzz/dictionaries
+
+                nix develop .#fuzz --command bash -c '
+                  # Function to run fuzzer and capture dictionary
+                  run_and_capture() {
+                    local target=$1
+                    local output_file=$(mktemp)
+
+                    echo "[$(date +%H:%M)] Starting $target..."
+                    cargo fuzz run "$target" --sanitizer none -- -max_total_time=28800 2>&1 | tee "$output_file"
+
+                    # Extract and save recommended dictionary
+                    if grep -q "Recommended dictionary" "$output_file"; then
+                      local dict_file="fuzz/dictionaries/$target-auto.dict"
+                      echo "# Auto-generated dictionary from overnight fuzzing on $(date -I)" > "$dict_file"
+                      sed -n "/^###### Recommended dictionary/,/^###### End of recommended dictionary/p" "$output_file" \
+                        | grep -v "^######" >> "$dict_file"
+                      echo "[$(date +%H:%M)] Saved dictionary to $dict_file"
+                    fi
+                    rm -f "$output_file"
+                    echo "[$(date +%H:%M)] Completed $target"
+                  }
+
+                  # Run 4 high-priority targets in parallel (8 hours each)
+                  run_and_capture fuzz_raft_rpc &
+                  run_and_capture fuzz_tui_rpc &
+                  run_and_capture fuzz_snapshot_json &
+                  run_and_capture fuzz_http_api &
+                  wait
+
+                  echo ""
+                  echo "=== Overnight fuzzing complete ==="
+                  echo "Dictionaries saved to fuzz/dictionaries/"
+                  echo "Corpus entries:"
+                  for target in fuzz_raft_rpc fuzz_tui_rpc fuzz_snapshot_json fuzz_http_api; do
+                    count=$(find "fuzz/corpus/$target" -type f 2>/dev/null | wc -l)
+                    printf "  %-25s %d entries\n" "$target" "$count"
+                  done
+                '
+              ''}";
+            };
+
             fuzz-corpus = {
               type = "app";
               program = "${pkgs.writeShellScript "fuzz-corpus" ''
                 set -e
-                cd ${toString ./.}
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
 
                 echo "Generating fuzz corpus seeds..."
                 nix develop .#fuzz --command cargo run --bin generate_fuzz_corpus --features fuzzing
                 echo ""
                 echo "Corpus generation complete!"
+              ''}";
+            };
+
+            # Code coverage command
+            # Usage: nix run .#coverage [subcommand]
+            #   nix run .#coverage        - Show summary (default)
+            #   nix run .#coverage html   - Generate HTML report and open browser
+            #   nix run .#coverage ci     - Generate lcov.info for CI
+            #   nix run .#coverage update - Update .coverage-baseline.toml
+            coverage = {
+              type = "app";
+              program = "${pkgs.writeShellScript "coverage" ''
+                set -e
+
+                SUBCMD="''${1:-summary}"
+
+                case "$SUBCMD" in
+                  html|open)
+                    echo "Generating HTML coverage report..."
+                    nix develop -c cargo llvm-cov --html --open --lib \
+                      --ignore-filename-regex '(tests/|examples/|openraft/)'
+                    ;;
+
+                  ci|lcov)
+                    echo "Generating lcov.info for CI..."
+                    nix develop -c cargo llvm-cov --lib \
+                      --lcov \
+                      --output-path lcov.info \
+                      --ignore-filename-regex '(tests/|examples/|openraft/)'
+                    echo "Coverage report written to lcov.info"
+                    ;;
+
+                  update|baseline)
+                    echo "Generating coverage data..."
+                    nix develop -c cargo llvm-cov --lib \
+                      --ignore-filename-regex '(tests/|examples/|openraft/)' \
+                      2>&1 | tee /tmp/coverage-output.txt
+
+                    echo ""
+                    echo "=== Updating .coverage-baseline.toml ==="
+
+                    TOTAL=$(grep "^TOTAL" /tmp/coverage-output.txt | awk '{print $NF}' | tr -d '%')
+                    TOTAL_LINES=$(grep "^TOTAL" /tmp/coverage-output.txt | awk '{print $8}')
+                    COVERED_LINES=$(grep "^TOTAL" /tmp/coverage-output.txt | awk '{print $10}')
+
+                    echo "Total coverage: $TOTAL%"
+                    echo "Lines: $COVERED_LINES / $TOTAL_LINES"
+
+                    if [ -f .coverage-baseline.toml ]; then
+                      sed -i "s/^generated = .*/generated = \"$(date +%Y-%m-%d)\"/" .coverage-baseline.toml
+                      sed -i "s/^total_coverage = .*/total_coverage = $TOTAL/" .coverage-baseline.toml
+                      echo ""
+                      echo "Updated .coverage-baseline.toml"
+                      echo "Review changes with: git diff .coverage-baseline.toml"
+                    fi
+                    ;;
+
+                  summary|"")
+                    echo "=== Code Coverage Summary ==="
+                    nix develop -c cargo llvm-cov --lib \
+                      --ignore-filename-regex '(tests/|examples/|openraft/)'
+                    echo ""
+                    echo "Commands: nix run .#coverage [html|ci|update|summary]"
+                    ;;
+
+                  help|--help|-h)
+                    echo "Usage: nix run .#coverage [subcommand]"
+                    echo ""
+                    echo "Subcommands:"
+                    echo "  summary  Show coverage summary to stdout (default)"
+                    echo "  html     Generate HTML report and open in browser"
+                    echo "  ci       Generate lcov.info for CI/Codecov"
+                    echo "  update   Update .coverage-baseline.toml with current coverage"
+                    echo "  help     Show this help message"
+                    ;;
+
+                  *)
+                    echo "Unknown subcommand: $SUBCMD"
+                    echo "Run 'nix run .#coverage help' for usage"
+                    exit 1
+                    ;;
+                esac
+              ''}";
+            };
+
+            fuzz-coverage = {
+              type = "app";
+              program = "${pkgs.writeShellScript "fuzz-coverage" ''
+                set -e
+
+                if [ ! -f "fuzz/Cargo.toml" ]; then
+                  echo "Error: Must be run from the aspen project root directory"
+                  exit 1
+                fi
+
+                mkdir -p fuzz/coverage
+
+                # Parse target from args or use default
+                target="''${1:-fuzz_raft_rpc}"
+
+                echo "Generating coverage report for $target..."
+                echo ""
+
+                nix develop .#fuzz --command bash -c "
+                  # Generate coverage data
+                  cargo fuzz coverage \"$target\"
+
+                  # Find the profdata file
+                  profdata_dir=\"fuzz/coverage/$target/coverage\"
+                  if [ -d \"\$profdata_dir\" ]; then
+                    # Merge profile data
+                    \$LLVM_PROFDATA merge -sparse \"\$profdata_dir\"/*.profraw -o \"fuzz/coverage/$target.profdata\"
+
+                    # Generate HTML report
+                    target_bin=\"fuzz/target/x86_64-unknown-linux-gnu/coverage/x86_64-unknown-linux-gnu/release/$target\"
+                    if [ -f \"\$target_bin\" ]; then
+                      \$LLVM_COV show \"\$target_bin\" \
+                        --instr-profile=\"fuzz/coverage/$target.profdata\" \
+                        --format=html \
+                        --output-dir=\"fuzz/coverage/$target-html\" \
+                        --ignore-filename-regex='/.cargo/|/rustc/'
+
+                      # Also generate summary
+                      \$LLVM_COV report \"\$target_bin\" \
+                        --instr-profile=\"fuzz/coverage/$target.profdata\" \
+                        --ignore-filename-regex='/.cargo/|/rustc/' \
+                        > \"fuzz/coverage/$target-summary.txt\"
+
+                      echo \"\"
+                      echo \"Coverage report generated:\"
+                      echo \"  HTML: fuzz/coverage/$target-html/index.html\"
+                      echo \"  Summary: fuzz/coverage/$target-summary.txt\"
+                      echo \"\"
+                      cat \"fuzz/coverage/$target-summary.txt\"
+                    else
+                      echo \"Warning: Could not find coverage binary at \$target_bin\"
+                    fi
+                  else
+                    echo \"Warning: No coverage data found. Run fuzzing first.\"
+                  fi
+                "
               ''}";
             };
           };
@@ -572,17 +840,24 @@
               shellHook = ''
                 echo "Fuzzing development environment ready!"
                 echo ""
-                echo "Available fuzz targets:"
+                echo "Nix apps (from project root):"
+                echo "  nix run .#fuzz           # Parallel fuzzing (1hr/target)"
+                echo "  nix run .#fuzz-quick     # Quick smoke test (5min/target)"
+                echo "  nix run .#fuzz-overnight # Overnight run (8hr, 4 parallel targets)"
+                echo "  nix run .#fuzz-intensive # Full campaign (6hr/target, sequential)"
+                echo "  nix run .#fuzz-coverage  # Generate coverage report"
+                echo "  nix run .#fuzz-corpus    # Generate seed corpus"
+                echo ""
+                echo "Manual commands (in this shell):"
                 echo "  cargo fuzz list"
-                echo ""
-                echo "Run a fuzz target:"
-                echo "  cargo fuzz run fuzz_raft_rpc -- -max_total_time=60"
-                echo ""
-                echo "Run without sanitizers (faster, for safe Rust):"
                 echo "  cargo fuzz run fuzz_raft_rpc --sanitizer none -- -max_total_time=60"
-                echo ""
-                echo "Generate coverage report:"
                 echo "  cargo fuzz coverage fuzz_raft_rpc"
+                echo ""
+                echo "Outputs saved to:"
+                echo "  fuzz/corpus/          # Coverage-increasing inputs"
+                echo "  fuzz/artifacts/       # Crash-triggering inputs"
+                echo "  fuzz/dictionaries/    # Auto-generated dictionaries"
+                echo "  fuzz/coverage/        # Coverage reports"
               '';
             };
 
@@ -596,6 +871,7 @@
                 coreutils
                 cargo-watch
                 cargo-nextest
+                cargo-llvm-cov # Code coverage tool
                 git
                 jq
                 ripgrep
@@ -619,6 +895,8 @@
                 bridge-utils # For network bridge management
                 iproute2 # For ip commands (TAP devices)
                 qemu-utils # For qemu-img disk operations
+                # LLVM tools for coverage
+                rustc.llvmPackages.llvm
               ]
               ++ [
                 # Add our custom helper scripts to devShell
@@ -628,6 +906,9 @@
 
             env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
             env.SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
+
+            # LLVM coverage tool environment variables
+            inherit (pkgs.cargo-llvm-cov) LLVM_COV LLVM_PROFDATA;
 
             # Incremental compilation settings for faster rebuilds
             env.CARGO_INCREMENTAL = "1";
@@ -654,11 +935,10 @@
               echo "   - Use 'cargo build' in this shell for local incremental compilation"
               echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
               echo ""
-              echo "Cloud Hypervisor VM testing available:"
-              echo "   - Run 'aspen-vm-setup' to configure network bridges and TAP devices"
-              echo "   - Run 'aspen-vm-run <node-id>' to launch a test VM"
-              echo "   - Run 'cloud-hypervisor --version' to check Cloud Hypervisor"
-              echo "   - Custom build: 'nix build .#cloud-hypervisor-custom' (from vendored source)"
+              echo "Code coverage: nix run .#coverage [summary|html|ci|update]"
+              echo ""
+              echo "Cloud Hypervisor VM testing:"
+              echo "   - aspen-vm-setup / aspen-vm-run <node-id>"
               echo ""
               echo "Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
             '';

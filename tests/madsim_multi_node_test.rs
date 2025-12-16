@@ -5,6 +5,14 @@
 /// - Leader election with multiple candidates
 /// - Log replication between nodes
 /// - Write operations propagated through consensus
+///
+/// TODO: Add 5-node cluster tests to validate majority quorum behavior
+///       with f=2 fault tolerance (can survive 2 node failures).
+///       Coverage gap identified in coverage matrix analysis.
+///
+/// TODO: Add 7-node cluster tests to validate larger cluster dynamics
+///       including leadership handoff under heavy load and quorum
+///       recovery scenarios. Currently only 3-node clusters are tested.
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

@@ -9,6 +9,13 @@
 /// when adding learners post-initialization (documented in router_t20_change_membership.rs).
 ///
 /// Original: openraft/tests/tests/snapshot_building/t10_build_snapshot.rs
+///
+/// TODO: Add snapshot-under-failure tests including:
+///       - Snapshot creation during leader crash (should resume on new leader)
+///       - Snapshot installation interrupted by network partition
+///       - Snapshot transfer with message loss/corruption
+///       - Concurrent snapshot and membership change operations
+///       Coverage gap: Snapshot operations under failure are marked FAIL in coverage matrix.
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;

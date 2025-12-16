@@ -7,6 +7,17 @@
 /// - Concurrent writes under failure conditions
 ///
 /// All tests use deterministic seeds for reproducibility.
+///
+/// TODO: Add Byzantine failure scenarios including:
+///       - Message corruption (bit flips in RPC payloads)
+///       - Message duplication (same message delivered multiple times)
+///       - Vote manipulation (term/vote_for field corruption)
+///       Coverage gap: Byzantine failures have <3 tests in coverage matrix.
+///
+/// TODO: Add multiple simultaneous crash scenarios:
+///       - 2 nodes crash simultaneously in 5-node cluster (should survive)
+///       - Minority partition crash (quorum preserved)
+///       Coverage gap: crash:multiple has only 2 tests.
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

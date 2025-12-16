@@ -15,6 +15,18 @@
 //! - Explicitly sized types: `u64` for NodeId (not usize for portability)
 //! - Newtype pattern: Prevents accidental mixing with log indices, terms, ports
 //! - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for NodeId:
+//!       - FromStr parsing with valid and invalid inputs
+//!       - Display formatting consistency
+//!       - PartialOrd/Ord ordering correctness
+//!       Coverage: 18% line coverage - basic type, needs serialization tests
+//!
+//! TODO: Add unit tests for AppRequest/AppResponse:
+//!       - Serde serialization roundtrip for all variants
+//!       - SetMulti with MAX_SETMULTI_KEYS boundary
 
 use std::fmt;
 use std::num::ParseIntError;

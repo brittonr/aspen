@@ -14,6 +14,16 @@
 //! 3. Receives peer announcements and adds them to the network factory
 //!
 //! This enables automatic peer discovery without manual configuration.
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for bootstrap_node() function:
+//!       - Bootstrap with different storage backends (InMemory, SQLite, Redb)
+//!       - Bootstrap with gossip enabled/disabled
+//!       - Bootstrap with cluster ticket joining
+//!       - NodeHandle shutdown sequence testing
+//!       - Supervisor restart behavior verification
+//!       Coverage: 0% line coverage (complex integration - tested via smoke tests)
 
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -16,6 +16,19 @@
 //! - Automatic cleanup via Drop trait implementations
 //! - Clear separation between fault injection and verification
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for NetworkPartition:
+//!       - create() with valid and invalid node configurations
+//!       - heal() idempotency (can be called multiple times safely)
+//!       - Drop cleanup behavior verification
+//!       Coverage: 6.20% line coverage - critical for chaos testing
+//!
+//! TODO: Add unit tests for LatencyInjection and PacketLoss:
+//!       - Boundary testing at MAX_LATENCY_MS and MAX_PACKET_LOSS_PERCENT
+//!       - Multiple fault types applied simultaneously
+//!       - Cleanup ordering when multiple faults are active
+//!
 //! # Example
 //!
 //! ```ignore

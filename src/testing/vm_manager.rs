@@ -23,6 +23,20 @@
 //! - Resource cleanup via Drop trait
 //! - Fail-fast on configuration errors
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for VmManager (requires root/KVM):
+//!       - launch_cluster() with various cluster sizes
+//!       - Health check timeout behavior
+//!       - Snapshot and restore roundtrip
+//!       - TAP device creation and cleanup
+//!       Coverage: 12.28% line coverage - tested via vm-tests CI workflow
+//!
+//! TODO: Add mock-based tests for VmManager:
+//!       - VmConfig validation without actual VM creation
+//!       - Error handling for missing Cloud Hypervisor binary
+//!       - Network configuration generation
+//!
 //! # Example
 //!
 //! ```ignore

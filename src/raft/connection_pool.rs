@@ -18,6 +18,18 @@
 //! - Explicit error handling: All failures propagated with context
 //! - Fixed timeouts: No unbounded waits on connection or stream operations
 //! - Fail fast: Invalid states cause immediate errors, not silent corruption
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for RaftConnectionPool:
+//!       - Pool creation with bounded MAX_PEERS
+//!       - Connection reuse across multiple get_stream() calls
+//!       - Stream semaphore limiting MAX_STREAMS_PER_CONNECTION
+//!       - Idle connection cleanup after CONNECTION_IDLE_TIMEOUT
+//!       - Connection retry with exponential backoff
+//!       - Health status transitions (Healthy -> Degraded -> Failed)
+//!       - Concurrent stream acquisition under load
+//!       Coverage: 0% line coverage (requires Iroh endpoint mocking)
 
 use std::collections::HashMap;
 use std::sync::Arc;

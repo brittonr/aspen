@@ -2,6 +2,20 @@
 ///
 /// AspenRouter manages multiple Raft nodes with simulated networking, enabling fast
 /// deterministic tests without real network I/O. Inspired by OpenRaft's RaftRouter.
+///
+/// # Test Coverage
+///
+/// TODO: Add unit tests for AspenRouter internals:
+///       - InMemoryNetworkFactory RPC routing correctness
+///       - Network delay injection (inject_delay)
+///       - Partition simulation (add_partition, remove_partition)
+///       - Wait conditions (Wait::state, Wait::log, etc.)
+///       Coverage: 22.16% line coverage - router is test infrastructure itself
+///
+/// TODO: Add tests for failure scenarios:
+///       - RPC timeout during partition
+///       - Node crash during vote/append_entries
+///       - Recovery after partition heal
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;

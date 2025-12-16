@@ -22,6 +22,20 @@
 //! - Transactions: All writes use BEGIN IMMEDIATE for write serialization
 //! - WAL mode: Write-ahead logging enabled for better concurrency
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for SqliteStateMachine durability:
+//!       - apply() correctness after crash recovery
+//!       - Snapshot install overwrites existing state correctly
+//!       - WAL checkpoint behavior under heavy writes
+//!       - Connection pool exhaustion handling
+//!       Coverage: 29.56% line coverage - most coverage from proptest/integration
+//!
+//! TODO: Add tests for concurrent read/write scenarios:
+//!       - Multiple readers during single writer
+//!       - Read pool connection reuse under load
+//!       - Transaction isolation verification
+//!
 //! # Schema
 //!
 //! - `kv_data`: (key TEXT PRIMARY KEY, value BLOB) - Main key-value store

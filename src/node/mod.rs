@@ -27,6 +27,15 @@
 //! - Error handling: Anyhow for application errors, clear context messages
 //! - Deterministic testing: Builder supports in-memory mode for tests
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for NodeBuilder:
+//!       - Builder with all configuration options
+//!       - with_storage() for each StorageBackend variant
+//!       - with_http_port() binding validation
+//!       - start() returning properly configured Node
+//!       Coverage: 0% line coverage (tested via node_builder_integration tests)
+//!
 //! # Example
 //!
 //! ```ignore

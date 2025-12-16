@@ -20,6 +20,21 @@
 //! - Fixed timeouts (IROH_READ_TIMEOUT) for bounded operation
 //! - Size limits (MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE) for memory safety
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for IrpcRaftNetworkFactory:
+//!       - Factory creation with peer address registration
+//!       - Dynamic peer addition via add_peer()
+//!       - Network client creation via new_client()
+//!       Coverage: 0% line coverage (tested via madsim simulation tests)
+//!
+//! TODO: Add unit tests for IrpcRaftNetwork RPC methods:
+//!       - vote() request/response serialization
+//!       - append_entries() with various payload sizes
+//!       - full_snapshot() streaming with MAX_SNAPSHOT_SIZE limit
+//!       - Error propagation (Unreachable, NetworkError, Timeout)
+//!       Coverage: Tested via integration tests only
+//!
 //! # Architecture
 //!
 //! ```text

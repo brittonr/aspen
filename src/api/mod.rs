@@ -15,6 +15,15 @@
 //! - Size validation on keys and values (prevents memory exhaustion)
 //! - Pagination support for bounded memory usage
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for trait implementations via integration tests:
+//!       - ClusterNode construction and serialization
+//!       - ClusterState transitions and validation
+//!       - WriteCommand validation with edge cases (max key/value sizes)
+//!       - ScanRequest pagination boundary testing
+//!       Coverage: 0% line coverage (traits tested via RaftNode integration tests)
+//!
 //! # Example
 //!
 //! ```ignore

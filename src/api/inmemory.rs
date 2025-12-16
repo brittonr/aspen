@@ -1,3 +1,23 @@
+//! In-memory implementations of ClusterController and KeyValueStore for testing.
+//!
+//! Provides deterministic, non-persistent implementations of the core API traits
+//! for use in unit tests and deterministic simulation testing. These implementations
+//! mirror the behavior of production backends without network or disk I/O.
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for DeterministicClusterController:
+//!       - init() with empty members (should error)
+//!       - add_learner() idempotency
+//!       - change_membership() with invalid node IDs
+//!       Coverage: 5.00% function coverage - used as test fixture, not tested directly
+//!
+//! TODO: Add unit tests for DeterministicKeyValueStore:
+//!       - WriteCommand validation boundary testing
+//!       - scan() with continuation tokens
+//!       - delete() idempotency verification
+//!       Coverage: 7.14% line coverage - tested via proptest generators
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

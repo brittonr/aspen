@@ -28,6 +28,20 @@
 //! - Bounded connection and stream limits per handler
 //! - Explicit error handling with AcceptError
 //! - Clean shutdown via ProtocolHandler::shutdown()
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for RaftProtocolHandler:
+//!       - accept() with valid Raft RPC messages
+//!       - Connection semaphore limiting MAX_CONCURRENT_CONNECTIONS
+//!       - Stream semaphore limiting MAX_STREAMS_PER_CONNECTION
+//!       - Error handling for malformed RPC messages
+//!       Coverage: 0% line coverage (tested via integration tests)
+//!
+//! TODO: Add unit tests for TuiProtocolHandler:
+//!       - accept() with valid TUI RPC messages
+//!       - Connection handling for all TUI commands
+//!       - Graceful shutdown behavior
 
 use std::io::Cursor;
 use std::sync::Arc;

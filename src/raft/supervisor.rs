@@ -3,6 +3,16 @@
 //! This module provides lightweight supervision for tokio tasks,
 //! replacing the heavyweight actor-based supervision with simple
 //! restart logic.
+//!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for Supervisor:
+//!       - Restart counting within RESTART_WINDOW
+//!       - Backoff duration progression (1s, 5s, 10s)
+//!       - Circuit breaker after MAX_RESTARTS (3)
+//!       - should_restart() logic with time window reset
+//!       - Graceful shutdown via cancel token
+//!       Coverage: 0% line coverage (supervisor is infrastructure)
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

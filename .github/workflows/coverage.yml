@@ -55,6 +55,30 @@ jobs:
             --output-path lcov.info \
             --ignore-filename-regex '(tests/|examples/|openraft/)'
 
+          # Also generate JSON for detailed analysis
+          nix develop -c cargo llvm-cov \
+            --workspace \
+            --json \
+            --output-path coverage.json \
+            --ignore-filename-regex '(tests/|examples/|openraft/)' \
+            -- --lib || true
+
+      - name: Check coverage threshold
+        run: |
+          # Minimum acceptable total coverage (fail CI if below)
+          MIN_COVERAGE=25
+
+          COVERAGE=$(awk -F: '/^LF:/{lines+=$2} /^LH:/{hit+=$2} END {printf "%.1f", (hit/lines)*100}' lcov.info)
+          echo "Current coverage: ${COVERAGE}%"
+          echo "Minimum required: ${MIN_COVERAGE}%"
+
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below minimum threshold ${MIN_COVERAGE}%"
+            exit 1
+          fi
+
+          echo "Coverage check passed"
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

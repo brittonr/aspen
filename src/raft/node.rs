@@ -21,6 +21,18 @@
 //! - Bounded resources: Semaphore limits concurrent operations
 //! - Explicit error handling: All errors use snafu
 //! - No unbounded growth: Fixed capacity for pending operations
+//!
+//! ## Test Coverage
+//!
+//! TODO: Add unit tests for RaftNode trait implementations:
+//!       - ClusterController::init() with various initial member configurations
+//!       - ClusterController::add_learner() and promotion to voter
+//!       - ClusterController::change_membership() transitions
+//!       - KeyValueStore::write() with all WriteCommand variants
+//!       - KeyValueStore::read() linearizability via ReadPolicy
+//!       - KeyValueStore::scan() pagination boundary testing
+//!       - Semaphore limiting (MAX_CONCURRENT_OPS) under load
+//!       Coverage: 0% line coverage (tested via router tests and direct API tests)
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

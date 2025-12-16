@@ -8,6 +8,15 @@
 //! - **Cluster Tickets**: Compact bootstrap information for joining clusters
 //! - **Manual Peer Configuration**: Explicit peer list as fallback when gossip is disabled
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for IrohEndpointManager:
+//!       - Endpoint creation with various IrohEndpointConfig options
+//!       - Discovery service integration (mDNS, DNS, Pkarr)
+//!       - Router spawning and ALPN protocol registration
+//!       - Graceful shutdown sequence
+//!       Coverage: 0% line coverage (requires Iroh endpoint mocking)
+//!
 //! # Peer Discovery
 //!
 //! Aspen provides multiple automatic discovery mechanisms (all can work simultaneously):

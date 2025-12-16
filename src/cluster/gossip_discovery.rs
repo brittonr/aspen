@@ -15,6 +15,20 @@
 //! Messages are signed with the node's SecretKey and verified on receipt.
 //! Invalid signatures are rejected (fail-fast).
 //!
+//! # Test Coverage
+//!
+//! TODO: Add unit tests for GossipPeerDiscovery:
+//!       - Message serialization/deserialization roundtrip
+//!       - Peer announcement broadcast timing (10s interval)
+//!       - Duplicate peer detection and deduplication
+//!       - Shutdown cancellation token behavior
+//!       Coverage: 19.55% line coverage - tested via integration tests only
+//!
+//! TODO: Add tests for edge cases:
+//!       - Malformed gossip message handling
+//!       - Network partition recovery
+//!       - High churn rate peer discovery
+//!
 //! # Example
 //!
 //! ```no_run
