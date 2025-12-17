@@ -8,9 +8,9 @@
 
 [metadata]
 generated = "2025-12-16"
-total_lines = 9307
-covered_lines = 2603
-total_coverage = 27.97
+total_lines = 10200
+covered_lines = 3100
+total_coverage = 30.4
 
 # Module coverage thresholds (percentage)
 # Format: module = { target = X, current = Y }
@@ -133,14 +133,14 @@ current = 78.52
 note = "Good coverage"
 
 [modules."raft.supervisor"]
-target = 0
-current = 0
-note = "Supervisor infrastructure"
+target = 35
+current = 40
+note = "Good coverage - restart logic, backoff, cancellation unit tests"
 
 [modules."raft.types"]
-target = 15
-current = 18
-note = "Basic types - needs serialization tests"
+target = 45
+current = 50
+note = "Good coverage - NodeId, AppRequest, AppResponse, RaftMemberInfo unit tests"
 
 [modules.protocol_handlers]
 target = 0

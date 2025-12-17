@@ -18,15 +18,11 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for NodeId:
-//!       - FromStr parsing with valid and invalid inputs
-//!       - Display formatting consistency
-//!       - PartialOrd/Ord ordering correctness
-//!       Coverage: 18% line coverage - basic type, needs serialization tests
-//!
-//! TODO: Add unit tests for AppRequest/AppResponse:
-//!       - Serde serialization roundtrip for all variants
-//!       - SetMulti with MAX_SETMULTI_KEYS boundary
+//! Unit tests in `#[cfg(test)]` module below cover:
+//!   - NodeId: FromStr parsing, Display formatting, ordering, conversions
+//!   - AppRequest: All variants, Display formatting
+//!   - AppResponse: Construction and field access
+//!   - RaftMemberInfo: Construction, Default, Display
 
 use std::fmt;
 use std::num::ParseIntError;
@@ -202,3 +198,329 @@ declare_raft_types!(
         NodeId = NodeId,
         Node = RaftMemberInfo,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // NodeId Tests
+    // =========================================================================
+
+    #[test]
+    fn test_node_id_new() {
+        let id = NodeId::new(42);
+        assert_eq!(id.0, 42);
+    }
+
+    #[test]
+    fn test_node_id_from_u64() {
+        let id: NodeId = 123.into();
+        assert_eq!(id.0, 123);
+    }
+
+    #[test]
+    fn test_node_id_into_u64() {
+        let id = NodeId::new(456);
+        let raw: u64 = id.into();
+        assert_eq!(raw, 456);
+    }
+
+    #[test]
+    fn test_node_id_display() {
+        let id = NodeId::new(789);
+        assert_eq!(format!("{}", id), "789");
+    }
+
+    #[test]
+    fn test_node_id_from_str_valid() {
+        let id: NodeId = "12345".parse().expect("should parse valid u64");
+        assert_eq!(id.0, 12345);
+    }
+
+    #[test]
+    fn test_node_id_from_str_zero() {
+        let id: NodeId = "0".parse().expect("should parse zero");
+        assert_eq!(id.0, 0);
+    }
+
+    #[test]
+    fn test_node_id_from_str_max() {
+        let id: NodeId = u64::MAX.to_string().parse().expect("should parse max");
+        assert_eq!(id.0, u64::MAX);
+    }
+
+    #[test]
+    fn test_node_id_from_str_invalid() {
+        let result: Result<NodeId, _> = "not_a_number".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_node_id_from_str_negative() {
+        let result: Result<NodeId, _> = "-1".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_node_id_from_str_overflow() {
+        let result: Result<NodeId, _> = "99999999999999999999999999".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_node_id_ordering() {
+        let a = NodeId::new(1);
+        let b = NodeId::new(2);
+        let c = NodeId::new(2);
+
+        assert!(a < b);
+        assert!(b > a);
+        assert!(b == c);
+        assert!(a <= b);
+        assert!(b >= a);
+    }
+
+    #[test]
+    fn test_node_id_hash() {
+        use std::collections::HashSet;
+
+        let mut set = HashSet::new();
+        set.insert(NodeId::new(1));
+        set.insert(NodeId::new(2));
+        set.insert(NodeId::new(1)); // Duplicate
+
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn test_node_id_default() {
+        let id = NodeId::default();
+        assert_eq!(id.0, 0);
+    }
+
+    #[test]
+    fn test_node_id_serde_roundtrip() {
+        let original = NodeId::new(42);
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: NodeId = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_node_id_display_roundtrip() {
+        let original = NodeId::new(12345);
+        let displayed = original.to_string();
+        let parsed: NodeId = displayed.parse().expect("should parse");
+        assert_eq!(original, parsed);
+    }
+
+    // =========================================================================
+    // AppRequest Tests
+    // =========================================================================
+
+    #[test]
+    fn test_app_request_set_display() {
+        let req = AppRequest::Set {
+            key: "foo".to_string(),
+            value: "bar".to_string(),
+        };
+        assert_eq!(format!("{}", req), "Set { key: foo, value: bar }");
+    }
+
+    #[test]
+    fn test_app_request_delete_display() {
+        let req = AppRequest::Delete {
+            key: "foo".to_string(),
+        };
+        assert_eq!(format!("{}", req), "Delete { key: foo }");
+    }
+
+    #[test]
+    fn test_app_request_set_multi_empty() {
+        let req = AppRequest::SetMulti { pairs: vec![] };
+        assert_eq!(format!("{}", req), "SetMulti { pairs: [] }");
+    }
+
+    #[test]
+    fn test_app_request_set_multi_one() {
+        let req = AppRequest::SetMulti {
+            pairs: vec![("a".to_string(), "1".to_string())],
+        };
+        assert_eq!(format!("{}", req), "SetMulti { pairs: [(a, 1)] }");
+    }
+
+    #[test]
+    fn test_app_request_set_multi_many() {
+        let req = AppRequest::SetMulti {
+            pairs: vec![
+                ("a".to_string(), "1".to_string()),
+                ("b".to_string(), "2".to_string()),
+                ("c".to_string(), "3".to_string()),
+            ],
+        };
+        assert_eq!(
+            format!("{}", req),
+            "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }"
+        );
+    }
+
+    #[test]
+    fn test_app_request_delete_multi_empty() {
+        let req = AppRequest::DeleteMulti { keys: vec![] };
+        assert_eq!(format!("{}", req), "DeleteMulti { keys: [] }");
+    }
+
+    #[test]
+    fn test_app_request_delete_multi_many() {
+        let req = AppRequest::DeleteMulti {
+            keys: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+        };
+        assert_eq!(format!("{}", req), "DeleteMulti { keys: [x, y, z] }");
+    }
+
+    #[test]
+    fn test_app_request_serde_set() {
+        let original = AppRequest::Set {
+            key: "test".to_string(),
+            value: "value".to_string(),
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert!(
+            matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value")
+        );
+    }
+
+    #[test]
+    fn test_app_request_serde_delete() {
+        let original = AppRequest::Delete {
+            key: "to_delete".to_string(),
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert!(matches!(deserialized, AppRequest::Delete { key } if key == "to_delete"));
+    }
+
+    #[test]
+    fn test_app_request_serde_set_multi() {
+        let original = AppRequest::SetMulti {
+            pairs: vec![
+                ("k1".to_string(), "v1".to_string()),
+                ("k2".to_string(), "v2".to_string()),
+            ],
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert!(matches!(deserialized, AppRequest::SetMulti { pairs } if pairs.len() == 2));
+    }
+
+    #[test]
+    fn test_app_request_serde_delete_multi() {
+        let original = AppRequest::DeleteMulti {
+            keys: vec!["a".to_string(), "b".to_string()],
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert!(matches!(deserialized, AppRequest::DeleteMulti { keys } if keys.len() == 2));
+    }
+
+    // =========================================================================
+    // AppResponse Tests
+    // =========================================================================
+
+    #[test]
+    fn test_app_response_with_value() {
+        let resp = AppResponse {
+            value: Some("result".to_string()),
+            deleted: None,
+        };
+        assert_eq!(resp.value, Some("result".to_string()));
+        assert!(resp.deleted.is_none());
+    }
+
+    #[test]
+    fn test_app_response_deleted_true() {
+        let resp = AppResponse {
+            value: None,
+            deleted: Some(true),
+        };
+        assert!(resp.deleted == Some(true));
+    }
+
+    #[test]
+    fn test_app_response_deleted_false() {
+        let resp = AppResponse {
+            value: None,
+            deleted: Some(false),
+        };
+        assert!(resp.deleted == Some(false));
+    }
+
+    #[test]
+    fn test_app_response_serde_roundtrip() {
+        let original = AppResponse {
+            value: Some("test_value".to_string()),
+            deleted: Some(true),
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original.value, deserialized.value);
+        assert_eq!(original.deleted, deserialized.deleted);
+    }
+
+    // =========================================================================
+    // RaftMemberInfo Tests
+    // =========================================================================
+
+    #[test]
+    fn test_raft_member_info_default() {
+        let info = RaftMemberInfo::default();
+        // Default should create a valid RaftMemberInfo with a zero-seed endpoint
+        assert!(format!("{}", info).starts_with("RaftMemberInfo("));
+    }
+
+    #[test]
+    fn test_raft_member_info_display() {
+        let info = RaftMemberInfo::default();
+        let display = format!("{}", info);
+        // Should contain "RaftMemberInfo(" prefix
+        assert!(display.contains("RaftMemberInfo("));
+    }
+
+    #[test]
+    fn test_raft_member_info_equality() {
+        let info1 = RaftMemberInfo::default();
+        let info2 = RaftMemberInfo::default();
+        // Two defaults with same seed should be equal
+        assert_eq!(info1, info2);
+    }
+
+    #[test]
+    fn test_raft_member_info_new() {
+        use iroh::{EndpointAddr, EndpointId, SecretKey};
+
+        let seed = [1u8; 32];
+        let secret_key = SecretKey::from(seed);
+        let endpoint_id: EndpointId = secret_key.public();
+        let addr = EndpointAddr::new(endpoint_id);
+
+        let info = RaftMemberInfo::new(addr.clone());
+        assert_eq!(info.iroh_addr.id, endpoint_id);
+    }
+
+    #[test]
+    fn test_raft_member_info_serde_roundtrip() {
+        let original = RaftMemberInfo::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: RaftMemberInfo = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_raft_member_info_clone() {
+        let original = RaftMemberInfo::default();
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+}

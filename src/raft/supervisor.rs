@@ -6,13 +6,12 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for Supervisor:
-//!       - Restart counting within RESTART_WINDOW
-//!       - Backoff duration progression (1s, 5s, 10s)
-//!       - Circuit breaker after MAX_RESTARTS (3)
-//!       - should_restart() logic with time window reset
-//!       - Graceful shutdown via cancel token
-//!       Coverage: 0% line coverage (supervisor is infrastructure)
+//! Unit tests in `#[cfg(test)]` module below cover:
+//!   - Supervisor creation and initial state
+//!   - Restart counting and backoff duration progression
+//!   - should_restart() logic with window reset
+//!   - Graceful shutdown via stop() and cancellation token
+//!   - Health failure recording
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -197,6 +196,12 @@ impl Supervisor {
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancel.clone()
     }
+
+    /// Check if the supervisor is stopping.
+    #[cfg(test)]
+    pub fn is_stopping(&self) -> bool {
+        self.stopping.load(Ordering::Acquire)
+    }
 }
 
 /// Run a Raft node with supervision.
@@ -215,4 +220,286 @@ where
     });
 
     supervisor
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // Supervisor Creation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_supervisor_new() {
+        let supervisor = Supervisor::new("test-task");
+        assert_eq!(supervisor.restart_count(), 0);
+        assert!(!supervisor.is_stopping());
+    }
+
+    #[test]
+    fn test_supervisor_name_into_string() {
+        let supervisor = Supervisor::new(String::from("my-task"));
+        assert_eq!(supervisor.restart_count(), 0);
+    }
+
+    #[test]
+    fn test_supervisor_new_returns_arc() {
+        let supervisor: Arc<Supervisor> = Supervisor::new("test");
+        // Should be able to clone the Arc
+        let _cloned = supervisor.clone();
+        assert_eq!(supervisor.restart_count(), 0);
+    }
+
+    // =========================================================================
+    // Backoff Duration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_backoff_durations_constant() {
+        // Verify the backoff durations are as documented
+        assert_eq!(BACKOFF_DURATIONS[0], Duration::from_secs(1));
+        assert_eq!(BACKOFF_DURATIONS[1], Duration::from_secs(5));
+        assert_eq!(BACKOFF_DURATIONS[2], Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_get_backoff_initial() {
+        let supervisor = Supervisor::new("test");
+        // Initial backoff should be 1 second (index 0)
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn test_get_backoff_after_restarts() {
+        let supervisor = Supervisor::new("test");
+
+        // Initial: 1s
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(1));
+
+        // After 1 restart: 5s
+        supervisor.restart_count.store(1, Ordering::Release);
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(5));
+
+        // After 2 restarts: 10s
+        supervisor.restart_count.store(2, Ordering::Release);
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(10));
+
+        // After 3+ restarts: still 10s (capped at max)
+        supervisor.restart_count.store(3, Ordering::Release);
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(10));
+
+        supervisor.restart_count.store(100, Ordering::Release);
+        assert_eq!(supervisor.get_backoff(), Duration::from_secs(10));
+    }
+
+    // =========================================================================
+    // Stop and Cancellation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_supervisor_stop() {
+        let supervisor = Supervisor::new("test");
+        assert!(!supervisor.is_stopping());
+
+        supervisor.stop();
+
+        assert!(supervisor.is_stopping());
+        assert!(supervisor.cancel.is_cancelled());
+    }
+
+    #[test]
+    fn test_cancellation_token() {
+        let supervisor = Supervisor::new("test");
+        let token = supervisor.cancellation_token();
+
+        assert!(!token.is_cancelled());
+
+        supervisor.stop();
+
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn test_cancellation_token_clones() {
+        let supervisor = Supervisor::new("test");
+        let token1 = supervisor.cancellation_token();
+        let token2 = supervisor.cancellation_token();
+
+        assert!(!token1.is_cancelled());
+        assert!(!token2.is_cancelled());
+
+        supervisor.stop();
+
+        // All clones should be cancelled
+        assert!(token1.is_cancelled());
+        assert!(token2.is_cancelled());
+    }
+
+    // =========================================================================
+    // Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_max_restarts_constant() {
+        assert_eq!(MAX_RESTARTS, 3);
+    }
+
+    #[test]
+    fn test_restart_window_constant() {
+        assert_eq!(RESTART_WINDOW, Duration::from_secs(600));
+    }
+
+    // =========================================================================
+    // Async Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_should_restart_initially_true() {
+        let supervisor = Supervisor::new("test");
+        // With no restarts, should_restart should return true
+        assert!(supervisor.should_restart().await);
+    }
+
+    #[tokio::test]
+    async fn test_record_restart_increments_count() {
+        let supervisor = Supervisor::new("test");
+        assert_eq!(supervisor.restart_count(), 0);
+
+        supervisor.record_restart().await;
+        assert_eq!(supervisor.restart_count(), 1);
+
+        supervisor.record_restart().await;
+        assert_eq!(supervisor.restart_count(), 2);
+
+        supervisor.record_restart().await;
+        assert_eq!(supervisor.restart_count(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_should_restart_false_after_max_restarts() {
+        let supervisor = Supervisor::new("test");
+
+        // Record MAX_RESTARTS restarts
+        for _ in 0..MAX_RESTARTS {
+            supervisor.record_restart().await;
+        }
+
+        // Now should_restart should return false
+        assert!(!supervisor.should_restart().await);
+    }
+
+    #[tokio::test]
+    async fn test_record_health_failure() {
+        let supervisor = Supervisor::new("test");
+        assert_eq!(supervisor.restart_count(), 0);
+
+        supervisor.record_health_failure("test failure").await;
+        assert_eq!(supervisor.restart_count(), 1);
+
+        supervisor.record_health_failure("another failure").await;
+        assert_eq!(supervisor.restart_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_should_attempt_recovery() {
+        let supervisor = Supervisor::new("test");
+
+        // Initially should allow recovery
+        assert!(supervisor.should_attempt_recovery().await);
+
+        // After MAX_RESTARTS, should not allow recovery
+        for _ in 0..MAX_RESTARTS {
+            supervisor.record_restart().await;
+        }
+
+        assert!(!supervisor.should_attempt_recovery().await);
+    }
+
+    #[tokio::test]
+    async fn test_supervise_successful_task() {
+        let supervisor = Supervisor::new("test");
+        let supervisor_clone = supervisor.clone();
+
+        // Create a task that succeeds immediately
+        let call_count = Arc::new(AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        let handle = tokio::spawn(async move {
+            supervisor_clone
+                .supervise(move || {
+                    let count = call_count_clone.clone();
+                    async move {
+                        count.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    }
+                })
+                .await;
+        });
+
+        // Wait for completion
+        tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("should complete")
+            .expect("should not panic");
+
+        // Task should have been called once
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+        // No restarts for successful task
+        assert_eq!(supervisor.restart_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_supervise_cancelled_task() {
+        let supervisor = Supervisor::new("test");
+        let supervisor_clone = supervisor.clone();
+
+        let call_count = Arc::new(AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Spawn supervision
+        let handle = tokio::spawn(async move {
+            supervisor_clone
+                .supervise(move || {
+                    let count = call_count_clone.clone();
+                    async move {
+                        count.fetch_add(1, Ordering::SeqCst);
+                        // Hang forever
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
+                        Ok(())
+                    }
+                })
+                .await;
+        });
+
+        // Give it time to start
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Cancel the supervisor
+        supervisor.stop();
+
+        // Should complete quickly
+        tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("should complete after cancel")
+            .expect("should not panic");
+
+        // Task should have been started once
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_run_raft_with_supervision() {
+        let supervisor = run_raft_with_supervision("test-raft".to_string(), || async {
+            // Succeed immediately
+            Ok(())
+        })
+        .await;
+
+        // Give the spawned task time to complete
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Should have created a supervisor
+        assert_eq!(supervisor.restart_count(), 0);
+    }
 }
