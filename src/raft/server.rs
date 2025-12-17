@@ -12,13 +12,18 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for RaftRpcServer:
-//!       - spawn() and shutdown() lifecycle
-//!       - VoteRequest/VoteResponse handling
-//!       - AppendEntriesRequest/Response handling
-//!       - SnapshotRequest handling with large payloads
+//! RPC message handling is tested in `tests/server_rpc_test.rs`:
+//!   - VoteRequest/VoteResponse serialization and mock RPC flow
+//!   - AppendEntriesRequest/Response (all variants: Success, Conflict, HigherVote, PartialSuccess)
+//!   - SnapshotRequest handling with large payloads (1MB+)
+//!   - Timestamp wrapping for clock drift detection
+//!   - Mock stream concurrent RPC tests
+//!   - Network partition and connection close handling
+//!
+//! TODO: Add integration tests for:
+//!       - spawn() and shutdown() lifecycle with real Iroh endpoints
 //!       - Connection limit enforcement (MAX_CONCURRENT_CONNECTIONS)
-//!       Coverage: 0% line coverage (tested via madsim and integration tests)
+//!       - Stream limit enforcement (MAX_STREAMS_PER_CONNECTION)
 
 use std::io::Cursor;
 use std::sync::Arc;
