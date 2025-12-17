@@ -45,6 +45,7 @@ pub mod madsim_network;
 pub mod network;
 pub mod node;
 pub mod node_failure_detection;
+pub mod pure;
 pub mod rpc;
 pub mod server;
 pub mod storage;

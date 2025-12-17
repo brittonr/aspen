@@ -146,6 +146,8 @@ testing = []
 tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
+# Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
+bolero = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

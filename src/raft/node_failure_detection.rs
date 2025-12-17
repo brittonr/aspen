@@ -117,11 +117,15 @@ impl NodeFailureDetector {
                 }
             }
             FailureType::ActorCrash | FailureType::NodeCrash => {
-                // Tiger Style: Enforce bounded map size before insertion
-                // Check if we need to evict before the entry() call to avoid borrow checker issues
-                if !self.unreachable_nodes.contains_key(&node_id)
-                    && self.unreachable_nodes.len() >= MAX_UNREACHABLE_NODES as usize
-                {
+                use crate::raft::pure::should_evict_oldest_unreachable;
+
+                // Tiger Style: Enforce bounded map size before insertion (using pure function)
+                let already_tracked = self.unreachable_nodes.contains_key(&node_id);
+                if should_evict_oldest_unreachable(
+                    self.unreachable_nodes.len(),
+                    MAX_UNREACHABLE_NODES as usize,
+                    already_tracked,
+                ) {
                     tracing::error!(
                         max_unreachable_nodes = MAX_UNREACHABLE_NODES,
                         "unreachable nodes map at capacity, oldest entries will be evicted"
@@ -174,15 +178,8 @@ impl NodeFailureDetector {
         raft_heartbeat: ConnectionStatus,
         iroh_connection: ConnectionStatus,
     ) -> FailureType {
-        match (raft_heartbeat, iroh_connection) {
-            (ConnectionStatus::Connected, _) => FailureType::Healthy,
-            (ConnectionStatus::Disconnected, ConnectionStatus::Connected) => {
-                FailureType::ActorCrash
-            }
-            (ConnectionStatus::Disconnected, ConnectionStatus::Disconnected) => {
-                FailureType::NodeCrash
-            }
-        }
+        // Delegate to extracted pure function
+        crate::raft::pure::classify_node_failure(raft_heartbeat, iroh_connection)
     }
 
     /// Get nodes that need operator intervention (unreachable > alert_threshold).

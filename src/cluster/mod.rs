@@ -90,6 +90,7 @@ pub mod config;
 pub mod gossip_discovery;
 pub mod metadata;
 pub mod ticket;
+pub mod validation;
 
 /// Controls how the node server should behave while running in deterministic
 /// simulations.

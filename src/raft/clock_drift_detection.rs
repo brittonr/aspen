@@ -80,8 +80,10 @@ struct DriftObservation {
 
 impl DriftObservation {
     fn new(offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) -> Self {
+        use crate::raft::pure::classify_drift_severity;
+
         let severity =
-            Self::classify_offset(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
+            classify_drift_severity(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
         Self {
             last_offset_ms: offset_ms,
             ewma_offset_ms: offset_ms as f64,
@@ -93,33 +95,18 @@ impl DriftObservation {
 
     /// Update observation with new measurement using EWMA.
     fn update(&mut self, offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) {
+        use crate::raft::pure::{classify_drift_severity, compute_ewma};
+
         self.last_offset_ms = offset_ms;
         // EWMA: new_avg = alpha * new_value + (1 - alpha) * old_avg
-        self.ewma_offset_ms =
-            DRIFT_EWMA_ALPHA * (offset_ms as f64) + (1.0 - DRIFT_EWMA_ALPHA) * self.ewma_offset_ms;
+        self.ewma_offset_ms = compute_ewma(offset_ms as f64, self.ewma_offset_ms, DRIFT_EWMA_ALPHA);
         self.observation_count = self.observation_count.saturating_add(1);
         self.last_observed_at = Instant::now();
-        self.severity = Self::classify_offset(
+        self.severity = classify_drift_severity(
             self.ewma_offset_ms,
             warning_threshold_ms,
             alert_threshold_ms,
         );
-    }
-
-    /// Classify offset into severity level based on provided thresholds.
-    fn classify_offset(
-        ewma_offset_ms: f64,
-        warning_threshold_ms: u64,
-        alert_threshold_ms: u64,
-    ) -> DriftSeverity {
-        let abs_offset = ewma_offset_ms.abs() as u64;
-        if abs_offset >= alert_threshold_ms {
-            DriftSeverity::Alert
-        } else if abs_offset >= warning_threshold_ms {
-            DriftSeverity::Warning
-        } else {
-            DriftSeverity::Normal
-        }
     }
 }
 
@@ -193,17 +180,15 @@ impl ClockDriftDetector {
         server_send_ms: u64,
         client_recv_ms: u64,
     ) {
-        // Calculate clock offset using NTP formula:
-        // offset = ((t2 - t1) + (t3 - t4)) / 2
-        // Note: Using signed arithmetic to handle negative offsets
-        let t2_minus_t1 = server_recv_ms as i64 - client_send_ms as i64;
-        let t3_minus_t4 = server_send_ms as i64 - client_recv_ms as i64;
-        let offset_ms = (t2_minus_t1 + t3_minus_t4) / 2;
+        use crate::raft::pure::calculate_ntp_clock_offset;
 
-        // Also calculate RTT for logging
-        // RTT = (t4 - t1) - (t3 - t2)
-        let rtt_ms = (client_recv_ms as i64 - client_send_ms as i64)
-            - (server_send_ms as i64 - server_recv_ms as i64);
+        // Calculate clock offset and RTT using NTP formula (extracted pure function)
+        let (offset_ms, rtt_ms) = calculate_ntp_clock_offset(
+            client_send_ms,
+            server_recv_ms,
+            server_send_ms,
+            client_recv_ms,
+        );
 
         // Tiger Style: Bounded storage
         if self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize

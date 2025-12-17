@@ -398,71 +398,53 @@ impl NodeConfig {
     ///
     /// Returns `ConfigError` if configuration is invalid.
     pub fn validate(&self) -> Result<(), ConfigError> {
+        use crate::cluster::validation::{
+            check_disk_usage, check_http_port, check_raft_timing_sanity, validate_cookie,
+            validate_mailbox_capacity, validate_node_id, validate_raft_timings,
+            validate_secret_key,
+        };
         use tracing::warn;
 
-        // Required fields
-        if self.node_id == 0 {
-            return Err(ConfigError::Validation {
-                message: "node_id must be non-zero".into(),
-            });
+        // Validate core fields using extracted pure functions
+        validate_node_id(self.node_id).map_err(|e| ConfigError::Validation {
+            message: e.to_string(),
+        })?;
+
+        validate_cookie(&self.cookie).map_err(|e| ConfigError::Validation {
+            message: e.to_string(),
+        })?;
+
+        validate_raft_timings(
+            self.heartbeat_interval_ms,
+            self.election_timeout_min_ms,
+            self.election_timeout_max_ms,
+        )
+        .map_err(|e| ConfigError::Validation {
+            message: e.to_string(),
+        })?;
+
+        validate_secret_key(self.iroh.secret_key.as_deref()).map_err(|e| {
+            ConfigError::Validation {
+                message: e.to_string(),
+            }
+        })?;
+
+        validate_mailbox_capacity(self.raft_mailbox_capacity).map_err(|e| {
+            ConfigError::Validation {
+                message: e.to_string(),
+            }
+        })?;
+
+        // Log sanity warnings using extracted pure function
+        for warning in check_raft_timing_sanity(
+            self.heartbeat_interval_ms,
+            self.election_timeout_min_ms,
+            self.election_timeout_max_ms,
+        ) {
+            warn!("{}", warning);
         }
 
-        if self.cookie.is_empty() {
-            return Err(ConfigError::Validation {
-                message: "cluster cookie cannot be empty".into(),
-            });
-        }
-
-        // Numeric ranges
-        if self.heartbeat_interval_ms == 0 {
-            return Err(ConfigError::Validation {
-                message: "heartbeat_interval_ms must be greater than 0".into(),
-            });
-        }
-
-        if self.election_timeout_min_ms == 0 {
-            return Err(ConfigError::Validation {
-                message: "election_timeout_min_ms must be greater than 0".into(),
-            });
-        }
-
-        if self.election_timeout_max_ms == 0 {
-            return Err(ConfigError::Validation {
-                message: "election_timeout_max_ms must be greater than 0".into(),
-            });
-        }
-
-        if self.election_timeout_max_ms <= self.election_timeout_min_ms {
-            return Err(ConfigError::Validation {
-                message: "election_timeout_max_ms must be greater than election_timeout_min_ms"
-                    .into(),
-            });
-        }
-
-        // Raft sanity checks (warnings)
-        if self.heartbeat_interval_ms >= self.election_timeout_min_ms {
-            warn!(
-                heartbeat_interval_ms = self.heartbeat_interval_ms,
-                election_timeout_min_ms = self.election_timeout_min_ms,
-                "heartbeat interval should be less than election timeout (Raft requirement)"
-            );
-        }
-
-        if self.election_timeout_min_ms < 1000 {
-            warn!(
-                election_timeout_min_ms = self.election_timeout_min_ms,
-                "election timeout < 1000ms may be too aggressive for production"
-            );
-        }
-
-        if self.election_timeout_max_ms > 10000 {
-            warn!(
-                election_timeout_max_ms = self.election_timeout_max_ms,
-                "election timeout > 10000ms may be too conservative"
-            );
-        }
-
-        // File path validation
+        // File path validation (has I/O side effects, kept inline)
         if let Some(ref data_dir) = self.data_dir
             && let Some(parent) = data_dir.parent()
         {
@@ -485,12 +467,12 @@ impl NodeConfig {
             // Check disk space (warning only, not error)
             match crate::utils::check_disk_space(data_dir) {
                 Ok(disk_space) => {
-                    if disk_space.usage_percent > 80 {
+                    if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
                         warn!(
                             data_dir = %data_dir.display(),
-                            usage_percent = disk_space.usage_percent,
                             available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
-                            "disk space usage high (>80%)"
+                            "{}",
+                            warning
                         );
                     }
                 }
@@ -504,42 +486,9 @@ impl NodeConfig {
             }
         }
 
-        // Network port validation (warn if using default ports)
-        if self.http_addr.port() == 8080 {
-            warn!(
-                http_addr = %self.http_addr,
-                "using default HTTP port 8080 (may conflict in production)"
-            );
-        }
-
-        // Iroh secret key validation
-        if let Some(ref key_hex) = self.iroh.secret_key {
-            if key_hex.len() != 64 {
-                return Err(ConfigError::Validation {
-                    message: "iroh secret key must be 64 hex characters (32 bytes)".into(),
-                });
-            }
-            if hex::decode(key_hex).is_err() {
-                return Err(ConfigError::Validation {
-                    message: "iroh secret key must be valid hex".into(),
-                });
-            }
-        }
-
-        // Tiger Style: Validate bounded mailbox capacity
-        const MAX_RAFT_MAILBOX_CAPACITY: u32 = 10000;
-        if self.raft_mailbox_capacity == 0 {
-            return Err(ConfigError::Validation {
-                message: "raft_mailbox_capacity must be greater than 0".into(),
-            });
-        }
-        if self.raft_mailbox_capacity > MAX_RAFT_MAILBOX_CAPACITY {
-            return Err(ConfigError::Validation {
-                message: format!(
-                    "raft_mailbox_capacity {} exceeds maximum of {}",
-                    self.raft_mailbox_capacity, MAX_RAFT_MAILBOX_CAPACITY
-                ),
-            });
+        // Network port validation (using extracted pure function)
+        if let Some(warning) = check_http_port(self.http_addr.port()) {
+            warn!(http_addr = %self.http_addr, "{}", warning);
         }
 
         Ok(())

@@ -126,14 +126,16 @@ impl Supervisor {
 
     /// Check if we should attempt a restart.
     async fn should_restart(&self) -> bool {
+        use crate::raft::pure::should_allow_restart;
+
         let mut times = self.restart_times.lock().await;
         let now = Instant::now();
 
         // Remove old restart times outside the window
         times.retain(|&t| now.duration_since(t) < RESTART_WINDOW);
 
-        // Check if we've exceeded max restarts in the window
-        times.len() < MAX_RESTARTS as usize
+        // Check if we've exceeded max restarts in the window (extracted pure logic)
+        should_allow_restart(times.len(), MAX_RESTARTS)
     }
 
     /// Record a restart attempt.
@@ -151,9 +153,10 @@ impl Supervisor {
 
     /// Get the backoff duration for the current restart count.
     fn get_backoff(&self) -> Duration {
+        use crate::raft::pure::calculate_backoff_duration;
+
         let count = self.restart_count.load(Ordering::Acquire) as usize;
-        let idx = count.min(BACKOFF_DURATIONS.len() - 1);
-        BACKOFF_DURATIONS[idx]
+        calculate_backoff_duration(count, &BACKOFF_DURATIONS)
     }
 
     /// Stop the supervisor.

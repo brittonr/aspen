@@ -150,15 +150,19 @@ impl PeerConnection {
         // Handle stream open result
         match stream_result {
             Ok(stream) => {
+                use crate::raft::pure::transition_connection_health;
+
                 info!(node_id = %self.node_id, "stream opened successfully");
                 // Update last used timestamp on success
                 *self.last_used.lock().await = Instant::now();
 
-                // Reset health to healthy on successful stream open
+                // Transition health state using pure function
                 let mut health = self.health.lock().await;
-                if !matches!(*health, ConnectionHealth::Healthy) {
+                let new_health =
+                    transition_connection_health(*health, true, MAX_CONNECTION_RETRIES);
+                if *health != new_health {
                     debug!(node_id = %self.node_id, "connection health recovered");
-                    *health = ConnectionHealth::Healthy;
+                    *health = new_health;
                 }
 
                 // Return stream with automatic cleanup on drop
@@ -178,41 +182,34 @@ impl PeerConnection {
                 Ok((send, recv))
             }
             Err(err) => {
+                use crate::raft::pure::transition_connection_health;
+
                 // Decrement active streams on failure
                 self.active_streams.fetch_sub(1, Ordering::Relaxed);
 
-                // Update health status
+                // Update health status using pure state machine
                 let mut health = self.health.lock().await;
-                match *health {
-                    ConnectionHealth::Healthy => {
-                        *health = ConnectionHealth::Degraded {
-                            consecutive_failures: 1,
-                        };
+                let old_health = *health;
+                let new_health =
+                    transition_connection_health(*health, false, MAX_CONNECTION_RETRIES);
+                *health = new_health;
+
+                // Log state transitions
+                match (old_health, new_health) {
+                    (ConnectionHealth::Healthy, ConnectionHealth::Degraded { .. }) => {
                         warn!(
                             node_id = %self.node_id,
                             error = %err,
                             "connection degraded after stream failure"
                         );
                     }
-                    ConnectionHealth::Degraded {
-                        consecutive_failures,
-                    } => {
-                        if consecutive_failures >= MAX_CONNECTION_RETRIES {
-                            *health = ConnectionHealth::Failed;
-                            error!(
-                                node_id = %self.node_id,
-                                failures = consecutive_failures + 1,
-                                "connection marked as failed after repeated stream failures"
-                            );
-                        } else {
-                            *health = ConnectionHealth::Degraded {
-                                consecutive_failures: consecutive_failures + 1,
-                            };
-                        }
+                    (ConnectionHealth::Degraded { .. }, ConnectionHealth::Failed) => {
+                        error!(
+                            node_id = %self.node_id,
+                            "connection marked as failed after repeated stream failures"
+                        );
                     }
-                    ConnectionHealth::Failed => {
-                        // Already failed, stay failed
-                    }
+                    _ => {}
                 }
 
                 Err(err)
@@ -352,8 +349,11 @@ impl RaftConnectionPool {
             match connect_result {
                 Ok(conn) => break conn,
                 Err(err) if attempts < MAX_CONNECTION_RETRIES => {
-                    let backoff = Duration::from_millis(
-                        CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)),
+                    use crate::raft::pure::calculate_connection_retry_backoff;
+
+                    let backoff = calculate_connection_retry_backoff(
+                        attempts,
+                        CONNECTION_RETRY_BACKOFF_BASE_MS,
                     );
                     warn!(
                         %node_id,
