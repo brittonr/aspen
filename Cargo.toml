@@ -123,7 +123,12 @@ log = { version = "0.4", optional = true }
 mime = { version = "0.3.17", optional = true }
 
 [dev-dependencies]
+# Property-based testing with Bolero (unified frontend for multiple backends)
+bolero = "0.13"
+bolero-generator = "0.13"
+# Keep proptest for madsim compatibility (madsim tests use proptest strategies internally)
 proptest = "1.0"
+
 tokio-test = "0.4"
 cargo-nextest = "0.9.60"
 tempfile = "3.10"

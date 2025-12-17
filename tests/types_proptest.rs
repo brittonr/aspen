@@ -7,193 +7,246 @@
 
 mod support;
 
-use proptest::prelude::*;
+use bolero::check;
 use std::str::FromStr;
 
 use aspen::raft::types::{AppRequest, AppResponse, NodeId, RaftMemberInfo};
-use support::proptest_generators::{
-    arbitrary_app_request, arbitrary_node_id_string, invalid_node_id_string,
-};
+use support::bolero_generators::{BalancedAppRequest, InvalidNodeIdString, ValidNodeIdString};
 
-proptest! {
-    /// NodeId Display -> FromStr roundtrip should be identity.
-    #[test]
-    fn test_node_id_display_fromstr_roundtrip(
-        id in 0u64..u64::MAX
-    ) {
-        let node_id = NodeId::from(id);
-        let displayed = node_id.to_string();
-        let parsed: NodeId = displayed.parse().expect("Display output should parse");
-        prop_assert_eq!(node_id, parsed);
-    }
+/// NodeId Display -> FromStr roundtrip should be identity.
+#[test]
+fn test_node_id_display_fromstr_roundtrip() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<u64>()
+        .for_each(|id| {
+            let node_id = NodeId::from(*id);
+            let displayed = node_id.to_string();
+            let parsed: NodeId = displayed.parse().expect("Display output should parse");
+            assert_eq!(node_id, parsed);
+        });
+}
 
-    /// NodeId ordering should match underlying u64 ordering.
-    #[test]
-    fn test_node_id_ordering(
-        a in 0u64..u64::MAX,
-        b in 0u64..u64::MAX,
-    ) {
-        let node_a = NodeId::from(a);
-        let node_b = NodeId::from(b);
+/// NodeId ordering should match underlying u64 ordering.
+#[test]
+fn test_node_id_ordering() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<(u64, u64)>()
+        .for_each(|(a, b)| {
+            let node_a = NodeId::from(*a);
+            let node_b = NodeId::from(*b);
 
-        prop_assert_eq!(a < b, node_a < node_b);
-        prop_assert_eq!(a == b, node_a == node_b);
-        prop_assert_eq!(a > b, node_a > node_b);
-    }
+            assert_eq!(a < b, node_a < node_b);
+            assert_eq!(a == b, node_a == node_b);
+            assert_eq!(a > b, node_a > node_b);
+        });
+}
 
-    /// Valid NodeId strings should parse successfully.
-    #[test]
-    fn test_node_id_valid_string_parsing(
-        s in arbitrary_node_id_string()
-    ) {
-        let result = NodeId::from_str(&s);
-        prop_assert!(result.is_ok(), "Valid string '{}' should parse", s);
+/// Valid NodeId strings should parse successfully.
+#[test]
+fn test_node_id_valid_string_parsing() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<ValidNodeIdString>()
+        .for_each(|s| {
+            let result = NodeId::from_str(&s.0);
+            assert!(result.is_ok(), "Valid string '{}' should parse", s.0);
 
-        // Verify roundtrip
-        let node_id = result.unwrap();
-        let displayed = node_id.to_string();
-        prop_assert_eq!(s, displayed, "Roundtrip should preserve value");
-    }
+            // Verify roundtrip
+            let node_id = result.unwrap();
+            let displayed = node_id.to_string();
+            assert_eq!(s.0, displayed, "Roundtrip should preserve value");
+        });
+}
 
-    /// Invalid NodeId strings should fail parsing.
-    #[test]
-    fn test_node_id_invalid_string_parsing(
-        s in invalid_node_id_string()
-    ) {
-        let result = NodeId::from_str(&s);
-        prop_assert!(result.is_err(), "Invalid string '{}' should fail parsing", s);
-    }
+/// Invalid NodeId strings should fail parsing.
+#[test]
+fn test_node_id_invalid_string_parsing() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<InvalidNodeIdString>()
+        .for_each(|s| {
+            let result = NodeId::from_str(&s.0);
+            assert!(
+                result.is_err(),
+                "Invalid string '{}' should fail parsing",
+                s.0
+            );
+        });
+}
 
-    /// NodeId From<u64>/Into<u64> roundtrip should be identity.
-    #[test]
-    fn test_node_id_u64_conversion_roundtrip(
-        id in 0u64..u64::MAX
-    ) {
-        let node_id = NodeId::from(id);
-        let back: u64 = node_id.into();
-        prop_assert_eq!(id, back);
-    }
+/// NodeId From<u64>/Into<u64> roundtrip should be identity.
+#[test]
+fn test_node_id_u64_conversion_roundtrip() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<u64>()
+        .for_each(|id| {
+            let node_id = NodeId::from(*id);
+            let back: u64 = node_id.into();
+            assert_eq!(*id, back);
+        });
+}
 
-    /// AppRequest serde JSON roundtrip.
-    #[test]
-    fn test_app_request_serde_json_roundtrip(
-        request in arbitrary_app_request()
-    ) {
-        let serialized = serde_json::to_string(&request).expect("Should serialize");
-        let deserialized: AppRequest = serde_json::from_str(&serialized).expect("Should deserialize");
+/// AppRequest serde JSON roundtrip.
+#[test]
+fn test_app_request_serde_json_roundtrip() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<BalancedAppRequest>()
+        .for_each(|request| {
+            let serialized = serde_json::to_string(&request.0).expect("Should serialize");
+            let deserialized: AppRequest =
+                serde_json::from_str(&serialized).expect("Should deserialize");
 
-        // Compare by re-serializing (since AppRequest doesn't derive PartialEq)
-        let reserialized = serde_json::to_string(&deserialized).expect("Should re-serialize");
-        prop_assert_eq!(serialized, reserialized);
-    }
+            // Compare by re-serializing (since AppRequest doesn't derive PartialEq)
+            let reserialized = serde_json::to_string(&deserialized).expect("Should re-serialize");
+            assert_eq!(serialized, reserialized);
+        });
+}
 
-    /// AppRequest bincode roundtrip (compact binary format).
-    #[test]
-    fn test_app_request_bincode_roundtrip(
-        request in arbitrary_app_request()
-    ) {
-        let serialized = bincode::serialize(&request).expect("Should serialize");
-        let deserialized: AppRequest = bincode::deserialize(&serialized).expect("Should deserialize");
+/// AppRequest bincode roundtrip (compact binary format).
+#[test]
+fn test_app_request_bincode_roundtrip() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<BalancedAppRequest>()
+        .for_each(|request| {
+            let serialized = bincode::serialize(&request.0).expect("Should serialize");
+            let deserialized: AppRequest =
+                bincode::deserialize(&serialized).expect("Should deserialize");
 
-        // Compare by re-serializing
-        let reserialized = bincode::serialize(&deserialized).expect("Should re-serialize");
-        prop_assert_eq!(serialized, reserialized);
-    }
+            // Compare by re-serializing
+            let reserialized = bincode::serialize(&deserialized).expect("Should re-serialize");
+            assert_eq!(serialized, reserialized);
+        });
+}
 
-    /// AppRequest Display should contain key for Set/Delete operations.
-    #[test]
-    fn test_app_request_display_contains_key(
-        request in arbitrary_app_request()
-    ) {
-        let displayed = request.to_string();
+/// AppRequest Display should contain key for Set/Delete operations.
+#[test]
+fn test_app_request_display_contains_key() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<BalancedAppRequest>()
+        .for_each(|request| {
+            let displayed = request.0.to_string();
 
-        match &request {
-            AppRequest::Set { key, value } => {
-                prop_assert!(displayed.contains(key), "Display should contain key");
-                prop_assert!(displayed.contains(value), "Display should contain value");
-                prop_assert!(displayed.contains("Set"), "Display should contain variant name");
-            }
-            AppRequest::SetMulti { pairs } => {
-                prop_assert!(displayed.contains("SetMulti"), "Display should contain variant name");
-                // First pair's key should be present
-                if let Some((k, _)) = pairs.first() {
-                    prop_assert!(displayed.contains(k), "Display should contain first key");
+            match &request.0 {
+                AppRequest::Set { key, value } => {
+                    assert!(displayed.contains(key), "Display should contain key");
+                    assert!(displayed.contains(value), "Display should contain value");
+                    assert!(
+                        displayed.contains("Set"),
+                        "Display should contain variant name"
+                    );
+                }
+                AppRequest::SetMulti { pairs } => {
+                    assert!(
+                        displayed.contains("SetMulti"),
+                        "Display should contain variant name"
+                    );
+                    // First pair's key should be present
+                    if let Some((k, _)) = pairs.first() {
+                        assert!(displayed.contains(k), "Display should contain first key");
+                    }
+                }
+                AppRequest::Delete { key } => {
+                    assert!(displayed.contains(key), "Display should contain key");
+                    assert!(
+                        displayed.contains("Delete"),
+                        "Display should contain variant name"
+                    );
+                }
+                AppRequest::DeleteMulti { keys } => {
+                    assert!(
+                        displayed.contains("DeleteMulti"),
+                        "Display should contain variant name"
+                    );
+                    if let Some(k) = keys.first() {
+                        assert!(displayed.contains(k), "Display should contain first key");
+                    }
                 }
             }
-            AppRequest::Delete { key } => {
-                prop_assert!(displayed.contains(key), "Display should contain key");
-                prop_assert!(displayed.contains("Delete"), "Display should contain variant name");
+        });
+}
+
+/// AppResponse serde JSON roundtrip.
+#[test]
+fn test_app_response_serde_json_roundtrip() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<(Option<String>, Option<bool>)>()
+        .for_each(|(value, deleted)| {
+            let response = AppResponse {
+                value: value.clone(),
+                deleted: *deleted,
+            };
+            let serialized = serde_json::to_string(&response).expect("Should serialize");
+            let deserialized: AppResponse =
+                serde_json::from_str(&serialized).expect("Should deserialize");
+
+            assert_eq!(response.value, deserialized.value);
+            assert_eq!(response.deleted, deserialized.deleted);
+        });
+}
+
+/// NodeId hash should be consistent with equality.
+#[test]
+fn test_node_id_hash_consistency() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<(u64, u64)>()
+        .for_each(|(a, b)| {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            // Limit range to make collisions more likely to test
+            let a = a % 1000;
+            let b = b % 1000;
+
+            let node_a = NodeId::from(a);
+            let node_b = NodeId::from(b);
+
+            let hash_a = {
+                let mut hasher = DefaultHasher::new();
+                node_a.hash(&mut hasher);
+                hasher.finish()
+            };
+
+            let hash_b = {
+                let mut hasher = DefaultHasher::new();
+                node_b.hash(&mut hasher);
+                hasher.finish()
+            };
+
+            // Equal values must have equal hashes
+            if node_a == node_b {
+                assert_eq!(hash_a, hash_b, "Equal NodeIds must have equal hashes");
             }
-            AppRequest::DeleteMulti { keys } => {
-                prop_assert!(displayed.contains("DeleteMulti"), "Display should contain variant name");
-                if let Some(k) = keys.first() {
-                    prop_assert!(displayed.contains(k), "Display should contain first key");
-                }
-            }
-        }
-    }
+        });
+}
 
-    /// AppResponse serde JSON roundtrip.
-    #[test]
-    fn test_app_response_serde_json_roundtrip(
-        value in prop::option::of("[a-zA-Z0-9]{1,50}"),
-        deleted in prop::option::of(any::<bool>())
-    ) {
-        let response = AppResponse { value, deleted };
-        let serialized = serde_json::to_string(&response).expect("Should serialize");
-        let deserialized: AppResponse = serde_json::from_str(&serialized).expect("Should deserialize");
+/// NodeId::new constructor should work for any u64.
+#[test]
+fn test_node_id_new_any_u64() {
+    check!()
+        .with_iterations(1000)
+        .with_type::<u64>()
+        .for_each(|id| {
+            let node_id = NodeId::new(*id);
+            assert_eq!(node_id.0, *id);
+            let back: u64 = node_id.into();
+            assert_eq!(*id, back);
+        });
+}
 
-        prop_assert_eq!(response.value, deserialized.value);
-        prop_assert_eq!(response.deleted, deserialized.deleted);
-    }
-
-    /// NodeId hash should be consistent with equality.
-    #[test]
-    fn test_node_id_hash_consistency(
-        a in 0u64..1000u64,
-        b in 0u64..1000u64,
-    ) {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let node_a = NodeId::from(a);
-        let node_b = NodeId::from(b);
-
-        let hash_a = {
-            let mut hasher = DefaultHasher::new();
-            node_a.hash(&mut hasher);
-            hasher.finish()
-        };
-
-        let hash_b = {
-            let mut hasher = DefaultHasher::new();
-            node_b.hash(&mut hasher);
-            hasher.finish()
-        };
-
-        // Equal values must have equal hashes
-        if node_a == node_b {
-            prop_assert_eq!(hash_a, hash_b, "Equal NodeIds must have equal hashes");
-        }
-    }
-
-    /// NodeId::new constructor should work for any u64.
-    #[test]
-    fn test_node_id_new_any_u64(
-        id in any::<u64>()
-    ) {
-        let node_id = NodeId::new(id);
-        prop_assert_eq!(node_id.0, id);
-        let back: u64 = node_id.into();
-        prop_assert_eq!(id, back);
-    }
-
-    /// NodeId Default should be 0.
-    #[test]
-    fn test_node_id_default(_dummy in Just(())) {
-        let default_node = NodeId::default();
-        prop_assert_eq!(default_node.0, 0);
-    }
+/// NodeId Default should be 0.
+#[test]
+fn test_node_id_default() {
+    // This is a single test case, not property-based
+    let default_node = NodeId::default();
+    assert_eq!(default_node.0, 0);
 }
 
 // Non-proptest unit tests for specific edge cases

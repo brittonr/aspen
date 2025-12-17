@@ -8,8 +8,9 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
-arbitrary = { version = "1", features = ["derive"] }
+# Bolero unified fuzzing frontend (supports libFuzzer, AFL, Honggfuzz, Kani)
+bolero = "0.13"
+bolero-generator = "0.13"
 
 # Main crate with fuzzing feature
 aspen = { path = "..", features = ["fuzzing"] }
@@ -38,113 +39,3 @@ tokio = { version = "1.0", features = ["rt", "sync", "macros"] }
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
-
-# Fuzz targets - network/protocol parsing (highest priority)
-[[bin]]
-name = "fuzz_raft_rpc"
-path = "fuzz_targets/fuzz_raft_rpc.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_snapshot_json"
-path = "fuzz_targets/fuzz_snapshot_json.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_log_entries"
-path = "fuzz_targets/fuzz_log_entries.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_http_api"
-path = "fuzz_targets/fuzz_http_api.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_gossip"
-path = "fuzz_targets/fuzz_gossip.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_cluster_ticket"
-path = "fuzz_targets/fuzz_cluster_ticket.rs"
-test = false
-doc = false
-bench = false
-
-# New fuzz targets - P0 (high priority protocol fuzzing)
-[[bin]]
-name = "fuzz_tui_rpc"
-path = "fuzz_targets/fuzz_tui_rpc.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_protocol_handler"
-path = "fuzz_targets/fuzz_protocol_handler.rs"
-test = false
-doc = false
-bench = false
-
-# New fuzz targets - P1 (configuration and integrity)
-[[bin]]
-name = "fuzz_config"
-path = "fuzz_targets/fuzz_config.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_integrity"
-path = "fuzz_targets/fuzz_integrity.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_roundtrip"
-path = "fuzz_targets/fuzz_roundtrip.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_differential"
-path = "fuzz_targets/fuzz_differential.rs"
-test = false
-doc = false
-bench = false
-
-# New fuzz targets - P2 (lower priority)
-[[bin]]
-name = "fuzz_clock_drift"
-path = "fuzz_targets/fuzz_clock_drift.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_metadata"
-path = "fuzz_targets/fuzz_metadata.rs"
-test = false
-doc = false
-bench = false
-
-# Phase 4: Model-guided Raft fuzzing
-[[bin]]
-name = "fuzz_raft_model_guided"
-path = "fuzz_targets/fuzz_raft_model_guided.rs"
-test = false
-doc = false
-bench = false

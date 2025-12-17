@@ -4,8 +4,10 @@
 //! - Mock Iroh infrastructure for fast, deterministic networking tests
 //! - Mock gossip for fast, deterministic peer discovery tests
 //! - Test helpers for cluster bootstrap and configuration
-//! - Proptest generators for property-based testing
+//! - Bolero generators for unified property-based testing (libFuzzer, AFL, Honggfuzz, Kani, Miri)
+//! - Proptest generators for madsim compatibility (proptest used inside madsim tests)
 
+pub mod bolero_generators;
 pub mod mock_gossip;
 pub mod mock_iroh;
 pub mod proptest_generators;
