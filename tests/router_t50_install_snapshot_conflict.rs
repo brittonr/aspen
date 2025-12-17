@@ -6,12 +6,6 @@
 /// a node falls behind and needs snapshot recovery.
 ///
 /// Original: openraft/openraft/src/engine/handler/following_handler/install_snapshot_test.rs::test_install_snapshot_conflict
-///
-/// TODO: Known flaky test (as of 2025-12-16):
-///   - test_install_snapshot_conflict: Timing-dependent test involving network partitions
-///     and snapshot transfers. Fails intermittently in CI/coverage runs, likely due to
-///     election timeouts or partition healing timing. Passes consistently when run in
-///     isolation.
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,6 +44,8 @@ async fn test_install_snapshot_conflict() -> Result<()> {
             max_in_snapshot_log_to_keep: 0,
             purge_batch_size: 1,
             enable_heartbeat: false,
+            enable_tick: false,
+            enable_elect: false,
             ..Default::default()
         }
         .validate()?,
@@ -287,6 +283,8 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
             max_in_snapshot_log_to_keep: 2,
             purge_batch_size: 1,
             enable_heartbeat: false,
+            enable_tick: false,
+            enable_elect: false,
             ..Default::default()
         }
         .validate()?,

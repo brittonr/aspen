@@ -4,12 +4,6 @@
 //! and transaction atomicity through comprehensive property testing.
 //!
 //! Tiger Style: Tests verify that resource bounds from constants.rs are enforced.
-//!
-//! TODO: Known flaky tests (as of 2025-12-16):
-//!   - test_failed_transaction_doesnt_corrupt_state: Intermittent failures when testing
-//!     that oversized SetMulti transactions fail gracefully without corrupting state.
-//!     May be related to async runtime behavior or SQLite connection pooling under load.
-//!     Needs investigation to determine root cause.
 
 mod support;
 
@@ -180,6 +174,10 @@ fn test_failed_transaction_doesnt_corrupt_state() {
                 // Attempt to apply invalid entry (should fail)
                 let result = sm.apply(entries_stream).await;
                 assert!(result.is_err(), "Oversized SetMulti should fail");
+
+                // Force WAL checkpoint to ensure read visibility after rollback
+                sm.checkpoint_wal().ok();
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
                 // Verify all valid entries are still present and unchanged
                 for (key, value) in &valid_entries {
