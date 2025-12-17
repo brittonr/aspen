@@ -72,13 +72,21 @@ use super::IrohEndpointManager;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::types::NodeId;
 
+/// Current gossip message protocol version.
+///
+/// Increment this when making breaking changes to PeerAnnouncement format.
+/// Note: This is a breaking change - old nodes will not parse new messages.
+const GOSSIP_MESSAGE_VERSION: u8 = 1;
+
 /// Announcement message broadcast to the gossip topic.
 ///
 /// Contains node's ID, EndpointAddr, and a timestamp for freshness tracking.
 ///
-/// Tiger Style: Fixed-size payload, explicit timestamp in microseconds.
+/// Tiger Style: Fixed-size payload, explicit timestamp in microseconds, versioned for forward compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PeerAnnouncement {
+    /// Protocol version for forward compatibility checking.
+    version: u8,
     /// Node ID of the announcing node.
     node_id: NodeId,
     /// The endpoint address of the announcing node.
@@ -96,6 +104,7 @@ impl PeerAnnouncement {
             .as_micros() as u64;
 
         Ok(Self {
+            version: GOSSIP_MESSAGE_VERSION,
             node_id,
             endpoint_addr,
             timestamp_micros,
@@ -108,8 +117,17 @@ impl PeerAnnouncement {
     }
 
     /// Deserialize from bytes using postcard.
-    fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        postcard::from_bytes(bytes).context("failed to deserialize peer announcement")
+    ///
+    /// Returns None for unknown future versions to allow graceful handling.
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let announcement: Self = postcard::from_bytes(bytes).ok()?;
+
+        // Reject unknown future versions
+        if announcement.version > GOSSIP_MESSAGE_VERSION {
+            return None;
+        }
+
+        Some(announcement)
     }
 }
 
@@ -231,7 +249,7 @@ impl GossipPeerDiscovery {
                     event = gossip_receiver.next() => match event {
                     Some(Ok(Event::Received(msg))) => {
                         match PeerAnnouncement::from_bytes(&msg.content) {
-                            Ok(announcement) => {
+                            Some(announcement) => {
                                 // Filter out our own announcements
                                 if announcement.node_id == receiver_node_id {
                                     tracing::trace!("ignoring self-announcement");
@@ -294,8 +312,8 @@ impl GossipPeerDiscovery {
                                     announcement.endpoint_addr.addrs.len()
                                 );
                             }
-                            Err(e) => {
-                                tracing::warn!("failed to parse peer announcement: {}", e);
+                            None => {
+                                tracing::warn!("failed to parse peer announcement (unknown version or malformed)");
                             }
                         }
                     }

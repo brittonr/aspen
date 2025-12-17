@@ -633,9 +633,8 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(config.http_addr).await?;
     info!(addr = %config.http_addr, "http server listening");
 
-    let http = axum::serve(listener, app.into_make_service()).with_graceful_shutdown(async {
-        let _ = signal::ctrl_c().await;
-    });
+    let http =
+        axum::serve(listener, app.into_make_service()).with_graceful_shutdown(shutdown_signal());
 
     tokio::select! {
         result = http => {
@@ -653,6 +652,38 @@ async fn main() -> Result<()> {
     handle.shutdown().await?;
 
     Ok(())
+}
+
+/// Wait for shutdown signal (SIGINT or SIGTERM).
+///
+/// Tiger Style: Handles both signals for graceful shutdown in production
+/// (systemd sends SIGTERM) and development (Ctrl-C sends SIGINT).
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("received SIGINT, initiating graceful shutdown");
+        }
+        _ = terminate => {
+            info!("received SIGTERM, initiating graceful shutdown");
+        }
+    }
 }
 
 /// Check Raft node responsiveness.

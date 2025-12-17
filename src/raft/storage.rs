@@ -253,6 +253,9 @@ pub enum StorageError {
 
     #[snafu(display("chain hash missing at index {index}"))]
     ChainHashMissing { index: u64 },
+
+    #[snafu(display("storage lock poisoned: {context}"))]
+    LockPoisoned { context: String },
 }
 
 impl From<StorageError> for io::Error {
@@ -673,7 +676,12 @@ impl RedbLogStore {
 
         // Update in-memory chain tip
         {
-            let mut chain_tip = self.chain_tip.write().unwrap();
+            let mut chain_tip = self
+                .chain_tip
+                .write()
+                .map_err(|_| StorageError::LockPoisoned {
+                    context: "writing chain_tip during migration".into(),
+                })?;
             chain_tip.hash = prev_hash;
             chain_tip.index = last_index;
         }
@@ -885,7 +893,12 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         // Get current chain tip for hash computation
         let mut prev_hash = {
-            let chain_tip = self.chain_tip.read().unwrap();
+            let chain_tip = self
+                .chain_tip
+                .read()
+                .map_err(|_| StorageError::LockPoisoned {
+                    context: "reading chain_tip for append".into(),
+                })?;
             chain_tip.hash
         };
 
@@ -943,7 +956,12 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         // Update cached chain tip after successful commit
         if has_entries {
-            let mut chain_tip = self.chain_tip.write().unwrap();
+            let mut chain_tip = self
+                .chain_tip
+                .write()
+                .map_err(|_| StorageError::LockPoisoned {
+                    context: "writing chain_tip after append".into(),
+                })?;
             chain_tip.hash = new_tip_hash;
             chain_tip.index = new_tip_index;
         }
@@ -994,7 +1012,12 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         };
 
         {
-            let mut chain_tip = self.chain_tip.write().unwrap();
+            let mut chain_tip = self
+                .chain_tip
+                .write()
+                .map_err(|_| StorageError::LockPoisoned {
+                    context: "writing chain_tip after truncate".into(),
+                })?;
             *chain_tip = new_tip;
         }
 
@@ -1086,15 +1109,25 @@ impl RedbLogStore {
     ///
     /// Returns (tip_index, tip_hash) which can be compared across replicas.
     /// If chain tips match, logs are identical up to that point.
-    pub fn chain_tip_for_verification(&self) -> (u64, ChainHash) {
-        let chain_tip = self.chain_tip.read().unwrap();
-        (chain_tip.index, chain_tip.hash)
+    pub fn chain_tip_for_verification(&self) -> Result<(u64, ChainHash), StorageError> {
+        let chain_tip = self
+            .chain_tip
+            .read()
+            .map_err(|_| StorageError::LockPoisoned {
+                context: "reading chain_tip for verification".into(),
+            })?;
+        Ok((chain_tip.index, chain_tip.hash))
     }
 
     /// Get chain tip hash as hex string for logging/display.
-    pub fn chain_tip_hash_hex(&self) -> String {
-        let chain_tip = self.chain_tip.read().unwrap();
-        hash_to_hex(&chain_tip.hash)
+    pub fn chain_tip_hash_hex(&self) -> Result<String, StorageError> {
+        let chain_tip = self
+            .chain_tip
+            .read()
+            .map_err(|_| StorageError::LockPoisoned {
+                context: "reading chain_tip for hex display".into(),
+            })?;
+        Ok(hash_to_hex(&chain_tip.hash))
     }
 
     /// Verify chain integrity for a batch of log entries.
@@ -1814,7 +1847,7 @@ mod tests {
         let db_path = temp_dir.path().join("chain-tip-log.redb");
 
         let store = RedbLogStore::new(&db_path).unwrap();
-        let (index, hash) = store.chain_tip_for_verification();
+        let (index, hash) = store.chain_tip_for_verification().unwrap();
 
         // Initial chain tip should be genesis
         assert_eq!(index, 0);
@@ -1827,7 +1860,7 @@ mod tests {
         let db_path = temp_dir.path().join("chain-hex-log.redb");
 
         let store = RedbLogStore::new(&db_path).unwrap();
-        let hex = store.chain_tip_hash_hex();
+        let hex = store.chain_tip_hash_hex().unwrap();
 
         // Should be a valid hex string (64 characters for 32 bytes)
         assert_eq!(hex.len(), 64);

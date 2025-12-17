@@ -101,18 +101,22 @@ pub struct NodeBuilder {
 
 impl NodeBuilder {
     /// Create a new builder for the given node ID and data directory.
+    ///
+    /// All other configuration uses defaults from environment variables or
+    /// centralized default functions in config.rs. Override with builder methods.
     pub fn new(node_id: NodeId, data_dir: impl Into<PathBuf>) -> Self {
         let mut config = NodeConfig::from_env();
         config.node_id = node_id.into();
         config.data_dir = Some(data_dir.into());
-        config.storage_backend = StorageBackend::Sqlite;
-        config.host = "localhost".to_string();
-        config.cookie = "aspen-cluster".to_string();
-        config.http_addr = "127.0.0.1:8080".parse().unwrap();
-        config.heartbeat_interval_ms = 1000;
-        config.election_timeout_min_ms = 3000;
-        config.election_timeout_max_ms = 6000;
-        config.raft_mailbox_capacity = 1000;
+        // from_env() already sets defaults via default_*() functions:
+        // - storage_backend: Sqlite
+        // - host: "localhost"
+        // - cookie: "aspen-cluster"
+        // - http_addr: 127.0.0.1:8080
+        // - heartbeat_interval_ms: 1000
+        // - election_timeout_min_ms: 3000
+        // - election_timeout_max_ms: 6000
+        // - raft_mailbox_capacity: 1000
         Self { config }
     }
 
@@ -164,7 +168,18 @@ impl NodeBuilder {
     /// - Optional gossip discovery
     ///
     /// Returns a handle that can be used to shut down the node gracefully.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if configuration validation fails or bootstrap fails.
     pub async fn start(self) -> Result<Node> {
+        use anyhow::Context;
+
+        // Validate configuration before expensive bootstrap
+        self.config
+            .validate()
+            .context("configuration validation failed")?;
+
         let handle = bootstrap_node(self.config).await?;
         Ok(Node { handle })
     }

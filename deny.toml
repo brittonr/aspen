@@ -33,6 +33,18 @@ ignore = [
 
     # atomic-polyfill (via postcard/heapless in iroh ecosystem) - stable functionality
     { id = "RUSTSEC-2023-0089", reason = "Transitive dependency via postcard. Stable atomic operations polyfill, alternative portable-atomic blocked by iroh ecosystem." },
+
+    # atty crate (via cargo-nextest) - unmaintained but dev-only, no upgrade available
+    { id = "RUSTSEC-2024-0375", reason = "Dev dependency via cargo-nextest -> supports-color -> owo-colors. Terminal detection only, no security impact." },
+
+    # rustls-pemfile crate (via cargo-nextest) - unmaintained, dev-only
+    { id = "RUSTSEC-2025-0134", reason = "Dev dependency via cargo-nextest -> nextest-runner -> self_update -> reqwest. PEM parsing only, no security impact." },
+
+    # safemem crate (via cloud-hypervisor-client) - unmaintained, dev-only for VM tests
+    { id = "RUSTSEC-2023-0081", reason = "Dev dependency via cloud-hypervisor-client -> base64 v0.7. Memory operations only, no security impact." },
+
+    # memoffset crate (via nix via swarm-discovery) - potential unaligned read, fixed in 0.6.5+
+    { id = "RUSTSEC-2021-0145", reason = "Transitive dependency via swarm-discovery. Not on hot path, impact unlikely." },
 ]
 
 # -----------------------------------------------------------------------------

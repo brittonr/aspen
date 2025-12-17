@@ -17,6 +17,10 @@ use crate::event::Event;
 use crate::iroh_client::{MultiNodeClient, parse_cluster_ticket};
 use crate::types::{ClusterMetrics, NodeInfo, NodeStatus};
 
+/// Maximum input buffer size (8KB).
+/// Tiger Style: Prevents memory issues from large paste operations.
+const MAX_INPUT_SIZE: usize = 8192;
+
 /// Active view/tab in the TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ActiveView {
@@ -523,7 +527,10 @@ impl App {
                     self.input_buffer.pop();
                 }
                 KeyCode::Char(c) => {
-                    self.input_buffer.push(c);
+                    // Tiger Style: Bounded input to prevent memory issues
+                    if self.input_buffer.len() < MAX_INPUT_SIZE {
+                        self.input_buffer.push(c);
+                    }
                 }
                 KeyCode::Tab => {
                     // Switch between key and value input

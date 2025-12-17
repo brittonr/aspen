@@ -185,15 +185,54 @@ async fn run(
     mut app: App,
     mut event_handler: EventHandler,
 ) -> Result<()> {
+    // Set up shutdown signal listener
+    let mut shutdown = std::pin::pin!(shutdown_signal());
+
     while !app.should_quit {
         // Draw UI
         terminal.draw(|frame| ui::draw(frame, &app))?;
 
-        // Handle events
-        if let Some(event) = event_handler.next().await {
-            app.handle_event(event).await?;
+        // Handle events or shutdown signal
+        tokio::select! {
+            event = event_handler.next() => {
+                if let Some(event) = event {
+                    app.handle_event(event).await?;
+                }
+            }
+            _ = &mut shutdown => {
+                app.should_quit = true;
+            }
         }
     }
 
     Ok(())
+}
+
+/// Wait for shutdown signal (SIGINT or SIGTERM).
+///
+/// Tiger Style: Handles both signals for graceful shutdown.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+        info!("received SIGINT, initiating graceful shutdown");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+        info!("received SIGTERM, initiating graceful shutdown");
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
 }

@@ -28,8 +28,8 @@ const RPC_TIMEOUT: Duration = Duration::from_secs(2); // Reduced from 10s
 const RETRY_DELAY: Duration = Duration::from_millis(500); // Reduced from 5s
 
 /// Maximum connection retries before giving up.
-/// Reduced for TUI to avoid long blocking periods.
-const MAX_RETRIES: u32 = 1; // Reduced from 5
+/// Balance between responsiveness and reliability on lossy networks.
+const MAX_RETRIES: u32 = 3;
 
 /// Client ALPN for identifying Client RPC connections.
 const CLIENT_ALPN: &[u8] = b"aspen-tui";
