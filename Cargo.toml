@@ -19,6 +19,10 @@ name = "generate_fuzz_corpus"
 path = "src/bin/generate_fuzz_corpus.rs"
 required-features = ["fuzzing"]
 
+[[bin]]
+name = "aspen-prometheus-adapter"
+path = "src/bin/aspen-prometheus-adapter.rs"
+
 [workspace]
 members = [".", "scripts/tutorial-verify"]
 

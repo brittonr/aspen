@@ -1,17 +1,19 @@
 //! Iroh client for connecting to Aspen nodes over QUIC.
 //!
 //! This module provides the client-side implementation for connecting to
-//! Aspen nodes using Iroh's peer-to-peer transport with the TUI ALPN.
+//! Aspen nodes using Iroh's peer-to-peer transport with the Client ALPN.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use aspen::tui_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterStateResponse,
-    ClusterTicketResponse, HealthResponse, InitResultResponse, MAX_TUI_MESSAGE_SIZE,
-    NodeDescriptor, NodeInfoResponse, RaftMetricsResponse, ReadResultResponse,
-    SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse, WriteResultResponse,
+use aspen::client_rpc::{
+    AddLearnerResultResponse, ChangeMembershipResultResponse, CheckpointWalResultResponse,
+    ClientRpcRequest, ClientRpcResponse, ClusterStateResponse, ClusterTicketResponse,
+    DeleteResultResponse, HealthResponse, InitResultResponse, MAX_CLIENT_MESSAGE_SIZE,
+    MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
+    RaftMetricsResponse, ReadResultResponse, ScanResultResponse, SnapshotResultResponse,
+    WriteResultResponse,
 };
 use iroh::{Endpoint, EndpointAddr, SecretKey};
 use tokio::sync::RwLock;
@@ -29,8 +31,8 @@ const RETRY_DELAY: Duration = Duration::from_millis(500); // Reduced from 5s
 /// Reduced for TUI to avoid long blocking periods.
 const MAX_RETRIES: u32 = 1; // Reduced from 5
 
-/// TUI ALPN for identifying TUI connections.
-const TUI_ALPN: &[u8] = b"aspen-tui";
+/// Client ALPN for identifying Client RPC connections.
+const CLIENT_ALPN: &[u8] = b"aspen-tui";
 
 /// Iroh client for TUI connections to Aspen nodes.
 pub struct IrohClient {
@@ -62,7 +64,7 @@ impl IrohClient {
         // Build the Iroh endpoint with TUI ALPN
         let endpoint = Endpoint::builder()
             .secret_key(secret_key)
-            .alpns(vec![TUI_ALPN.to_vec()])
+            .alpns(vec![CLIENT_ALPN.to_vec()])
             .bind()
             .await
             .context("failed to bind Iroh endpoint")?;
@@ -91,7 +93,7 @@ impl IrohClient {
     }
 
     /// Send an RPC request to the target node.
-    async fn send_rpc(&self, request: TuiRpcRequest) -> Result<TuiRpcResponse> {
+    async fn send_rpc(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         let target_addr = self.target_addr.read().await.clone();
 
         debug!(
@@ -103,7 +105,7 @@ impl IrohClient {
         // Connect to the target node
         let connection = self
             .endpoint
-            .connect(target_addr, TUI_ALPN)
+            .connect(target_addr, CLIENT_ALPN)
             .await
             .context("failed to connect to node")?;
 
@@ -123,16 +125,16 @@ impl IrohClient {
 
         // Read the response
         let response_bytes = recv
-            .read_to_end(MAX_TUI_MESSAGE_SIZE)
+            .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
             .await
             .context("failed to read response")?;
 
         // Deserialize the response
-        let response: TuiRpcResponse =
+        let response: ClientRpcResponse =
             postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
 
         // Check for error response
-        if let TuiRpcResponse::Error(err) = &response {
+        if let ClientRpcResponse::Error(err) = &response {
             anyhow::bail!("RPC error {}: {}", err.code, err.message);
         }
 
@@ -144,7 +146,7 @@ impl IrohClient {
     }
 
     /// Send an RPC request with automatic retry on failure.
-    async fn send_rpc_with_retry(&self, request: TuiRpcRequest) -> Result<TuiRpcResponse> {
+    async fn send_rpc_with_retry(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         let mut retries = 0;
 
         loop {
@@ -186,10 +188,12 @@ impl IrohClient {
 
     /// Get health status from the node.
     pub async fn get_health(&self) -> Result<HealthResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::GetHealth).await?;
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::GetHealth)
+            .await?;
 
         match response {
-            TuiRpcResponse::Health(health) => Ok(health),
+            ClientRpcResponse::Health(health) => Ok(health),
             _ => anyhow::bail!("unexpected response type for GetHealth"),
         }
     }
@@ -197,31 +201,35 @@ impl IrohClient {
     /// Get Raft metrics from the node.
     pub async fn get_raft_metrics(&self) -> Result<RaftMetricsResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::GetRaftMetrics)
+            .send_rpc_with_retry(ClientRpcRequest::GetRaftMetrics)
             .await?;
 
         match response {
-            TuiRpcResponse::RaftMetrics(metrics) => Ok(metrics),
+            ClientRpcResponse::RaftMetrics(metrics) => Ok(metrics),
             _ => anyhow::bail!("unexpected response type for GetRaftMetrics"),
         }
     }
 
     /// Get the current leader node ID.
     pub async fn get_leader(&self) -> Result<Option<u64>> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::GetLeader).await?;
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::GetLeader)
+            .await?;
 
         match response {
-            TuiRpcResponse::Leader(leader) => Ok(leader),
+            ClientRpcResponse::Leader(leader) => Ok(leader),
             _ => anyhow::bail!("unexpected response type for GetLeader"),
         }
     }
 
     /// Get node information.
     pub async fn get_node_info(&self) -> Result<NodeInfoResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::GetNodeInfo).await?;
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::GetNodeInfo)
+            .await?;
 
         match response {
-            TuiRpcResponse::NodeInfo(info) => Ok(info),
+            ClientRpcResponse::NodeInfo(info) => Ok(info),
             _ => anyhow::bail!("unexpected response type for GetNodeInfo"),
         }
     }
@@ -229,21 +237,23 @@ impl IrohClient {
     /// Get cluster ticket for joining.
     pub async fn get_cluster_ticket(&self) -> Result<ClusterTicketResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::GetClusterTicket)
+            .send_rpc_with_retry(ClientRpcRequest::GetClusterTicket)
             .await?;
 
         match response {
-            TuiRpcResponse::ClusterTicket(ticket) => Ok(ticket),
+            ClientRpcResponse::ClusterTicket(ticket) => Ok(ticket),
             _ => anyhow::bail!("unexpected response type for GetClusterTicket"),
         }
     }
 
     /// Initialize a new cluster.
     pub async fn init_cluster(&self) -> Result<InitResultResponse> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::InitCluster).await?;
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::InitCluster)
+            .await?;
 
         match response {
-            TuiRpcResponse::InitResult(result) => Ok(result),
+            ClientRpcResponse::InitResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for InitCluster"),
         }
     }
@@ -251,11 +261,11 @@ impl IrohClient {
     /// Read a key from the key-value store.
     pub async fn read_key(&self, key: String) -> Result<ReadResultResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::ReadKey { key })
+            .send_rpc_with_retry(ClientRpcRequest::ReadKey { key })
             .await?;
 
         match response {
-            TuiRpcResponse::ReadResult(result) => Ok(result),
+            ClientRpcResponse::ReadResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for ReadKey"),
         }
     }
@@ -263,11 +273,11 @@ impl IrohClient {
     /// Write a key-value pair to the store.
     pub async fn write_key(&self, key: String, value: Vec<u8>) -> Result<WriteResultResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::WriteKey { key, value })
+            .send_rpc_with_retry(ClientRpcRequest::WriteKey { key, value })
             .await?;
 
         match response {
-            TuiRpcResponse::WriteResult(result) => Ok(result),
+            ClientRpcResponse::WriteResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for WriteKey"),
         }
     }
@@ -275,11 +285,11 @@ impl IrohClient {
     /// Trigger a Raft snapshot.
     pub async fn trigger_snapshot(&self) -> Result<SnapshotResultResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::TriggerSnapshot)
+            .send_rpc_with_retry(ClientRpcRequest::TriggerSnapshot)
             .await?;
 
         match response {
-            TuiRpcResponse::SnapshotResult(result) => Ok(result),
+            ClientRpcResponse::SnapshotResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for TriggerSnapshot"),
         }
     }
@@ -291,11 +301,11 @@ impl IrohClient {
         addr: String,
     ) -> Result<AddLearnerResultResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::AddLearner { node_id, addr })
+            .send_rpc_with_retry(ClientRpcRequest::AddLearner { node_id, addr })
             .await?;
 
         match response {
-            TuiRpcResponse::AddLearnerResult(result) => Ok(result),
+            ClientRpcResponse::AddLearnerResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for AddLearner"),
         }
     }
@@ -306,21 +316,21 @@ impl IrohClient {
         members: Vec<u64>,
     ) -> Result<ChangeMembershipResultResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::ChangeMembership { members })
+            .send_rpc_with_retry(ClientRpcRequest::ChangeMembership { members })
             .await?;
 
         match response {
-            TuiRpcResponse::ChangeMembershipResult(result) => Ok(result),
+            ClientRpcResponse::ChangeMembershipResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for ChangeMembership"),
         }
     }
 
     /// Send a ping to check connectivity.
     pub async fn ping(&self) -> Result<()> {
-        let response = self.send_rpc_with_retry(TuiRpcRequest::Ping).await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::Ping).await?;
 
         match response {
-            TuiRpcResponse::Pong => Ok(()),
+            ClientRpcResponse::Pong => Ok(()),
             _ => anyhow::bail!("unexpected response type for Ping"),
         }
     }
@@ -328,12 +338,90 @@ impl IrohClient {
     /// Get cluster state with all known nodes.
     pub async fn get_cluster_state(&self) -> Result<ClusterStateResponse> {
         let response = self
-            .send_rpc_with_retry(TuiRpcRequest::GetClusterState)
+            .send_rpc_with_retry(ClientRpcRequest::GetClusterState)
             .await?;
 
         match response {
-            TuiRpcResponse::ClusterState(state) => Ok(state),
+            ClientRpcResponse::ClusterState(state) => Ok(state),
             _ => anyhow::bail!("unexpected response type for GetClusterState"),
+        }
+    }
+
+    /// Delete a key from the key-value store.
+    pub async fn delete_key(&self, key: String) -> Result<DeleteResultResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::DeleteKey { key })
+            .await?;
+
+        match response {
+            ClientRpcResponse::DeleteResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for DeleteKey"),
+        }
+    }
+
+    /// Scan keys with a prefix from the key-value store.
+    pub async fn scan_keys(
+        &self,
+        prefix: String,
+        limit: Option<u32>,
+        continuation_token: Option<String>,
+    ) -> Result<ScanResultResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::ScanKeys {
+                prefix,
+                limit,
+                continuation_token,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::ScanResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for ScanKeys"),
+        }
+    }
+
+    /// Get Prometheus-format metrics from the node.
+    pub async fn get_metrics(&self) -> Result<MetricsResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::GetMetrics)
+            .await?;
+
+        match response {
+            ClientRpcResponse::Metrics(metrics) => Ok(metrics),
+            _ => anyhow::bail!("unexpected response type for GetMetrics"),
+        }
+    }
+
+    /// Promote a learner node to voter.
+    pub async fn promote_learner(
+        &self,
+        learner_id: u64,
+        replace_node: Option<u64>,
+        force: bool,
+    ) -> Result<PromoteLearnerResultResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::PromoteLearner {
+                learner_id,
+                replace_node,
+                force,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::PromoteLearnerResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for PromoteLearner"),
+        }
+    }
+
+    /// Force a SQLite WAL checkpoint.
+    pub async fn checkpoint_wal(&self) -> Result<CheckpointWalResultResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::CheckpointWal)
+            .await?;
+
+        match response {
+            ClientRpcResponse::CheckpointWalResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for CheckpointWal"),
         }
     }
 
@@ -430,7 +518,7 @@ impl MultiNodeClient {
             bind_timeout,
             Endpoint::builder()
                 .secret_key(secret_key)
-                .alpns(vec![TUI_ALPN.to_vec()])
+                .alpns(vec![CLIENT_ALPN.to_vec()])
                 .bind(),
         )
         .await
@@ -457,8 +545,8 @@ impl MultiNodeClient {
     async fn send_rpc_to(
         &self,
         target: &EndpointAddr,
-        request: TuiRpcRequest,
-    ) -> Result<TuiRpcResponse> {
+        request: ClientRpcRequest,
+    ) -> Result<ClientRpcResponse> {
         debug!(
             target_node_id = %target.id,
             request_type = ?request,
@@ -468,7 +556,7 @@ impl MultiNodeClient {
         // Connect to the target node
         let connection = self
             .endpoint
-            .connect(target.clone(), TUI_ALPN)
+            .connect(target.clone(), CLIENT_ALPN)
             .await
             .context("failed to connect to node")?;
 
@@ -488,16 +576,16 @@ impl MultiNodeClient {
 
         // Read the response
         let response_bytes = recv
-            .read_to_end(MAX_TUI_MESSAGE_SIZE)
+            .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
             .await
             .context("failed to read response")?;
 
         // Deserialize the response
-        let response: TuiRpcResponse =
+        let response: ClientRpcResponse =
             postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
 
         // Check for error response
-        if let TuiRpcResponse::Error(err) = &response {
+        if let ClientRpcResponse::Error(err) = &response {
             anyhow::bail!("RPC error {}: {}", err.code, err.message);
         }
 
@@ -505,7 +593,7 @@ impl MultiNodeClient {
     }
 
     /// Send an RPC to the primary target with retry.
-    async fn send_rpc_primary(&self, request: TuiRpcRequest) -> Result<TuiRpcResponse> {
+    async fn send_rpc_primary(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         let target = self.primary_target.read().await.clone();
         let mut retries = 0;
 
@@ -548,11 +636,11 @@ impl MultiNodeClient {
     /// Updates internal node tracking with discovered peers.
     pub async fn discover_peers(&self) -> Result<Vec<NodeDescriptor>> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::GetClusterState)
+            .send_rpc_primary(ClientRpcRequest::GetClusterState)
             .await?;
 
         match response {
-            TuiRpcResponse::ClusterState(state) => {
+            ClientRpcResponse::ClusterState(state) => {
                 // Update leader ID
                 {
                     let mut leader = self.leader_id.write().await;
@@ -653,40 +741,42 @@ impl MultiNodeClient {
 
     /// Get node info from the primary target.
     pub async fn get_node_info(&self) -> Result<NodeInfoResponse> {
-        let response = self.send_rpc_primary(TuiRpcRequest::GetNodeInfo).await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::GetNodeInfo).await?;
 
         match response {
-            TuiRpcResponse::NodeInfo(info) => Ok(info),
+            ClientRpcResponse::NodeInfo(info) => Ok(info),
             _ => anyhow::bail!("unexpected response type for GetNodeInfo"),
         }
     }
 
     /// Get health from the primary target.
     pub async fn get_health(&self) -> Result<HealthResponse> {
-        let response = self.send_rpc_primary(TuiRpcRequest::GetHealth).await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::GetHealth).await?;
 
         match response {
-            TuiRpcResponse::Health(health) => Ok(health),
+            ClientRpcResponse::Health(health) => Ok(health),
             _ => anyhow::bail!("unexpected response type for GetHealth"),
         }
     }
 
     /// Get Raft metrics from the primary target.
     pub async fn get_raft_metrics(&self) -> Result<RaftMetricsResponse> {
-        let response = self.send_rpc_primary(TuiRpcRequest::GetRaftMetrics).await?;
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::GetRaftMetrics)
+            .await?;
 
         match response {
-            TuiRpcResponse::RaftMetrics(metrics) => Ok(metrics),
+            ClientRpcResponse::RaftMetrics(metrics) => Ok(metrics),
             _ => anyhow::bail!("unexpected response type for GetRaftMetrics"),
         }
     }
 
     /// Initialize the cluster via the primary target.
     pub async fn init_cluster(&self) -> Result<InitResultResponse> {
-        let response = self.send_rpc_primary(TuiRpcRequest::InitCluster).await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::InitCluster).await?;
 
         match response {
-            TuiRpcResponse::InitResult(result) => Ok(result),
+            ClientRpcResponse::InitResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for InitCluster"),
         }
     }
@@ -694,11 +784,11 @@ impl MultiNodeClient {
     /// Read a key from the cluster.
     pub async fn read_key(&self, key: String) -> Result<ReadResultResponse> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::ReadKey { key })
+            .send_rpc_primary(ClientRpcRequest::ReadKey { key })
             .await?;
 
         match response {
-            TuiRpcResponse::ReadResult(result) => Ok(result),
+            ClientRpcResponse::ReadResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for ReadKey"),
         }
     }
@@ -706,11 +796,11 @@ impl MultiNodeClient {
     /// Write a key-value pair to the cluster.
     pub async fn write_key(&self, key: String, value: Vec<u8>) -> Result<WriteResultResponse> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::WriteKey { key, value })
+            .send_rpc_primary(ClientRpcRequest::WriteKey { key, value })
             .await?;
 
         match response {
-            TuiRpcResponse::WriteResult(result) => Ok(result),
+            ClientRpcResponse::WriteResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for WriteKey"),
         }
     }
@@ -718,11 +808,11 @@ impl MultiNodeClient {
     /// Trigger a Raft snapshot.
     pub async fn trigger_snapshot(&self) -> Result<SnapshotResultResponse> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::TriggerSnapshot)
+            .send_rpc_primary(ClientRpcRequest::TriggerSnapshot)
             .await?;
 
         match response {
-            TuiRpcResponse::SnapshotResult(result) => Ok(result),
+            ClientRpcResponse::SnapshotResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for TriggerSnapshot"),
         }
     }
@@ -734,11 +824,11 @@ impl MultiNodeClient {
         addr: String,
     ) -> Result<AddLearnerResultResponse> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::AddLearner { node_id, addr })
+            .send_rpc_primary(ClientRpcRequest::AddLearner { node_id, addr })
             .await?;
 
         match response {
-            TuiRpcResponse::AddLearnerResult(result) => Ok(result),
+            ClientRpcResponse::AddLearnerResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for AddLearner"),
         }
     }
@@ -749,12 +839,88 @@ impl MultiNodeClient {
         members: Vec<u64>,
     ) -> Result<ChangeMembershipResultResponse> {
         let response = self
-            .send_rpc_primary(TuiRpcRequest::ChangeMembership { members })
+            .send_rpc_primary(ClientRpcRequest::ChangeMembership { members })
             .await?;
 
         match response {
-            TuiRpcResponse::ChangeMembershipResult(result) => Ok(result),
+            ClientRpcResponse::ChangeMembershipResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for ChangeMembership"),
+        }
+    }
+
+    /// Delete a key from the cluster.
+    pub async fn delete_key(&self, key: String) -> Result<DeleteResultResponse> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::DeleteKey { key })
+            .await?;
+
+        match response {
+            ClientRpcResponse::DeleteResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for DeleteKey"),
+        }
+    }
+
+    /// Scan keys with a prefix from the cluster.
+    pub async fn scan_keys(
+        &self,
+        prefix: String,
+        limit: Option<u32>,
+        continuation_token: Option<String>,
+    ) -> Result<ScanResultResponse> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::ScanKeys {
+                prefix,
+                limit,
+                continuation_token,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::ScanResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for ScanKeys"),
+        }
+    }
+
+    /// Get Prometheus-format metrics from the primary target.
+    pub async fn get_metrics(&self) -> Result<MetricsResponse> {
+        let response = self.send_rpc_primary(ClientRpcRequest::GetMetrics).await?;
+
+        match response {
+            ClientRpcResponse::Metrics(metrics) => Ok(metrics),
+            _ => anyhow::bail!("unexpected response type for GetMetrics"),
+        }
+    }
+
+    /// Promote a learner node to voter.
+    pub async fn promote_learner(
+        &self,
+        learner_id: u64,
+        replace_node: Option<u64>,
+        force: bool,
+    ) -> Result<PromoteLearnerResultResponse> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::PromoteLearner {
+                learner_id,
+                replace_node,
+                force,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::PromoteLearnerResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for PromoteLearner"),
+        }
+    }
+
+    /// Force a SQLite WAL checkpoint.
+    pub async fn checkpoint_wal(&self) -> Result<CheckpointWalResultResponse> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::CheckpointWal)
+            .await?;
+
+        match response {
+            ClientRpcResponse::CheckpointWalResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for CheckpointWal"),
         }
     }
 

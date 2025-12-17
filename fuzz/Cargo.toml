@@ -66,8 +66,8 @@ name = "fuzz_log_entries"
 path = "fuzz_targets/fuzz_log_entries.rs"
 
 [[test]]
-name = "fuzz_tui_rpc"
-path = "fuzz_targets/fuzz_tui_rpc.rs"
+name = "fuzz_client_rpc"
+path = "fuzz_targets/fuzz_client_rpc.rs"
 
 [[test]]
 name = "fuzz_config"

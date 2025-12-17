@@ -12,7 +12,7 @@ mod support;
 
 use bolero::check;
 
-use aspen::tui_rpc::{TuiRpcRequest, TuiRpcResponse};
+use aspen::client_rpc::{ClientRpcRequest, ClientRpcResponse};
 use support::bolero_generators::{MembershipList, ValidApiKey, ValidIpAddr};
 
 // Test 1: TUI RPC Request serialization roundtrip
@@ -24,23 +24,23 @@ fn test_tui_request_roundtrip_simple_variants() {
         .for_each(|seed| {
             // Test simple variants (no data)
             let request = match seed % 10 {
-                0 => TuiRpcRequest::Ping,
-                1 => TuiRpcRequest::GetHealth,
-                2 => TuiRpcRequest::GetRaftMetrics,
-                3 => TuiRpcRequest::GetLeader,
-                4 => TuiRpcRequest::GetNodeInfo,
-                5 => TuiRpcRequest::GetClusterTicket,
-                6 => TuiRpcRequest::InitCluster,
-                7 => TuiRpcRequest::TriggerSnapshot,
-                8 => TuiRpcRequest::GetClusterState,
-                _ => TuiRpcRequest::Ping,
+                0 => ClientRpcRequest::Ping,
+                1 => ClientRpcRequest::GetHealth,
+                2 => ClientRpcRequest::GetRaftMetrics,
+                3 => ClientRpcRequest::GetLeader,
+                4 => ClientRpcRequest::GetNodeInfo,
+                5 => ClientRpcRequest::GetClusterTicket,
+                6 => ClientRpcRequest::InitCluster,
+                7 => ClientRpcRequest::TriggerSnapshot,
+                8 => ClientRpcRequest::GetClusterState,
+                _ => ClientRpcRequest::Ping,
             };
 
             // Serialize
             let bytes = postcard::to_stdvec(&request).expect("Failed to serialize request");
 
             // Deserialize
-            let roundtripped: TuiRpcRequest =
+            let roundtripped: ClientRpcRequest =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize request");
 
             // Re-serialize and compare bytes (idempotency)
@@ -58,15 +58,15 @@ fn test_tui_request_read_key_roundtrip() {
         .with_iterations(50)
         .with_type::<ValidApiKey>()
         .for_each(|key| {
-            let request = TuiRpcRequest::ReadKey { key: key.0.clone() };
+            let request = ClientRpcRequest::ReadKey { key: key.0.clone() };
 
             let bytes = postcard::to_stdvec(&request).expect("Failed to serialize ReadKey request");
 
-            let roundtripped: TuiRpcRequest =
+            let roundtripped: ClientRpcRequest =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize ReadKey request");
 
             match roundtripped {
-                TuiRpcRequest::ReadKey {
+                ClientRpcRequest::ReadKey {
                     key: roundtripped_key,
                 } => {
                     assert_eq!(key.0, roundtripped_key);
@@ -85,7 +85,7 @@ fn test_tui_request_write_key_roundtrip() {
         .for_each(|(key, value)| {
             let value: Vec<u8> = value.iter().take(1000).copied().collect();
 
-            let request = TuiRpcRequest::WriteKey {
+            let request = ClientRpcRequest::WriteKey {
                 key: key.0.clone(),
                 value: value.clone(),
             };
@@ -93,11 +93,11 @@ fn test_tui_request_write_key_roundtrip() {
             let bytes =
                 postcard::to_stdvec(&request).expect("Failed to serialize WriteKey request");
 
-            let roundtripped: TuiRpcRequest =
+            let roundtripped: ClientRpcRequest =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize WriteKey request");
 
             match roundtripped {
-                TuiRpcRequest::WriteKey {
+                ClientRpcRequest::WriteKey {
                     key: roundtripped_key,
                     value: roundtripped_value,
                 } => {
@@ -118,7 +118,7 @@ fn test_tui_request_add_learner_roundtrip() {
         .for_each(|(node_id, addr)| {
             let node_id = 1 + (*node_id % 999);
 
-            let request = TuiRpcRequest::AddLearner {
+            let request = ClientRpcRequest::AddLearner {
                 node_id,
                 addr: addr.0.clone(),
             };
@@ -126,11 +126,11 @@ fn test_tui_request_add_learner_roundtrip() {
             let bytes =
                 postcard::to_stdvec(&request).expect("Failed to serialize AddLearner request");
 
-            let roundtripped: TuiRpcRequest =
+            let roundtripped: ClientRpcRequest =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize AddLearner request");
 
             match roundtripped {
-                TuiRpcRequest::AddLearner {
+                ClientRpcRequest::AddLearner {
                     node_id: roundtripped_id,
                     addr: roundtripped_addr,
                 } => {
@@ -149,18 +149,18 @@ fn test_tui_request_change_membership_roundtrip() {
         .with_iterations(50)
         .with_type::<MembershipList>()
         .for_each(|members| {
-            let request = TuiRpcRequest::ChangeMembership {
+            let request = ClientRpcRequest::ChangeMembership {
                 members: members.0.clone(),
             };
 
             let bytes = postcard::to_stdvec(&request)
                 .expect("Failed to serialize ChangeMembership request");
 
-            let roundtripped: TuiRpcRequest = postcard::from_bytes(&bytes)
+            let roundtripped: ClientRpcRequest = postcard::from_bytes(&bytes)
                 .expect("Failed to deserialize ChangeMembership request");
 
             match roundtripped {
-                TuiRpcRequest::ChangeMembership {
+                ClientRpcRequest::ChangeMembership {
                     members: roundtripped_members,
                 } => {
                     assert_eq!(members.0, roundtripped_members);
@@ -178,14 +178,14 @@ fn test_tui_response_pong_roundtrip() {
         .with_type::<u8>()
         .for_each(|seed| {
             let response = match seed % 3 {
-                0 => TuiRpcResponse::Pong,
-                1 => TuiRpcResponse::Leader(Some(*seed as u64)),
-                _ => TuiRpcResponse::Leader(None),
+                0 => ClientRpcResponse::Pong,
+                1 => ClientRpcResponse::Leader(Some(*seed as u64)),
+                _ => ClientRpcResponse::Leader(None),
             };
 
             let bytes = postcard::to_stdvec(&response).expect("Failed to serialize response");
 
-            let roundtripped: TuiRpcResponse =
+            let roundtripped: ClientRpcResponse =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize response");
 
             // Re-serialize to verify idempotency
@@ -205,7 +205,7 @@ fn test_serialized_size_bounded() {
         .for_each(|(key, value)| {
             let value: Vec<u8> = value.iter().take(1000).copied().collect();
 
-            let request = TuiRpcRequest::WriteKey {
+            let request = ClientRpcRequest::WriteKey {
                 key: key.0.clone(),
                 value: value.clone(),
             };
@@ -232,7 +232,7 @@ fn test_empty_value_handling() {
         .with_iterations(10)
         .with_type::<ValidApiKey>()
         .for_each(|key| {
-            let request = TuiRpcRequest::WriteKey {
+            let request = ClientRpcRequest::WriteKey {
                 key: key.0.clone(),
                 value: vec![], // Empty value
             };
@@ -240,11 +240,11 @@ fn test_empty_value_handling() {
             let bytes = postcard::to_stdvec(&request)
                 .expect("Failed to serialize request with empty value");
 
-            let roundtripped: TuiRpcRequest = postcard::from_bytes(&bytes)
+            let roundtripped: ClientRpcRequest = postcard::from_bytes(&bytes)
                 .expect("Failed to deserialize request with empty value");
 
             match roundtripped {
-                TuiRpcRequest::WriteKey { value, .. } => {
+                ClientRpcRequest::WriteKey { value, .. } => {
                     assert!(value.is_empty());
                 }
                 _ => panic!("Wrong variant"),
@@ -262,18 +262,18 @@ fn test_large_membership_list() {
             let num_members = 50 + (*num_members as usize % 50);
             let members: Vec<u64> = (1..=num_members as u64).collect();
 
-            let request = TuiRpcRequest::ChangeMembership {
+            let request = ClientRpcRequest::ChangeMembership {
                 members: members.clone(),
             };
 
             let bytes =
                 postcard::to_stdvec(&request).expect("Failed to serialize large membership");
 
-            let roundtripped: TuiRpcRequest =
+            let roundtripped: ClientRpcRequest =
                 postcard::from_bytes(&bytes).expect("Failed to deserialize large membership");
 
             match roundtripped {
-                TuiRpcRequest::ChangeMembership {
+                ClientRpcRequest::ChangeMembership {
                     members: roundtripped_members,
                 } => {
                     assert_eq!(members.len(), roundtripped_members.len());
@@ -303,7 +303,7 @@ fn test_binary_value_special_bytes() {
             ];
 
             for value in special_values {
-                let request = TuiRpcRequest::WriteKey {
+                let request = ClientRpcRequest::WriteKey {
                     key: key.0.clone(),
                     value: value.clone(),
                 };
@@ -311,11 +311,11 @@ fn test_binary_value_special_bytes() {
                 let bytes =
                     postcard::to_stdvec(&request).expect("Failed to serialize special bytes");
 
-                let roundtripped: TuiRpcRequest =
+                let roundtripped: ClientRpcRequest =
                     postcard::from_bytes(&bytes).expect("Failed to deserialize special bytes");
 
                 match roundtripped {
-                    TuiRpcRequest::WriteKey {
+                    ClientRpcRequest::WriteKey {
                         value: rt_value, ..
                     } => {
                         assert_eq!(value, rt_value);

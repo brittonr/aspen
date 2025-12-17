@@ -1,6 +1,6 @@
 //! Common client trait for Iroh connections.
 
-use aspen::tui_rpc::NodeDescriptor;
+use aspen::client_rpc::NodeDescriptor;
 use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
@@ -427,18 +427,95 @@ impl ClusterClient for ClientImpl {
 
     async fn list_vaults(&self) -> Result<Vec<VaultSummary>> {
         match self {
-            // Vault listing requires scan RPC which is not yet in TUI protocol
-            Self::Iroh(_) => Ok(vec![]),
-            Self::MultiNode(_) => Ok(vec![]),
+            Self::Iroh(client) => {
+                // Scan for all vault: prefixed keys
+                let result = client
+                    .scan_keys("vault:".to_string(), Some(1000), None)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+
+                // Group by vault name
+                let mut vault_counts: std::collections::HashMap<String, u64> =
+                    std::collections::HashMap::new();
+                for entry in result.entries {
+                    // Key format: vault:<vault-name>:<key>
+                    if let Some(rest) = entry.key.strip_prefix("vault:") {
+                        if let Some(vault_name) = rest.split(':').next() {
+                            *vault_counts.entry(vault_name.to_string()).or_default() += 1;
+                        }
+                    }
+                }
+
+                Ok(vault_counts
+                    .into_iter()
+                    .map(|(name, key_count)| VaultSummary { name, key_count })
+                    .collect())
+            }
+            Self::MultiNode(client) => {
+                let result = client
+                    .scan_keys("vault:".to_string(), Some(1000), None)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+
+                let mut vault_counts: std::collections::HashMap<String, u64> =
+                    std::collections::HashMap::new();
+                for entry in result.entries {
+                    if let Some(rest) = entry.key.strip_prefix("vault:") {
+                        if let Some(vault_name) = rest.split(':').next() {
+                            *vault_counts.entry(vault_name.to_string()).or_default() += 1;
+                        }
+                    }
+                }
+
+                Ok(vault_counts
+                    .into_iter()
+                    .map(|(name, key_count)| VaultSummary { name, key_count })
+                    .collect())
+            }
             Self::Disconnected(client) => client.list_vaults().await,
         }
     }
 
     async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
         match self {
-            // Vault key listing requires scan RPC which is not yet in TUI protocol
-            Self::Iroh(_) => Ok(vec![]),
-            Self::MultiNode(_) => Ok(vec![]),
+            Self::Iroh(client) => {
+                let prefix = format!("vault:{}:", vault);
+                let result = client
+                    .scan_keys(prefix.clone(), Some(1000), None)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+
+                Ok(result
+                    .entries
+                    .into_iter()
+                    .filter_map(|entry| {
+                        let key = entry.key.strip_prefix(&prefix)?.to_string();
+                        Some(VaultKeyEntry {
+                            key,
+                            value: entry.value,
+                        })
+                    })
+                    .collect())
+            }
+            Self::MultiNode(client) => {
+                let prefix = format!("vault:{}:", vault);
+                let result = client
+                    .scan_keys(prefix.clone(), Some(1000), None)
+                    .await
+                    .map_err(anyhow_to_eyre)?;
+
+                Ok(result
+                    .entries
+                    .into_iter()
+                    .filter_map(|entry| {
+                        let key = entry.key.strip_prefix(&prefix)?.to_string();
+                        Some(VaultKeyEntry {
+                            key,
+                            value: entry.value,
+                        })
+                    })
+                    .collect())
+            }
             Self::Disconnected(client) => client.list_vault_keys(vault).await,
         }
     }

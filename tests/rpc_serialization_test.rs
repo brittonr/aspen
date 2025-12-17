@@ -1,6 +1,6 @@
 //! Tests for RPC message serialization and deserialization.
 //!
-//! Tests TUI RPC and Raft RPC protocol messages for correct serialization
+//! Tests Client RPC and Raft RPC protocol messages for correct serialization
 //! roundtrips using postcard (binary) and JSON formats.
 //!
 //! Target: Cover protocol message types without requiring network infrastructure.
@@ -14,13 +14,13 @@ use support::bolero_generators::{
     TuiBinaryData, TuiRpcKey,
 };
 
-use aspen::tui_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterStateResponse,
-    ClusterTicketResponse, ErrorResponse, HealthResponse, InitResultResponse, MAX_CLUSTER_NODES,
-    MAX_TUI_MESSAGE_SIZE, NodeDescriptor, NodeInfoResponse, RaftMetricsResponse,
-    ReadResultResponse, SnapshotResultResponse, TUI_ALPN, TuiRpcRequest, TuiRpcResponse,
-    WriteResultResponse,
+use aspen::client_rpc::{
+    AddLearnerResultResponse, ChangeMembershipResultResponse, ClientRpcRequest, ClientRpcResponse,
+    ClusterStateResponse, ClusterTicketResponse, ErrorResponse, HealthResponse, InitResultResponse,
+    MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, NodeDescriptor, NodeInfoResponse,
+    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, WriteResultResponse,
 };
+use aspen::protocol_handlers::CLIENT_ALPN;
 
 // ============================================================================
 // TUI RPC Request serialization tests
@@ -28,67 +28,68 @@ use aspen::tui_rpc::{
 
 /// GetHealth request serializes correctly.
 #[test]
-fn test_tui_get_health_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetHealth;
+fn test_client_get_health_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetHealth;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetHealth));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetHealth));
 }
 
 /// GetRaftMetrics request serializes correctly.
 #[test]
-fn test_tui_get_raft_metrics_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetRaftMetrics;
+fn test_client_get_raft_metrics_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetRaftMetrics;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetRaftMetrics));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetRaftMetrics));
 }
 
 /// GetLeader request serializes correctly.
 #[test]
-fn test_tui_get_leader_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetLeader;
+fn test_client_get_leader_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetLeader;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetLeader));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetLeader));
 }
 
 /// GetNodeInfo request serializes correctly.
 #[test]
-fn test_tui_get_node_info_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetNodeInfo;
+fn test_client_get_node_info_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetNodeInfo;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetNodeInfo));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetNodeInfo));
 }
 
 /// GetClusterTicket request serializes correctly.
 #[test]
-fn test_tui_get_cluster_ticket_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetClusterTicket;
+fn test_client_get_cluster_ticket_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetClusterTicket;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetClusterTicket));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetClusterTicket));
 }
 
 /// InitCluster request serializes correctly.
 #[test]
-fn test_tui_init_cluster_postcard_roundtrip() {
-    let request = TuiRpcRequest::InitCluster;
+fn test_client_init_cluster_postcard_roundtrip() {
+    let request = ClientRpcRequest::InitCluster;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::InitCluster));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::InitCluster));
 }
 
 /// ReadKey request serializes correctly.
 #[test]
-fn test_tui_read_key_postcard_roundtrip() {
+fn test_client_read_key_postcard_roundtrip() {
     check!().with_type::<TuiRpcKey>().for_each(|key| {
-        let request = TuiRpcRequest::ReadKey { key: key.0.clone() };
+        let request = ClientRpcRequest::ReadKey { key: key.0.clone() };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest =
+            postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
-            TuiRpcRequest::ReadKey { key: k } => assert_eq!(k, key.0),
+            ClientRpcRequest::ReadKey { key: k } => assert_eq!(k, key.0),
             _ => panic!("Wrong variant"),
         }
     });
@@ -96,19 +97,19 @@ fn test_tui_read_key_postcard_roundtrip() {
 
 /// WriteKey request serializes correctly.
 #[test]
-fn test_tui_write_key_postcard_roundtrip() {
+fn test_client_write_key_postcard_roundtrip() {
     check!()
         .with_type::<(TuiRpcKey, TuiBinaryData)>()
         .for_each(|(key, value)| {
-            let request = TuiRpcRequest::WriteKey {
+            let request = ClientRpcRequest::WriteKey {
                 key: key.0.clone(),
                 value: value.0.clone(),
             };
             let serialized = postcard::to_stdvec(&request).expect("serialize");
-            let deserialized: TuiRpcRequest =
+            let deserialized: ClientRpcRequest =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcRequest::WriteKey { key: k, value: v } => {
+                ClientRpcRequest::WriteKey { key: k, value: v } => {
                     assert_eq!(k, key.0);
                     assert_eq!(v, value.0);
                 }
@@ -119,28 +120,28 @@ fn test_tui_write_key_postcard_roundtrip() {
 
 /// TriggerSnapshot request serializes correctly.
 #[test]
-fn test_tui_trigger_snapshot_postcard_roundtrip() {
-    let request = TuiRpcRequest::TriggerSnapshot;
+fn test_client_trigger_snapshot_postcard_roundtrip() {
+    let request = ClientRpcRequest::TriggerSnapshot;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::TriggerSnapshot));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::TriggerSnapshot));
 }
 
 /// AddLearner request serializes correctly.
 #[test]
-fn test_tui_add_learner_postcard_roundtrip() {
+fn test_client_add_learner_postcard_roundtrip() {
     check!()
         .with_type::<(u64, HexAddrString)>()
         .for_each(|(node_id, addr)| {
-            let request = TuiRpcRequest::AddLearner {
+            let request = ClientRpcRequest::AddLearner {
                 node_id: *node_id,
                 addr: addr.0.clone(),
             };
             let serialized = postcard::to_stdvec(&request).expect("serialize");
-            let deserialized: TuiRpcRequest =
+            let deserialized: ClientRpcRequest =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcRequest::AddLearner {
+                ClientRpcRequest::AddLearner {
                     node_id: n,
                     addr: a,
                 } => {
@@ -154,15 +155,16 @@ fn test_tui_add_learner_postcard_roundtrip() {
 
 /// ChangeMembership request serializes correctly.
 #[test]
-fn test_tui_change_membership_postcard_roundtrip() {
+fn test_client_change_membership_postcard_roundtrip() {
     check!().with_type::<MembershipList>().for_each(|members| {
-        let request = TuiRpcRequest::ChangeMembership {
+        let request = ClientRpcRequest::ChangeMembership {
             members: members.0.clone(),
         };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest =
+            postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
-            TuiRpcRequest::ChangeMembership { members: m } => {
+            ClientRpcRequest::ChangeMembership { members: m } => {
                 assert_eq!(m, members.0);
             }
             _ => panic!("Wrong variant"),
@@ -172,20 +174,20 @@ fn test_tui_change_membership_postcard_roundtrip() {
 
 /// Ping request serializes correctly.
 #[test]
-fn test_tui_ping_postcard_roundtrip() {
-    let request = TuiRpcRequest::Ping;
+fn test_client_ping_postcard_roundtrip() {
+    let request = ClientRpcRequest::Ping;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::Ping));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::Ping));
 }
 
 /// GetClusterState request serializes correctly.
 #[test]
-fn test_tui_get_cluster_state_postcard_roundtrip() {
-    let request = TuiRpcRequest::GetClusterState;
+fn test_client_get_cluster_state_postcard_roundtrip() {
+    let request = ClientRpcRequest::GetClusterState;
     let serialized = postcard::to_stdvec(&request).expect("serialize");
-    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcRequest::GetClusterState));
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcRequest::GetClusterState));
 }
 
 // ============================================================================
@@ -198,17 +200,17 @@ fn test_health_response_postcard_roundtrip() {
     check!()
         .with_type::<(StatusString, u64, Option<u64>, u64)>()
         .for_each(|(status, node_id, raft_node_id, uptime_seconds)| {
-            let response = TuiRpcResponse::Health(HealthResponse {
+            let response = ClientRpcResponse::Health(HealthResponse {
                 status: status.0.clone(),
                 node_id: *node_id,
                 raft_node_id: *raft_node_id,
                 uptime_seconds: *uptime_seconds,
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::Health(h) => {
+                ClientRpcResponse::Health(h) => {
                     assert_eq!(h.status, status.0);
                     assert_eq!(h.node_id, *node_id);
                     assert_eq!(h.raft_node_id, *raft_node_id);
@@ -242,7 +244,7 @@ fn test_raft_metrics_response_postcard_roundtrip() {
                 last_applied_index,
                 snapshot_index,
             )| {
-                let response = TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
+                let response = ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                     node_id: *node_id,
                     state: state.0.clone(),
                     current_leader: *current_leader,
@@ -252,10 +254,10 @@ fn test_raft_metrics_response_postcard_roundtrip() {
                     snapshot_index: *snapshot_index,
                 });
                 let serialized = postcard::to_stdvec(&response).expect("serialize");
-                let deserialized: TuiRpcResponse =
+                let deserialized: ClientRpcResponse =
                     postcard::from_bytes(&serialized).expect("deserialize");
                 match deserialized {
-                    TuiRpcResponse::RaftMetrics(m) => {
+                    ClientRpcResponse::RaftMetrics(m) => {
                         assert_eq!(m.node_id, *node_id);
                         assert_eq!(m.state, state.0);
                         assert_eq!(m.current_leader, *current_leader);
@@ -271,11 +273,12 @@ fn test_raft_metrics_response_postcard_roundtrip() {
 #[test]
 fn test_leader_response_postcard_roundtrip() {
     check!().with_type::<Option<u64>>().for_each(|leader_id| {
-        let response = TuiRpcResponse::Leader(*leader_id);
+        let response = ClientRpcResponse::Leader(*leader_id);
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
-            TuiRpcResponse::Leader(l) => assert_eq!(l, *leader_id),
+            ClientRpcResponse::Leader(l) => assert_eq!(l, *leader_id),
             _ => panic!("Wrong variant"),
         }
     });
@@ -287,15 +290,15 @@ fn test_node_info_response_postcard_roundtrip() {
     check!()
         .with_type::<(u64, EndpointIdString)>()
         .for_each(|(node_id, endpoint_addr)| {
-            let response = TuiRpcResponse::NodeInfo(NodeInfoResponse {
+            let response = ClientRpcResponse::NodeInfo(NodeInfoResponse {
                 node_id: *node_id,
                 endpoint_addr: endpoint_addr.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::NodeInfo(n) => {
+                ClientRpcResponse::NodeInfo(n) => {
                     assert_eq!(n.node_id, *node_id);
                     assert_eq!(n.endpoint_addr, endpoint_addr.0);
                 }
@@ -315,17 +318,18 @@ fn test_cluster_ticket_response_postcard_roundtrip() {
             EndpointIdString,
         )>()
         .for_each(|(ticket, topic_id, cluster_id, endpoint_id)| {
-            let response = TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
+            let response = ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
                 ticket: ticket.0.clone(),
                 topic_id: topic_id.0.clone(),
                 cluster_id: cluster_id.0.clone(),
                 endpoint_id: endpoint_id.0.clone(),
+                bootstrap_peers: Some(1),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::ClusterTicket(t) => {
+                ClientRpcResponse::ClusterTicket(t) => {
                     assert_eq!(t.ticket, ticket.0);
                     assert_eq!(t.topic_id, topic_id.0);
                     assert_eq!(t.cluster_id, cluster_id.0);
@@ -342,15 +346,15 @@ fn test_init_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(bool, OptionalErrorString)>()
         .for_each(|(success, error)| {
-            let response = TuiRpcResponse::InitResult(InitResultResponse {
+            let response = ClientRpcResponse::InitResult(InitResultResponse {
                 success: *success,
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::InitResult(r) => {
+                ClientRpcResponse::InitResult(r) => {
                     assert_eq!(r.success, *success);
                     assert_eq!(r.error, error.0);
                 }
@@ -365,16 +369,16 @@ fn test_read_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(OptionalBinaryValue, bool, OptionalErrorString)>()
         .for_each(|(value, found, error)| {
-            let response = TuiRpcResponse::ReadResult(ReadResultResponse {
+            let response = ClientRpcResponse::ReadResult(ReadResultResponse {
                 value: value.0.clone(),
                 found: *found,
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::ReadResult(r) => {
+                ClientRpcResponse::ReadResult(r) => {
                     assert_eq!(r.value, value.0);
                     assert_eq!(r.found, *found);
                     assert_eq!(r.error, error.0);
@@ -390,15 +394,15 @@ fn test_write_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(bool, OptionalErrorString)>()
         .for_each(|(success, error)| {
-            let response = TuiRpcResponse::WriteResult(WriteResultResponse {
+            let response = ClientRpcResponse::WriteResult(WriteResultResponse {
                 success: *success,
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::WriteResult(r) => {
+                ClientRpcResponse::WriteResult(r) => {
                     assert_eq!(r.success, *success);
                     assert_eq!(r.error, error.0);
                 }
@@ -413,16 +417,16 @@ fn test_snapshot_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(bool, Option<u64>, OptionalErrorString)>()
         .for_each(|(success, snapshot_index, error)| {
-            let response = TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+            let response = ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
                 success: *success,
                 snapshot_index: *snapshot_index,
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::SnapshotResult(r) => {
+                ClientRpcResponse::SnapshotResult(r) => {
                     assert_eq!(r.success, *success);
                     assert_eq!(r.snapshot_index, *snapshot_index);
                     assert_eq!(r.error, error.0);
@@ -438,15 +442,15 @@ fn test_add_learner_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(bool, OptionalErrorString)>()
         .for_each(|(success, error)| {
-            let response = TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+            let response = ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
                 success: *success,
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::AddLearnerResult(r) => {
+                ClientRpcResponse::AddLearnerResult(r) => {
                     assert_eq!(r.success, *success);
                     assert_eq!(r.error, error.0);
                 }
@@ -461,15 +465,16 @@ fn test_change_membership_result_response_postcard_roundtrip() {
     check!()
         .with_type::<(bool, OptionalErrorString)>()
         .for_each(|(success, error)| {
-            let response = TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-                success: *success,
-                error: error.0.clone(),
-            });
+            let response =
+                ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+                    success: *success,
+                    error: error.0.clone(),
+                });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::ChangeMembershipResult(r) => {
+                ClientRpcResponse::ChangeMembershipResult(r) => {
                     assert_eq!(r.success, *success);
                     assert_eq!(r.error, error.0);
                 }
@@ -481,10 +486,10 @@ fn test_change_membership_result_response_postcard_roundtrip() {
 /// Pong response serializes correctly.
 #[test]
 fn test_pong_response_postcard_roundtrip() {
-    let response = TuiRpcResponse::Pong;
+    let response = ClientRpcResponse::Pong;
     let serialized = postcard::to_stdvec(&response).expect("serialize");
-    let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-    assert!(matches!(deserialized, TuiRpcResponse::Pong));
+    let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, ClientRpcResponse::Pong));
 }
 
 /// ErrorResponse serializes correctly.
@@ -493,15 +498,15 @@ fn test_error_response_postcard_roundtrip() {
     check!()
         .with_type::<(ErrorCode, ErrorMessage)>()
         .for_each(|(code, message)| {
-            let response = TuiRpcResponse::Error(ErrorResponse {
+            let response = ClientRpcResponse::Error(ErrorResponse {
                 code: code.0.clone(),
                 message: message.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: TuiRpcResponse =
+            let deserialized: ClientRpcResponse =
                 postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
-                TuiRpcResponse::Error(e) => {
+                ClientRpcResponse::Error(e) => {
                     assert_eq!(e.code, code.0);
                     assert_eq!(e.message, message.0);
                 }
@@ -510,15 +515,15 @@ fn test_error_response_postcard_roundtrip() {
         });
 }
 
-/// TuiRpcResponse::error helper works correctly.
+/// ClientRpcResponse::error helper works correctly.
 #[test]
-fn test_tui_rpc_response_error_helper() {
+fn test_client_rpc_response_error_helper() {
     check!()
         .with_type::<(ErrorCode, ErrorMessage)>()
         .for_each(|(code, message)| {
-            let response = TuiRpcResponse::error(code.0.clone(), message.0.clone());
+            let response = ClientRpcResponse::error(code.0.clone(), message.0.clone());
             match response {
-                TuiRpcResponse::Error(e) => {
+                ClientRpcResponse::Error(e) => {
                     assert_eq!(e.code, code.0);
                     assert_eq!(e.message, message.0);
                 }
@@ -536,13 +541,13 @@ mod unit_tests {
     use super::*;
 
     #[test]
-    fn test_tui_alpn_constant() {
-        assert_eq!(TUI_ALPN, b"aspen-tui");
+    fn test_client_alpn_constant() {
+        assert_eq!(CLIENT_ALPN, b"aspen-tui");
     }
 
     #[test]
     fn test_max_tui_message_size_constant() {
-        assert_eq!(MAX_TUI_MESSAGE_SIZE, 1024 * 1024); // 1 MB
+        assert_eq!(MAX_CLIENT_MESSAGE_SIZE, 1024 * 1024); // 1 MB
     }
 
     #[test]
@@ -575,17 +580,18 @@ mod unit_tests {
                 is_leader: false,
             },
         ];
-        let response = TuiRpcResponse::ClusterState(ClusterStateResponse {
+        let response = ClientRpcResponse::ClusterState(ClusterStateResponse {
             nodes: nodes.clone(),
             leader_id: Some(1),
             this_node_id: 2,
         });
 
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
-            TuiRpcResponse::ClusterState(state) => {
+            ClientRpcResponse::ClusterState(state) => {
                 assert_eq!(state.nodes.len(), 3);
                 assert_eq!(state.leader_id, Some(1));
                 assert_eq!(state.this_node_id, 2);
@@ -638,36 +644,36 @@ mod unit_tests {
     fn test_all_request_variants_serialize() {
         // Verify all request variants can serialize without error
         let requests = vec![
-            TuiRpcRequest::GetHealth,
-            TuiRpcRequest::GetRaftMetrics,
-            TuiRpcRequest::GetLeader,
-            TuiRpcRequest::GetNodeInfo,
-            TuiRpcRequest::GetClusterTicket,
-            TuiRpcRequest::InitCluster,
-            TuiRpcRequest::ReadKey {
+            ClientRpcRequest::GetHealth,
+            ClientRpcRequest::GetRaftMetrics,
+            ClientRpcRequest::GetLeader,
+            ClientRpcRequest::GetNodeInfo,
+            ClientRpcRequest::GetClusterTicket,
+            ClientRpcRequest::InitCluster,
+            ClientRpcRequest::ReadKey {
                 key: "test".to_string(),
             },
-            TuiRpcRequest::WriteKey {
+            ClientRpcRequest::WriteKey {
                 key: "test".to_string(),
                 value: vec![1, 2, 3],
             },
-            TuiRpcRequest::TriggerSnapshot,
-            TuiRpcRequest::AddLearner {
+            ClientRpcRequest::TriggerSnapshot,
+            ClientRpcRequest::AddLearner {
                 node_id: 42,
                 addr: "addr".to_string(),
             },
-            TuiRpcRequest::ChangeMembership {
+            ClientRpcRequest::ChangeMembership {
                 members: vec![1, 2, 3],
             },
-            TuiRpcRequest::Ping,
-            TuiRpcRequest::GetClusterState,
+            ClientRpcRequest::Ping,
+            ClientRpcRequest::GetClusterState,
         ];
 
         for request in requests {
             let serialized = postcard::to_stdvec(&request);
             assert!(serialized.is_ok(), "Failed to serialize: {:?}", request);
             assert!(
-                serialized.unwrap().len() < MAX_TUI_MESSAGE_SIZE,
+                serialized.unwrap().len() < MAX_CLIENT_MESSAGE_SIZE,
                 "Message too large: {:?}",
                 request
             );
@@ -678,13 +684,13 @@ mod unit_tests {
     fn test_all_response_variants_serialize() {
         // Verify all response variants can serialize without error
         let responses = vec![
-            TuiRpcResponse::Health(HealthResponse {
+            ClientRpcResponse::Health(HealthResponse {
                 status: "healthy".to_string(),
                 node_id: 1,
                 raft_node_id: None,
                 uptime_seconds: 0,
             }),
-            TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
+            ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: 1,
                 state: "Leader".to_string(),
                 current_leader: Some(1),
@@ -693,50 +699,51 @@ mod unit_tests {
                 last_applied_index: Some(10),
                 snapshot_index: None,
             }),
-            TuiRpcResponse::Leader(Some(1)),
-            TuiRpcResponse::NodeInfo(NodeInfoResponse {
+            ClientRpcResponse::Leader(Some(1)),
+            ClientRpcResponse::NodeInfo(NodeInfoResponse {
                 node_id: 1,
                 endpoint_addr: "addr".to_string(),
             }),
-            TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
+            ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
                 ticket: "ticket".to_string(),
                 topic_id: "topic".to_string(),
                 cluster_id: "cluster".to_string(),
                 endpoint_id: "endpoint".to_string(),
+                bootstrap_peers: Some(1),
             }),
-            TuiRpcResponse::InitResult(InitResultResponse {
+            ClientRpcResponse::InitResult(InitResultResponse {
                 success: true,
                 error: None,
             }),
-            TuiRpcResponse::ReadResult(ReadResultResponse {
+            ClientRpcResponse::ReadResult(ReadResultResponse {
                 value: Some(vec![1, 2, 3]),
                 found: true,
                 error: None,
             }),
-            TuiRpcResponse::WriteResult(WriteResultResponse {
+            ClientRpcResponse::WriteResult(WriteResultResponse {
                 success: true,
                 error: None,
             }),
-            TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+            ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
                 success: true,
                 snapshot_index: Some(100),
                 error: None,
             }),
-            TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+            ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
                 success: true,
                 error: None,
             }),
-            TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+            ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
                 success: true,
                 error: None,
             }),
-            TuiRpcResponse::Pong,
-            TuiRpcResponse::ClusterState(ClusterStateResponse {
+            ClientRpcResponse::Pong,
+            ClientRpcResponse::ClusterState(ClusterStateResponse {
                 nodes: vec![],
                 leader_id: None,
                 this_node_id: 1,
             }),
-            TuiRpcResponse::error("TEST_ERROR", "Test error message"),
+            ClientRpcResponse::error("TEST_ERROR", "Test error message"),
         ];
 
         for response in responses {
@@ -758,18 +765,19 @@ mod unit_tests {
             })
             .collect();
 
-        let response = TuiRpcResponse::ClusterState(ClusterStateResponse {
+        let response = ClientRpcResponse::ClusterState(ClusterStateResponse {
             nodes,
             leader_id: Some(0),
             this_node_id: 1,
         });
 
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        assert!(serialized.len() < MAX_TUI_MESSAGE_SIZE);
+        assert!(serialized.len() < MAX_CLIENT_MESSAGE_SIZE);
 
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
-            TuiRpcResponse::ClusterState(state) => {
+            ClientRpcResponse::ClusterState(state) => {
                 assert_eq!(state.nodes.len(), MAX_CLUSTER_NODES);
             }
             _ => panic!("Wrong variant"),
@@ -778,17 +786,18 @@ mod unit_tests {
 
     #[test]
     fn test_empty_cluster_state() {
-        let response = TuiRpcResponse::ClusterState(ClusterStateResponse {
+        let response = ClientRpcResponse::ClusterState(ClusterStateResponse {
             nodes: vec![],
             leader_id: None,
             this_node_id: 0,
         });
 
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
-            TuiRpcResponse::ClusterState(state) => {
+            ClientRpcResponse::ClusterState(state) => {
                 assert!(state.nodes.is_empty());
                 assert!(state.leader_id.is_none());
             }

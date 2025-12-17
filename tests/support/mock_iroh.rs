@@ -71,8 +71,8 @@ const MAX_MOCK_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 /// ALPN protocol identifier for Raft RPC (matches protocol_handlers.rs).
 pub const RAFT_ALPN: &[u8] = b"raft-rpc";
 
-/// ALPN protocol identifier for TUI RPC (matches protocol_handlers.rs).
-pub const TUI_ALPN: &[u8] = b"aspen-tui";
+/// ALPN protocol identifier for Client RPC (matches protocol_handlers.rs).
+pub const CLIENT_ALPN: &[u8] = b"aspen-tui";
 
 /// Central mock network managing all endpoints and connections.
 ///
@@ -897,8 +897,8 @@ mod tests {
         let ep2 = network
             .create_endpoint_with_key_and_alpns(random_secret_key(), vec![RAFT_ALPN.to_vec()]);
 
-        // Try to connect with TUI_ALPN (not supported)
-        let result = ep1.connect(ep2.id(), TUI_ALPN).await;
+        // Try to connect with CLIENT_ALPN (not supported)
+        let result = ep1.connect(ep2.id(), CLIENT_ALPN).await;
         assert_eq!(result.unwrap_err(), MockConnectionError::UnsupportedAlpn);
 
         // Connect with supported ALPN

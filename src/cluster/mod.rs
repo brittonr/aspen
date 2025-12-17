@@ -377,7 +377,7 @@ impl IrohEndpointManager {
         R: iroh::protocol::ProtocolHandler,
         T: iroh::protocol::ProtocolHandler,
     {
-        use crate::protocol_handlers::{RAFT_ALPN, TUI_ALPN};
+        use crate::protocol_handlers::{CLIENT_ALPN, RAFT_ALPN};
 
         let mut builder = Router::builder(self.endpoint.clone());
 
@@ -385,10 +385,10 @@ impl IrohEndpointManager {
         builder = builder.accept(RAFT_ALPN, raft_handler);
         tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
 
-        // Register TUI RPC handler if provided
+        // Register Client RPC handler if provided
         if let Some(handler) = tui_handler {
-            builder = builder.accept(TUI_ALPN, handler);
-            tracing::info!("registered TUI RPC protocol handler (ALPN: aspen-tui)");
+            builder = builder.accept(CLIENT_ALPN, handler);
+            tracing::info!("registered Client RPC protocol handler (ALPN: aspen-tui)");
         }
 
         // Register Gossip handler if enabled

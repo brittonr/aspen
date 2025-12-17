@@ -29,13 +29,13 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
     ReadRequest, WriteRequest,
 };
-use crate::cluster::IrohEndpointManager;
-use crate::tui_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterStateResponse,
-    ClusterTicketResponse, HealthResponse, InitResultResponse, MAX_CLUSTER_NODES,
-    MAX_TUI_MESSAGE_SIZE, NodeDescriptor, NodeInfoResponse, RaftMetricsResponse,
-    ReadResultResponse, SnapshotResultResponse, TuiRpcRequest, TuiRpcResponse, WriteResultResponse,
+use crate::client_rpc::{
+    AddLearnerResultResponse, ChangeMembershipResultResponse, ClientRpcRequest, ClientRpcResponse,
+    ClusterStateResponse, ClusterTicketResponse, HealthResponse, InitResultResponse,
+    MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, NodeDescriptor, NodeInfoResponse,
+    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, WriteResultResponse,
 };
+use crate::cluster::IrohEndpointManager;
 
 /// Maximum concurrent TUI connections.
 ///
@@ -216,12 +216,12 @@ async fn handle_tui_request(
 ) -> Result<()> {
     // Read the request with size limit
     let buffer = recv
-        .read_to_end(MAX_TUI_MESSAGE_SIZE)
+        .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
         .await
         .context("failed to read TUI request")?;
 
     // Deserialize the request
-    let request: TuiRpcRequest =
+    let request: ClientRpcRequest =
         postcard::from_bytes(&buffer).context("failed to deserialize TUI request")?;
 
     debug!(request_type = ?request, "received TUI request");
@@ -231,7 +231,7 @@ async fn handle_tui_request(
         Ok(resp) => resp,
         Err(err) => {
             warn!(error = %err, "TUI request processing failed");
-            TuiRpcResponse::error("INTERNAL_ERROR", err.to_string())
+            ClientRpcResponse::error("INTERNAL_ERROR", err.to_string())
         }
     };
 
@@ -248,11 +248,11 @@ async fn handle_tui_request(
 
 /// Process a TUI RPC request and generate response.
 async fn process_tui_request(
-    request: TuiRpcRequest,
+    request: ClientRpcRequest,
     ctx: &TuiRpcServerContext,
-) -> Result<TuiRpcResponse> {
+) -> Result<ClientRpcResponse> {
     match request {
-        TuiRpcRequest::GetHealth => {
+        ClientRpcRequest::GetHealth => {
             let uptime_seconds = ctx.start_time.elapsed().as_secs();
 
             // Get Raft metrics to determine health
@@ -267,7 +267,7 @@ async fn process_tui_request(
                 Err(_) => "unhealthy",
             };
 
-            Ok(TuiRpcResponse::Health(HealthResponse {
+            Ok(ClientRpcResponse::Health(HealthResponse {
                 status: status.to_string(),
                 node_id: ctx.node_id,
                 raft_node_id: Some(ctx.node_id), // In our case they're the same
@@ -275,14 +275,14 @@ async fn process_tui_request(
             }))
         }
 
-        TuiRpcRequest::GetRaftMetrics => {
+        ClientRpcRequest::GetRaftMetrics => {
             let metrics = ctx
                 .controller
                 .get_metrics()
                 .await
                 .context("failed to get Raft metrics")?;
 
-            Ok(TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
+            Ok(ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: ctx.node_id,
                 state: format!("{:?}", metrics.state),
                 current_leader: metrics.current_leader.map(|id| id.0),
@@ -293,24 +293,24 @@ async fn process_tui_request(
             }))
         }
 
-        TuiRpcRequest::GetLeader => {
+        ClientRpcRequest::GetLeader => {
             let leader = ctx
                 .controller
                 .get_leader()
                 .await
                 .context("failed to get leader")?;
-            Ok(TuiRpcResponse::Leader(leader))
+            Ok(ClientRpcResponse::Leader(leader))
         }
 
-        TuiRpcRequest::GetNodeInfo => {
+        ClientRpcRequest::GetNodeInfo => {
             let endpoint_addr = ctx.endpoint_manager.node_addr();
-            Ok(TuiRpcResponse::NodeInfo(NodeInfoResponse {
+            Ok(ClientRpcResponse::NodeInfo(NodeInfoResponse {
                 node_id: ctx.node_id,
                 endpoint_addr: format!("{:?}", endpoint_addr), // Serialize as debug format
             }))
         }
 
-        TuiRpcRequest::GetClusterTicket => {
+        ClientRpcRequest::GetClusterTicket => {
             use crate::cluster::ticket::AspenClusterTicket;
             use iroh_gossip::proto::TopicId;
 
@@ -327,15 +327,16 @@ async fn process_tui_request(
 
             let ticket_str = ticket.serialize();
 
-            Ok(TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
+            Ok(ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
                 ticket: ticket_str,
                 topic_id: format!("{:?}", topic_id),
                 cluster_id: ctx.cluster_cookie.clone(),
                 endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
+                bootstrap_peers: Some(1),
             }))
         }
 
-        TuiRpcRequest::InitCluster => {
+        ClientRpcRequest::InitCluster => {
             let result = ctx
                 .controller
                 .init(InitRequest {
@@ -343,17 +344,17 @@ async fn process_tui_request(
                 })
                 .await;
 
-            Ok(TuiRpcResponse::InitResult(InitResultResponse {
+            Ok(ClientRpcResponse::InitResult(InitResultResponse {
                 success: result.is_ok(),
                 error: result.err().map(|e| e.to_string()),
             }))
         }
 
-        TuiRpcRequest::ReadKey { key } => {
+        ClientRpcRequest::ReadKey { key } => {
             let result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
 
             match result {
-                Ok(resp) => Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
+                Ok(resp) => Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
                     value: Some(resp.value.into_bytes()),
                     found: true,
                     error: None,
@@ -367,7 +368,7 @@ async fn process_tui_request(
                         ),
                         other => (false, Some(other.to_string())),
                     };
-                    Ok(TuiRpcResponse::ReadResult(ReadResultResponse {
+                    Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
                         value: None,
                         found,
                         error,
@@ -376,7 +377,7 @@ async fn process_tui_request(
             }
         }
 
-        TuiRpcRequest::WriteKey { key, value } => {
+        ClientRpcRequest::WriteKey { key, value } => {
             use crate::api::WriteCommand;
 
             let result = ctx
@@ -389,22 +390,22 @@ async fn process_tui_request(
                 })
                 .await;
 
-            Ok(TuiRpcResponse::WriteResult(WriteResultResponse {
+            Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
                 success: result.is_ok(),
                 error: result.err().map(|e| e.to_string()),
             }))
         }
 
-        TuiRpcRequest::TriggerSnapshot => {
+        ClientRpcRequest::TriggerSnapshot => {
             let result = ctx.controller.trigger_snapshot().await;
 
             match result {
-                Ok(snapshot) => Ok(TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+                Ok(snapshot) => Ok(ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
                     success: true,
                     snapshot_index: snapshot.as_ref().map(|log_id| log_id.index),
                     error: None,
                 })),
-                Err(e) => Ok(TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+                Err(e) => Ok(ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
                     success: false,
                     snapshot_index: None,
                     error: Some(e.to_string()),
@@ -412,7 +413,7 @@ async fn process_tui_request(
             }
         }
 
-        TuiRpcRequest::AddLearner { node_id, addr } => {
+        ClientRpcRequest::AddLearner { node_id, addr } => {
             use crate::api::ClusterNode;
             use iroh::EndpointAddr;
             use std::str::FromStr;
@@ -440,19 +441,21 @@ async fn process_tui_request(
                 }
             };
 
-            Ok(TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
-                success: result.is_ok(),
-                error: result.err().map(|e| e.to_string()),
-            }))
+            Ok(ClientRpcResponse::AddLearnerResult(
+                AddLearnerResultResponse {
+                    success: result.is_ok(),
+                    error: result.err().map(|e| e.to_string()),
+                },
+            ))
         }
 
-        TuiRpcRequest::ChangeMembership { members } => {
+        ClientRpcRequest::ChangeMembership { members } => {
             let result = ctx
                 .controller
                 .change_membership(ChangeMembershipRequest { members })
                 .await;
 
-            Ok(TuiRpcResponse::ChangeMembershipResult(
+            Ok(ClientRpcResponse::ChangeMembershipResult(
                 ChangeMembershipResultResponse {
                     success: result.is_ok(),
                     error: result.err().map(|e| e.to_string()),
@@ -460,9 +463,9 @@ async fn process_tui_request(
             ))
         }
 
-        TuiRpcRequest::Ping => Ok(TuiRpcResponse::Pong),
+        ClientRpcRequest::Ping => Ok(ClientRpcResponse::Pong),
 
-        TuiRpcRequest::GetClusterState => {
+        ClientRpcRequest::GetClusterState => {
             // Get current cluster state from the Raft controller
             let cluster_state = ctx
                 .controller
@@ -509,11 +512,26 @@ async fn process_tui_request(
                 });
             }
 
-            Ok(TuiRpcResponse::ClusterState(ClusterStateResponse {
+            Ok(ClientRpcResponse::ClusterState(ClusterStateResponse {
                 nodes,
                 leader_id,
                 this_node_id: ctx.node_id,
             }))
         }
+
+        // New operations not supported by legacy TUI RPC server
+        // Use protocol_handlers::ClientProtocolHandler instead
+        ClientRpcRequest::DeleteKey { .. }
+        | ClientRpcRequest::ScanKeys { .. }
+        | ClientRpcRequest::GetMetrics
+        | ClientRpcRequest::PromoteLearner { .. }
+        | ClientRpcRequest::CheckpointWal
+        | ClientRpcRequest::ListVaults
+        | ClientRpcRequest::GetVaultKeys { .. }
+        | ClientRpcRequest::AddPeer { .. }
+        | ClientRpcRequest::GetClusterTicketCombined { .. } => Ok(ClientRpcResponse::error(
+            "UNSUPPORTED",
+            "Operation not supported by legacy TUI RPC server",
+        )),
     }
 }

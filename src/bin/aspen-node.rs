@@ -83,12 +83,12 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::{NodeHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
-use aspen::protocol_handlers::{RaftProtocolHandler, TuiProtocolContext, TuiProtocolHandler};
+use aspen::protocol_handlers::{ClientProtocolContext, ClientProtocolHandler, RaftProtocolHandler};
 use aspen::raft::network::IrpcRaftNetworkFactory;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Path, Query, State},
-    http::StatusCode,
+    http::{HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -112,6 +112,25 @@ const DEFAULT_HTTP_ADDR: SocketAddr = SocketAddr::new(
 /// Bounded to 4x the per-value limit to allow small batches while preventing
 /// oversized payloads from exhausting memory.
 const MAX_REQUEST_BODY_BYTES: usize = (aspen::raft::constants::MAX_VALUE_SIZE as usize) * 4;
+
+/// HTTP deprecation header name.
+///
+/// Added to HTTP API responses to warn clients to migrate to Iroh Client RPC.
+static DEPRECATION_HEADER_NAME: HeaderName = HeaderName::from_static("x-aspen-deprecated");
+
+/// HTTP deprecation header value.
+static DEPRECATION_HEADER_VALUE: HeaderValue = HeaderValue::from_static("true");
+
+/// Log HTTP API deprecation warning.
+///
+/// Called by deprecated HTTP handlers to encourage migration to Iroh Client RPC.
+fn log_http_deprecation(endpoint: &str) {
+    warn!(
+        target: "http_deprecation",
+        endpoint = endpoint,
+        "HTTP API deprecated, migrate to Iroh Client RPC"
+    );
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "aspen-node")]
@@ -577,8 +596,8 @@ async fn main() -> Result<()> {
     // This eliminates the race condition where TUI and Raft servers compete for connections
     let raft_handler = RaftProtocolHandler::new(handle.raft_node.raft().as_ref().clone());
 
-    // Create TUI protocol context and handler
-    let tui_context = TuiProtocolContext {
+    // Create Client protocol context and handler
+    let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
         kv_store: kv_store.clone(),
@@ -586,17 +605,17 @@ async fn main() -> Result<()> {
         cluster_cookie: config.cookie.clone(),
         start_time: app_state.start_time,
     };
-    let tui_handler = TuiProtocolHandler::new(tui_context);
+    let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with both handlers and gossip (if enabled)
     let router = {
-        use aspen::protocol_handlers::{RAFT_ALPN, TUI_ALPN};
+        use aspen::protocol_handlers::{CLIENT_ALPN, RAFT_ALPN};
         use iroh::protocol::Router;
         use iroh_gossip::ALPN as GOSSIP_ALPN;
 
         let mut builder = Router::builder(handle.iroh_manager.endpoint().clone());
         builder = builder.accept(RAFT_ALPN, raft_handler);
-        builder = builder.accept(TUI_ALPN, tui_handler);
+        builder = builder.accept(CLIENT_ALPN, client_handler);
 
         // Add gossip handler if enabled
         if let Some(gossip) = handle.iroh_manager.gossip() {
@@ -1601,11 +1620,19 @@ async fn init_cluster(
     State(state): State<AppState>,
     Json(request): Json<InitRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/cluster/init");
+
     // Note: Peer discovery now happens through Iroh gossip protocol,
     // not through HTTP endpoints. The network factory will learn about
     // peers as they announce themselves via gossip.
     let result = state.controller.init(request).await?;
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, learner_id = request.learner.id))]
@@ -1613,8 +1640,16 @@ async fn add_learner(
     State(state): State<AppState>,
     Json(request): Json<AddLearnerRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/cluster/add-learner");
+
     let result = state.controller.add_learner(request).await?;
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, new_members = ?request.members))]
@@ -1622,8 +1657,16 @@ async fn change_membership(
     State(state): State<AppState>,
     Json(request): Json<ChangeMembershipRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/cluster/change-membership");
+
     let result = state.controller.change_membership(request).await?;
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 #[instrument(skip(state, request), fields(node_id = state.node_id, command = ?request.command))]
@@ -1631,6 +1674,7 @@ async fn write_value(
     State(state): State<AppState>,
     Json(request): Json<WriteRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/kv/write");
     let start = Instant::now();
 
     // Tiger Style: Check disk space before writes to fail fast on resource exhaustion
@@ -1650,7 +1694,13 @@ async fn write_value(
     let latency_us = start.elapsed().as_micros() as u64;
     metrics_collector().record_write_latency(latency_us);
 
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 #[instrument(skip(state), fields(node_id = state.node_id, key = %request.key))]
@@ -1658,6 +1708,7 @@ async fn read_value(
     State(state): State<AppState>,
     Json(request): Json<ReadRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/kv/read");
     let start = Instant::now();
 
     let result = state.kv.read(request).await.inspect_err(|_e| {
@@ -1669,7 +1720,13 @@ async fn read_value(
     let latency_us = start.elapsed().as_micros() as u64;
     metrics_collector().record_read_latency(latency_us);
 
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 /// Delete a key from the distributed key-value store.
@@ -1680,6 +1737,7 @@ async fn delete_value(
     State(state): State<AppState>,
     Json(request): Json<DeleteRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/kv/delete");
     let start = Instant::now();
 
     let result = state.kv.delete(request).await.inspect_err(|_e| {
@@ -1690,7 +1748,13 @@ async fn delete_value(
     let latency_us = start.elapsed().as_micros() as u64;
     metrics_collector().record_write_latency(latency_us);
 
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 /// Scan keys matching a prefix with pagination support.
@@ -1702,6 +1766,7 @@ async fn scan_keys(
     State(state): State<AppState>,
     Json(request): Json<ScanRequest>,
 ) -> ApiResult<impl IntoResponse> {
+    log_http_deprecation("/kv/scan");
     let start = Instant::now();
 
     let result = state.kv.scan(request).await.inspect_err(|_e| {
@@ -1712,7 +1777,13 @@ async fn scan_keys(
     let latency_us = start.elapsed().as_micros() as u64;
     metrics_collector().record_read_latency(latency_us);
 
-    Ok(Json(result))
+    Ok((
+        [(
+            DEPRECATION_HEADER_NAME.clone(),
+            DEPRECATION_HEADER_VALUE.clone(),
+        )],
+        Json(result),
+    ))
 }
 
 #[derive(serde::Deserialize)]

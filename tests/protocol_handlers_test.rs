@@ -14,10 +14,10 @@
 
 mod support;
 
+use aspen::client_rpc::{ClientRpcRequest, ClientRpcResponse, MAX_CLIENT_MESSAGE_SIZE};
 use aspen::raft::constants::MAX_RPC_MESSAGE_SIZE;
 use aspen::raft::rpc::{RaftRpcProtocol, RaftVoteRequest};
-use aspen::tui_rpc::{MAX_TUI_MESSAGE_SIZE, TuiRpcRequest, TuiRpcResponse};
-use support::mock_iroh::{MockIrohNetwork, RAFT_ALPN, TUI_ALPN};
+use support::mock_iroh::{CLIENT_ALPN, MockIrohNetwork, RAFT_ALPN};
 
 /// Test that Raft RPC vote request serialization roundtrips correctly.
 #[tokio::test]
@@ -60,27 +60,27 @@ async fn test_raft_vote_rpc_serialization() {
 async fn test_tui_rpc_serialization() {
     // Test various TUI request types
     let requests = vec![
-        TuiRpcRequest::GetHealth,
-        TuiRpcRequest::GetRaftMetrics,
-        TuiRpcRequest::GetLeader,
-        TuiRpcRequest::GetNodeInfo,
-        TuiRpcRequest::GetClusterTicket,
-        TuiRpcRequest::InitCluster,
-        TuiRpcRequest::TriggerSnapshot,
-        TuiRpcRequest::Ping,
-        TuiRpcRequest::GetClusterState,
-        TuiRpcRequest::ReadKey {
+        ClientRpcRequest::GetHealth,
+        ClientRpcRequest::GetRaftMetrics,
+        ClientRpcRequest::GetLeader,
+        ClientRpcRequest::GetNodeInfo,
+        ClientRpcRequest::GetClusterTicket,
+        ClientRpcRequest::InitCluster,
+        ClientRpcRequest::TriggerSnapshot,
+        ClientRpcRequest::Ping,
+        ClientRpcRequest::GetClusterState,
+        ClientRpcRequest::ReadKey {
             key: "test-key".to_string(),
         },
-        TuiRpcRequest::WriteKey {
+        ClientRpcRequest::WriteKey {
             key: "test-key".to_string(),
             value: b"test-value".to_vec(),
         },
-        TuiRpcRequest::AddLearner {
+        ClientRpcRequest::AddLearner {
             node_id: 42,
             addr: "test-addr".to_string(),
         },
-        TuiRpcRequest::ChangeMembership {
+        ClientRpcRequest::ChangeMembership {
             members: vec![1, 2, 3],
         },
     ];
@@ -89,11 +89,11 @@ async fn test_tui_rpc_serialization() {
         let bytes = postcard::to_stdvec(&request).expect("failed to serialize TUI request");
 
         assert!(
-            bytes.len() <= MAX_TUI_MESSAGE_SIZE,
-            "serialized TUI request exceeds MAX_TUI_MESSAGE_SIZE"
+            bytes.len() <= MAX_CLIENT_MESSAGE_SIZE,
+            "serialized TUI request exceeds MAX_CLIENT_MESSAGE_SIZE"
         );
 
-        let deserialized: TuiRpcRequest =
+        let deserialized: ClientRpcRequest =
             postcard::from_bytes(&bytes).expect("failed to deserialize TUI request");
 
         // Verify discriminants match (basic roundtrip check)
@@ -104,19 +104,19 @@ async fn test_tui_rpc_serialization() {
     }
 }
 
-/// Test TUI response serialization roundtrips correctly.
+/// Test Client response serialization roundtrips correctly.
 #[tokio::test]
-async fn test_tui_response_serialization() {
-    use aspen::tui_rpc::*;
+async fn test_client_response_serialization() {
+    use aspen::client_rpc::*;
 
     let responses = vec![
-        TuiRpcResponse::Health(HealthResponse {
+        ClientRpcResponse::Health(HealthResponse {
             status: "healthy".to_string(),
             node_id: 1,
             raft_node_id: Some(1),
             uptime_seconds: 3600,
         }),
-        TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
+        ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
             node_id: 1,
             state: "Leader".to_string(),
             current_leader: Some(1),
@@ -125,44 +125,45 @@ async fn test_tui_response_serialization() {
             last_applied_index: Some(99),
             snapshot_index: Some(50),
         }),
-        TuiRpcResponse::Leader(Some(1)),
-        TuiRpcResponse::NodeInfo(NodeInfoResponse {
+        ClientRpcResponse::Leader(Some(1)),
+        ClientRpcResponse::NodeInfo(NodeInfoResponse {
             node_id: 1,
             endpoint_addr: "test-addr".to_string(),
         }),
-        TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
+        ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
             ticket: "aspen-ticket".to_string(),
             topic_id: "topic-id".to_string(),
             cluster_id: "cluster-id".to_string(),
             endpoint_id: "endpoint-id".to_string(),
+            bootstrap_peers: Some(1),
         }),
-        TuiRpcResponse::InitResult(InitResultResponse {
+        ClientRpcResponse::InitResult(InitResultResponse {
             success: true,
             error: None,
         }),
-        TuiRpcResponse::ReadResult(ReadResultResponse {
+        ClientRpcResponse::ReadResult(ReadResultResponse {
             value: Some(b"test-value".to_vec()),
             found: true,
             error: None,
         }),
-        TuiRpcResponse::WriteResult(WriteResultResponse {
+        ClientRpcResponse::WriteResult(WriteResultResponse {
             success: true,
             error: None,
         }),
-        TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+        ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
             success: true,
             snapshot_index: Some(100),
             error: None,
         }),
-        TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+        ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
             success: true,
             error: None,
         }),
-        TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+        ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
             success: true,
             error: None,
         }),
-        TuiRpcResponse::ClusterState(ClusterStateResponse {
+        ClientRpcResponse::ClusterState(ClusterStateResponse {
             nodes: vec![NodeDescriptor {
                 node_id: 1,
                 endpoint_addr: "addr".to_string(),
@@ -173,14 +174,14 @@ async fn test_tui_response_serialization() {
             leader_id: Some(1),
             this_node_id: 1,
         }),
-        TuiRpcResponse::Pong,
-        TuiRpcResponse::error("TEST_ERROR", "test error message"),
+        ClientRpcResponse::Pong,
+        ClientRpcResponse::error("TEST_ERROR", "test error message"),
     ];
 
     for response in responses {
         let bytes = postcard::to_stdvec(&response).expect("failed to serialize TUI response");
 
-        let deserialized: TuiRpcResponse =
+        let deserialized: ClientRpcResponse =
             postcard::from_bytes(&bytes).expect("failed to deserialize TUI response");
 
         assert_eq!(
@@ -208,7 +209,7 @@ async fn test_mock_rpc_pattern() {
     // Client side: open stream and send request
     let (mut send, mut recv) = client_conn.open_bi().await.unwrap();
 
-    let request = TuiRpcRequest::Ping;
+    let request = ClientRpcRequest::Ping;
     let request_bytes = postcard::to_stdvec(&request).unwrap();
     send.write_all(&request_bytes).await.unwrap();
     send.finish().unwrap();
@@ -216,22 +217,26 @@ async fn test_mock_rpc_pattern() {
     // Server side: accept stream and read request
     let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
 
-    let received_bytes = server_recv.read_to_end(MAX_TUI_MESSAGE_SIZE).await.unwrap();
-    let received_request: TuiRpcRequest = postcard::from_bytes(&received_bytes).unwrap();
+    let received_bytes = server_recv
+        .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
+        .await
+        .unwrap();
+    let received_request: ClientRpcRequest = postcard::from_bytes(&received_bytes).unwrap();
 
-    assert!(matches!(received_request, TuiRpcRequest::Ping));
+    assert!(matches!(received_request, ClientRpcRequest::Ping));
 
     // Server sends response
-    let response = TuiRpcResponse::Pong;
+    let response = ClientRpcResponse::Pong;
     let response_bytes = postcard::to_stdvec(&response).unwrap();
     server_send.write_all(&response_bytes).await.unwrap();
     server_send.finish().unwrap();
 
     // Client receives response
-    let response_received_bytes = recv.read_to_end(MAX_TUI_MESSAGE_SIZE).await.unwrap();
-    let received_response: TuiRpcResponse = postcard::from_bytes(&response_received_bytes).unwrap();
+    let response_received_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.unwrap();
+    let received_response: ClientRpcResponse =
+        postcard::from_bytes(&response_received_bytes).unwrap();
 
-    assert!(matches!(received_response, TuiRpcResponse::Pong));
+    assert!(matches!(received_response, ClientRpcResponse::Pong));
 }
 
 /// Test that oversized messages are rejected.
@@ -269,8 +274,8 @@ async fn test_alpn_routing() {
     let result = client.connect(server.id(), RAFT_ALPN).await;
     assert!(result.is_ok());
 
-    // Connect with TUI_ALPN should fail (not supported)
-    let result = client.connect(server.id(), TUI_ALPN).await;
+    // Connect with CLIENT_ALPN should fail (not supported)
+    let result = client.connect(server.id(), CLIENT_ALPN).await;
     assert!(result.is_err());
 }
 
