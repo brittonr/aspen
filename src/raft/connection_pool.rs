@@ -341,7 +341,7 @@ impl RaftConnectionPool {
                 IROH_CONNECT_TIMEOUT,
                 self.endpoint_manager
                     .endpoint()
-                    .connect(peer_addr.clone(), b"raft-rpc"),
+                    .connect(peer_addr.clone(), crate::protocol_handlers::RAFT_ALPN),
             )
             .await
             .context("timeout connecting to peer")?;

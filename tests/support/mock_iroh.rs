@@ -144,9 +144,9 @@ impl MockIrohNetwork {
 
     /// Create a new mock endpoint with a random identity.
     pub fn create_endpoint(&self) -> MockEndpoint {
-        // Generate random bytes for secret key (compatible with rand 0.8 used by the project)
+        // Generate random bytes for secret key
         let mut bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill_bytes(&mut bytes);
         let secret_key = SecretKey::from(bytes);
         self.create_endpoint_with_key(secret_key)
     }
@@ -754,10 +754,10 @@ impl MockRecvStream {
 mod tests {
     use super::*;
 
-    /// Helper to generate a random secret key (compatible with rand 0.8).
+    /// Helper to generate a random secret key.
     fn random_secret_key() -> SecretKey {
         let mut bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill_bytes(&mut bytes);
         SecretKey::from(bytes)
     }
 

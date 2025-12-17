@@ -17,11 +17,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// ALPN protocol identifier for Client RPC.
-///
-/// Uses "aspen-tui" for backward compatibility with existing TUI clients.
-/// Distinct from `raft-rpc` to allow separate connection handling.
-pub const CLIENT_ALPN: &[u8] = b"aspen-tui";
+// Re-export ALPN constant from canonical location
+pub use crate::protocol_handlers::CLIENT_ALPN;
 
 /// Maximum Client RPC message size (1 MB).
 ///

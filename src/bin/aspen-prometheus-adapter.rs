@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
     // Create Iroh endpoint
     use rand::RngCore;
     let mut key_bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut key_bytes);
+    rand::rng().fill_bytes(&mut key_bytes);
     let secret_key = SecretKey::from(key_bytes);
 
     let endpoint = Endpoint::builder()

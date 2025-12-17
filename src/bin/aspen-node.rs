@@ -484,7 +484,6 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_pkarr: args.enable_pkarr,
     };
     config.peers = args.peers.clone();
-    config.raft_mailbox_capacity = 1000;
     config
 }
 

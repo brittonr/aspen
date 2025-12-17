@@ -305,13 +305,13 @@ impl Workload {
     /// Tiger Style: Bounded operation count.
     pub fn generate(total_operations: u64, read_percentage: u32, key_space_size: u64) -> Self {
         use rand::Rng;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let mut operations = Vec::with_capacity(total_operations as usize);
 
         for _ in 0..total_operations {
-            let is_read = rng.gen_range(0..100) < read_percentage;
-            let key_id = rng.gen_range(0..key_space_size);
+            let is_read = rng.random_range(0..100) < read_percentage;
+            let key_id = rng.random_range(0..key_space_size);
 
             let op_type = if is_read {
                 WorkloadOp::Read

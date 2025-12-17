@@ -54,11 +54,9 @@ impl IrohClient {
     /// A new IrohClient instance.
     pub async fn new(target_addr: EndpointAddr) -> Result<Self> {
         // Generate a new secret key for the TUI client
-        // Use bytes from thread_rng since the iroh SecretKey expects a CryptoRng
-        // which has version compatibility issues with the rand crate
         use rand::RngCore;
         let mut key_bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key_bytes);
+        rand::rng().fill_bytes(&mut key_bytes);
         let secret_key = SecretKey::from(key_bytes);
 
         // Build the Iroh endpoint with TUI ALPN
@@ -508,7 +506,7 @@ impl MultiNodeClient {
         // Generate a new secret key for the TUI client
         use rand::RngCore;
         let mut key_bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key_bytes);
+        rand::rng().fill_bytes(&mut key_bytes);
         let secret_key = SecretKey::from(key_bytes);
 
         // Build the shared Iroh endpoint with TUI ALPN

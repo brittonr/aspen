@@ -29,7 +29,6 @@ struct FuzzNodeConfig {
     heartbeat_interval_ms: Option<u64>,
     election_timeout_min_ms: Option<u64>,
     election_timeout_max_ms: Option<u64>,
-    raft_mailbox_capacity: Option<u32>,
     // Nested iroh config
     iroh: Option<FuzzIrohConfig>,
 }

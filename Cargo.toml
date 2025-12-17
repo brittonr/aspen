@@ -78,7 +78,7 @@ iroh-gossip = "0.95"
 iroh-tickets = "0.2"
 blake3 = "1.5"
 bytes = "1.7"
-rand = "0.8"
+rand = "0.9"
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 anyhow = "1.0"
@@ -136,7 +136,7 @@ proptest = "1.0"
 tokio-test = "0.4"
 cargo-nextest = "0.9.60"
 tempfile = "3.10"
-rand09 = { package = "rand", version = "0.9" }
+# rand09 alias removed - now using rand 0.9 directly
 anyerror = { version = "0.1", features = ["anyhow"] }
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 portpicker = "0.1"

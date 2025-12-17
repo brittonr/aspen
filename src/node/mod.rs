@@ -116,7 +116,6 @@ impl NodeBuilder {
         // - heartbeat_interval_ms: 1000
         // - election_timeout_min_ms: 3000
         // - election_timeout_max_ms: 6000
-        // - raft_mailbox_capacity: 1000
         Self { config }
     }
 
@@ -156,6 +155,44 @@ impl NodeBuilder {
     pub fn with_election_timeout_ms(mut self, min_ms: u64, max_ms: u64) -> Self {
         self.config.election_timeout_min_ms = min_ms;
         self.config.election_timeout_max_ms = max_ms;
+        self
+    }
+
+    /// Set the cluster authentication cookie (default: "aspen-cluster").
+    pub fn with_cookie(mut self, cookie: impl Into<String>) -> Self {
+        self.config.cookie = cookie.into();
+        self
+    }
+
+    /// Set the HTTP API address (default: 127.0.0.1:8080).
+    pub fn with_http_addr(mut self, addr: std::net::SocketAddr) -> Self {
+        self.config.http_addr = addr;
+        self
+    }
+
+    /// Set the Iroh secret key (hex-encoded, 64 characters).
+    ///
+    /// If not set, a new key is generated on startup.
+    pub fn with_iroh_secret_key(mut self, secret_key: impl Into<String>) -> Self {
+        self.config.iroh.secret_key = Some(secret_key.into());
+        self
+    }
+
+    /// Set a cluster ticket for bootstrap peer discovery.
+    pub fn with_gossip_ticket(mut self, ticket: impl Into<String>) -> Self {
+        self.config.iroh.gossip_ticket = Some(ticket.into());
+        self
+    }
+
+    /// Enable/disable DNS discovery (default: false).
+    pub fn with_dns_discovery(mut self, enable: bool) -> Self {
+        self.config.iroh.enable_dns_discovery = enable;
+        self
+    }
+
+    /// Enable/disable Pkarr DHT discovery (default: false).
+    pub fn with_pkarr(mut self, enable: bool) -> Self {
+        self.config.iroh.enable_pkarr = enable;
         self
     }
 

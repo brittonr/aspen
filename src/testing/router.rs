@@ -166,7 +166,7 @@ impl InnerRouter {
             && rate > 0
             && rate <= 100
         {
-            let random_value = rand::thread_rng().gen_range(0..100);
+            let random_value = rand::rng().random_range(0..100);
             return random_value < rate;
         }
         false

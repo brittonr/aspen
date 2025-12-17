@@ -43,16 +43,7 @@ pub enum ValidationError {
 
     #[snafu(display("iroh secret key must be valid hex: {reason}"))]
     SecretKeyInvalidHex { reason: String },
-
-    #[snafu(display("raft_mailbox_capacity must be greater than 0"))]
-    MailboxCapacityZero,
-
-    #[snafu(display("raft_mailbox_capacity {value} exceeds maximum of {max}"))]
-    MailboxCapacityExceedsMax { value: u32, max: u32 },
 }
-
-/// Maximum allowed Raft mailbox capacity.
-pub const MAX_RAFT_MAILBOX_CAPACITY: u32 = 10_000;
 
 /// Required length for Iroh secret key in hex characters.
 pub const SECRET_KEY_HEX_LENGTH: usize = 64;
@@ -195,35 +186,6 @@ pub fn validate_secret_key(key_hex: Option<&str>) -> Result<(), ValidationError>
     Ok(())
 }
 
-/// Validate Raft mailbox capacity bounds.
-///
-/// # Tiger Style
-///
-/// Bounded mailbox prevents memory exhaustion under high load.
-///
-/// # Arguments
-///
-/// * `capacity` - Configured mailbox capacity
-///
-/// # Bounds
-///
-/// - Minimum: 1
-/// - Maximum: 10,000
-pub fn validate_mailbox_capacity(capacity: u32) -> Result<(), ValidationError> {
-    if capacity == 0 {
-        return Err(ValidationError::MailboxCapacityZero);
-    }
-
-    if capacity > MAX_RAFT_MAILBOX_CAPACITY {
-        return Err(ValidationError::MailboxCapacityExceedsMax {
-            value: capacity,
-            max: MAX_RAFT_MAILBOX_CAPACITY,
-        });
-    }
-
-    Ok(())
-}
-
 /// Check if HTTP port is a commonly conflicting default.
 ///
 /// # Returns
@@ -272,7 +234,6 @@ pub fn check_disk_usage(usage_percent: u64) -> Option<String> {
 /// * `election_timeout_min_ms` - Minimum election timeout
 /// * `election_timeout_max_ms` - Maximum election timeout
 /// * `secret_key_hex` - Optional Iroh secret key
-/// * `mailbox_capacity` - Raft mailbox capacity
 pub fn validate_core_config(
     node_id: u64,
     cookie: &str,
@@ -280,7 +241,6 @@ pub fn validate_core_config(
     election_timeout_min_ms: u64,
     election_timeout_max_ms: u64,
     secret_key_hex: Option<&str>,
-    mailbox_capacity: u32,
 ) -> Result<(), ValidationError> {
     validate_node_id(node_id)?;
     validate_cookie(cookie)?;
@@ -290,7 +250,6 @@ pub fn validate_core_config(
         election_timeout_max_ms,
     )?;
     validate_secret_key(secret_key_hex)?;
-    validate_mailbox_capacity(mailbox_capacity)?;
     Ok(())
 }
 
@@ -444,36 +403,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Mailbox Capacity Tests
-    // ========================================================================
-
-    #[test]
-    fn test_mailbox_zero_invalid() {
-        assert_eq!(
-            validate_mailbox_capacity(0),
-            Err(ValidationError::MailboxCapacityZero)
-        );
-    }
-
-    #[test]
-    fn test_mailbox_exceeds_max() {
-        assert_eq!(
-            validate_mailbox_capacity(10001),
-            Err(ValidationError::MailboxCapacityExceedsMax {
-                value: 10001,
-                max: 10000
-            })
-        );
-    }
-
-    #[test]
-    fn test_mailbox_valid() {
-        assert!(validate_mailbox_capacity(1).is_ok());
-        assert!(validate_mailbox_capacity(1000).is_ok());
-        assert!(validate_mailbox_capacity(10000).is_ok());
-    }
-
-    // ========================================================================
     // HTTP Port Tests
     // ========================================================================
 
@@ -504,14 +433,14 @@ mod tests {
 
     #[test]
     fn test_validate_core_config_all_valid() {
-        let result = validate_core_config(1, "aspen-cookie", 500, 1500, 3000, None, 1000);
+        let result = validate_core_config(1, "aspen-cookie", 500, 1500, 3000, None);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_validate_core_config_fails_fast() {
         // Should fail on node_id first
-        let result = validate_core_config(0, "", 0, 0, 0, None, 0);
+        let result = validate_core_config(0, "", 0, 0, 0, None);
         assert_eq!(result, Err(ValidationError::NodeIdZero));
     }
 }
@@ -543,16 +472,6 @@ mod property_tests {
             .filter(|(hb, min, max)| *hb > 0 && *min > 0 && *max > *min)
             .for_each(|(heartbeat, min, max)| {
                 assert!(validate_raft_timings(*heartbeat, *min, *max).is_ok());
-            });
-    }
-
-    #[test]
-    fn prop_mailbox_in_bounds_succeeds() {
-        check!()
-            .with_type::<u32>()
-            .filter(|&cap| cap > 0 && cap <= MAX_RAFT_MAILBOX_CAPACITY)
-            .for_each(|capacity| {
-                assert!(validate_mailbox_capacity(*capacity).is_ok());
             });
     }
 

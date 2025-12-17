@@ -242,7 +242,7 @@ impl IrohEndpointManager {
         let secret_key = config.secret_key.unwrap_or_else(|| {
             use rand::RngCore;
             let mut bytes = [0u8; 32];
-            rand::thread_rng().fill_bytes(&mut bytes);
+            rand::rng().fill_bytes(&mut bytes);
             SecretKey::from(bytes)
         });
 

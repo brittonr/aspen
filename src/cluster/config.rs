@@ -156,17 +156,6 @@ pub struct NodeConfig {
     /// Format: "node_id@endpoint_id:direct_addrs"
     #[serde(default)]
     pub peers: Vec<String>,
-
-    /// RaftActor mailbox capacity (bounded mailbox size).
-    /// Prevents memory exhaustion under high load by enforcing backpressure.
-    /// Default: 1000 messages
-    /// Maximum: 10000 messages
-    #[serde(default = "default_raft_mailbox_capacity")]
-    pub raft_mailbox_capacity: u32,
-}
-
-fn default_raft_mailbox_capacity() -> u32 {
-    1000
 }
 
 /// Iroh networking configuration.
@@ -310,8 +299,6 @@ impl NodeConfig {
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
-            raft_mailbox_capacity: parse_env("ASPEN_RAFT_MAILBOX_CAPACITY")
-                .unwrap_or_else(default_raft_mailbox_capacity),
         }
     }
 
@@ -400,8 +387,7 @@ impl NodeConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
         use crate::cluster::validation::{
             check_disk_usage, check_http_port, check_raft_timing_sanity, validate_cookie,
-            validate_mailbox_capacity, validate_node_id, validate_raft_timings,
-            validate_secret_key,
+            validate_node_id, validate_raft_timings, validate_secret_key,
         };
         use tracing::warn;
 
@@ -424,12 +410,6 @@ impl NodeConfig {
         })?;
 
         validate_secret_key(self.iroh.secret_key.as_deref()).map_err(|e| {
-            ConfigError::Validation {
-                message: e.to_string(),
-            }
-        })?;
-
-        validate_mailbox_capacity(self.raft_mailbox_capacity).map_err(|e| {
             ConfigError::Validation {
                 message: e.to_string(),
             }
@@ -593,7 +573,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            raft_mailbox_capacity: 1000,
         };
 
         assert!(config.validate().is_ok());
@@ -614,7 +593,6 @@ mod tests {
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
-            raft_mailbox_capacity: 1000,
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
             redb_sm_path: None,
@@ -644,7 +622,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            raft_mailbox_capacity: 1000,
         };
 
         assert!(config.validate().is_err());
@@ -670,7 +647,6 @@ mod tests {
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            raft_mailbox_capacity: 1000,
         };
 
         let override_config = NodeConfig {
@@ -698,7 +674,6 @@ mod tests {
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
             sqlite_log_path: None,
             sqlite_sm_path: None,
-            raft_mailbox_capacity: 1000,
         };
 
         base.merge(override_config);
