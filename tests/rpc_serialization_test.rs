@@ -7,7 +7,12 @@
 
 mod support;
 
-use proptest::prelude::*;
+use bolero::check;
+use support::bolero_generators::{
+    ClusterTicketString, EndpointIdString, ErrorCode, ErrorMessage, HexAddrString, MembershipList,
+    OptionalBinaryValue, OptionalErrorString, RaftStateString, StatusString, TopicIdString,
+    TuiBinaryData, TuiRpcKey,
+};
 
 use aspen::tui_rpc::{
     AddLearnerResultResponse, ChangeMembershipResultResponse, ClusterStateResponse,
@@ -17,498 +22,514 @@ use aspen::tui_rpc::{
     WriteResultResponse,
 };
 
+// ============================================================================
 // TUI RPC Request serialization tests
+// ============================================================================
 
-proptest! {
-    /// GetHealth request serializes correctly.
-    #[test]
-    fn test_tui_get_health_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetHealth;
+/// GetHealth request serializes correctly.
+#[test]
+fn test_tui_get_health_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetHealth;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetHealth));
+}
+
+/// GetRaftMetrics request serializes correctly.
+#[test]
+fn test_tui_get_raft_metrics_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetRaftMetrics;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetRaftMetrics));
+}
+
+/// GetLeader request serializes correctly.
+#[test]
+fn test_tui_get_leader_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetLeader;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetLeader));
+}
+
+/// GetNodeInfo request serializes correctly.
+#[test]
+fn test_tui_get_node_info_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetNodeInfo;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetNodeInfo));
+}
+
+/// GetClusterTicket request serializes correctly.
+#[test]
+fn test_tui_get_cluster_ticket_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetClusterTicket;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetClusterTicket));
+}
+
+/// InitCluster request serializes correctly.
+#[test]
+fn test_tui_init_cluster_postcard_roundtrip() {
+    let request = TuiRpcRequest::InitCluster;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::InitCluster));
+}
+
+/// ReadKey request serializes correctly.
+#[test]
+fn test_tui_read_key_postcard_roundtrip() {
+    check!().with_type::<TuiRpcKey>().for_each(|key| {
+        let request = TuiRpcRequest::ReadKey { key: key.0.clone() };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
         let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
-            TuiRpcRequest::GetHealth => {}
-            _ => prop_assert!(false, "Wrong variant"),
+            TuiRpcRequest::ReadKey { key: k } => assert_eq!(k, key.0),
+            _ => panic!("Wrong variant"),
         }
-    }
+    });
+}
 
-    /// GetRaftMetrics request serializes correctly.
-    #[test]
-    fn test_tui_get_raft_metrics_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetRaftMetrics;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::GetRaftMetrics => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// GetLeader request serializes correctly.
-    #[test]
-    fn test_tui_get_leader_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetLeader;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::GetLeader => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// GetNodeInfo request serializes correctly.
-    #[test]
-    fn test_tui_get_node_info_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetNodeInfo;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::GetNodeInfo => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// GetClusterTicket request serializes correctly.
-    #[test]
-    fn test_tui_get_cluster_ticket_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetClusterTicket;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::GetClusterTicket => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// InitCluster request serializes correctly.
-    #[test]
-    fn test_tui_init_cluster_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::InitCluster;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::InitCluster => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// ReadKey request serializes correctly.
-    #[test]
-    fn test_tui_read_key_postcard_roundtrip(key in "[a-zA-Z0-9_:/-]{1,100}") {
-        let request = TuiRpcRequest::ReadKey { key: key.clone() };
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::ReadKey { key: k } => prop_assert_eq!(k, key),
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// WriteKey request serializes correctly.
-    #[test]
-    fn test_tui_write_key_postcard_roundtrip(
-        key in "[a-zA-Z0-9_:/-]{1,100}",
-        value in prop::collection::vec(any::<u8>(), 0..1000)
-    ) {
-        let request = TuiRpcRequest::WriteKey {
-            key: key.clone(),
-            value: value.clone(),
-        };
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::WriteKey { key: k, value: v } => {
-                prop_assert_eq!(k, key);
-                prop_assert_eq!(v, value);
+/// WriteKey request serializes correctly.
+#[test]
+fn test_tui_write_key_postcard_roundtrip() {
+    check!()
+        .with_type::<(TuiRpcKey, TuiBinaryData)>()
+        .for_each(|(key, value)| {
+            let request = TuiRpcRequest::WriteKey {
+                key: key.0.clone(),
+                value: value.0.clone(),
+            };
+            let serialized = postcard::to_stdvec(&request).expect("serialize");
+            let deserialized: TuiRpcRequest =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcRequest::WriteKey { key: k, value: v } => {
+                    assert_eq!(k, key.0);
+                    assert_eq!(v, value.0);
+                }
+                _ => panic!("Wrong variant"),
             }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
+        });
+}
 
-    /// TriggerSnapshot request serializes correctly.
-    #[test]
-    fn test_tui_trigger_snapshot_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::TriggerSnapshot;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::TriggerSnapshot => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
+/// TriggerSnapshot request serializes correctly.
+#[test]
+fn test_tui_trigger_snapshot_postcard_roundtrip() {
+    let request = TuiRpcRequest::TriggerSnapshot;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::TriggerSnapshot));
+}
 
-    /// AddLearner request serializes correctly.
-    #[test]
-    fn test_tui_add_learner_postcard_roundtrip(
-        node_id in any::<u64>(),
-        addr in "[a-zA-Z0-9]{32}"
-    ) {
-        let request = TuiRpcRequest::AddLearner {
-            node_id,
-            addr: addr.clone(),
-        };
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::AddLearner { node_id: n, addr: a } => {
-                prop_assert_eq!(n, node_id);
-                prop_assert_eq!(a, addr);
+/// AddLearner request serializes correctly.
+#[test]
+fn test_tui_add_learner_postcard_roundtrip() {
+    check!()
+        .with_type::<(u64, HexAddrString)>()
+        .for_each(|(node_id, addr)| {
+            let request = TuiRpcRequest::AddLearner {
+                node_id: *node_id,
+                addr: addr.0.clone(),
+            };
+            let serialized = postcard::to_stdvec(&request).expect("serialize");
+            let deserialized: TuiRpcRequest =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcRequest::AddLearner {
+                    node_id: n,
+                    addr: a,
+                } => {
+                    assert_eq!(n, *node_id);
+                    assert_eq!(a, addr.0);
+                }
+                _ => panic!("Wrong variant"),
             }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
+        });
+}
 
-    /// ChangeMembership request serializes correctly.
-    #[test]
-    fn test_tui_change_membership_postcard_roundtrip(
-        members in prop::collection::vec(any::<u64>(), 1..10)
-    ) {
+/// ChangeMembership request serializes correctly.
+#[test]
+fn test_tui_change_membership_postcard_roundtrip() {
+    check!().with_type::<MembershipList>().for_each(|members| {
         let request = TuiRpcRequest::ChangeMembership {
-            members: members.clone(),
+            members: members.0.clone(),
         };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
         let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
             TuiRpcRequest::ChangeMembership { members: m } => {
-                prop_assert_eq!(m, members);
+                assert_eq!(m, members.0);
             }
-            _ => prop_assert!(false, "Wrong variant"),
+            _ => panic!("Wrong variant"),
         }
-    }
-
-    /// Ping request serializes correctly.
-    #[test]
-    fn test_tui_ping_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::Ping;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::Ping => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// GetClusterState request serializes correctly.
-    #[test]
-    fn test_tui_get_cluster_state_postcard_roundtrip(_dummy in Just(())) {
-        let request = TuiRpcRequest::GetClusterState;
-        let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcRequest::GetClusterState => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
+    });
 }
 
+/// Ping request serializes correctly.
+#[test]
+fn test_tui_ping_postcard_roundtrip() {
+    let request = TuiRpcRequest::Ping;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::Ping));
+}
+
+/// GetClusterState request serializes correctly.
+#[test]
+fn test_tui_get_cluster_state_postcard_roundtrip() {
+    let request = TuiRpcRequest::GetClusterState;
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: TuiRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcRequest::GetClusterState));
+}
+
+// ============================================================================
 // TUI RPC Response serialization tests
+// ============================================================================
 
-proptest! {
-    /// HealthResponse serializes correctly.
-    #[test]
-    fn test_health_response_postcard_roundtrip(
-        status in "(healthy|degraded|unhealthy)",
-        node_id in any::<u64>(),
-        raft_node_id in prop::option::of(any::<u64>()),
-        uptime_seconds in any::<u64>()
-    ) {
-        let response = TuiRpcResponse::Health(HealthResponse {
-            status: status.clone(),
-            node_id,
-            raft_node_id,
-            uptime_seconds,
+/// HealthResponse serializes correctly.
+#[test]
+fn test_health_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(StatusString, u64, Option<u64>, u64)>()
+        .for_each(|(status, node_id, raft_node_id, uptime_seconds)| {
+            let response = TuiRpcResponse::Health(HealthResponse {
+                status: status.0.clone(),
+                node_id: *node_id,
+                raft_node_id: *raft_node_id,
+                uptime_seconds: *uptime_seconds,
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::Health(h) => {
+                    assert_eq!(h.status, status.0);
+                    assert_eq!(h.node_id, *node_id);
+                    assert_eq!(h.raft_node_id, *raft_node_id);
+                    assert_eq!(h.uptime_seconds, *uptime_seconds);
+                }
+                _ => panic!("Wrong variant"),
+            }
         });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::Health(h) => {
-                prop_assert_eq!(h.status, status);
-                prop_assert_eq!(h.node_id, node_id);
-                prop_assert_eq!(h.raft_node_id, raft_node_id);
-                prop_assert_eq!(h.uptime_seconds, uptime_seconds);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// RaftMetricsResponse serializes correctly.
-    #[test]
-    fn test_raft_metrics_response_postcard_roundtrip(
-        node_id in any::<u64>(),
-        state in "(Leader|Follower|Candidate|Learner)",
-        current_leader in prop::option::of(any::<u64>()),
-        current_term in any::<u64>(),
-        last_log_index in prop::option::of(any::<u64>()),
-        last_applied_index in prop::option::of(any::<u64>()),
-        snapshot_index in prop::option::of(any::<u64>())
-    ) {
-        let response = TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
-            node_id,
-            state: state.clone(),
-            current_leader,
-            current_term,
-            last_log_index,
-            last_applied_index,
-            snapshot_index,
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::RaftMetrics(m) => {
-                prop_assert_eq!(m.node_id, node_id);
-                prop_assert_eq!(m.state, state);
-                prop_assert_eq!(m.current_leader, current_leader);
-                prop_assert_eq!(m.current_term, current_term);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// Leader response serializes correctly.
-    #[test]
-    fn test_leader_response_postcard_roundtrip(
-        leader_id in prop::option::of(any::<u64>())
-    ) {
-        let response = TuiRpcResponse::Leader(leader_id);
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::Leader(l) => prop_assert_eq!(l, leader_id),
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// NodeInfoResponse serializes correctly.
-    #[test]
-    fn test_node_info_response_postcard_roundtrip(
-        node_id in any::<u64>(),
-        endpoint_addr in "[a-zA-Z0-9]{32,64}"
-    ) {
-        let response = TuiRpcResponse::NodeInfo(NodeInfoResponse {
-            node_id,
-            endpoint_addr: endpoint_addr.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::NodeInfo(n) => {
-                prop_assert_eq!(n.node_id, node_id);
-                prop_assert_eq!(n.endpoint_addr, endpoint_addr);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// ClusterTicketResponse serializes correctly.
-    #[test]
-    fn test_cluster_ticket_response_postcard_roundtrip(
-        ticket in "[a-zA-Z0-9]{50,200}",
-        topic_id in "[a-zA-Z0-9]{32}",
-        cluster_id in "[a-zA-Z0-9]{16}",
-        endpoint_id in "[a-zA-Z0-9]{32}"
-    ) {
-        let response = TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
-            ticket: ticket.clone(),
-            topic_id: topic_id.clone(),
-            cluster_id: cluster_id.clone(),
-            endpoint_id: endpoint_id.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::ClusterTicket(t) => {
-                prop_assert_eq!(t.ticket, ticket);
-                prop_assert_eq!(t.topic_id, topic_id);
-                prop_assert_eq!(t.cluster_id, cluster_id);
-                prop_assert_eq!(t.endpoint_id, endpoint_id);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// InitResultResponse serializes correctly.
-    #[test]
-    fn test_init_result_response_postcard_roundtrip(
-        success in any::<bool>(),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::InitResult(InitResultResponse {
-            success,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::InitResult(r) => {
-                prop_assert_eq!(r.success, success);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// ReadResultResponse serializes correctly.
-    #[test]
-    fn test_read_result_response_postcard_roundtrip(
-        value in prop::option::of(prop::collection::vec(any::<u8>(), 0..100)),
-        found in any::<bool>(),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::ReadResult(ReadResultResponse {
-            value: value.clone(),
-            found,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::ReadResult(r) => {
-                prop_assert_eq!(r.value, value);
-                prop_assert_eq!(r.found, found);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// WriteResultResponse serializes correctly.
-    #[test]
-    fn test_write_result_response_postcard_roundtrip(
-        success in any::<bool>(),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::WriteResult(WriteResultResponse {
-            success,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::WriteResult(r) => {
-                prop_assert_eq!(r.success, success);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// SnapshotResultResponse serializes correctly.
-    #[test]
-    fn test_snapshot_result_response_postcard_roundtrip(
-        success in any::<bool>(),
-        snapshot_index in prop::option::of(any::<u64>()),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
-            success,
-            snapshot_index,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::SnapshotResult(r) => {
-                prop_assert_eq!(r.success, success);
-                prop_assert_eq!(r.snapshot_index, snapshot_index);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// AddLearnerResultResponse serializes correctly.
-    #[test]
-    fn test_add_learner_result_response_postcard_roundtrip(
-        success in any::<bool>(),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
-            success,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::AddLearnerResult(r) => {
-                prop_assert_eq!(r.success, success);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// ChangeMembershipResultResponse serializes correctly.
-    #[test]
-    fn test_change_membership_result_response_postcard_roundtrip(
-        success in any::<bool>(),
-        error in prop::option::of("[a-zA-Z0-9 ]{10,50}")
-    ) {
-        let response = TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-            success,
-            error: error.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::ChangeMembershipResult(r) => {
-                prop_assert_eq!(r.success, success);
-                prop_assert_eq!(r.error, error);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// Pong response serializes correctly.
-    #[test]
-    fn test_pong_response_postcard_roundtrip(_dummy in Just(())) {
-        let response = TuiRpcResponse::Pong;
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::Pong => {}
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// ErrorResponse serializes correctly.
-    #[test]
-    fn test_error_response_postcard_roundtrip(
-        code in "[A-Z_]{3,20}",
-        message in "[a-zA-Z0-9 ]{10,100}"
-    ) {
-        let response = TuiRpcResponse::Error(ErrorResponse {
-            code: code.clone(),
-            message: message.clone(),
-        });
-        let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
-        match deserialized {
-            TuiRpcResponse::Error(e) => {
-                prop_assert_eq!(e.code, code);
-                prop_assert_eq!(e.message, message);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
-
-    /// TuiRpcResponse::error helper works correctly.
-    #[test]
-    fn test_tui_rpc_response_error_helper(
-        code in "[A-Z_]{3,20}",
-        message in "[a-zA-Z0-9 ]{10,100}"
-    ) {
-        let response = TuiRpcResponse::error(code.clone(), message.clone());
-        match response {
-            TuiRpcResponse::Error(e) => {
-                prop_assert_eq!(e.code, code);
-                prop_assert_eq!(e.message, message);
-            }
-            _ => prop_assert!(false, "Wrong variant"),
-        }
-    }
 }
 
+/// RaftMetricsResponse serializes correctly.
+#[test]
+fn test_raft_metrics_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(
+            u64,
+            RaftStateString,
+            Option<u64>,
+            u64,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+        )>()
+        .for_each(
+            |(
+                node_id,
+                state,
+                current_leader,
+                current_term,
+                last_log_index,
+                last_applied_index,
+                snapshot_index,
+            )| {
+                let response = TuiRpcResponse::RaftMetrics(RaftMetricsResponse {
+                    node_id: *node_id,
+                    state: state.0.clone(),
+                    current_leader: *current_leader,
+                    current_term: *current_term,
+                    last_log_index: *last_log_index,
+                    last_applied_index: *last_applied_index,
+                    snapshot_index: *snapshot_index,
+                });
+                let serialized = postcard::to_stdvec(&response).expect("serialize");
+                let deserialized: TuiRpcResponse =
+                    postcard::from_bytes(&serialized).expect("deserialize");
+                match deserialized {
+                    TuiRpcResponse::RaftMetrics(m) => {
+                        assert_eq!(m.node_id, *node_id);
+                        assert_eq!(m.state, state.0);
+                        assert_eq!(m.current_leader, *current_leader);
+                        assert_eq!(m.current_term, *current_term);
+                    }
+                    _ => panic!("Wrong variant"),
+                }
+            },
+        );
+}
+
+/// Leader response serializes correctly.
+#[test]
+fn test_leader_response_postcard_roundtrip() {
+    check!().with_type::<Option<u64>>().for_each(|leader_id| {
+        let response = TuiRpcResponse::Leader(*leader_id);
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            TuiRpcResponse::Leader(l) => assert_eq!(l, *leader_id),
+            _ => panic!("Wrong variant"),
+        }
+    });
+}
+
+/// NodeInfoResponse serializes correctly.
+#[test]
+fn test_node_info_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(u64, EndpointIdString)>()
+        .for_each(|(node_id, endpoint_addr)| {
+            let response = TuiRpcResponse::NodeInfo(NodeInfoResponse {
+                node_id: *node_id,
+                endpoint_addr: endpoint_addr.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::NodeInfo(n) => {
+                    assert_eq!(n.node_id, *node_id);
+                    assert_eq!(n.endpoint_addr, endpoint_addr.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// ClusterTicketResponse serializes correctly.
+#[test]
+fn test_cluster_ticket_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(
+            ClusterTicketString,
+            TopicIdString,
+            TopicIdString,
+            EndpointIdString,
+        )>()
+        .for_each(|(ticket, topic_id, cluster_id, endpoint_id)| {
+            let response = TuiRpcResponse::ClusterTicket(ClusterTicketResponse {
+                ticket: ticket.0.clone(),
+                topic_id: topic_id.0.clone(),
+                cluster_id: cluster_id.0.clone(),
+                endpoint_id: endpoint_id.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::ClusterTicket(t) => {
+                    assert_eq!(t.ticket, ticket.0);
+                    assert_eq!(t.topic_id, topic_id.0);
+                    assert_eq!(t.cluster_id, cluster_id.0);
+                    assert_eq!(t.endpoint_id, endpoint_id.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// InitResultResponse serializes correctly.
+#[test]
+fn test_init_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(bool, OptionalErrorString)>()
+        .for_each(|(success, error)| {
+            let response = TuiRpcResponse::InitResult(InitResultResponse {
+                success: *success,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::InitResult(r) => {
+                    assert_eq!(r.success, *success);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// ReadResultResponse serializes correctly.
+#[test]
+fn test_read_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(OptionalBinaryValue, bool, OptionalErrorString)>()
+        .for_each(|(value, found, error)| {
+            let response = TuiRpcResponse::ReadResult(ReadResultResponse {
+                value: value.0.clone(),
+                found: *found,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::ReadResult(r) => {
+                    assert_eq!(r.value, value.0);
+                    assert_eq!(r.found, *found);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// WriteResultResponse serializes correctly.
+#[test]
+fn test_write_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(bool, OptionalErrorString)>()
+        .for_each(|(success, error)| {
+            let response = TuiRpcResponse::WriteResult(WriteResultResponse {
+                success: *success,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::WriteResult(r) => {
+                    assert_eq!(r.success, *success);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// SnapshotResultResponse serializes correctly.
+#[test]
+fn test_snapshot_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(bool, Option<u64>, OptionalErrorString)>()
+        .for_each(|(success, snapshot_index, error)| {
+            let response = TuiRpcResponse::SnapshotResult(SnapshotResultResponse {
+                success: *success,
+                snapshot_index: *snapshot_index,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::SnapshotResult(r) => {
+                    assert_eq!(r.success, *success);
+                    assert_eq!(r.snapshot_index, *snapshot_index);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// AddLearnerResultResponse serializes correctly.
+#[test]
+fn test_add_learner_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(bool, OptionalErrorString)>()
+        .for_each(|(success, error)| {
+            let response = TuiRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+                success: *success,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::AddLearnerResult(r) => {
+                    assert_eq!(r.success, *success);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// ChangeMembershipResultResponse serializes correctly.
+#[test]
+fn test_change_membership_result_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(bool, OptionalErrorString)>()
+        .for_each(|(success, error)| {
+            let response = TuiRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+                success: *success,
+                error: error.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::ChangeMembershipResult(r) => {
+                    assert_eq!(r.success, *success);
+                    assert_eq!(r.error, error.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// Pong response serializes correctly.
+#[test]
+fn test_pong_response_postcard_roundtrip() {
+    let response = TuiRpcResponse::Pong;
+    let serialized = postcard::to_stdvec(&response).expect("serialize");
+    let deserialized: TuiRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+    assert!(matches!(deserialized, TuiRpcResponse::Pong));
+}
+
+/// ErrorResponse serializes correctly.
+#[test]
+fn test_error_response_postcard_roundtrip() {
+    check!()
+        .with_type::<(ErrorCode, ErrorMessage)>()
+        .for_each(|(code, message)| {
+            let response = TuiRpcResponse::Error(ErrorResponse {
+                code: code.0.clone(),
+                message: message.0.clone(),
+            });
+            let serialized = postcard::to_stdvec(&response).expect("serialize");
+            let deserialized: TuiRpcResponse =
+                postcard::from_bytes(&serialized).expect("deserialize");
+            match deserialized {
+                TuiRpcResponse::Error(e) => {
+                    assert_eq!(e.code, code.0);
+                    assert_eq!(e.message, message.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+/// TuiRpcResponse::error helper works correctly.
+#[test]
+fn test_tui_rpc_response_error_helper() {
+    check!()
+        .with_type::<(ErrorCode, ErrorMessage)>()
+        .for_each(|(code, message)| {
+            let response = TuiRpcResponse::error(code.0.clone(), message.0.clone());
+            match response {
+                TuiRpcResponse::Error(e) => {
+                    assert_eq!(e.code, code.0);
+                    assert_eq!(e.message, message.0);
+                }
+                _ => panic!("Wrong variant"),
+            }
+        });
+}
+
+// ============================================================================
 // Unit tests for specific scenarios and constants
+// ============================================================================
 
 #[cfg(test)]
 mod unit_tests {

@@ -1019,6 +1019,233 @@ impl TypeGenerator for MembershipList {
     }
 }
 
+// ============================================================================
+// TUI RPC Generators
+// ============================================================================
+
+const TUI_KEY_CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:/-";
+const UPPERCASE_UNDERSCORE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+
+/// TUI RPC key (alphanumeric + _:/-), 1-100 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TuiRpcKey(pub String);
+
+impl TypeGenerator for TuiRpcKey {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 1 + (driver.produce::<usize>()? % 100);
+        let mut key = String::with_capacity(len);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % TUI_KEY_CHARS.len();
+            key.push(TUI_KEY_CHARS[idx] as char);
+        }
+        Some(TuiRpcKey(key))
+    }
+}
+
+/// Health status string: "healthy", "degraded", or "unhealthy".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusString(pub String);
+
+impl TypeGenerator for StatusString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let statuses = ["healthy", "degraded", "unhealthy"];
+        let idx = driver.produce::<usize>()? % statuses.len();
+        Some(StatusString(statuses[idx].to_string()))
+    }
+}
+
+/// Raft state string: "Leader", "Follower", "Candidate", or "Learner".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaftStateString(pub String);
+
+impl TypeGenerator for RaftStateString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let states = ["Leader", "Follower", "Candidate", "Learner"];
+        let idx = driver.produce::<usize>()? % states.len();
+        Some(RaftStateString(states[idx].to_string()))
+    }
+}
+
+/// Error code string: uppercase letters and underscores, 3-20 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorCode(pub String);
+
+impl TypeGenerator for ErrorCode {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 3 + (driver.produce::<usize>()? % 18);
+        let mut code = String::with_capacity(len);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % UPPERCASE_UNDERSCORE.len();
+            code.push(UPPERCASE_UNDERSCORE[idx] as char);
+        }
+        Some(ErrorCode(code))
+    }
+}
+
+/// Error message string: alphanumeric with spaces, 10-100 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorMessage(pub String);
+
+impl TypeGenerator for ErrorMessage {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 10 + (driver.produce::<usize>()? % 91);
+        let mut msg = String::with_capacity(len);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % ALPHANUMERIC_SPACE.len();
+            msg.push(ALPHANUMERIC_SPACE[idx] as char);
+        }
+        Some(ErrorMessage(msg))
+    }
+}
+
+/// Cluster ticket string: alphanumeric, 50-200 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterTicketString(pub String);
+
+impl TypeGenerator for ClusterTicketString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 50 + (driver.produce::<usize>()? % 151);
+        let mut ticket = String::with_capacity(len);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % ALPHANUMERIC_UNDERSCORE.len();
+            ticket.push(ALPHANUMERIC_UNDERSCORE[idx] as char);
+        }
+        Some(ClusterTicketString(ticket))
+    }
+}
+
+/// Topic ID string: alphanumeric, exactly 32 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicIdString(pub String);
+
+impl TypeGenerator for TopicIdString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let mut id = String::with_capacity(32);
+        for _ in 0..32 {
+            let idx = driver.produce::<usize>()? % ALPHANUMERIC_UNDERSCORE.len();
+            id.push(ALPHANUMERIC_UNDERSCORE[idx] as char);
+        }
+        Some(TopicIdString(id))
+    }
+}
+
+/// Endpoint ID string: alphanumeric, 32-64 chars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EndpointIdString(pub String);
+
+impl TypeGenerator for EndpointIdString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 32 + (driver.produce::<usize>()? % 33);
+        let mut id = String::with_capacity(len);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % ALPHANUMERIC_UNDERSCORE.len();
+            id.push(ALPHANUMERIC_UNDERSCORE[idx] as char);
+        }
+        Some(EndpointIdString(id))
+    }
+}
+
+/// Prefix string for scan operations: 1-5 lowercase letters followed by ":".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanPrefixWithColon(pub String);
+
+impl TypeGenerator for ScanPrefixWithColon {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = 1 + (driver.produce::<usize>()? % 5);
+        let mut prefix = String::with_capacity(len + 1);
+        for _ in 0..len {
+            let idx = driver.produce::<usize>()? % LOWERCASE.len();
+            prefix.push(LOWERCASE[idx] as char);
+        }
+        prefix.push(':');
+        Some(ScanPrefixWithColon(prefix))
+    }
+}
+
+/// Number of keys for scan tests (1-20).
+#[derive(Debug, Clone, Copy)]
+pub struct ScanKeyCount(pub usize);
+
+impl TypeGenerator for ScanKeyCount {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let n = 1 + (driver.produce::<usize>()? % 19);
+        Some(ScanKeyCount(n))
+    }
+}
+
+/// Binary data for TUI RPC (0-1000 bytes).
+#[derive(Debug, Clone)]
+pub struct TuiBinaryData(pub Vec<u8>);
+
+impl TypeGenerator for TuiBinaryData {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let len = driver.produce::<usize>()? % 1001;
+        let mut data = Vec::with_capacity(len);
+        for _ in 0..len {
+            data.push(driver.produce::<u8>()?);
+        }
+        Some(TuiBinaryData(data))
+    }
+}
+
+/// Hex address string for AddLearner (32 alphanumeric chars).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HexAddrString(pub String);
+
+impl TypeGenerator for HexAddrString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let mut addr = String::with_capacity(32);
+        for _ in 0..32 {
+            let idx = driver.produce::<usize>()? % ALPHANUMERIC_UNDERSCORE.len();
+            addr.push(ALPHANUMERIC_UNDERSCORE[idx] as char);
+        }
+        Some(HexAddrString(addr))
+    }
+}
+
+/// Optional error string for response types.
+#[derive(Debug, Clone)]
+pub struct OptionalErrorString(pub Option<String>);
+
+impl TypeGenerator for OptionalErrorString {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let has_error = driver.produce::<bool>()?;
+        let error = if has_error {
+            let len = 10 + (driver.produce::<usize>()? % 41);
+            let mut msg = String::with_capacity(len);
+            for _ in 0..len {
+                let idx = driver.produce::<usize>()? % ALPHANUMERIC_SPACE.len();
+                msg.push(ALPHANUMERIC_SPACE[idx] as char);
+            }
+            Some(msg)
+        } else {
+            None
+        };
+        Some(OptionalErrorString(error))
+    }
+}
+
+/// Optional binary value for read results.
+#[derive(Debug, Clone)]
+pub struct OptionalBinaryValue(pub Option<Vec<u8>>);
+
+impl TypeGenerator for OptionalBinaryValue {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let has_value = driver.produce::<bool>()?;
+        let value = if has_value {
+            let len = driver.produce::<usize>()? % 101;
+            let mut data = Vec::with_capacity(len);
+            for _ in 0..len {
+                data.push(driver.produce::<u8>()?);
+            }
+            Some(data)
+        } else {
+            None
+        };
+        Some(OptionalBinaryValue(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

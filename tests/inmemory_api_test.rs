@@ -7,7 +7,8 @@
 
 mod support;
 
-use proptest::prelude::*;
+use bolero::check;
+use support::bolero_generators::{ScanKeyCount, ScanPrefixWithColon, ValidApiKey, ValidApiValue};
 
 use aspen::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ControlPlaneError,
@@ -817,96 +818,111 @@ async fn test_kv_store_rejects_oversized_batch() {
     }
 }
 
-// Proptest for stress testing
+// Property-based tests using Bolero
 
-proptest! {
-    /// Random write/read operations should be consistent.
-    #[test]
-    fn test_kv_store_write_read_consistency(
-        key in "[a-zA-Z0-9_:/-]{1,50}",
-        value in "[a-zA-Z0-9_:/-]{1,200}"
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let store = DeterministicKeyValueStore::new();
+/// Random write/read operations should be consistent.
+#[test]
+fn test_kv_store_write_read_consistency() {
+    check!()
+        .with_type::<(ValidApiKey, ValidApiValue)>()
+        .for_each(|(key, value)| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let store = DeterministicKeyValueStore::new();
 
-            store.write(WriteRequest {
-                command: WriteCommand::Set {
-                    key: key.clone(),
-                    value: value.clone(),
-                },
-            }).await.unwrap();
+                store
+                    .write(WriteRequest {
+                        command: WriteCommand::Set {
+                            key: key.0.clone(),
+                            value: value.0.clone(),
+                        },
+                    })
+                    .await
+                    .unwrap();
 
-            let result = store.read(ReadRequest { key: key.clone() }).await.unwrap();
-            prop_assert_eq!(result.value, value);
+                let result = store
+                    .read(ReadRequest { key: key.0.clone() })
+                    .await
+                    .unwrap();
+                assert_eq!(result.value, value.0);
+            });
+        });
+}
 
-            Ok(())
-        }).unwrap();
-    }
-
-    /// Delete should be idempotent.
-    #[test]
-    fn test_kv_store_delete_idempotent(
-        key in "[a-zA-Z0-9_:/-]{1,50}"
-    ) {
+/// Delete should be idempotent.
+#[test]
+fn test_kv_store_delete_idempotent() {
+    check!().with_type::<ValidApiKey>().for_each(|key| {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let store = DeterministicKeyValueStore::new();
 
             // Delete non-existent key (first time)
-            let result1 = store.delete(DeleteRequest { key: key.clone() }).await.unwrap();
-            prop_assert!(!result1.deleted);
+            let result1 = store
+                .delete(DeleteRequest { key: key.0.clone() })
+                .await
+                .unwrap();
+            assert!(!result1.deleted);
 
             // Delete again (second time)
-            let result2 = store.delete(DeleteRequest { key: key.clone() }).await.unwrap();
-            prop_assert!(!result2.deleted);
+            let result2 = store
+                .delete(DeleteRequest { key: key.0.clone() })
+                .await
+                .unwrap();
+            assert!(!result2.deleted);
+        });
+    });
+}
 
-            Ok(())
-        }).unwrap();
-    }
+/// Scan with various prefixes should only return matching keys.
+#[test]
+fn test_kv_store_scan_prefix_filtering() {
+    check!()
+        .with_type::<(ScanPrefixWithColon, ScanKeyCount)>()
+        .for_each(|(prefix, num_keys)| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let store = DeterministicKeyValueStore::new();
 
-    /// Scan with various prefixes should only return matching keys.
-    #[test]
-    fn test_kv_store_scan_prefix_filtering(
-        prefix in "[a-z]{1,5}:",
-        num_keys in 1usize..20
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let store = DeterministicKeyValueStore::new();
+                // Write keys with the prefix
+                for i in 0..num_keys.0 {
+                    store
+                        .write(WriteRequest {
+                            command: WriteCommand::Set {
+                                key: format!("{}{}", prefix.0, i),
+                                value: format!("v{}", i),
+                            },
+                        })
+                        .await
+                        .unwrap();
+                }
 
-            // Write keys with the prefix
-            for i in 0..num_keys {
-                store.write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key: format!("{}{}", prefix, i),
-                        value: format!("v{}", i),
-                    },
-                }).await.unwrap();
-            }
+                // Write keys with different prefix
+                for i in 0..5 {
+                    store
+                        .write(WriteRequest {
+                            command: WriteCommand::Set {
+                                key: format!("other:{}", i),
+                                value: format!("other{}", i),
+                            },
+                        })
+                        .await
+                        .unwrap();
+                }
 
-            // Write keys with different prefix
-            for i in 0..5 {
-                store.write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key: format!("other:{}", i),
-                        value: format!("other{}", i),
-                    },
-                }).await.unwrap();
-            }
+                let result = store
+                    .scan(ScanRequest {
+                        prefix: prefix.0.clone(),
+                        limit: None,
+                        continuation_token: None,
+                    })
+                    .await
+                    .unwrap();
 
-            let result = store.scan(ScanRequest {
-                prefix: prefix.clone(),
-                limit: None,
-                continuation_token: None,
-            }).await.unwrap();
-
-            prop_assert_eq!(result.count as usize, num_keys);
-            for entry in &result.entries {
-                prop_assert!(entry.key.starts_with(&prefix));
-            }
-
-            Ok(())
-        }).unwrap();
-    }
+                assert_eq!(result.count as usize, num_keys.0);
+                for entry in &result.entries {
+                    assert!(entry.key.starts_with(&prefix.0));
+                }
+            });
+        });
 }
