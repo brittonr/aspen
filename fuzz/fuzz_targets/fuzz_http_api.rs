@@ -11,9 +11,7 @@
 //! - Oversized keys/values (should be rejected by validation)
 //! - Special characters in keys
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 // Import API request types
 use aspen::fuzz_helpers::{
@@ -21,15 +19,18 @@ use aspen::fuzz_helpers::{
     ScanRequest, WriteRequest,
 };
 
-fuzz_target!(|data: &[u8]| {
-    // Fuzz cluster control endpoints
-    let _ = serde_json::from_slice::<InitRequest>(data);
-    let _ = serde_json::from_slice::<AddLearnerRequest>(data);
-    let _ = serde_json::from_slice::<ChangeMembershipRequest>(data);
+#[test]
+fn fuzz_http_api() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Fuzz cluster control endpoints
+        let _ = serde_json::from_slice::<InitRequest>(data);
+        let _ = serde_json::from_slice::<AddLearnerRequest>(data);
+        let _ = serde_json::from_slice::<ChangeMembershipRequest>(data);
 
-    // Fuzz key-value store endpoints
-    let _ = serde_json::from_slice::<WriteRequest>(data);
-    let _ = serde_json::from_slice::<ReadRequest>(data);
-    let _ = serde_json::from_slice::<DeleteRequest>(data);
-    let _ = serde_json::from_slice::<ScanRequest>(data);
-});
+        // Fuzz key-value store endpoints
+        let _ = serde_json::from_slice::<WriteRequest>(data);
+        let _ = serde_json::from_slice::<ReadRequest>(data);
+        let _ = serde_json::from_slice::<DeleteRequest>(data);
+        let _ = serde_json::from_slice::<ScanRequest>(data);
+    });
+}

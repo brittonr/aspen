@@ -218,6 +218,21 @@ pub fn make_log_id(term: u64, node: u64, index: u64) -> LogId<AppTypeConfig> {
     log_id::<AppTypeConfig>(term, NodeId::from(node), index)
 }
 
+/// Valid vote with term and node ID.
+#[derive(Debug, Clone, Copy)]
+pub struct ValidVote {
+    pub term: u64,
+    pub node_id: NodeId,
+}
+
+impl TypeGenerator for ValidVote {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        let term = 1 + (driver.produce::<u64>()? % 100);
+        let node_id = NodeId::from(driver.produce::<u64>()? % 10);
+        Some(ValidVote { term, node_id })
+    }
+}
+
 // ============================================================================
 // AppRequest Types
 // ============================================================================

@@ -11,25 +11,26 @@
 //! - Invalid TopicId
 //! - Invalid EndpointId values
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 use aspen::fuzz_helpers::AspenClusterTicket;
 
-fuzz_target!(|data: &[u8]| {
-    // Fuzz raw postcard deserialization (bypassing base32)
-    // This tests the core deserialization path
-    let _ = postcard::from_bytes::<AspenClusterTicket>(data);
+#[test]
+fn fuzz_cluster_ticket() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Fuzz raw postcard deserialization (bypassing base32)
+        // This tests the core deserialization path
+        let _ = postcard::from_bytes::<AspenClusterTicket>(data);
 
-    // Also fuzz as a string (tests base32 decoding path)
-    if let Ok(s) = std::str::from_utf8(data) {
-        let _ = AspenClusterTicket::deserialize(s);
-    }
+        // Also fuzz as a string (tests base32 decoding path)
+        if let Ok(s) = std::str::from_utf8(data) {
+            let _ = AspenClusterTicket::deserialize(s);
+        }
 
-    // Fuzz TopicId alone (32-byte fixed size)
-    if data.len() >= 32 {
-        let topic_bytes: [u8; 32] = data[0..32].try_into().unwrap();
-        let _ = iroh_gossip::proto::TopicId::from_bytes(topic_bytes);
-    }
-});
+        // Fuzz TopicId alone (32-byte fixed size)
+        if data.len() >= 32 {
+            let topic_bytes: [u8; 32] = data[0..32].try_into().unwrap();
+            let _ = iroh_gossip::proto::TopicId::from_bytes(topic_bytes);
+        }
+    });
+}

@@ -5,7 +5,11 @@ edition = "2024"
 publish = false
 
 [package.metadata]
-cargo-fuzz = true
+# Bolero uses test harness instead of cargo-fuzz
+bolero = true
+
+[lib]
+path = "src/lib.rs"
 
 [dependencies]
 # Bolero unified fuzzing frontend (supports libFuzzer, AFL, Honggfuzz, Kani)
@@ -35,6 +39,67 @@ tokio = { version = "1.0", features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
 # None needed
+
+# Fuzz test targets (run with cargo bolero test)
+[[test]]
+name = "fuzz_raft_rpc"
+path = "fuzz_targets/fuzz_raft_rpc.rs"
+
+[[test]]
+name = "fuzz_http_api"
+path = "fuzz_targets/fuzz_http_api.rs"
+
+[[test]]
+name = "fuzz_snapshot_json"
+path = "fuzz_targets/fuzz_snapshot_json.rs"
+
+[[test]]
+name = "fuzz_cluster_ticket"
+path = "fuzz_targets/fuzz_cluster_ticket.rs"
+
+[[test]]
+name = "fuzz_gossip"
+path = "fuzz_targets/fuzz_gossip.rs"
+
+[[test]]
+name = "fuzz_log_entries"
+path = "fuzz_targets/fuzz_log_entries.rs"
+
+[[test]]
+name = "fuzz_tui_rpc"
+path = "fuzz_targets/fuzz_tui_rpc.rs"
+
+[[test]]
+name = "fuzz_config"
+path = "fuzz_targets/fuzz_config.rs"
+
+[[test]]
+name = "fuzz_protocol_handler"
+path = "fuzz_targets/fuzz_protocol_handler.rs"
+
+[[test]]
+name = "fuzz_roundtrip"
+path = "fuzz_targets/fuzz_roundtrip.rs"
+
+[[test]]
+name = "fuzz_metadata"
+path = "fuzz_targets/fuzz_metadata.rs"
+
+[[test]]
+name = "fuzz_integrity"
+path = "fuzz_targets/fuzz_integrity.rs"
+
+[[test]]
+name = "fuzz_clock_drift"
+path = "fuzz_targets/fuzz_clock_drift.rs"
+
+[[test]]
+name = "fuzz_differential"
+path = "fuzz_targets/fuzz_differential.rs"
+
+[[test]]
+name = "fuzz_raft_model_guided"
+path = "fuzz_targets/fuzz_raft_model_guided.rs"
 
 # Prevent this from interfering with workspaces
 [workspace]

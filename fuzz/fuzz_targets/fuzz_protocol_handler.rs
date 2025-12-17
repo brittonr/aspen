@@ -11,9 +11,7 @@
 //! - Messages just under/at/over size limits
 //! - Invalid message types
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 use aspen::fuzz_helpers::{RaftRpcProtocol, RaftRpcResponse, TuiRpcRequest, TuiRpcResponse};
 
@@ -21,30 +19,33 @@ use aspen::fuzz_helpers::{RaftRpcProtocol, RaftRpcResponse, TuiRpcRequest, TuiRp
 const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 const MAX_TUI_MESSAGE_SIZE: usize = 1024 * 1024; // 1 MB
 
-fuzz_target!(|data: &[u8]| {
-    // Test Raft RPC path - simulates size-bounded stream read
-    // Protocol handler reads up to MAX_RPC_MESSAGE_SIZE bytes then deserializes
-    if data.len() <= MAX_RPC_MESSAGE_SIZE {
-        // Try deserializing as request (incoming from peers)
-        let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
-        // Try deserializing as response (incoming from peers)
-        let _ = postcard::from_bytes::<RaftRpcResponse>(data);
-    }
+#[test]
+fn fuzz_protocol_handler() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Test Raft RPC path - simulates size-bounded stream read
+        // Protocol handler reads up to MAX_RPC_MESSAGE_SIZE bytes then deserializes
+        if data.len() <= MAX_RPC_MESSAGE_SIZE {
+            // Try deserializing as request (incoming from peers)
+            let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
+            // Try deserializing as response (incoming from peers)
+            let _ = postcard::from_bytes::<RaftRpcResponse>(data);
+        }
 
-    // Test TUI RPC path - smaller size limit for TUI clients
-    // Protocol handler reads up to MAX_TUI_MESSAGE_SIZE bytes then deserializes
-    if data.len() <= MAX_TUI_MESSAGE_SIZE {
-        // Try deserializing as TUI request (incoming from TUI clients)
-        let _ = postcard::from_bytes::<TuiRpcRequest>(data);
-        // Try deserializing as TUI response
-        let _ = postcard::from_bytes::<TuiRpcResponse>(data);
-    }
+        // Test TUI RPC path - smaller size limit for TUI clients
+        // Protocol handler reads up to MAX_TUI_MESSAGE_SIZE bytes then deserializes
+        if data.len() <= MAX_TUI_MESSAGE_SIZE {
+            // Try deserializing as TUI request (incoming from TUI clients)
+            let _ = postcard::from_bytes::<TuiRpcRequest>(data);
+            // Try deserializing as TUI response
+            let _ = postcard::from_bytes::<TuiRpcResponse>(data);
+        }
 
-    // Test boundary cases: messages exactly at size limits
-    // These edge cases are particularly interesting for fuzzing
-    if data.len() == MAX_TUI_MESSAGE_SIZE || data.len() == MAX_RPC_MESSAGE_SIZE {
-        // Ensure no panics at exact boundaries
-        let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
-        let _ = postcard::from_bytes::<TuiRpcRequest>(data);
-    }
-});
+        // Test boundary cases: messages exactly at size limits
+        // These edge cases are particularly interesting for fuzzing
+        if data.len() == MAX_TUI_MESSAGE_SIZE || data.len() == MAX_RPC_MESSAGE_SIZE {
+            // Ensure no panics at exact boundaries
+            let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
+            let _ = postcard::from_bytes::<TuiRpcRequest>(data);
+        }
+    });
+}

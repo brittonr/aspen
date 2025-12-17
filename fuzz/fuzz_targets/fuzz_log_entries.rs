@@ -12,9 +12,7 @@
 //! - Invalid log indices
 //! - Corrupted entry payloads
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 // Import types used in log storage
 use aspen::fuzz_helpers::{AppRequest, AppResponse};
@@ -23,17 +21,21 @@ use openraft::Entry;
 // Type alias matching storage.rs
 type LogEntry = Entry<aspen::fuzz_helpers::AppTypeConfig>;
 
-fuzz_target!(|data: &[u8]| {
-    // Fuzz log entry deserialization (storage.rs:493, 550, 581)
-    let _ = bincode::deserialize::<LogEntry>(data);
+#[test]
+fn fuzz_log_entries() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Fuzz log entry deserialization (storage.rs:493, 550, 581)
+        let _ = bincode::deserialize::<LogEntry>(data);
 
-    // Fuzz AppRequest deserialization (the payload inside entries)
-    let _ = bincode::deserialize::<AppRequest>(data);
+        // Fuzz AppRequest deserialization (the payload inside entries)
+        let _ = bincode::deserialize::<AppRequest>(data);
 
-    // Fuzz AppResponse deserialization
-    let _ = bincode::deserialize::<AppResponse>(data);
+        // Fuzz AppResponse deserialization
+        let _ = bincode::deserialize::<AppResponse>(data);
 
-    // Also fuzz as raw openraft LogId for metadata corruption
-    // LogId requires a full RaftTypeConfig, so we use AppTypeConfig
-    let _ = bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::AppTypeConfig>>(data);
-});
+        // Also fuzz as raw openraft LogId for metadata corruption
+        // LogId requires a full RaftTypeConfig, so we use AppTypeConfig
+        let _ =
+            bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::AppTypeConfig>>(data);
+    });
+}

@@ -13,9 +13,7 @@
 //! - Invalid EndpointAddr structure
 //! - Truncated messages
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 use aspen::fuzz_helpers::NodeId;
 
@@ -29,16 +27,19 @@ struct FuzzPeerAnnouncement {
     timestamp_micros: u64,
 }
 
-fuzz_target!(|data: &[u8]| {
-    // Fuzz the simplified peer announcement
-    let _ = postcard::from_bytes::<FuzzPeerAnnouncement>(data);
+#[test]
+fn fuzz_gossip() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Fuzz the simplified peer announcement
+        let _ = postcard::from_bytes::<FuzzPeerAnnouncement>(data);
 
-    // Also fuzz just NodeId deserialization
-    let _ = postcard::from_bytes::<NodeId>(data);
-    let _ = bincode::deserialize::<NodeId>(data);
+        // Also fuzz just NodeId deserialization
+        let _ = postcard::from_bytes::<NodeId>(data);
+        let _ = bincode::deserialize::<NodeId>(data);
 
-    // Fuzz u64 timestamp extraction (should handle truncated data)
-    if data.len() >= 8 {
-        let _timestamp = u64::from_le_bytes(data[0..8].try_into().unwrap());
-    }
-});
+        // Fuzz u64 timestamp extraction (should handle truncated data)
+        if data.len() >= 8 {
+            let _timestamp = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        }
+    });
+}

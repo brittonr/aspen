@@ -6,17 +6,17 @@
 
 mod support;
 
-use proptest::prelude::*;
 use std::path::PathBuf;
 
 use aspen::raft::storage::{InMemoryLogStore, RedbLogStore, StorageBackend};
 use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use bolero::check;
 use openraft::entry::RaftEntry;
 use openraft::storage::{IOFlushed, RaftLogReader, RaftLogStorage};
 use openraft::testing::log_id;
 use tempfile::TempDir;
 
-use support::proptest_generators::{arbitrary_app_request, arbitrary_vote};
+use support::bolero_generators::{BalancedAppRequest, ValidVote};
 
 fn create_temp_dir() -> TempDir {
     TempDir::new().expect("failed to create temp directory")
@@ -42,437 +42,609 @@ fn make_entry(
 // StorageBackend Tests
 // ============================================================================
 
-proptest! {
-    /// StorageBackend FromStr -> Display roundtrip.
-    #[test]
-    fn test_storage_backend_fromstr_display_roundtrip(
-        variant in prop_oneof![
-            Just("inmemory"),
-            Just("in-memory"),
-            Just("memory"),
-            Just("sqlite"),
-            Just("sql"),
-            Just("persistent"),
-            Just("disk"),
-            Just("redb"),
-        ]
-    ) {
+/// StorageBackend FromStr -> Display roundtrip.
+#[test]
+fn test_storage_backend_fromstr_display_roundtrip() {
+    let variants = [
+        "inmemory",
+        "in-memory",
+        "memory",
+        "sqlite",
+        "sql",
+        "persistent",
+        "disk",
+        "redb",
+    ];
+    for variant in variants {
         let parsed: StorageBackend = variant.parse().expect("Should parse");
         let displayed = parsed.to_string();
         let reparsed: StorageBackend = displayed.parse().expect("Display output should parse");
-        prop_assert_eq!(parsed, reparsed);
+        assert_eq!(parsed, reparsed);
     }
+}
 
-    /// StorageBackend rejects invalid strings.
-    #[test]
-    fn test_storage_backend_rejects_invalid(
-        invalid in "[a-zA-Z]{5,20}".prop_filter("Not valid backend", |s| {
-            !["inmemory", "in-memory", "memory", "sqlite", "sql", "persistent", "disk", "redb"]
-                .contains(&s.to_lowercase().as_str())
-        })
-    ) {
-        let result: Result<StorageBackend, _> = invalid.parse();
-        prop_assert!(result.is_err(), "Should reject invalid backend: {}", invalid);
-    }
+/// StorageBackend rejects invalid strings.
+#[test]
+fn test_storage_backend_rejects_invalid() {
+    check!()
+        .with_iterations(100)
+        .with_type::<[u8; 10]>()
+        .for_each(|bytes| {
+            // Generate a random string from bytes
+            let s: String = bytes
+                .iter()
+                .map(|b| {
+                    let c = (b % 26) + b'a';
+                    c as char
+                })
+                .collect();
+
+            // Skip if it accidentally matches a valid backend
+            let valid_backends = [
+                "inmemory",
+                "in-memory",
+                "memory",
+                "sqlite",
+                "sql",
+                "persistent",
+                "disk",
+                "redb",
+            ];
+            if valid_backends.contains(&s.to_lowercase().as_str()) {
+                return;
+            }
+
+            let result: Result<StorageBackend, _> = s.parse();
+            assert!(result.is_err(), "Should reject invalid backend: {}", s);
+        });
 }
 
 // ============================================================================
 // InMemoryLogStore Tests
 // ============================================================================
 
-proptest! {
-    /// Vote save and read roundtrip for InMemoryLogStore.
-    #[test]
-    fn test_inmemory_vote_roundtrip(
-        (term, node_id) in arbitrary_vote()
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+/// Vote save and read roundtrip for InMemoryLogStore.
+#[test]
+fn test_inmemory_vote_roundtrip() {
+    check!()
+        .with_iterations(100)
+        .with_type::<ValidVote>()
+        .for_each(|valid_vote| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-            let vote = openraft::vote::Vote::new(term, node_id);
-            store.save_vote(&vote).await.expect("Should save vote");
+                let vote = openraft::vote::Vote::new(valid_vote.term, valid_vote.node_id);
+                store.save_vote(&vote).await.expect("Should save vote");
 
-            let read_vote = store.read_vote().await.expect("Should read vote");
-            prop_assert_eq!(read_vote, Some(vote));
-            Ok(())
-        })?;
-    }
+                let read_vote = store.read_vote().await.expect("Should read vote");
+                assert_eq!(read_vote, Some(vote));
+            });
+        });
+}
 
-    /// InMemoryLogStore append and read entries.
-    #[test]
-    fn test_inmemory_append_read(
-        requests in prop::collection::vec(arbitrary_app_request(), 1..10)
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+/// InMemoryLogStore append and read entries.
+#[test]
+fn test_inmemory_append_read() {
+    check!()
+        .with_iterations(50)
+        .with_type::<(
+            BalancedAppRequest,
+            BalancedAppRequest,
+            BalancedAppRequest,
+            BalancedAppRequest,
+            BalancedAppRequest,
+        )>()
+        .for_each(|requests| {
+            let requests = [
+                requests.0.0.clone(),
+                requests.1.0.clone(),
+                requests.2.0.clone(),
+                requests.3.0.clone(),
+                requests.4.0.clone(),
+            ];
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-            // Create entries
-            let entries: Vec<_> = requests.iter().enumerate().map(|(i, req)| {
-                make_entry(1, 1, i as u64 + 1, req.clone())
-            }).collect();
+                // Create entries
+                let entries: Vec<_> = requests
+                    .iter()
+                    .enumerate()
+                    .map(|(i, req)| make_entry(1, 1, i as u64 + 1, req.clone()))
+                    .collect();
 
-            store.append(entries.clone(), IOFlushed::noop()).await.expect("Should append");
+                store
+                    .append(entries.clone(), IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-            // Read back
-            let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-            prop_assert_eq!(read_entries.len(), entries.len());
+                // Read back
+                let read_entries = store
+                    .try_get_log_entries(1u64..)
+                    .await
+                    .expect("Should read");
+                assert_eq!(read_entries.len(), entries.len());
 
-            // Verify indices
-            for (i, entry) in read_entries.iter().enumerate() {
-                prop_assert_eq!(entry.log_id().index(), i as u64 + 1);
-            }
+                // Verify indices
+                for (i, entry) in read_entries.iter().enumerate() {
+                    assert_eq!(entry.log_id().index(), i as u64 + 1);
+                }
+            });
+        });
+}
 
-            Ok(())
-        })?;
-    }
+/// InMemoryLogStore get_log_state reflects appended entries.
+#[test]
+fn test_inmemory_log_state() {
+    check!()
+        .with_iterations(100)
+        .with_type::<u8>()
+        .for_each(|count| {
+            let count = 1 + (*count as usize % 19); // 1..20
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-    /// InMemoryLogStore get_log_state reflects appended entries.
-    #[test]
-    fn test_inmemory_log_state(
-        count in 1usize..20usize
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+                // Initially empty
+                let state = store.get_log_state().await.expect("Should get state");
+                assert!(state.last_log_id.is_none());
 
-            // Initially empty
-            let state = store.get_log_state().await.expect("Should get state");
-            prop_assert!(state.last_log_id.is_none());
+                // Create and append entries
+                let entries: Vec<_> = (1..=count as u64)
+                    .map(|i| {
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
+                    })
+                    .collect();
 
-            // Create and append entries
-            let entries: Vec<_> = (1..=count as u64).map(|i| {
-                make_entry(1, 1, i, AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                })
-            }).collect();
+                store
+                    .append(entries, IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-            store.append(entries, IOFlushed::noop()).await.expect("Should append");
+                // Check state
+                let state = store.get_log_state().await.expect("Should get state");
+                let last_log_id = state.last_log_id.expect("Should have last log id");
+                assert_eq!(last_log_id.index(), count as u64);
+            });
+        });
+}
 
-            // Check state
-            let state = store.get_log_state().await.expect("Should get state");
-            let last_log_id = state.last_log_id.expect("Should have last log id");
-            prop_assert_eq!(last_log_id.index(), count as u64);
+/// InMemoryLogStore truncate removes entries from given index.
+#[test]
+fn test_inmemory_truncate() {
+    check!()
+        .with_iterations(50)
+        .with_type::<(u8, u8)>()
+        .for_each(|(total, truncate_at)| {
+            let total = 5 + (*total as usize % 15); // 5..20
+            let truncate_at = 1 + (*truncate_at as usize % 4); // 1..5
+            let truncate_at = truncate_at.min(total);
 
-            Ok(())
-        })?;
-    }
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-    /// InMemoryLogStore truncate removes entries from given index.
-    #[test]
-    fn test_inmemory_truncate(
-        total in 5usize..20usize,
-        truncate_at in 1usize..5usize,
-    ) {
-        let truncate_at = truncate_at.min(total);
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+                // Append entries
+                let entries: Vec<_> = (1..=total as u64)
+                    .map(|i| {
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
+                    })
+                    .collect();
 
-            // Append entries
-            let entries: Vec<_> = (1..=total as u64).map(|i| {
-                make_entry(1, 1, i, AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                })
-            }).collect();
+                store
+                    .append(entries, IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-            store.append(entries, IOFlushed::noop()).await.expect("Should append");
+                // Truncate
+                store
+                    .truncate(log_id::<AppTypeConfig>(
+                        1,
+                        NodeId::from(1),
+                        truncate_at as u64,
+                    ))
+                    .await
+                    .expect("Should truncate");
 
-            // Truncate
-            store.truncate(log_id::<AppTypeConfig>(1, NodeId::from(1), truncate_at as u64))
-                .await
-                .expect("Should truncate");
+                // Read back - should only have entries before truncation point
+                let read_entries = store
+                    .try_get_log_entries(1u64..)
+                    .await
+                    .expect("Should read");
+                assert!(
+                    read_entries.len() < total,
+                    "Should have fewer entries after truncate"
+                );
+            });
+        });
+}
 
-            // Read back - should only have entries before truncation point
-            let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-            prop_assert!(read_entries.len() < total, "Should have fewer entries after truncate");
+/// InMemoryLogStore purge removes entries up to given index.
+#[test]
+fn test_inmemory_purge() {
+    check!()
+        .with_iterations(50)
+        .with_type::<(u8, u8)>()
+        .for_each(|(total, purge_at)| {
+            let total = 5 + (*total as usize % 15); // 5..20
+            let purge_at = 1 + (*purge_at as usize % 4); // 1..5
+            let purge_at = purge_at.min(total - 1);
 
-            Ok(())
-        })?;
-    }
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-    /// InMemoryLogStore purge removes entries up to given index.
-    #[test]
-    fn test_inmemory_purge(
-        total in 5usize..20usize,
-        purge_at in 1usize..5usize,
-    ) {
-        let purge_at = purge_at.min(total - 1);
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+                // Append entries
+                let entries: Vec<_> = (1..=total as u64)
+                    .map(|i| {
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
+                    })
+                    .collect();
 
-            // Append entries
-            let entries: Vec<_> = (1..=total as u64).map(|i| {
-                make_entry(1, 1, i, AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                })
-            }).collect();
+                store
+                    .append(entries, IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-            store.append(entries, IOFlushed::noop()).await.expect("Should append");
+                // Purge
+                store
+                    .purge(log_id::<AppTypeConfig>(1, NodeId::from(1), purge_at as u64))
+                    .await
+                    .expect("Should purge");
 
-            // Purge
-            store.purge(log_id::<AppTypeConfig>(1, NodeId::from(1), purge_at as u64))
-                .await
-                .expect("Should purge");
+                // Read back - should only have entries after purge point
+                let read_entries = store
+                    .try_get_log_entries(1u64..)
+                    .await
+                    .expect("Should read");
+                assert!(
+                    read_entries.len() < total,
+                    "Should have fewer entries after purge"
+                );
 
-            // Read back - should only have entries after purge point
-            let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-            prop_assert!(read_entries.len() < total, "Should have fewer entries after purge");
+                // Check log state reflects purge
+                let state = store.get_log_state().await.expect("Should get state");
+                let purged_id = state.last_purged_log_id.expect("Should have purged id");
+                assert_eq!(purged_id.index(), purge_at as u64);
+            });
+        });
+}
 
-            // Check log state reflects purge
-            let state = store.get_log_state().await.expect("Should get state");
-            let purged_id = state.last_purged_log_id.expect("Should have purged id");
-            prop_assert_eq!(purged_id.index(), purge_at as u64);
+/// InMemoryLogStore committed index save/read roundtrip.
+#[test]
+fn test_inmemory_committed_roundtrip() {
+    check!()
+        .with_iterations(100)
+        .with_type::<u16>()
+        .for_each(|index| {
+            let index = 1 + (*index as u64 % 999); // 1..1000
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = InMemoryLogStore::default();
 
-            Ok(())
-        })?;
-    }
+                // Initially none
+                let committed = store.read_committed().await.expect("Should read");
+                assert!(committed.is_none());
 
-    /// InMemoryLogStore committed index save/read roundtrip.
-    #[test]
-    fn test_inmemory_committed_roundtrip(
-        index in 1u64..1000u64
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = InMemoryLogStore::default();
+                // Save committed
+                let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), index);
+                store
+                    .save_committed(Some(log_id))
+                    .await
+                    .expect("Should save");
 
-            // Initially none
-            let committed = store.read_committed().await.expect("Should read");
-            prop_assert!(committed.is_none());
-
-            // Save committed
-            let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), index);
-            store.save_committed(Some(log_id)).await.expect("Should save");
-
-            // Read back
-            let committed = store.read_committed().await.expect("Should read");
-            let committed = committed.expect("Should have committed");
-            prop_assert_eq!(committed.index(), index);
-
-            Ok(())
-        })?;
-    }
+                // Read back
+                let committed = store.read_committed().await.expect("Should read");
+                let committed = committed.expect("Should have committed");
+                assert_eq!(committed.index(), index);
+            });
+        });
 }
 
 // ============================================================================
 // RedbLogStore Tests
 // ============================================================================
 
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10))] // Fewer cases for disk tests
+/// RedbLogStore vote persistence across reopen.
+#[test]
+fn test_redb_vote_persists_across_reopen() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<ValidVote>()
+        .for_each(|valid_vote| {
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "vote_persist");
 
-    /// RedbLogStore vote persistence across reopen.
-    #[test]
-    fn test_redb_vote_persists_across_reopen(
-        (term, node_id) in arbitrary_vote()
-    ) {
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "vote_persist");
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Save vote
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should create store");
+                    let vote = openraft::vote::Vote::new(valid_vote.term, valid_vote.node_id);
+                    store.save_vote(&vote).await.expect("Should save vote");
+                }
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Save vote
-            {
-                let mut store = RedbLogStore::new(&path).expect("Should create store");
-                let vote = openraft::vote::Vote::new(term, node_id);
-                store.save_vote(&vote).await.expect("Should save vote");
-            }
+                // Reopen and verify vote was persisted
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should reopen store");
+                    let read_vote = store.read_vote().await.expect("Should read vote");
+                    assert!(
+                        read_vote.is_some(),
+                        "Vote should be persisted across reopen"
+                    );
+                }
+            });
+        });
+}
 
-            // Reopen and verify vote was persisted
-            {
-                let mut store = RedbLogStore::new(&path).expect("Should reopen store");
-                let read_vote = store.read_vote().await.expect("Should read vote");
-                prop_assert!(read_vote.is_some(), "Vote should be persisted across reopen");
-            }
+/// RedbLogStore append and read entries.
+#[test]
+fn test_redb_append_read() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<(BalancedAppRequest, BalancedAppRequest, BalancedAppRequest)>()
+        .for_each(|requests| {
+            let requests = [
+                requests.0.0.clone(),
+                requests.1.0.clone(),
+                requests.2.0.clone(),
+            ];
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "append_read");
 
-            Ok(())
-        })?;
-    }
-
-    /// RedbLogStore append and read entries.
-    #[test]
-    fn test_redb_append_read(
-        requests in prop::collection::vec(arbitrary_app_request(), 1..5)
-    ) {
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "append_read");
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = RedbLogStore::new(&path).expect("Should create store");
-
-            // Create entries
-            let entries: Vec<_> = requests.iter().enumerate().map(|(i, req)| {
-                make_entry(1, 1, i as u64 + 1, req.clone())
-            }).collect();
-
-            // Append with callback
-            store.append(entries.clone(), IOFlushed::noop())
-                .await
-                .expect("Should append");
-
-            // Read back
-            let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-            prop_assert_eq!(read_entries.len(), entries.len());
-
-            Ok(())
-        })?;
-    }
-
-    /// RedbLogStore entries persist across reopen.
-    #[test]
-    fn test_redb_entries_persist_across_reopen(
-        count in 1usize..5usize
-    ) {
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "entries_persist");
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Append entries
-            {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
                 let mut store = RedbLogStore::new(&path).expect("Should create store");
 
-                let entries: Vec<_> = (1..=count as u64).map(|i| {
-                    make_entry(1, 1, i, AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: format!("v{}", i),
-                    })
-                }).collect();
+                // Create entries
+                let entries: Vec<_> = requests
+                    .iter()
+                    .enumerate()
+                    .map(|(i, req)| make_entry(1, 1, i as u64 + 1, req.clone()))
+                    .collect();
 
-                store.append(entries, IOFlushed::noop())
+                // Append with callback
+                store
+                    .append(entries.clone(), IOFlushed::noop())
                     .await
                     .expect("Should append");
-            }
 
-            // Reopen and verify
-            {
-                let mut store = RedbLogStore::new(&path).expect("Should reopen store");
-                let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-                prop_assert_eq!(read_entries.len(), count);
+                // Read back
+                let read_entries = store
+                    .try_get_log_entries(1u64..)
+                    .await
+                    .expect("Should read");
+                assert_eq!(read_entries.len(), entries.len());
+            });
+        });
+}
 
-                let state = store.get_log_state().await.expect("Should get state");
-                let last_log_id = state.last_log_id.expect("Should have last log id");
-                prop_assert_eq!(last_log_id.index(), count as u64);
-            }
+/// RedbLogStore entries persist across reopen.
+#[test]
+fn test_redb_entries_persist_across_reopen() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<u8>()
+        .for_each(|count| {
+            let count = 1 + (*count as usize % 4); // 1..5
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "entries_persist");
 
-            Ok(())
-        })?;
-    }
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Append entries
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should create store");
 
-    /// RedbLogStore committed index persists across reopen.
-    #[test]
-    fn test_redb_committed_persists(
-        index in 1u64..100u64
-    ) {
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "committed_persist");
+                    let entries: Vec<_> = (1..=count as u64)
+                        .map(|i| {
+                            make_entry(
+                                1,
+                                1,
+                                i,
+                                AppRequest::Set {
+                                    key: format!("k{}", i),
+                                    value: format!("v{}", i),
+                                },
+                            )
+                        })
+                        .collect();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Save committed
-            {
+                    store
+                        .append(entries, IOFlushed::noop())
+                        .await
+                        .expect("Should append");
+                }
+
+                // Reopen and verify
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should reopen store");
+                    let read_entries = store
+                        .try_get_log_entries(1u64..)
+                        .await
+                        .expect("Should read");
+                    assert_eq!(read_entries.len(), count);
+
+                    let state = store.get_log_state().await.expect("Should get state");
+                    let last_log_id = state.last_log_id.expect("Should have last log id");
+                    assert_eq!(last_log_id.index(), count as u64);
+                }
+            });
+        });
+}
+
+/// RedbLogStore committed index persists across reopen.
+#[test]
+fn test_redb_committed_persists() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<u8>()
+        .for_each(|index| {
+            let index = 1 + (*index as u64 % 99); // 1..100
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "committed_persist");
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Save committed
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should create store");
+                    let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), index);
+                    store
+                        .save_committed(Some(log_id))
+                        .await
+                        .expect("Should save");
+                }
+
+                // Reopen and verify
+                {
+                    let mut store = RedbLogStore::new(&path).expect("Should reopen store");
+                    let committed = store.read_committed().await.expect("Should read");
+                    let committed = committed.expect("Should have committed");
+                    assert_eq!(committed.index(), index);
+                }
+            });
+        });
+}
+
+/// RedbLogStore truncate removes entries.
+#[test]
+fn test_redb_truncate() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<(u8, u8)>()
+        .for_each(|(total, truncate_at)| {
+            let total = 5 + (*total as usize % 5); // 5..10
+            let truncate_at = 2 + (*truncate_at as usize % 3); // 2..5
+            let truncate_at = truncate_at.min(total - 1);
+
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "truncate");
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
                 let mut store = RedbLogStore::new(&path).expect("Should create store");
-                let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), index);
-                store.save_committed(Some(log_id)).await.expect("Should save");
-            }
 
-            // Reopen and verify
-            {
-                let mut store = RedbLogStore::new(&path).expect("Should reopen store");
-                let committed = store.read_committed().await.expect("Should read");
-                let committed = committed.expect("Should have committed");
-                prop_assert_eq!(committed.index(), index);
-            }
+                // Append entries
+                let entries: Vec<_> = (1..=total as u64)
+                    .map(|i| {
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
+                    })
+                    .collect();
 
-            Ok(())
-        })?;
-    }
+                store
+                    .append(entries, IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-    /// RedbLogStore truncate removes entries.
-    #[test]
-    fn test_redb_truncate(
-        total in 5usize..10usize,
-        truncate_at in 2usize..5usize,
-    ) {
-        let truncate_at = truncate_at.min(total - 1);
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "truncate");
+                // Truncate
+                store
+                    .truncate(log_id::<AppTypeConfig>(
+                        1,
+                        NodeId::from(1),
+                        truncate_at as u64,
+                    ))
+                    .await
+                    .expect("Should truncate");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = RedbLogStore::new(&path).expect("Should create store");
+                // Read back
+                let read_entries = store
+                    .try_get_log_entries(1u64..)
+                    .await
+                    .expect("Should read");
+                assert!(
+                    read_entries.len() < total,
+                    "Should have fewer entries: {} < {}",
+                    read_entries.len(),
+                    total
+                );
+            });
+        });
+}
 
-            // Append entries
-            let entries: Vec<_> = (1..=total as u64).map(|i| {
-                make_entry(1, 1, i, AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                })
-            }).collect();
+/// RedbLogStore purge removes old entries.
+#[test]
+fn test_redb_purge() {
+    check!()
+        .with_iterations(10) // Fewer cases for disk tests
+        .with_type::<(u8, u8)>()
+        .for_each(|(total, purge_at)| {
+            let total = 5 + (*total as usize % 5); // 5..10
+            let purge_at = 1 + (*purge_at as usize % 3); // 1..4
+            let purge_at = purge_at.min(total - 2);
 
-            store.append(entries, IOFlushed::noop())
-                .await
-                .expect("Should append");
+            let temp_dir = create_temp_dir();
+            let path = create_redb_path(&temp_dir, "purge");
 
-            // Truncate
-            store.truncate(log_id::<AppTypeConfig>(1, NodeId::from(1), truncate_at as u64))
-                .await
-                .expect("Should truncate");
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let mut store = RedbLogStore::new(&path).expect("Should create store");
 
-            // Read back
-            let read_entries = store.try_get_log_entries(1u64..).await.expect("Should read");
-            prop_assert!(read_entries.len() < total, "Should have fewer entries: {} < {}", read_entries.len(), total);
+                // Append entries
+                let entries: Vec<_> = (1..=total as u64)
+                    .map(|i| {
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
+                    })
+                    .collect();
 
-            Ok(())
-        })?;
-    }
+                store
+                    .append(entries, IOFlushed::noop())
+                    .await
+                    .expect("Should append");
 
-    /// RedbLogStore purge removes old entries.
-    #[test]
-    fn test_redb_purge(
-        total in 5usize..10usize,
-        purge_at in 1usize..4usize,
-    ) {
-        let purge_at = purge_at.min(total - 2);
-        let temp_dir = create_temp_dir();
-        let path = create_redb_path(&temp_dir, "purge");
+                // Purge
+                store
+                    .purge(log_id::<AppTypeConfig>(1, NodeId::from(1), purge_at as u64))
+                    .await
+                    .expect("Should purge");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let mut store = RedbLogStore::new(&path).expect("Should create store");
-
-            // Append entries
-            let entries: Vec<_> = (1..=total as u64).map(|i| {
-                make_entry(1, 1, i, AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                })
-            }).collect();
-
-            store.append(entries, IOFlushed::noop())
-                .await
-                .expect("Should append");
-
-            // Purge
-            store.purge(log_id::<AppTypeConfig>(1, NodeId::from(1), purge_at as u64))
-                .await
-                .expect("Should purge");
-
-            // Check state
-            let state = store.get_log_state().await.expect("Should get state");
-            let purged_id = state.last_purged_log_id.expect("Should have purged id");
-            prop_assert_eq!(purged_id.index(), purge_at as u64);
-
-            Ok(())
-        })?;
-    }
+                // Check state
+                let state = store.get_log_state().await.expect("Should get state");
+                let purged_id = state.last_purged_log_id.expect("Should have purged id");
+                assert_eq!(purged_id.index(), purge_at as u64);
+            });
+        });
 }
 
 // ============================================================================

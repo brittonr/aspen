@@ -12,9 +12,7 @@
 //! - Invalid UTF-8 in string fields
 //! - Boundary conditions for node IDs
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 // Import the types we're fuzzing
 use aspen::fuzz_helpers::{TuiRpcRequest, TuiRpcResponse};
@@ -22,17 +20,20 @@ use aspen::fuzz_helpers::{TuiRpcRequest, TuiRpcResponse};
 // Tiger Style: Bounded message size
 const MAX_TUI_MESSAGE_SIZE: usize = 1024 * 1024;
 
-fuzz_target!(|data: &[u8]| {
-    // Tiger Style: Skip oversized inputs early
-    if data.len() > MAX_TUI_MESSAGE_SIZE {
-        return;
-    }
+#[test]
+fn fuzz_tui_rpc() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Tiger Style: Skip oversized inputs early
+        if data.len() > MAX_TUI_MESSAGE_SIZE {
+            return;
+        }
 
-    // Fuzz TuiRpcRequest deserialization (incoming from TUI clients)
-    // This is the main entry point for TUI operations
-    let _ = postcard::from_bytes::<TuiRpcRequest>(data);
+        // Fuzz TuiRpcRequest deserialization (incoming from TUI clients)
+        // This is the main entry point for TUI operations
+        let _ = postcard::from_bytes::<TuiRpcRequest>(data);
 
-    // Fuzz TuiRpcResponse deserialization
-    // Tests the response path for consistency
-    let _ = postcard::from_bytes::<TuiRpcResponse>(data);
-});
+        // Fuzz TuiRpcResponse deserialization
+        // Tests the response path for consistency
+        let _ = postcard::from_bytes::<TuiRpcResponse>(data);
+    });
+}

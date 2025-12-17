@@ -11,19 +11,20 @@
 //! - Oversized payloads
 //! - Invalid UTF-8 in string fields
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
+use bolero::check;
 
 // Import the types we're fuzzing
 use aspen::fuzz_helpers::{RaftRpcProtocol, RaftRpcResponse};
 
-fuzz_target!(|data: &[u8]| {
-    // Fuzz RaftRpcProtocol deserialization (incoming requests)
-    // This is the main entry point for Raft RPCs from peers
-    let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
+#[test]
+fn fuzz_raft_rpc() {
+    check!().with_type::<Vec<u8>>().for_each(|data| {
+        // Fuzz RaftRpcProtocol deserialization (incoming requests)
+        // This is the main entry point for Raft RPCs from peers
+        let _ = postcard::from_bytes::<RaftRpcProtocol>(data);
 
-    // Fuzz RaftRpcResponse deserialization (incoming responses)
-    // This is what we receive when we make RPC calls to peers
-    let _ = postcard::from_bytes::<RaftRpcResponse>(data);
-});
+        // Fuzz RaftRpcResponse deserialization (incoming responses)
+        // This is what we receive when we make RPC calls to peers
+        let _ = postcard::from_bytes::<RaftRpcResponse>(data);
+    });
+}

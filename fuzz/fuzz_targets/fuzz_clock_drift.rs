@@ -12,10 +12,8 @@
 //! - Zero timestamps
 //! - EWMA smoothing edge cases
 
-#![no_main]
-
-use libfuzzer_sys::fuzz_target;
-use arbitrary::Arbitrary;
+use bolero::check;
+use bolero_generator::{Driver, TypeGenerator};
 
 /// Maximum expected RTT before we consider timestamps suspicious
 const MAX_RTT_MS: i64 = 60_000; // 1 minute
@@ -23,7 +21,7 @@ const MAX_RTT_MS: i64 = 60_000; // 1 minute
 /// EWMA smoothing factor
 const EWMA_ALPHA: f64 = 0.1;
 
-#[derive(Debug, Arbitrary)]
+#[derive(Debug, Clone)]
 struct FuzzTimestamps {
     /// Client send timestamp (local time when request sent)
     client_send_ms: u64,
@@ -35,6 +33,18 @@ struct FuzzTimestamps {
     client_recv_ms: u64,
     /// Previous smoothed offset for EWMA
     prev_smoothed_offset_ms: i64,
+}
+
+impl TypeGenerator for FuzzTimestamps {
+    fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
+        Some(FuzzTimestamps {
+            client_send_ms: driver.produce::<u64>()?,
+            server_recv_ms: driver.produce::<u64>()?,
+            server_send_ms: driver.produce::<u64>()?,
+            client_recv_ms: driver.produce::<u64>()?,
+            prev_smoothed_offset_ms: driver.produce::<i64>()?,
+        })
+    }
 }
 
 /// NTP-style offset calculation
@@ -64,10 +74,8 @@ fn compute_offset_ms(timestamps: &FuzzTimestamps) -> Option<i64> {
 /// rtt = (t4 - t1) - (t3 - t2)
 fn compute_rtt_ms(timestamps: &FuzzTimestamps) -> Option<i64> {
     // Use checked arithmetic
-    let total_time =
-        (timestamps.client_recv_ms as i128) - (timestamps.client_send_ms as i128);
-    let server_time =
-        (timestamps.server_send_ms as i128) - (timestamps.server_recv_ms as i128);
+    let total_time = (timestamps.client_recv_ms as i128) - (timestamps.client_send_ms as i128);
+    let server_time = (timestamps.server_send_ms as i128) - (timestamps.server_recv_ms as i128);
 
     let rtt = total_time.checked_sub(server_time)?;
 
@@ -85,81 +93,84 @@ fn smooth_offset(current: i64, prev_smoothed: i64) -> i64 {
     smoothed as i64
 }
 
-fuzz_target!(|input: FuzzTimestamps| {
-    // Test offset calculation with arbitrary timestamps
-    let offset = compute_offset_ms(&input);
+#[test]
+fn fuzz_clock_drift() {
+    check!().with_type::<FuzzTimestamps>().for_each(|input| {
+        // Test offset calculation with arbitrary timestamps
+        let offset = compute_offset_ms(input);
 
-    // Test RTT calculation
-    let rtt = compute_rtt_ms(&input);
+        // Test RTT calculation
+        let rtt = compute_rtt_ms(input);
 
-    // If both succeed, test the relationship
-    if let (Some(offset_val), Some(rtt_val)) = (offset, rtt) {
-        // RTT should typically be non-negative, but we don't enforce
-        // since clock issues could cause negative RTT briefly
-        let _ = rtt_val;
+        // If both succeed, test the relationship
+        if let (Some(offset_val), Some(rtt_val)) = (offset, rtt) {
+            // RTT should typically be non-negative, but we don't enforce
+            // since clock issues could cause negative RTT briefly
+            let _ = rtt_val;
 
-        // Test EWMA smoothing
-        let smoothed = smooth_offset(offset_val, input.prev_smoothed_offset_ms);
+            // Test EWMA smoothing
+            let smoothed = smooth_offset(offset_val, input.prev_smoothed_offset_ms);
 
-        // Smoothed value should be between current and previous
-        // (or equal if alpha is 0 or 1, or if they're equal)
-        let _ = smoothed;
+            // Smoothed value should be between current and previous
+            // (or equal if alpha is 0 or 1, or if they're equal)
+            let _ = smoothed;
 
-        // Verify smoothing is bounded
-        if input.prev_smoothed_offset_ms != 0 && offset_val != 0 {
-            // Smoothed value should be in a reasonable range
-            let min_val = offset_val.min(input.prev_smoothed_offset_ms);
-            let max_val = offset_val.max(input.prev_smoothed_offset_ms);
-            // Due to EWMA, result should be between min and max
-            // (allowing for floating point rounding)
-            assert!(
-                smoothed >= min_val - 1 && smoothed <= max_val + 1,
-                "EWMA result {} should be between {} and {}",
-                smoothed,
-                min_val,
-                max_val
-            );
+            // Verify smoothing is bounded
+            if input.prev_smoothed_offset_ms != 0 && offset_val != 0 {
+                // Smoothed value should be in a reasonable range
+                let min_val = offset_val.min(input.prev_smoothed_offset_ms);
+                let max_val = offset_val.max(input.prev_smoothed_offset_ms);
+                // Due to EWMA, result should be between min and max
+                // (allowing for floating point rounding)
+                assert!(
+                    smoothed >= min_val - 1 && smoothed <= max_val + 1,
+                    "EWMA result {} should be between {} and {}",
+                    smoothed,
+                    min_val,
+                    max_val
+                );
+            }
         }
-    }
 
-    // Test edge cases directly
-    let edge_cases = [
-        // All zeros
-        FuzzTimestamps {
-            client_send_ms: 0,
-            server_recv_ms: 0,
-            server_send_ms: 0,
-            client_recv_ms: 0,
-            prev_smoothed_offset_ms: 0,
-        },
-        // All max
-        FuzzTimestamps {
-            client_send_ms: u64::MAX,
-            server_recv_ms: u64::MAX,
-            server_send_ms: u64::MAX,
-            client_recv_ms: u64::MAX,
-            prev_smoothed_offset_ms: i64::MAX,
-        },
-        // Mixed extremes
-        FuzzTimestamps {
-            client_send_ms: 0,
-            server_recv_ms: u64::MAX,
-            server_send_ms: 0,
-            client_recv_ms: u64::MAX,
-            prev_smoothed_offset_ms: i64::MIN,
-        },
-    ];
+        // Test edge cases directly
+        let edge_cases = [
+            // All zeros
+            FuzzTimestamps {
+                client_send_ms: 0,
+                server_recv_ms: 0,
+                server_send_ms: 0,
+                client_recv_ms: 0,
+                prev_smoothed_offset_ms: 0,
+            },
+            // All max
+            FuzzTimestamps {
+                client_send_ms: u64::MAX,
+                server_recv_ms: u64::MAX,
+                server_send_ms: u64::MAX,
+                client_recv_ms: u64::MAX,
+                prev_smoothed_offset_ms: i64::MAX,
+            },
+            // Mixed extremes
+            FuzzTimestamps {
+                client_send_ms: 0,
+                server_recv_ms: u64::MAX,
+                server_send_ms: 0,
+                client_recv_ms: u64::MAX,
+                prev_smoothed_offset_ms: i64::MIN,
+            },
+        ];
 
-    for edge in &edge_cases {
-        // These should not panic
-        let _ = compute_offset_ms(edge);
-        let _ = compute_rtt_ms(edge);
-    }
+        for edge in &edge_cases {
+            // These should not panic
+            let _ = compute_offset_ms(edge);
+            let _ = compute_rtt_ms(edge);
+        }
 
-    // Test timestamp validation logic
-    // Negative RTT might indicate clock issues
-    if let Some(rtt_val) = rtt {
-        let is_suspicious = rtt_val < 0 || rtt_val > MAX_RTT_MS;
-        let _ = is_suspicious;
-    }
-});
+        // Test timestamp validation logic
+        // Negative RTT might indicate clock issues
+        if let Some(rtt_val) = rtt {
+            let is_suspicious = rtt_val < 0 || rtt_val > MAX_RTT_MS;
+            let _ = is_suspicious;
+        }
+    });
+}
