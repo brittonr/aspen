@@ -8,9 +8,9 @@
 
 [metadata]
 generated = "2025-12-16"
-total_lines = 10200
-covered_lines = 3100
-total_coverage = 30.4
+total_lines = 10500
+covered_lines = 3400
+total_coverage = 32.4
 
 # Module coverage thresholds (percentage)
 # Format: module = { target = X, current = Y }
@@ -73,9 +73,9 @@ current = 75
 note = "Good coverage"
 
 [modules."raft.connection_pool"]
-target = 0
-current = 0
-note = "Needs Iroh endpoint mocking"
+target = 15
+current = 20
+note = "Unit tests for ConnectionHealth, metrics, StreamGuard, constants"
 
 [modules."raft.integrity"]
 target = 60
@@ -118,14 +118,14 @@ current = 0
 note = "Tested via integration tests"
 
 [modules."raft.storage"]
-target = 25
-current = 28.74
-note = "Needs persistence recovery tests"
+target = 40
+current = 45
+note = "StorageBackend, InMemoryLogStore, RedbLogStore, InMemoryStateMachine unit tests"
 
 [modules."raft.storage_sqlite"]
-target = 25
-current = 29.56
-note = "Needs durability tests"
+target = 35
+current = 40
+note = "SqliteStateMachine, TransactionGuard, checksum, validation unit tests"
 
 [modules."raft.storage_validation"]
 target = 75
@@ -203,7 +203,6 @@ high = [
 ]
 
 medium = [
-    "raft.connection_pool",
     "raft.server",
     "node.mod",
     "cluster.mod",

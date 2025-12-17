@@ -1612,6 +1612,407 @@ mod tests {
     use crate::raft::constants::MAX_BATCH_SIZE;
     use tempfile::tempdir;
 
+    // =========================================================================
+    // SqliteStateMachine Constructor Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_state_machine_new_creates_file() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+
+        assert!(!db_path.exists());
+
+        let _sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_with_pool_size() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+
+        // Create with custom pool size
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 5).unwrap();
+        assert_eq!(sm.path(), db_path);
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_creates_parent_directory() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("nested").join("path").join("state.db");
+
+        assert!(!db_path.parent().unwrap().exists());
+
+        let _sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_path() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+        assert_eq!(sm.path(), db_path);
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_clone() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+        let cloned = sm.clone();
+
+        // Both should point to same path
+        assert_eq!(sm.path(), cloned.path());
+    }
+
+    // =========================================================================
+    // Key-Value Operations Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_count_kv_pairs_empty() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        let count = sm.count_kv_pairs().unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_sqlite_count_kv_pairs_with_data() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        // Insert some data directly
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('key1', 'value1')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('key2', 'value2')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        let count = sm.count_kv_pairs().unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_sqlite_count_kv_pairs_like() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        // Insert data with different prefixes
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('test:key1', 'v1')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('test:key2', 'v2')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('other:key1', 'v3')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        // Count with pattern
+        let test_count = sm.count_kv_pairs_like("test:%").unwrap();
+        assert_eq!(test_count, 2);
+
+        let other_count = sm.count_kv_pairs_like("other:%").unwrap();
+        assert_eq!(other_count, 1);
+
+        let all_count = sm.count_kv_pairs_like("%").unwrap();
+        assert_eq!(all_count, 3);
+    }
+
+    #[tokio::test]
+    async fn test_sqlite_get_nonexistent() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        let value = sm.get("nonexistent").await.unwrap();
+        assert_eq!(value, None);
+    }
+
+    #[tokio::test]
+    async fn test_sqlite_get_existing() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        // Insert data directly
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('mykey', 'myvalue')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        let value = sm.get("mykey").await.unwrap();
+        assert_eq!(value, Some("myvalue".to_string()));
+    }
+
+    // =========================================================================
+    // WAL File Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_wal_file_size_initial() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        // WAL file may or may not exist initially, but the function should not panic
+        let _size = sm.wal_file_size();
+    }
+
+    #[test]
+    fn test_sqlite_checkpoint_wal() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        // Insert some data to create WAL entries
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            for i in 0..10 {
+                conn.execute(
+                    "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("k{}", i), format!("v{}", i)],
+                )
+                .unwrap();
+            }
+            guard.commit().unwrap();
+        }
+
+        // Checkpoint should succeed
+        let result = sm.checkpoint_wal();
+        assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_validate_healthy_database() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        let result = sm.validate(1);
+        assert!(result.is_ok());
+
+        let report = result.unwrap();
+        assert_eq!(report.checks_passed, 2); // Integrity + schema checks
+    }
+
+    // =========================================================================
+    // Checksum Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_state_machine_checksum_empty() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        let checksum = sm.state_machine_checksum();
+        assert!(checksum.is_ok());
+        // Empty database should have deterministic checksum
+        let checksum_hex = checksum.unwrap();
+        assert_eq!(checksum_hex.len(), 64); // 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_checksum_deterministic() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        // Insert some data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('a', '1')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        // Same data should produce same checksum
+        let checksum1 = sm.state_machine_checksum().unwrap();
+        let checksum2 = sm.state_machine_checksum().unwrap();
+        assert_eq!(checksum1, checksum2);
+    }
+
+    #[test]
+    fn test_sqlite_state_machine_checksum_changes_with_data() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::with_pool_size(&db_path, 2).unwrap();
+
+        let before = sm.state_machine_checksum().unwrap();
+
+        // Insert data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('key', 'value')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        let after = sm.state_machine_checksum().unwrap();
+        assert_ne!(before, after);
+    }
+
+    // =========================================================================
+    // TransactionGuard Tests
+    // =========================================================================
+
+    #[test]
+    fn test_transaction_guard_commit() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        let conn = sm.write_conn.lock().unwrap();
+        let guard = TransactionGuard::new(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')",
+            [],
+        )
+        .unwrap();
+
+        // Commit should succeed
+        let result = guard.commit();
+        assert!(result.is_ok());
+
+        // Data should be persisted
+        drop(conn);
+        let count = sm.count_kv_pairs().unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_transaction_guard_rollback_on_drop() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("state.db");
+        let sm = SqliteStateMachine::new(&db_path).unwrap();
+
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+
+            conn.execute(
+                "INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')",
+                [],
+            )
+            .unwrap();
+
+            // Drop without commit - should rollback
+            drop(guard);
+        }
+
+        // Data should NOT be persisted (rolled back)
+        let count = sm.count_kv_pairs().unwrap();
+        assert_eq!(count, 0);
+    }
+
+    // =========================================================================
+    // SqliteStorageError Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sqlite_storage_error_display() {
+        let err = SqliteStorageError::MutexPoisoned {
+            operation: "test_operation",
+        };
+        let msg = format!("{}", err);
+        assert!(msg.contains("storage lock poisoned"));
+        assert!(msg.contains("test_operation"));
+    }
+
+    #[test]
+    fn test_sqlite_storage_error_into_io_error() {
+        let err = SqliteStorageError::MutexPoisoned { operation: "test" };
+        let io_err: io::Error = err.into();
+        let msg = io_err.to_string();
+        assert!(msg.contains("storage lock poisoned"));
+    }
+
+    // =========================================================================
+    // Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_default_read_pool_size_constant() {
+        assert_eq!(DEFAULT_READ_POOL_SIZE, 10);
+    }
+
+    #[test]
+    fn test_max_batch_size_constant() {
+        assert_eq!(MAX_BATCH_SIZE, 1000);
+    }
+
+    #[test]
+    fn test_max_setmulti_keys_constant() {
+        assert_eq!(MAX_SETMULTI_KEYS, 100);
+    }
+
+    #[test]
+    fn test_max_snapshot_entries_constant() {
+        assert_eq!(MAX_SNAPSHOT_ENTRIES, 1_000_000);
+    }
+
+    #[test]
+    fn test_max_snapshot_size_constant() {
+        assert_eq!(MAX_SNAPSHOT_SIZE, 100 * 1024 * 1024);
+    }
+
+    // =========================================================================
+    // Existing Tests (preserved from before)
+    // =========================================================================
+
     #[tokio::test]
     async fn sqlite_scan_progresses_with_continuation() {
         let dir = tempdir().unwrap();

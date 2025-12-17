@@ -1477,6 +1477,238 @@ mod tests {
     use openraft::Vote;
     use tempfile::TempDir;
 
+    // =========================================================================
+    // StorageBackend Enum Tests
+    // =========================================================================
+
+    #[test]
+    fn test_storage_backend_default() {
+        let backend = StorageBackend::default();
+        assert_eq!(backend, StorageBackend::Sqlite);
+    }
+
+    #[test]
+    fn test_storage_backend_from_str_inmemory() {
+        assert_eq!(
+            "inmemory".parse::<StorageBackend>().unwrap(),
+            StorageBackend::InMemory
+        );
+        assert_eq!(
+            "in-memory".parse::<StorageBackend>().unwrap(),
+            StorageBackend::InMemory
+        );
+        assert_eq!(
+            "memory".parse::<StorageBackend>().unwrap(),
+            StorageBackend::InMemory
+        );
+    }
+
+    #[test]
+    fn test_storage_backend_from_str_sqlite() {
+        assert_eq!(
+            "sqlite".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+        assert_eq!(
+            "sql".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+        assert_eq!(
+            "persistent".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+        assert_eq!(
+            "disk".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+        assert_eq!(
+            "redb".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+    }
+
+    #[test]
+    fn test_storage_backend_from_str_case_insensitive() {
+        assert_eq!(
+            "INMEMORY".parse::<StorageBackend>().unwrap(),
+            StorageBackend::InMemory
+        );
+        assert_eq!(
+            "SQLite".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Sqlite
+        );
+        assert_eq!(
+            "InMemory".parse::<StorageBackend>().unwrap(),
+            StorageBackend::InMemory
+        );
+    }
+
+    #[test]
+    fn test_storage_backend_from_str_invalid() {
+        let result = "invalid".parse::<StorageBackend>();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Invalid storage backend"));
+    }
+
+    #[test]
+    fn test_storage_backend_display_inmemory() {
+        assert_eq!(format!("{}", StorageBackend::InMemory), "inmemory");
+    }
+
+    #[test]
+    fn test_storage_backend_display_sqlite() {
+        assert_eq!(format!("{}", StorageBackend::Sqlite), "sqlite");
+    }
+
+    #[test]
+    fn test_storage_backend_roundtrip() {
+        let original = StorageBackend::InMemory;
+        let display = format!("{}", original);
+        let parsed: StorageBackend = display.parse().unwrap();
+        assert_eq!(original, parsed);
+
+        let original = StorageBackend::Sqlite;
+        let display = format!("{}", original);
+        let parsed: StorageBackend = display.parse().unwrap();
+        assert_eq!(original, parsed);
+    }
+
+    #[test]
+    fn test_storage_backend_clone() {
+        let backend = StorageBackend::Sqlite;
+        let cloned = backend;
+        assert_eq!(backend, cloned);
+    }
+
+    #[test]
+    fn test_storage_backend_debug() {
+        let debug_str = format!("{:?}", StorageBackend::InMemory);
+        assert!(debug_str.contains("InMemory"));
+    }
+
+    #[test]
+    fn test_storage_backend_serde_roundtrip() {
+        let original = StorageBackend::Sqlite;
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: StorageBackend = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_storage_backend_serde_inmemory() {
+        let original = StorageBackend::InMemory;
+        let json = serde_json::to_string(&original).expect("serialize");
+        assert_eq!(json, "\"inmemory\"");
+    }
+
+    // =========================================================================
+    // StorageError Tests
+    // =========================================================================
+
+    #[test]
+    fn test_storage_error_into_io_error() {
+        let err = StorageError::ChainIntegrityViolation {
+            index: 42,
+            expected: "abc".to_string(),
+            found: "def".to_string(),
+        };
+        let io_err: io::Error = err.into();
+        let msg = io_err.to_string();
+        assert!(msg.contains("chain integrity violation"));
+        assert!(msg.contains("42"));
+    }
+
+    #[test]
+    fn test_storage_error_snapshot_integrity_failed() {
+        let err = StorageError::SnapshotIntegrityFailed {
+            reason: "corrupted data".to_string(),
+        };
+        let msg = format!("{}", err);
+        assert!(msg.contains("snapshot integrity"));
+        assert!(msg.contains("corrupted data"));
+    }
+
+    #[test]
+    fn test_storage_error_chain_hash_missing() {
+        let err = StorageError::ChainHashMissing { index: 100 };
+        let msg = format!("{}", err);
+        assert!(msg.contains("chain hash missing"));
+        assert!(msg.contains("100"));
+    }
+
+    // =========================================================================
+    // InMemoryLogStore Tests
+    // =========================================================================
+
+    #[test]
+    fn test_inmemory_log_store_default() {
+        let store = InMemoryLogStore::default();
+        // Should be able to clone
+        let _cloned = store.clone();
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_log_store_vote_roundtrip() {
+        let mut store = InMemoryLogStore::default();
+        let vote = Vote::new(1, NodeId::new(1));
+
+        // Initially no vote
+        assert_eq!(store.read_vote().await.unwrap(), None);
+
+        // Save vote
+        store.save_vote(&vote).await.unwrap();
+
+        // Read back
+        assert_eq!(store.read_vote().await.unwrap(), Some(vote));
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_log_store_committed_roundtrip() {
+        use openraft::testing::log_id;
+        let mut store = InMemoryLogStore::default();
+
+        // Initially no committed
+        assert_eq!(store.read_committed().await.unwrap(), None);
+
+        // Save committed
+        let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 5);
+        store.save_committed(Some(committed)).await.unwrap();
+
+        // Read back
+        assert_eq!(store.read_committed().await.unwrap(), Some(committed));
+
+        // Clear committed
+        store.save_committed(None).await.unwrap();
+        assert_eq!(store.read_committed().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_log_store_get_log_state_empty() {
+        let mut store = InMemoryLogStore::default();
+        let state = store.get_log_state().await.unwrap();
+
+        assert_eq!(state.last_purged_log_id, None);
+        assert_eq!(state.last_log_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_log_store_clone_shares_state() {
+        let store = InMemoryLogStore::default();
+        let mut store1 = store.clone();
+        let mut store2 = store.clone();
+
+        let vote = Vote::new(2, NodeId::new(2));
+        store1.save_vote(&vote).await.unwrap();
+
+        // Both clones should see the vote (shared state)
+        assert_eq!(store2.read_vote().await.unwrap(), Some(vote));
+    }
+
+    // =========================================================================
+    // RedbLogStore Tests
+    // =========================================================================
+
     #[tokio::test]
     async fn redb_log_store_preserves_vote_on_reopen() {
         let temp_dir = TempDir::new().unwrap();
@@ -1493,5 +1725,288 @@ mod tests {
         let recovered = reopened.read_vote().await.unwrap();
 
         assert_eq!(recovered, Some(vote));
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_new_creates_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("new-log.redb");
+
+        assert!(!db_path.exists());
+
+        let _store = RedbLogStore::new(&db_path).unwrap();
+
+        assert!(db_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test-log.redb");
+
+        let store = RedbLogStore::new(&db_path).unwrap();
+        assert_eq!(store.path(), db_path);
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_initial_state_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("empty-log.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let state = store.get_log_state().await.unwrap();
+
+        assert_eq!(state.last_purged_log_id, None);
+        assert_eq!(state.last_log_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_committed_roundtrip() {
+        use openraft::testing::log_id;
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-log.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Initially no committed
+        assert_eq!(store.read_committed().await.unwrap(), None);
+
+        // Save committed
+        let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+        store.save_committed(Some(committed)).await.unwrap();
+
+        // Read back
+        assert_eq!(store.read_committed().await.unwrap(), Some(committed));
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_committed_clear() {
+        use openraft::testing::log_id;
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-clear-log.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Save then clear
+        let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 5);
+        store.save_committed(Some(committed)).await.unwrap();
+        store.save_committed(None).await.unwrap();
+
+        assert_eq!(store.read_committed().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_creates_parent_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("nested").join("path").join("log.redb");
+
+        // Parent doesn't exist yet
+        assert!(!db_path.parent().unwrap().exists());
+
+        let _store = RedbLogStore::new(&db_path).unwrap();
+
+        assert!(db_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_chain_tip_initial() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-tip-log.redb");
+
+        let store = RedbLogStore::new(&db_path).unwrap();
+        let (index, hash) = store.chain_tip_for_verification();
+
+        // Initial chain tip should be genesis
+        assert_eq!(index, 0);
+        assert_eq!(hash, GENESIS_HASH);
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_chain_tip_hash_hex() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-hex-log.redb");
+
+        let store = RedbLogStore::new(&db_path).unwrap();
+        let hex = store.chain_tip_hash_hex();
+
+        // Should be a valid hex string (64 characters for 32 bytes)
+        assert_eq!(hex.len(), 64);
+        assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_verification_range_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("range-empty-log.redb");
+
+        let store = RedbLogStore::new(&db_path).unwrap();
+        let range = store.verification_range().unwrap();
+
+        assert_eq!(range, None);
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_clone() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("clone-log.redb");
+
+        let store = RedbLogStore::new(&db_path).unwrap();
+        let cloned = store.clone();
+
+        // Both should point to same path
+        assert_eq!(store.path(), cloned.path());
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_store_get_log_reader() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("reader-log.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let mut reader = store.get_log_reader().await;
+
+        // Reader should work
+        let vote = reader.read_vote().await.unwrap();
+        assert_eq!(vote, None);
+    }
+
+    // =========================================================================
+    // InMemoryStateMachine Tests
+    // =========================================================================
+
+    #[test]
+    fn test_inmemory_state_machine_new() {
+        let sm = InMemoryStateMachine::new();
+        // Should be wrapped in Arc
+        let _cloned = Arc::clone(&sm);
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_get_nonexistent() {
+        let sm = InMemoryStateMachine::new();
+        let value = sm.get("nonexistent").await;
+        assert_eq!(value, None);
+    }
+
+    #[test]
+    fn test_inmemory_state_machine_scan_keys_empty() {
+        let sm = InMemoryStateMachine::new();
+        let keys = sm.scan_keys_with_prefix("test:");
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn test_inmemory_state_machine_scan_kv_empty() {
+        let sm = InMemoryStateMachine::new();
+        let pairs = sm.scan_kv_with_prefix("test:");
+        assert!(pairs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_scan_kv_async_empty() {
+        let sm = InMemoryStateMachine::new();
+        let pairs = sm.scan_kv_with_prefix_async("test:").await;
+        assert!(pairs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_applied_state_initial() {
+        let mut sm = InMemoryStateMachine::new();
+        let (last_applied, membership) = sm.applied_state().await.unwrap();
+
+        assert_eq!(last_applied, None);
+        // Membership is an Option - check inner membership is empty
+        assert!(membership.membership().nodes().next().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_get_snapshot_builder() {
+        let mut sm = InMemoryStateMachine::new();
+        let _builder = sm.get_snapshot_builder().await;
+        // Builder should be a clone of self
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_begin_receiving_snapshot() {
+        let mut sm = InMemoryStateMachine::new();
+        let cursor = sm.begin_receiving_snapshot().await.unwrap();
+        // Should return empty cursor initially
+        assert_eq!(cursor.get_ref().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_inmemory_state_machine_get_current_snapshot_none() {
+        let mut sm = InMemoryStateMachine::new();
+        let snapshot = sm.get_current_snapshot().await.unwrap();
+        assert!(snapshot.is_none());
+    }
+
+    // =========================================================================
+    // StoredSnapshot Tests
+    // =========================================================================
+
+    #[test]
+    fn test_stored_snapshot_serde() {
+        use openraft::{Membership, SnapshotMeta, StoredMembership};
+
+        let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![], []);
+        let meta = SnapshotMeta {
+            last_log_id: None,
+            last_membership: StoredMembership::new(None, membership),
+            snapshot_id: "test-snap".to_string(),
+        };
+        let snapshot = StoredSnapshot {
+            meta,
+            data: vec![1, 2, 3, 4],
+        };
+
+        let serialized = bincode::serialize(&snapshot).expect("serialize");
+        let deserialized: StoredSnapshot = bincode::deserialize(&serialized).expect("deserialize");
+
+        assert_eq!(deserialized.data, vec![1, 2, 3, 4]);
+        assert_eq!(deserialized.meta.snapshot_id, "test-snap");
+    }
+
+    // =========================================================================
+    // StateMachineData Tests
+    // =========================================================================
+
+    #[test]
+    fn test_state_machine_data_default() {
+        let data = StateMachineData::default();
+        assert_eq!(data.last_applied_log, None);
+        assert!(data.data.is_empty());
+    }
+
+    #[test]
+    fn test_state_machine_data_clone() {
+        let mut data = StateMachineData::default();
+        data.data.insert("key".to_string(), "value".to_string());
+
+        let cloned = data.clone();
+        assert_eq!(cloned.data.get("key"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_state_machine_data_serde() {
+        let mut data = StateMachineData::default();
+        data.data.insert("test".to_string(), "data".to_string());
+
+        let serialized = bincode::serialize(&data).expect("serialize");
+        let deserialized: StateMachineData =
+            bincode::deserialize(&serialized).expect("deserialize");
+
+        assert_eq!(deserialized.data.get("test"), Some(&"data".to_string()));
+    }
+
+    // =========================================================================
+    // ChainTipState Tests
+    // =========================================================================
+
+    #[test]
+    fn test_chain_tip_state_default() {
+        let tip = ChainTipState::default();
+        assert_eq!(tip.index, 0);
+        assert_eq!(tip.hash, GENESIS_HASH);
     }
 }
