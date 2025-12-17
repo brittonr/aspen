@@ -65,6 +65,10 @@ pub fn validate_node_id(node_id: u64) -> Result<(), ValidationError> {
     Ok(())
 }
 
+/// The unsafe default cookie marker that indicates no custom cookie was set.
+/// When this is detected, validation should warn the user.
+pub const UNSAFE_DEFAULT_COOKIE: &str = "aspen-cookie-UNSAFE-CHANGE-ME";
+
 /// Validate that cluster cookie is non-empty.
 ///
 /// The cookie is used for cluster authentication and gossip topic derivation.
@@ -74,6 +78,27 @@ pub fn validate_cookie(cookie: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::CookieEmpty);
     }
     Ok(())
+}
+
+/// Check if the cluster cookie is the unsafe default.
+///
+/// When using the default cookie, all clusters share the same gossip topic,
+/// which is a security vulnerability. Returns a warning message if the
+/// default cookie is in use.
+///
+/// # Tiger Style
+///
+/// Security-critical: Fail safe by warning, don't silently accept unsafe defaults.
+pub fn check_cookie_safety(cookie: &str) -> Option<String> {
+    if cookie == UNSAFE_DEFAULT_COOKIE {
+        Some(
+            "SECURITY WARNING: Using default cluster cookie. All clusters with default cookie share the same gossip topic. \
+            Set a unique cookie via --cookie, ASPEN_COOKIE env var, or config file to isolate this cluster's gossip traffic."
+            .to_string()
+        )
+    } else {
+        None
+    }
 }
 
 /// Validate Raft timing configuration.

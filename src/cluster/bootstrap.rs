@@ -72,8 +72,12 @@ pub struct NodeHandle {
     /// via iroh-gossip. Discovered peers are added to the network factory
     /// for Raft RPC routing.
     pub gossip_discovery: Option<GossipPeerDiscovery>,
-    /// RPC server for handling incoming Raft RPCs.
-    pub rpc_server: RaftRpcServer,
+    /// Legacy RPC server for handling incoming Raft RPCs.
+    ///
+    /// When using Iroh Router with RaftProtocolHandler (preferred), this should be None.
+    /// The Router handles ALPN-based dispatching directly.
+    /// Only used when Router is not available (e.g., testing scenarios).
+    pub rpc_server: Option<RaftRpcServer>,
     /// Supervisor for automatic restarts.
     pub supervisor: Arc<Supervisor>,
     /// Health monitor.
@@ -103,10 +107,12 @@ impl NodeHandle {
             }
         }
 
-        // Stop RPC server
-        info!("shutting down RPC server");
-        if let Err(err) = self.rpc_server.shutdown().await {
-            error!(error = ?err, "failed to shutdown RPC server gracefully");
+        // Stop RPC server if present (only used when not using Router)
+        if let Some(rpc_server) = self.rpc_server {
+            info!("shutting down legacy RPC server");
+            if let Err(err) = rpc_server.shutdown().await {
+                error!(error = ?err, "failed to shutdown RPC server gracefully");
+            }
         }
 
         // Stop supervisor
@@ -390,9 +396,17 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         }
     });
 
-    // Start RPC server for handling incoming Raft RPCs
-    let rpc_server = RaftRpcServer::spawn(iroh_manager.clone(), raft.as_ref().clone());
-    info!(node_id = config.node_id, "started Raft RPC server");
+    // NOTE: RPC server is NOT spawned here anymore.
+    // When using Iroh Router (preferred), the RaftProtocolHandler handles Raft RPCs.
+    // The Router is spawned in aspen-node.rs after bootstrap completes.
+    // This eliminates the race condition where both RaftRpcServer and Router
+    // compete for incoming connections on the same endpoint.
+    //
+    // For testing scenarios without Router, call RaftRpcServer::spawn() separately.
+    info!(
+        node_id = config.node_id,
+        "bootstrap complete - Router should be spawned by caller for RPC handling"
+    );
 
     // Register node in metadata store
     use crate::cluster::metadata::NodeMetadata;
@@ -414,7 +428,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         raft_node,
         network_factory,
         gossip_discovery,
-        rpc_server,
+        rpc_server: None, // Router-based architecture preferred; spawn Router in caller
         supervisor,
         health_monitor,
         shutdown_token: shutdown,

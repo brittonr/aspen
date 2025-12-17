@@ -386,8 +386,8 @@ impl NodeConfig {
     /// Returns `ConfigError` if configuration is invalid.
     pub fn validate(&self) -> Result<(), ConfigError> {
         use crate::cluster::validation::{
-            check_disk_usage, check_http_port, check_raft_timing_sanity, validate_cookie,
-            validate_node_id, validate_raft_timings, validate_secret_key,
+            check_cookie_safety, check_disk_usage, check_http_port, check_raft_timing_sanity,
+            validate_cookie, validate_node_id, validate_raft_timings, validate_secret_key,
         };
         use tracing::warn;
 
@@ -399,6 +399,11 @@ impl NodeConfig {
         validate_cookie(&self.cookie).map_err(|e| ConfigError::Validation {
             message: e.to_string(),
         })?;
+
+        // Check for unsafe default cookie (security warning)
+        if let Some(warning) = check_cookie_safety(&self.cookie) {
+            warn!("{}", warning);
+        }
 
         validate_raft_timings(
             self.heartbeat_interval_ms,
@@ -487,8 +492,13 @@ fn default_host() -> String {
     "127.0.0.1".into()
 }
 
+/// Default cookie value used as a marker.
+/// When this exact value is detected, validation will warn and recommend a unique cookie.
+/// This prevents multiple independent clusters from accidentally sharing gossip topics.
+const DEFAULT_COOKIE_MARKER: &str = "aspen-cookie-UNSAFE-CHANGE-ME";
+
 fn default_cookie() -> String {
-    "aspen-cookie".into()
+    DEFAULT_COOKIE_MARKER.into()
 }
 
 fn default_http_addr() -> SocketAddr {

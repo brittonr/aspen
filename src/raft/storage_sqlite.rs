@@ -179,9 +179,17 @@ impl<'a> TransactionGuard<'a> {
 impl Drop for TransactionGuard<'_> {
     fn drop(&mut self) {
         if !self.committed {
-            // Best-effort rollback - ignore errors since we're already unwinding
-            // Logging is not done here to avoid allocation during panic
-            let _ = self.conn.execute("ROLLBACK", []);
+            // Best-effort rollback with error logging.
+            // Tiger Style: Log rollback errors even during panic for operational visibility.
+            // This helps operators diagnose transaction leaks.
+            if let Err(e) = self.conn.execute("ROLLBACK", []) {
+                // Use eprintln instead of tracing to avoid allocation during panic.
+                // This is a critical error that operators must know about.
+                eprintln!(
+                    "CRITICAL: TransactionGuard rollback failed: {}. Database may have lingering transaction.",
+                    e
+                );
+            }
         }
     }
 }
