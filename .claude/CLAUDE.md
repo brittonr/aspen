@@ -14,10 +14,12 @@ The codebase recently underwent a major refactoring (completed Dec 13, 2025) to 
 - **redb**: Embedded ACID storage engine for Raft log storage (append-only, fast sequential writes)
 - **rusqlite**: SQLite-based state machine storage (ACID transactions, queryable)
 - **iroh**: Peer-to-peer networking and content-addressed communication (QUIC, NAT traversal, discovery)
+- **iroh-blobs**: Content-addressed blob storage for large values
+- **iroh-docs**: CRDT-based document synchronization for real-time KV replication
 - **madsim**: Deterministic simulator for distributed systems testing
 - **snafu/anyhow**: Error handling (snafu for library errors, anyhow for application errors)
 - **proptest**: Property-based testing
-- **axum**: HTTP REST API framework
+- **bolero**: Unified testing framework combining fuzz testing and property-based testing (same tests run as fuzzing with libFuzzer/AFL or as property tests in CI)
 - **ratatui**: Terminal UI framework
 
 ## Vendored Dependencies
@@ -66,7 +68,7 @@ These components work together through direct async interfaces without actor ind
 ### Current Architecture
 
 ```
-HTTP API (axum) / Terminal UI (ratatui)
+Client RPC (Iroh QUIC) / Terminal UI (ratatui)
          ↓
 ClusterController + KeyValueStore Traits
          ↓
@@ -81,14 +83,25 @@ IrohEndpointManager (QUIC + NAT traversal)
     ├── mDNS discovery (local networks)
     ├── DNS discovery (production)
     ├── Pkarr (DHT fallback)
-    └── Gossip (peer announcements)
+    ├── Gossip (peer announcements)
+    ├── iroh-blobs (content-addressed storage)
+    └── iroh-docs (CRDT replication)
 ```
 
 ### Implementation Guidelines
 
+**API Design: Iroh-First, No HTTP**
+
+Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP endpoints or use axum for new features. The existing HTTP API in `aspen-node.rs` is legacy and will be removed.
+
+- **Client APIs**: Use Iroh Client RPC protocol (`CLIENT_ALPN`) via `ClientProtocolHandler`
+- **Node-to-node**: Use Iroh with ALPN-based protocol routing
+- **Blob transfer**: Use iroh-blobs protocol
+- **Real-time sync**: Use iroh-docs for CRDT-based replication
+
 **For new distributed features:**
 
-1. Use Iroh for ALL network communication between nodes (no raw TCP/HTTP)
+1. Use Iroh for ALL network communication (no raw TCP/HTTP)
 2. Go through Raft consensus for any state that needs cluster-wide agreement
 3. Use the trait-based API (`ClusterController` and `KeyValueStore`) for abstraction
 4. Follow Tiger Style resource bounds (see constants.rs for limits)
@@ -109,6 +122,7 @@ IrohEndpointManager (QUIC + NAT traversal)
 
 **Never:**
 
+- Add HTTP endpoints or use axum for new APIs (use Iroh Client RPC instead)
 - Implement node-to-node communication without Iroh
 - Create distributed state without Raft consensus
 - Allow unbounded operations (always use Tiger Style limits)
@@ -141,8 +155,8 @@ The project is structured into focused modules with narrow APIs:
   - `NodeBuilder`: Fluent API for programmatic node configuration and startup
   - Returns handle with access to both trait implementations
 - **src/bin/**:
-  - `aspen-node.rs` (2,056 lines): HTTP REST API server with full cluster node
-  - `aspen-tui.rs` (2,260 lines): Terminal UI for cluster monitoring and management
+  - `aspen-node.rs`: Full cluster node with Iroh-based client RPC (legacy HTTP API to be removed)
+  - `aspen-tui.rs`: Terminal UI for cluster monitoring and management
 
 ## Development Commands
 
@@ -194,6 +208,9 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 
 ### Safety Principles
 
+- Avoid `.unwrap()` and `.expect()` in production code; use `?` operator, `context()`/`whatever_context()` from snafu, or explicit pattern matching instead
+- Avoid `panic!()`, `todo!()`, `unimplemented!()` in production code
+- Avoid `unsafe` unless absolutely necessary; document safety invariants when used
 - Use explicitly sized types (`u32`, `i64`) instead of `usize` for portability
 - Set fixed limits on loops, queues, and data structures to prevent unbounded resource use
 - Static memory allocation preferred; avoid dynamic allocation after initialization
@@ -202,6 +219,29 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 - Fail fast on programmer errors; handle all errors explicitly
 - Centralize control flow in parent functions; move non-branching logic to helper functions
 - Keep functions under 70 lines
+
+### Async/Concurrency Safety
+
+- Avoid holding locks across `.await` points (causes deadlocks)
+- Prefer `tokio::sync` primitives over `std::sync` in async code
+- Use structured concurrency (`JoinSet`, `TaskTracker`) for spawned tasks
+- Be explicit about cancellation safety in async code
+- Use `tokio::select!` carefully; understand which branches are cancel-safe
+
+### Memory/Allocation
+
+- Avoid unnecessary `.clone()`; prefer borrowing when possible
+- Use `&str` over `String` in function parameters where ownership isn't needed
+
+### Testability
+
+- Prefer pure functions (deterministic output from inputs, no side effects) for easier testing
+- Extract complex logic into pure functions that can be unit tested independently
+
+### Error Handling
+
+- Add context to errors (use snafu's `context()`) so failures are actionable
+- Don't log and return the same error (causes duplicate noise)
 
 ### Performance Principles
 
@@ -243,6 +283,7 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
     - [TigerBeetle VSR](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/vsr.md) - Viewstamped Replication consensus protocol implementation
     - [TigerBeetle Data File](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/internals/data_file.md) - Storage engine design for deterministic performance
 - **Property-based testing**: Use `proptest` for exploring edge cases
+- **Unified testing**: Use `bolero` for tests that can run as both property-based tests (in CI) and fuzz tests (for deeper exploration)
 - **Test modifications**: Never modify, remove, or add tests unless explicitly asked
 
 ## Core API Traits

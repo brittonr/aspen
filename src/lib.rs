@@ -9,8 +9,11 @@
 //! in.
 
 pub mod api;
+pub mod blob;
+pub mod client;
 pub mod client_rpc;
 pub mod cluster;
+pub mod docs;
 pub mod node;
 pub mod protocol_handlers;
 pub mod raft;

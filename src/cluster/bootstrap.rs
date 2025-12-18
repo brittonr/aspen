@@ -35,6 +35,7 @@ use openraft::{Config as RaftConfig, Raft};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
+use crate::blob::IrohBlobStore;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeStatus};
@@ -94,6 +95,17 @@ pub struct NodeHandle {
     /// Tiger Style: Always computed to enable ticket generation even when
     /// gossip discovery is disabled.
     pub gossip_topic_id: TopicId,
+    /// Blob store for content-addressed storage.
+    ///
+    /// Provides large value offloading and P2P blob distribution.
+    /// None when blobs are disabled in configuration.
+    pub blob_store: Option<Arc<IrohBlobStore>>,
+    /// Peer manager for cluster-to-cluster sync.
+    ///
+    /// Manages connections to peer Aspen clusters for iroh-docs
+    /// based data synchronization with priority-based conflict resolution.
+    /// None when peer sync is disabled in configuration.
+    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
 }
 
 impl NodeHandle {
@@ -123,6 +135,14 @@ impl NodeHandle {
         // Stop supervisor
         info!("shutting down supervisor");
         self.supervisor.stop();
+
+        // Shutdown blob store if present
+        if let Some(blob_store) = &self.blob_store {
+            info!("shutting down blob store");
+            if let Err(err) = blob_store.shutdown().await {
+                error!(error = ?err, "failed to shutdown blob store gracefully");
+            }
+        }
 
         // Shutdown Iroh endpoint
         info!("shutting down Iroh endpoint");
@@ -456,6 +476,40 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         "bootstrap complete - Router should be spawned by caller for RPC handling"
     );
 
+    // Initialize blob store if enabled
+    let blob_store = if config.blobs.enabled {
+        let blobs_dir = data_dir.join("blobs");
+        std::fs::create_dir_all(&blobs_dir).with_context(|| {
+            format!("failed to create blobs directory: {}", blobs_dir.display())
+        })?;
+
+        match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
+            Ok(store) => {
+                info!(
+                    node_id = config.node_id,
+                    path = %blobs_dir.display(),
+                    "blob store initialized"
+                );
+                Some(Arc::new(store))
+            }
+            Err(err) => {
+                // Blob store failure is non-fatal - node can still work without blobs
+                warn!(
+                    error = ?err,
+                    node_id = config.node_id,
+                    "failed to initialize blob store, continuing without it"
+                );
+                None
+            }
+        }
+    } else {
+        info!(
+            node_id = config.node_id,
+            "blob store disabled by configuration"
+        );
+        None
+    };
+
     // Register node in metadata store
     use crate::cluster::metadata::NodeMetadata;
     metadata_store.register_node(NodeMetadata {
@@ -481,6 +535,8 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         health_monitor,
         shutdown_token: shutdown,
         gossip_topic_id,
+        blob_store,
+        peer_manager: None, // TODO: Initialize when peer sync config is added
     })
 }
 

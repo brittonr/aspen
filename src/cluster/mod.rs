@@ -531,6 +531,85 @@ impl IrohEndpointManager {
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
     }
 
+    /// Spawn the Iroh Router with full protocol support including blobs.
+    ///
+    /// This method creates a Router with support for:
+    /// - Legacy unauthenticated Raft RPC (ALPN: `raft-rpc`) - required
+    /// - Authenticated Raft RPC (ALPN: `raft-auth`) - optional
+    /// - Log subscription (ALPN: `aspen-logs`) - optional
+    /// - Client RPC (ALPN: `aspen-tui`) - optional
+    /// - Blobs (ALPN: `iroh-blobs/0`) - optional
+    /// - Gossip (ALPN: `iroh-gossip/0`) - automatic if enabled
+    ///
+    /// # Arguments
+    /// * `raft_handler` - Protocol handler for unauthenticated Raft RPC
+    /// * `auth_raft_handler` - Optional handler for authenticated Raft RPC
+    /// * `log_subscriber_handler` - Optional handler for log subscription
+    /// * `client_handler` - Optional handler for Client RPC
+    /// * `blobs_handler` - Optional handler for blob transfers
+    ///
+    /// # Tiger Style
+    /// - Must be called before any server starts accepting connections
+    /// - ALPNs are set automatically by the Router
+    pub fn spawn_router_full<R, A, L, C, B>(
+        &mut self,
+        raft_handler: R,
+        auth_raft_handler: Option<A>,
+        log_subscriber_handler: Option<L>,
+        client_handler: Option<C>,
+        blobs_handler: Option<B>,
+    ) where
+        R: iroh::protocol::ProtocolHandler,
+        A: iroh::protocol::ProtocolHandler,
+        L: iroh::protocol::ProtocolHandler,
+        C: iroh::protocol::ProtocolHandler,
+        B: iroh::protocol::ProtocolHandler,
+    {
+        use crate::protocol_handlers::{
+            CLIENT_ALPN, LOG_SUBSCRIBER_ALPN, RAFT_ALPN, RAFT_AUTH_ALPN,
+        };
+
+        let mut builder = Router::builder(self.endpoint.clone());
+
+        // Register legacy Raft RPC handler (unauthenticated)
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+
+        // Register authenticated Raft RPC handler
+        if let Some(handler) = auth_raft_handler {
+            builder = builder.accept(RAFT_AUTH_ALPN, handler);
+            tracing::info!("registered authenticated Raft RPC protocol handler (ALPN: raft-auth)");
+        }
+
+        // Register log subscriber handler
+        if let Some(handler) = log_subscriber_handler {
+            builder = builder.accept(LOG_SUBSCRIBER_ALPN, handler);
+            tracing::info!("registered log subscriber protocol handler (ALPN: aspen-logs)");
+        }
+
+        // Register Client RPC handler if provided
+        if let Some(handler) = client_handler {
+            builder = builder.accept(CLIENT_ALPN, handler);
+            tracing::info!("registered Client RPC protocol handler (ALPN: aspen-tui)");
+        }
+
+        // Register Blobs handler if provided
+        if let Some(handler) = blobs_handler {
+            builder = builder.accept(iroh_blobs::ALPN, handler);
+            tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
+        }
+
+        // Register Gossip handler if enabled
+        if let Some(gossip) = &self.gossip {
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            tracing::info!("registered Gossip protocol handler (ALPN: gossip)");
+        }
+
+        // Spawn the router (sets ALPNs and starts accept loop)
+        self.router = Some(builder.spawn());
+        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
+    }
+
     /// Add a known peer address to the endpoint for direct connections.
     ///
     /// # Iroh 0.95.1 Behavior

@@ -122,6 +122,138 @@ pub enum ClientRpcRequest {
         /// Comma-separated endpoint IDs to include.
         endpoint_ids: Option<String>,
     },
+
+    /// Get a client ticket for overlay subscription.
+    ///
+    /// Returns a ticket that clients can use to connect to this cluster
+    /// as part of a priority-based overlay (like Nix binary caches).
+    GetClientTicket {
+        /// Access level: "read" or "write".
+        access: String,
+        /// Priority level (0 = highest).
+        priority: u32,
+    },
+
+    /// Get a docs ticket for iroh-docs subscription.
+    ///
+    /// Returns a ticket for subscribing to the cluster's iroh-docs
+    /// namespace for real-time state synchronization.
+    GetDocsTicket {
+        /// Whether client should have write access to docs.
+        read_write: bool,
+        /// Priority level for this subscription.
+        priority: u8,
+    },
+
+    // =========================================================================
+    // Blob operations (content-addressed storage)
+    // =========================================================================
+    /// Add a blob to the store.
+    ///
+    /// Stores the provided bytes and returns a blob reference with the hash.
+    AddBlob {
+        /// Blob data to store.
+        data: Vec<u8>,
+        /// Optional tag to protect the blob from GC.
+        tag: Option<String>,
+    },
+
+    /// Get a blob by hash.
+    ///
+    /// Returns the blob data if it exists.
+    GetBlob {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+    },
+
+    /// Check if a blob exists.
+    HasBlob {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+    },
+
+    /// Get a ticket for sharing a blob.
+    ///
+    /// Returns a BlobTicket that can be used to download the blob from this node.
+    GetBlobTicket {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+    },
+
+    /// List blobs in the store.
+    ListBlobs {
+        /// Maximum number of blobs to return.
+        limit: u32,
+        /// Continuation token from previous list call.
+        continuation_token: Option<String>,
+    },
+
+    /// Protect a blob from garbage collection.
+    ProtectBlob {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+        /// Tag name for the protection.
+        tag: String,
+    },
+
+    /// Remove protection from a blob.
+    UnprotectBlob {
+        /// Tag name to remove.
+        tag: String,
+    },
+
+    // =========================================================================
+    // Peer cluster operations (cluster-to-cluster sync)
+    // =========================================================================
+    /// Add a peer cluster to sync with.
+    ///
+    /// Subscribes to the peer cluster's iroh-docs namespace for real-time
+    /// synchronization with priority-based conflict resolution.
+    AddPeerCluster {
+        /// Serialized AspenDocsTicket from the peer cluster.
+        ticket: String,
+    },
+
+    /// Remove a peer cluster subscription.
+    RemovePeerCluster {
+        /// Cluster ID of the peer to remove.
+        cluster_id: String,
+    },
+
+    /// List all peer cluster subscriptions.
+    ListPeerClusters,
+
+    /// Get sync status for a specific peer cluster.
+    GetPeerClusterStatus {
+        /// Cluster ID of the peer.
+        cluster_id: String,
+    },
+
+    /// Update the subscription filter for a peer cluster.
+    UpdatePeerClusterFilter {
+        /// Cluster ID of the peer.
+        cluster_id: String,
+        /// Filter type: "full", "include", or "exclude".
+        filter_type: String,
+        /// Prefixes for include/exclude filters (JSON array).
+        prefixes: Option<String>,
+    },
+
+    /// Update the priority for a peer cluster.
+    UpdatePeerClusterPriority {
+        /// Cluster ID of the peer.
+        cluster_id: String,
+        /// New priority (0 = highest, lower wins conflicts).
+        priority: u32,
+    },
+
+    /// Enable or disable a peer cluster subscription.
+    SetPeerClusterEnabled {
+        /// Cluster ID of the peer.
+        cluster_id: String,
+        /// Whether to enable the subscription.
+        enabled: bool,
+    },
 }
 
 /// Client RPC response protocol.
@@ -197,6 +329,60 @@ pub enum ClientRpcResponse {
 
     /// Add peer response.
     AddPeerResult(AddPeerResultResponse),
+
+    /// Client ticket response for overlay subscription.
+    ClientTicket(ClientTicketResponse),
+
+    /// Docs ticket response for iroh-docs subscription.
+    DocsTicket(DocsTicketResponse),
+
+    // =========================================================================
+    // Blob operation responses
+    // =========================================================================
+    /// Add blob result.
+    AddBlobResult(AddBlobResultResponse),
+
+    /// Get blob result.
+    GetBlobResult(GetBlobResultResponse),
+
+    /// Has blob result.
+    HasBlobResult(HasBlobResultResponse),
+
+    /// Get blob ticket result.
+    GetBlobTicketResult(GetBlobTicketResultResponse),
+
+    /// List blobs result.
+    ListBlobsResult(ListBlobsResultResponse),
+
+    /// Protect blob result.
+    ProtectBlobResult(ProtectBlobResultResponse),
+
+    /// Unprotect blob result.
+    UnprotectBlobResult(UnprotectBlobResultResponse),
+
+    // =========================================================================
+    // Peer cluster operation responses
+    // =========================================================================
+    /// Add peer cluster result.
+    AddPeerClusterResult(AddPeerClusterResultResponse),
+
+    /// Remove peer cluster result.
+    RemovePeerClusterResult(RemovePeerClusterResultResponse),
+
+    /// List peer clusters result.
+    ListPeerClustersResult(ListPeerClustersResultResponse),
+
+    /// Get peer cluster status result.
+    PeerClusterStatus(PeerClusterStatusResponse),
+
+    /// Update peer cluster filter result.
+    UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse),
+
+    /// Update peer cluster priority result.
+    UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse),
+
+    /// Set peer cluster enabled result.
+    SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse),
 }
 
 /// Health status response.
@@ -478,6 +664,262 @@ pub struct VaultKeyValue {
 pub struct AddPeerResultResponse {
     /// Whether add peer succeeded.
     pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Client ticket response for overlay subscription.
+///
+/// Used by clients to connect to a cluster as part of a priority-based
+/// overlay system (similar to Nix binary cache substituters).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientTicketResponse {
+    /// Serialized AspenClientTicket.
+    pub ticket: String,
+    /// Cluster identifier.
+    pub cluster_id: String,
+    /// Access level: "read" or "write".
+    pub access: String,
+    /// Priority level (0 = highest).
+    pub priority: u32,
+    /// This node's endpoint ID.
+    pub endpoint_id: String,
+    /// Error message if generation failed.
+    pub error: Option<String>,
+}
+
+/// Docs ticket response for iroh-docs subscription.
+///
+/// Used by clients to subscribe to a cluster's iroh-docs namespace
+/// for real-time state synchronization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsTicketResponse {
+    /// Serialized AspenDocsTicket.
+    pub ticket: String,
+    /// Cluster identifier.
+    pub cluster_id: String,
+    /// Namespace ID (derived from cluster cookie).
+    pub namespace_id: String,
+    /// Whether client has write access.
+    pub read_write: bool,
+    /// Priority level for this subscription.
+    pub priority: u8,
+    /// This node's endpoint ID.
+    pub endpoint_id: String,
+    /// Error message if generation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Blob operation response types
+// =============================================================================
+
+/// Add blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// BLAKE3 hash of the stored blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Size of the blob in bytes.
+    pub size: Option<u64>,
+    /// Whether the blob was new (not already in store).
+    pub was_new: Option<bool>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Get blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBlobResultResponse {
+    /// Whether the blob was found.
+    pub found: bool,
+    /// Blob data if found.
+    pub data: Option<Vec<u8>>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Has blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HasBlobResultResponse {
+    /// Whether the blob exists in the store.
+    pub exists: bool,
+    /// Error message if check failed.
+    pub error: Option<String>,
+}
+
+/// Get blob ticket result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBlobTicketResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Serialized BlobTicket.
+    pub ticket: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Blob list entry for listing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlobListEntry {
+    /// BLAKE3 hash (hex-encoded).
+    pub hash: String,
+    /// Size in bytes.
+    pub size: u64,
+}
+
+/// List blobs result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListBlobsResultResponse {
+    /// List of blobs.
+    pub blobs: Vec<BlobListEntry>,
+    /// Total count returned.
+    pub count: u32,
+    /// Whether more blobs are available.
+    pub has_more: bool,
+    /// Continuation token for next page.
+    pub continuation_token: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Protect blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProtectBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Unprotect blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnprotectBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Peer cluster operation response types
+// =============================================================================
+
+/// Add peer cluster result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddPeerClusterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Cluster ID of the added peer.
+    pub cluster_id: Option<String>,
+    /// Priority assigned to this peer.
+    pub priority: Option<u32>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Remove peer cluster result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemovePeerClusterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Cluster ID of the removed peer.
+    pub cluster_id: String,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// List peer clusters result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListPeerClustersResultResponse {
+    /// List of peer cluster information.
+    pub peers: Vec<PeerClusterInfo>,
+    /// Total number of peer clusters.
+    pub count: u32,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Information about a peer cluster subscription.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerClusterInfo {
+    /// Cluster ID of the peer.
+    pub cluster_id: String,
+    /// Human-readable name of the peer.
+    pub name: String,
+    /// Connection state: "disconnected", "connecting", "connected", "failed".
+    pub state: String,
+    /// Priority for conflict resolution (0 = highest).
+    pub priority: u32,
+    /// Whether sync is enabled.
+    pub enabled: bool,
+    /// Number of completed sync sessions.
+    pub sync_count: u64,
+    /// Number of connection failures.
+    pub failure_count: u64,
+}
+
+/// Peer cluster status response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerClusterStatusResponse {
+    /// Whether the peer was found.
+    pub found: bool,
+    /// Cluster ID of the peer.
+    pub cluster_id: String,
+    /// Connection state: "disconnected", "connecting", "connected", "failed".
+    pub state: String,
+    /// Whether sync is currently in progress.
+    pub syncing: bool,
+    /// Entries received in current/last sync.
+    pub entries_received: u64,
+    /// Entries imported in current/last sync.
+    pub entries_imported: u64,
+    /// Entries skipped due to priority.
+    pub entries_skipped: u64,
+    /// Entries skipped due to filter.
+    pub entries_filtered: u64,
+    /// Error message if lookup failed.
+    pub error: Option<String>,
+}
+
+/// Update peer cluster filter result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdatePeerClusterFilterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Cluster ID of the peer.
+    pub cluster_id: String,
+    /// New filter type: "full", "include", or "exclude".
+    pub filter_type: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Update peer cluster priority result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdatePeerClusterPriorityResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Cluster ID of the peer.
+    pub cluster_id: String,
+    /// Previous priority value.
+    pub previous_priority: Option<u32>,
+    /// New priority value.
+    pub new_priority: Option<u32>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Set peer cluster enabled result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetPeerClusterEnabledResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Cluster ID of the peer.
+    pub cluster_id: String,
+    /// Whether the peer is now enabled.
+    pub enabled: Option<bool>,
     /// Error message if failed.
     pub error: Option<String>,
 }

@@ -558,6 +558,8 @@ fn build_router(app_state: AppState) -> Router {
         // Vault endpoints
         .route("/vaults", get(list_vaults))
         .route("/vault/:vault_name", get(get_vault_keys))
+        // Ticket endpoints removed - use Iroh Client RPC instead (aspen-tui ALPN)
+        // See ClientRpcRequest::GetClientTicket and ClientRpcRequest::GetDocsTicket
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .with_state(app_state)
 }
@@ -601,12 +603,14 @@ async fn main() -> Result<()> {
         controller: controller.clone(),
         kv_store: kv_store.clone(),
         endpoint_manager: handle.iroh_manager.clone(),
+        blob_store: handle.blob_store.clone(),
+        peer_manager: handle.peer_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         start_time: app_state.start_time,
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 
-    // Spawn the Router with both handlers and gossip (if enabled)
+    // Spawn the Router with all protocol handlers
     let router = {
         use aspen::protocol_handlers::{CLIENT_ALPN, RAFT_ALPN};
         use iroh::protocol::Router;
@@ -621,9 +625,16 @@ async fn main() -> Result<()> {
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
         }
 
+        // Add blobs protocol handler if blob store is enabled
+        if let Some(ref blob_store) = handle.blob_store {
+            let blobs_handler = blob_store.protocol_handler();
+            builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
+            info!("Blobs protocol handler registered");
+        }
+
         builder.spawn()
     };
-    info!("Iroh Router spawned with Raft and TUI protocol handlers");
+    info!("Iroh Router spawned with protocol handlers");
 
     // Build router with all API endpoints
     let app = build_router(app_state);
@@ -1469,6 +1480,11 @@ async fn cluster_ticket_combined(
         },
     }))
 }
+
+// NOTE: client_ticket and docs_ticket HTTP endpoints have been removed.
+// Use Iroh Client RPC instead (aspen-tui ALPN):
+// - ClientRpcRequest::GetClientTicket
+// - ClientRpcRequest::GetDocsTicket
 
 /// Request to promote a learner to voter.
 #[derive(Debug, serde::Deserialize)]

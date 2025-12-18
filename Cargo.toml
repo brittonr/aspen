@@ -77,6 +77,8 @@ validit = "0.2.2"
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
+iroh-blobs = "0.97"
+iroh-docs = "0.95"
 iroh-tickets = "0.2"
 blake3 = "1.5"
 bytes = "1.7"

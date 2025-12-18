@@ -529,7 +529,23 @@ async fn process_tui_request(
         | ClientRpcRequest::ListVaults
         | ClientRpcRequest::GetVaultKeys { .. }
         | ClientRpcRequest::AddPeer { .. }
-        | ClientRpcRequest::GetClusterTicketCombined { .. } => Ok(ClientRpcResponse::error(
+        | ClientRpcRequest::GetClusterTicketCombined { .. }
+        | ClientRpcRequest::GetClientTicket { .. }
+        | ClientRpcRequest::GetDocsTicket { .. }
+        | ClientRpcRequest::AddBlob { .. }
+        | ClientRpcRequest::GetBlob { .. }
+        | ClientRpcRequest::HasBlob { .. }
+        | ClientRpcRequest::GetBlobTicket { .. }
+        | ClientRpcRequest::ListBlobs { .. }
+        | ClientRpcRequest::ProtectBlob { .. }
+        | ClientRpcRequest::UnprotectBlob { .. }
+        | ClientRpcRequest::AddPeerCluster { .. }
+        | ClientRpcRequest::RemovePeerCluster { .. }
+        | ClientRpcRequest::ListPeerClusters
+        | ClientRpcRequest::GetPeerClusterStatus { .. }
+        | ClientRpcRequest::UpdatePeerClusterFilter { .. }
+        | ClientRpcRequest::UpdatePeerClusterPriority { .. }
+        | ClientRpcRequest::SetPeerClusterEnabled { .. } => Ok(ClientRpcResponse::error(
             "UNSUPPORTED",
             "Operation not supported by legacy TUI RPC server",
         )),

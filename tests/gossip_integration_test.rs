@@ -11,7 +11,7 @@ mod support;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
+use aspen::cluster::config::{BlobConfig, ControlBackend, DocsConfig, IrohConfig, NodeConfig};
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
@@ -38,6 +38,8 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
             dns_discovery_url: None,
             enable_pkarr: false,
         },
+        docs: DocsConfig::default(),
+        blobs: BlobConfig::default(),
         peers: vec![],
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
@@ -299,6 +301,8 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             dns_discovery_url: None,
             enable_pkarr: false,
         },
+        docs: DocsConfig::default(),
+        blobs: BlobConfig::default(),
         peers: vec![],
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,
@@ -326,6 +330,8 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             dns_discovery_url: Some("https://dns.example.com".into()),
             enable_pkarr: false,
         },
+        docs: DocsConfig::default(),
+        blobs: BlobConfig::default(),
         peers: vec![],
         storage_backend: aspen::raft::storage::StorageBackend::default(),
         redb_log_path: None,

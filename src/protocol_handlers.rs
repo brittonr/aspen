@@ -70,14 +70,18 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
     ReadRequest, WriteRequest,
 };
+use crate::blob::IrohBlobStore;
 use crate::client_rpc::{
-    AddLearnerResultResponse, AddPeerResultResponse, ChangeMembershipResultResponse,
-    CheckpointWalResultResponse, ClientRpcRequest, ClientRpcResponse, ClusterStateResponse,
-    ClusterTicketResponse, DeleteResultResponse, HealthResponse, InitResultResponse,
-    MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse, NodeDescriptor, NodeInfoResponse,
-    PromoteLearnerResultResponse, RaftMetricsResponse, ReadResultResponse, ScanEntry,
-    ScanResultResponse, SnapshotResultResponse, VaultKeysResponse, VaultListResponse,
-    WriteResultResponse,
+    AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse,
+    BlobListEntry as RpcBlobListEntry, ChangeMembershipResultResponse, CheckpointWalResultResponse,
+    ClientRpcRequest, ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse,
+    ClusterStateResponse, ClusterTicketResponse, DeleteResultResponse,
+    DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
+    GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse,
+    ListBlobsResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse,
+    NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse, ProtectBlobResultResponse,
+    RaftMetricsResponse, ReadResultResponse, ScanEntry, ScanResultResponse, SnapshotResultResponse,
+    UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse, WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
 use crate::raft::auth::{
@@ -938,6 +942,10 @@ pub struct ClientProtocolContext {
     pub kv_store: Arc<dyn KeyValueStore>,
     /// Iroh endpoint manager for peer info.
     pub endpoint_manager: Arc<IrohEndpointManager>,
+    /// Blob store for content-addressed storage (optional).
+    pub blob_store: Option<Arc<IrohBlobStore>>,
+    /// Peer manager for cluster-to-cluster sync (optional).
+    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
     /// Cluster cookie for ticket generation.
     pub cluster_cookie: String,
     /// Node start time for uptime calculation.
@@ -1622,6 +1630,704 @@ async fn process_client_request(
                 endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
                 bootstrap_peers: Some(1),
             }))
+        }
+
+        ClientRpcRequest::GetClientTicket { access, priority } => {
+            use crate::client::AccessLevel;
+            use crate::client::ticket::AspenClientTicket;
+
+            let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
+            let access_level = match access.to_lowercase().as_str() {
+                "write" | "readwrite" | "read_write" | "rw" => AccessLevel::ReadWrite,
+                _ => AccessLevel::ReadOnly,
+            };
+
+            // Tiger Style: saturate priority to u8 range
+            let priority_u8 = priority.min(255) as u8;
+
+            let ticket = AspenClientTicket::new(&ctx.cluster_cookie, vec![endpoint_addr])
+                .with_access(access_level)
+                .with_priority(priority_u8);
+
+            let ticket_str = ticket.serialize();
+
+            Ok(ClientRpcResponse::ClientTicket(ClientTicketRpcResponse {
+                ticket: ticket_str,
+                cluster_id: ctx.cluster_cookie.clone(),
+                access: match access_level {
+                    AccessLevel::ReadOnly => "read".to_string(),
+                    AccessLevel::ReadWrite => "write".to_string(),
+                },
+                priority,
+                endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
+                error: None,
+            }))
+        }
+
+        ClientRpcRequest::GetDocsTicket {
+            read_write,
+            priority,
+        } => {
+            use crate::docs::ticket::AspenDocsTicket;
+
+            let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
+
+            // Derive namespace ID from cluster cookie
+            let namespace_hash =
+                blake3::hash(format!("aspen-docs-{}", ctx.cluster_cookie).as_bytes());
+            let namespace_id_str = format!("{}", namespace_hash);
+
+            let ticket = AspenDocsTicket::new(
+                ctx.cluster_cookie.clone(),
+                priority,
+                namespace_id_str.clone(),
+                vec![endpoint_addr],
+                read_write,
+            );
+
+            let ticket_str = ticket.serialize();
+
+            Ok(ClientRpcResponse::DocsTicket(DocsTicketRpcResponse {
+                ticket: ticket_str,
+                cluster_id: ctx.cluster_cookie.clone(),
+                namespace_id: namespace_id_str,
+                read_write,
+                priority,
+                endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
+                error: None,
+            }))
+        }
+
+        // =========================================================================
+        // Blob operations
+        // =========================================================================
+        ClientRpcRequest::AddBlob { data, tag } => {
+            use crate::blob::BlobStore;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    was_new: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
+            };
+
+            match blob_store.add_bytes(&data).await {
+                Ok(result) => {
+                    // Apply tag if provided
+                    if let Some(tag_name) = tag {
+                        let tag_name = IrohBlobStore::user_tag(&tag_name);
+                        if let Err(e) = blob_store.protect(&result.blob_ref.hash, &tag_name).await {
+                            warn!(error = %e, "failed to apply tag to blob");
+                        }
+                    }
+
+                    Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
+                        success: true,
+                        hash: Some(result.blob_ref.hash.to_string()),
+                        size: Some(result.blob_ref.size),
+                        was_new: Some(result.was_new),
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    was_new: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::GetBlob { hash } => {
+            use crate::blob::BlobStore;
+            use iroh_blobs::Hash;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    found: false,
+                    data: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
+            };
+
+            // Parse hash from string
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                        found: false,
+                        data: None,
+                        error: Some(format!("invalid hash: {}", e)),
+                    }));
+                }
+            };
+
+            match blob_store.get_bytes(&hash).await {
+                Ok(Some(data)) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    found: true,
+                    data: Some(data.to_vec()),
+                    error: None,
+                })),
+                Ok(None) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    found: false,
+                    data: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                    found: false,
+                    data: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::HasBlob { hash } => {
+            use crate::blob::BlobStore;
+            use iroh_blobs::Hash;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+                    exists: false,
+                    error: Some("blob store not enabled".to_string()),
+                }));
+            };
+
+            // Parse hash from string
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+                        exists: false,
+                        error: Some(format!("invalid hash: {}", e)),
+                    }));
+                }
+            };
+
+            match blob_store.has(&hash).await {
+                Ok(exists) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+                    exists,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+                    exists: false,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::GetBlobTicket { hash } => {
+            use crate::blob::BlobStore;
+            use iroh_blobs::Hash;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::GetBlobTicketResult(
+                    GetBlobTicketResultResponse {
+                        success: false,
+                        ticket: None,
+                        error: Some("blob store not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Parse hash from string
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::GetBlobTicketResult(
+                        GetBlobTicketResultResponse {
+                            success: false,
+                            ticket: None,
+                            error: Some(format!("invalid hash: {}", e)),
+                        },
+                    ));
+                }
+            };
+
+            match blob_store.ticket(&hash).await {
+                Ok(ticket) => Ok(ClientRpcResponse::GetBlobTicketResult(
+                    GetBlobTicketResultResponse {
+                        success: true,
+                        ticket: Some(ticket.to_string()),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::GetBlobTicketResult(
+                    GetBlobTicketResultResponse {
+                        success: false,
+                        ticket: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ListBlobs {
+            limit,
+            continuation_token,
+        } => {
+            use crate::blob::BlobStore;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::ListBlobsResult(
+                    ListBlobsResultResponse {
+                        blobs: vec![],
+                        count: 0,
+                        has_more: false,
+                        continuation_token: None,
+                        error: Some("blob store not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Tiger Style: Cap limit to prevent unbounded responses
+            let limit = limit.min(1000);
+
+            match blob_store.list(limit, continuation_token.as_deref()).await {
+                Ok(result) => {
+                    let count = result.blobs.len() as u32;
+                    let blobs = result
+                        .blobs
+                        .into_iter()
+                        .map(|entry| RpcBlobListEntry {
+                            hash: entry.hash.to_string(),
+                            size: entry.size,
+                        })
+                        .collect();
+
+                    Ok(ClientRpcResponse::ListBlobsResult(
+                        ListBlobsResultResponse {
+                            blobs,
+                            count,
+                            has_more: result.continuation_token.is_some(),
+                            continuation_token: result.continuation_token,
+                            error: None,
+                        },
+                    ))
+                }
+                Err(e) => Ok(ClientRpcResponse::ListBlobsResult(
+                    ListBlobsResultResponse {
+                        blobs: vec![],
+                        count: 0,
+                        has_more: false,
+                        continuation_token: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ProtectBlob { hash, tag } => {
+            use crate::blob::BlobStore;
+            use iroh_blobs::Hash;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::ProtectBlobResult(
+                    ProtectBlobResultResponse {
+                        success: false,
+                        error: Some("blob store not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Parse hash from string
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ProtectBlobResult(
+                        ProtectBlobResultResponse {
+                            success: false,
+                            error: Some(format!("invalid hash: {}", e)),
+                        },
+                    ));
+                }
+            };
+
+            let tag_name = IrohBlobStore::user_tag(&tag);
+            match blob_store.protect(&hash, &tag_name).await {
+                Ok(()) => Ok(ClientRpcResponse::ProtectBlobResult(
+                    ProtectBlobResultResponse {
+                        success: true,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ProtectBlobResult(
+                    ProtectBlobResultResponse {
+                        success: false,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::UnprotectBlob { tag } => {
+            use crate::blob::BlobStore;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::UnprotectBlobResult(
+                    UnprotectBlobResultResponse {
+                        success: false,
+                        error: Some("blob store not enabled".to_string()),
+                    },
+                ));
+            };
+
+            let tag_name = IrohBlobStore::user_tag(&tag);
+            match blob_store.unprotect(&tag_name).await {
+                Ok(()) => Ok(ClientRpcResponse::UnprotectBlobResult(
+                    UnprotectBlobResultResponse {
+                        success: true,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::UnprotectBlobResult(
+                    UnprotectBlobResultResponse {
+                        success: false,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        // =========================================================================
+        // Peer cluster operations (cluster-to-cluster sync)
+        // =========================================================================
+        ClientRpcRequest::AddPeerCluster { ticket } => {
+            use crate::client_rpc::AddPeerClusterResultResponse;
+            use crate::docs::ticket::AspenDocsTicket;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::AddPeerClusterResult(
+                    AddPeerClusterResultResponse {
+                        success: false,
+                        cluster_id: None,
+                        priority: None,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Parse the ticket
+            let docs_ticket = match AspenDocsTicket::deserialize(&ticket) {
+                Ok(t) => t,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::AddPeerClusterResult(
+                        AddPeerClusterResultResponse {
+                            success: false,
+                            cluster_id: None,
+                            priority: None,
+                            error: Some(format!("invalid ticket: {}", e)),
+                        },
+                    ));
+                }
+            };
+
+            let cluster_id = docs_ticket.cluster_id.clone();
+            let priority = docs_ticket.priority as u32;
+
+            match peer_manager.add_peer(docs_ticket).await {
+                Ok(()) => Ok(ClientRpcResponse::AddPeerClusterResult(
+                    AddPeerClusterResultResponse {
+                        success: true,
+                        cluster_id: Some(cluster_id),
+                        priority: Some(priority),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::AddPeerClusterResult(
+                    AddPeerClusterResultResponse {
+                        success: false,
+                        cluster_id: Some(cluster_id),
+                        priority: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RemovePeerCluster { cluster_id } => {
+            use crate::client_rpc::RemovePeerClusterResultResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::RemovePeerClusterResult(
+                    RemovePeerClusterResultResponse {
+                        success: false,
+                        cluster_id: cluster_id.clone(),
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            match peer_manager.remove_peer(&cluster_id).await {
+                Ok(()) => Ok(ClientRpcResponse::RemovePeerClusterResult(
+                    RemovePeerClusterResultResponse {
+                        success: true,
+                        cluster_id,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RemovePeerClusterResult(
+                    RemovePeerClusterResultResponse {
+                        success: false,
+                        cluster_id,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ListPeerClusters => {
+            use crate::client_rpc::{ListPeerClustersResultResponse, PeerClusterInfo};
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::ListPeerClustersResult(
+                    ListPeerClustersResultResponse {
+                        peers: vec![],
+                        count: 0,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            let peers = peer_manager.list_peers().await;
+            let count = peers.len() as u32;
+            let peer_infos: Vec<PeerClusterInfo> = peers
+                .into_iter()
+                .map(|p| PeerClusterInfo {
+                    cluster_id: p.cluster_id,
+                    name: p.name,
+                    state: format!("{:?}", p.state),
+                    priority: p.priority,
+                    enabled: p.enabled,
+                    sync_count: p.sync_count,
+                    failure_count: p.failure_count,
+                })
+                .collect();
+
+            Ok(ClientRpcResponse::ListPeerClustersResult(
+                ListPeerClustersResultResponse {
+                    peers: peer_infos,
+                    count,
+                    error: None,
+                },
+            ))
+        }
+
+        ClientRpcRequest::GetPeerClusterStatus { cluster_id } => {
+            use crate::client_rpc::PeerClusterStatusResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::PeerClusterStatus(
+                    PeerClusterStatusResponse {
+                        found: false,
+                        cluster_id: cluster_id.clone(),
+                        state: "unknown".to_string(),
+                        syncing: false,
+                        entries_received: 0,
+                        entries_imported: 0,
+                        entries_skipped: 0,
+                        entries_filtered: 0,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            match peer_manager.sync_status(&cluster_id).await {
+                Some(status) => Ok(ClientRpcResponse::PeerClusterStatus(
+                    PeerClusterStatusResponse {
+                        found: true,
+                        cluster_id: status.cluster_id,
+                        state: format!("{:?}", status.state),
+                        syncing: status.syncing,
+                        entries_received: status.entries_received,
+                        entries_imported: status.entries_imported,
+                        entries_skipped: status.entries_skipped,
+                        entries_filtered: status.entries_filtered,
+                        error: None,
+                    },
+                )),
+                None => Ok(ClientRpcResponse::PeerClusterStatus(
+                    PeerClusterStatusResponse {
+                        found: false,
+                        cluster_id,
+                        state: "unknown".to_string(),
+                        syncing: false,
+                        entries_received: 0,
+                        entries_imported: 0,
+                        entries_skipped: 0,
+                        entries_filtered: 0,
+                        error: None,
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::UpdatePeerClusterFilter {
+            cluster_id,
+            filter_type,
+            prefixes,
+        } => {
+            use crate::client::SubscriptionFilter;
+            use crate::client_rpc::UpdatePeerClusterFilterResultResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
+                    UpdatePeerClusterFilterResultResponse {
+                        success: false,
+                        cluster_id: cluster_id.clone(),
+                        filter_type: None,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Parse filter type and prefixes
+            let filter = match filter_type.to_lowercase().as_str() {
+                "full" | "fullreplication" => SubscriptionFilter::FullReplication,
+                "include" | "prefixfilter" => {
+                    let prefix_list: Vec<String> = prefixes
+                        .as_ref()
+                        .map(|p| serde_json::from_str(p).unwrap_or_default())
+                        .unwrap_or_default();
+                    SubscriptionFilter::PrefixFilter(prefix_list)
+                }
+                "exclude" | "prefixexclude" => {
+                    let prefix_list: Vec<String> = prefixes
+                        .as_ref()
+                        .map(|p| serde_json::from_str(p).unwrap_or_default())
+                        .unwrap_or_default();
+                    SubscriptionFilter::PrefixExclude(prefix_list)
+                }
+                other => {
+                    return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
+                        UpdatePeerClusterFilterResultResponse {
+                            success: false,
+                            cluster_id,
+                            filter_type: None,
+                            error: Some(format!("invalid filter type: {}", other)),
+                        },
+                    ));
+                }
+            };
+
+            match peer_manager
+                .importer()
+                .update_filter(&cluster_id, filter.clone())
+                .await
+            {
+                Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
+                    UpdatePeerClusterFilterResultResponse {
+                        success: true,
+                        cluster_id,
+                        filter_type: Some(filter_type),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
+                    UpdatePeerClusterFilterResultResponse {
+                        success: false,
+                        cluster_id,
+                        filter_type: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::UpdatePeerClusterPriority {
+            cluster_id,
+            priority,
+        } => {
+            use crate::client_rpc::UpdatePeerClusterPriorityResultResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
+                    UpdatePeerClusterPriorityResultResponse {
+                        success: false,
+                        cluster_id: cluster_id.clone(),
+                        previous_priority: None,
+                        new_priority: None,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            // Get current priority before update
+            let previous_priority = peer_manager
+                .list_peers()
+                .await
+                .into_iter()
+                .find(|p| p.cluster_id == cluster_id)
+                .map(|p| p.priority);
+
+            match peer_manager
+                .importer()
+                .update_priority(&cluster_id, priority)
+                .await
+            {
+                Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
+                    UpdatePeerClusterPriorityResultResponse {
+                        success: true,
+                        cluster_id,
+                        previous_priority,
+                        new_priority: Some(priority),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
+                    UpdatePeerClusterPriorityResultResponse {
+                        success: false,
+                        cluster_id,
+                        previous_priority,
+                        new_priority: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::SetPeerClusterEnabled {
+            cluster_id,
+            enabled,
+        } => {
+            use crate::client_rpc::SetPeerClusterEnabledResultResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
+                    SetPeerClusterEnabledResultResponse {
+                        success: false,
+                        cluster_id: cluster_id.clone(),
+                        enabled: None,
+                        error: Some("peer sync not enabled".to_string()),
+                    },
+                ));
+            };
+
+            match peer_manager
+                .importer()
+                .set_enabled(&cluster_id, enabled)
+                .await
+            {
+                Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
+                    SetPeerClusterEnabledResultResponse {
+                        success: true,
+                        cluster_id,
+                        enabled: Some(enabled),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
+                    SetPeerClusterEnabledResultResponse {
+                        success: false,
+                        cluster_id,
+                        enabled: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
         }
     }
 }

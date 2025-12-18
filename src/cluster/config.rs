@@ -152,6 +152,14 @@ pub struct NodeConfig {
     #[serde(default)]
     pub iroh: IrohConfig,
 
+    /// iroh-docs configuration for real-time KV synchronization.
+    #[serde(default)]
+    pub docs: DocsConfig,
+
+    /// iroh-blobs configuration for content-addressed storage.
+    #[serde(default)]
+    pub blobs: BlobConfig,
+
     /// Peer node addresses.
     /// Format: "node_id@endpoint_id:direct_addrs"
     #[serde(default)]
@@ -232,6 +240,131 @@ impl Default for IrohConfig {
     }
 }
 
+/// iroh-docs configuration for real-time KV synchronization.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsConfig {
+    /// Enable iroh-docs integration for real-time KV synchronization.
+    ///
+    /// When enabled, committed KV operations are exported to an iroh-docs
+    /// namespace for CRDT-based replication to clients.
+    ///
+    /// Default: false (docs disabled).
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Enable periodic full sync from state machine to docs.
+    ///
+    /// When enabled, the docs exporter periodically scans the entire
+    /// state machine to detect and correct any drift between the
+    /// committed state and the docs namespace.
+    ///
+    /// Default: true (background sync enabled).
+    #[serde(default = "default_enable_background_sync")]
+    pub enable_background_sync: bool,
+
+    /// Interval for background sync in seconds.
+    ///
+    /// Only relevant when enable_background_sync is true.
+    ///
+    /// Default: 60 seconds.
+    #[serde(default = "default_background_sync_interval_secs")]
+    pub background_sync_interval_secs: u64,
+}
+
+impl Default for DocsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            enable_background_sync: default_enable_background_sync(),
+            background_sync_interval_secs: default_background_sync_interval_secs(),
+        }
+    }
+}
+
+fn default_enable_background_sync() -> bool {
+    true
+}
+
+fn default_background_sync_interval_secs() -> u64 {
+    60
+}
+
+/// iroh-blobs configuration for content-addressed storage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlobConfig {
+    /// Enable iroh-blobs integration for content-addressed storage.
+    ///
+    /// When enabled, the node can store and retrieve blobs (large binary data)
+    /// using content-addressed storage with automatic deduplication.
+    ///
+    /// Default: false (blobs disabled).
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Enable automatic offloading of large KV values to blobs.
+    ///
+    /// When enabled, KV values larger than offload_threshold_bytes are
+    /// automatically stored in the blob store, with a reference saved
+    /// in the KV store. The original value is reconstructed on read.
+    ///
+    /// Default: true (auto-offload enabled).
+    #[serde(default = "default_auto_offload")]
+    pub auto_offload: bool,
+
+    /// Threshold in bytes for automatic blob offloading.
+    ///
+    /// KV values larger than this size are stored as blobs when auto_offload is enabled.
+    ///
+    /// Default: 1048576 (1 MB).
+    #[serde(default = "default_offload_threshold_bytes")]
+    pub offload_threshold_bytes: u32,
+
+    /// Interval for blob garbage collection in seconds.
+    ///
+    /// Untagged blobs are collected after the GC grace period expires.
+    ///
+    /// Default: 60 seconds.
+    #[serde(default = "default_gc_interval_secs")]
+    pub gc_interval_secs: u64,
+
+    /// Grace period for blob garbage collection in seconds.
+    ///
+    /// Blobs must remain untagged for this duration before being collected.
+    /// This prevents race conditions during concurrent tag updates.
+    ///
+    /// Default: 300 seconds (5 minutes).
+    #[serde(default = "default_gc_grace_period_secs")]
+    pub gc_grace_period_secs: u64,
+}
+
+impl Default for BlobConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auto_offload: default_auto_offload(),
+            offload_threshold_bytes: default_offload_threshold_bytes(),
+            gc_interval_secs: default_gc_interval_secs(),
+            gc_grace_period_secs: default_gc_grace_period_secs(),
+        }
+    }
+}
+
+fn default_auto_offload() -> bool {
+    true
+}
+
+fn default_offload_threshold_bytes() -> u32 {
+    1_048_576 // 1 MB
+}
+
+fn default_gc_interval_secs() -> u64 {
+    60
+}
+
+fn default_gc_grace_period_secs() -> u64 {
+    300 // 5 minutes
+}
+
 /// Control-plane backend implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -297,6 +430,26 @@ impl NodeConfig {
                 enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
                 dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
+            },
+            docs: DocsConfig {
+                enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
+                enable_background_sync: parse_env("ASPEN_DOCS_ENABLE_BACKGROUND_SYNC")
+                    .unwrap_or_else(default_enable_background_sync),
+                background_sync_interval_secs: parse_env(
+                    "ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS",
+                )
+                .unwrap_or_else(default_background_sync_interval_secs),
+            },
+            blobs: BlobConfig {
+                enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or(false),
+                auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD")
+                    .unwrap_or_else(default_auto_offload),
+                offload_threshold_bytes: parse_env("ASPEN_BLOBS_OFFLOAD_THRESHOLD_BYTES")
+                    .unwrap_or_else(default_offload_threshold_bytes),
+                gc_interval_secs: parse_env("ASPEN_BLOBS_GC_INTERVAL_SECS")
+                    .unwrap_or_else(default_gc_interval_secs),
+                gc_grace_period_secs: parse_env("ASPEN_BLOBS_GC_GRACE_PERIOD_SECS")
+                    .unwrap_or_else(default_gc_grace_period_secs),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
         }
@@ -376,10 +529,35 @@ impl NodeConfig {
         if other.iroh.enable_pkarr {
             self.iroh.enable_pkarr = other.iroh.enable_pkarr;
         }
+        // Docs config merging
+        if other.docs.enabled {
+            self.docs.enabled = other.docs.enabled;
+        }
+        if other.docs.enable_background_sync != default_enable_background_sync() {
+            self.docs.enable_background_sync = other.docs.enable_background_sync;
+        }
+        if other.docs.background_sync_interval_secs != default_background_sync_interval_secs() {
+            self.docs.background_sync_interval_secs = other.docs.background_sync_interval_secs;
+        }
+        // Blobs config merging
+        if other.blobs.enabled {
+            self.blobs.enabled = other.blobs.enabled;
+        }
+        if other.blobs.auto_offload != default_auto_offload() {
+            self.blobs.auto_offload = other.blobs.auto_offload;
+        }
+        if other.blobs.offload_threshold_bytes != default_offload_threshold_bytes() {
+            self.blobs.offload_threshold_bytes = other.blobs.offload_threshold_bytes;
+        }
+        if other.blobs.gc_interval_secs != default_gc_interval_secs() {
+            self.blobs.gc_interval_secs = other.blobs.gc_interval_secs;
+        }
+        if other.blobs.gc_grace_period_secs != default_gc_grace_period_secs() {
+            self.blobs.gc_grace_period_secs = other.blobs.gc_grace_period_secs;
+        }
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
-        // supervision_config removed - was legacy from actor-based architecture
     }
 
     /// Validate configuration on startup.
@@ -624,6 +802,8 @@ mod tests {
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
@@ -649,6 +829,8 @@ mod tests {
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
@@ -673,6 +855,8 @@ mod tests {
             election_timeout_min_ms: 3000,
             election_timeout_max_ms: 1500,
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::default(),
             redb_log_path: None,
@@ -698,6 +882,8 @@ mod tests {
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default value
             redb_log_path: None,
@@ -727,6 +913,8 @@ mod tests {
                 dns_discovery_url: Some("https://dns.example.com".into()),
                 enable_pkarr: true,
             },
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec!["peer1".into()],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
@@ -773,6 +961,8 @@ mod tests {
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Explicit non-default
             redb_log_path: None,
@@ -793,6 +983,8 @@ mod tests {
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
             peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default: should NOT override
             redb_log_path: None,
