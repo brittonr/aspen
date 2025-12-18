@@ -398,9 +398,10 @@ impl DocsWriter for SyncHandleDocsWriter {
 
     #[instrument(skip(self), fields(key_len = key.len()))]
     async fn delete_entry(&self, key: Vec<u8>) -> Result<()> {
-        // Deletion uses empty content with hash of empty
-        let empty: &[u8] = &[];
-        let hash = iroh_blobs::Hash::new(empty);
+        // iroh-docs doesn't support empty entries, so we use a tombstone marker
+        // This is a convention: a single null byte indicates deletion
+        const TOMBSTONE: &[u8] = b"\x00";
+        let hash = iroh_blobs::Hash::new(TOMBSTONE);
         let author_id = self.author.id();
 
         self.sync_handle
@@ -409,12 +410,12 @@ impl DocsWriter for SyncHandleDocsWriter {
                 author_id,
                 bytes::Bytes::from(key),
                 hash,
-                0,
+                TOMBSTONE.len() as u64,
             )
             .await
             .context("failed to delete entry via sync handle")?;
 
-        debug!(namespace = %self.namespace_id, "entry deleted via sync handle");
+        debug!(namespace = %self.namespace_id, "entry deleted via sync handle (tombstone)");
         Ok(())
     }
 }
