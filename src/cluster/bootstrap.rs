@@ -586,27 +586,51 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // This spawns a background task that listens to the log broadcast channel
     // and exports committed KV operations to iroh-docs for CRDT-based sync
     let docs_exporter_cancel = if config.docs.enabled {
-        use crate::docs::{DocsExporter, InMemoryDocsWriter};
+        use crate::docs::{init_docs_resources, DocsExporter, IrohDocsWriter};
 
         if let Some(ref sender) = log_broadcast {
-            // Create an in-memory writer for now
-            // TODO: Wire up actual IrohDocsWriter when iroh-docs store is available
-            let writer = Arc::new(InMemoryDocsWriter::new());
+            // Initialize iroh-docs resources (Store, NamespaceId, Author)
+            match init_docs_resources(
+                data_dir,
+                config.docs.in_memory,
+                config.docs.namespace_secret.as_deref(),
+                config.docs.author_secret.as_deref(),
+            ) {
+                Ok(resources) => {
+                    // Create IrohDocsWriter with real iroh-docs store
+                    let writer = Arc::new(IrohDocsWriter::new(
+                        resources.store,
+                        resources.namespace_id,
+                        resources.author,
+                    ));
 
-            // Create the exporter
-            let exporter = Arc::new(DocsExporter::new(writer));
+                    // Create the exporter
+                    let exporter = Arc::new(DocsExporter::new(writer));
 
-            // Subscribe to the broadcast channel
-            let receiver = sender.subscribe();
+                    // Subscribe to the broadcast channel
+                    let receiver = sender.subscribe();
 
-            // Spawn the exporter background task
-            let cancel_token = exporter.spawn(receiver);
+                    // Spawn the exporter background task
+                    let cancel_token = exporter.spawn(receiver);
 
-            info!(
-                node_id = config.node_id,
-                "DocsExporter started - real-time KV export enabled"
-            );
-            Some(cancel_token)
+                    info!(
+                        node_id = config.node_id,
+                        namespace_id = %resources.namespace_id,
+                        in_memory = config.docs.in_memory,
+                        "DocsExporter started - real-time KV export to iroh-docs enabled"
+                    );
+                    Some(cancel_token)
+                }
+                Err(err) => {
+                    // Docs initialization failure is non-fatal - node can still work without docs
+                    error!(
+                        error = ?err,
+                        node_id = config.node_id,
+                        "failed to initialize iroh-docs resources, continuing without docs export"
+                    );
+                    None
+                }
+            }
         } else {
             warn!(
                 node_id = config.node_id,

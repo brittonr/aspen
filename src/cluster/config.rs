@@ -160,10 +160,40 @@ pub struct NodeConfig {
     #[serde(default)]
     pub blobs: BlobConfig,
 
+    /// Peer cluster synchronization configuration.
+    #[serde(default)]
+    pub peer_sync: PeerSyncConfig,
+
     /// Peer node addresses.
     /// Format: "node_id@endpoint_id:direct_addrs"
     #[serde(default)]
     pub peers: Vec<String>,
+}
+
+impl Default for NodeConfig {
+    fn default() -> Self {
+        Self {
+            node_id: 0,
+            data_dir: None,
+            storage_backend: StorageBackend::default(),
+            redb_log_path: None,
+            redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
+            host: default_host(),
+            cookie: default_cookie(),
+            http_addr: default_http_addr(),
+            control_backend: ControlBackend::default(),
+            heartbeat_interval_ms: default_heartbeat_interval_ms(),
+            election_timeout_min_ms: default_election_timeout_min_ms(),
+            election_timeout_max_ms: default_election_timeout_max_ms(),
+            iroh: IrohConfig::default(),
+            docs: DocsConfig::default(),
+            blobs: BlobConfig::default(),
+            peer_sync: PeerSyncConfig::default(),
+            peers: vec![],
+        }
+    }
 }
 
 /// Iroh networking configuration.
@@ -269,6 +299,31 @@ pub struct DocsConfig {
     /// Default: 60 seconds.
     #[serde(default = "default_background_sync_interval_secs")]
     pub background_sync_interval_secs: u64,
+
+    /// Use in-memory storage for iroh-docs instead of persistent storage.
+    ///
+    /// When true, the docs store uses in-memory storage (data lost on restart).
+    /// When false, uses persistent storage in data_dir/docs/.
+    ///
+    /// Default: false (persistent storage).
+    #[serde(default)]
+    pub in_memory: bool,
+
+    /// Hex-encoded namespace secret for the docs namespace.
+    ///
+    /// If not provided, a new namespace is created on first start and the
+    /// secret is persisted to data_dir/docs/namespace_secret.
+    ///
+    /// 64 hex characters = 32 bytes.
+    pub namespace_secret: Option<String>,
+
+    /// Hex-encoded author secret for signing docs entries.
+    ///
+    /// If not provided, a new author is created on first start and the
+    /// secret is persisted to data_dir/docs/author_secret.
+    ///
+    /// 64 hex characters = 32 bytes.
+    pub author_secret: Option<String>,
 }
 
 impl Default for DocsConfig {
@@ -277,6 +332,9 @@ impl Default for DocsConfig {
             enabled: false,
             enable_background_sync: default_enable_background_sync(),
             background_sync_interval_secs: default_background_sync_interval_secs(),
+            in_memory: false,
+            namespace_secret: None,
+            author_secret: None,
         }
     }
 }
@@ -365,6 +423,78 @@ fn default_gc_grace_period_secs() -> u64 {
     300 // 5 minutes
 }
 
+/// Peer cluster synchronization configuration.
+///
+/// Controls cluster-to-cluster data synchronization via iroh-docs.
+/// When enabled, this cluster can subscribe to other Aspen clusters
+/// and receive their KV data with priority-based conflict resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerSyncConfig {
+    /// Enable peer cluster synchronization.
+    ///
+    /// When enabled, this node can subscribe to other Aspen clusters
+    /// and import their KV data via iroh-docs CRDT sync.
+    ///
+    /// Default: false (peer sync disabled).
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Default priority for imported peer data.
+    ///
+    /// Lower values have higher priority. Local cluster data has priority 0.
+    /// When conflicts occur, the entry with lower priority wins.
+    ///
+    /// Default: 100 (lower priority than local data).
+    #[serde(default = "default_peer_sync_priority")]
+    pub default_priority: u32,
+
+    /// Maximum number of peer cluster subscriptions.
+    ///
+    /// Tiger Style: Bounded to prevent resource exhaustion.
+    ///
+    /// Default: 32.
+    #[serde(default = "default_max_peer_subscriptions")]
+    pub max_subscriptions: u32,
+
+    /// Reconnection interval in seconds when peer connection is lost.
+    ///
+    /// Default: 30 seconds.
+    #[serde(default = "default_peer_reconnect_interval_secs")]
+    pub reconnect_interval_secs: u64,
+
+    /// Maximum reconnection attempts before giving up.
+    ///
+    /// Set to 0 for unlimited retries.
+    ///
+    /// Default: 0 (unlimited retries).
+    #[serde(default)]
+    pub max_reconnect_attempts: u32,
+}
+
+impl Default for PeerSyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_priority: default_peer_sync_priority(),
+            max_subscriptions: default_max_peer_subscriptions(),
+            reconnect_interval_secs: default_peer_reconnect_interval_secs(),
+            max_reconnect_attempts: 0,
+        }
+    }
+}
+
+fn default_peer_sync_priority() -> u32 {
+    100
+}
+
+fn default_max_peer_subscriptions() -> u32 {
+    32
+}
+
+fn default_peer_reconnect_interval_secs() -> u64 {
+    30
+}
+
 /// Control-plane backend implementation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -439,6 +569,9 @@ impl NodeConfig {
                     "ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS",
                 )
                 .unwrap_or_else(default_background_sync_interval_secs),
+                in_memory: parse_env("ASPEN_DOCS_IN_MEMORY").unwrap_or(false),
+                namespace_secret: parse_env("ASPEN_DOCS_NAMESPACE_SECRET"),
+                author_secret: parse_env("ASPEN_DOCS_AUTHOR_SECRET"),
             },
             blobs: BlobConfig {
                 enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or(false),
@@ -450,6 +583,17 @@ impl NodeConfig {
                     .unwrap_or_else(default_gc_interval_secs),
                 gc_grace_period_secs: parse_env("ASPEN_BLOBS_GC_GRACE_PERIOD_SECS")
                     .unwrap_or_else(default_gc_grace_period_secs),
+            },
+            peer_sync: PeerSyncConfig {
+                enabled: parse_env("ASPEN_PEER_SYNC_ENABLED").unwrap_or(false),
+                default_priority: parse_env("ASPEN_PEER_SYNC_DEFAULT_PRIORITY")
+                    .unwrap_or_else(default_peer_sync_priority),
+                max_subscriptions: parse_env("ASPEN_PEER_SYNC_MAX_SUBSCRIPTIONS")
+                    .unwrap_or_else(default_max_peer_subscriptions),
+                reconnect_interval_secs: parse_env("ASPEN_PEER_SYNC_RECONNECT_INTERVAL_SECS")
+                    .unwrap_or_else(default_peer_reconnect_interval_secs),
+                max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS")
+                    .unwrap_or(0),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
         }
@@ -539,6 +683,15 @@ impl NodeConfig {
         if other.docs.background_sync_interval_secs != default_background_sync_interval_secs() {
             self.docs.background_sync_interval_secs = other.docs.background_sync_interval_secs;
         }
+        if other.docs.in_memory {
+            self.docs.in_memory = other.docs.in_memory;
+        }
+        if other.docs.namespace_secret.is_some() {
+            self.docs.namespace_secret = other.docs.namespace_secret;
+        }
+        if other.docs.author_secret.is_some() {
+            self.docs.author_secret = other.docs.author_secret;
+        }
         // Blobs config merging
         if other.blobs.enabled {
             self.blobs.enabled = other.blobs.enabled;
@@ -554,6 +707,22 @@ impl NodeConfig {
         }
         if other.blobs.gc_grace_period_secs != default_gc_grace_period_secs() {
             self.blobs.gc_grace_period_secs = other.blobs.gc_grace_period_secs;
+        }
+        // Peer sync config merging
+        if other.peer_sync.enabled {
+            self.peer_sync.enabled = other.peer_sync.enabled;
+        }
+        if other.peer_sync.default_priority != default_peer_sync_priority() {
+            self.peer_sync.default_priority = other.peer_sync.default_priority;
+        }
+        if other.peer_sync.max_subscriptions != default_max_peer_subscriptions() {
+            self.peer_sync.max_subscriptions = other.peer_sync.max_subscriptions;
+        }
+        if other.peer_sync.reconnect_interval_secs != default_peer_reconnect_interval_secs() {
+            self.peer_sync.reconnect_interval_secs = other.peer_sync.reconnect_interval_secs;
+        }
+        if other.peer_sync.max_reconnect_attempts != 0 {
+            self.peer_sync.max_reconnect_attempts = other.peer_sync.max_reconnect_attempts;
         }
         if !other.peers.is_empty() {
             self.peers = other.peers;
@@ -793,23 +962,7 @@ mod tests {
     fn test_default_config() {
         let config = NodeConfig {
             node_id: 1,
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
-            control_backend: ControlBackend::default(),
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
-            election_timeout_min_ms: default_election_timeout_min_ms(),
-            election_timeout_max_ms: default_election_timeout_max_ms(),
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
-            storage_backend: crate::raft::storage::StorageBackend::default(),
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         assert!(config.validate().is_ok());
@@ -820,23 +973,7 @@ mod tests {
     fn test_validation_node_id_zero() {
         let config = NodeConfig {
             node_id: 0,
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
-            control_backend: ControlBackend::default(),
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
-            election_timeout_min_ms: default_election_timeout_min_ms(),
-            election_timeout_max_ms: default_election_timeout_max_ms(),
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
-            storage_backend: crate::raft::storage::StorageBackend::default(),
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         assert!(config.validate().is_err());
@@ -846,23 +983,9 @@ mod tests {
     fn test_validation_election_timeout() {
         let config = NodeConfig {
             node_id: 1,
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
-            control_backend: ControlBackend::default(),
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
             election_timeout_min_ms: 3000,
             election_timeout_max_ms: 1500,
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
-            storage_backend: crate::raft::storage::StorageBackend::default(),
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         assert!(config.validate().is_err());
@@ -873,23 +996,9 @@ mod tests {
     fn test_merge() {
         let mut base = NodeConfig {
             node_id: 1,
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
             control_backend: ControlBackend::RaftActor, // Default value
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
-            election_timeout_min_ms: default_election_timeout_min_ms(),
-            election_timeout_max_ms: default_election_timeout_max_ms(),
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default value
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         // Override config uses non-default values for control_backend and storage_backend
@@ -913,14 +1022,11 @@ mod tests {
                 dns_discovery_url: Some("https://dns.example.com".into()),
                 enable_pkarr: true,
             },
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
             peers: vec!["peer1".into()],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         base.merge(override_config);
@@ -952,45 +1058,17 @@ mod tests {
         // This tests the layered config precedence fix
         let mut base = NodeConfig {
             node_id: 1,
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
             control_backend: ControlBackend::Deterministic, // Explicit non-default
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
-            election_timeout_min_ms: default_election_timeout_min_ms(),
-            election_timeout_max_ms: default_election_timeout_max_ms(),
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Explicit non-default
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         // Override config uses DEFAULT values - should NOT override base
         let override_config = NodeConfig {
-            node_id: 0, // Default: 0 doesn't override
-            data_dir: None,
-            host: default_host(),
-            cookie: default_cookie(),
-            http_addr: default_http_addr(),
+            node_id: 0,                                 // Default: 0 doesn't override
             control_backend: ControlBackend::RaftActor, // Default: should NOT override
-            heartbeat_interval_ms: default_heartbeat_interval_ms(),
-            election_timeout_min_ms: default_election_timeout_min_ms(),
-            election_timeout_max_ms: default_election_timeout_max_ms(),
-            iroh: IrohConfig::default(),
-            docs: DocsConfig::default(),
-            blobs: BlobConfig::default(),
-            peers: vec![],
             storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default: should NOT override
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            ..Default::default()
         };
 
         base.merge(override_config);
