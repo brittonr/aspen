@@ -115,6 +115,7 @@ mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef
 # ractor is used for madsim actor simulation tests
 ractor = { version = "0.15.9", features = ["cluster", "async-trait"] }
 futures = "0.3.31"
+async-channel = "2.3"
 toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"

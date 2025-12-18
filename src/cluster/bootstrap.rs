@@ -598,7 +598,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // This spawns a background task that listens to the log broadcast channel
     // and exports committed KV operations to iroh-docs for CRDT-based sync
     let (docs_exporter_cancel, docs_sync) = if config.docs.enabled {
-        use crate::docs::{init_docs_resources, DocsSyncResources, DocsExporter, SyncHandleDocsWriter};
+        use crate::docs::{init_docs_resources, DocsSyncResources, DocsExporter, SyncHandleDocsWriter, BlobBackedDocsWriter};
 
         if let Some(ref sender) = log_broadcast {
             // Initialize iroh-docs resources (Store, NamespaceId, Author)
@@ -628,13 +628,36 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                         );
                     }
 
-                    // Create SyncHandleDocsWriter that uses the sync handle
-                    // This allows both DocsExporter and P2P sync to share the same Store
-                    let writer = Arc::new(SyncHandleDocsWriter::new(
-                        docs_sync.sync_handle.clone(),
-                        docs_sync.namespace_id,
-                        docs_sync.author.clone(),
-                    ));
+                    // Create the appropriate DocsWriter implementation:
+                    // - BlobBackedDocsWriter when blob_store is available (full P2P content transfer)
+                    // - SyncHandleDocsWriter otherwise (metadata sync only)
+                    let writer: Arc<dyn crate::docs::DocsWriter> = match &blob_store {
+                        Some(store) => {
+                            info!(
+                                node_id = config.node_id,
+                                namespace_id = %namespace_id,
+                                "using BlobBackedDocsWriter for full P2P content transfer"
+                            );
+                            Arc::new(BlobBackedDocsWriter::new(
+                                docs_sync.sync_handle.clone(),
+                                docs_sync.namespace_id,
+                                docs_sync.author.clone(),
+                                store.clone(),
+                            ))
+                        }
+                        None => {
+                            info!(
+                                node_id = config.node_id,
+                                namespace_id = %namespace_id,
+                                "using SyncHandleDocsWriter (metadata sync only, no blob storage)"
+                            );
+                            Arc::new(SyncHandleDocsWriter::new(
+                                docs_sync.sync_handle.clone(),
+                                docs_sync.namespace_id,
+                                docs_sync.author.clone(),
+                            ))
+                        }
+                    };
 
                     // Create the exporter
                     let exporter = Arc::new(DocsExporter::new(writer));

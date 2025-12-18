@@ -24,6 +24,7 @@ use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
+use crate::blob::store::BlobStore;
 use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
 
 use super::constants::{EXPORT_BATCH_SIZE, MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE};
@@ -45,19 +46,19 @@ pub trait DocsWriter: Send + Sync {
 ///
 /// Listens to the log subscriber broadcast channel and converts
 /// `KvOperation` events to docs entries in real-time.
-pub struct DocsExporter<W: DocsWriter> {
+pub struct DocsExporter {
     /// The docs writer implementation.
-    writer: Arc<W>,
+    writer: Arc<dyn DocsWriter>,
     /// Cancellation token for shutdown.
     cancel: CancellationToken,
 }
 
-impl<W: DocsWriter + 'static> DocsExporter<W> {
+impl DocsExporter {
     /// Create a new DocsExporter.
     ///
     /// # Arguments
     /// * `writer` - Implementation of DocsWriter for actual entry operations
-    pub fn new(writer: Arc<W>) -> Self {
+    pub fn new(writer: Arc<dyn DocsWriter>) -> Self {
         Self {
             writer,
             cancel: CancellationToken::new(),
@@ -416,6 +417,124 @@ impl DocsWriter for SyncHandleDocsWriter {
             .context("failed to delete entry via sync handle")?;
 
         debug!(namespace = %self.namespace_id, "entry deleted via sync handle (tombstone)");
+        Ok(())
+    }
+}
+
+// ============================================================================
+// SyncHandle + Blob Store Implementation for Full P2P Content Transfer
+// ============================================================================
+
+/// Docs writer that stores content in iroh-blobs for full P2P content transfer.
+///
+/// This writer combines iroh-docs (for entry metadata sync) with iroh-blobs
+/// (for actual content storage). When entries sync to peers, they can fetch
+/// the actual content via iroh-blobs using the hash in the entry metadata.
+///
+/// # Data Flow
+///
+/// 1. Content is stored in iroh-blobs → returns Hash
+/// 2. Entry metadata (key, hash, len) is stored in iroh-docs
+/// 3. iroh-docs syncs entry metadata to peers
+/// 4. Peers can fetch content from iroh-blobs using the Hash
+pub struct BlobBackedDocsWriter {
+    /// Sync handle for replica operations.
+    sync_handle: iroh_docs::actor::SyncHandle,
+    /// Namespace ID for the document.
+    namespace_id: iroh_docs::NamespaceId,
+    /// Author for signing entries.
+    author: Author,
+    /// Blob store for content storage.
+    blob_store: std::sync::Arc<crate::blob::store::IrohBlobStore>,
+}
+
+impl BlobBackedDocsWriter {
+    /// Create a new BlobBackedDocsWriter.
+    ///
+    /// # Arguments
+    /// * `sync_handle` - The sync handle from DocsSyncResources
+    /// * `namespace_id` - The namespace ID for the document
+    /// * `author` - The author for signing entries
+    /// * `blob_store` - The blob store for content storage
+    pub fn new(
+        sync_handle: iroh_docs::actor::SyncHandle,
+        namespace_id: iroh_docs::NamespaceId,
+        author: Author,
+        blob_store: std::sync::Arc<crate::blob::store::IrohBlobStore>,
+    ) -> Self {
+        Self {
+            sync_handle,
+            namespace_id,
+            author,
+            blob_store,
+        }
+    }
+}
+
+#[async_trait]
+impl DocsWriter for BlobBackedDocsWriter {
+    #[instrument(skip(self, value), fields(key_len = key.len(), value_len = value.len()))]
+    async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
+        // Store content in iroh-blobs first
+        let blob_result = self
+            .blob_store
+            .add_bytes(&value)
+            .await
+            .context("failed to store content in blob store")?;
+
+        let hash = blob_result.blob_ref.hash;
+        let len = blob_result.blob_ref.size;
+        let author_id = self.author.id();
+
+        // Insert entry metadata via sync handle
+        // Now the content is available for P2P fetching via iroh-blobs
+        self.sync_handle
+            .insert_local(
+                self.namespace_id,
+                author_id,
+                bytes::Bytes::from(key),
+                hash,
+                len,
+            )
+            .await
+            .context("failed to insert entry via sync handle")?;
+
+        debug!(
+            namespace = %self.namespace_id,
+            hash = %hash.fmt_short(),
+            size = len,
+            "entry inserted with blob content"
+        );
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(key_len = key.len()))]
+    async fn delete_entry(&self, key: Vec<u8>) -> Result<()> {
+        // iroh-docs doesn't support empty entries, so we use a tombstone marker
+        const TOMBSTONE: &[u8] = b"\x00";
+
+        // Store tombstone in blobs for consistency
+        let blob_result = self
+            .blob_store
+            .add_bytes(TOMBSTONE)
+            .await
+            .context("failed to store tombstone in blob store")?;
+
+        let hash = blob_result.blob_ref.hash;
+        let author_id = self.author.id();
+
+        self.sync_handle
+            .insert_local(
+                self.namespace_id,
+                author_id,
+                bytes::Bytes::from(key),
+                hash,
+                TOMBSTONE.len() as u64,
+            )
+            .await
+            .context("failed to delete entry via sync handle")?;
+
+        debug!(namespace = %self.namespace_id, "entry deleted via sync handle (tombstone in blob)");
         Ok(())
     }
 }

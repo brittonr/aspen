@@ -33,7 +33,7 @@ use iroh_docs::store::Store;
 use iroh_docs::{Author, NamespaceId, NamespaceSecret};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use super::constants::MAX_DOCS_CONNECTIONS;
 
@@ -202,6 +202,115 @@ impl DocsSyncResources {
         }
 
         result
+    }
+
+    /// Subscribe to sync events and forward RemoteInsert entries to the DocsImporter.
+    ///
+    /// This spawns a background task that:
+    /// 1. Subscribes to sync events for this namespace
+    /// 2. Filters for RemoteInsert events (entries received from peers)
+    /// 3. Forwards each entry to the DocsImporter for priority-based import
+    ///
+    /// # Arguments
+    /// * `importer` - The DocsImporter to forward entries to
+    /// * `source_cluster_id` - Identifier for the source cluster (for origin tracking)
+    ///
+    /// # Returns
+    /// A CancellationToken that can be used to stop the event listener.
+    pub async fn spawn_sync_event_listener(
+        &self,
+        importer: std::sync::Arc<super::importer::DocsImporter>,
+        source_cluster_id: String,
+    ) -> Result<CancellationToken> {
+        use iroh_docs::sync::Event;
+
+        // Create channel for sync events
+        let (tx, rx) = async_channel::bounded::<Event>(1000);
+
+        // Subscribe to sync events for our namespace
+        self.sync_handle
+            .subscribe(self.namespace_id, tx)
+            .await
+            .context("failed to subscribe to sync events")?;
+
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+        let namespace_id = self.namespace_id;
+
+        tokio::spawn(async move {
+            info!(
+                namespace = %namespace_id,
+                source = %source_cluster_id,
+                "sync event listener started"
+            );
+
+            loop {
+                tokio::select! {
+                    _ = cancel_clone.cancelled() => {
+                        info!(
+                            namespace = %namespace_id,
+                            "sync event listener shutting down"
+                        );
+                        break;
+                    }
+                    event = rx.recv() => {
+                        match event {
+                            Ok(Event::RemoteInsert {
+                                namespace: _,
+                                entry,
+                                from,
+                                should_download: _,
+                                remote_content_status: _,
+                            }) => {
+                                // Extract key and value from the signed entry
+                                let key = entry.key().to_vec();
+
+                                // For content, we need to fetch it via blob store
+                                // For now, we use the hash as a placeholder value
+                                // TODO: Integrate with iroh-blobs to fetch actual content
+                                let content_hash = entry.content_hash();
+                                let content_len = entry.content_len();
+
+                                debug!(
+                                    namespace = %namespace_id,
+                                    key_len = key.len(),
+                                    from = %hex::encode(&from[..8]),
+                                    hash = %content_hash.fmt_short(),
+                                    len = content_len,
+                                    "received remote entry"
+                                );
+
+                                // For entries with content in the hash (small values stored inline),
+                                // we can import them directly. For larger blobs, we'd need to fetch.
+                                // For now, skip content import until blob integration is complete.
+                                // TODO: Fetch content from blob store and pass to importer
+
+                                // We could pass empty value or skip; let's log and skip for now
+                                // since the importer expects actual content bytes
+                                debug!(
+                                    namespace = %namespace_id,
+                                    key = %String::from_utf8_lossy(&key),
+                                    "skipping import - blob content fetch not yet implemented"
+                                );
+                            }
+                            Ok(Event::LocalInsert { .. }) => {
+                                // Ignore local inserts - we only care about remote
+                            }
+                            Err(e) => {
+                                warn!(
+                                    namespace = %namespace_id,
+                                    error = %e,
+                                    "sync event channel error, stopping listener"
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(cancel)
     }
 }
 

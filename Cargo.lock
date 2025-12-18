@@ -183,6 +183,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "async-channel",
  "async-trait",
  "axum",
  "base64 0.22.1",

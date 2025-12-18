@@ -66,7 +66,10 @@ pub use constants::{
     MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE, MAX_DOCS_CONNECTIONS,
 };
 
-pub use exporter::{DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter, SyncHandleDocsWriter};
+pub use exporter::{
+    BlobBackedDocsWriter, DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter,
+    SyncHandleDocsWriter,
+};
 
 pub use store::{
     init_docs_resources, DocsProtocolHandler, DocsResources, DocsSyncResources, DocsSyncService,
