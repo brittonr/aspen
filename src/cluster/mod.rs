@@ -108,7 +108,19 @@ pub struct IrohEndpointConfig {
     /// Optional secret key for the endpoint. If None, a new key is generated.
     pub secret_key: Option<SecretKey>,
     /// Bind port for the QUIC socket (0 = random port).
+    /// Applied to both IPv4 and IPv6 if enabled.
     pub bind_port: u16,
+    /// Enable IPv6 binding in addition to IPv4 (default: true).
+    ///
+    /// When true, the endpoint will bind to both IPv4 (0.0.0.0) and IPv6 (::)
+    /// on the specified port. This enables dual-stack operation for better
+    /// connectivity in IPv6-enabled environments.
+    ///
+    /// Set to false if:
+    /// - Running on IPv4-only infrastructure
+    /// - IPv6 causes connectivity issues in your environment
+    /// - You need to bind to a specific IPv4-only interface
+    pub enable_ipv6: bool,
     /// Enable gossip-based peer discovery (default: true).
     pub enable_gossip: bool,
     /// Optional explicit gossip topic ID. If None, derived from cluster cookie.
@@ -121,11 +133,33 @@ pub struct IrohEndpointConfig {
     pub dns_discovery_url: Option<String>,
     /// Enable Pkarr publisher (default: false).
     pub enable_pkarr: bool,
-    /// ALPNs to accept on this endpoint.
+    /// ALPNs (Application-Layer Protocol Negotiation) to accept on this endpoint.
     ///
-    /// Required when NOT using an Iroh Router for ALPN dispatching.
-    /// When using Router, ALPNs are set automatically via `.accept()` calls.
-    /// When using internal server (use_router=false), these must be set here.
+    /// # When to Set ALPNs
+    ///
+    /// **Using Iroh Router (recommended, bootstrap.rs):**
+    /// - ALPNs are set AUTOMATICALLY via `Router::builder().accept(ALPN, handler)` calls
+    /// - DO NOT set `alpns` here when using Router - they will be configured by Router
+    /// - The Router handles ALPN-based protocol dispatching for Raft RPC, Gossip, etc.
+    ///
+    /// **NOT using Router (legacy/testing):**
+    /// - Set `alpns` here to the list of protocols this endpoint should accept
+    /// - Required for `endpoint.accept()` to work with specific protocols
+    /// - Example: `vec![RAFT_ALPN.to_vec(), GOSSIP_ALPN.to_vec()]`
+    ///
+    /// # Common ALPNs in Aspen
+    ///
+    /// - `RAFT_ALPN` ("raft-rpc"): Raft consensus RPC between cluster nodes
+    /// - `CLIENT_ALPN` ("aspen-tui"): TUI client connections
+    /// - `GOSSIP_ALPN` ("iroh-gossip/0"): Peer discovery via iroh-gossip
+    ///
+    /// # Architecture Note
+    ///
+    /// In production (aspen-node), the Router is spawned AFTER bootstrap via
+    /// `iroh_manager.spawn_router()`, which registers all protocol handlers and
+    /// sets ALPNs automatically. The `alpns` field here is primarily for:
+    /// - Testing scenarios without Router
+    /// - Custom endpoint configurations
     pub alpns: Vec<Vec<u8>>,
 }
 
@@ -134,6 +168,7 @@ impl Default for IrohEndpointConfig {
         Self {
             secret_key: None,
             bind_port: 0,
+            enable_ipv6: true, // Enable dual-stack by default for better connectivity
             enable_gossip: true,
             gossip_topic: None,
             enable_mdns: true,
@@ -159,6 +194,15 @@ impl IrohEndpointConfig {
     /// Set the bind port for the QUIC socket.
     pub fn with_bind_port(mut self, port: u16) -> Self {
         self.bind_port = port;
+        self
+    }
+
+    /// Enable or disable IPv6 dual-stack binding.
+    ///
+    /// When enabled (default), the endpoint binds to both IPv4 and IPv6.
+    /// Disable for IPv4-only environments or when IPv6 causes issues.
+    pub fn with_ipv6(mut self, enable: bool) -> Self {
+        self.enable_ipv6 = enable;
         self
     }
 
@@ -250,10 +294,25 @@ impl IrohEndpointManager {
         let mut builder = IrohEndpoint::builder();
         builder = builder.secret_key(secret_key.clone());
 
-        // Configure bind address if port is specified
+        // Configure bind addresses if port is specified
+        // Tiger Style: Support both IPv4 and IPv6 for dual-stack connectivity
         if config.bind_port > 0 {
-            let bind_addr = std::net::SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, config.bind_port);
-            builder = builder.bind_addr_v4(bind_addr);
+            // Always bind IPv4
+            let bind_addr_v4 = std::net::SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, config.bind_port);
+            builder = builder.bind_addr_v4(bind_addr_v4);
+            tracing::info!(port = config.bind_port, "bound IPv4 address");
+
+            // Optionally bind IPv6 for dual-stack
+            if config.enable_ipv6 {
+                let bind_addr_v6 = std::net::SocketAddrV6::new(
+                    std::net::Ipv6Addr::UNSPECIFIED,
+                    config.bind_port,
+                    0,
+                    0,
+                );
+                builder = builder.bind_addr_v6(bind_addr_v6);
+                tracing::info!(port = config.bind_port, "bound IPv6 address (dual-stack)");
+            }
         }
 
         // Configure relay mode based on relay URLs
@@ -404,14 +463,34 @@ impl IrohEndpointManager {
 
     /// Add a known peer address to the endpoint for direct connections.
     ///
-    /// Note: In Iroh 0.95.1, peer discovery is handled differently.
-    /// This is a placeholder that stores the address for future use.
-    /// Actual peer discovery should be configured via discovery services
-    /// (DnsDiscovery, PkarrPublisher, etc.) when needed.
-    pub fn add_peer(&self, _addr: EndpointAddr) -> Result<()> {
-        // In Iroh 0.95.1, there's no direct add_node_addr method on Endpoint.
-        // Peer discovery is handled via discovery services or by passing
-        // EndpointAddr directly to connect() calls.
+    /// # Iroh 0.95.1 Behavior
+    ///
+    /// In Iroh 0.95.1, peer addresses are added implicitly when calling `connect()`.
+    /// The endpoint's discovery services (mDNS, DNS, Pkarr) handle address resolution.
+    ///
+    /// This method logs the address for debugging but does NOT store it directly.
+    /// For Raft peer management, use `IrpcRaftNetworkFactory::add_peer()` instead,
+    /// which stores addresses in the network factory's peer map.
+    ///
+    /// # Arguments
+    /// * `addr` - The EndpointAddr to add (logged but not stored)
+    ///
+    /// # Returns
+    /// Always returns `Ok(())`. Use `IrpcRaftNetworkFactory::add_peer()` for actual
+    /// peer management in Raft clusters.
+    pub fn add_peer(&self, addr: EndpointAddr) -> Result<()> {
+        // In Iroh 0.95.1, peer addresses are added implicitly via connect() or
+        // through discovery services. This method cannot directly store addresses.
+        //
+        // For Raft peer management, use IrpcRaftNetworkFactory::add_peer() instead.
+        // That method stores addresses in the network factory's peer map, which
+        // is then used when creating connections via new_client().
+        tracing::debug!(
+            peer_id = %addr.id,
+            direct_addrs = addr.ip_addrs().count(),
+            "add_peer called but Iroh 0.95.1 doesn't support direct address storage; \
+             use IrpcRaftNetworkFactory::add_peer() for Raft peer management"
+        );
         Ok(())
     }
 

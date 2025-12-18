@@ -84,11 +84,16 @@ pub struct NodeHandle {
     pub health_monitor: Arc<RaftNodeHealth>,
     /// Cancellation token for shutdown.
     pub shutdown_token: CancellationToken,
-    /// Gossip topic ID used for peer discovery.
+    /// Gossip topic ID used for peer discovery and cluster tickets.
     ///
-    /// Derived from the cluster cookie (hash) or provided via a cluster ticket.
-    /// Exposed for generating cluster tickets via HTTP API.
-    pub gossip_topic_id: Option<TopicId>,
+    /// Always available (derived from cluster cookie or provided via ticket).
+    /// Used for:
+    /// - Gossip peer discovery (when enabled)
+    /// - Generating cluster tickets via HTTP API (GET /cluster-ticket)
+    ///
+    /// Tiger Style: Always computed to enable ticket generation even when
+    /// gossip discovery is disabled.
+    pub gossip_topic_id: TopicId,
 }
 
 impl NodeHandle {
@@ -215,6 +220,34 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         peer_addrs,
     ));
 
+    // Derive gossip topic ID - always computed for cluster ticket generation,
+    // even when gossip discovery is disabled
+    //
+    // Tiger Style: Topic ID is derived deterministically from:
+    // 1. Cluster ticket (if provided) - ensures joining nodes use same topic
+    // 2. Cluster cookie hash (fallback) - deterministic for all nodes with same cookie
+    let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
+        match AspenClusterTicket::deserialize(ticket_str) {
+            Ok(ticket) => {
+                info!(
+                    cluster_id = %ticket.cluster_id,
+                    bootstrap_peers = ticket.bootstrap.len(),
+                    "using topic ID from cluster ticket"
+                );
+                ticket.topic_id
+            }
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    "failed to parse gossip ticket, falling back to cookie-derived topic"
+                );
+                derive_topic_id_from_cookie(&config.cookie)
+            }
+        }
+    } else {
+        derive_topic_id_from_cookie(&config.cookie)
+    };
+
     // Setup gossip discovery if enabled
     //
     // Gossip discovery automatically:
@@ -223,38 +256,15 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // 3. Receives peer announcements and adds them to the network factory
     //
     // This enables automatic peer discovery without manual configuration.
-    let (gossip_discovery, gossip_topic_id) = if config.iroh.enable_gossip {
-        // Determine topic ID: from ticket if provided, otherwise derive from cookie
-        let topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
-            match AspenClusterTicket::deserialize(ticket_str) {
-                Ok(ticket) => {
-                    info!(
-                        cluster_id = %ticket.cluster_id,
-                        bootstrap_peers = ticket.bootstrap.len(),
-                        "using topic ID from cluster ticket"
-                    );
-                    ticket.topic_id
-                }
-                Err(err) => {
-                    warn!(
-                        error = %err,
-                        "failed to parse gossip ticket, falling back to cookie-derived topic"
-                    );
-                    derive_topic_id_from_cookie(&config.cookie)
-                }
-            }
-        } else {
-            derive_topic_id_from_cookie(&config.cookie)
-        };
-
+    let gossip_discovery = if config.iroh.enable_gossip {
         info!(
             node_id = config.node_id,
-            topic_id = %hex::encode(topic_id.as_bytes()),
+            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
             "starting gossip discovery"
         );
 
         match GossipPeerDiscovery::spawn(
-            topic_id,
+            gossip_topic_id,
             config.node_id.into(),
             &iroh_manager,
             Some(network_factory.clone()),
@@ -264,10 +274,10 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
             Ok(discovery) => {
                 info!(
                     node_id = config.node_id,
-                    topic_id = %hex::encode(topic_id.as_bytes()),
+                    topic_id = %hex::encode(gossip_topic_id.as_bytes()),
                     "gossip discovery started successfully"
                 );
-                (Some(discovery), Some(topic_id))
+                Some(discovery)
             }
             Err(err) => {
                 // Gossip failure is non-fatal - node can still work with manual peers
@@ -276,15 +286,16 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                     node_id = config.node_id,
                     "failed to start gossip discovery, continuing without it"
                 );
-                (None, None)
+                None
             }
         }
     } else {
         info!(
             node_id = config.node_id,
-            "gossip discovery disabled by configuration"
+            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+            "gossip discovery disabled by configuration (topic ID still available for tickets)"
         );
-        (None, None)
+        None
     };
 
     // Create Raft config with custom timeouts from NodeConfig
@@ -355,6 +366,10 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
 
     // Start health monitoring in background, wired to supervisor
+    //
+    // Tiger Style: Bounded channel (32 slots) with explicit drop tracking.
+    // Health callbacks fire at 5-second intervals, so 32 slots provides ~2.5 minutes
+    // of buffer before drops occur (which would indicate serious issues anyway).
     let health_clone = health_monitor.clone();
     let shutdown = CancellationToken::new();
     let shutdown_clone = shutdown.clone();
@@ -362,10 +377,16 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     let node_id_for_health = config.node_id;
     tokio::spawn(async move {
         // Create a channel to communicate failures from the sync callback to async supervisor
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(16);
+        // Tiger Style: Bounded channel size = 32 (allows ~2.5 min backlog at 5s intervals)
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(32);
+
+        // Track dropped messages for observability using Arc for safe sharing
+        let dropped_count = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let dropped_count_for_callback = Arc::clone(&dropped_count);
 
         // Spawn a task to process health failures and record them with supervisor
         let supervisor_clone = supervisor_for_health.clone();
+        let node_id_for_processor = node_id_for_health;
         tokio::spawn(async move {
             while let Some(reason) = rx.recv().await {
                 supervisor_clone.record_health_failure(&reason).await;
@@ -373,7 +394,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 // Check if we should give up (too many failures)
                 if !supervisor_clone.should_attempt_recovery().await {
                     error!(
-                        node_id = node_id_for_health,
+                        node_id = node_id_for_processor,
                         "too many health failures, supervisor circuit breaker triggered"
                     );
                     // Cancel the supervisor which will propagate shutdown
@@ -381,6 +402,11 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                     break;
                 }
             }
+            // Log channel closure for debugging
+            warn!(
+                node_id = node_id_for_processor,
+                "health failure processor channel closed"
+            );
         });
 
         tokio::select! {
@@ -389,10 +415,32 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                     "health check failed: state={:?}, failures={}",
                     status.state, status.consecutive_failures
                 );
-                // Non-blocking send - if channel is full, drop the message
-                let _ = tx.try_send(reason);
+                // Non-blocking send with explicit drop handling
+                // Tiger Style: Log dropped messages for observability
+                if let Err(tokio::sync::mpsc::error::TrySendError::Full(_)) = tx.try_send(reason) {
+                    let count = dropped_count_for_callback
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    // Log every 10th drop to avoid log spam
+                    if count % 10 == 1 {
+                        tracing::warn!(
+                            dropped_count = count,
+                            "health failure channel full, messages being dropped \
+                             (health processor may be blocked or overwhelmed)"
+                        );
+                    }
+                }
             }) => {}
-            _ = shutdown_clone.cancelled() => {}
+            _ = shutdown_clone.cancelled() => {
+                // Log final drop count on shutdown if any messages were dropped
+                let final_drops = dropped_count.load(std::sync::atomic::Ordering::Relaxed);
+                if final_drops > 0 {
+                    warn!(
+                        node_id = node_id_for_health,
+                        dropped_messages = final_drops,
+                        "health monitor shutdown with dropped messages"
+                    );
+                }
+            }
         }
     });
 

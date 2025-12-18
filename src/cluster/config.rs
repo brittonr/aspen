@@ -322,11 +322,18 @@ impl NodeConfig {
         if other.http_addr != default_http_addr() {
             self.http_addr = other.http_addr;
         }
-        self.control_backend = other.control_backend;
-        // Tiger Style: Explicitly merge storage_backend if provided
-        // Note: We always merge storage_backend since it defaults to Sqlite
-        // and we want CLI args to override both env and TOML configs
-        self.storage_backend = other.storage_backend;
+        // Tiger Style: Only merge control_backend if explicitly set (non-default)
+        // This preserves TOML settings when CLI args don't override them
+        if other.control_backend != ControlBackend::default() {
+            self.control_backend = other.control_backend;
+        }
+        // Tiger Style: Only merge storage_backend if explicitly set (non-default)
+        // This preserves TOML settings when CLI args don't override them
+        // Example: TOML sets `storage_backend = "inmemory"`, CLI doesn't override,
+        // so InMemory is preserved instead of being overwritten by default Sqlite
+        if other.storage_backend != StorageBackend::default() {
+            self.storage_backend = other.storage_backend;
+        }
         if other.redb_log_path.is_some() {
             self.redb_log_path = other.redb_log_path;
         }
@@ -467,6 +474,46 @@ impl NodeConfig {
                         error = %e,
                         "could not check disk space (non-fatal)"
                     );
+                }
+            }
+        }
+
+        // Validate explicit storage paths if provided
+        // Tiger Style: Fail fast on invalid paths before node startup
+        for (name, path) in [
+            ("redb_log_path", &self.redb_log_path),
+            ("redb_sm_path", &self.redb_sm_path),
+            ("sqlite_log_path", &self.sqlite_log_path),
+            ("sqlite_sm_path", &self.sqlite_sm_path),
+        ] {
+            if let Some(path) = path {
+                // Validate parent directory exists or can be created
+                if let Some(parent) = path.parent()
+                    && !parent.as_os_str().is_empty()
+                    && !parent.exists()
+                {
+                    // Try to create parent directory
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        return Err(ConfigError::Validation {
+                            message: format!(
+                                "{} parent directory {} does not exist and cannot be created: {}",
+                                name,
+                                parent.display(),
+                                e
+                            ),
+                        });
+                    }
+                }
+
+                // Warn if path exists but is a directory (should be a file)
+                if path.exists() && path.is_dir() {
+                    return Err(ConfigError::Validation {
+                        message: format!(
+                            "{} path {} exists but is a directory, expected a file",
+                            name,
+                            path.display()
+                        ),
+                    });
                 }
             }
         }
@@ -646,26 +693,28 @@ mod tests {
             host: default_host(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
-            control_backend: ControlBackend::Deterministic,
+            control_backend: ControlBackend::RaftActor, // Default value
             heartbeat_interval_ms: default_heartbeat_interval_ms(),
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
             iroh: IrohConfig::default(),
             peers: vec![],
-            storage_backend: crate::raft::storage::StorageBackend::default(),
+            storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default value
             redb_log_path: None,
             redb_sm_path: None,
             sqlite_log_path: None,
             sqlite_sm_path: None,
         };
 
+        // Override config uses non-default values for control_backend and storage_backend
+        // to test that explicit non-default values override
         let override_config = NodeConfig {
             node_id: 2,
             data_dir: Some(PathBuf::from("/custom/data")),
             host: "192.168.1.1".into(),
             cookie: "custom-cookie".into(),
             http_addr: "0.0.0.0:9090".parse().unwrap(),
-            control_backend: ControlBackend::RaftActor,
+            control_backend: ControlBackend::Deterministic, // Non-default: should override
             heartbeat_interval_ms: 1000,
             election_timeout_min_ms: 2000,
             election_timeout_max_ms: 4000,
@@ -679,7 +728,7 @@ mod tests {
                 enable_pkarr: true,
             },
             peers: vec!["peer1".into()],
-            storage_backend: crate::raft::storage::StorageBackend::Sqlite,
+            storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override
             redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
             redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
             sqlite_log_path: None,
@@ -693,7 +742,8 @@ mod tests {
         assert_eq!(base.host, "192.168.1.1");
         assert_eq!(base.cookie, "custom-cookie");
         assert_eq!(base.http_addr, "0.0.0.0:9090".parse().unwrap());
-        assert_eq!(base.control_backend, ControlBackend::RaftActor);
+        // Deterministic (non-default) should override RaftActor (default)
+        assert_eq!(base.control_backend, ControlBackend::Deterministic);
         assert_eq!(base.heartbeat_interval_ms, 1000);
         assert_eq!(base.election_timeout_min_ms, 2000);
         assert_eq!(base.election_timeout_max_ms, 4000);
@@ -701,5 +751,64 @@ mod tests {
         assert!(!base.iroh.enable_gossip);
         assert_eq!(base.iroh.gossip_ticket, Some("test-ticket".into()));
         assert_eq!(base.peers, vec!["peer1"]);
+        // InMemory (non-default) should override Sqlite (default)
+        assert_eq!(
+            base.storage_backend,
+            crate::raft::storage::StorageBackend::InMemory
+        );
+    }
+
+    #[test]
+    fn test_merge_preserves_explicit_base_values() {
+        // Test that default override values don't clobber explicit base values
+        // This tests the layered config precedence fix
+        let mut base = NodeConfig {
+            node_id: 1,
+            data_dir: None,
+            host: default_host(),
+            cookie: default_cookie(),
+            http_addr: default_http_addr(),
+            control_backend: ControlBackend::Deterministic, // Explicit non-default
+            heartbeat_interval_ms: default_heartbeat_interval_ms(),
+            election_timeout_min_ms: default_election_timeout_min_ms(),
+            election_timeout_max_ms: default_election_timeout_max_ms(),
+            iroh: IrohConfig::default(),
+            peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::InMemory, // Explicit non-default
+            redb_log_path: None,
+            redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
+        };
+
+        // Override config uses DEFAULT values - should NOT override base
+        let override_config = NodeConfig {
+            node_id: 0, // Default: 0 doesn't override
+            data_dir: None,
+            host: default_host(),
+            cookie: default_cookie(),
+            http_addr: default_http_addr(),
+            control_backend: ControlBackend::RaftActor, // Default: should NOT override
+            heartbeat_interval_ms: default_heartbeat_interval_ms(),
+            election_timeout_min_ms: default_election_timeout_min_ms(),
+            election_timeout_max_ms: default_election_timeout_max_ms(),
+            iroh: IrohConfig::default(),
+            peers: vec![],
+            storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default: should NOT override
+            redb_log_path: None,
+            redb_sm_path: None,
+            sqlite_log_path: None,
+            sqlite_sm_path: None,
+        };
+
+        base.merge(override_config);
+
+        // Original non-default values should be preserved (not clobbered by defaults)
+        assert_eq!(base.node_id, 1); // Preserved (0 is "unset")
+        assert_eq!(base.control_backend, ControlBackend::Deterministic); // Preserved
+        assert_eq!(
+            base.storage_backend,
+            crate::raft::storage::StorageBackend::InMemory
+        ); // Preserved
     }
 }
