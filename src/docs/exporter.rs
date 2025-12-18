@@ -328,6 +328,101 @@ impl DocsWriter for IrohDocsWriter {
     }
 }
 
+// ============================================================================
+// SyncHandle-based Implementation for P2P Sync
+// ============================================================================
+
+/// Docs writer implementation that uses `SyncHandle` for P2P sync compatibility.
+///
+/// Unlike `IrohDocsWriter` which owns the Store directly, this implementation
+/// works with a `SyncHandle` that manages the Store. This allows both the
+/// DocsExporter and the P2P sync protocol handler to share the same Store.
+///
+/// Use this when P2P sync is enabled, use `IrohDocsWriter` when only local
+/// export is needed (no P2P sync).
+pub struct SyncHandleDocsWriter {
+    /// Sync handle for replica operations.
+    sync_handle: iroh_docs::actor::SyncHandle,
+    /// Namespace ID for the document.
+    namespace_id: iroh_docs::NamespaceId,
+    /// Author for signing entries.
+    author: Author,
+}
+
+impl SyncHandleDocsWriter {
+    /// Create a new SyncHandleDocsWriter.
+    ///
+    /// # Arguments
+    /// * `sync_handle` - The sync handle from DocsSyncResources
+    /// * `namespace_id` - The namespace ID for the document
+    /// * `author` - The author for signing entries
+    pub fn new(
+        sync_handle: iroh_docs::actor::SyncHandle,
+        namespace_id: iroh_docs::NamespaceId,
+        author: Author,
+    ) -> Self {
+        Self {
+            sync_handle,
+            namespace_id,
+            author,
+        }
+    }
+}
+
+#[async_trait]
+impl DocsWriter for SyncHandleDocsWriter {
+    #[instrument(skip(self, value), fields(key_len = key.len(), value_len = value.len()))]
+    async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
+        // Compute BLAKE3 hash of the value (same as iroh-blobs uses)
+        let hash = iroh_blobs::Hash::new(&value);
+        let len = value.len() as u64;
+        let author_id = self.author.id();
+
+        // Insert entry metadata via sync handle
+        // Note: The actual content should be stored in iroh-blobs for P2P fetching.
+        // For now, this stores the metadata (hash, len) which allows sync of entry info.
+        self.sync_handle
+            .insert_local(
+                self.namespace_id,
+                author_id,
+                bytes::Bytes::from(key),
+                hash,
+                len,
+            )
+            .await
+            .context("failed to insert entry via sync handle")?;
+
+        debug!(namespace = %self.namespace_id, hash = %hash.fmt_short(), "entry inserted via sync handle");
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(key_len = key.len()))]
+    async fn delete_entry(&self, key: Vec<u8>) -> Result<()> {
+        // Deletion uses empty content with hash of empty
+        let empty: &[u8] = &[];
+        let hash = iroh_blobs::Hash::new(empty);
+        let author_id = self.author.id();
+
+        self.sync_handle
+            .insert_local(
+                self.namespace_id,
+                author_id,
+                bytes::Bytes::from(key),
+                hash,
+                0,
+            )
+            .await
+            .context("failed to delete entry via sync handle")?;
+
+        debug!(namespace = %self.namespace_id, "entry deleted via sync handle");
+        Ok(())
+    }
+}
+
+// ============================================================================
+// In-Memory Implementation for Testing
+// ============================================================================
+
 /// In-memory docs writer for development and testing.
 ///
 /// Stores entries in a thread-safe HashMap. Useful when:

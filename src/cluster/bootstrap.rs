@@ -594,11 +594,11 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         None
     };
 
-    // Initialize DocsExporter for real-time KV export to iroh-docs if enabled
+    // Initialize DocsExporter and P2P sync for real-time KV export/sync if enabled
     // This spawns a background task that listens to the log broadcast channel
     // and exports committed KV operations to iroh-docs for CRDT-based sync
-    let docs_exporter_cancel = if config.docs.enabled {
-        use crate::docs::{init_docs_resources, DocsExporter, IrohDocsWriter};
+    let (docs_exporter_cancel, docs_sync) = if config.docs.enabled {
+        use crate::docs::{init_docs_resources, DocsSyncResources, DocsExporter, SyncHandleDocsWriter};
 
         if let Some(ref sender) = log_broadcast {
             // Initialize iroh-docs resources (Store, NamespaceId, Author)
@@ -609,11 +609,21 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 config.docs.author_secret.as_deref(),
             ) {
                 Ok(resources) => {
-                    // Create IrohDocsWriter with real iroh-docs store
-                    let writer = Arc::new(IrohDocsWriter::new(
-                        resources.store,
-                        resources.namespace_id,
-                        resources.author,
+                    let namespace_id = resources.namespace_id;
+                    let in_memory = config.docs.in_memory;
+
+                    // Create DocsSyncResources for P2P sync (consumes Store, spawns SyncHandle)
+                    let docs_sync = DocsSyncResources::from_docs_resources(
+                        resources,
+                        &format!("node-{}", config.node_id),
+                    );
+
+                    // Create SyncHandleDocsWriter that uses the sync handle
+                    // This allows both DocsExporter and P2P sync to share the same Store
+                    let writer = Arc::new(SyncHandleDocsWriter::new(
+                        docs_sync.sync_handle.clone(),
+                        docs_sync.namespace_id,
+                        docs_sync.author.clone(),
                     ));
 
                     // Create the exporter
@@ -627,11 +637,12 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
 
                     info!(
                         node_id = config.node_id,
-                        namespace_id = %resources.namespace_id,
-                        in_memory = config.docs.in_memory,
-                        "DocsExporter started - real-time KV export to iroh-docs enabled"
+                        namespace_id = %namespace_id,
+                        in_memory = in_memory,
+                        p2p_sync = true,
+                        "DocsExporter started with P2P sync enabled"
                     );
-                    Some(cancel_token)
+                    (Some(cancel_token), Some(docs_sync))
                 }
                 Err(err) => {
                     // Docs initialization failure is non-fatal - node can still work without docs
@@ -640,7 +651,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                         node_id = config.node_id,
                         "failed to initialize iroh-docs resources, continuing without docs export"
                     );
-                    None
+                    (None, None)
                 }
             }
         } else {
@@ -649,14 +660,14 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 "DocsExporter not started - log broadcast channel not available \
                  (docs enabled but InMemory storage backend doesn't support broadcast yet)"
             );
-            None
+            (None, None)
         }
     } else {
         info!(
             node_id = config.node_id,
             "DocsExporter disabled by configuration"
         );
-        None
+        (None, None)
     };
 
     // Register node in metadata store
@@ -688,7 +699,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         peer_manager,
         log_broadcast,
         docs_exporter_cancel,
-        docs_sync: None, // Initialized in caller after bootstrap when P2P sync is enabled
+        docs_sync,
     })
 }
 
