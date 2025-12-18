@@ -36,6 +36,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::constants::MAX_DOCS_CONNECTIONS;
+use crate::blob::store::BlobStore;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";
@@ -209,11 +210,13 @@ impl DocsSyncResources {
     /// This spawns a background task that:
     /// 1. Subscribes to sync events for this namespace
     /// 2. Filters for RemoteInsert events (entries received from peers)
-    /// 3. Forwards each entry to the DocsImporter for priority-based import
+    /// 3. Fetches content from the blob store using the content hash
+    /// 4. Forwards each entry to the DocsImporter for priority-based import
     ///
     /// # Arguments
     /// * `importer` - The DocsImporter to forward entries to
     /// * `source_cluster_id` - Identifier for the source cluster (for origin tracking)
+    /// * `blob_store` - The blob store for fetching content by hash
     ///
     /// # Returns
     /// A CancellationToken that can be used to stop the event listener.
@@ -221,6 +224,7 @@ impl DocsSyncResources {
         &self,
         importer: std::sync::Arc<super::importer::DocsImporter>,
         source_cluster_id: String,
+        blob_store: Arc<crate::blob::store::IrohBlobStore>,
     ) -> Result<CancellationToken> {
         use iroh_docs::sync::Event;
 
@@ -259,15 +263,11 @@ impl DocsSyncResources {
                                 namespace: _,
                                 entry,
                                 from,
-                                should_download: _,
-                                remote_content_status: _,
+                                should_download,
+                                remote_content_status,
                             }) => {
-                                // Extract key and value from the signed entry
+                                // Extract key from the signed entry
                                 let key = entry.key().to_vec();
-
-                                // For content, we need to fetch it via blob store
-                                // For now, we use the hash as a placeholder value
-                                // TODO: Integrate with iroh-blobs to fetch actual content
                                 let content_hash = entry.content_hash();
                                 let content_len = entry.content_len();
 
@@ -277,21 +277,90 @@ impl DocsSyncResources {
                                     from = %hex::encode(&from[..8]),
                                     hash = %content_hash.fmt_short(),
                                     len = content_len,
+                                    should_download = should_download,
+                                    remote_status = ?remote_content_status,
                                     "received remote entry"
                                 );
 
-                                // For entries with content in the hash (small values stored inline),
-                                // we can import them directly. For larger blobs, we'd need to fetch.
-                                // For now, skip content import until blob integration is complete.
-                                // TODO: Fetch content from blob store and pass to importer
+                                // Skip tombstones (empty content)
+                                if content_len == 0 {
+                                    debug!(
+                                        namespace = %namespace_id,
+                                        key = %String::from_utf8_lossy(&key),
+                                        "skipping tombstone entry"
+                                    );
+                                    continue;
+                                }
 
-                                // We could pass empty value or skip; let's log and skip for now
-                                // since the importer expects actual content bytes
-                                debug!(
-                                    namespace = %namespace_id,
-                                    key = %String::from_utf8_lossy(&key),
-                                    "skipping import - blob content fetch not yet implemented"
-                                );
+                                // Fetch content from blob store using the content hash
+                                let content = match blob_store.get_bytes(&content_hash).await {
+                                    Ok(Some(bytes)) => {
+                                        debug!(
+                                            namespace = %namespace_id,
+                                            hash = %content_hash.fmt_short(),
+                                            size = bytes.len(),
+                                            "fetched content from blob store"
+                                        );
+                                        bytes.to_vec()
+                                    }
+                                    Ok(None) => {
+                                        // Content not yet available locally
+                                        // This can happen if should_download is true and we need to
+                                        // fetch from the remote peer. For now, we skip and log.
+                                        // TODO: Trigger blob download from peer when should_download=true
+                                        warn!(
+                                            namespace = %namespace_id,
+                                            hash = %content_hash.fmt_short(),
+                                            should_download = should_download,
+                                            key = %String::from_utf8_lossy(&key),
+                                            "content not found in blob store, skipping"
+                                        );
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            namespace = %namespace_id,
+                                            hash = %content_hash.fmt_short(),
+                                            error = %e,
+                                            "failed to fetch content from blob store"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                // Check for tombstone marker (single null byte indicates deletion)
+                                if content.len() == 1 && content[0] == 0x00 {
+                                    debug!(
+                                        namespace = %namespace_id,
+                                        key = %String::from_utf8_lossy(&key),
+                                        "skipping tombstone marker entry"
+                                    );
+                                    continue;
+                                }
+
+                                // Forward to importer for priority-based import
+                                match importer.process_remote_entry(
+                                    &source_cluster_id,
+                                    &key,
+                                    &content,
+                                ).await {
+                                    Ok(result) => {
+                                        debug!(
+                                            namespace = %namespace_id,
+                                            key = %String::from_utf8_lossy(&key),
+                                            result = ?result,
+                                            "processed remote entry"
+                                        );
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            namespace = %namespace_id,
+                                            key = %String::from_utf8_lossy(&key),
+                                            error = %e,
+                                            "failed to import remote entry"
+                                        );
+                                    }
+                                }
                             }
                             Ok(Event::LocalInsert { .. }) => {
                                 // Ignore local inserts - we only care about remote
