@@ -9,12 +9,13 @@
 //! KV operations to iroh-docs entries. This enables real-time synchronization
 //! of the KV store to clients via iroh-docs CRDT replication.
 //!
-//! # TODO
+//! # Features
 //!
-//! - Add background full-sync for drift correction
-//! - Implement batch export for efficiency
+//! - **Batch export**: Buffers entries and writes them in batches for efficiency
+//! - **Background full-sync**: Periodic drift correction by scanning all KV entries
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -24,10 +25,28 @@ use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
+use crate::api::{KeyValueStore, ScanRequest};
 use crate::blob::store::BlobStore;
 use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
 
-use super::constants::{EXPORT_BATCH_SIZE, MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE};
+use super::constants::{
+    BACKGROUND_SYNC_INTERVAL, EXPORT_BATCH_SIZE, MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE,
+};
+
+/// Maximum time to buffer entries before forcing a flush.
+/// Tiger Style: Bounded latency for export operations.
+const BATCH_FLUSH_INTERVAL: Duration = Duration::from_millis(100);
+
+/// A batch entry for efficient bulk writes.
+#[derive(Debug, Clone)]
+pub struct BatchEntry {
+    /// The key to write.
+    pub key: Vec<u8>,
+    /// The value to write (empty for tombstone/delete).
+    pub value: Vec<u8>,
+    /// True if this is a delete operation (tombstone).
+    pub is_delete: bool,
+}
 
 /// Trait for writing entries to a docs namespace.
 ///
@@ -40,6 +59,21 @@ pub trait DocsWriter: Send + Sync {
 
     /// Delete an entry (set to empty value for tombstone).
     async fn delete_entry(&self, key: Vec<u8>) -> Result<()>;
+
+    /// Write a batch of entries for efficiency.
+    ///
+    /// Default implementation calls set_entry/delete_entry for each entry.
+    /// Implementations can override for more efficient bulk operations.
+    async fn write_batch(&self, entries: Vec<BatchEntry>) -> Result<()> {
+        for entry in entries {
+            if entry.is_delete {
+                self.delete_entry(entry.key).await?;
+            } else {
+                self.set_entry(entry.key, entry.value).await?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Exports KV operations to an iroh-docs namespace.
@@ -65,10 +99,15 @@ impl DocsExporter {
         }
     }
 
-    /// Start exporting from a log subscriber broadcast channel.
+    /// Start exporting from a log subscriber broadcast channel with batching.
     ///
     /// Spawns a background task that listens to the broadcast channel
-    /// and exports KV operations to the docs namespace.
+    /// and exports KV operations to the docs namespace in batches for efficiency.
+    ///
+    /// # Batching Behavior
+    ///
+    /// - Entries are buffered until EXPORT_BATCH_SIZE is reached or BATCH_FLUSH_INTERVAL elapses
+    /// - On shutdown, any remaining buffered entries are flushed
     pub fn spawn(
         self: Arc<Self>,
         mut receiver: broadcast::Receiver<LogEntryPayload>,
@@ -77,22 +116,55 @@ impl DocsExporter {
         let exporter = self.clone();
 
         tokio::spawn(async move {
-            info!("DocsExporter started");
+            info!(
+                batch_size = EXPORT_BATCH_SIZE,
+                flush_interval_ms = BATCH_FLUSH_INTERVAL.as_millis(),
+                "DocsExporter started with batching"
+            );
+
+            let mut batch: Vec<BatchEntry> = Vec::with_capacity(EXPORT_BATCH_SIZE as usize);
+            let mut flush_interval = tokio::time::interval(BATCH_FLUSH_INTERVAL);
+            flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 tokio::select! {
                     _ = exporter.cancel.cancelled() => {
+                        // Flush remaining entries on shutdown
+                        if !batch.is_empty() {
+                            if let Err(e) = exporter.flush_batch(&mut batch).await {
+                                error!(error = %e, "failed to flush batch on shutdown");
+                            }
+                        }
                         info!("DocsExporter shutting down");
                         break;
+                    }
+                    _ = flush_interval.tick() => {
+                        // Time-based flush to bound latency
+                        if !batch.is_empty() {
+                            if let Err(e) = exporter.flush_batch(&mut batch).await {
+                                error!(error = %e, "failed to flush batch on interval");
+                            }
+                        }
                     }
                     result = receiver.recv() => {
                         match result {
                             Ok(payload) => {
-                                if let Err(e) = exporter.process_payload(payload).await {
-                                    error!(error = %e, "failed to process log entry");
+                                exporter.collect_payload_to_batch(payload, &mut batch);
+
+                                // Size-based flush when batch is full
+                                if batch.len() >= EXPORT_BATCH_SIZE as usize {
+                                    if let Err(e) = exporter.flush_batch(&mut batch).await {
+                                        error!(error = %e, "failed to flush full batch");
+                                    }
                                 }
                             }
                             Err(broadcast::error::RecvError::Closed) => {
+                                // Flush remaining entries before exit
+                                if !batch.is_empty() {
+                                    if let Err(e) = exporter.flush_batch(&mut batch).await {
+                                        error!(error = %e, "failed to flush batch on channel close");
+                                    }
+                                }
                                 warn!("log subscriber channel closed");
                                 break;
                             }
@@ -109,7 +181,68 @@ impl DocsExporter {
         cancel
     }
 
-    /// Process a single log entry payload.
+    /// Start exporting with periodic background full-sync for drift correction.
+    ///
+    /// In addition to real-time export, this spawns a background task that
+    /// periodically scans all KV entries and exports them to ensure consistency.
+    /// This catches any entries that may have been missed due to lag or restarts.
+    ///
+    /// # Arguments
+    /// * `receiver` - Broadcast receiver for real-time log entries
+    /// * `kv_store` - Reference to the KV store for scanning all entries
+    pub fn spawn_with_full_sync<KV>(
+        self: Arc<Self>,
+        receiver: broadcast::Receiver<LogEntryPayload>,
+        kv_store: Arc<KV>,
+    ) -> CancellationToken
+    where
+        KV: KeyValueStore + 'static,
+    {
+        // Spawn the real-time exporter with batching
+        let cancel = self.clone().spawn(receiver);
+
+        // Spawn background full-sync task
+        let exporter = self.clone();
+        let cancel_clone = self.cancel.clone();
+
+        tokio::spawn(async move {
+            info!(
+                interval_secs = BACKGROUND_SYNC_INTERVAL.as_secs(),
+                "background full-sync started"
+            );
+
+            let mut sync_interval = tokio::time::interval(BACKGROUND_SYNC_INTERVAL);
+            sync_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            // Skip the first immediate tick
+            sync_interval.tick().await;
+
+            loop {
+                tokio::select! {
+                    _ = cancel_clone.cancelled() => {
+                        info!("background full-sync shutting down");
+                        break;
+                    }
+                    _ = sync_interval.tick() => {
+                        info!("starting periodic full-sync");
+                        match exporter.full_sync_from_kv(&kv_store).await {
+                            Ok(count) => {
+                                info!(exported = count, "periodic full-sync completed");
+                            }
+                            Err(e) => {
+                                error!(error = %e, "periodic full-sync failed");
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        cancel
+    }
+
+    /// Process a single log entry payload (non-batched, for testing).
+    #[allow(dead_code)]
     async fn process_payload(&self, payload: LogEntryPayload) -> Result<()> {
         match &payload.operation {
             KvOperation::Set { key, value } => {
@@ -136,7 +269,139 @@ impl DocsExporter {
         Ok(())
     }
 
-    /// Export a Set operation to docs.
+    /// Collect entries from a log payload into the batch buffer.
+    ///
+    /// Filters out entries that exceed size limits.
+    fn collect_payload_to_batch(&self, payload: LogEntryPayload, batch: &mut Vec<BatchEntry>) {
+        match payload.operation {
+            KvOperation::Set { key, value } => {
+                if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
+                    batch.push(BatchEntry {
+                        key,
+                        value,
+                        is_delete: false,
+                    });
+                } else {
+                    warn!(
+                        key_len = key.len(),
+                        value_len = value.len(),
+                        "entry too large for docs export, skipping"
+                    );
+                }
+            }
+            KvOperation::SetMulti { pairs } => {
+                for (key, value) in pairs {
+                    if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
+                        batch.push(BatchEntry {
+                            key,
+                            value,
+                            is_delete: false,
+                        });
+                    }
+                }
+            }
+            KvOperation::Delete { key } => {
+                batch.push(BatchEntry {
+                    key,
+                    value: vec![],
+                    is_delete: true,
+                });
+            }
+            KvOperation::DeleteMulti { keys } => {
+                for key in keys {
+                    batch.push(BatchEntry {
+                        key,
+                        value: vec![],
+                        is_delete: true,
+                    });
+                }
+            }
+            KvOperation::Noop | KvOperation::MembershipChange { .. } => {
+                // Skip non-KV operations
+            }
+        }
+    }
+
+    /// Flush the batch buffer to the docs writer.
+    async fn flush_batch(&self, batch: &mut Vec<BatchEntry>) -> Result<()> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        let count = batch.len();
+        debug!(count, "flushing export batch");
+
+        // Take ownership of batch contents
+        let entries = std::mem::take(batch);
+
+        self.writer.write_batch(entries).await?;
+
+        debug!(count, "batch flushed successfully");
+        Ok(())
+    }
+
+    /// Perform a full sync from a KeyValueStore implementation.
+    ///
+    /// Scans all keys in the KV store and exports them to docs.
+    /// Used for initial population and periodic drift correction.
+    pub async fn full_sync_from_kv<KV>(&self, kv_store: &KV) -> Result<u64>
+    where
+        KV: KeyValueStore,
+    {
+        info!("starting full sync from KV store");
+
+        let mut exported = 0u64;
+        let mut continuation_token: Option<String> = None;
+
+        loop {
+            // Scan a batch of keys
+            let result = kv_store
+                .scan(ScanRequest {
+                    prefix: String::new(), // All keys
+                    limit: Some(EXPORT_BATCH_SIZE),
+                    continuation_token: continuation_token.clone(),
+                })
+                .await
+                .context("failed to scan KV store")?;
+
+            if result.entries.is_empty() {
+                break;
+            }
+
+            // Collect entries for batch write
+            let batch_entries: Vec<BatchEntry> = result
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry.key.len() <= MAX_DOC_KEY_SIZE && entry.value.len() <= MAX_DOC_VALUE_SIZE
+                })
+                .map(|entry| BatchEntry {
+                    key: entry.key.as_bytes().to_vec(),
+                    value: entry.value.as_bytes().to_vec(),
+                    is_delete: false,
+                })
+                .collect();
+
+            let batch_count = batch_entries.len() as u64;
+
+            // Write batch
+            self.writer.write_batch(batch_entries).await?;
+
+            exported += batch_count;
+
+            // Check for more pages
+            if !result.is_truncated {
+                break;
+            }
+            continuation_token = result.continuation_token;
+        }
+
+        info!(exported, "full sync complete");
+        Ok(exported)
+    }
+
+    /// Export a Set operation to docs (non-batched, for testing).
+    #[allow(dead_code)]
     async fn export_set(&self, key: &[u8], value: &[u8], log_index: u64) -> Result<()> {
         // Validate sizes
         if key.len() > MAX_DOC_KEY_SIZE {
@@ -162,61 +427,13 @@ impl DocsExporter {
         Ok(())
     }
 
-    /// Export a Delete operation to docs.
+    /// Export a Delete operation to docs (non-batched, for testing).
+    #[allow(dead_code)]
     async fn export_delete(&self, key: &[u8], log_index: u64) -> Result<()> {
         self.writer.delete_entry(key.to_vec()).await?;
 
         debug!(log_index, key_len = key.len(), "exported Delete to docs");
         Ok(())
-    }
-
-    /// Perform a full sync from the state machine to docs.
-    ///
-    /// Used for initial population and drift correction.
-    /// Scans all keys in the KV store and exports them to docs.
-    #[allow(dead_code)]
-    pub async fn full_sync<F, Fut>(&self, scan_fn: F) -> Result<u64>
-    where
-        F: Fn(Option<String>, u32) -> Fut,
-        Fut: std::future::Future<Output = Result<Vec<(String, String)>>>,
-    {
-        info!("starting full sync");
-
-        let mut exported = 0u64;
-        let mut continuation: Option<String> = None;
-
-        loop {
-            // Scan a batch of keys
-            let entries = scan_fn(continuation.clone(), EXPORT_BATCH_SIZE).await?;
-
-            if entries.is_empty() {
-                break;
-            }
-
-            // Export each entry
-            for (key, value) in &entries {
-                // Skip if too large
-                if key.len() > MAX_DOC_KEY_SIZE || value.len() > MAX_DOC_VALUE_SIZE {
-                    continue;
-                }
-
-                self.writer
-                    .set_entry(key.as_bytes().to_vec(), value.as_bytes().to_vec())
-                    .await?;
-
-                exported += 1;
-            }
-
-            // Update continuation for next batch
-            if entries.len() < EXPORT_BATCH_SIZE as usize {
-                break;
-            }
-            continuation = entries.last().map(|(k, _)| k.clone());
-        }
-
-        info!(exported, "full sync complete");
-
-        Ok(exported)
     }
 
     /// Shutdown the exporter.
