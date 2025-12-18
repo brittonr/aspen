@@ -68,7 +68,10 @@ pub use constants::{
 
 pub use exporter::{DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter, SyncHandleDocsWriter};
 
-pub use store::{init_docs_resources, DocsProtocolHandler, DocsResources, DocsSyncResources};
+pub use store::{
+    init_docs_resources, DocsProtocolHandler, DocsResources, DocsSyncResources, DocsSyncService,
+    BACKGROUND_SYNC_INTERVAL_SECS, MAX_OUTBOUND_SYNCS,
+};
 
 pub use importer::{
     DocsImporter, ImportResult, MAX_PEER_SUBSCRIPTIONS, PeerStatus, PeerSubscription,
