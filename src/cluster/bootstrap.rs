@@ -119,6 +119,11 @@ pub struct NodeHandle {
     /// Used to gracefully shutdown the DocsExporter background task.
     /// None when docs export is disabled.
     pub docs_exporter_cancel: Option<CancellationToken>,
+    /// Docs sync resources for P2P CRDT replication.
+    ///
+    /// Contains the SyncHandle and NamespaceId for accepting incoming
+    /// sync connections. None when docs P2P sync is disabled.
+    pub docs_sync: Option<crate::docs::DocsSyncResources>,
 }
 
 impl NodeHandle {
@@ -155,6 +160,13 @@ impl NodeHandle {
         if let Some(cancel_token) = &self.docs_exporter_cancel {
             info!("shutting down DocsExporter");
             cancel_token.cancel();
+        }
+
+        // Shutdown docs sync if present
+        // Note: SyncHandle shutdown is handled by dropping it
+        if self.docs_sync.is_some() {
+            info!("shutting down docs sync");
+            drop(self.docs_sync);
         }
 
         // Stop supervisor
@@ -676,6 +688,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         peer_manager,
         log_broadcast,
         docs_exporter_cancel,
+        docs_sync: None, // Initialized in caller after bootstrap when P2P sync is enabled
     })
 }
 

@@ -4,6 +4,12 @@
 
 use std::time::Duration;
 
+/// ALPN identifier for iroh-docs sync protocol.
+///
+/// Re-exported from iroh_docs for convenience.
+/// Value: `b"/iroh-sync/1"`
+pub use iroh_docs::net::ALPN as DOCS_SYNC_ALPN;
+
 /// Maximum number of concurrent docs sync connections.
 /// Tiger Style: Bounded to prevent connection exhaustion.
 pub const MAX_DOCS_CONNECTIONS: u32 = 100;

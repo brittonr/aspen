@@ -20,11 +20,19 @@
 //! - Fixed 32-byte secrets (64 hex characters)
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use iroh::endpoint::Connection;
+use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh_docs::actor::SyncHandle;
+use iroh_docs::net::{self, AcceptOutcome};
 use iroh_docs::store::Store;
 use iroh_docs::{Author, NamespaceId, NamespaceSecret};
-use tracing::{debug, info};
+use tokio::sync::Semaphore;
+use tracing::{debug, info, warn};
+
+use super::constants::MAX_DOCS_CONNECTIONS;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";
@@ -47,6 +55,202 @@ pub struct DocsResources {
     pub author: Author,
     /// Path to the docs directory (None for in-memory).
     pub docs_dir: Option<PathBuf>,
+}
+
+/// Resources needed for iroh-docs P2P sync.
+///
+/// Contains the SyncHandle and NamespaceId needed for accepting incoming
+/// sync connections. This takes ownership of the Store.
+///
+/// Note: When using DocsSyncResources, the Store is consumed by the SyncHandle
+/// actor. You cannot use DocsResources.store after converting to DocsSyncResources.
+pub struct DocsSyncResources {
+    /// Sync handle for P2P synchronization.
+    pub sync_handle: SyncHandle,
+    /// The namespace ID for the docs namespace.
+    pub namespace_id: NamespaceId,
+    /// The author for signing entries.
+    pub author: Author,
+    /// Path to the docs directory (None for in-memory).
+    pub docs_dir: Option<PathBuf>,
+}
+
+impl DocsSyncResources {
+    /// Create DocsSyncResources from DocsResources.
+    ///
+    /// This takes ownership of the Store and spawns a sync actor.
+    /// After this, the Store cannot be accessed directly.
+    ///
+    /// # Arguments
+    /// * `resources` - DocsResources to convert (consumed)
+    /// * `node_id` - Human-readable identifier for this node (used in logging)
+    pub fn from_docs_resources(resources: DocsResources, node_id: &str) -> Self {
+        // Spawn the sync actor (takes ownership of store)
+        let sync_handle = SyncHandle::spawn(
+            resources.store,
+            None, // No content status callback for now
+            node_id.to_string(),
+        );
+
+        info!(
+            node_id,
+            namespace = %resources.namespace_id,
+            "created DocsSyncResources with sync handle"
+        );
+
+        Self {
+            sync_handle,
+            namespace_id: resources.namespace_id,
+            author: resources.author,
+            docs_dir: resources.docs_dir,
+        }
+    }
+
+    /// Create a protocol handler for accepting incoming sync connections.
+    pub fn protocol_handler(&self) -> DocsProtocolHandler {
+        DocsProtocolHandler::new(self.sync_handle.clone(), self.namespace_id)
+    }
+}
+
+// ============================================================================
+// Protocol Handler for Incoming Sync Connections
+// ============================================================================
+
+/// Protocol handler for iroh-docs P2P sync connections.
+///
+/// Implements `ProtocolHandler` to accept incoming sync connections from
+/// remote peers. Uses `iroh_docs::net::handle_connection` for the actual
+/// sync protocol implementation (range-based set reconciliation).
+///
+/// # Tiger Style
+///
+/// - Bounded connection count via semaphore (MAX_DOCS_CONNECTIONS)
+/// - Explicit access control via accept callback
+/// - Clean shutdown via ProtocolHandler::shutdown()
+#[derive(Debug)]
+pub struct DocsProtocolHandler {
+    /// Sync handle for coordinating with the replica store.
+    sync_handle: SyncHandle,
+    /// Our namespace ID (used for access control decisions).
+    namespace_id: NamespaceId,
+    /// Connection semaphore for bounded resources.
+    connection_semaphore: Arc<Semaphore>,
+}
+
+impl DocsProtocolHandler {
+    /// Create a new docs protocol handler.
+    ///
+    /// # Arguments
+    /// * `sync_handle` - Handle to the sync actor for replica coordination
+    /// * `namespace_id` - The namespace ID this node is serving
+    pub fn new(sync_handle: SyncHandle, namespace_id: NamespaceId) -> Self {
+        Self {
+            sync_handle,
+            namespace_id,
+            connection_semaphore: Arc::new(Semaphore::new(MAX_DOCS_CONNECTIONS as usize)),
+        }
+    }
+}
+
+#[allow(refining_impl_trait)]
+impl ProtocolHandler for DocsProtocolHandler {
+    fn accept(
+        &self,
+        connection: Connection,
+    ) -> impl std::future::Future<Output = Result<(), AcceptError>> + Send + '_ {
+        let sync_handle = self.sync_handle.clone();
+        let namespace_id = self.namespace_id;
+        let semaphore = self.connection_semaphore.clone();
+
+        async move {
+            let remote_peer = connection.remote_id();
+
+            // Try to acquire a connection permit
+            let permit = match semaphore.try_acquire_owned() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    warn!(
+                        peer = %remote_peer.fmt_short(),
+                        max = MAX_DOCS_CONNECTIONS,
+                        "docs sync connection limit reached, rejecting"
+                    );
+                    return Err(AcceptError::from_err(std::io::Error::other(
+                        "connection limit reached",
+                    )));
+                }
+            };
+
+            debug!(
+                peer = %remote_peer.fmt_short(),
+                namespace = %namespace_id,
+                "accepting docs sync connection"
+            );
+
+            // Handle the connection using iroh-docs sync protocol
+            let result = net::handle_connection(
+                sync_handle,
+                connection,
+                |requested_namespace, peer| {
+                    // Access control: only allow sync for our namespace
+                    async move {
+                        if requested_namespace == namespace_id {
+                            debug!(
+                                peer = %peer.fmt_short(),
+                                namespace = %requested_namespace,
+                                "accepting sync request"
+                            );
+                            AcceptOutcome::Allow
+                        } else {
+                            warn!(
+                                peer = %peer.fmt_short(),
+                                requested = %requested_namespace,
+                                our_namespace = %namespace_id,
+                                "rejecting sync request for unknown namespace"
+                            );
+                            AcceptOutcome::Reject(net::AbortReason::NotFound)
+                        }
+                    }
+                },
+                None, // No metrics for now
+            )
+            .await;
+
+            // Release permit
+            drop(permit);
+
+            match result {
+                Ok(finished) => {
+                    info!(
+                        peer = %finished.peer.fmt_short(),
+                        namespace = %finished.namespace,
+                        sent = finished.outcome.num_sent,
+                        recv = finished.outcome.num_recv,
+                        connect_ms = ?finished.timings.connect.as_millis(),
+                        process_ms = ?finished.timings.process.as_millis(),
+                        "docs sync completed"
+                    );
+                    Ok(())
+                }
+                Err(err) => {
+                    warn!(
+                        peer = ?err.peer(),
+                        namespace = ?err.namespace(),
+                        error = %err,
+                        "docs sync failed"
+                    );
+                    Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
+                }
+            }
+        }
+    }
+
+    fn shutdown(&self) -> impl std::future::Future<Output = ()> + Send + '_ {
+        async move {
+            info!("docs protocol handler shutting down");
+            // Close the semaphore to prevent new connections
+            self.connection_semaphore.close();
+        }
+    }
 }
 
 /// Initialize iroh-docs resources for export.

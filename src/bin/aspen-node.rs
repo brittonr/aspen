@@ -632,6 +632,17 @@ async fn main() -> Result<()> {
             info!("Blobs protocol handler registered");
         }
 
+        // Add docs sync protocol handler if docs sync is enabled
+        if let Some(ref docs_sync) = handle.docs_sync {
+            use aspen::docs::DOCS_SYNC_ALPN;
+            let docs_handler = docs_sync.protocol_handler();
+            builder = builder.accept(DOCS_SYNC_ALPN, docs_handler);
+            info!(
+                namespace = %docs_sync.namespace_id,
+                "Docs sync protocol handler registered"
+            );
+        }
+
         builder.spawn()
     };
     info!("Iroh Router spawned with protocol handlers");

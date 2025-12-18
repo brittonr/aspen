@@ -62,13 +62,13 @@ pub mod store;
 pub mod ticket;
 
 pub use constants::{
-    BACKGROUND_SYNC_INTERVAL, DOCS_SYNC_TIMEOUT, EXPORT_BATCH_SIZE, MAX_DOC_KEY_SIZE,
-    MAX_DOC_VALUE_SIZE, MAX_DOCS_CONNECTIONS,
+    BACKGROUND_SYNC_INTERVAL, DOCS_SYNC_ALPN, DOCS_SYNC_TIMEOUT, EXPORT_BATCH_SIZE,
+    MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE, MAX_DOCS_CONNECTIONS,
 };
 
 pub use exporter::{DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter};
 
-pub use store::{init_docs_resources, DocsResources};
+pub use store::{init_docs_resources, DocsProtocolHandler, DocsResources, DocsSyncResources};
 
 pub use importer::{
     DocsImporter, ImportResult, MAX_PEER_SUBSCRIPTIONS, PeerStatus, PeerSubscription,
