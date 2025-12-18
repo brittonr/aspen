@@ -181,6 +181,7 @@ impl Default for IrohEndpointConfig {
 }
 
 impl IrohEndpointConfig {
+    /// Create a new endpoint configuration with default settings.
     pub fn new() -> Self {
         Self::default()
     }
@@ -446,6 +447,75 @@ impl IrohEndpointManager {
 
         // Register Client RPC handler if provided
         if let Some(handler) = tui_handler {
+            builder = builder.accept(CLIENT_ALPN, handler);
+            tracing::info!("registered Client RPC protocol handler (ALPN: aspen-tui)");
+        }
+
+        // Register Gossip handler if enabled
+        if let Some(gossip) = &self.gossip {
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            tracing::info!("registered Gossip protocol handler (ALPN: gossip)");
+        }
+
+        // Spawn the router (sets ALPNs and starts accept loop)
+        self.router = Some(builder.spawn());
+        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
+    }
+
+    /// Spawn the Iroh Router with extended protocol handlers.
+    ///
+    /// This method creates a Router with support for:
+    /// - Legacy unauthenticated Raft RPC (ALPN: `raft-rpc`) - required
+    /// - Authenticated Raft RPC (ALPN: `raft-auth`) - optional
+    /// - Log subscription (ALPN: `aspen-logs`) - optional
+    /// - Client RPC (ALPN: `aspen-tui`) - optional
+    /// - Gossip (ALPN: `iroh-gossip/0`) - automatic if enabled
+    ///
+    /// # Arguments
+    /// * `raft_handler` - Protocol handler for unauthenticated Raft RPC
+    /// * `auth_raft_handler` - Optional handler for authenticated Raft RPC
+    /// * `log_subscriber_handler` - Optional handler for log subscription
+    /// * `client_handler` - Optional handler for Client RPC
+    ///
+    /// # Tiger Style
+    /// - Must be called before any server starts accepting connections
+    /// - ALPNs are set automatically by the Router
+    pub fn spawn_router_extended<R, A, L, C>(
+        &mut self,
+        raft_handler: R,
+        auth_raft_handler: Option<A>,
+        log_subscriber_handler: Option<L>,
+        client_handler: Option<C>,
+    ) where
+        R: iroh::protocol::ProtocolHandler,
+        A: iroh::protocol::ProtocolHandler,
+        L: iroh::protocol::ProtocolHandler,
+        C: iroh::protocol::ProtocolHandler,
+    {
+        use crate::protocol_handlers::{
+            CLIENT_ALPN, LOG_SUBSCRIBER_ALPN, RAFT_ALPN, RAFT_AUTH_ALPN,
+        };
+
+        let mut builder = Router::builder(self.endpoint.clone());
+
+        // Register legacy Raft RPC handler (unauthenticated)
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+
+        // Register authenticated Raft RPC handler
+        if let Some(handler) = auth_raft_handler {
+            builder = builder.accept(RAFT_AUTH_ALPN, handler);
+            tracing::info!("registered authenticated Raft RPC protocol handler (ALPN: raft-auth)");
+        }
+
+        // Register log subscriber handler
+        if let Some(handler) = log_subscriber_handler {
+            builder = builder.accept(LOG_SUBSCRIBER_ALPN, handler);
+            tracing::info!("registered log subscriber protocol handler (ALPN: aspen-logs)");
+        }
+
+        // Register Client RPC handler if provided
+        if let Some(handler) = client_handler {
             builder = builder.accept(CLIENT_ALPN, handler);
             tracing::info!("registered Client RPC protocol handler (ALPN: aspen-tui)");
         }

@@ -2,6 +2,8 @@
 //!
 //! This module provides `ProtocolHandler` implementations for different protocols:
 //! - `RaftProtocolHandler`: Handles Raft RPC connections (ALPN: `raft-rpc`)
+//! - `AuthenticatedRaftProtocolHandler`: Handles authenticated Raft RPC (ALPN: `raft-auth`)
+//! - `LogSubscriberProtocolHandler`: Handles log subscription connections (ALPN: `aspen-logs`)
 //! - `ClientProtocolHandler`: Handles client connections (ALPN: `aspen-tui`)
 //!
 //! These handlers are registered with an Iroh Router to properly dispatch
@@ -16,12 +18,22 @@
 //!       v
 //!   Router (ALPN dispatch)
 //!       |
-//!       +---> raft-rpc ALPN ---> RaftProtocolHandler
+//!       +---> raft-auth ALPN --> AuthenticatedRaftProtocolHandler (recommended)
+//!       |
+//!       +---> raft-rpc ALPN ---> RaftProtocolHandler (legacy, no auth)
+//!       |
+//!       +---> aspen-logs ALPN -> LogSubscriberProtocolHandler (read-only)
 //!       |
 //!       +---> aspen-tui ALPN --> ClientProtocolHandler
 //!       |
 //!       +---> gossip ALPN -----> Gossip (via iroh-gossip)
 //! ```
+//!
+//! # Authentication
+//!
+//! The `AuthenticatedRaftProtocolHandler` uses HMAC-SHA256 challenge-response
+//! authentication based on the cluster cookie. This prevents unauthorized nodes
+//! from participating in consensus.
 //!
 //! # Tiger Style
 //!
@@ -45,13 +57,13 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
 use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError, ProtocolHandler};
 use openraft::Raft;
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, broadcast};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::api::{
@@ -68,14 +80,31 @@ use crate::client_rpc::{
     WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
+use crate::raft::auth::{
+    AUTH_HANDSHAKE_TIMEOUT, AuthContext, AuthResponse, AuthResult, MAX_AUTH_MESSAGE_SIZE,
+};
 use crate::raft::constants::{
     MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
+};
+use crate::raft::log_subscriber::{
+    EndOfStreamReason, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage, LogEntryPayload,
+    MAX_LOG_SUBSCRIBERS, SUBSCRIBE_HANDSHAKE_TIMEOUT, SUBSCRIBE_KEEPALIVE_INTERVAL,
+    SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
 };
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 
-/// ALPN protocol identifier for Raft RPC.
+/// ALPN protocol identifier for Raft RPC (legacy, no authentication).
 pub const RAFT_ALPN: &[u8] = b"raft-rpc";
+
+/// ALPN protocol identifier for authenticated Raft RPC.
+///
+/// Uses HMAC-SHA256 challenge-response authentication based on the cluster cookie.
+/// This is the recommended ALPN for production deployments.
+pub const RAFT_AUTH_ALPN: &[u8] = b"raft-auth";
+
+/// Re-export LOG_SUBSCRIBER_ALPN for convenience.
+pub use crate::raft::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
 /// ALPN protocol identifier for Client RPC.
 ///
@@ -289,6 +318,614 @@ async fn handle_raft_rpc_stream(
 
     Ok(())
 }
+
+// ============================================================================
+// Authenticated Raft Protocol Handler
+// ============================================================================
+
+/// Protocol handler for authenticated Raft RPC over Iroh.
+///
+/// Uses HMAC-SHA256 challenge-response authentication to verify that connecting
+/// nodes share the same cluster cookie before processing Raft RPCs.
+///
+/// # Tiger Style
+///
+/// - Bounded connection count via semaphore
+/// - Explicit authentication timeout
+/// - Fixed nonce and HMAC sizes
+#[derive(Debug)]
+pub struct AuthenticatedRaftProtocolHandler {
+    raft_core: Raft<AppTypeConfig>,
+    auth_context: AuthContext,
+    connection_semaphore: Arc<Semaphore>,
+    /// Our endpoint ID for verification.
+    #[allow(dead_code)] // TODO: Use for enhanced security verification
+    our_endpoint_id: [u8; 32],
+}
+
+impl AuthenticatedRaftProtocolHandler {
+    /// Create a new authenticated Raft protocol handler.
+    ///
+    /// # Arguments
+    /// * `raft_core` - Raft instance to forward RPCs to
+    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `our_endpoint_id` - This node's Iroh endpoint ID
+    pub fn new(
+        raft_core: Raft<AppTypeConfig>,
+        cluster_cookie: &str,
+        our_endpoint_id: [u8; 32],
+    ) -> Self {
+        Self {
+            raft_core,
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
+            our_endpoint_id,
+        }
+    }
+}
+
+impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        let remote_node_id = connection.remote_id();
+
+        // Try to acquire a connection permit
+        let permit = match self.connection_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    "Authenticated Raft connection limit reached ({}), rejecting connection from {}",
+                    MAX_CONCURRENT_CONNECTIONS, remote_node_id
+                );
+                return Err(AcceptError::from_err(std::io::Error::other(
+                    "connection limit reached",
+                )));
+            }
+        };
+
+        debug!(remote_node = %remote_node_id, "accepted authenticated Raft RPC connection");
+
+        // Handle the connection with authentication
+        let result = handle_authenticated_raft_connection(
+            connection,
+            self.raft_core.clone(),
+            self.auth_context.clone(),
+        )
+        .await;
+
+        drop(permit);
+
+        result.map_err(|err| AcceptError::from_err(std::io::Error::other(err.to_string())))
+    }
+
+    async fn shutdown(&self) {
+        info!("Authenticated Raft protocol handler shutting down");
+        self.connection_semaphore.close();
+    }
+}
+
+/// Handle an authenticated Raft RPC connection.
+///
+/// Performs challenge-response authentication before processing RPCs.
+#[instrument(skip(connection, raft_core, auth_context))]
+async fn handle_authenticated_raft_connection(
+    connection: Connection,
+    raft_core: Raft<AppTypeConfig>,
+    auth_context: AuthContext,
+) -> anyhow::Result<()> {
+    let remote_node_id = connection.remote_id();
+
+    // Tiger Style: Fixed limit on concurrent streams per connection
+    let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
+    let active_streams = Arc::new(AtomicU32::new(0));
+
+    // Accept bidirectional streams from this connection
+    loop {
+        let stream = match connection.accept_bi().await {
+            Ok(stream) => stream,
+            Err(err) => {
+                debug!(remote_node = %remote_node_id, error = %err, "Authenticated Raft connection closed");
+                break;
+            }
+        };
+
+        // Try to acquire a stream permit
+        let permit = match stream_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    remote_node = %remote_node_id,
+                    max_streams = MAX_STREAMS_PER_CONNECTION,
+                    "Authenticated Raft stream limit reached, dropping stream"
+                );
+                continue;
+            }
+        };
+
+        active_streams.fetch_add(1, Ordering::Relaxed);
+        let active_streams_clone = active_streams.clone();
+
+        let raft_core_clone = raft_core.clone();
+        let auth_context_clone = auth_context.clone();
+        let (send, recv) = stream;
+        tokio::spawn(async move {
+            let _permit = permit;
+            if let Err(err) =
+                handle_authenticated_raft_stream((recv, send), raft_core_clone, auth_context_clone)
+                    .await
+            {
+                error!(error = %err, "failed to handle authenticated Raft RPC stream");
+            }
+            active_streams_clone.fetch_sub(1, Ordering::Relaxed);
+        });
+    }
+
+    Ok(())
+}
+
+/// Handle a single authenticated Raft RPC stream.
+///
+/// 1. Send AuthChallenge
+/// 2. Receive AuthResponse
+/// 3. Verify HMAC
+/// 4. Send AuthResult
+/// 5. If authenticated, process Raft RPC
+#[instrument(skip(recv, send, raft_core, auth_context))]
+async fn handle_authenticated_raft_stream(
+    (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
+    raft_core: Raft<AppTypeConfig>,
+    auth_context: AuthContext,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    // Step 1: Generate and send challenge
+    let challenge = auth_context.generate_challenge();
+    let challenge_bytes =
+        postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
+    send.write_all(&challenge_bytes)
+        .await
+        .context("failed to send challenge")?;
+
+    // Step 2: Receive response with timeout
+    let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+        let buffer = recv
+            .read_to_end(MAX_AUTH_MESSAGE_SIZE)
+            .await
+            .context("failed to read auth response")?;
+        let response: AuthResponse =
+            postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
+        Ok::<_, anyhow::Error>(response)
+    })
+    .await;
+
+    let response = match response_result {
+        Ok(Ok(response)) => response,
+        Ok(Err(err)) => {
+            warn!(error = %err, "authentication failed: bad response");
+            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
+                .context("failed to serialize auth result")?;
+            send.write_all(&result_bytes).await.ok();
+            send.finish().ok();
+            return Err(err);
+        }
+        Err(_) => {
+            warn!("authentication timed out");
+            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
+                .context("failed to serialize auth result")?;
+            send.write_all(&result_bytes).await.ok();
+            send.finish().ok();
+            return Err(anyhow::anyhow!("authentication timeout"));
+        }
+    };
+
+    // Step 3: Verify the response
+    let auth_result = auth_context.verify_response(&challenge, &response);
+
+    // Step 4: Send result
+    let result_bytes =
+        postcard::to_stdvec(&auth_result).context("failed to serialize auth result")?;
+    send.write_all(&result_bytes)
+        .await
+        .context("failed to send auth result")?;
+
+    if !auth_result.is_ok() {
+        warn!(result = ?auth_result, "authentication failed");
+        send.finish().ok();
+        return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
+    }
+
+    debug!("authentication successful, processing Raft RPC");
+
+    // Step 5: Read and process the Raft RPC message
+    let buffer = recv
+        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
+        .await
+        .context("failed to read RPC message")?;
+
+    let request: RaftRpcProtocol =
+        postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
+
+    debug!(request_type = ?request, "received authenticated Raft RPC request");
+
+    // Process the RPC (same as unauthenticated handler)
+    let response = match request {
+        RaftRpcProtocol::Vote(vote_req) => {
+            let result = match raft_core.vote(vote_req.request).await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!(error = ?err, "vote RPC failed with fatal error");
+                    return Err(anyhow::anyhow!("vote failed: {:?}", err));
+                }
+            };
+            RaftRpcResponse::Vote(result)
+        }
+        RaftRpcProtocol::AppendEntries(append_req) => {
+            let result = match raft_core.append_entries(append_req.request).await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!(error = ?err, "append_entries RPC failed with fatal error");
+                    return Err(anyhow::anyhow!("append_entries failed: {:?}", err));
+                }
+            };
+            RaftRpcResponse::AppendEntries(result)
+        }
+        RaftRpcProtocol::InstallSnapshot(snapshot_req) => {
+            let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
+            let snapshot = openraft::Snapshot {
+                meta: snapshot_req.snapshot_meta,
+                snapshot: snapshot_cursor,
+            };
+            let result = raft_core
+                .install_full_snapshot(snapshot_req.vote, snapshot)
+                .await
+                .map_err(openraft::error::RaftError::Fatal);
+            RaftRpcResponse::InstallSnapshot(result)
+        }
+    };
+
+    let response_bytes =
+        postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
+
+    send.write_all(&response_bytes)
+        .await
+        .context("failed to write RPC response")?;
+    send.finish().context("failed to finish send stream")?;
+
+    debug!("authenticated Raft RPC response sent successfully");
+
+    Ok(())
+}
+
+// ============================================================================
+// Log Subscriber Protocol Handler
+// ============================================================================
+
+/// Protocol handler for log subscription over Iroh.
+///
+/// Provides a read-only interface for clients to stream committed Raft log entries.
+/// Uses the same HMAC-SHA256 authentication as the authenticated Raft handler.
+///
+/// # Tiger Style
+///
+/// - Bounded subscriber count
+/// - Keepalive for idle connections
+/// - Explicit subscription limits
+#[derive(Debug)]
+pub struct LogSubscriberProtocolHandler {
+    auth_context: AuthContext,
+    connection_semaphore: Arc<Semaphore>,
+    /// Broadcast channel for log entries.
+    log_sender: broadcast::Sender<LogEntryPayload>,
+    /// Node ID for response messages.
+    node_id: u64,
+    /// Subscriber ID counter.
+    next_subscriber_id: AtomicU64,
+}
+
+impl LogSubscriberProtocolHandler {
+    /// Create a new log subscriber protocol handler.
+    ///
+    /// # Arguments
+    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `node_id` - This node's ID
+    ///
+    /// # Returns
+    /// The handler and a sender that should be used to broadcast log entries.
+    pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>) {
+        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let handler = Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender: log_sender.clone(),
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+        };
+        (handler, log_sender)
+    }
+
+    /// Create a handler with an existing broadcast sender.
+    ///
+    /// Use this when you need multiple handlers to share the same broadcast channel.
+    pub fn with_sender(
+        cluster_cookie: &str,
+        node_id: u64,
+        log_sender: broadcast::Sender<LogEntryPayload>,
+    ) -> Self {
+        Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender,
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+        }
+    }
+}
+
+impl ProtocolHandler for LogSubscriberProtocolHandler {
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        let remote_node_id = connection.remote_id();
+
+        // Try to acquire a connection permit
+        let permit = match self.connection_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                warn!(
+                    "Log subscriber limit reached ({}), rejecting connection from {}",
+                    MAX_LOG_SUBSCRIBERS, remote_node_id
+                );
+                return Err(AcceptError::from_err(std::io::Error::other(
+                    "subscriber limit reached",
+                )));
+            }
+        };
+
+        let subscriber_id = self.next_subscriber_id.fetch_add(1, Ordering::Relaxed);
+        debug!(
+            remote_node = %remote_node_id,
+            subscriber_id = subscriber_id,
+            "accepted log subscriber connection"
+        );
+
+        // Handle the subscriber connection
+        let result = handle_log_subscriber_connection(
+            connection,
+            self.auth_context.clone(),
+            self.log_sender.subscribe(),
+            self.node_id,
+            subscriber_id,
+        )
+        .await;
+
+        drop(permit);
+
+        result.map_err(|err| AcceptError::from_err(std::io::Error::other(err.to_string())))
+    }
+
+    async fn shutdown(&self) {
+        info!("Log subscriber protocol handler shutting down");
+        self.connection_semaphore.close();
+    }
+}
+
+/// Handle a log subscriber connection.
+#[instrument(skip(connection, auth_context, log_receiver))]
+async fn handle_log_subscriber_connection(
+    connection: Connection,
+    auth_context: AuthContext,
+    mut log_receiver: broadcast::Receiver<LogEntryPayload>,
+    node_id: u64,
+    subscriber_id: u64,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let remote_node_id = connection.remote_id();
+
+    // Accept the initial stream for authentication and subscription setup
+    let (mut send, mut recv) = connection
+        .accept_bi()
+        .await
+        .context("failed to accept subscriber stream")?;
+
+    // Step 1: Send challenge
+    let challenge = auth_context.generate_challenge();
+    let challenge_bytes =
+        postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
+    send.write_all(&challenge_bytes)
+        .await
+        .context("failed to send challenge")?;
+
+    // Step 2: Receive auth response
+    let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+        let buffer = recv
+            .read_to_end(MAX_AUTH_MESSAGE_SIZE)
+            .await
+            .context("failed to read auth response")?;
+        let response: AuthResponse =
+            postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
+        Ok::<_, anyhow::Error>(response)
+    })
+    .await;
+
+    let auth_response = match response_result {
+        Ok(Ok(response)) => response,
+        Ok(Err(err)) => {
+            warn!(error = %err, subscriber_id = subscriber_id, "subscriber auth failed");
+            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
+            send.write_all(&result_bytes).await.ok();
+            send.finish().ok();
+            return Err(err);
+        }
+        Err(_) => {
+            warn!(subscriber_id = subscriber_id, "subscriber auth timed out");
+            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
+            send.write_all(&result_bytes).await.ok();
+            send.finish().ok();
+            return Err(anyhow::anyhow!("authentication timeout"));
+        }
+    };
+
+    // Step 3: Verify
+    let auth_result = auth_context.verify_response(&challenge, &auth_response);
+
+    // Step 4: Send auth result
+    let result_bytes = postcard::to_stdvec(&auth_result)?;
+    send.write_all(&result_bytes)
+        .await
+        .context("failed to send auth result")?;
+
+    if !auth_result.is_ok() {
+        warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
+        send.finish().ok();
+        return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
+    }
+
+    debug!(subscriber_id = subscriber_id, "subscriber authenticated");
+
+    // Step 5: Receive subscription request
+    let sub_request_result = tokio::time::timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
+        let buffer = recv
+            .read_to_end(1024) // Subscription requests are small
+            .await
+            .context("failed to read subscribe request")?;
+        let request: SubscribeRequest =
+            postcard::from_bytes(&buffer).context("failed to deserialize subscribe request")?;
+        Ok::<_, anyhow::Error>(request)
+    })
+    .await;
+
+    let sub_request = match sub_request_result {
+        Ok(Ok(request)) => request,
+        Ok(Err(err)) => {
+            let response = SubscribeResponse::Rejected {
+                reason: SubscribeRejectReason::InternalError,
+            };
+            let response_bytes = postcard::to_stdvec(&response)?;
+            send.write_all(&response_bytes).await.ok();
+            send.finish().ok();
+            return Err(err);
+        }
+        Err(_) => {
+            let response = SubscribeResponse::Rejected {
+                reason: SubscribeRejectReason::InternalError,
+            };
+            let response_bytes = postcard::to_stdvec(&response)?;
+            send.write_all(&response_bytes).await.ok();
+            send.finish().ok();
+            return Err(anyhow::anyhow!("subscribe request timeout"));
+        }
+    };
+
+    debug!(
+        subscriber_id = subscriber_id,
+        start_index = sub_request.start_index,
+        prefix = ?sub_request.key_prefix,
+        "processing subscription request"
+    );
+
+    // Step 6: Accept subscription
+    // TODO: Implement historical replay from start_index if available
+    let response = SubscribeResponse::Accepted {
+        current_index: 0, // TODO: Get actual committed index
+        node_id,
+    };
+    let response_bytes = postcard::to_stdvec(&response)?;
+    send.write_all(&response_bytes)
+        .await
+        .context("failed to send subscribe response")?;
+
+    info!(
+        subscriber_id = subscriber_id,
+        remote = %remote_node_id,
+        "log subscription active"
+    );
+
+    // Step 7: Stream log entries
+    let key_prefix = sub_request.key_prefix;
+    let mut keepalive_interval = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
+    keepalive_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            // Receive log entry from broadcast channel
+            entry_result = log_receiver.recv() => {
+                match entry_result {
+                    Ok(entry) => {
+                        // Apply prefix filter
+                        if !key_prefix.is_empty() && !entry.operation.matches_prefix(&key_prefix) {
+                            continue;
+                        }
+
+                        let message = LogEntryMessage::Entry(entry);
+                        let message_bytes = match postcard::to_stdvec(&message) {
+                            Ok(bytes) => bytes,
+                            Err(err) => {
+                                error!(error = %err, "failed to serialize log entry");
+                                continue;
+                            }
+                        };
+
+                        if let Err(err) = send.write_all(&message_bytes).await {
+                            debug!(subscriber_id = subscriber_id, error = %err, "subscriber disconnected");
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!(
+                            subscriber_id = subscriber_id,
+                            lagged_count = count,
+                            "subscriber lagged, disconnecting"
+                        );
+                        let end_message = LogEntryMessage::EndOfStream {
+                            reason: EndOfStreamReason::Lagged,
+                        };
+                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
+                            send.write_all(&bytes).await.ok();
+                        }
+                        break;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!(subscriber_id = subscriber_id, "log broadcast channel closed");
+                        let end_message = LogEntryMessage::EndOfStream {
+                            reason: EndOfStreamReason::ServerShutdown,
+                        };
+                        if let Ok(bytes) = postcard::to_stdvec(&end_message) {
+                            send.write_all(&bytes).await.ok();
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Send keepalive on idle
+            _ = keepalive_interval.tick() => {
+                let keepalive = LogEntryMessage::Keepalive {
+                    committed_index: 0, // TODO: Get actual committed index
+                    timestamp_ms: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64,
+                };
+                let message_bytes = match postcard::to_stdvec(&keepalive) {
+                    Ok(bytes) => bytes,
+                    Err(_) => continue,
+                };
+                if send.write_all(&message_bytes).await.is_err() {
+                    debug!(subscriber_id = subscriber_id, "subscriber disconnected during keepalive");
+                    break;
+                }
+            }
+        }
+    }
+
+    send.finish().ok();
+
+    info!(subscriber_id = subscriber_id, "log subscription ended");
+
+    Ok(())
+}
+
+// ============================================================================
+// Client Protocol Handler
+// ============================================================================
 
 /// Context for Client protocol handler with all dependencies.
 #[derive(Clone)]

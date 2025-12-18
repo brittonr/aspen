@@ -38,6 +38,22 @@ pub use node::NodeBuilder;
 // Note: NodeClient removed - use RaftNode directly from bootstrap_simple
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
+// Re-export key protocol handler types
+pub use protocol_handlers::{
+    AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler,
+    LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN,
+    RaftProtocolHandler,
+};
+
+// Re-export authentication types
+pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
+
+// Re-export log subscriber types
+pub use raft::log_subscriber::{
+    EndOfStreamReason, KvOperation, LogEntryMessage, LogEntryPayload, SubscribeRejectReason,
+    SubscribeRequest, SubscribeResponse,
+};
+
 /// Fuzzing-specific module that exposes internal types for fuzz testing.
 ///
 /// Only available when compiled with the `fuzzing` feature.

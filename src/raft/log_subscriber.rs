@@ -1,0 +1,481 @@
+//! Raft log subscription protocol for read-only clients.
+//!
+//! Provides a streaming interface for clients to receive committed Raft log
+//! entries in real-time. This enables building reactive systems that respond
+//! to state changes without polling.
+//!
+//! # Protocol Flow
+//!
+//! 1. Client connects via LOG_SUBSCRIBER_ALPN
+//! 2. Server sends AuthChallenge (same as Raft auth)
+//! 3. Client sends AuthResponse with valid HMAC
+//! 4. Server sends AuthResult
+//! 5. If authenticated, client sends SubscribeRequest
+//! 6. Server streams LogEntryMessage for each committed entry
+//!
+//! # Design Notes
+//!
+//! - Read-only: Subscribers cannot modify state
+//! - Authenticated: Uses same cookie-based auth as Raft RPC
+//! - Bounded: Fixed buffer sizes and rate limits
+//! - Resumable: Clients can specify starting log index
+//!
+//! # Tiger Style
+//!
+//! - Fixed message sizes with explicit bounds
+//! - Explicit subscription limits (max subscribers, buffer size)
+//! - Clear protocol versioning for forward compatibility
+
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// ALPN identifier for log subscription protocol.
+pub const LOG_SUBSCRIBER_ALPN: &[u8] = b"aspen-logs";
+
+/// Maximum number of concurrent log subscribers per node.
+///
+/// Tiger Style: Fixed upper bound on subscriber connections.
+pub const MAX_LOG_SUBSCRIBERS: usize = 100;
+
+/// Size of the broadcast channel buffer for log entries.
+///
+/// Subscribers that fall behind by more than this many entries
+/// will experience lag (receive lagged error).
+pub const LOG_BROADCAST_BUFFER_SIZE: usize = 1000;
+
+/// Maximum size of a single log entry message (10 MB).
+///
+/// Matches MAX_RPC_MESSAGE_SIZE for consistency.
+pub const MAX_LOG_ENTRY_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+
+/// Timeout for subscription handshake (5 seconds).
+pub const SUBSCRIBE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Keepalive interval for idle connections (30 seconds).
+pub const SUBSCRIBE_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Protocol version for log subscription.
+pub const LOG_SUBSCRIBE_PROTOCOL_VERSION: u8 = 1;
+
+// ============================================================================
+// Protocol Types
+// ============================================================================
+
+/// Subscription request sent by client after authentication.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscribeRequest {
+    /// Starting log index (0 = from beginning, u64::MAX = latest only).
+    pub start_index: u64,
+    /// Optional key prefix filter (empty = all keys).
+    pub key_prefix: Vec<u8>,
+    /// Protocol version for compatibility checking.
+    pub protocol_version: u8,
+}
+
+impl SubscribeRequest {
+    /// Create a subscription starting from a specific log index.
+    pub fn from_index(index: u64) -> Self {
+        Self {
+            start_index: index,
+            key_prefix: Vec::new(),
+            protocol_version: LOG_SUBSCRIBE_PROTOCOL_VERSION,
+        }
+    }
+
+    /// Create a subscription for only the latest entries.
+    pub fn latest_only() -> Self {
+        Self {
+            start_index: u64::MAX,
+            key_prefix: Vec::new(),
+            protocol_version: LOG_SUBSCRIBE_PROTOCOL_VERSION,
+        }
+    }
+
+    /// Create a subscription with a key prefix filter.
+    pub fn with_prefix(start_index: u64, prefix: impl Into<Vec<u8>>) -> Self {
+        Self {
+            start_index,
+            key_prefix: prefix.into(),
+            protocol_version: LOG_SUBSCRIBE_PROTOCOL_VERSION,
+        }
+    }
+}
+
+/// Response to subscription request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SubscribeResponse {
+    /// Subscription accepted, streaming will begin.
+    Accepted {
+        /// Current committed index at time of subscription.
+        current_index: u64,
+        /// Node ID of the server.
+        node_id: u64,
+    },
+    /// Subscription rejected.
+    Rejected {
+        /// Reason for rejection.
+        reason: SubscribeRejectReason,
+    },
+}
+
+/// Reasons why a subscription might be rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SubscribeRejectReason {
+    /// Too many subscribers connected.
+    TooManySubscribers,
+    /// Requested start index is not available (compacted).
+    IndexNotAvailable,
+    /// Protocol version not supported.
+    UnsupportedVersion,
+    /// Server is not ready to accept subscriptions.
+    NotReady,
+    /// Generic internal error.
+    InternalError,
+}
+
+impl std::fmt::Display for SubscribeRejectReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooManySubscribers => write!(f, "too many subscribers"),
+            Self::IndexNotAvailable => write!(f, "requested index not available"),
+            Self::UnsupportedVersion => write!(f, "protocol version not supported"),
+            Self::NotReady => write!(f, "server not ready"),
+            Self::InternalError => write!(f, "internal error"),
+        }
+    }
+}
+
+/// A streamed log entry message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LogEntryMessage {
+    /// A committed log entry.
+    Entry(LogEntryPayload),
+    /// Keepalive message (sent periodically on idle connections).
+    Keepalive {
+        /// Current committed index.
+        committed_index: u64,
+        /// Server timestamp (milliseconds since UNIX epoch).
+        timestamp_ms: u64,
+    },
+    /// Stream is ending (server shutting down or error).
+    EndOfStream {
+        /// Reason for stream termination.
+        reason: EndOfStreamReason,
+    },
+}
+
+/// Reasons why a log stream might end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EndOfStreamReason {
+    /// Server is shutting down gracefully.
+    ServerShutdown,
+    /// Client requested disconnect.
+    ClientDisconnect,
+    /// Subscriber fell too far behind.
+    Lagged,
+    /// Internal error occurred.
+    InternalError,
+}
+
+impl std::fmt::Display for EndOfStreamReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ServerShutdown => write!(f, "server shutdown"),
+            Self::ClientDisconnect => write!(f, "client disconnect"),
+            Self::Lagged => write!(f, "subscriber lagged"),
+            Self::InternalError => write!(f, "internal error"),
+        }
+    }
+}
+
+/// Payload of a committed log entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntryPayload {
+    /// Log index of this entry.
+    pub index: u64,
+    /// Raft term when entry was created.
+    pub term: u64,
+    /// Timestamp when entry was committed (milliseconds since UNIX epoch).
+    pub committed_at_ms: u64,
+    /// The operation that was committed.
+    pub operation: KvOperation,
+}
+
+/// Key-value operations that appear in the log.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum KvOperation {
+    /// Set a single key-value pair.
+    Set { key: Vec<u8>, value: Vec<u8> },
+    /// Set multiple key-value pairs atomically.
+    SetMulti { pairs: Vec<(Vec<u8>, Vec<u8>)> },
+    /// Delete a single key.
+    Delete { key: Vec<u8> },
+    /// Delete multiple keys atomically.
+    DeleteMulti { keys: Vec<Vec<u8>> },
+    /// No-op entry (used for leader election).
+    Noop,
+    /// Membership change entry.
+    MembershipChange {
+        /// Human-readable description of the change.
+        description: String,
+    },
+}
+
+impl KvOperation {
+    /// Returns true if this operation affects the given key prefix.
+    pub fn matches_prefix(&self, prefix: &[u8]) -> bool {
+        if prefix.is_empty() {
+            return true;
+        }
+
+        match self {
+            KvOperation::Set { key, .. } => key.starts_with(prefix),
+            KvOperation::SetMulti { pairs } => pairs.iter().any(|(k, _)| k.starts_with(prefix)),
+            KvOperation::Delete { key } => key.starts_with(prefix),
+            KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
+            KvOperation::Noop | KvOperation::MembershipChange { .. } => {
+                // Always include control operations
+                true
+            }
+        }
+    }
+
+    /// Returns the primary key affected by this operation, if any.
+    pub fn primary_key(&self) -> Option<&[u8]> {
+        match self {
+            KvOperation::Set { key, .. } | KvOperation::Delete { key } => Some(key),
+            KvOperation::SetMulti { pairs } => pairs.first().map(|(k, _)| k.as_slice()),
+            KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
+            KvOperation::Noop | KvOperation::MembershipChange { .. } => None,
+        }
+    }
+
+    /// Returns the number of keys affected by this operation.
+    pub fn key_count(&self) -> usize {
+        match self {
+            KvOperation::Set { .. } | KvOperation::Delete { .. } => 1,
+            KvOperation::SetMulti { pairs } => pairs.len(),
+            KvOperation::DeleteMulti { keys } => keys.len(),
+            KvOperation::Noop | KvOperation::MembershipChange { .. } => 0,
+        }
+    }
+}
+
+// ============================================================================
+// Subscriber State
+// ============================================================================
+
+/// State tracking for a connected subscriber.
+#[derive(Debug)]
+pub struct SubscriberState {
+    /// Unique identifier for this subscriber connection.
+    pub id: u64,
+    /// Client's Iroh endpoint ID.
+    pub client_endpoint_id: [u8; 32],
+    /// Key prefix filter (empty = all keys).
+    pub key_prefix: Vec<u8>,
+    /// Last sent log index.
+    pub last_sent_index: u64,
+    /// Connection timestamp (milliseconds since UNIX epoch).
+    pub connected_at_ms: u64,
+    /// Number of entries sent.
+    pub entries_sent: u64,
+}
+
+impl SubscriberState {
+    /// Create new subscriber state.
+    pub fn new(
+        id: u64,
+        client_endpoint_id: [u8; 32],
+        key_prefix: Vec<u8>,
+        start_index: u64,
+    ) -> Self {
+        Self {
+            id,
+            client_endpoint_id,
+            key_prefix,
+            last_sent_index: start_index.saturating_sub(1),
+            connected_at_ms: current_time_ms(),
+            entries_sent: 0,
+        }
+    }
+
+    /// Check if an operation should be sent to this subscriber.
+    pub fn should_send(&self, operation: &KvOperation) -> bool {
+        operation.matches_prefix(&self.key_prefix)
+    }
+
+    /// Record that an entry was sent.
+    pub fn record_sent(&mut self, index: u64) {
+        self.last_sent_index = index;
+        self.entries_sent += 1;
+    }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Get current time in milliseconds since UNIX epoch.
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time before UNIX epoch")
+        .as_millis() as u64
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subscribe_request_from_index() {
+        let req = SubscribeRequest::from_index(100);
+        assert_eq!(req.start_index, 100);
+        assert!(req.key_prefix.is_empty());
+        assert_eq!(req.protocol_version, LOG_SUBSCRIBE_PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn test_subscribe_request_latest_only() {
+        let req = SubscribeRequest::latest_only();
+        assert_eq!(req.start_index, u64::MAX);
+    }
+
+    #[test]
+    fn test_subscribe_request_with_prefix() {
+        let req = SubscribeRequest::with_prefix(50, b"users/".to_vec());
+        assert_eq!(req.start_index, 50);
+        assert_eq!(req.key_prefix, b"users/");
+    }
+
+    #[test]
+    fn test_kv_operation_matches_prefix() {
+        let set_op = KvOperation::Set {
+            key: b"users/123".to_vec(),
+            value: b"data".to_vec(),
+        };
+
+        assert!(set_op.matches_prefix(b""));
+        assert!(set_op.matches_prefix(b"users/"));
+        assert!(set_op.matches_prefix(b"users/123"));
+        assert!(!set_op.matches_prefix(b"posts/"));
+
+        let multi_op = KvOperation::SetMulti {
+            pairs: vec![
+                (b"users/1".to_vec(), b"a".to_vec()),
+                (b"posts/1".to_vec(), b"b".to_vec()),
+            ],
+        };
+
+        assert!(multi_op.matches_prefix(b"users/"));
+        assert!(multi_op.matches_prefix(b"posts/"));
+        assert!(!multi_op.matches_prefix(b"comments/"));
+
+        // Control operations always match
+        assert!(KvOperation::Noop.matches_prefix(b"anything"));
+    }
+
+    #[test]
+    fn test_kv_operation_primary_key() {
+        let set_op = KvOperation::Set {
+            key: b"key1".to_vec(),
+            value: b"val".to_vec(),
+        };
+        assert_eq!(set_op.primary_key(), Some(b"key1".as_slice()));
+
+        let delete_op = KvOperation::Delete {
+            key: b"key2".to_vec(),
+        };
+        assert_eq!(delete_op.primary_key(), Some(b"key2".as_slice()));
+
+        assert_eq!(KvOperation::Noop.primary_key(), None);
+    }
+
+    #[test]
+    fn test_kv_operation_key_count() {
+        assert_eq!(
+            KvOperation::Set {
+                key: vec![],
+                value: vec![]
+            }
+            .key_count(),
+            1
+        );
+
+        assert_eq!(
+            KvOperation::SetMulti {
+                pairs: vec![(vec![], vec![]), (vec![], vec![]), (vec![], vec![])]
+            }
+            .key_count(),
+            3
+        );
+
+        assert_eq!(KvOperation::Noop.key_count(), 0);
+    }
+
+    #[test]
+    fn test_subscriber_state_should_send() {
+        let mut state = SubscriberState::new(1, [0u8; 32], b"users/".to_vec(), 0);
+
+        let matching = KvOperation::Set {
+            key: b"users/123".to_vec(),
+            value: vec![],
+        };
+        assert!(state.should_send(&matching));
+
+        let non_matching = KvOperation::Set {
+            key: b"posts/456".to_vec(),
+            value: vec![],
+        };
+        assert!(!state.should_send(&non_matching));
+
+        // With empty prefix, everything matches
+        state.key_prefix = vec![];
+        assert!(state.should_send(&non_matching));
+    }
+
+    #[test]
+    fn test_subscriber_state_record_sent() {
+        let mut state = SubscriberState::new(1, [0u8; 32], vec![], 10);
+        assert_eq!(state.last_sent_index, 9); // start_index - 1
+        assert_eq!(state.entries_sent, 0);
+
+        state.record_sent(10);
+        assert_eq!(state.last_sent_index, 10);
+        assert_eq!(state.entries_sent, 1);
+
+        state.record_sent(11);
+        assert_eq!(state.last_sent_index, 11);
+        assert_eq!(state.entries_sent, 2);
+    }
+
+    #[test]
+    fn test_subscribe_reject_reason_display() {
+        assert_eq!(
+            SubscribeRejectReason::TooManySubscribers.to_string(),
+            "too many subscribers"
+        );
+        assert_eq!(
+            SubscribeRejectReason::IndexNotAvailable.to_string(),
+            "requested index not available"
+        );
+    }
+
+    #[test]
+    fn test_end_of_stream_reason_display() {
+        assert_eq!(
+            EndOfStreamReason::ServerShutdown.to_string(),
+            "server shutdown"
+        );
+        assert_eq!(EndOfStreamReason::Lagged.to_string(), "subscriber lagged");
+    }
+}

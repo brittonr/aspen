@@ -36,11 +36,13 @@
 //! handle.raft_node.write(write_request).await?;
 //! ```
 
+pub mod auth;
 pub mod clock_drift_detection;
 pub mod connection_pool;
 pub mod constants;
 pub mod integrity;
 pub mod learner_promotion;
+pub mod log_subscriber;
 pub mod madsim_network;
 pub mod network;
 pub mod node;
