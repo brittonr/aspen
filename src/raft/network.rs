@@ -275,37 +275,56 @@ impl IrpcRaftNetwork {
             .context("peer address not found in peer map")?;
 
         // Get or create connection from pool
+        //
+        // Error classification: Connection failure (timeout, refused, unreachable) is
+        // classified as NodeCrash (both Raft and Iroh disconnected). This is intentional:
+        // the failure detector tracks reachability, not error details. Specific error
+        // types are logged but not used for classification.
         let peer_connection = self
             .connection_pool
             .get_or_connect(self.target, peer_addr)
             .await
-            .inspect_err(|_err| {
-                // Update failure detector on connection failure
+            .inspect_err(|err| {
+                // Log specific error for debugging, but classify uniformly as NodeCrash
+                tracing::debug!(
+                    target = %self.target,
+                    error = %err,
+                    "connection failure, classifying as NodeCrash"
+                );
                 let failure_detector_clone = Arc::clone(&self.failure_detector);
                 let target = self.target;
                 tokio::spawn(async move {
                     failure_detector_clone.write().await.update_node_status(
                         target,
-                        ConnectionStatus::Disconnected,
-                        ConnectionStatus::Disconnected,
+                        ConnectionStatus::Disconnected, // Raft failed
+                        ConnectionStatus::Disconnected, // Iroh failed (can't reach node)
                     );
                 });
             })
             .context("failed to get connection from pool")?;
 
         // Acquire a stream from the pooled connection
-        let (mut send_stream, mut recv_stream) = peer_connection
+        //
+        // Error classification: Stream failure with existing connection is classified
+        // as ActorCrash (Iroh connected but Raft disconnected). This distinguishes
+        // node-level failures from application-level issues.
+        let mut stream_handle = peer_connection
             .acquire_stream()
             .await
-            .inspect_err(|_err| {
-                // Update failure detector on stream failure (connection exists but stream failed)
+            .inspect_err(|err| {
+                // Log specific error for debugging, but classify uniformly as ActorCrash
+                tracing::debug!(
+                    target = %self.target,
+                    error = %err,
+                    "stream failure with connection up, classifying as ActorCrash"
+                );
                 let failure_detector_clone = Arc::clone(&self.failure_detector);
                 let target = self.target;
                 tokio::spawn(async move {
                     failure_detector_clone.write().await.update_node_status(
                         target,
-                        ConnectionStatus::Disconnected,
-                        ConnectionStatus::Connected, // Connection exists but Raft actor might be down
+                        ConnectionStatus::Disconnected, // Raft failed
+                        ConnectionStatus::Connected,    // Iroh works (connection exists)
                     );
                 });
             })
@@ -317,18 +336,22 @@ impl IrpcRaftNetwork {
         // Serialize and send the request
         let serialized =
             postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
-        send_stream
+        stream_handle
+            .send
             .write_all(&serialized)
             .await
             .context("failed to write RPC request to stream")?;
-        send_stream
+        stream_handle
+            .send
             .finish()
             .context("failed to finish send stream")?;
 
         // Read response (with size and time limits)
         let response_buf = tokio::time::timeout(
             IROH_READ_TIMEOUT,
-            recv_stream.read_to_end(MAX_RPC_MESSAGE_SIZE as usize),
+            stream_handle
+                .recv
+                .read_to_end(MAX_RPC_MESSAGE_SIZE as usize),
         )
         .await
         .context("timeout reading RPC response")?

@@ -470,14 +470,34 @@ where
 /// - Fail-fast on corruption (redb panics on invalid state)
 /// - Bounded operations (no unbounded iteration)
 /// - Chain hashing for integrity verification (32-byte Blake3)
+///
+/// # Cache Consistency
+///
+/// The `chain_tip` cache is an optimization to avoid database reads on every append.
+/// It is safe because:
+///
+/// 1. **Raft serializes appends**: OpenRaft guarantees that log appends are serialized
+///    at the consensus layer. Only the leader appends, and it does so sequentially.
+///    This eliminates concurrent append races.
+///
+/// 2. **Database is source of truth**: On startup/recovery, `load_chain_tip()` reads
+///    from the database, not the cache. A crash after database commit but before
+///    cache update is safe - the next startup loads the correct state.
+///
+/// 3. **Truncate is also serialized**: Log truncation only happens during leader
+///    changes, which are also serialized by Raft consensus.
 #[derive(Clone, Debug)]
 pub struct RedbLogStore {
     db: Arc<Database>,
     path: PathBuf,
     /// Cached chain tip state for efficient appends.
     /// Updated on each append, loaded on startup.
+    ///
     /// Uses std::sync::RwLock because operations are fast and we need
     /// to access it from both sync (migration) and async (append) contexts.
+    ///
+    /// This cache is safe without versioning because Raft serializes all
+    /// log operations. See struct-level documentation for details.
     chain_tip: Arc<StdRwLock<ChainTipState>>,
 }
 

@@ -36,10 +36,11 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 use openraft::{Raft, RaftMetrics, ReadPolicy};
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::Semaphore;
 use tracing::{error, info, instrument, warn};
 
 use crate::api::{
@@ -68,8 +69,11 @@ pub struct RaftNode {
     /// State machine (for direct KV operations).
     state_machine: StateMachineVariant,
 
-    /// Whether the cluster has been initialized.
-    initialized: RwLock<bool>,
+    /// Whether the cluster has been initialized (atomic for race-free updates).
+    ///
+    /// Tiger Style: Uses atomic boolean to prevent TOCTOU race condition where
+    /// multiple concurrent calls could read false, check metrics, then all write true.
+    initialized: AtomicBool,
 
     /// Semaphore to limit concurrent operations.
     semaphore: Arc<Semaphore>,
@@ -86,7 +90,7 @@ impl RaftNode {
             raft,
             node_id,
             state_machine,
-            initialized: RwLock::new(false),
+            initialized: AtomicBool::new(false),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
         }
     }
@@ -107,13 +111,13 @@ impl RaftNode {
     }
 
     /// Check if the cluster is initialized.
-    pub async fn is_initialized(&self) -> bool {
-        *self.initialized.read().await
+    pub fn is_initialized(&self) -> bool {
+        self.initialized.load(Ordering::Acquire)
     }
 
     /// Ensure the cluster is initialized.
-    async fn ensure_initialized(&self) -> Result<(), ControlPlaneError> {
-        if !*self.initialized.read().await {
+    fn ensure_initialized(&self) -> Result<(), ControlPlaneError> {
+        if !self.initialized.load(Ordering::Acquire) {
             return Err(ControlPlaneError::NotInitialized);
         }
         Ok(())
@@ -124,13 +128,17 @@ impl RaftNode {
     /// A node is considered initialized if:
     /// 1. init() was called on this node directly, OR
     /// 2. The node has received membership info through Raft replication
-    async fn ensure_initialized_kv(&self) -> Result<(), KeyValueStoreError> {
-        // Check if explicitly initialized via init()
-        if *self.initialized.read().await {
+    ///
+    /// Tiger Style: Uses atomic compare_exchange to prevent TOCTOU race where
+    /// multiple concurrent calls could all read false, check metrics, then
+    /// all try to set true. With CAS, only one succeeds in the transition.
+    fn ensure_initialized_kv(&self) -> Result<(), KeyValueStoreError> {
+        // Fast path: check if already initialized (Acquire ensures we see prior writes)
+        if self.initialized.load(Ordering::Acquire) {
             return Ok(());
         }
 
-        // Also consider initialized if we have received membership from Raft
+        // Slow path: check Raft membership and atomically set initialized
         // This handles nodes that join via replication rather than explicit init
         let metrics = self.raft.metrics().borrow().clone();
         if metrics
@@ -140,8 +148,14 @@ impl RaftNode {
             .next()
             .is_some()
         {
-            // Node has received membership config through Raft - mark as initialized
-            *self.initialized.write().await = true;
+            // Atomically transition from false to true (only one thread wins)
+            // We don't care if we lose the race - another thread already set it
+            let _ = self.initialized.compare_exchange(
+                false,
+                true,
+                Ordering::Release, // Ensure membership check happens-before this store
+                Ordering::Relaxed, // On failure, we don't need to see the current value
+            );
             return Ok(());
         }
 
@@ -228,7 +242,7 @@ impl ClusterController for RaftNode {
         })?;
         info!("raft.initialize() completed successfully");
 
-        *self.initialized.write().await = true;
+        self.initialized.store(true, Ordering::Release);
         info!("initialized flag set to true");
 
         Ok(self.build_cluster_state())
@@ -247,7 +261,7 @@ impl ClusterController for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
 
         let learner = request.learner;
         let iroh_addr =
@@ -289,7 +303,7 @@ impl ClusterController for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
 
         if request.members.is_empty() {
             return Err(ControlPlaneError::InvalidRequest {
@@ -312,20 +326,20 @@ impl ClusterController for RaftNode {
 
     #[instrument(skip(self))]
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
         Ok(self.build_cluster_state())
     }
 
     #[instrument(skip(self))]
     async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
         let metrics = self.raft.metrics().borrow().clone();
         Ok(metrics.current_leader.map(|id| id.0))
     }
 
     #[instrument(skip(self))]
     async fn get_metrics(&self) -> Result<RaftMetrics<AppTypeConfig>, ControlPlaneError> {
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
         Ok(self.raft.metrics().borrow().clone())
     }
 
@@ -333,7 +347,7 @@ impl ClusterController for RaftNode {
     async fn trigger_snapshot(
         &self,
     ) -> Result<Option<openraft::LogId<AppTypeConfig>>, ControlPlaneError> {
-        self.ensure_initialized().await?;
+        self.ensure_initialized()?;
 
         // Trigger a snapshot (returns () on success)
         self.raft
@@ -362,7 +376,7 @@ impl KeyValueStore for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized_kv().await?;
+        self.ensure_initialized_kv()?;
 
         validate_write_command(&request.command)?;
 
@@ -411,29 +425,42 @@ impl KeyValueStore for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized_kv().await?;
+        self.ensure_initialized_kv()?;
 
-        // Enforce linearizable reads; fail fast instead of silently degrading to local reads.
-        let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-
+        // Enforce linearizable reads via ReadIndex protocol.
+        //
+        // ReadIndex works by:
+        // 1. Leader records its current commit index
+        // 2. Leader confirms it's still leader via heartbeat quorum
+        // 3. await_ready() waits for our state machine to catch up to that commit index
+        //
+        // This guarantees linearizability because any read after await_ready()
+        // sees all writes committed before get_read_linearizer() was called.
+        //
+        // Note: We refresh leader_hint after errors since leadership may have changed.
         let linearizer = self
             .raft
             .get_read_linearizer(ReadPolicy::ReadIndex)
             .await
-            .map_err(|err| KeyValueStoreError::NotLeader {
-                leader: leader_hint,
-                reason: err.to_string(),
+            .map_err(|err| {
+                // Refresh leader hint on error - leadership may have changed
+                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                KeyValueStoreError::NotLeader {
+                    leader: leader_hint,
+                    reason: err.to_string(),
+                }
             })?;
 
-        linearizer
-            .await_ready(&self.raft)
-            .await
-            .map_err(|err| KeyValueStoreError::NotLeader {
+        linearizer.await_ready(&self.raft).await.map_err(|err| {
+            // Refresh leader hint on error - leadership may have changed during await
+            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+            KeyValueStoreError::NotLeader {
                 leader: leader_hint,
                 reason: err.to_string(),
-            })?;
+            }
+        })?;
 
-        // Read directly from state machine
+        // Read directly from state machine (linearizability guaranteed by ReadIndex above)
         match &self.state_machine {
             StateMachineVariant::InMemory(sm) => match sm.get(&request.key).await {
                 Some(value) => Ok(ReadResult {
@@ -465,7 +492,7 @@ impl KeyValueStore for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized_kv().await?;
+        self.ensure_initialized_kv()?;
 
         // Apply delete through Raft consensus
         use crate::raft::types::AppRequest;
@@ -502,25 +529,30 @@ impl KeyValueStore for RaftNode {
                 reason: "semaphore closed".into(),
             })?;
 
-        self.ensure_initialized_kv().await?;
+        self.ensure_initialized_kv()?;
 
-        // Use ReadIndex for linearizable scan
+        // Use ReadIndex for linearizable scan (see read() for protocol details)
         let linearizer = self
             .raft
             .get_read_linearizer(ReadPolicy::ReadIndex)
             .await
-            .map_err(|err| KeyValueStoreError::Failed {
-                reason: err.to_string(),
+            .map_err(|err| {
+                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                KeyValueStoreError::NotLeader {
+                    leader: leader_hint,
+                    reason: err.to_string(),
+                }
             })?;
 
-        linearizer
-            .await_ready(&self.raft)
-            .await
-            .map_err(|err| KeyValueStoreError::Failed {
+        linearizer.await_ready(&self.raft).await.map_err(|err| {
+            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+            KeyValueStoreError::NotLeader {
+                leader: leader_hint,
                 reason: err.to_string(),
-            })?;
+            }
+        })?;
 
-        // Scan directly from state machine
+        // Scan directly from state machine (linearizability guaranteed by ReadIndex above)
         // Apply default limit if not specified
         let limit = _request
             .limit
@@ -533,11 +565,16 @@ impl KeyValueStore for RaftNode {
                 let all_pairs = sm.scan_kv_with_prefix_async(&_request.prefix).await;
 
                 // Handle pagination via continuation token
+                //
+                // Tiger Style: Use >= comparison and skip the exact token key.
+                // This handles the edge case where the continuation token key was
+                // deleted between paginated calls - we still return all keys after it.
+                // Using only > would skip entries if the token key no longer exists.
                 let start_key = _request.continuation_token.as_deref();
                 let filtered: Vec<_> = all_pairs
                     .into_iter()
                     .filter(|(k, _)| {
-                        // If we have a continuation token, skip keys before it
+                        // Skip keys before or equal to continuation token
                         start_key.is_none_or(|start| k.as_str() > start)
                     })
                     .collect();

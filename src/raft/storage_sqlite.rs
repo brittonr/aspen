@@ -296,9 +296,17 @@ fn apply_buffered_entries_impl(
     // Single COMMIT for entire batch - this is where durability is guaranteed
     guard.commit()?;
 
-    // Force a single WAL checkpoint for the entire batch.
-    // This amortizes the checkpoint cost across all entries in the batch.
-    // Use PASSIVE mode which doesn't block writers.
+    // Trigger WAL checkpoint hint for the entire batch.
+    //
+    // We use PASSIVE mode because:
+    // 1. PASSIVE doesn't block writers (critical for Raft leader performance)
+    // 2. It checkpoints what it can without waiting for readers
+    // 3. SQLite's auto_checkpoint (default 1000 pages) handles WAL growth bounds
+    //
+    // Note: PASSIVE may not fully checkpoint if readers hold locks. WAL file
+    // may grow temporarily but will shrink on subsequent checkpoints. For
+    // aggressive WAL management, consider periodic TRUNCATE checkpoints during
+    // low-activity periods (not in the hot path).
     let _ = conn.pragma_update(None, "wal_checkpoint", "PASSIVE");
 
     // Send all responses after transaction is durably committed
@@ -404,50 +412,10 @@ impl SqliteStateMachine {
             )
             .context(ExecuteSnafu)?;
 
-        // Create indexes for efficient vault operations
+        // Create indexes for efficient prefix-based scans
         write_conn
             .execute(
                 "CREATE INDEX IF NOT EXISTS idx_kv_prefix ON state_machine_kv(key)",
-                [],
-            )
-            .context(ExecuteSnafu)?;
-
-        // Create vault metadata table for tracking vault-level information
-        write_conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS vault_metadata (
-                vault_name TEXT PRIMARY KEY,
-                created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-                updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-                key_count INTEGER NOT NULL DEFAULT 0,
-                total_bytes INTEGER NOT NULL DEFAULT 0,
-                description TEXT,
-                owner TEXT,
-                tags TEXT
-            )",
-                [],
-            )
-            .context(ExecuteSnafu)?;
-
-        // Create vault access log for monitoring and optimization
-        write_conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS vault_access_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                vault_name TEXT NOT NULL,
-                operation TEXT NOT NULL,
-                key TEXT,
-                timestamp INTEGER NOT NULL DEFAULT (unixepoch()),
-                duration_us INTEGER
-            )",
-                [],
-            )
-            .context(ExecuteSnafu)?;
-
-        // Index for time-based access queries
-        write_conn
-            .execute(
-                "CREATE INDEX IF NOT EXISTS idx_access_time ON vault_access_log(timestamp)",
                 [],
             )
             .context(ExecuteSnafu)?;

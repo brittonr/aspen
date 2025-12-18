@@ -111,8 +111,12 @@ impl PeerConnection {
 
     /// Acquire a bidirectional stream from this connection.
     ///
+    /// Returns a `StreamHandle` that automatically decrements the active stream count
+    /// and releases the semaphore permit when dropped. This ensures proper cleanup
+    /// even if the caller forgets to close the streams or panics.
+    ///
     /// Tiger Style: Enforces stream limit per connection, fails fast on unhealthy connections.
-    pub async fn acquire_stream(&self) -> Result<(SendStream, RecvStream)> {
+    pub async fn acquire_stream(&self) -> Result<StreamHandle> {
         // Check connection health before attempting stream
         let health = *self.health.lock().await;
         if health == ConnectionHealth::Failed {
@@ -165,21 +169,20 @@ impl PeerConnection {
                     *health = new_health;
                 }
 
-                // Return stream with automatic cleanup on drop
+                // Return stream handle with guard that cleans up on drop
                 let active_streams = Arc::clone(&self.active_streams);
                 let (send, recv) = stream;
 
-                // Spawn cleanup task for when stream is dropped
-                let stream_guard = StreamGuard {
+                let guard = StreamGuard {
                     _permit: permit,
                     active_streams,
                 };
-                tokio::spawn(async move {
-                    // Keep guard alive until explicitly dropped
-                    let _guard = stream_guard;
-                });
 
-                Ok((send, recv))
+                Ok(StreamHandle {
+                    send,
+                    recv,
+                    _guard: guard,
+                })
             }
             Err(err) => {
                 use crate::raft::pure::transition_connection_health;
@@ -232,6 +235,22 @@ impl PeerConnection {
     pub fn active_stream_count(&self) -> u32 {
         self.active_streams.load(Ordering::Relaxed)
     }
+}
+
+/// Handle to an acquired stream pair with automatic cleanup.
+///
+/// When this handle is dropped, the active stream count is decremented
+/// and the semaphore permit is released. This ensures proper resource
+/// tracking even if the caller doesn't explicitly close the streams.
+///
+/// Tiger Style: RAII pattern ensures cleanup happens on all code paths.
+pub struct StreamHandle {
+    /// The send stream for writing data.
+    pub send: SendStream,
+    /// The receive stream for reading data.
+    pub recv: RecvStream,
+    /// Guard that decrements counters on drop (held for lifetime of streams).
+    _guard: StreamGuard,
 }
 
 /// Guard to automatically decrement stream count when dropped.
