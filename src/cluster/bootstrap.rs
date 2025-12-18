@@ -618,6 +618,16 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                         &format!("node-{}", config.node_id),
                     );
 
+                    // Open the replica for reading/writing (required before using SyncHandleDocsWriter)
+                    if let Err(err) = docs_sync.open_replica().await {
+                        error!(
+                            error = ?err,
+                            node_id = config.node_id,
+                            namespace_id = %namespace_id,
+                            "failed to open docs replica"
+                        );
+                    }
+
                     // Create SyncHandleDocsWriter that uses the sync handle
                     // This allows both DocsExporter and P2P sync to share the same Store
                     let writer = Arc::new(SyncHandleDocsWriter::new(
