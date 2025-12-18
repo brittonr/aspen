@@ -36,6 +36,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::constants::MAX_DOCS_CONNECTIONS;
+use crate::blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
 use crate::blob::store::BlobStore;
 
 /// File name for the iroh-docs redb database.
@@ -211,7 +212,8 @@ impl DocsSyncResources {
     /// 1. Subscribes to sync events for this namespace
     /// 2. Filters for RemoteInsert events (entries received from peers)
     /// 3. Fetches content from the blob store using the content hash
-    /// 4. Forwards each entry to the DocsImporter for priority-based import
+    /// 4. Downloads content from peer if not available locally and should_download=true
+    /// 5. Forwards each entry to the DocsImporter for priority-based import
     ///
     /// # Arguments
     /// * `importer` - The DocsImporter to forward entries to
@@ -220,12 +222,17 @@ impl DocsSyncResources {
     ///
     /// # Returns
     /// A CancellationToken that can be used to stop the event listener.
+    ///
+    /// # Tiger Style
+    /// - Bounded concurrent blob downloads (MAX_CONCURRENT_BLOB_DOWNLOADS)
+    /// - Non-blocking download spawning to avoid blocking event processing
     pub async fn spawn_sync_event_listener(
         &self,
         importer: std::sync::Arc<super::importer::DocsImporter>,
         source_cluster_id: String,
         blob_store: Arc<crate::blob::store::IrohBlobStore>,
     ) -> Result<CancellationToken> {
+        use iroh::PublicKey;
         use iroh_docs::sync::Event;
 
         // Create channel for sync events
@@ -241,10 +248,14 @@ impl DocsSyncResources {
         let cancel_clone = cancel.clone();
         let namespace_id = self.namespace_id;
 
+        // Semaphore for bounded concurrent blob downloads (Tiger Style)
+        let download_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_BLOB_DOWNLOADS as usize));
+
         tokio::spawn(async move {
             info!(
                 namespace = %namespace_id,
                 source = %source_cluster_id,
+                max_concurrent_downloads = MAX_CONCURRENT_BLOB_DOWNLOADS,
                 "sync event listener started"
             );
 
@@ -292,7 +303,7 @@ impl DocsSyncResources {
                                     continue;
                                 }
 
-                                // Fetch content from blob store using the content hash
+                                // First, try to fetch content from local blob store
                                 let content = match blob_store.get_bytes(&content_hash).await {
                                     Ok(Some(bytes)) => {
                                         debug!(
@@ -301,21 +312,11 @@ impl DocsSyncResources {
                                             size = bytes.len(),
                                             "fetched content from blob store"
                                         );
-                                        bytes.to_vec()
+                                        Some(bytes.to_vec())
                                     }
                                     Ok(None) => {
-                                        // Content not yet available locally
-                                        // This can happen if should_download is true and we need to
-                                        // fetch from the remote peer. For now, we skip and log.
-                                        // TODO: Trigger blob download from peer when should_download=true
-                                        warn!(
-                                            namespace = %namespace_id,
-                                            hash = %content_hash.fmt_short(),
-                                            should_download = should_download,
-                                            key = %String::from_utf8_lossy(&key),
-                                            "content not found in blob store, skipping"
-                                        );
-                                        continue;
+                                        // Content not available locally
+                                        None
                                     }
                                     Err(e) => {
                                         warn!(
@@ -325,6 +326,162 @@ impl DocsSyncResources {
                                             "failed to fetch content from blob store"
                                         );
                                         continue;
+                                    }
+                                };
+
+                                // If content not available locally and should_download, fetch from peer
+                                let content = match content {
+                                    Some(c) => c,
+                                    None => {
+                                        if !should_download {
+                                            debug!(
+                                                namespace = %namespace_id,
+                                                hash = %content_hash.fmt_short(),
+                                                key = %String::from_utf8_lossy(&key),
+                                                "content not available locally and should_download=false, skipping"
+                                            );
+                                            continue;
+                                        }
+
+                                        // Convert peer ID bytes to NodeId (PublicKey)
+                                        let provider = match PublicKey::from_bytes(&from) {
+                                            Ok(pk) => pk,
+                                            Err(e) => {
+                                                warn!(
+                                                    namespace = %namespace_id,
+                                                    hash = %content_hash.fmt_short(),
+                                                    from = %hex::encode(&from[..8]),
+                                                    error = %e,
+                                                    "invalid peer ID bytes, cannot download blob"
+                                                );
+                                                continue;
+                                            }
+                                        };
+
+                                        // Acquire semaphore permit for bounded concurrency
+                                        let permit = match download_semaphore.clone().try_acquire_owned() {
+                                            Ok(permit) => permit,
+                                            Err(_) => {
+                                                // Semaphore full - spawn background download and continue
+                                                // to avoid blocking event processing
+                                                let blob_store_clone = blob_store.clone();
+                                                let importer_clone = importer.clone();
+                                                let source_cluster_id_clone = source_cluster_id.clone();
+                                                let semaphore_clone = download_semaphore.clone();
+                                                let key_clone = key.clone();
+
+                                                tokio::spawn(async move {
+                                                    // Wait for permit
+                                                    let _permit = match semaphore_clone.acquire().await {
+                                                        Ok(p) => p,
+                                                        Err(_) => {
+                                                            warn!(
+                                                                hash = %content_hash.fmt_short(),
+                                                                "download semaphore closed"
+                                                            );
+                                                            return;
+                                                        }
+                                                    };
+
+                                                    // Download blob
+                                                    match blob_store_clone.download_from_peer(&content_hash, provider).await {
+                                                        Ok(blob_ref) => {
+                                                            info!(
+                                                                hash = %content_hash.fmt_short(),
+                                                                size = blob_ref.size,
+                                                                provider = %provider.fmt_short(),
+                                                                "blob downloaded from peer (deferred)"
+                                                            );
+
+                                                            // Fetch and process the downloaded content
+                                                            if let Ok(Some(bytes)) = blob_store_clone.get_bytes(&content_hash).await {
+                                                                let content = bytes.to_vec();
+                                                                // Skip tombstone markers
+                                                                if content.len() == 1 && content[0] == 0x00 {
+                                                                    return;
+                                                                }
+                                                                if let Err(e) = importer_clone.process_remote_entry(
+                                                                    &source_cluster_id_clone,
+                                                                    &key_clone,
+                                                                    &content,
+                                                                ).await {
+                                                                    warn!(
+                                                                        key = %String::from_utf8_lossy(&key_clone),
+                                                                        error = %e,
+                                                                        "failed to import deferred remote entry"
+                                                                    );
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            warn!(
+                                                                hash = %content_hash.fmt_short(),
+                                                                provider = %provider.fmt_short(),
+                                                                error = %e,
+                                                                "failed to download blob from peer (deferred)"
+                                                            );
+                                                        }
+                                                    }
+                                                });
+
+                                                continue;
+                                            }
+                                        };
+
+                                        // Download blob with permit already acquired
+                                        info!(
+                                            namespace = %namespace_id,
+                                            hash = %content_hash.fmt_short(),
+                                            provider = %provider.fmt_short(),
+                                            "downloading blob from peer"
+                                        );
+
+                                        match blob_store.download_from_peer(&content_hash, provider).await {
+                                            Ok(blob_ref) => {
+                                                drop(permit); // Release permit early
+
+                                                info!(
+                                                    namespace = %namespace_id,
+                                                    hash = %content_hash.fmt_short(),
+                                                    size = blob_ref.size,
+                                                    provider = %provider.fmt_short(),
+                                                    "blob downloaded from peer"
+                                                );
+
+                                                // Fetch the downloaded content
+                                                match blob_store.get_bytes(&content_hash).await {
+                                                    Ok(Some(bytes)) => bytes.to_vec(),
+                                                    Ok(None) => {
+                                                        warn!(
+                                                            namespace = %namespace_id,
+                                                            hash = %content_hash.fmt_short(),
+                                                            "blob disappeared after download"
+                                                        );
+                                                        continue;
+                                                    }
+                                                    Err(e) => {
+                                                        warn!(
+                                                            namespace = %namespace_id,
+                                                            hash = %content_hash.fmt_short(),
+                                                            error = %e,
+                                                            "failed to read downloaded blob"
+                                                        );
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                drop(permit);
+                                                warn!(
+                                                    namespace = %namespace_id,
+                                                    hash = %content_hash.fmt_short(),
+                                                    provider = %provider.fmt_short(),
+                                                    error = %e,
+                                                    "failed to download blob from peer"
+                                                );
+                                                continue;
+                                            }
+                                        }
                                     }
                                 };
 

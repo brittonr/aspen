@@ -16,6 +16,8 @@ use iroh_blobs::{BlobFormat, Hash, HashAndFormat};
 use snafu::Snafu;
 use tracing::{debug, info, instrument, warn};
 
+use iroh::PublicKey;
+
 use super::constants::{KV_TAG_PREFIX, MAX_BLOB_SIZE, USER_TAG_PREFIX};
 use super::types::{AddBlobResult, BlobListEntry, BlobListResult, BlobRef, BlobStatus};
 
@@ -152,6 +154,51 @@ impl IrohBlobStore {
             .await
             .context("failed to shutdown blob store")?;
         Ok(())
+    }
+
+    /// Download a blob from a remote peer by hash and provider PublicKey.
+    ///
+    /// Unlike `download()` which requires a full `BlobTicket`, this method only
+    /// needs the content hash and the PublicKey of the peer that has the content.
+    /// This is useful for downloading content discovered through iroh-docs sync
+    /// where we know the hash and the peer that sent the entry, but don't have
+    /// a full ticket.
+    ///
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash of the blob to download
+    /// * `provider` - The PublicKey (NodeId) of the peer that has the content
+    ///
+    /// # Returns
+    /// * `Ok(BlobRef)` - Successfully downloaded blob with hash and size
+    /// * `Err(BlobStoreError)` - Download failed (network error, peer unavailable, etc.)
+    #[instrument(skip(self))]
+    pub async fn download_from_peer(
+        &self,
+        hash: &Hash,
+        provider: PublicKey,
+    ) -> Result<BlobRef, BlobStoreError> {
+        // Create downloader and download
+        let downloader = self.store.downloader(&self.endpoint);
+
+        let progress = downloader.download(HashAndFormat::raw(*hash), vec![provider]);
+
+        // Wait for completion
+        progress.await.map_err(|e| BlobStoreError::Download {
+            message: e.to_string(),
+        })?;
+
+        // Get size and verify blob was stored
+        let bytes = self
+            .get_bytes(hash)
+            .await?
+            .ok_or_else(|| BlobStoreError::Download {
+                message: "blob not found after download".to_string(),
+            })?;
+
+        let blob_ref = BlobRef::new(*hash, bytes.len() as u64, BlobFormat::Raw);
+
+        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), "blob downloaded from peer");
+        Ok(blob_ref)
     }
 }
 
@@ -410,8 +457,8 @@ impl BlobStore for IrohBlobStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::blob::BlobFormat;
-    use crate::blob::BlobRef;
+    #![allow(unused_imports)]
+    use super::*;
 
     // Integration tests require an actual iroh endpoint, so they're in tests/
 }
