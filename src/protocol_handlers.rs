@@ -950,6 +950,10 @@ pub struct ClientProtocolContext {
     pub cluster_cookie: String,
     /// Node start time for uptime calculation.
     pub start_time: Instant,
+    /// Network factory for dynamic peer addition (optional).
+    ///
+    /// When present, enables AddPeer RPC to register peers in the network factory.
+    pub network_factory: Option<Arc<crate::raft::network::IrpcRaftNetworkFactory>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -1590,17 +1594,58 @@ async fn process_client_request(
             node_id,
             endpoint_addr,
         } => {
-            // TODO: Phase 3 - Implement peer registration via network factory
-            // For now, return a placeholder response
-            debug!(
+            // Parse the endpoint address (JSON-serialized EndpointAddr)
+            let parsed_addr: iroh::EndpointAddr = match serde_json::from_str(&endpoint_addr) {
+                Ok(addr) => addr,
+                Err(e) => {
+                    debug!(
+                        node_id = node_id,
+                        endpoint_addr = %endpoint_addr,
+                        error = %e,
+                        "AddPeer: failed to parse endpoint_addr as JSON EndpointAddr"
+                    );
+                    return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
+                        success: false,
+                        error: Some(format!(
+                            "invalid endpoint_addr: expected JSON-serialized EndpointAddr: {}",
+                            e
+                        )),
+                    }));
+                }
+            };
+
+            // Check if network factory is available
+            let network_factory = match &ctx.network_factory {
+                Some(nf) => nf,
+                None => {
+                    warn!(
+                        node_id = node_id,
+                        "AddPeer: network_factory not available in context"
+                    );
+                    return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
+                        success: false,
+                        error: Some(
+                            "network_factory not configured for this node".to_string()
+                        ),
+                    }));
+                }
+            };
+
+            // Add peer to the network factory
+            // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
+            network_factory
+                .add_peer(crate::raft::types::NodeId(node_id), parsed_addr.clone())
+                .await;
+
+            info!(
                 node_id = node_id,
-                endpoint_addr = %endpoint_addr,
-                "AddPeer request received"
+                endpoint_id = %parsed_addr.id,
+                "AddPeer: successfully registered peer in network factory"
             );
 
             Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
-                success: false,
-                error: Some("AddPeer not yet implemented via Client RPC".to_string()),
+                success: true,
+                error: None,
             }))
         }
 
@@ -1611,24 +1656,91 @@ async fn process_client_request(
             let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
             let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-            // TODO: Phase 3 - Parse endpoint_ids and add other peers from cluster state
-            // For now, just use our own endpoint (single bootstrap peer)
-            let _ = endpoint_ids;
-
-            let ticket = AspenClusterTicket::with_bootstrap(
+            // Start with this node as the first bootstrap peer
+            let mut ticket = AspenClusterTicket::with_bootstrap(
                 topic_id,
                 ctx.cluster_cookie.clone(),
                 ctx.endpoint_manager.endpoint().id(),
             );
 
+            // Collect additional peers from:
+            // 1. Explicit endpoint_ids parameter (comma-separated EndpointId strings)
+            // 2. Cluster state (iroh_addr from known cluster nodes)
+            let mut added_peers = 1u32; // Already added this node
+
+            // Parse explicit endpoint_ids if provided
+            if let Some(ids_str) = &endpoint_ids {
+                for id_str in ids_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    // Skip if we've hit the limit (Tiger Style: MAX_BOOTSTRAP_PEERS = 16)
+                    if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+                        debug!(
+                            max_peers = AspenClusterTicket::MAX_BOOTSTRAP_PEERS,
+                            "GetClusterTicketCombined: reached max bootstrap peers, skipping remaining"
+                        );
+                        break;
+                    }
+
+                    // Try to parse as EndpointId (public key)
+                    match id_str.parse::<iroh::EndpointId>() {
+                        Ok(endpoint_id) => {
+                            // Skip if it's our own endpoint
+                            if endpoint_id == ctx.endpoint_manager.endpoint().id() {
+                                continue;
+                            }
+                            if ticket.add_bootstrap(endpoint_id).is_ok() {
+                                added_peers += 1;
+                            }
+                        }
+                        Err(e) => {
+                            debug!(
+                                endpoint_id = id_str,
+                                error = %e,
+                                "GetClusterTicketCombined: failed to parse endpoint_id, skipping"
+                            );
+                        }
+                    }
+                }
+            }
+
+            // If we haven't hit the limit, also add peers from cluster state
+            if added_peers < AspenClusterTicket::MAX_BOOTSTRAP_PEERS
+                && let Ok(cluster_state) = ctx.controller.current_state().await
+            {
+                // Add endpoint IDs from nodes with known iroh_addr
+                for node in cluster_state
+                    .nodes
+                    .iter()
+                    .chain(cluster_state.learners.iter())
+                {
+                    if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+                        break;
+                    }
+
+                    if let Some(iroh_addr) = &node.iroh_addr {
+                        // Skip our own endpoint
+                        if iroh_addr.id == ctx.endpoint_manager.endpoint().id() {
+                            continue;
+                        }
+                        if ticket.add_bootstrap(iroh_addr.id).is_ok() {
+                            added_peers += 1;
+                        }
+                    }
+                }
+            }
+
             let ticket_str = ticket.serialize();
+
+            debug!(
+                bootstrap_peers = added_peers,
+                "GetClusterTicketCombined: generated ticket with multiple bootstrap peers"
+            );
 
             Ok(ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
                 ticket: ticket_str,
                 topic_id: format!("{:?}", topic_id),
                 cluster_id: ctx.cluster_cookie.clone(),
                 endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
-                bootstrap_peers: Some(1),
+                bootstrap_peers: Some(added_peers as usize),
             }))
         }
 

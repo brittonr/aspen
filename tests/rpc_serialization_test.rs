@@ -804,4 +804,127 @@ mod unit_tests {
             _ => panic!("Wrong variant"),
         }
     }
+
+    // ============================================================================
+    // Phase 3: AddPeer and GetClusterTicketCombined serialization tests
+    // ============================================================================
+
+    #[test]
+    fn test_add_peer_request_postcard_roundtrip() {
+        let request = ClientRpcRequest::AddPeer {
+            node_id: 42,
+            endpoint_addr: r#"{"id":"test_endpoint_id","addrs":[]}"#.to_string(),
+        };
+        let serialized = postcard::to_stdvec(&request).expect("serialize");
+        let deserialized: ClientRpcRequest =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcRequest::AddPeer {
+                node_id,
+                endpoint_addr,
+            } => {
+                assert_eq!(node_id, 42);
+                assert!(endpoint_addr.contains("test_endpoint_id"));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_get_cluster_ticket_combined_request_no_ids() {
+        let request = ClientRpcRequest::GetClusterTicketCombined { endpoint_ids: None };
+        let serialized = postcard::to_stdvec(&request).expect("serialize");
+        let deserialized: ClientRpcRequest =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcRequest::GetClusterTicketCombined { endpoint_ids } => {
+                assert!(endpoint_ids.is_none());
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_get_cluster_ticket_combined_request_with_ids() {
+        let ids = "abc123,def456,ghi789".to_string();
+        let request = ClientRpcRequest::GetClusterTicketCombined {
+            endpoint_ids: Some(ids.clone()),
+        };
+        let serialized = postcard::to_stdvec(&request).expect("serialize");
+        let deserialized: ClientRpcRequest =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcRequest::GetClusterTicketCombined { endpoint_ids } => {
+                assert_eq!(endpoint_ids, Some(ids));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_add_peer_result_response_success() {
+        use aspen::client_rpc::AddPeerResultResponse;
+
+        let response = ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
+            success: true,
+            error: None,
+        });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcResponse::AddPeerResult(r) => {
+                assert!(r.success);
+                assert!(r.error.is_none());
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_add_peer_result_response_failure() {
+        use aspen::client_rpc::AddPeerResultResponse;
+
+        let response = ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
+            success: false,
+            error: Some("invalid endpoint_addr format".to_string()),
+        });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcResponse::AddPeerResult(r) => {
+                assert!(!r.success);
+                assert!(r.error.as_ref().unwrap().contains("invalid"));
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_cluster_ticket_response_with_multiple_bootstrap_peers() {
+        let response = ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
+            ticket: "aspen_multi_peer_ticket_data".to_string(),
+            topic_id: "topic_abc123".to_string(),
+            cluster_id: "test-cluster".to_string(),
+            endpoint_id: "local_endpoint_id".to_string(),
+            bootstrap_peers: Some(5), // Multiple bootstrap peers
+        });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse =
+            postcard::from_bytes(&serialized).expect("deserialize");
+
+        match deserialized {
+            ClientRpcResponse::ClusterTicket(t) => {
+                assert_eq!(t.bootstrap_peers, Some(5));
+                assert_eq!(t.cluster_id, "test-cluster");
+            }
+            _ => panic!("Wrong variant"),
+        }
+    }
 }

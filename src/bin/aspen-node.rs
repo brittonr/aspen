@@ -607,6 +607,7 @@ async fn main() -> Result<()> {
         peer_manager: handle.peer_manager.clone(),
         cluster_cookie: config.cookie.clone(),
         start_time: app_state.start_time,
+        network_factory: Some(handle.network_factory.clone()),
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 
