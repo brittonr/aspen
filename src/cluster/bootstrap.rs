@@ -32,6 +32,7 @@ use anyhow::{Context, Result, ensure};
 use iroh::EndpointAddr;
 use iroh_gossip::proto::TopicId;
 use openraft::{Config as RaftConfig, Raft};
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -43,6 +44,7 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::protocol_handlers::RAFT_ALPN;
 use crate::raft::StateMachineVariant;
+use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
 use crate::raft::server::RaftRpcServer;
@@ -106,6 +108,17 @@ pub struct NodeHandle {
     /// based data synchronization with priority-based conflict resolution.
     /// None when peer sync is disabled in configuration.
     pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    /// Log broadcast sender for DocsExporter and other subscribers.
+    ///
+    /// When docs export is enabled, committed KV entries are broadcast on this
+    /// channel for real-time synchronization to iroh-docs.
+    /// None when docs export is disabled.
+    pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    /// DocsExporter cancellation token.
+    ///
+    /// Used to gracefully shutdown the DocsExporter background task.
+    /// None when docs export is disabled.
+    pub docs_exporter_cancel: Option<CancellationToken>,
 }
 
 impl NodeHandle {
@@ -130,6 +143,18 @@ impl NodeHandle {
             if let Err(err) = rpc_server.shutdown().await {
                 error!(error = ?err, "failed to shutdown RPC server gracefully");
             }
+        }
+
+        // Shutdown peer manager if present
+        if let Some(peer_manager) = &self.peer_manager {
+            info!("shutting down peer manager");
+            peer_manager.shutdown();
+        }
+
+        // Shutdown DocsExporter if present
+        if let Some(cancel_token) = &self.docs_exporter_cancel {
+            info!("shutting down DocsExporter");
+            cancel_token.cancel();
         }
 
         // Stop supervisor
@@ -331,6 +356,20 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         ..RaftConfig::default()
     });
 
+    // Create broadcast channel for log entry notifications (when docs export is enabled)
+    // This channel is used by DocsExporter to receive committed KV operations in real-time
+    let log_broadcast: Option<broadcast::Sender<LogEntryPayload>> = if config.docs.enabled {
+        let (sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        info!(
+            node_id = config.node_id,
+            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
+            "created log broadcast channel for docs export"
+        );
+        Some(sender)
+    } else {
+        None
+    };
+
     // Build OpenRaft instance and state machine variant based on selected storage
     let (raft, state_machine_variant) = match config.storage_backend {
         StorageBackend::InMemory => {
@@ -354,6 +393,13 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
 
             let state_machine_path = data_dir.join(format!("node_{}_state.db", config.node_id));
             let sqlite_state_machine = SqliteStateMachine::new(&state_machine_path)?;
+
+            // Wire up log broadcast channel to state machine if docs export is enabled
+            let sqlite_state_machine = if let Some(ref sender) = log_broadcast {
+                sqlite_state_machine.with_log_broadcast(sender.clone())
+            } else {
+                sqlite_state_machine
+            };
 
             let raft = Arc::new(
                 Raft::new(
@@ -510,6 +556,73 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         None
     };
 
+    // Initialize peer sync (DocsImporter + PeerManager) if enabled
+    let peer_manager = if config.peer_sync.enabled {
+        use crate::docs::{DocsImporter, PeerManager};
+
+        // Create DocsImporter with raft_node as the KV store
+        // DocsImporter uses the KV store to write imported entries
+        let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone()));
+
+        // Create PeerManager which coordinates peer connections
+        let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
+
+        info!(
+            node_id = config.node_id,
+            max_subscriptions = config.peer_sync.max_subscriptions,
+            default_priority = config.peer_sync.default_priority,
+            "peer sync initialized"
+        );
+        Some(manager)
+    } else {
+        info!(
+            node_id = config.node_id,
+            "peer sync disabled by configuration"
+        );
+        None
+    };
+
+    // Initialize DocsExporter for real-time KV export to iroh-docs if enabled
+    // This spawns a background task that listens to the log broadcast channel
+    // and exports committed KV operations to iroh-docs for CRDT-based sync
+    let docs_exporter_cancel = if config.docs.enabled {
+        use crate::docs::{DocsExporter, InMemoryDocsWriter};
+
+        if let Some(ref sender) = log_broadcast {
+            // Create an in-memory writer for now
+            // TODO: Wire up actual IrohDocsWriter when iroh-docs store is available
+            let writer = Arc::new(InMemoryDocsWriter::new());
+
+            // Create the exporter
+            let exporter = Arc::new(DocsExporter::new(writer));
+
+            // Subscribe to the broadcast channel
+            let receiver = sender.subscribe();
+
+            // Spawn the exporter background task
+            let cancel_token = exporter.spawn(receiver);
+
+            info!(
+                node_id = config.node_id,
+                "DocsExporter started - real-time KV export enabled"
+            );
+            Some(cancel_token)
+        } else {
+            warn!(
+                node_id = config.node_id,
+                "DocsExporter not started - log broadcast channel not available \
+                 (docs enabled but InMemory storage backend doesn't support broadcast yet)"
+            );
+            None
+        }
+    } else {
+        info!(
+            node_id = config.node_id,
+            "DocsExporter disabled by configuration"
+        );
+        None
+    };
+
     // Register node in metadata store
     use crate::cluster::metadata::NodeMetadata;
     metadata_store.register_node(NodeMetadata {
@@ -536,7 +649,9 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         shutdown_token: shutdown,
         gossip_topic_id,
         blob_store,
-        peer_manager: None, // TODO: Initialize when peer sync config is added
+        peer_manager,
+        log_broadcast,
+        docs_exporter_cancel,
     })
 }
 

@@ -69,6 +69,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
+use tokio::sync::broadcast;
 use tokio::task::JoinError;
 
 use crate::raft::constants::{
@@ -76,6 +77,7 @@ use crate::raft::constants::{
     MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::integrity::{GENESIS_HASH, SnapshotIntegrity};
+use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 
 /// Errors that can occur when using SQLite storage
@@ -238,11 +240,49 @@ pub struct SqliteStateMachine {
     path: PathBuf,
     /// Snapshot index counter (for generating unique snapshot IDs)
     snapshot_idx: Arc<AtomicU64>,
+    /// Optional broadcast sender for log entry notifications.
+    ///
+    /// When set, committed entries are broadcast to subscribers (e.g., DocsExporter)
+    /// for real-time KV synchronization to iroh-docs.
+    log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
 }
 
 /// Convert a JoinError from spawn_blocking into an io::Error.
 fn join_error_to_io(err: JoinError, operation: &'static str) -> io::Error {
     io::Error::other(format!("{operation} task failed: {err}"))
+}
+
+/// Convert an AppRequest to a KvOperation for broadcasting.
+///
+/// Converts String-based AppRequest types to byte-based KvOperation types
+/// for the log broadcast channel.
+///
+/// Tiger Style: Pure function, no side effects.
+fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOperation {
+    match payload {
+        EntryPayload::Blank => KvOperation::Noop,
+        EntryPayload::Normal(req) => match req {
+            AppRequest::Set { key, value } => KvOperation::Set {
+                key: key.clone().into_bytes(),
+                value: value.clone().into_bytes(),
+            },
+            AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
+                pairs: pairs
+                    .iter()
+                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
+                    .collect(),
+            },
+            AppRequest::Delete { key } => KvOperation::Delete {
+                key: key.clone().into_bytes(),
+            },
+            AppRequest::DeleteMulti { keys } => KvOperation::DeleteMulti {
+                keys: keys.iter().map(|k| k.clone().into_bytes()).collect(),
+            },
+        },
+        EntryPayload::Membership(membership) => KvOperation::MembershipChange {
+            description: format!("{:?}", membership),
+        },
+    }
 }
 
 /// Apply a batch of buffered entries in a single SQLite transaction.
@@ -255,13 +295,18 @@ fn join_error_to_io(err: JoinError, operation: &'static str) -> io::Error {
 /// - Lock acquisitions from N to 1
 /// - WAL checkpoint operations from N to 1
 ///
+/// When `log_broadcast` is provided, committed entries are broadcast to
+/// subscribers (e.g., DocsExporter) for real-time KV synchronization.
+///
 /// # Tiger Style
 /// - Fixed batch size limits prevent unbounded resource usage
 /// - RAII TransactionGuard ensures atomic commit/rollback
 /// - All responses sent after transaction commits for durability
+/// - Broadcast happens after commit to ensure only durable entries are published
 fn apply_buffered_entries_impl(
     write_conn: &Arc<Mutex<Connection>>,
     buffer: &mut Vec<EntryResponder<AppTypeConfig>>,
+    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
 ) -> Result<(), io::Error> {
     if buffer.is_empty() {
         return Ok(());
@@ -281,6 +326,13 @@ fn apply_buffered_entries_impl(
     type ResponsePair = (Option<ApplyResponder<AppTypeConfig>>, AppResponse);
     let mut responses: Vec<ResponsePair> = Vec::with_capacity(buffer.len());
 
+    // Collect payloads to broadcast after commit (only if broadcast channel is set)
+    let mut broadcast_payloads: Vec<LogEntryPayload> = if log_broadcast.is_some() {
+        Vec::with_capacity(buffer.len())
+    } else {
+        Vec::new()
+    };
+
     // Apply all entries within the transaction
     for (entry, responder) in buffer.drain(..) {
         // Update last_applied_log for each entry (idempotent, only final value matters)
@@ -289,6 +341,20 @@ fn apply_buffered_entries_impl(
         // Apply the payload
         let response =
             SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
+
+        // Collect payload for broadcast if channel is available
+        if log_broadcast.is_some() {
+            let operation = app_request_to_kv_operation(&entry.payload);
+            broadcast_payloads.push(LogEntryPayload {
+                index: entry.log_id.index,
+                term: entry.log_id.leader_id.term,
+                committed_at_ms: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                operation,
+            });
+        }
 
         responses.push((responder, response));
     }
@@ -314,6 +380,17 @@ fn apply_buffered_entries_impl(
     for (responder, response) in responses {
         if let Some(r) = responder {
             r.send(response);
+        }
+    }
+
+    // Broadcast committed entries to subscribers (e.g., DocsExporter)
+    // This happens after commit to ensure only durable entries are published
+    if let Some(sender) = log_broadcast {
+        for payload in broadcast_payloads {
+            // Non-blocking send - if no receivers or buffer full, entry is dropped
+            // This is intentional: subscribers that lag too far behind will miss entries
+            // and should use catch-up mechanisms (e.g., full_sync from state machine)
+            let _ = sender.send(payload);
         }
     }
 
@@ -432,12 +509,49 @@ impl SqliteStateMachine {
             write_conn: Arc::new(Mutex::new(write_conn)),
             path,
             snapshot_idx: Arc::new(AtomicU64::new(0)),
+            log_broadcast: None,
         }))
     }
 
     /// Get the path to the state machine database file.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Set the broadcast sender for log entry notifications.
+    ///
+    /// When set, committed entries are broadcast to subscribers (e.g., DocsExporter)
+    /// for real-time KV synchronization to iroh-docs.
+    ///
+    /// # Arguments
+    ///
+    /// * `sender` - The broadcast sender to use for notifications
+    ///
+    /// # Returns
+    ///
+    /// A new `SqliteStateMachine` with the broadcast sender configured.
+    /// This consumes the Arc and returns a new one.
+    ///
+    /// # Tiger Style
+    ///
+    /// This method takes ownership of the Arc and returns a new one to ensure
+    /// the broadcast sender is set atomically during construction.
+    pub fn with_log_broadcast(
+        self: Arc<Self>,
+        sender: broadcast::Sender<LogEntryPayload>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            read_pool: self.read_pool.clone(),
+            write_conn: Arc::clone(&self.write_conn),
+            path: self.path.clone(),
+            snapshot_idx: Arc::clone(&self.snapshot_idx),
+            log_broadcast: Some(sender),
+        })
+    }
+
+    /// Get a reference to the log broadcast sender, if configured.
+    pub fn log_broadcast(&self) -> Option<&broadcast::Sender<LogEntryPayload>> {
+        self.log_broadcast.as_ref()
     }
 
     /// Reset read connection to ensure we see latest committed data.
@@ -1364,6 +1478,10 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         let mut buffer: Vec<EntryResponder<AppTypeConfig>> = Vec::with_capacity(BATCH_BUFFER_SIZE);
         let mut total_count: u32 = 0;
 
+        // Clone broadcast sender for use in spawn_blocking closures
+        // Cloning broadcast::Sender is cheap (Arc-based)
+        let log_broadcast = self.log_broadcast.clone();
+
         // Collect entries from stream into buffer
         while let Some(entry_responder) = entries.try_next().await? {
             total_count += 1;
@@ -1384,8 +1502,9 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                 let mut to_apply: Vec<EntryResponder<AppTypeConfig>> = Vec::new();
                 std::mem::swap(&mut to_apply, &mut buffer);
                 let write_conn = Arc::clone(&self.write_conn);
+                let broadcast = log_broadcast.clone();
                 tokio::task::spawn_blocking(move || {
-                    apply_buffered_entries_impl(&write_conn, &mut to_apply)
+                    apply_buffered_entries_impl(&write_conn, &mut to_apply, broadcast.as_ref())
                 })
                 .await
                 .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;
@@ -1395,8 +1514,9 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         // Apply remaining entries in buffer
         if !buffer.is_empty() {
             let write_conn = Arc::clone(&self.write_conn);
+            let broadcast = log_broadcast;
             tokio::task::spawn_blocking(move || {
-                apply_buffered_entries_impl(&write_conn, &mut buffer)
+                apply_buffered_entries_impl(&write_conn, &mut buffer, broadcast.as_ref())
             })
             .await
             .map_err(|err| join_error_to_io(err, "raft_apply_batch"))??;

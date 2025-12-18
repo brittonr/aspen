@@ -65,7 +65,7 @@ pub use constants::{
     MAX_DOC_VALUE_SIZE, MAX_DOCS_CONNECTIONS,
 };
 
-pub use exporter::{DocsExporter, DocsWriter, IrohDocsWriter};
+pub use exporter::{DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter};
 
 pub use importer::{
     DocsImporter, ImportResult, MAX_PEER_SUBSCRIPTIONS, PeerStatus, PeerSubscription,

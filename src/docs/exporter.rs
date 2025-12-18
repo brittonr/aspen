@@ -328,62 +328,65 @@ impl DocsWriter for IrohDocsWriter {
     }
 }
 
-/// In-memory docs writer for testing.
-#[cfg(test)]
-pub mod test_helpers {
-    use super::*;
-    use std::collections::HashMap;
-    use tokio::sync::RwLock;
+/// In-memory docs writer for development and testing.
+///
+/// Stores entries in a thread-safe HashMap. Useful when:
+/// - No iroh-docs store is available yet
+/// - Testing DocsExporter integration
+/// - Development environments without persistent storage
+///
+/// In production, use `IrohDocsWriter` for actual iroh-docs CRDT sync.
+pub struct InMemoryDocsWriter {
+    entries: tokio::sync::RwLock<std::collections::HashMap<Vec<u8>, Vec<u8>>>,
+}
 
-    /// Test implementation of DocsWriter that stores entries in memory.
-    pub struct InMemoryDocsWriter {
-        entries: RwLock<HashMap<Vec<u8>, Vec<u8>>>,
+impl Default for InMemoryDocsWriter {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    impl Default for InMemoryDocsWriter {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl InMemoryDocsWriter {
-        pub fn new() -> Self {
-            Self {
-                entries: RwLock::new(HashMap::new()),
-            }
-        }
-
-        pub async fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-            self.entries.read().await.get(key).cloned()
-        }
-
-        pub async fn len(&self) -> usize {
-            self.entries.read().await.len()
-        }
-
-        pub async fn is_empty(&self) -> bool {
-            self.entries.read().await.is_empty()
+impl InMemoryDocsWriter {
+    /// Create a new in-memory docs writer.
+    pub fn new() -> Self {
+        Self {
+            entries: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 
-    #[async_trait]
-    impl DocsWriter for InMemoryDocsWriter {
-        async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
-            self.entries.write().await.insert(key, value);
-            Ok(())
-        }
+    /// Get an entry by key.
+    pub async fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        self.entries.read().await.get(key).cloned()
+    }
 
-        async fn delete_entry(&self, key: Vec<u8>) -> Result<()> {
-            // Use empty value as tombstone (like iroh-docs)
-            self.entries.write().await.insert(key, vec![]);
-            Ok(())
-        }
+    /// Get the number of entries.
+    pub async fn len(&self) -> usize {
+        self.entries.read().await.len()
+    }
+
+    /// Check if the writer is empty.
+    pub async fn is_empty(&self) -> bool {
+        self.entries.read().await.is_empty()
+    }
+}
+
+#[async_trait]
+impl DocsWriter for InMemoryDocsWriter {
+    async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
+        self.entries.write().await.insert(key, value);
+        Ok(())
+    }
+
+    async fn delete_entry(&self, key: Vec<u8>) -> Result<()> {
+        // Use empty value as tombstone (like iroh-docs)
+        self.entries.write().await.insert(key, vec![]);
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::test_helpers::InMemoryDocsWriter;
+    use super::InMemoryDocsWriter;
     use super::*;
 
     #[tokio::test]
@@ -444,5 +447,139 @@ mod tests {
             .expect("should skip without error");
 
         assert_eq!(writer.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_receiver_integration() {
+        use crate::raft::log_subscriber::{
+            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
+        };
+        use tokio::sync::broadcast;
+
+        let writer = Arc::new(InMemoryDocsWriter::new());
+        let exporter = Arc::new(DocsExporter::new(writer.clone()));
+
+        // Create broadcast channel (same as in bootstrap)
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+
+        // Subscribe and spawn exporter
+        let receiver = sender.subscribe();
+        let cancel = exporter.clone().spawn(receiver);
+
+        // Send a Set operation via broadcast
+        let payload = LogEntryPayload {
+            index: 1,
+            term: 1,
+            committed_at_ms: 12345,
+            operation: KvOperation::Set {
+                key: b"test-key".to_vec(),
+                value: b"test-value".to_vec(),
+            },
+        };
+        sender.send(payload).expect("send should succeed");
+
+        // Give the exporter task time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Verify the entry was exported
+        assert_eq!(writer.get(b"test-key").await, Some(b"test-value".to_vec()));
+
+        // Cancel the exporter
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_multi_operations() {
+        use crate::raft::log_subscriber::{
+            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
+        };
+        use tokio::sync::broadcast;
+
+        let writer = Arc::new(InMemoryDocsWriter::new());
+        let exporter = Arc::new(DocsExporter::new(writer.clone()));
+
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let receiver = sender.subscribe();
+        let cancel = exporter.clone().spawn(receiver);
+
+        // Send SetMulti operation
+        sender
+            .send(LogEntryPayload {
+                index: 1,
+                term: 1,
+                committed_at_ms: 12345,
+                operation: KvOperation::SetMulti {
+                    pairs: vec![
+                        (b"key1".to_vec(), b"value1".to_vec()),
+                        (b"key2".to_vec(), b"value2".to_vec()),
+                    ],
+                },
+            })
+            .expect("send should succeed");
+
+        // Send Delete operation
+        sender
+            .send(LogEntryPayload {
+                index: 2,
+                term: 1,
+                committed_at_ms: 12346,
+                operation: KvOperation::Delete {
+                    key: b"key1".to_vec(),
+                },
+            })
+            .expect("send should succeed");
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // key1 should be deleted (tombstone)
+        assert_eq!(writer.get(b"key1").await, Some(vec![]));
+        // key2 should exist
+        assert_eq!(writer.get(b"key2").await, Some(b"value2".to_vec()));
+
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_skips_noop_and_membership() {
+        use crate::raft::log_subscriber::{
+            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
+        };
+        use tokio::sync::broadcast;
+
+        let writer = Arc::new(InMemoryDocsWriter::new());
+        let exporter = Arc::new(DocsExporter::new(writer.clone()));
+
+        let (sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let receiver = sender.subscribe();
+        let cancel = exporter.clone().spawn(receiver);
+
+        // Send Noop (should be skipped)
+        sender
+            .send(LogEntryPayload {
+                index: 1,
+                term: 1,
+                committed_at_ms: 12345,
+                operation: KvOperation::Noop,
+            })
+            .expect("send should succeed");
+
+        // Send MembershipChange (should be skipped)
+        sender
+            .send(LogEntryPayload {
+                index: 2,
+                term: 1,
+                committed_at_ms: 12346,
+                operation: KvOperation::MembershipChange {
+                    description: "test change".into(),
+                },
+            })
+            .expect("send should succeed");
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // No entries should be written
+        assert!(writer.is_empty().await);
+
+        cancel.cancel();
     }
 }
