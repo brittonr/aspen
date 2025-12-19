@@ -5,6 +5,12 @@ test-threads = 1
 # Increased timeout to 60s for chaos tests that simulate network delays and leader elections
 slow-timeout = { period = "60s", terminate-after = 1 }
 
+# Always generate JUnit XML for test runs
+[profile.default.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
+
 # Profile for long-running property-based tests
 [profile.ci]
 retries = 1
@@ -12,6 +18,12 @@ fail-fast = false
 test-threads = 1
 # Extended timeout for property-based tests that run multiple iterations
 slow-timeout = { period = "120s", terminate-after = 1 }
+
+# JUnit output for CI systems
+[profile.ci.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
 
 # Specific overrides for known long-running tests
 [[profile.default.overrides]]

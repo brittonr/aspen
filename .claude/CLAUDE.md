@@ -179,6 +179,21 @@ nix fmt
 nix develop -c cargo clippy --all-targets -- --deny warnings
 ```
 
+### Test Results
+
+After running tests, results are automatically saved to JUnit XML:
+
+```
+target/nextest/default/junit.xml
+```
+
+**Always read this file after test runs** to see detailed results including:
+
+- Pass/fail status for each test
+- Failure messages and stack traces
+- Test duration
+- Stdout/stderr for failed tests
+
 ### Running Scripts
 
 ```bash
