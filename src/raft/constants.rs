@@ -352,3 +352,55 @@ pub const CHAIN_VERIFY_BATCH_SIZE: u32 = 1000;
 /// Used in:
 /// - `storage.rs`: Database migration for chain hashing
 pub const INTEGRITY_VERSION: u32 = 1;
+
+// ============================================================================
+// Gossip Rate Limiting Constants (HIGH-6 Security Enhancement)
+// ============================================================================
+
+/// Maximum number of peers to track for rate limiting (256).
+///
+/// Tiger Style: Bounded LRU-style cache prevents unbounded memory growth.
+/// Sufficient for tracking active gossipers while limiting memory to ~8KB.
+/// Oldest entries are evicted when limit is reached.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Per-peer rate limiter cache size
+pub const GOSSIP_MAX_TRACKED_PEERS: usize = 256;
+
+/// Per-peer gossip announcement rate limit (messages per minute).
+///
+/// Tiger Style: Fixed limit prevents individual peer abuse.
+/// Allows normal operation (6/minute at 10s interval) with margin for retries.
+/// Value of 12 allows 1 message every 5 seconds average.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Per-peer rate limiter threshold
+pub const GOSSIP_PER_PEER_RATE_PER_MINUTE: u32 = 12;
+
+/// Per-peer gossip announcement burst capacity (messages).
+///
+/// Tiger Style: Allows brief bursts (e.g., reconnection) without blocking.
+/// A peer can send up to this many messages before rate limiting kicks in.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Per-peer burst allowance
+pub const GOSSIP_PER_PEER_BURST: u32 = 3;
+
+/// Global gossip announcement rate limit (messages per minute).
+///
+/// Tiger Style: Cluster-wide bandwidth protection for 1000+ peer scenarios.
+/// With 1000 peers each sending 6/minute, worst case is 6000/minute.
+/// Setting to 10,000 provides margin for bursts and network recovery.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Global rate limiter threshold
+pub const GOSSIP_GLOBAL_RATE_PER_MINUTE: u32 = 10_000;
+
+/// Global gossip announcement burst capacity (messages).
+///
+/// Tiger Style: Handles cluster-wide startup bursts gracefully.
+/// Allows brief spikes without immediate rejection.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Global burst allowance
+pub const GOSSIP_GLOBAL_BURST: u32 = 100;
