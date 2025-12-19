@@ -96,7 +96,7 @@ use clap::Parser;
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
-use tracing::{info, instrument, warn};
+use tracing::{error, info, instrument, warn};
 use tracing_subscriber::EnvFilter;
 
 /// Default HTTP server address (127.0.0.1:8080).
@@ -1535,11 +1535,13 @@ async fn promote_learner(
     Json(req): Json<PromoteLearnerRequest>,
 ) -> Result<Json<PromoteLearnerResponse>, (StatusCode, String)> {
     // Get current cluster state to find existing voters and verify learner exists
-    let current_state = state
-        .controller
-        .current_state()
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let current_state = state.controller.current_state().await.map_err(|e| {
+        error!(error = %e, "failed to get cluster state for learner promotion");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to get cluster state".to_string(),
+        )
+    })?;
 
     let previous_voters: Vec<u64> = current_state.members.clone();
     let learner_ids: Vec<u64> = current_state.learners.iter().map(|l| l.id).collect();
@@ -1558,11 +1560,13 @@ async fn promote_learner(
     // Safety checks (skip if force=true)
     if !req.force {
         // Check if learner is caught up by examining Raft metrics
-        let metrics = state
-            .controller
-            .get_metrics()
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let metrics = state.controller.get_metrics().await.map_err(|e| {
+            error!(error = %e, "failed to get metrics for learner promotion");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to get cluster metrics".to_string(),
+            )
+        })?;
 
         // Only leader has replication state to check
         // replication is BTreeMap<NodeId, Option<LogId>> where Option<LogId> is the matched log
@@ -1651,7 +1655,13 @@ async fn promote_learner(
             members: new_voters.clone(),
         })
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            error!(error = %e, learner_id = req.learner_id, "failed to change membership");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to change cluster membership".to_string(),
+            )
+        })?;
 
     let message = if let Some(replace_id) = req.replace_node {
         format!(
@@ -1895,10 +1905,11 @@ async fn raft_metrics(State(ctx): State<AppState>) -> impl IntoResponse {
             }))).into_response()
         }
         Err(err) => {
-            warn!(error = ?err, "failed to get raft metrics");
+            // Log full error for debugging, return generic message to client
+            error!(error = %err, "failed to get raft metrics");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() })),
+                Json(json!({ "error": "failed to get cluster metrics" })),
             )
                 .into_response()
         }
@@ -1912,10 +1923,11 @@ async fn get_leader(State(ctx): State<AppState>) -> impl IntoResponse {
     match ctx.controller.get_leader().await {
         Ok(leader) => (StatusCode::OK, Json(json!({ "leader": leader }))).into_response(),
         Err(err) => {
-            warn!(error = ?err, "failed to get leader");
+            // Log full error for debugging, return generic message to client
+            error!(error = %err, "failed to get leader");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() })),
+                Json(json!({ "error": "failed to get leader information" })),
             )
                 .into_response()
         }
@@ -1938,10 +1950,11 @@ async fn trigger_snapshot(State(ctx): State<AppState>) -> impl IntoResponse {
         )
             .into_response(),
         Err(err) => {
-            warn!(error = ?err, "failed to trigger snapshot");
+            // Log full error for debugging, return generic message to client
+            error!(error = %err, "failed to trigger snapshot");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({ "error": err.to_string() })),
+                Json(json!({ "error": "failed to trigger snapshot" })),
             )
                 .into_response()
         }
@@ -1960,25 +1973,28 @@ async fn checkpoint_wal(
     if let aspen::raft::StateMachineVariant::Sqlite(sm) = &state.state_machine {
         // Get WAL size before checkpoint
         let wal_size_before = sm.wal_file_size().map_err(|e| {
+            error!(error = %e, "failed to get WAL size before checkpoint");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get WAL size before checkpoint: {}", e),
+                "failed to get WAL size".to_string(),
             )
         })?;
 
         // Perform checkpoint
         let pages = sm.checkpoint_wal().map_err(|e| {
+            error!(error = %e, "checkpoint failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Checkpoint failed: {}", e),
+                "checkpoint failed".to_string(),
             )
         })?;
 
         // Get WAL size after checkpoint
         let wal_size_after = sm.wal_file_size().map_err(|e| {
+            error!(error = %e, "failed to get WAL size after checkpoint");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get WAL size after checkpoint: {}", e),
+                "failed to get WAL size".to_string(),
             )
         })?;
 
@@ -2012,9 +2028,10 @@ async fn list_vaults(
     let keys = match &state.state_machine {
         aspen::raft::StateMachineVariant::Sqlite(sm) => {
             sm.scan_keys_with_prefix(VAULT_PREFIX).map_err(|e| {
+                error!(error = %e, "failed to scan vault keys");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to scan vault keys: {}", e),
+                    "failed to list vaults".to_string(),
                 )
             })?
         }
@@ -2056,11 +2073,11 @@ async fn get_vault_keys(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     use aspen::api::vault::{parse_vault_key, validate_vault_name, vault_scan_prefix};
 
-    // Validate vault name
+    // Validate vault name - this is client input, so the error message is safe to return
     if let Err(e) = validate_vault_name(&vault_name) {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Invalid vault name: {}", e),
+            format!("invalid vault name: {}", e),
         ));
     }
 
@@ -2070,9 +2087,10 @@ async fn get_vault_keys(
     let kv_pairs = match &state.state_machine {
         aspen::raft::StateMachineVariant::Sqlite(sm) => {
             sm.scan_kv_with_prefix(&prefix).map_err(|e| {
+                error!(error = %e, vault = %vault_name, "failed to scan vault keys");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to scan vault keys: {}", e),
+                    "failed to get vault keys".to_string(),
                 )
             })?
         }
@@ -2132,6 +2150,7 @@ impl From<std::io::Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         match self {
+            // Client validation errors - safe to show user-provided data
             ApiError::Control(ControlPlaneError::InvalidRequest { reason }) => {
                 (StatusCode::BAD_REQUEST, Json(json!({ "error": reason }))).into_response()
             }
@@ -2140,22 +2159,34 @@ impl IntoResponse for ApiError {
                 Json(json!({ "error": "cluster not initialized" })),
             )
                 .into_response(),
+            // Internal operation failures - log details, return generic message
             ApiError::Control(ControlPlaneError::Failed { reason }) => {
-                (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
+                error!(reason = %reason, "control plane operation failed");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": "cluster operation failed" })),
+                )
+                    .into_response()
             }
-            ApiError::Control(ControlPlaneError::Unsupported { backend, operation }) => (
+            ApiError::Control(ControlPlaneError::Unsupported {
+                backend: _,
+                operation,
+            }) => (
                 StatusCode::NOT_IMPLEMENTED,
-                Json(json!({ "error": format!("{} backend does not support {}", backend, operation) })),
+                Json(json!({ "error": format!("{operation} is not supported") })),
             )
                 .into_response(),
+            // Key not found - safe to show key name (client provided it)
             ApiError::KeyValue(KeyValueStoreError::NotFound { key }) => (
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": format!("key '{key}' not found") })),
             )
                 .into_response(),
+            // Not leader - log internal reason, return minimal info to client
             ApiError::KeyValue(KeyValueStoreError::NotLeader { leader, reason }) => {
+                error!(leader = ?leader, reason = %reason, "request sent to non-leader");
                 let mut body = serde_json::Map::new();
-                body.insert("error".to_string(), json!(format!("not leader: {reason}")));
+                body.insert("error".to_string(), json!("not leader"));
                 if let Some(id) = leader {
                     body.insert("leader".to_string(), json!(id));
                 }
@@ -2165,9 +2196,16 @@ impl IntoResponse for ApiError {
                 )
                     .into_response()
             }
+            // Internal KV failures - log details, return generic message
             ApiError::KeyValue(KeyValueStoreError::Failed { reason }) => {
-                (StatusCode::BAD_GATEWAY, Json(json!({ "error": reason }))).into_response()
+                error!(reason = %reason, "key-value operation failed");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "error": "operation failed" })),
+                )
+                    .into_response()
             }
+            // Size validation errors - safe to show (client-provided sizes)
             ApiError::KeyValue(KeyValueStoreError::KeyTooLarge { size, max }) => (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": format!("key size {size} exceeds maximum of {max} bytes") })),
@@ -2187,16 +2225,23 @@ impl IntoResponse for ApiError {
                 ),
             )
                 .into_response(),
+            // Timeout - safe to show duration
             ApiError::KeyValue(KeyValueStoreError::Timeout { duration_ms }) => (
                 StatusCode::GATEWAY_TIMEOUT,
                 Json(json!({ "error": format!("operation timed out after {duration_ms}ms") })),
             )
                 .into_response(),
-            ApiError::General(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": err.to_string() })),
-            )
-                .into_response(),
+            // General errors - CRITICAL: never expose internal details
+            ApiError::General(err) => {
+                // Log full error chain for debugging
+                error!(error = %err, error_chain = ?err, "internal server error");
+                // Return generic message to client
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "internal server error" })),
+                )
+                    .into_response()
+            }
         }
     }
 }
