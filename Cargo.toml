@@ -11,7 +11,7 @@ required-features = ["tui"]
 
 [[bin]]
 name = "sqlite-crash-helper"
-path = "tests/sqlite_crash_helper.rs"
+path = "src/bin/sqlite_crash_helper/main.rs"
 required-features = ["testing"]
 
 [[bin]]
