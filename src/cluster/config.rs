@@ -740,8 +740,8 @@ impl NodeConfig {
     /// Returns `ConfigError` if configuration is invalid.
     pub fn validate(&self) -> Result<(), ConfigError> {
         use crate::cluster::validation::{
-            check_cookie_safety, check_disk_usage, check_http_port, check_raft_timing_sanity,
-            validate_cookie, validate_node_id, validate_raft_timings, validate_secret_key,
+            check_disk_usage, check_http_port, check_raft_timing_sanity, validate_cookie,
+            validate_cookie_safety, validate_node_id, validate_raft_timings, validate_secret_key,
         };
         use tracing::warn;
 
@@ -754,10 +754,10 @@ impl NodeConfig {
             message: e.to_string(),
         })?;
 
-        // Check for unsafe default cookie (security warning)
-        if let Some(warning) = check_cookie_safety(&self.cookie) {
-            warn!("{}", warning);
-        }
+        // Reject unsafe default cookie (security-critical: prevents shared gossip topics)
+        validate_cookie_safety(&self.cookie).map_err(|e| ConfigError::Validation {
+            message: e.to_string(),
+        })?;
 
         validate_raft_timings(
             self.heartbeat_interval_ms,
@@ -962,6 +962,7 @@ mod tests {
     fn test_default_config() {
         let config = NodeConfig {
             node_id: 1,
+            cookie: "test-cookie".into(),
             ..Default::default()
         };
 
@@ -973,6 +974,7 @@ mod tests {
     fn test_validation_node_id_zero() {
         let config = NodeConfig {
             node_id: 0,
+            cookie: "test-cookie".into(),
             ..Default::default()
         };
 

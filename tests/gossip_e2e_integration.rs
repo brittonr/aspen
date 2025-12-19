@@ -27,6 +27,7 @@ async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<a
 
     let mut node = NodeBuilder::new(node_id, &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_CLUSTER_COOKIE)
         .with_gossip(true)
         // Longer timeouts for CI stability
         .with_heartbeat_interval_ms(1000)

@@ -24,6 +24,12 @@ pub enum ValidationError {
     #[snafu(display("cluster cookie cannot be empty"))]
     CookieEmpty,
 
+    #[snafu(display(
+        "using default cluster cookie is not allowed - all clusters with default cookie share \
+         the same gossip topic. Set a unique cookie via --cookie, ASPEN_COOKIE env var, or config file"
+    ))]
+    CookieUnsafeDefault,
+
     #[snafu(display("heartbeat_interval_ms must be greater than 0"))]
     HeartbeatIntervalZero,
 
@@ -83,21 +89,16 @@ pub fn validate_cookie(cookie: &str) -> Result<(), ValidationError> {
 /// Check if the cluster cookie is the unsafe default.
 ///
 /// When using the default cookie, all clusters share the same gossip topic,
-/// which is a security vulnerability. Returns a warning message if the
-/// default cookie is in use.
+/// which is a security vulnerability.
 ///
 /// # Tiger Style
 ///
-/// Security-critical: Fail safe by warning, don't silently accept unsafe defaults.
-pub fn check_cookie_safety(cookie: &str) -> Option<String> {
+/// Security-critical: Fail hard on unsafe defaults, don't allow startup.
+pub fn validate_cookie_safety(cookie: &str) -> Result<(), ValidationError> {
     if cookie == UNSAFE_DEFAULT_COOKIE {
-        Some(
-            "SECURITY WARNING: Using default cluster cookie. All clusters with default cookie share the same gossip topic. \
-            Set a unique cookie via --cookie, ASPEN_COOKIE env var, or config file to isolate this cluster's gossip traffic."
-            .to_string()
-        )
+        Err(ValidationError::CookieUnsafeDefault)
     } else {
-        None
+        Ok(())
     }
 }
 
@@ -310,6 +311,20 @@ mod tests {
     fn test_cookie_valid() {
         assert!(validate_cookie("aspen-cookie").is_ok());
         assert!(validate_cookie("x").is_ok());
+    }
+
+    #[test]
+    fn test_cookie_safety_default_rejected() {
+        assert_eq!(
+            validate_cookie_safety(UNSAFE_DEFAULT_COOKIE),
+            Err(ValidationError::CookieUnsafeDefault)
+        );
+    }
+
+    #[test]
+    fn test_cookie_safety_custom_accepted() {
+        assert!(validate_cookie_safety("my-unique-cluster-cookie").is_ok());
+        assert!(validate_cookie_safety("production-cluster-2025").is_ok());
     }
 
     // ========================================================================

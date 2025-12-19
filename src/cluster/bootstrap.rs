@@ -919,6 +919,7 @@ mod tests {
         // Test that overrides work with default values
         let overrides = NodeConfig {
             node_id: 42,
+            cookie: "test-cookie".into(),
             ..Default::default()
         };
 
@@ -932,6 +933,7 @@ mod tests {
     fn test_load_config_custom_heartbeat() {
         let overrides = NodeConfig {
             node_id: 1,
+            cookie: "test-cookie".into(),
             heartbeat_interval_ms: 500,
             ..Default::default()
         };
@@ -946,6 +948,7 @@ mod tests {
     fn test_load_config_custom_election_timeouts() {
         let overrides = NodeConfig {
             node_id: 1,
+            cookie: "test-cookie".into(),
             election_timeout_min_ms: 2000,
             election_timeout_max_ms: 4000,
             ..Default::default()
@@ -962,6 +965,7 @@ mod tests {
     fn test_load_config_storage_backend() {
         let overrides = NodeConfig {
             node_id: 1,
+            cookie: "test-cookie".into(),
             storage_backend: StorageBackend::InMemory,
             ..Default::default()
         };
@@ -978,6 +982,7 @@ mod tests {
 
         let overrides = NodeConfig {
             node_id: 1,
+            cookie: "test-cookie".into(),
             iroh: IrohConfig {
                 enable_gossip: false,
                 enable_mdns: false,

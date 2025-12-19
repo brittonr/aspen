@@ -10,6 +10,9 @@ use aspen::raft::storage::StorageBackend;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
+/// Test cluster cookie used by all integration tests.
+const TEST_COOKIE: &str = "node-builder-test-cookie";
+
 /// Test basic service lifecycle: start and shutdown.
 #[tokio::test]
 async fn test_service_lifecycle() {
@@ -18,6 +21,7 @@ async fn test_service_lifecycle() {
 
     let service = NodeBuilder::new(NodeId(1), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service");
@@ -42,6 +46,7 @@ async fn test_custom_storage_backend() {
 
     let service = NodeBuilder::new(NodeId(2), &data_dir)
         .with_storage(StorageBackend::Sqlite)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service");
@@ -58,6 +63,7 @@ async fn test_gossip_enabled() {
 
     let service = NodeBuilder::new(NodeId(3), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .with_gossip(true)
         .start()
         .await
@@ -75,6 +81,7 @@ async fn test_mdns_enabled() {
 
     let service = NodeBuilder::new(NodeId(4), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .with_mdns(true)
         .start()
         .await
@@ -92,6 +99,7 @@ async fn test_custom_raft_timeouts() {
 
     let service = NodeBuilder::new(NodeId(5), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .with_heartbeat_interval_ms(500)
         .with_election_timeout_ms(1500, 3000)
         .start()
@@ -110,6 +118,7 @@ async fn test_raft_node_access() {
 
     let service = NodeBuilder::new(NodeId(6), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service");
@@ -128,6 +137,7 @@ async fn test_raft_metrics_access() {
 
     let service = NodeBuilder::new(NodeId(7), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service");
@@ -154,6 +164,7 @@ async fn test_bootstrap_handle_access() {
 
     let service = NodeBuilder::new(NodeId(8), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service");
@@ -173,6 +184,7 @@ async fn test_builder_all_options() {
 
     let service = NodeBuilder::new(NodeId(9), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .with_peers(vec![])
         .with_gossip(false)
         .with_mdns(false)
@@ -193,12 +205,14 @@ async fn test_multiple_services() {
 
     let service1 = NodeBuilder::new(NodeId(10), temp_dir.path().join("node-10"))
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service1");
 
     let service2 = NodeBuilder::new(NodeId(11), temp_dir.path().join("node-11"))
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service2");
@@ -226,6 +240,7 @@ async fn test_service_restart_inmemory() {
     // Start first instance
     let service1 = NodeBuilder::new(NodeId(12), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service1");
@@ -242,6 +257,7 @@ async fn test_service_restart_inmemory() {
     // Start second instance (InMemory means fresh state)
     let service2 = NodeBuilder::new(NodeId(12), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .start()
         .await
         .expect("failed to start service2");
@@ -266,6 +282,7 @@ async fn test_rapid_lifecycle_cycles() {
     for i in 0..3 {
         let service = NodeBuilder::new(NodeId(13), &data_dir)
             .with_storage(StorageBackend::InMemory)
+            .with_cookie(TEST_COOKIE)
             .start()
             .await
             .unwrap_or_else(|e| panic!("failed to start service on cycle {}: {}", i, e));
@@ -293,6 +310,7 @@ async fn test_peer_configuration() {
 
     let service = NodeBuilder::new(NodeId(14), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(TEST_COOKIE)
         .with_peers(peers)
         .start()
         .await
