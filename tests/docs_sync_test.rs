@@ -11,8 +11,8 @@ use iroh_docs::{Author, NamespaceSecret};
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-use aspen::docs::exporter::{DocsExporter, IrohDocsWriter};
 use aspen::docs::DocsWriter; // Import trait for set_entry/delete_entry methods
+use aspen::docs::exporter::{DocsExporter, IrohDocsWriter};
 use aspen::raft::log_subscriber::{KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 
 /// Test that entries exported to iroh-docs store can be read back.
@@ -245,12 +245,7 @@ async fn test_init_docs_resources_with_config_secrets() -> Result<()> {
     let ns_hex = hex::encode(ns_secret.to_bytes());
     let author_hex = hex::encode(author.to_bytes());
 
-    let resources = init_docs_resources(
-        temp_dir.path(),
-        false,
-        Some(&ns_hex),
-        Some(&author_hex),
-    )?;
+    let resources = init_docs_resources(temp_dir.path(), false, Some(&ns_hex), Some(&author_hex))?;
 
     // Should use config-provided secrets
     assert_eq!(resources.namespace_id, ns_secret.id());

@@ -42,7 +42,6 @@ use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
-use crate::protocol_handlers::RAFT_ALPN;
 use crate::raft::StateMachineVariant;
 use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 use crate::raft::network::IrpcRaftNetworkFactory;
@@ -52,7 +51,6 @@ use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore,
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
 use crate::raft::types::NodeId;
-use iroh_gossip::net::GOSSIP_ALPN;
 
 /// Handle to a running cluster node.
 ///
@@ -227,18 +225,16 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
     // Create Iroh endpoint configuration
-    // IMPORTANT: Configure ALPNs to accept the protocols we serve
-    let mut alpns = vec![RAFT_ALPN.to_vec()];
-    if config.iroh.enable_gossip {
-        alpns.push(GOSSIP_ALPN.to_vec());
-    }
+    // NOTE: Do NOT set ALPNs here! When using Router (which is the standard pattern),
+    // ALPNs are registered automatically via Router::builder().accept(). Setting ALPNs
+    // on the endpoint directly conflicts with Router-based ALPN handling.
+    // The Router is spawned by the caller (aspen-node.rs or Node::spawn_router()).
 
     let iroh_config = IrohEndpointConfig::default()
         .with_gossip(config.iroh.enable_gossip)
         .with_mdns(config.iroh.enable_mdns)
         .with_dns_discovery(config.iroh.enable_dns_discovery)
-        .with_pkarr(config.iroh.enable_pkarr)
-        .with_alpns(alpns);
+        .with_pkarr(config.iroh.enable_pkarr);
 
     let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
         iroh_config.with_dns_discovery_url(dns_url.clone())
@@ -598,7 +594,10 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // This spawns a background task that listens to the log broadcast channel
     // and exports committed KV operations to iroh-docs for CRDT-based sync
     let (docs_exporter_cancel, docs_sync) = if config.docs.enabled {
-        use crate::docs::{init_docs_resources, DocsSyncResources, DocsExporter, SyncHandleDocsWriter, BlobBackedDocsWriter};
+        use crate::docs::{
+            BlobBackedDocsWriter, DocsExporter, DocsSyncResources, SyncHandleDocsWriter,
+            init_docs_resources,
+        };
 
         if let Some(ref sender) = log_broadcast {
             // Initialize iroh-docs resources (Store, NamespaceId, Author)

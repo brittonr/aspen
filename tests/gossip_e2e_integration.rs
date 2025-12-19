@@ -25,7 +25,7 @@ const TEST_CLUSTER_COOKIE: &str = "gossip-e2e-test-cluster";
 async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<aspen::node::Node> {
     let data_dir = temp_dir.path().join(format!("node-{}", node_id.0));
 
-    let node = NodeBuilder::new(node_id, &data_dir)
+    let mut node = NodeBuilder::new(node_id, &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_gossip(true)
         // Longer timeouts for CI stability
@@ -33,6 +33,13 @@ async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<a
         .with_election_timeout_ms(2000, 5000)
         .start()
         .await?;
+
+    // Spawn the Router with RaftProtocolHandler to enable inter-node communication.
+    // The Router handle is stored in the Node to keep it alive.
+    node.spawn_router();
+
+    // Wait for the endpoint to be fully online and ready for connections
+    node.handle().iroh_manager.endpoint().online().await;
 
     Ok(node)
 }

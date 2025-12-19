@@ -189,10 +189,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 };
 
                 // First, read existing value to check if we need to unprotect old blob
-                if let Some(old_value) = self.read_raw(&key).await {
-                    if let Err(e) = self.unprotect_blob(&key, &old_value).await {
-                        warn!(error = %e, key, "failed to unprotect old blob");
-                    }
+                if let Some(old_value) = self.read_raw(&key).await
+                    && let Err(e) = self.unprotect_blob(&key, &old_value).await
+                {
+                    warn!(error = %e, key, "failed to unprotect old blob");
                 }
 
                 WriteCommand::Set {
@@ -219,10 +219,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                     };
 
                     // Unprotect old blob if exists
-                    if let Some(old_value) = self.read_raw(&key).await {
-                        if let Err(e) = self.unprotect_blob(&key, &old_value).await {
-                            warn!(error = %e, key, "failed to unprotect old blob");
-                        }
+                    if let Some(old_value) = self.read_raw(&key).await
+                        && let Err(e) = self.unprotect_blob(&key, &old_value).await
+                    {
+                        warn!(error = %e, key, "failed to unprotect old blob");
                     }
 
                     processed_pairs.push((key, final_value));
@@ -233,20 +233,20 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
             }
             WriteCommand::Delete { key } => {
                 // Unprotect blob before delete
-                if let Some(old_value) = self.read_raw(&key).await {
-                    if let Err(e) = self.unprotect_blob(&key, &old_value).await {
-                        warn!(error = %e, key, "failed to unprotect old blob");
-                    }
+                if let Some(old_value) = self.read_raw(&key).await
+                    && let Err(e) = self.unprotect_blob(&key, &old_value).await
+                {
+                    warn!(error = %e, key, "failed to unprotect old blob");
                 }
                 WriteCommand::Delete { key }
             }
             WriteCommand::DeleteMulti { keys } => {
                 // Unprotect blobs before delete
                 for key in &keys {
-                    if let Some(old_value) = self.read_raw(key).await {
-                        if let Err(e) = self.unprotect_blob(key, &old_value).await {
-                            warn!(error = %e, key, "failed to unprotect old blob");
-                        }
+                    if let Some(old_value) = self.read_raw(key).await
+                        && let Err(e) = self.unprotect_blob(key, &old_value).await
+                    {
+                        warn!(error = %e, key, "failed to unprotect old blob");
                     }
                 }
                 WriteCommand::DeleteMulti { keys }
@@ -263,10 +263,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
 
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         // Unprotect blob before delete
-        if let Some(old_value) = self.read_raw(&request.key).await {
-            if let Err(e) = self.unprotect_blob(&request.key, &old_value).await {
-                warn!(error = %e, key = %request.key, "failed to unprotect old blob");
-            }
+        if let Some(old_value) = self.read_raw(&request.key).await
+            && let Err(e) = self.unprotect_blob(&request.key, &old_value).await
+        {
+            warn!(error = %e, key = %request.key, "failed to unprotect old blob");
         }
 
         self.kv.delete(request).await

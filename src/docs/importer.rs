@@ -49,6 +49,7 @@ pub const MAX_PEER_SUBSCRIPTIONS: usize = 32;
 /// entries based on priority ordering. Lower priority numbers win conflicts.
 pub struct DocsImporter {
     /// Local cluster ID for tracking origin.
+    #[allow(dead_code)] // Reserved for future origin tracking
     local_cluster_id: String,
     /// Local KV store to write imported entries.
     kv_store: Arc<dyn KeyValueStore>,
@@ -326,7 +327,8 @@ impl DocsImporter {
 
         // Check if we should import based on priority
         if let Some(existing) = &existing_origin
-            && !existing.should_replace(priority) {
+            && !existing.should_replace(priority)
+        {
             // Update skipped count
             let mut subs = self.subscriptions.write().await;
             if let Some(sub) = subs.get_mut(source_cluster_id) {

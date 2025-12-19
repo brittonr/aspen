@@ -1624,9 +1624,7 @@ async fn process_client_request(
                     );
                     return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
                         success: false,
-                        error: Some(
-                            "network_factory not configured for this node".to_string()
-                        ),
+                        error: Some("network_factory not configured for this node".to_string()),
                     }));
                 }
             };
@@ -1670,7 +1668,11 @@ async fn process_client_request(
 
             // Parse explicit endpoint_ids if provided
             if let Some(ids_str) = &endpoint_ids {
-                for id_str in ids_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                for id_str in ids_str
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
                     // Skip if we've hit the limit (Tiger Style: MAX_BOOTSTRAP_PEERS = 16)
                     if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
                         debug!(

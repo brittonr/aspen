@@ -72,8 +72,8 @@ pub use exporter::{
 };
 
 pub use store::{
-    init_docs_resources, DocsProtocolHandler, DocsResources, DocsSyncResources, DocsSyncService,
-    BACKGROUND_SYNC_INTERVAL_SECS, MAX_OUTBOUND_SYNCS,
+    BACKGROUND_SYNC_INTERVAL_SECS, DocsProtocolHandler, DocsResources, DocsSyncResources,
+    DocsSyncService, MAX_OUTBOUND_SYNCS, init_docs_resources,
 };
 
 pub use importer::{

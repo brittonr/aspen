@@ -130,20 +130,20 @@ impl DocsExporter {
                 tokio::select! {
                     _ = exporter.cancel.cancelled() => {
                         // Flush remaining entries on shutdown
-                        if !batch.is_empty() {
-                            if let Err(e) = exporter.flush_batch(&mut batch).await {
-                                error!(error = %e, "failed to flush batch on shutdown");
-                            }
+                        if !batch.is_empty()
+                            && let Err(e) = exporter.flush_batch(&mut batch).await
+                        {
+                            error!(error = %e, "failed to flush batch on shutdown");
                         }
                         info!("DocsExporter shutting down");
                         break;
                     }
                     _ = flush_interval.tick() => {
                         // Time-based flush to bound latency
-                        if !batch.is_empty() {
-                            if let Err(e) = exporter.flush_batch(&mut batch).await {
-                                error!(error = %e, "failed to flush batch on interval");
-                            }
+                        if !batch.is_empty()
+                            && let Err(e) = exporter.flush_batch(&mut batch).await
+                        {
+                            error!(error = %e, "failed to flush batch on interval");
                         }
                     }
                     result = receiver.recv() => {
@@ -152,18 +152,18 @@ impl DocsExporter {
                                 exporter.collect_payload_to_batch(payload, &mut batch);
 
                                 // Size-based flush when batch is full
-                                if batch.len() >= EXPORT_BATCH_SIZE as usize {
-                                    if let Err(e) = exporter.flush_batch(&mut batch).await {
-                                        error!(error = %e, "failed to flush full batch");
-                                    }
+                                if batch.len() >= EXPORT_BATCH_SIZE as usize
+                                    && let Err(e) = exporter.flush_batch(&mut batch).await
+                                {
+                                    error!(error = %e, "failed to flush full batch");
                                 }
                             }
                             Err(broadcast::error::RecvError::Closed) => {
                                 // Flush remaining entries before exit
-                                if !batch.is_empty() {
-                                    if let Err(e) = exporter.flush_batch(&mut batch).await {
-                                        error!(error = %e, "failed to flush batch on channel close");
-                                    }
+                                if !batch.is_empty()
+                                    && let Err(e) = exporter.flush_batch(&mut batch).await
+                                {
+                                    error!(error = %e, "failed to flush batch on channel close");
                                 }
                                 warn!("log subscriber channel closed");
                                 break;

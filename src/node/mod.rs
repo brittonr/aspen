@@ -63,9 +63,12 @@ use iroh::EndpointAddr;
 
 pub use self::types::NodeId;
 
+use iroh::protocol::Router;
+
 use crate::api::{ClusterController, KeyValueStore};
 use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
 use crate::cluster::config::NodeConfig;
+use crate::protocol_handlers::RaftProtocolHandler;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -218,7 +221,10 @@ impl NodeBuilder {
             .context("configuration validation failed")?;
 
         let handle = bootstrap_node(self.config).await?;
-        Ok(Node { handle })
+        Ok(Node {
+            handle,
+            router: None,
+        })
     }
 }
 
@@ -228,6 +234,9 @@ impl NodeBuilder {
 /// node's components for integration testing and programmatic usage.
 pub struct Node {
     handle: NodeHandle,
+    /// Router for handling incoming protocol connections.
+    /// Stored to keep it alive - dropping the Router shuts down protocol handling.
+    router: Option<Router>,
 }
 
 impl Node {
@@ -270,6 +279,48 @@ impl Node {
     /// Access the KeyValueStore interface for key-value operations.
     pub fn kv_store(&self) -> &dyn KeyValueStore {
         self.handle.raft_node.as_ref()
+    }
+
+    /// Spawn the Iroh Router with the Raft protocol handler.
+    ///
+    /// This must be called after `NodeBuilder::start()` to enable inter-node
+    /// communication. The Router registers the `RaftProtocolHandler` which
+    /// handles incoming Raft RPC connections.
+    ///
+    /// # Why This Is Separate
+    ///
+    /// The Router is not spawned automatically by `NodeBuilder::start()` because:
+    /// - `aspen-node.rs` needs to add additional handlers (Client, LogSubscriber)
+    /// - The Router configuration varies by deployment scenario
+    ///
+    /// For integration tests, call this immediately after `start()`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut node = NodeBuilder::new(NodeId(1), &temp_dir)
+    ///     .with_storage(StorageBackend::InMemory)
+    ///     .start()
+    ///     .await?;
+    /// node.spawn_router();
+    /// ```
+    pub fn spawn_router(&mut self) {
+        use crate::protocol_handlers::RAFT_ALPN;
+
+        let raft_handler = RaftProtocolHandler::new(self.handle.raft_node.raft().as_ref().clone());
+
+        let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+
+        // Add gossip handler if enabled
+        if let Some(gossip) = self.handle.iroh_manager.gossip() {
+            use iroh_gossip::ALPN as GOSSIP_ALPN;
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+        }
+
+        // Spawn the router and store the handle to keep it alive
+        // Dropping the Router would shut down protocol handling!
+        self.router = Some(builder.spawn());
     }
 
     /// Gracefully shutdown the node.

@@ -125,6 +125,7 @@ impl PeerConnection {
 /// incoming entries through the DocsImporter for conflict resolution.
 pub struct PeerManager {
     /// Our cluster's identity.
+    #[allow(dead_code)] // Reserved for future peer coordination
     local_cluster_id: String,
     /// DocsImporter for handling incoming entries.
     importer: Arc<DocsImporter>,

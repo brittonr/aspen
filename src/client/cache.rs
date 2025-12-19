@@ -31,6 +31,7 @@ impl CacheEntry {
         Instant::now() >= self.expires_at
     }
 
+    #[allow(dead_code)] // Reserved for future LRU eviction
     fn touch(&mut self) {
         self.last_access = Instant::now();
     }
@@ -68,19 +69,19 @@ impl LocalCache {
         // Try read lock first
         {
             let entries = self.entries.read().ok()?;
-            if let Some(entry) = entries.get(key) {
-                if !entry.is_expired() {
-                    return Some(entry.value.clone());
-                }
+            if let Some(entry) = entries.get(key)
+                && !entry.is_expired()
+            {
+                return Some(entry.value.clone());
             }
         }
 
         // If entry is expired, remove it (needs write lock)
         let mut entries = self.entries.write().ok()?;
-        if let Some(entry) = entries.get(key) {
-            if entry.is_expired() {
-                entries.remove(key);
-            }
+        if let Some(entry) = entries.get(key)
+            && entry.is_expired()
+        {
+            entries.remove(key);
         }
         None
     }

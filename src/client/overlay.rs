@@ -63,6 +63,12 @@ pub enum OverlayError {
     ConnectionError { reason: String },
 }
 
+/// Callback type for reading from a subscription.
+type ReadHandler = dyn Fn(&str, &str) -> Option<String> + Send + Sync;
+
+/// Callback type for writing to a subscription.
+type WriteHandler = dyn Fn(&str, &str, &str) -> bool + Send + Sync;
+
 /// Client overlay for managing multiple cluster subscriptions.
 ///
 /// Provides a unified interface for reading and writing across
@@ -74,9 +80,9 @@ pub struct ClientOverlay {
     caches: RwLock<HashMap<String, Arc<LocalCache>>>,
     /// Callback for reading from a subscription.
     /// In a real implementation, this would connect to the cluster.
-    read_handler: Option<Arc<dyn Fn(&str, &str) -> Option<String> + Send + Sync>>,
+    read_handler: Option<Arc<ReadHandler>>,
     /// Callback for writing to a subscription.
-    write_handler: Option<Arc<dyn Fn(&str, &str, &str) -> bool + Send + Sync>>,
+    write_handler: Option<Arc<WriteHandler>>,
 }
 
 impl ClientOverlay {
@@ -167,24 +173,25 @@ impl ClientOverlay {
 
         for sub in subs.iter() {
             // Check cache first
-            if let Some(cache) = caches.get(&sub.id) {
-                if let Some(value) = cache.get(key) {
-                    debug!(
-                        subscription = %sub.id,
-                        key,
-                        "cache hit"
-                    );
-                    return Ok(ReadResult {
-                        value: Some(value),
-                        source: Some(sub.id.clone()),
-                        from_cache: true,
-                    });
-                }
+            if let Some(cache) = caches.get(&sub.id)
+                && let Some(value) = cache.get(key)
+            {
+                debug!(
+                    subscription = %sub.id,
+                    key,
+                    "cache hit"
+                );
+                return Ok(ReadResult {
+                    value: Some(value),
+                    source: Some(sub.id.clone()),
+                    from_cache: true,
+                });
             }
 
             // Try to read from cluster
             if let Some(handler) = &self.read_handler
-                && let Some(value) = handler(&sub.id, key) {
+                && let Some(value) = handler(&sub.id, key)
+            {
                 // Cache the result
                 if let Some(cache) = caches.get(&sub.id) {
                     cache.set(key, &value);

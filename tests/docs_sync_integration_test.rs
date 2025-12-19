@@ -12,8 +12,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::docs::{
-    init_docs_resources, DocsSyncResources, DocsWriter, SyncHandleDocsWriter,
-    DOCS_SYNC_ALPN,
+    DOCS_SYNC_ALPN, DocsSyncResources, DocsWriter, SyncHandleDocsWriter, init_docs_resources,
 };
 use iroh::protocol::Router;
 use iroh::{Endpoint, EndpointAddr, SecretKey};
@@ -38,7 +37,11 @@ fn get_endpoint_addr(endpoint: &Endpoint) -> EndpointAddr {
 }
 
 /// Create docs sync resources for a test node.
-async fn create_docs_sync(temp_dir: &TempDir, node_id: &str, in_memory: bool) -> Result<DocsSyncResources> {
+async fn create_docs_sync(
+    temp_dir: &TempDir,
+    node_id: &str,
+    in_memory: bool,
+) -> Result<DocsSyncResources> {
     let resources = init_docs_resources(temp_dir.path(), in_memory, None, None)?;
     let docs_sync = DocsSyncResources::from_docs_resources(resources, node_id);
     // Open the replica for reading/writing
@@ -76,10 +79,14 @@ async fn test_sync_handle_writer() -> Result<()> {
     );
 
     // Write an entry
-    writer.set_entry(b"test-key".to_vec(), b"test-value".to_vec()).await?;
+    writer
+        .set_entry(b"test-key".to_vec(), b"test-value".to_vec())
+        .await?;
 
     // Write another entry
-    writer.set_entry(b"test-key-2".to_vec(), b"test-value-2".to_vec()).await?;
+    writer
+        .set_entry(b"test-key-2".to_vec(), b"test-value-2".to_vec())
+        .await?;
 
     // Note: delete_entry uses empty content which iroh-docs rejects
     // In practice, deletion in CRDT systems is done by writing a tombstone
@@ -107,12 +114,7 @@ async fn test_two_node_docs_sync() -> Result<()> {
     let endpoint2 = create_test_endpoint().await?;
     // Use a different namespace (this test verifies protocol handling with different namespaces)
     let ns_secret_hex = hex::encode(iroh_docs::NamespaceSecret::new(&mut rand::rng()).to_bytes());
-    let resources2 = init_docs_resources(
-        temp_dir2.path(),
-        true,
-        Some(&ns_secret_hex),
-        None,
-    )?;
+    let resources2 = init_docs_resources(temp_dir2.path(), true, Some(&ns_secret_hex), None)?;
     let docs_sync2 = DocsSyncResources::from_docs_resources(resources2, "node-2");
     docs_sync2.open_replica().await?;
     let docs_sync2 = Arc::new(docs_sync2);
@@ -136,9 +138,15 @@ async fn test_two_node_docs_sync() -> Result<()> {
         docs_sync1.author.clone(),
     );
 
-    writer1.set_entry(b"key1".to_vec(), b"value1".to_vec()).await?;
-    writer1.set_entry(b"key2".to_vec(), b"value2".to_vec()).await?;
-    writer1.set_entry(b"key3".to_vec(), b"value3".to_vec()).await?;
+    writer1
+        .set_entry(b"key1".to_vec(), b"value1".to_vec())
+        .await?;
+    writer1
+        .set_entry(b"key2".to_vec(), b"value2".to_vec())
+        .await?;
+    writer1
+        .set_entry(b"key3".to_vec(), b"value3".to_vec())
+        .await?;
 
     info!("node 1 has written 3 entries");
 
@@ -207,24 +215,14 @@ async fn test_same_namespace_sync() -> Result<()> {
 
     // Node 1
     let endpoint1 = create_test_endpoint().await?;
-    let resources1 = init_docs_resources(
-        temp_dir1.path(),
-        true,
-        Some(&ns_secret_hex),
-        None,
-    )?;
+    let resources1 = init_docs_resources(temp_dir1.path(), true, Some(&ns_secret_hex), None)?;
     let docs_sync1 = DocsSyncResources::from_docs_resources(resources1, "node-1");
     docs_sync1.open_replica().await?;
     let docs_sync1 = Arc::new(docs_sync1);
 
     // Node 2 with same namespace
     let endpoint2 = create_test_endpoint().await?;
-    let resources2 = init_docs_resources(
-        temp_dir2.path(),
-        true,
-        Some(&ns_secret_hex),
-        None,
-    )?;
+    let resources2 = init_docs_resources(temp_dir2.path(), true, Some(&ns_secret_hex), None)?;
     let docs_sync2 = DocsSyncResources::from_docs_resources(resources2, "node-2");
     docs_sync2.open_replica().await?;
     let docs_sync2 = Arc::new(docs_sync2);
@@ -245,8 +243,12 @@ async fn test_same_namespace_sync() -> Result<()> {
         docs_sync1.author.clone(),
     );
 
-    writer1.set_entry(b"shared-key-1".to_vec(), b"shared-value-1".to_vec()).await?;
-    writer1.set_entry(b"shared-key-2".to_vec(), b"shared-value-2".to_vec()).await?;
+    writer1
+        .set_entry(b"shared-key-1".to_vec(), b"shared-value-1".to_vec())
+        .await?;
+    writer1
+        .set_entry(b"shared-key-2".to_vec(), b"shared-value-2".to_vec())
+        .await?;
 
     info!("node 1 has written 2 entries to shared namespace");
 
@@ -275,7 +277,7 @@ async fn test_same_namespace_sync() -> Result<()> {
             );
             // With same namespace, node 2 should receive the entries from node 1
             assert!(
-                finished.outcome.num_recv > 0 || finished.outcome.num_sent >= 0,
+                finished.outcome.num_recv > 0 || finished.outcome.num_sent > 0,
                 "expected some data transfer"
             );
         }
@@ -338,14 +340,18 @@ async fn test_bidirectional_sync() -> Result<()> {
         docs_sync1.namespace_id,
         docs_sync1.author.clone(),
     );
-    writer1.set_entry(b"from-node-1".to_vec(), b"data-1".to_vec()).await?;
+    writer1
+        .set_entry(b"from-node-1".to_vec(), b"data-1".to_vec())
+        .await?;
 
     let writer2 = SyncHandleDocsWriter::new(
         docs_sync2.sync_handle.clone(),
         docs_sync2.namespace_id,
         docs_sync2.author.clone(),
     );
-    writer2.set_entry(b"from-node-2".to_vec(), b"data-2".to_vec()).await?;
+    writer2
+        .set_entry(b"from-node-2".to_vec(), b"data-2".to_vec())
+        .await?;
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 

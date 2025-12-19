@@ -608,7 +608,8 @@ impl DocsSyncService {
                 "docs sync service started"
             );
 
-            let mut interval = tokio::time::interval(Duration::from_secs(BACKGROUND_SYNC_INTERVAL_SECS));
+            let mut interval =
+                tokio::time::interval(Duration::from_secs(BACKGROUND_SYNC_INTERVAL_SECS));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
@@ -805,18 +806,18 @@ impl ProtocolHandler for DocsProtocolHandler {
                         error = %err,
                         "docs sync failed"
                     );
-                    Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
+                    Err(AcceptError::from_err(std::io::Error::other(
+                        err.to_string(),
+                    )))
                 }
             }
         }
     }
 
-    fn shutdown(&self) -> impl std::future::Future<Output = ()> + Send + '_ {
-        async move {
-            info!("docs protocol handler shutting down");
-            // Close the semaphore to prevent new connections
-            self.connection_semaphore.close();
-        }
+    async fn shutdown(&self) {
+        info!("docs protocol handler shutting down");
+        // Close the semaphore to prevent new connections
+        self.connection_semaphore.close();
     }
 }
 
@@ -915,15 +916,17 @@ fn init_persistent_resources(
 
     // Create persistent store with path to the database file
     let db_path = docs_dir.join(STORE_DB_FILE);
-    let mut store = Store::persistent(&db_path)
-        .with_context(|| format!("failed to create persistent iroh-docs store at {}", db_path.display()))?;
+    let mut store = Store::persistent(&db_path).with_context(|| {
+        format!(
+            "failed to create persistent iroh-docs store at {}",
+            db_path.display()
+        )
+    })?;
 
     // Load or create namespace secret
     let namespace_secret_path = docs_dir.join(NAMESPACE_SECRET_FILE);
-    let namespace_secret = load_or_create_namespace_secret(
-        &namespace_secret_path,
-        namespace_secret_hex,
-    )?;
+    let namespace_secret =
+        load_or_create_namespace_secret(&namespace_secret_path, namespace_secret_hex)?;
     let namespace_id = namespace_secret.id();
 
     // Load or create author secret
@@ -1031,7 +1034,9 @@ fn parse_namespace_secret(hex_str: &str) -> Result<NamespaceSecret> {
             bytes.len()
         );
     }
-    let array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid length"))?;
+    let array: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("invalid length"))?;
     Ok(NamespaceSecret::from_bytes(&array))
 }
 
@@ -1044,7 +1049,9 @@ fn parse_author_secret(hex_str: &str) -> Result<Author> {
             bytes.len()
         );
     }
-    let array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid length"))?;
+    let array: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("invalid length"))?;
     Ok(Author::from_bytes(&array))
 }
 

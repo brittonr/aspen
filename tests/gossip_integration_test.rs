@@ -11,7 +11,7 @@ mod support;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::cluster::config::{BlobConfig, ControlBackend, DocsConfig, IrohConfig, NodeConfig};
+use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
@@ -38,14 +38,7 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
             dns_discovery_url: None,
             enable_pkarr: false,
         },
-        docs: DocsConfig::default(),
-        blobs: BlobConfig::default(),
-        peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
-        redb_log_path: None,
-        redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        ..Default::default()
     }
 }
 
@@ -284,14 +277,9 @@ async fn test_mock_gossip_topic_isolation() -> Result<()> {
 fn test_cluster_bootstrap_config_merge_gossip_fields() {
     let mut base = NodeConfig {
         node_id: 1,
-        data_dir: None,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
         http_addr: "127.0.0.1:8080".parse().unwrap(),
-        control_backend: ControlBackend::RaftActor,
-        heartbeat_interval_ms: 500,
-        election_timeout_min_ms: 1500,
-        election_timeout_max_ms: 3000,
         iroh: IrohConfig {
             secret_key: None,
             enable_gossip: true,
@@ -301,26 +289,14 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             dns_discovery_url: None,
             enable_pkarr: false,
         },
-        docs: DocsConfig::default(),
-        blobs: BlobConfig::default(),
-        peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
-        redb_log_path: None,
-        redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        ..Default::default()
     };
 
     let override_config = NodeConfig {
         node_id: 0,
-        data_dir: None,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
         http_addr: "127.0.0.1:8080".parse().unwrap(),
-        control_backend: ControlBackend::RaftActor,
-        heartbeat_interval_ms: 500,
-        election_timeout_min_ms: 1500,
-        election_timeout_max_ms: 3000,
         iroh: IrohConfig {
             secret_key: None,
             enable_gossip: false, // Override to disable
@@ -330,14 +306,7 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             dns_discovery_url: Some("https://dns.example.com".into()),
             enable_pkarr: false,
         },
-        docs: DocsConfig::default(),
-        blobs: BlobConfig::default(),
-        peers: vec![],
-        storage_backend: aspen::raft::storage::StorageBackend::default(),
-        redb_log_path: None,
-        redb_sm_path: None,
-        sqlite_log_path: None,
-        sqlite_sm_path: None,
+        ..Default::default()
     };
 
     base.merge(override_config);
