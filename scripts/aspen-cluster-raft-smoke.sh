@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+# OBSOLETE: This script uses the removed HTTP API.
+# The HTTP API was removed in favor of Iroh Client RPC (Dec 2025).
+# Use aspen-tui to interact with Aspen nodes instead.
+#
+# To test Raft consensus, use the Rust integration tests:
+#   cargo nextest run --test gossip_integration_test
+#   cargo nextest run --test raft_
+echo "ERROR: This smoke test is obsolete. HTTP API has been removed."
+echo "Use aspen-tui to interact with Aspen nodes via Iroh Client RPC."
+exit 1
+
+# Original script below (kept for reference)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

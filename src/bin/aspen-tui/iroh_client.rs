@@ -32,7 +32,7 @@ const RETRY_DELAY: Duration = Duration::from_millis(500); // Reduced from 5s
 const MAX_RETRIES: u32 = 3;
 
 /// Client ALPN for identifying Client RPC connections.
-const CLIENT_ALPN: &[u8] = b"aspen-tui";
+const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Iroh client for TUI connections to Aspen nodes.
 pub struct IrohClient {

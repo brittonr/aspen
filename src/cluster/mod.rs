@@ -150,7 +150,7 @@ pub struct IrohEndpointConfig {
     /// # Common ALPNs in Aspen
     ///
     /// - `RAFT_ALPN` ("raft-rpc"): Raft consensus RPC between cluster nodes
-    /// - `CLIENT_ALPN` ("aspen-tui"): TUI client connections
+    /// - `CLIENT_ALPN` ("aspen-client"): Client RPC connections
     /// - `GOSSIP_ALPN` ("iroh-gossip/0"): Peer discovery via iroh-gossip
     ///
     /// # Architecture Note

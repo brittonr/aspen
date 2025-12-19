@@ -111,13 +111,7 @@ pub const RAFT_AUTH_ALPN: &[u8] = b"raft-auth";
 pub use crate::raft::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
 /// ALPN protocol identifier for Client RPC.
-///
-/// Uses `aspen-tui` for backward compatibility with existing clients.
-pub const CLIENT_ALPN: &[u8] = b"aspen-tui";
-
-/// Deprecated: Use `CLIENT_ALPN` instead.
-#[deprecated(since = "0.1.0", note = "Use CLIENT_ALPN instead")]
-pub const TUI_ALPN: &[u8] = CLIENT_ALPN;
+pub const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Maximum concurrent Client connections.
 ///

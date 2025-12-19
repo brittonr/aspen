@@ -933,23 +933,3 @@ impl ClientRpcResponse {
         })
     }
 }
-
-// =============================================================================
-// Backward compatibility re-exports (deprecated)
-// =============================================================================
-
-/// Deprecated: Use `CLIENT_ALPN` instead.
-#[deprecated(since = "0.1.0", note = "Use CLIENT_ALPN instead")]
-pub const TUI_ALPN: &[u8] = CLIENT_ALPN;
-
-/// Deprecated: Use `MAX_CLIENT_MESSAGE_SIZE` instead.
-#[deprecated(since = "0.1.0", note = "Use MAX_CLIENT_MESSAGE_SIZE instead")]
-pub const MAX_TUI_MESSAGE_SIZE: usize = MAX_CLIENT_MESSAGE_SIZE;
-
-/// Deprecated: Use `ClientRpcRequest` instead.
-#[deprecated(since = "0.1.0", note = "Use ClientRpcRequest instead")]
-pub type TuiRpcRequest = ClientRpcRequest;
-
-/// Deprecated: Use `ClientRpcResponse` instead.
-#[deprecated(since = "0.1.0", note = "Use ClientRpcResponse instead")]
-pub type TuiRpcResponse = ClientRpcResponse;

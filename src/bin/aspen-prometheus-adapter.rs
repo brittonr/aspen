@@ -36,7 +36,7 @@ use aspen::client_rpc::{
 use aspen::cluster::ticket::AspenClusterTicket;
 
 /// Client ALPN for identifying Client RPC connections.
-const CLIENT_ALPN: &[u8] = b"aspen-tui";
+const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Default HTTP port for the adapter.
 const DEFAULT_PORT: u16 = 9090;

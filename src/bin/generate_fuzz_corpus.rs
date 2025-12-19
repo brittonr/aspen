@@ -10,14 +10,14 @@ use aspen::api::{
     ChangeMembershipRequest, ClusterNode, DeleteRequest, InitRequest, ReadRequest, ScanRequest,
     WriteCommand, WriteRequest,
 };
+use aspen::client_rpc::{ClientRpcRequest, ClientRpcResponse};
 use aspen::cluster::ticket::AspenClusterTicket;
-use aspen::tui_rpc::{TuiRpcRequest, TuiRpcResponse};
 use iroh_gossip::proto::TopicId;
 
 fn main() {
     let corpus_dir = Path::new("fuzz/corpus");
 
-    generate_tui_rpc_corpus(corpus_dir);
+    generate_client_rpc_corpus(corpus_dir);
     generate_raft_rpc_corpus(corpus_dir);
     generate_http_api_corpus(corpus_dir);
     generate_config_corpus(corpus_dir);
@@ -37,46 +37,40 @@ fn main() {
     println!("Corpus generation complete!");
 }
 
-fn generate_tui_rpc_corpus(corpus_dir: &Path) {
-    let dir = corpus_dir.join("fuzz_tui_rpc");
+fn generate_client_rpc_corpus(corpus_dir: &Path) {
+    let dir = corpus_dir.join("fuzz_client_rpc");
     fs::create_dir_all(&dir).unwrap();
 
-    let requests: Vec<(&str, TuiRpcRequest)> = vec![
-        ("get_health", TuiRpcRequest::GetHealth),
-        ("get_raft_metrics", TuiRpcRequest::GetRaftMetrics),
-        ("get_leader", TuiRpcRequest::GetLeader),
-        ("get_node_info", TuiRpcRequest::GetNodeInfo),
-        ("get_cluster_ticket", TuiRpcRequest::GetClusterTicket),
-        ("init_cluster", TuiRpcRequest::InitCluster),
+    let requests: Vec<(&str, ClientRpcRequest)> = vec![
+        ("get_health", ClientRpcRequest::GetHealth),
+        ("get_raft_metrics", ClientRpcRequest::GetRaftMetrics),
+        ("get_leader", ClientRpcRequest::GetLeader),
+        ("get_node_info", ClientRpcRequest::GetNodeInfo),
+        ("get_cluster_ticket", ClientRpcRequest::GetClusterTicket),
+        ("init_cluster", ClientRpcRequest::InitCluster),
         (
             "read_key",
-            TuiRpcRequest::ReadKey {
+            ClientRpcRequest::ReadKey {
                 key: "test_key".to_string(),
             },
         ),
         (
             "write_key",
-            TuiRpcRequest::WriteKey {
+            ClientRpcRequest::WriteKey {
                 key: "test_key".to_string(),
                 value: b"test_value".to_vec(),
             },
         ),
-        ("trigger_snapshot", TuiRpcRequest::TriggerSnapshot),
-        (
-            "add_learner",
-            TuiRpcRequest::AddLearner {
-                node_id: 2,
-                addr: "127.0.0.1:5302".to_string(),
-            },
-        ),
+        ("trigger_snapshot", ClientRpcRequest::TriggerSnapshot),
+        ("add_learner", ClientRpcRequest::AddLearner { node_id: 2 }),
         (
             "change_membership",
-            TuiRpcRequest::ChangeMembership {
+            ClientRpcRequest::ChangeMembership {
                 members: vec![1, 2, 3],
             },
         ),
-        ("ping", TuiRpcRequest::Ping),
-        ("get_cluster_state", TuiRpcRequest::GetClusterState),
+        ("ping", ClientRpcRequest::Ping),
+        ("get_cluster_state", ClientRpcRequest::GetClusterState),
     ];
 
     for (name, req) in requests {
@@ -87,10 +81,10 @@ fn generate_tui_rpc_corpus(corpus_dir: &Path) {
     }
 
     // Responses
-    let responses: Vec<(&str, TuiRpcResponse)> = vec![
-        ("resp_pong", TuiRpcResponse::Pong),
-        ("resp_leader_some", TuiRpcResponse::Leader(Some(1))),
-        ("resp_leader_none", TuiRpcResponse::Leader(None)),
+    let responses: Vec<(&str, ClientRpcResponse)> = vec![
+        ("resp_pong", ClientRpcResponse::Pong),
+        ("resp_leader_some", ClientRpcResponse::Leader(Some(1))),
+        ("resp_leader_none", ClientRpcResponse::Leader(None)),
     ];
 
     for (name, resp) in responses {
@@ -388,9 +382,9 @@ fn generate_protocol_handler_corpus(corpus_dir: &Path) {
         // Empty and minimal
         ("empty", vec![]),
         ("single_byte", vec![0]),
-        // Near TUI message size limit (1 MB)
-        ("tui_limit_under", vec![0x42; 1024 * 1024 - 1]),
-        ("tui_limit_exact", vec![0x42; 1024 * 1024]),
+        // Near Client message size limit (1 MB)
+        ("client_limit_under", vec![0x42; 1024 * 1024 - 1]),
+        ("client_limit_exact", vec![0x42; 1024 * 1024]),
         // Varint boundary patterns (postcard encoding)
         ("varint_1byte", vec![0x7f]),
         ("varint_2byte", vec![0x80, 0x01]),
@@ -411,14 +405,14 @@ fn generate_protocol_handler_corpus(corpus_dir: &Path) {
         println!("Created: {}/{}", dir.display(), name);
     }
 
-    // Also serialize actual TUI requests for valid baseline
-    let tui_requests: Vec<(&str, TuiRpcRequest)> = vec![
-        ("valid_ping", TuiRpcRequest::Ping),
-        ("valid_get_health", TuiRpcRequest::GetHealth),
-        ("valid_get_leader", TuiRpcRequest::GetLeader),
+    // Also serialize actual Client requests for valid baseline
+    let client_requests: Vec<(&str, ClientRpcRequest)> = vec![
+        ("valid_ping", ClientRpcRequest::Ping),
+        ("valid_get_health", ClientRpcRequest::GetHealth),
+        ("valid_get_leader", ClientRpcRequest::GetLeader),
     ];
 
-    for (name, req) in tui_requests {
+    for (name, req) in client_requests {
         if let Ok(bytes) = postcard::to_stdvec(&req) {
             fs::write(dir.join(name), &bytes).unwrap();
             println!("Created: {}/{}", dir.display(), name);
@@ -633,34 +627,37 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
     fs::create_dir_all(&dir).unwrap();
 
     // Serialize valid messages for roundtrip testing
-    // TUI RPC messages
-    let tui_requests: Vec<(&str, TuiRpcRequest)> = vec![
-        ("tui_ping", TuiRpcRequest::Ping),
-        ("tui_get_health", TuiRpcRequest::GetHealth),
-        ("tui_get_leader", TuiRpcRequest::GetLeader),
-        ("tui_init_cluster", TuiRpcRequest::InitCluster),
+    // Client RPC messages
+    let client_requests: Vec<(&str, ClientRpcRequest)> = vec![
+        ("client_ping", ClientRpcRequest::Ping),
+        ("client_get_health", ClientRpcRequest::GetHealth),
+        ("client_get_leader", ClientRpcRequest::GetLeader),
+        ("client_init_cluster", ClientRpcRequest::InitCluster),
         (
-            "tui_read_key",
-            TuiRpcRequest::ReadKey {
+            "client_read_key",
+            ClientRpcRequest::ReadKey {
                 key: "test".to_string(),
             },
         ),
     ];
 
-    for (name, req) in tui_requests {
+    for (name, req) in client_requests {
         if let Ok(bytes) = postcard::to_stdvec(&req) {
             fs::write(dir.join(name), &bytes).unwrap();
             println!("Created: {}/{}", dir.display(), name);
         }
     }
 
-    let tui_responses: Vec<(&str, TuiRpcResponse)> = vec![
-        ("tui_resp_pong", TuiRpcResponse::Pong),
-        ("tui_resp_leader_some", TuiRpcResponse::Leader(Some(1))),
-        ("tui_resp_leader_none", TuiRpcResponse::Leader(None)),
+    let client_responses: Vec<(&str, ClientRpcResponse)> = vec![
+        ("client_resp_pong", ClientRpcResponse::Pong),
+        (
+            "client_resp_leader_some",
+            ClientRpcResponse::Leader(Some(1)),
+        ),
+        ("client_resp_leader_none", ClientRpcResponse::Leader(None)),
     ];
 
-    for (name, resp) in tui_responses {
+    for (name, resp) in client_responses {
         if let Ok(bytes) = postcard::to_stdvec(&resp) {
             fs::write(dir.join(name), &bytes).unwrap();
             println!("Created: {}/{}", dir.display(), name);

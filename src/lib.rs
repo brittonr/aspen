@@ -19,10 +19,6 @@ pub mod protocol_handlers;
 pub mod raft;
 pub mod simulation;
 
-/// Deprecated: Use `client_rpc` module instead.
-#[deprecated(since = "0.1.0", note = "Use client_rpc module instead")]
-pub mod tui_rpc;
-#[deprecated(since = "0.1.0", note = "Use protocol_handlers module instead")]
 pub mod tui_rpc_server;
 
 /// Testing infrastructure for deterministic multi-node Raft tests.
@@ -94,10 +90,4 @@ pub mod fuzz_helpers {
 
     // Client RPC types (Iroh protocol attack surface)
     pub use crate::client_rpc::{ClientRpcRequest, ClientRpcResponse};
-
-    // Deprecated: Use ClientRpcRequest and ClientRpcResponse instead
-    #[deprecated(since = "0.1.0", note = "Use ClientRpcRequest instead")]
-    pub use crate::tui_rpc::TuiRpcRequest;
-    #[deprecated(since = "0.1.0", note = "Use ClientRpcResponse instead")]
-    pub use crate::tui_rpc::TuiRpcResponse;
 }
