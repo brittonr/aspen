@@ -17,13 +17,16 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for bootstrap_node() function:
-//!       - Bootstrap with different storage backends (InMemory, SQLite, Redb)
-//!       - Bootstrap with gossip enabled/disabled
-//!       - Bootstrap with cluster ticket joining
-//!       - NodeHandle shutdown sequence testing
-//!       - Supervisor restart behavior verification
-//!       Coverage: 0% line coverage (complex integration - tested via smoke tests)
+//! Unit tests in this module cover:
+//! - `derive_topic_id_from_cookie`: Deterministic topic ID derivation from cluster cookie
+//! - `parse_peer_addresses`: Peer spec parsing with error handling
+//! - `load_config`: Configuration merging from multiple sources
+//!
+//! Integration tests for `bootstrap_node()` are in `tests/node_builder_integration.rs`:
+//! - Bootstrap with different storage backends (InMemory, SQLite)
+//! - Bootstrap with gossip enabled/disabled
+//! - NodeHandle shutdown sequence testing
+//! - Service restart behavior verification
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -812,4 +815,214 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
     }
 
     Ok(peers)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // derive_topic_id_from_cookie Tests
+    // =========================================================================
+
+    #[test]
+    fn test_topic_id_from_cookie_deterministic() {
+        // Same cookie should always produce same topic ID
+        let topic1 = derive_topic_id_from_cookie("test-cluster-cookie");
+        let topic2 = derive_topic_id_from_cookie("test-cluster-cookie");
+        assert_eq!(topic1, topic2);
+    }
+
+    #[test]
+    fn test_topic_id_from_cookie_different_cookies() {
+        // Different cookies should produce different topic IDs
+        let topic1 = derive_topic_id_from_cookie("cluster-alpha");
+        let topic2 = derive_topic_id_from_cookie("cluster-beta");
+        assert_ne!(topic1, topic2);
+    }
+
+    #[test]
+    fn test_topic_id_from_cookie_empty() {
+        // Empty cookie should still produce a valid topic ID
+        let topic = derive_topic_id_from_cookie("");
+        // blake3 hash of empty string is deterministic
+        assert_eq!(topic.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_topic_id_from_cookie_unicode() {
+        // Unicode cookies should work
+        let topic = derive_topic_id_from_cookie("集群-α-βeta");
+        assert_eq!(topic.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_topic_id_from_cookie_whitespace_sensitive() {
+        // Whitespace should be significant
+        let topic1 = derive_topic_id_from_cookie("cookie");
+        let topic2 = derive_topic_id_from_cookie(" cookie");
+        let topic3 = derive_topic_id_from_cookie("cookie ");
+        assert_ne!(topic1, topic2);
+        assert_ne!(topic1, topic3);
+        assert_ne!(topic2, topic3);
+    }
+
+    #[test]
+    fn test_topic_id_from_default_cookie() {
+        // Default unsafe cookie should produce consistent topic ID
+        let topic = derive_topic_id_from_cookie("aspen-cookie-UNSAFE-CHANGE-ME");
+        assert_eq!(topic.as_bytes().len(), 32);
+    }
+
+    // =========================================================================
+    // parse_peer_addresses Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_peer_addresses_empty() {
+        let result = parse_peer_addresses(&[]).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_invalid_format_no_at() {
+        let specs = vec!["invalid-spec".to_string()];
+        let result = parse_peer_addresses(&specs);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid peer spec"));
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_invalid_node_id() {
+        let specs = vec!["not_a_number@someendpoint".to_string()];
+        let result = parse_peer_addresses(&specs);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid node_id"));
+    }
+
+    #[test]
+    fn test_parse_peer_addresses_multiple_at_signs() {
+        // More than one @ sign should result in 3+ parts after split
+        let specs = vec!["1@endpoint@extra".to_string()];
+        let result = parse_peer_addresses(&specs);
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // load_config Tests
+    // =========================================================================
+
+    #[test]
+    fn test_load_config_default_overrides() {
+        // Test that overrides work with default values
+        let overrides = NodeConfig {
+            node_id: 42,
+            ..Default::default()
+        };
+
+        let result = load_config(None, overrides);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.node_id, 42);
+    }
+
+    #[test]
+    fn test_load_config_custom_heartbeat() {
+        let overrides = NodeConfig {
+            node_id: 1,
+            heartbeat_interval_ms: 500,
+            ..Default::default()
+        };
+
+        let result = load_config(None, overrides);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.heartbeat_interval_ms, 500);
+    }
+
+    #[test]
+    fn test_load_config_custom_election_timeouts() {
+        let overrides = NodeConfig {
+            node_id: 1,
+            election_timeout_min_ms: 2000,
+            election_timeout_max_ms: 4000,
+            ..Default::default()
+        };
+
+        let result = load_config(None, overrides);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.election_timeout_min_ms, 2000);
+        assert_eq!(config.election_timeout_max_ms, 4000);
+    }
+
+    #[test]
+    fn test_load_config_storage_backend() {
+        let overrides = NodeConfig {
+            node_id: 1,
+            storage_backend: StorageBackend::InMemory,
+            ..Default::default()
+        };
+
+        let result = load_config(None, overrides);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.storage_backend, StorageBackend::InMemory);
+    }
+
+    #[test]
+    fn test_load_config_iroh_gossip_settings() {
+        use crate::cluster::config::IrohConfig;
+
+        let overrides = NodeConfig {
+            node_id: 1,
+            iroh: IrohConfig {
+                enable_gossip: false,
+                enable_mdns: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = load_config(None, overrides);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert!(!config.iroh.enable_gossip);
+        assert!(!config.iroh.enable_mdns);
+    }
+
+    #[test]
+    fn test_load_config_nonexistent_toml() {
+        let overrides = NodeConfig::default();
+        let result = load_config(
+            Some(std::path::Path::new("/nonexistent/config.toml")),
+            overrides,
+        );
+        assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // NodeHandle Tests (struct properties)
+    // =========================================================================
+
+    #[test]
+    fn test_node_handle_fields_are_public() {
+        // Verify NodeHandle fields are accessible (compile-time check)
+        // This test ensures the API remains stable
+        fn _check_handle_fields(handle: &NodeHandle) {
+            let _: &NodeConfig = &handle.config;
+            let _: &Arc<MetadataStore> = &handle.metadata_store;
+            let _: &Arc<IrohEndpointManager> = &handle.iroh_manager;
+            let _: &Arc<RaftNode> = &handle.raft_node;
+            let _: &Arc<IrpcRaftNetworkFactory> = &handle.network_factory;
+            let _: &Option<GossipPeerDiscovery> = &handle.gossip_discovery;
+            let _: &Option<RaftRpcServer> = &handle.rpc_server;
+            let _: &Arc<Supervisor> = &handle.supervisor;
+            let _: &Arc<RaftNodeHealth> = &handle.health_monitor;
+            let _: &CancellationToken = &handle.shutdown_token;
+            let _: &TopicId = &handle.gossip_topic_id;
+        }
+    }
 }

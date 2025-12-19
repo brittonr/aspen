@@ -21,15 +21,24 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for RaftConnectionPool:
-//!       - Pool creation with bounded MAX_PEERS
-//!       - Connection reuse across multiple get_stream() calls
-//!       - Stream semaphore limiting MAX_STREAMS_PER_CONNECTION
-//!       - Idle connection cleanup after CONNECTION_IDLE_TIMEOUT
-//!       - Connection retry with exponential backoff
-//!       - Health status transitions (Healthy -> Degraded -> Failed)
-//!       - Concurrent stream acquisition under load
-//!       Coverage: 0% line coverage (requires Iroh endpoint mocking)
+//! Unit tests in this module (mod tests) cover:
+//! - ConnectionHealth enum variants, equality, Copy/Clone, Debug
+//! - ConnectionPoolMetrics struct fields, clone, debug, edge cases
+//! - Tiger Style resource bound constants validation
+//! - Exponential backoff calculation pattern
+//! - StreamGuard decrement-on-drop behavior
+//! - Atomic operations correctness
+//! - Semaphore bounded capacity and release
+//! - Timeout duration ordering validation
+//! - Capacity bounds verification
+//!
+//! Pure function tests in `src/raft/pure.rs` cover:
+//! - Health state transitions (Healthy -> Degraded -> Failed)
+//! - Connection retry backoff calculation (exponential)
+//!
+//! Additional tests in `tests/connection_pool_test.rs` cover:
+//! - Integration-level ConnectionHealth and ConnectionPoolMetrics validation
+//! - State machine validity verification
 
 use std::collections::HashMap;
 use std::sync::Arc;
