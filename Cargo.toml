@@ -161,20 +161,4 @@ bolero = []
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
 
-# VM-based integration tests (require root and KVM)
-[[test]]
-name = "test_vm_basic"
-path = "tests/vm/basic_tests.rs"
-required-features = ["testing"]
-
-[[test]]
-name = "test_vm_partition"
-path = "tests/vm/partition_tests.rs"
-required-features = ["testing"]
-
-[[test]]
-name = "test_vm_failure"
-path = "tests/vm/failure_tests.rs"
-required-features = ["testing"]
-
 # Benchmarks

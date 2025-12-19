@@ -72,7 +72,7 @@ const MAX_MOCK_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 pub const RAFT_ALPN: &[u8] = b"raft-rpc";
 
 /// ALPN protocol identifier for Client RPC (matches protocol_handlers.rs).
-pub const CLIENT_ALPN: &[u8] = b"aspen-tui";
+pub const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Central mock network managing all endpoints and connections.
 ///

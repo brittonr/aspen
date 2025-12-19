@@ -19,8 +19,6 @@ pub mod protocol_handlers;
 pub mod raft;
 pub mod simulation;
 
-pub mod tui_rpc_server;
-
 /// Testing infrastructure for deterministic multi-node Raft tests.
 ///
 /// Provides `AspenRouter` for managing in-memory Raft clusters with simulated

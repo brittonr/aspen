@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use aspen::CLIENT_ALPN;
 use aspen::client_rpc::{
     AddLearnerResultResponse, ChangeMembershipResultResponse, CheckpointWalResultResponse,
     ClientRpcRequest, ClientRpcResponse, ClusterStateResponse, ClusterTicketResponse,
@@ -30,9 +31,6 @@ const RETRY_DELAY: Duration = Duration::from_millis(500); // Reduced from 5s
 /// Maximum connection retries before giving up.
 /// Balance between responsiveness and reliability on lossy networks.
 const MAX_RETRIES: u32 = 3;
-
-/// Client ALPN for identifying Client RPC connections.
-const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Iroh client for TUI connections to Aspen nodes.
 pub struct IrohClient {

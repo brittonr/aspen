@@ -177,16 +177,6 @@ target = 10
 current = 12.28
 note = "VM testing - requires KVM"
 
-[modules.tui_rpc]
-target = 0
-current = 0
-note = "TUI RPC client"
-
-[modules.tui_rpc_server]
-target = 0
-current = 0
-note = "TUI RPC server"
-
 [modules.utils]
 target = 75
 current = 80.28
@@ -211,6 +201,4 @@ medium = [
 low = [
     "testing.madsim_tester",
     "testing.network_utils",
-    "tui_rpc",
-    "tui_rpc_server",
 ]

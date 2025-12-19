@@ -30,13 +30,11 @@ use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
+use aspen::CLIENT_ALPN;
 use aspen::client_rpc::{
     ClientRpcRequest, ClientRpcResponse, MAX_CLIENT_MESSAGE_SIZE, MetricsResponse,
 };
 use aspen::cluster::ticket::AspenClusterTicket;
-
-/// Client ALPN for identifying Client RPC connections.
-const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Default HTTP port for the adapter.
 const DEFAULT_PORT: u16 = 9090;
