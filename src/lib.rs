@@ -47,8 +47,8 @@ pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
 
 // Re-export log subscriber types
 pub use raft::log_subscriber::{
-    EndOfStreamReason, KvOperation, LogEntryMessage, LogEntryPayload, SubscribeRejectReason,
-    SubscribeRequest, SubscribeResponse,
+    EndOfStreamReason, HistoricalLogReader, KvOperation, LogEntryMessage, LogEntryPayload,
+    SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
 };
 
 /// Fuzzing-specific module that exposes internal types for fuzz testing.

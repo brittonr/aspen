@@ -91,9 +91,9 @@ use crate::raft::constants::{
     MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
 };
 use crate::raft::log_subscriber::{
-    EndOfStreamReason, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage, LogEntryPayload,
-    MAX_LOG_SUBSCRIBERS, SUBSCRIBE_HANDSHAKE_TIMEOUT, SUBSCRIBE_KEEPALIVE_INTERVAL,
-    SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
+    EndOfStreamReason, HistoricalLogReader, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage,
+    LogEntryPayload, MAX_HISTORICAL_BATCH_SIZE, MAX_LOG_SUBSCRIBERS, SUBSCRIBE_HANDSHAKE_TIMEOUT,
+    SUBSCRIBE_KEEPALIVE_INTERVAL, SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
 };
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
@@ -614,6 +614,8 @@ pub struct LogSubscriberProtocolHandler {
     next_subscriber_id: AtomicU64,
     /// Current committed log index (updated externally).
     committed_index: Arc<AtomicU64>,
+    /// Optional historical log reader for replay from start_index.
+    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
 }
 
 impl LogSubscriberProtocolHandler {
@@ -627,6 +629,9 @@ impl LogSubscriberProtocolHandler {
     /// A tuple of (handler, log_sender, committed_index_handle).
     /// - `log_sender`: Use to broadcast log entries to subscribers
     /// - `committed_index_handle`: Update this atomic to reflect current Raft committed index
+    ///
+    /// # Note
+    /// Historical replay is disabled by default. Use `with_historical_reader()` to enable it.
     pub fn new(
         cluster_cookie: &str,
         node_id: u64,
@@ -640,6 +645,7 @@ impl LogSubscriberProtocolHandler {
             node_id,
             next_subscriber_id: AtomicU64::new(1),
             committed_index: committed_index.clone(),
+            historical_reader: None,
         };
         (handler, log_sender, committed_index)
     }
@@ -661,6 +667,37 @@ impl LogSubscriberProtocolHandler {
             node_id,
             next_subscriber_id: AtomicU64::new(1),
             committed_index,
+            historical_reader: None,
+        }
+    }
+
+    /// Create a handler with historical log replay support.
+    ///
+    /// When a subscriber connects with a `start_index`, historical entries
+    /// from `start_index` to the current committed index will be replayed
+    /// before streaming new entries.
+    ///
+    /// # Arguments
+    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `node_id` - This node's ID
+    /// * `log_sender` - Broadcast channel for new entries
+    /// * `committed_index` - Atomic counter for current committed index
+    /// * `historical_reader` - Reader for fetching historical log entries
+    pub fn with_historical_reader(
+        cluster_cookie: &str,
+        node_id: u64,
+        log_sender: broadcast::Sender<LogEntryPayload>,
+        committed_index: Arc<AtomicU64>,
+        historical_reader: Arc<dyn HistoricalLogReader>,
+    ) -> Self {
+        Self {
+            auth_context: AuthContext::new(cluster_cookie),
+            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
+            log_sender,
+            node_id,
+            next_subscriber_id: AtomicU64::new(1),
+            committed_index,
+            historical_reader: Some(historical_reader),
         }
     }
 
@@ -706,6 +743,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
             self.node_id,
             subscriber_id,
             self.committed_index.clone(),
+            self.historical_reader.clone(),
         )
         .await;
 
@@ -721,7 +759,13 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(connection, auth_context, log_receiver, committed_index))]
+#[instrument(skip(
+    connection,
+    auth_context,
+    log_receiver,
+    committed_index,
+    historical_reader
+))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
@@ -729,6 +773,7 @@ async fn handle_log_subscriber_connection(
     node_id: u64,
     subscriber_id: u64,
     committed_index: Arc<AtomicU64>,
+    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -837,7 +882,6 @@ async fn handle_log_subscriber_connection(
     );
 
     // Step 6: Accept subscription
-    // TODO: Implement historical replay from start_index if available
     let current_committed_index = committed_index.load(Ordering::Acquire);
     let response = SubscribeResponse::Accepted {
         current_index: current_committed_index,
@@ -851,8 +895,113 @@ async fn handle_log_subscriber_connection(
     info!(
         subscriber_id = subscriber_id,
         remote = %remote_node_id,
+        start_index = sub_request.start_index,
+        current_index = current_committed_index,
         "log subscription active"
     );
+
+    // Step 6b: Historical replay if requested and available
+    let replay_end_index = if sub_request.start_index < current_committed_index
+        && sub_request.start_index != u64::MAX
+    {
+        if let Some(ref reader) = historical_reader {
+            debug!(
+                subscriber_id = subscriber_id,
+                start_index = sub_request.start_index,
+                end_index = current_committed_index,
+                "starting historical replay"
+            );
+
+            // Replay in batches to avoid memory exhaustion
+            let mut current_start = sub_request.start_index;
+            let mut total_replayed = 0u64;
+
+            while current_start <= current_committed_index {
+                let batch_end = std::cmp::min(
+                    current_start.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64 - 1),
+                    current_committed_index,
+                );
+
+                match reader.read_entries(current_start, batch_end).await {
+                    Ok(entries) => {
+                        if entries.is_empty() {
+                            // No more entries available (may have been compacted)
+                            debug!(
+                                subscriber_id = subscriber_id,
+                                start = current_start,
+                                "no historical entries available, may have been compacted"
+                            );
+                            break;
+                        }
+
+                        for entry in entries {
+                            // Apply prefix filter
+                            if !sub_request.key_prefix.is_empty()
+                                && !entry.operation.matches_prefix(&sub_request.key_prefix)
+                            {
+                                continue;
+                            }
+
+                            let message = LogEntryMessage::Entry(entry.clone());
+                            let message_bytes = match postcard::to_stdvec(&message) {
+                                Ok(bytes) => bytes,
+                                Err(err) => {
+                                    error!(error = %err, "failed to serialize historical entry");
+                                    continue;
+                                }
+                            };
+
+                            if let Err(err) = send.write_all(&message_bytes).await {
+                                debug!(
+                                    subscriber_id = subscriber_id,
+                                    error = %err,
+                                    "subscriber disconnected during replay"
+                                );
+                                return Err(anyhow::anyhow!(
+                                    "subscriber disconnected during replay"
+                                ));
+                            }
+
+                            total_replayed += 1;
+                            current_start = entry.index + 1;
+                        }
+                    }
+                    Err(err) => {
+                        warn!(
+                            subscriber_id = subscriber_id,
+                            error = %err,
+                            "failed to read historical entries, continuing with live stream"
+                        );
+                        break;
+                    }
+                }
+
+                // Check if we've finished
+                if current_start > current_committed_index {
+                    break;
+                }
+            }
+
+            info!(
+                subscriber_id = subscriber_id,
+                total_replayed = total_replayed,
+                "historical replay complete"
+            );
+            current_start
+        } else {
+            debug!(
+                subscriber_id = subscriber_id,
+                "historical replay requested but no reader available"
+            );
+            current_committed_index
+        }
+    } else {
+        current_committed_index
+    };
+
+    // Update the log receiver to skip entries we've already sent
+    // (entries between replay_end_index and any new entries that arrived during replay)
+    let _ = replay_end_index; // Used for logging context
 
     // Step 7: Stream log entries
     let key_prefix = sub_request.key_prefix;

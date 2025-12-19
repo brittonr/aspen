@@ -1262,6 +1262,84 @@ impl RedbLogStore {
     }
 }
 
+// ============================================================================
+// Historical Log Reader Implementation
+// ============================================================================
+
+#[async_trait::async_trait]
+impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
+    async fn read_entries(
+        &self,
+        start_index: u64,
+        end_index: u64,
+    ) -> Result<Vec<crate::raft::log_subscriber::LogEntryPayload>, io::Error> {
+        use crate::raft::log_subscriber::{
+            KvOperation, LogEntryPayload, MAX_HISTORICAL_BATCH_SIZE,
+        };
+        use openraft::EntryPayload;
+
+        // Tiger Style: Bound the batch size
+        let actual_end = std::cmp::min(
+            end_index,
+            start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64),
+        );
+
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
+
+        let mut entries = Vec::new();
+        let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
+
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        for item in iter {
+            let (_key, value) = item.context(GetSnafu)?;
+            let bytes = value.value();
+            let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
+                bincode::deserialize(bytes).context(DeserializeSnafu)?;
+
+            let log_id = entry.log_id();
+            let operation = match &entry.payload {
+                EntryPayload::Blank => KvOperation::Noop,
+                EntryPayload::Normal(app_request) => KvOperation::from(app_request.clone()),
+                EntryPayload::Membership(_) => KvOperation::MembershipChange {
+                    description: "membership change".to_string(),
+                },
+            };
+
+            entries.push(LogEntryPayload {
+                index: log_id.index,
+                term: log_id.leader_id.term,
+                committed_at_ms: now_ms,
+                operation,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    async fn earliest_available_index(&self) -> Result<Option<u64>, io::Error> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
+
+        let first = table.iter().context(RangeSnafu)?.next();
+        match first {
+            Some(result) => {
+                let (key, _) = result.context(GetSnafu)?;
+                Ok(Some(key.value()))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
 /// Snapshot blob stored in memory for testing.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoredSnapshot {

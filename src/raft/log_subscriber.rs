@@ -61,6 +61,45 @@ pub const SUBSCRIBE_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// Protocol version for log subscription.
 pub const LOG_SUBSCRIBE_PROTOCOL_VERSION: u8 = 1;
 
+/// Maximum entries to fetch in a single historical replay batch.
+/// Tiger Style: Bounded batch size to prevent memory exhaustion.
+pub const MAX_HISTORICAL_BATCH_SIZE: usize = 1000;
+
+// ============================================================================
+// Historical Log Reader Trait
+// ============================================================================
+
+/// Trait for reading historical log entries for replay.
+///
+/// Implementations should return log entries in the given range, converting
+/// from the internal Raft log format to `LogEntryPayload`.
+#[async_trait::async_trait]
+pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
+    /// Fetch log entries in the given range [start, end].
+    ///
+    /// Returns entries ordered by index. If the start index has been
+    /// purged (compacted), returns entries starting from the earliest
+    /// available index.
+    ///
+    /// # Arguments
+    /// * `start_index` - First log index to fetch (inclusive)
+    /// * `end_index` - Last log index to fetch (inclusive)
+    ///
+    /// # Returns
+    /// * `Ok(entries)` - Vector of log entries in the range
+    /// * `Err(error)` - If reading fails
+    async fn read_entries(
+        &self,
+        start_index: u64,
+        end_index: u64,
+    ) -> Result<Vec<LogEntryPayload>, std::io::Error>;
+
+    /// Get the earliest available log index (after compaction).
+    ///
+    /// Returns `None` if no logs exist yet.
+    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error>;
+}
+
 // ============================================================================
 // Protocol Types
 // ============================================================================
@@ -261,6 +300,30 @@ impl KvOperation {
             KvOperation::SetMulti { pairs } => pairs.len(),
             KvOperation::DeleteMulti { keys } => keys.len(),
             KvOperation::Noop | KvOperation::MembershipChange { .. } => 0,
+        }
+    }
+}
+
+impl From<crate::raft::types::AppRequest> for KvOperation {
+    fn from(req: crate::raft::types::AppRequest) -> Self {
+        use crate::raft::types::AppRequest;
+        match req {
+            AppRequest::Set { key, value } => KvOperation::Set {
+                key: key.into_bytes(),
+                value: value.into_bytes(),
+            },
+            AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
+                pairs: pairs
+                    .into_iter()
+                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
+                    .collect(),
+            },
+            AppRequest::Delete { key } => KvOperation::Delete {
+                key: key.into_bytes(),
+            },
+            AppRequest::DeleteMulti { keys } => KvOperation::DeleteMulti {
+                keys: keys.into_iter().map(String::into_bytes).collect(),
+            },
         }
     }
 }
