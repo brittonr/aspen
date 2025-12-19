@@ -60,7 +60,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use iroh::EndpointAddr;
+use iroh::{EndpointAddr, SecretKey, Signature};
 use iroh_gossip::api::Event;
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
@@ -74,9 +74,12 @@ use crate::raft::types::NodeId;
 
 /// Current gossip message protocol version.
 ///
-/// Increment this when making breaking changes to PeerAnnouncement format.
+/// Version history:
+/// - v1: Initial version (unsigned)
+/// - v2: Added Ed25519 signatures for message authentication
+///
 /// Note: This is a breaking change - old nodes will not parse new messages.
-const GOSSIP_MESSAGE_VERSION: u8 = 1;
+const GOSSIP_MESSAGE_VERSION: u8 = 2;
 
 /// Announcement message broadcast to the gossip topic.
 ///
@@ -115,19 +118,76 @@ impl PeerAnnouncement {
     fn to_bytes(&self) -> Result<Vec<u8>> {
         postcard::to_stdvec(self).context("failed to serialize peer announcement")
     }
+}
+
+/// Signed peer announcement for cryptographic verification.
+///
+/// Wraps a `PeerAnnouncement` with an Ed25519 signature from the sender's
+/// Iroh secret key. Recipients verify using the public key embedded in
+/// the announcement's `endpoint_addr.id`.
+///
+/// Tiger Style: Fixed 64-byte signature, fail-fast verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SignedPeerAnnouncement {
+    /// The announcement payload (node_id, endpoint_addr, timestamp).
+    announcement: PeerAnnouncement,
+    /// Ed25519 signature over the serialized announcement (64 bytes).
+    signature: Signature,
+}
+
+impl SignedPeerAnnouncement {
+    /// Create a signed announcement.
+    ///
+    /// Signs the serialized `PeerAnnouncement` bytes with the provided secret key.
+    fn sign(announcement: PeerAnnouncement, secret_key: &SecretKey) -> Result<Self> {
+        let announcement_bytes = announcement.to_bytes()?;
+        let signature = secret_key.sign(&announcement_bytes);
+
+        Ok(Self {
+            announcement,
+            signature,
+        })
+    }
+
+    /// Verify the signature and return the inner announcement if valid.
+    ///
+    /// Extracts the public key from `announcement.endpoint_addr.id` and verifies
+    /// that the signature was created by the corresponding secret key.
+    ///
+    /// Returns `None` if:
+    /// - Signature verification fails (tampered or wrong key)
+    /// - Announcement deserialization fails
+    fn verify(&self) -> Option<&PeerAnnouncement> {
+        // Re-serialize announcement to get canonical bytes for verification
+        let announcement_bytes = self.announcement.to_bytes().ok()?;
+
+        // The endpoint_addr.id IS the PublicKey
+        let public_key = self.announcement.endpoint_addr.id;
+
+        // Verify signature
+        match public_key.verify(&announcement_bytes, &self.signature) {
+            Ok(()) => Some(&self.announcement),
+            Err(_) => None,
+        }
+    }
+
+    /// Serialize to bytes using postcard.
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        postcard::to_stdvec(self).context("failed to serialize signed peer announcement")
+    }
 
     /// Deserialize from bytes using postcard.
     ///
     /// Returns None for unknown future versions to allow graceful handling.
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let announcement: Self = postcard::from_bytes(bytes).ok()?;
+        let signed: Self = postcard::from_bytes(bytes).ok()?;
 
         // Reject unknown future versions
-        if announcement.version > GOSSIP_MESSAGE_VERSION {
+        if signed.announcement.version > GOSSIP_MESSAGE_VERSION {
             return None;
         }
 
-        Some(announcement)
+        Some(signed)
     }
 }
 
@@ -191,6 +251,7 @@ impl GossipPeerDiscovery {
 
         let cancel_token = CancellationToken::new();
         let endpoint_addr = iroh_manager.node_addr().clone();
+        let secret_key = iroh_manager.secret_key().clone();
 
         // Spawn announcer task
         let announcer_cancel = cancel_token.child_token();
@@ -215,19 +276,29 @@ impl GossipPeerDiscovery {
                                     continue;
                                 }
                             };
-                        match announcement.to_bytes() {
+
+                        // Sign the announcement with our secret key
+                        let signed = match SignedPeerAnnouncement::sign(announcement, &secret_key) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                tracing::error!("failed to sign peer announcement: {}", e);
+                                continue;
+                            }
+                        };
+
+                        match signed.to_bytes() {
                             Ok(bytes) => {
                                 if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
                                     tracing::warn!("failed to broadcast peer announcement: {}", e);
                                 } else {
                                     tracing::trace!(
-                                        "broadcast peer announcement for node_id={}",
+                                        "broadcast signed peer announcement for node_id={}",
                                         announcer_node_id
                                     );
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!("failed to serialize peer announcement: {}", e);
+                                tracing::warn!("failed to serialize signed peer announcement: {}", e);
                             }
                         }
                     }
@@ -248,74 +319,88 @@ impl GossipPeerDiscovery {
                     }
                     event = gossip_receiver.next() => match event {
                     Some(Ok(Event::Received(msg))) => {
-                        match PeerAnnouncement::from_bytes(&msg.content) {
-                            Some(announcement) => {
-                                // Filter out our own announcements
-                                if announcement.node_id == receiver_node_id {
-                                    tracing::trace!("ignoring self-announcement");
-                                    continue;
-                                }
-
-                                tracing::debug!(
-                                    "received peer announcement from node_id={}, endpoint_id={:?}",
-                                    announcement.node_id,
-                                    announcement.endpoint_addr.id
-                                );
-
-                                // Add peer to network factory's fallback cache.
-                                //
-                                // ARCHITECTURAL NOTE: Gossip discovery intentionally does NOT
-                                // automatically trigger add_learner() to add discovered peers to
-                                // Raft membership. This separation is by design:
-                                //
-                                // 1. Transport vs Application Layer: Gossip provides transport-layer
-                                //    connectivity (who can I talk to?), while Raft membership is an
-                                //    application-layer concern (who is part of the cluster?).
-                                //
-                                // 2. Security: Automatic promotion would allow any gossiping node to
-                                //    join the cluster, creating a Sybil attack vector.
-                                //
-                                // 3. Bounded Growth: Manual add_learner() calls ensure cluster
-                                //    membership is explicitly controlled by operators.
-                                //
-                                // 4. Address Persistence: Addresses ARE persisted! When a peer is
-                                //    added via add_learner(), their RaftMemberInfo (with iroh_addr) is
-                                //    stored in Raft membership and persisted to the state machine.
-                                //    On restart, these addresses are recovered automatically.
-                                //
-                                // The network factory's peer_addrs map is just a fallback cache for
-                                // addresses not yet in Raft membership. Once a peer is promoted to
-                                // learner/voter, their address comes from the Raft membership state.
-                                if let Some(ref factory) = receiver_network_factory {
-                                    factory
-                                        .add_peer(
-                                            announcement.node_id,
-                                            announcement.endpoint_addr.clone(),
-                                        )
-                                        .await;
-
-                                    tracing::info!(
-                                        "added peer to network factory: node_id={}, endpoint_id={:?}",
-                                        announcement.node_id,
-                                        announcement.endpoint_addr.id
-                                    );
-                                }
-
-                                // Log the discovery details
-                                let relay_urls: Vec<_> =
-                                    announcement.endpoint_addr.relay_urls().collect();
-                                tracing::info!(
-                                    "discovered peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
-                                    announcement.node_id,
-                                    announcement.endpoint_addr.id,
-                                    relay_urls,
-                                    announcement.endpoint_addr.addrs.len()
-                                );
-                            }
+                        // Parse signed announcement
+                        let signed = match SignedPeerAnnouncement::from_bytes(&msg.content) {
+                            Some(s) => s,
                             None => {
-                                tracing::warn!("failed to parse peer announcement (unknown version or malformed)");
+                                tracing::warn!("failed to parse signed peer announcement");
+                                continue;
                             }
+                        };
+
+                        // Verify signature - reject if invalid
+                        let announcement = match signed.verify() {
+                            Some(ann) => ann,
+                            None => {
+                                tracing::warn!(
+                                    "rejected peer announcement with invalid signature from endpoint_id={:?}",
+                                    signed.announcement.endpoint_addr.id
+                                );
+                                continue;
+                            }
+                        };
+
+                        // Filter out our own announcements
+                        if announcement.node_id == receiver_node_id {
+                            tracing::trace!("ignoring self-announcement");
+                            continue;
                         }
+
+                        tracing::debug!(
+                            "received verified peer announcement from node_id={}, endpoint_id={:?}",
+                            announcement.node_id,
+                            announcement.endpoint_addr.id
+                        );
+
+                        // Add peer to network factory's fallback cache.
+                        //
+                        // ARCHITECTURAL NOTE: Gossip discovery intentionally does NOT
+                        // automatically trigger add_learner() to add discovered peers to
+                        // Raft membership. This separation is by design:
+                        //
+                        // 1. Transport vs Application Layer: Gossip provides transport-layer
+                        //    connectivity (who can I talk to?), while Raft membership is an
+                        //    application-layer concern (who is part of the cluster?).
+                        //
+                        // 2. Security: Automatic promotion would allow any gossiping node to
+                        //    join the cluster, creating a Sybil attack vector.
+                        //
+                        // 3. Bounded Growth: Manual add_learner() calls ensure cluster
+                        //    membership is explicitly controlled by operators.
+                        //
+                        // 4. Address Persistence: Addresses ARE persisted! When a peer is
+                        //    added via add_learner(), their RaftMemberInfo (with iroh_addr) is
+                        //    stored in Raft membership and persisted to the state machine.
+                        //    On restart, these addresses are recovered automatically.
+                        //
+                        // The network factory's peer_addrs map is just a fallback cache for
+                        // addresses not yet in Raft membership. Once a peer is promoted to
+                        // learner/voter, their address comes from the Raft membership state.
+                        if let Some(ref factory) = receiver_network_factory {
+                            factory
+                                .add_peer(
+                                    announcement.node_id,
+                                    announcement.endpoint_addr.clone(),
+                                )
+                                .await;
+
+                            tracing::info!(
+                                "added peer to network factory: node_id={}, endpoint_id={:?}",
+                                announcement.node_id,
+                                announcement.endpoint_addr.id
+                            );
+                        }
+
+                        // Log the discovery details
+                        let relay_urls: Vec<_> =
+                            announcement.endpoint_addr.relay_urls().collect();
+                        tracing::info!(
+                            "discovered verified peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
+                            announcement.node_id,
+                            announcement.endpoint_addr.id,
+                            relay_urls,
+                            announcement.endpoint_addr.addrs.len()
+                        );
                     }
                     Some(Ok(Event::NeighborUp(neighbor_id))) => {
                         tracing::debug!("neighbor up: {:?}", neighbor_id);
@@ -438,7 +523,7 @@ mod tests {
         let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
 
         let bytes = announcement.to_bytes().unwrap();
-        let deserialized = PeerAnnouncement::from_bytes(&bytes).unwrap();
+        let deserialized: PeerAnnouncement = postcard::from_bytes(&bytes).unwrap();
 
         assert_eq!(announcement.node_id, deserialized.node_id);
         assert_eq!(announcement.endpoint_addr, deserialized.endpoint_addr);
@@ -457,5 +542,73 @@ mod tests {
 
         // Second announcement should have a later timestamp
         assert!(announcement2.timestamp_micros > announcement1.timestamp_micros);
+    }
+
+    #[test]
+    fn test_signed_peer_announcement_sign_and_verify() {
+        let secret_key = SecretKey::from([42u8; 32]);
+        let node_id = 789u64;
+        let addr = EndpointAddr::new(secret_key.public());
+
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
+        let signed = SignedPeerAnnouncement::sign(announcement.clone(), &secret_key).unwrap();
+
+        // Verify should succeed with correct key
+        let verified = signed.verify();
+        assert!(verified.is_some());
+        assert_eq!(verified.unwrap().node_id, announcement.node_id);
+    }
+
+    #[test]
+    fn test_signed_peer_announcement_roundtrip() {
+        let secret_key = SecretKey::from([99u8; 32]);
+        let node_id = 111u64;
+        let addr = EndpointAddr::new(secret_key.public());
+
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
+        let signed = SignedPeerAnnouncement::sign(announcement, &secret_key).unwrap();
+
+        // Serialize and deserialize
+        let bytes = signed.to_bytes().unwrap();
+        let deserialized = SignedPeerAnnouncement::from_bytes(&bytes).unwrap();
+
+        // Verify still works after roundtrip
+        assert!(deserialized.verify().is_some());
+    }
+
+    #[test]
+    fn test_signed_peer_announcement_wrong_key_rejected() {
+        let real_key = SecretKey::from([11u8; 32]);
+        let fake_key = SecretKey::from([22u8; 32]);
+        let node_id = 222u64;
+
+        // Announcement claims to be from real_key's identity
+        let addr = EndpointAddr::new(real_key.public());
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
+
+        // But signed with fake_key (attacker trying to impersonate)
+        let signed = SignedPeerAnnouncement {
+            announcement,
+            signature: fake_key.sign(b"some message"),
+        };
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_signed_peer_announcement_tampered_rejected() {
+        let secret_key = SecretKey::from([33u8; 32]);
+        let node_id = 333u64;
+        let addr = EndpointAddr::new(secret_key.public());
+
+        let announcement = PeerAnnouncement::new(node_id.into(), addr.clone()).unwrap();
+        let mut signed = SignedPeerAnnouncement::sign(announcement, &secret_key).unwrap();
+
+        // Tamper with the announcement after signing
+        signed.announcement.node_id = 999u64.into();
+
+        // Verification should fail (signature doesn't match modified content)
+        assert!(signed.verify().is_none());
     }
 }
