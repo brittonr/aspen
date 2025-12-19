@@ -24,8 +24,11 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Helper to create a single-node cluster.
 async fn setup_single_node(node_id: u64, temp_dir: &TempDir) -> anyhow::Result<aspen::node::Node> {
     let data_dir = temp_dir.path().join(format!("node-{}", node_id));
+    // Use a unique test cookie to satisfy cookie validation
+    let test_cookie = format!("test-cookie-{}", node_id);
     let node = NodeBuilder::new(NodeId(node_id), &data_dir)
         .with_storage(StorageBackend::InMemory)
+        .with_cookie(test_cookie)
         .start()
         .await?;
     Ok(node)

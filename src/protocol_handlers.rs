@@ -336,9 +336,6 @@ pub struct AuthenticatedRaftProtocolHandler {
     raft_core: Raft<AppTypeConfig>,
     auth_context: AuthContext,
     connection_semaphore: Arc<Semaphore>,
-    /// Our endpoint ID for verification.
-    #[allow(dead_code)] // TODO: Use for enhanced security verification
-    our_endpoint_id: [u8; 32],
 }
 
 impl AuthenticatedRaftProtocolHandler {
@@ -347,17 +344,15 @@ impl AuthenticatedRaftProtocolHandler {
     /// # Arguments
     /// * `raft_core` - Raft instance to forward RPCs to
     /// * `cluster_cookie` - Shared secret for authentication
-    /// * `our_endpoint_id` - This node's Iroh endpoint ID
-    pub fn new(
-        raft_core: Raft<AppTypeConfig>,
-        cluster_cookie: &str,
-        our_endpoint_id: [u8; 32],
-    ) -> Self {
+    ///
+    /// # Security Note
+    /// Authentication is handled by HMAC-SHA256 challenge-response using the cluster cookie.
+    /// Iroh already provides cryptographic identity verification at the transport layer.
+    pub fn new(raft_core: Raft<AppTypeConfig>, cluster_cookie: &str) -> Self {
         Self {
             raft_core,
             auth_context: AuthContext::new(cluster_cookie),
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
-            our_endpoint_id,
         }
     }
 }
@@ -617,6 +612,8 @@ pub struct LogSubscriberProtocolHandler {
     node_id: u64,
     /// Subscriber ID counter.
     next_subscriber_id: AtomicU64,
+    /// Current committed log index (updated externally).
+    committed_index: Arc<AtomicU64>,
 }
 
 impl LogSubscriberProtocolHandler {
@@ -627,26 +624,35 @@ impl LogSubscriberProtocolHandler {
     /// * `node_id` - This node's ID
     ///
     /// # Returns
-    /// The handler and a sender that should be used to broadcast log entries.
-    pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>) {
+    /// A tuple of (handler, log_sender, committed_index_handle).
+    /// - `log_sender`: Use to broadcast log entries to subscribers
+    /// - `committed_index_handle`: Update this atomic to reflect current Raft committed index
+    pub fn new(
+        cluster_cookie: &str,
+        node_id: u64,
+    ) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
         let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let committed_index = Arc::new(AtomicU64::new(0));
         let handler = Self {
             auth_context: AuthContext::new(cluster_cookie),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender: log_sender.clone(),
             node_id,
             next_subscriber_id: AtomicU64::new(1),
+            committed_index: committed_index.clone(),
         };
-        (handler, log_sender)
+        (handler, log_sender, committed_index)
     }
 
-    /// Create a handler with an existing broadcast sender.
+    /// Create a handler with an existing broadcast sender and committed index tracker.
     ///
-    /// Use this when you need multiple handlers to share the same broadcast channel.
+    /// Use this when you need multiple handlers to share the same broadcast channel
+    /// and committed index state.
     pub fn with_sender(
         cluster_cookie: &str,
         node_id: u64,
         log_sender: broadcast::Sender<LogEntryPayload>,
+        committed_index: Arc<AtomicU64>,
     ) -> Self {
         Self {
             auth_context: AuthContext::new(cluster_cookie),
@@ -654,7 +660,16 @@ impl LogSubscriberProtocolHandler {
             log_sender,
             node_id,
             next_subscriber_id: AtomicU64::new(1),
+            committed_index,
         }
+    }
+
+    /// Get a handle to the committed index for external updates.
+    ///
+    /// Call `committed_index_handle.store(new_index, Ordering::Release)` when
+    /// the Raft committed index changes.
+    pub fn committed_index_handle(&self) -> Arc<AtomicU64> {
+        self.committed_index.clone()
     }
 }
 
@@ -690,6 +705,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
             self.log_sender.subscribe(),
             self.node_id,
             subscriber_id,
+            self.committed_index.clone(),
         )
         .await;
 
@@ -705,13 +721,14 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(connection, auth_context, log_receiver))]
+#[instrument(skip(connection, auth_context, log_receiver, committed_index))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
     mut log_receiver: broadcast::Receiver<LogEntryPayload>,
     node_id: u64,
     subscriber_id: u64,
+    committed_index: Arc<AtomicU64>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -821,8 +838,9 @@ async fn handle_log_subscriber_connection(
 
     // Step 6: Accept subscription
     // TODO: Implement historical replay from start_index if available
+    let current_committed_index = committed_index.load(Ordering::Acquire);
     let response = SubscribeResponse::Accepted {
-        current_index: 0, // TODO: Get actual committed index
+        current_index: current_committed_index,
         node_id,
     };
     let response_bytes = postcard::to_stdvec(&response)?;
@@ -896,7 +914,7 @@ async fn handle_log_subscriber_connection(
             // Send keepalive on idle
             _ = keepalive_interval.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
-                    committed_index: 0, // TODO: Get actual committed index
+                    committed_index: committed_index.load(Ordering::Acquire),
                     timestamp_ms: std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -1479,21 +1497,64 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetMetrics => {
-            // TODO: Phase 3 - Implement full Prometheus metrics collection
-            // For now, return basic metrics from Raft
+            // Return Prometheus-format metrics from Raft
             let metrics_text = match ctx.controller.get_metrics().await {
                 Ok(metrics) => {
+                    let state_value = match metrics.state {
+                        openraft::ServerState::Learner => 0,
+                        openraft::ServerState::Follower => 1,
+                        openraft::ServerState::Candidate => 2,
+                        openraft::ServerState::Leader => 3,
+                        openraft::ServerState::Shutdown => 4,
+                    };
+                    let is_leader: u8 = if metrics.state == openraft::ServerState::Leader {
+                        1
+                    } else {
+                        0
+                    };
+                    let last_applied = metrics
+                        .last_applied
+                        .as_ref()
+                        .map(|la| la.index)
+                        .unwrap_or(0);
+                    let snapshot_index = metrics.snapshot.as_ref().map(|s| s.index).unwrap_or(0);
+
                     format!(
                         "# HELP aspen_raft_term Current Raft term\n\
                          # TYPE aspen_raft_term gauge\n\
                          aspen_raft_term{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_raft_state Raft state (0=Learner, 1=Follower, 2=Candidate, 3=Leader, 4=Shutdown)\n\
+                         # TYPE aspen_raft_state gauge\n\
+                         aspen_raft_state{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_raft_is_leader Whether this node is the leader\n\
+                         # TYPE aspen_raft_is_leader gauge\n\
+                         aspen_raft_is_leader{{node_id=\"{}\"}} {}\n\
                          # HELP aspen_raft_last_log_index Last log index\n\
                          # TYPE aspen_raft_last_log_index gauge\n\
-                         aspen_raft_last_log_index{{node_id=\"{}\"}} {}\n",
+                         aspen_raft_last_log_index{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_raft_last_applied_index Last applied log index\n\
+                         # TYPE aspen_raft_last_applied_index gauge\n\
+                         aspen_raft_last_applied_index{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_raft_snapshot_index Snapshot index\n\
+                         # TYPE aspen_raft_snapshot_index gauge\n\
+                         aspen_raft_snapshot_index{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_node_uptime_seconds Node uptime in seconds\n\
+                         # TYPE aspen_node_uptime_seconds counter\n\
+                         aspen_node_uptime_seconds{{node_id=\"{}\"}} {}\n",
                         ctx.node_id,
                         metrics.current_term,
                         ctx.node_id,
-                        metrics.last_log_index.unwrap_or(0)
+                        state_value,
+                        ctx.node_id,
+                        is_leader,
+                        ctx.node_id,
+                        metrics.last_log_index.unwrap_or(0),
+                        ctx.node_id,
+                        last_applied,
+                        ctx.node_id,
+                        snapshot_index,
+                        ctx.node_id,
+                        ctx.start_time.elapsed().as_secs()
                     )
                 }
                 Err(_) => String::new(),
@@ -1551,37 +1612,111 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::CheckpointWal => {
-            // TODO: Phase 3 - Implement WAL checkpoint via state machine
-            // For now, return a placeholder response
+            // WAL checkpoint requires direct access to the SQLite state machine,
+            // which is not exposed through the ClusterController/KeyValueStore traits.
+            // This would need to be implemented as a new trait method or by extending
+            // the ClientProtocolContext to include the state machine reference.
             Ok(ClientRpcResponse::CheckpointWalResult(
                 CheckpointWalResultResponse {
                     success: false,
                     pages_checkpointed: None,
                     wal_size_before_bytes: None,
                     wal_size_after_bytes: None,
-                    error: Some("WAL checkpoint not yet implemented via Client RPC".to_string()),
+                    error: Some("WAL checkpoint requires state machine access - use trigger_snapshot for log compaction".to_string()),
                 },
             ))
         }
 
         ClientRpcRequest::ListVaults => {
-            // TODO: Phase 3 - Implement vault listing via state machine
             // Vaults are key prefixes ending in ':'
-            // For now, return empty list
-            Ok(ClientRpcResponse::VaultList(VaultListResponse {
-                vaults: vec![],
-                error: Some("Vault listing not yet implemented via Client RPC".to_string()),
-            }))
+            // Scan all keys and extract unique vault names with key counts
+            use crate::api::ScanRequest;
+            use crate::client_rpc::VaultInfo;
+            use std::collections::BTreeMap;
+
+            // Tiger Style: Limit scan to 10,000 keys to prevent unbounded operations
+            let scan_result = ctx
+                .kv_store
+                .scan(ScanRequest {
+                    prefix: String::new(),
+                    limit: Some(10_000),
+                    continuation_token: None,
+                })
+                .await;
+
+            match scan_result {
+                Ok(scan_resp) => {
+                    // Count keys per vault (part before ':')
+                    let mut vault_counts: BTreeMap<String, u64> = BTreeMap::new();
+                    for entry in scan_resp.entries {
+                        if let Some(colon_pos) = entry.key.find(':') {
+                            let vault = entry.key[..colon_pos].to_string();
+                            if !vault.is_empty() {
+                                *vault_counts.entry(vault).or_insert(0) += 1;
+                            }
+                        }
+                    }
+
+                    let vaults: Vec<VaultInfo> = vault_counts
+                        .into_iter()
+                        .map(|(name, key_count)| VaultInfo { name, key_count })
+                        .collect();
+
+                    Ok(ClientRpcResponse::VaultList(VaultListResponse {
+                        vaults,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::VaultList(VaultListResponse {
+                    vaults: vec![],
+                    error: Some(e.to_string()),
+                })),
+            }
         }
 
         ClientRpcRequest::GetVaultKeys { vault_name } => {
-            // TODO: Phase 3 - Implement vault key listing via state machine
-            // For now, return empty response
-            Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
-                vault: vault_name,
-                keys: vec![],
-                error: Some("Vault keys not yet implemented via Client RPC".to_string()),
-            }))
+            // Get all keys with the vault prefix
+            use crate::api::ScanRequest;
+            use crate::client_rpc::VaultKeyValue;
+
+            // Build prefix: "vault_name:"
+            let prefix = format!("{}:", vault_name);
+
+            // Tiger Style: Limit scan to 10,000 keys
+            let scan_result = ctx
+                .kv_store
+                .scan(ScanRequest {
+                    prefix: prefix.clone(),
+                    limit: Some(10_000),
+                    continuation_token: None,
+                })
+                .await;
+
+            match scan_result {
+                Ok(scan_resp) => {
+                    // Extract key-value pairs with the vault prefix stripped
+                    let keys: Vec<VaultKeyValue> = scan_resp
+                        .entries
+                        .into_iter()
+                        .map(|entry| VaultKeyValue {
+                            // Strip the "vault:" prefix to get just the key name
+                            key: entry.key[prefix.len()..].to_string(),
+                            value: entry.value,
+                        })
+                        .collect();
+
+                    Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
+                        vault: vault_name,
+                        keys,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
+                    vault: vault_name,
+                    keys: vec![],
+                    error: Some(e.to_string()),
+                })),
+            }
         }
 
         ClientRpcRequest::AddPeer {

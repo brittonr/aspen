@@ -542,7 +542,7 @@ mod unit_tests {
 
     #[test]
     fn test_client_alpn_constant() {
-        assert_eq!(CLIENT_ALPN, b"aspen-tui");
+        assert_eq!(CLIENT_ALPN, b"aspen-client");
     }
 
     #[test]
