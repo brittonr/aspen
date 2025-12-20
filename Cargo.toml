@@ -23,6 +23,11 @@ required-features = ["fuzzing"]
 name = "aspen-prometheus-adapter"
 path = "src/bin/aspen-prometheus-adapter.rs"
 
+[[bin]]
+name = "aspen-fuse"
+path = "src/bin/aspen-fuse/main.rs"
+required-features = ["fuse"]
+
 [workspace]
 members = [".", "scripts/tutorial-verify"]
 
@@ -119,7 +124,6 @@ async-channel = "2.3"
 toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
-lru = "0.12"
 
 # base64 is used by core modules
 base64 = "0.22"
@@ -131,6 +135,11 @@ color-eyre = { version = "0.6", optional = true }
 tui-logger = { version = "0.13", features = ["tracing-support"], optional = true }
 log = { version = "0.4", optional = true }
 mime = { version = "0.3.17", optional = true }
+
+# FUSE filesystem dependencies (optional)
+fuse-backend-rs = { version = "0.13", optional = true, default-features = false, features = ["fusedev"] }
+vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
+ctrlc = { version = "3.4", optional = true }
 
 [dev-dependencies]
 # Property-based testing with Bolero (unified frontend for multiple backends)
@@ -158,6 +167,10 @@ tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
 fuzzing = []
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
 bolero = []
+# FUSE filesystem support
+fuse = ["dep:fuse-backend-rs", "dep:ctrlc"]
+# VirtioFS support for VM guests (requires fuse feature)
+virtiofs = ["fuse", "dep:vhost"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

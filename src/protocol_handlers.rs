@@ -1664,7 +1664,7 @@ async fn process_client_request(
         ClientRpcRequest::WriteKey { key, value } => {
             use crate::api::WriteCommand;
 
-            // Validate key against reserved prefixes and vault name rules
+            // Validate key against reserved _system: prefix
             if let Err(vault_err) = validate_client_key(&key) {
                 return Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
                     success: false,
@@ -1676,7 +1676,7 @@ async fn process_client_request(
                 .kv_store
                 .write(WriteRequest {
                     command: WriteCommand::Set {
-                        key,
+                        key: key.clone(),
                         value: String::from_utf8_lossy(&value).to_string(),
                     },
                 })
@@ -1841,7 +1841,7 @@ async fn process_client_request(
         ClientRpcRequest::DeleteKey { key } => {
             use crate::api::WriteCommand;
 
-            // Validate key against reserved prefixes and vault name rules
+            // Validate key against reserved _system: prefix
             if let Err(vault_err) = validate_client_key(&key) {
                 return Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
                     key,
@@ -2045,105 +2045,26 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ListVaults => {
-            // List all vaults by scanning vault:* keys
-            use crate::api::ScanRequest;
-            use crate::api::vault::{VAULT_PREFIX, parse_vault_key};
-            use crate::client_rpc::VaultInfo;
-            use std::collections::BTreeMap;
-
-            // Tiger Style: Limit scan to 10,000 keys to prevent unbounded operations
-            let scan_result = ctx
-                .kv_store
-                .scan(ScanRequest {
-                    prefix: VAULT_PREFIX.to_string(),
-                    limit: Some(10_000),
-                    continuation_token: None,
-                })
-                .await;
-
-            match scan_result {
-                Ok(scan_resp) => {
-                    // Count keys per vault using parse_vault_key
-                    let mut vault_counts: BTreeMap<String, u64> = BTreeMap::new();
-                    for entry in scan_resp.entries {
-                        if let Some((vault_name, _)) = parse_vault_key(&entry.key) {
-                            *vault_counts.entry(vault_name).or_insert(0) += 1;
-                        }
-                    }
-
-                    let vaults: Vec<VaultInfo> = vault_counts
-                        .into_iter()
-                        .map(|(name, key_count)| VaultInfo { name, key_count })
-                        .collect();
-
-                    Ok(ClientRpcResponse::VaultList(VaultListResponse {
-                        vaults,
-                        error: None,
-                    }))
-                }
-                Err(e) => Ok(ClientRpcResponse::VaultList(VaultListResponse {
-                    vaults: vec![],
-                    // HIGH-4: Sanitize error messages to prevent information leakage
-                    error: Some(sanitize_kv_error(&e)),
-                })),
-            }
+            // Deprecated: Vault-specific operations removed in favor of flat keyspace.
+            // Use ScanKeys with an empty prefix to list all keys.
+            Ok(ClientRpcResponse::VaultList(VaultListResponse {
+                vaults: vec![],
+                error: Some(
+                    "ListVaults is deprecated. Use ScanKeys with a prefix instead.".to_string(),
+                ),
+            }))
         }
 
         ClientRpcRequest::GetVaultKeys { vault_name } => {
-            // Get all keys in a vault
-            use crate::api::ScanRequest;
-            use crate::api::vault::{parse_vault_key, validate_vault_name, vault_scan_prefix};
-            use crate::client_rpc::VaultKeyValue;
-
-            // Validate vault name
-            if let Err(reason) = validate_vault_name(&vault_name) {
-                return Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
-                    vault: vault_name,
-                    keys: vec![],
-                    error: Some(format!("invalid vault name: {}", reason)),
-                }));
-            }
-
-            // Build correct prefix: "vault:name:"
-            let prefix = vault_scan_prefix(&vault_name);
-
-            // Tiger Style: Limit scan to 10,000 keys
-            let scan_result = ctx
-                .kv_store
-                .scan(ScanRequest {
-                    prefix: prefix.clone(),
-                    limit: Some(10_000),
-                    continuation_token: None,
-                })
-                .await;
-
-            match scan_result {
-                Ok(scan_resp) => {
-                    // Extract key-value pairs using parse_vault_key
-                    let keys: Vec<VaultKeyValue> = scan_resp
-                        .entries
-                        .into_iter()
-                        .filter_map(|entry| {
-                            parse_vault_key(&entry.key).map(|(_, key)| VaultKeyValue {
-                                key,
-                                value: entry.value,
-                            })
-                        })
-                        .collect();
-
-                    Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
-                        vault: vault_name,
-                        keys,
-                        error: None,
-                    }))
-                }
-                Err(e) => Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
-                    vault: vault_name,
-                    keys: vec![],
-                    // HIGH-4: Sanitize error messages to prevent information leakage
-                    error: Some(sanitize_kv_error(&e)),
-                })),
-            }
+            // Deprecated: Vault-specific operations removed in favor of flat keyspace.
+            // Use ScanKeys with the desired prefix instead.
+            Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
+                vault: vault_name,
+                keys: vec![],
+                error: Some(
+                    "GetVaultKeys is deprecated. Use ScanKeys with a prefix instead.".to_string(),
+                ),
+            }))
         }
 
         ClientRpcRequest::AddPeer {

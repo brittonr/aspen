@@ -18,7 +18,6 @@ pub mod node;
 pub mod protocol_handlers;
 pub mod raft;
 pub mod simulation;
-pub mod vault;
 
 /// Testing infrastructure for deterministic multi-node Raft tests.
 ///

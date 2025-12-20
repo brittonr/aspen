@@ -68,7 +68,6 @@ pub mod constants;
 pub mod overlay;
 pub mod subscription;
 pub mod ticket;
-pub mod vault;
 
 pub use cache::LocalCache;
 pub use constants::{
@@ -78,4 +77,3 @@ pub use constants::{
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};
 pub use ticket::{AspenClientTicket, CLIENT_TICKET_PREFIX};
-pub use vault::{VaultClient, VaultClientError};
