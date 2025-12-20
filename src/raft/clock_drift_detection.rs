@@ -221,7 +221,11 @@ impl ClockDriftDetector {
         }
 
         // Get current state for logging
-        let obs = self.observations.get(&node_id).unwrap();
+        // SAFETY: We just inserted or updated above, so this key is guaranteed to exist
+        let obs = self
+            .observations
+            .get(&node_id)
+            .expect("observation must exist after insert/update");
         let new_severity = obs.severity;
 
         // Only log on severity transitions (to avoid log spam)

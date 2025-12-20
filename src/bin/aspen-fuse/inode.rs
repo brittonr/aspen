@@ -70,10 +70,18 @@ impl InodeManager {
     ///
     /// If the path is already cached, returns the existing inode.
     /// Otherwise, generates a stable inode from the path hash.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned (indicates prior panic in critical section).
+    /// Tiger Style: fail-fast on unrecoverable internal state corruption.
     pub fn get_or_create(&self, path: &str, entry_type: EntryType) -> u64 {
         // Fast path: check if already cached
         {
-            let path_map = self.path_to_inode.read().unwrap();
+            let path_map = self
+                .path_to_inode
+                .read()
+                .expect("inode manager path_to_inode lock poisoned");
             if let Some(&inode) = path_map.get(path) {
                 // Update access time
                 let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
@@ -90,8 +98,14 @@ impl InodeManager {
         let inode = self.hash_path(path);
         let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
 
-        let mut entries = self.inode_to_entry.write().unwrap();
-        let mut paths = self.path_to_inode.write().unwrap();
+        let mut entries = self
+            .inode_to_entry
+            .write()
+            .expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self
+            .path_to_inode
+            .write()
+            .expect("inode manager path_to_inode lock poisoned");
 
         // Evict old entries if at capacity
         if entries.len() >= MAX_INODE_CACHE {
@@ -113,22 +127,46 @@ impl InodeManager {
     }
 
     /// Look up a path by its inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     pub fn get_path(&self, inode: u64) -> Option<InodeEntry> {
-        let entries = self.inode_to_entry.read().unwrap();
+        let entries = self
+            .inode_to_entry
+            .read()
+            .expect("inode manager inode_to_entry lock poisoned");
         entries.get(&inode).cloned()
     }
 
     /// Look up an inode by its path.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     pub fn get_inode(&self, path: &str) -> Option<u64> {
-        let paths = self.path_to_inode.read().unwrap();
+        let paths = self
+            .path_to_inode
+            .read()
+            .expect("inode manager path_to_inode lock poisoned");
         paths.get(path).copied()
     }
 
     /// Remove an inode from the cache.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn remove(&self, inode: u64) {
-        let mut entries = self.inode_to_entry.write().unwrap();
-        let mut paths = self.path_to_inode.write().unwrap();
+        let mut entries = self
+            .inode_to_entry
+            .write()
+            .expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self
+            .path_to_inode
+            .write()
+            .expect("inode manager path_to_inode lock poisoned");
 
         if let Some(entry) = entries.remove(&inode) {
             paths.remove(&entry.path);
@@ -136,9 +174,19 @@ impl InodeManager {
     }
 
     /// Remove a path from the cache.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     pub fn remove_path(&self, path: &str) {
-        let mut entries = self.inode_to_entry.write().unwrap();
-        let mut paths = self.path_to_inode.write().unwrap();
+        let mut entries = self
+            .inode_to_entry
+            .write()
+            .expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self
+            .path_to_inode
+            .write()
+            .expect("inode manager path_to_inode lock poisoned");
 
         if let Some(inode) = paths.remove(path) {
             entries.remove(&inode);
@@ -146,9 +194,16 @@ impl InodeManager {
     }
 
     /// Update the entry type for an inode (e.g., when a file becomes a directory).
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn update_type(&self, inode: u64, entry_type: EntryType) {
-        let mut entries = self.inode_to_entry.write().unwrap();
+        let mut entries = self
+            .inode_to_entry
+            .write()
+            .expect("inode manager inode_to_entry lock poisoned");
         if let Some(entry) = entries.get_mut(&inode) {
             entry.entry_type = entry_type;
         }
@@ -187,9 +242,16 @@ impl InodeManager {
     }
 
     /// Get the current cache size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn cache_size(&self) -> usize {
-        self.inode_to_entry.read().unwrap().len()
+        self.inode_to_entry
+            .read()
+            .expect("inode manager inode_to_entry lock poisoned")
+            .len()
     }
 }
 

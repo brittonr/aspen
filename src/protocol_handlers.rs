@@ -682,16 +682,26 @@ async fn handle_authenticated_raft_stream(
             warn!(error = %err, "authentication failed: bad response");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
                 .context("failed to serialize auth result")?;
-            write_length_prefixed(&mut send, &result_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of failure response - log if it fails but don't block error return
+            if let Err(write_err) = write_length_prefixed(&mut send, &result_bytes).await {
+                debug!(error = %write_err, "failed to send auth failure response to client");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(error = %finish_err, "failed to finish stream after auth failure");
+            }
             return Err(err);
         }
         Err(_) => {
             warn!("authentication timed out");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
                 .context("failed to serialize auth result")?;
-            write_length_prefixed(&mut send, &result_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of failure response - log if it fails but don't block error return
+            if let Err(write_err) = write_length_prefixed(&mut send, &result_bytes).await {
+                debug!(error = %write_err, "failed to send auth timeout response to client");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(error = %finish_err, "failed to finish stream after auth timeout");
+            }
             return Err(anyhow::anyhow!("authentication timeout"));
         }
     };
@@ -708,7 +718,9 @@ async fn handle_authenticated_raft_stream(
 
     if !auth_result.is_ok() {
         warn!(result = ?auth_result, "authentication failed");
-        send.finish().ok();
+        if let Err(finish_err) = send.finish() {
+            debug!(error = %finish_err, "failed to finish stream after auth verification failure");
+        }
         return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
     }
 
@@ -1054,15 +1066,25 @@ async fn handle_log_subscriber_connection(
         Ok(Err(err)) => {
             warn!(error = %err, subscriber_id = subscriber_id, "subscriber auth failed");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            send.write_all(&result_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of failure response - log if it fails
+            if let Err(write_err) = send.write_all(&result_bytes).await {
+                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth failure to subscriber");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth failure");
+            }
             return Err(err);
         }
         Err(_) => {
             warn!(subscriber_id = subscriber_id, "subscriber auth timed out");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)?;
-            send.write_all(&result_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of failure response - log if it fails
+            if let Err(write_err) = send.write_all(&result_bytes).await {
+                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send auth timeout to subscriber");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth timeout");
+            }
             return Err(anyhow::anyhow!("authentication timeout"));
         }
     };
@@ -1078,7 +1100,9 @@ async fn handle_log_subscriber_connection(
 
     if !auth_result.is_ok() {
         warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
-        send.finish().ok();
+        if let Err(finish_err) = send.finish() {
+            debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth verification failure");
+        }
         return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
     }
 
@@ -1103,8 +1127,13 @@ async fn handle_log_subscriber_connection(
                 reason: SubscribeRejectReason::InternalError,
             };
             let response_bytes = postcard::to_stdvec(&response)?;
-            send.write_all(&response_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of rejection - log if it fails
+            if let Err(write_err) = send.write_all(&response_bytes).await {
+                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe rejection");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe error");
+            }
             return Err(err);
         }
         Err(_) => {
@@ -1112,8 +1141,13 @@ async fn handle_log_subscriber_connection(
                 reason: SubscribeRejectReason::InternalError,
             };
             let response_bytes = postcard::to_stdvec(&response)?;
-            send.write_all(&response_bytes).await.ok();
-            send.finish().ok();
+            // Best-effort send of rejection - log if it fails
+            if let Err(write_err) = send.write_all(&response_bytes).await {
+                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send subscribe timeout rejection");
+            }
+            if let Err(finish_err) = send.finish() {
+                debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscribe timeout");
+            }
             return Err(anyhow::anyhow!("subscribe request timeout"));
         }
     };
@@ -1287,7 +1321,10 @@ async fn handle_log_subscriber_connection(
                             reason: EndOfStreamReason::Lagged,
                         };
                         if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            send.write_all(&bytes).await.ok();
+                            // Best-effort send of end-of-stream message
+                            if let Err(write_err) = send.write_all(&bytes).await {
+                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send lagged end-of-stream");
+                            }
                         }
                         break;
                     }
@@ -1297,7 +1334,10 @@ async fn handle_log_subscriber_connection(
                             reason: EndOfStreamReason::ServerShutdown,
                         };
                         if let Ok(bytes) = postcard::to_stdvec(&end_message) {
-                            send.write_all(&bytes).await.ok();
+                            // Best-effort send of end-of-stream message
+                            if let Err(write_err) = send.write_all(&bytes).await {
+                                debug!(subscriber_id = subscriber_id, error = %write_err, "failed to send shutdown end-of-stream");
+                            }
                         }
                         break;
                     }
@@ -1325,7 +1365,10 @@ async fn handle_log_subscriber_connection(
         }
     }
 
-    send.finish().ok();
+    // Best-effort stream finish - log if it fails
+    if let Err(finish_err) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+    }
 
     info!(subscriber_id = subscriber_id, "log subscription ended");
 
