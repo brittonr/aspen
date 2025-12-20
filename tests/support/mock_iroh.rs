@@ -60,6 +60,10 @@ use parking_lot::Mutex;
 use rand::RngCore;
 use tokio::sync::mpsc;
 
+// Re-export ALPN constants from the main crate for test convenience
+// (avoids duplication of constant definitions)
+pub use aspen::{CLIENT_ALPN, RAFT_ALPN};
+
 /// Default channel capacity for streams.
 ///
 /// Tiger Style: Fixed limit to prevent unbounded memory growth.
@@ -67,12 +71,6 @@ const DEFAULT_STREAM_CAPACITY: usize = 256;
 
 /// Maximum message size for mock streams (matches MAX_RPC_MESSAGE_SIZE).
 const MAX_MOCK_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
-
-/// ALPN protocol identifier for Raft RPC (matches protocol_handlers.rs).
-pub const RAFT_ALPN: &[u8] = b"raft-rpc";
-
-/// ALPN protocol identifier for Client RPC (matches protocol_handlers.rs).
-pub const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Central mock network managing all endpoints and connections.
 ///

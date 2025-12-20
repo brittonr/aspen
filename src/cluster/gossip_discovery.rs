@@ -71,10 +71,13 @@ use tokio_util::sync::CancellationToken;
 
 use super::IrohEndpointManager;
 use crate::raft::constants::{
-    GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_MAX_TRACKED_PEERS,
-    GOSSIP_PER_PEER_BURST, GOSSIP_PER_PEER_RATE_PER_MINUTE,
+    GOSSIP_ANNOUNCE_FAILURE_THRESHOLD, GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE,
+    GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS, GOSSIP_MAX_STREAM_RETRIES, GOSSIP_MAX_TRACKED_PEERS,
+    GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS, GOSSIP_PER_PEER_BURST, GOSSIP_PER_PEER_RATE_PER_MINUTE,
+    GOSSIP_STREAM_BACKOFF_SECS,
 };
 use crate::raft::network::IrpcRaftNetworkFactory;
+use crate::raft::pure::calculate_backoff_duration;
 use crate::raft::types::NodeId;
 
 /// Current gossip message protocol version.
@@ -379,10 +382,8 @@ pub struct GossipPeerDiscovery {
 }
 
 impl GossipPeerDiscovery {
-    /// Announcement interval in seconds.
-    ///
-    /// Tiger Style: Fixed interval to prevent unbounded announcement rate.
-    const ANNOUNCE_INTERVAL_SECS: u64 = 10;
+    // Note: Announcement interval is now controlled by GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS
+    // and GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS from constants.rs with adaptive backoff.
 
     /// Spawn gossip peer discovery tasks.
     ///
@@ -422,7 +423,10 @@ impl GossipPeerDiscovery {
         let announcer_sender = gossip_sender.clone();
         let announcer_node_id = node_id;
         let announcer_task = tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_secs(Self::ANNOUNCE_INTERVAL_SECS));
+            // Adaptive interval tracking for sender-side rate limiting
+            let mut consecutive_failures: u32 = 0;
+            let mut current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
+            let mut ticker = interval(Duration::from_secs(current_interval_secs));
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
@@ -452,13 +456,50 @@ impl GossipPeerDiscovery {
 
                         match signed.to_bytes() {
                             Ok(bytes) => {
-                                if let Err(e) = announcer_sender.broadcast(bytes.into()).await {
-                                    tracing::warn!("failed to broadcast peer announcement: {}", e);
-                                } else {
-                                    tracing::trace!(
-                                        "broadcast signed peer announcement for node_id={}",
-                                        announcer_node_id
-                                    );
+                                match announcer_sender.broadcast(bytes.into()).await {
+                                    Ok(()) => {
+                                        tracing::trace!(
+                                            "broadcast signed peer announcement for node_id={}",
+                                            announcer_node_id
+                                        );
+                                        // Reset on success if we were in backoff mode
+                                        if consecutive_failures > 0 {
+                                            consecutive_failures = 0;
+                                            if current_interval_secs != GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS {
+                                                current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
+                                                ticker = interval(Duration::from_secs(current_interval_secs));
+                                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                                                tracing::debug!(
+                                                    "announcement succeeded, resetting interval to {}s",
+                                                    current_interval_secs
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        consecutive_failures += 1;
+                                        tracing::warn!(
+                                            "failed to broadcast peer announcement (failure {}/{}): {}",
+                                            consecutive_failures,
+                                            GOSSIP_ANNOUNCE_FAILURE_THRESHOLD,
+                                            e
+                                        );
+
+                                        // Increase interval after threshold failures
+                                        if consecutive_failures >= GOSSIP_ANNOUNCE_FAILURE_THRESHOLD {
+                                            let new_interval = (current_interval_secs * 2)
+                                                .min(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS);
+                                            if new_interval != current_interval_secs {
+                                                current_interval_secs = new_interval;
+                                                ticker = interval(Duration::from_secs(current_interval_secs));
+                                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                                                tracing::info!(
+                                                    "increasing announcement interval to {}s due to failures",
+                                                    current_interval_secs
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -478,6 +519,13 @@ impl GossipPeerDiscovery {
             // Rate limiter for incoming gossip messages (HIGH-6 security)
             let mut rate_limiter = GossipRateLimiter::new();
 
+            // Error recovery state for transient stream errors
+            let mut consecutive_errors: u32 = 0;
+            let backoff_durations: Vec<Duration> = GOSSIP_STREAM_BACKOFF_SECS
+                .iter()
+                .map(|s| Duration::from_secs(*s))
+                .collect();
+
             loop {
                 tokio::select! {
                     _ = receiver_cancel.cancelled() => {
@@ -486,6 +534,8 @@ impl GossipPeerDiscovery {
                     }
                     event = gossip_receiver.next() => match event {
                     Some(Ok(Event::Received(msg))) => {
+                        // Reset error count on successful message
+                        consecutive_errors = 0;
                         // Rate limit check BEFORE parsing/signature verification (save CPU)
                         // Use delivered_from as the peer identifier
                         if let Err(reason) = rate_limiter.check(&msg.delivered_from) {
@@ -601,8 +651,35 @@ impl GossipPeerDiscovery {
                         tracing::warn!("gossip receiver lagged, messages may be lost");
                     }
                     Some(Err(e)) => {
-                        tracing::error!("gossip receiver error: {}", e);
-                        break;
+                        consecutive_errors += 1;
+
+                        // Check if we've exceeded max retries
+                        if consecutive_errors > GOSSIP_MAX_STREAM_RETRIES {
+                            tracing::error!(
+                                "gossip receiver exceeded max retries ({}), giving up: {}",
+                                GOSSIP_MAX_STREAM_RETRIES,
+                                e
+                            );
+                            break;
+                        }
+
+                        // Calculate backoff duration using existing pure function
+                        let backoff = calculate_backoff_duration(
+                            (consecutive_errors as usize).saturating_sub(1),
+                            &backoff_durations
+                        );
+
+                        tracing::warn!(
+                            "gossip receiver error (retry {}/{}), backing off for {:?}: {}",
+                            consecutive_errors,
+                            GOSSIP_MAX_STREAM_RETRIES,
+                            backoff,
+                            e
+                        );
+
+                        // Wait before retrying - stream may recover
+                        tokio::time::sleep(backoff).await;
+                        continue;
                     }
                     None => {
                         tracing::info!("gossip receiver stream ended");

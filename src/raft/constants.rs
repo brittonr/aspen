@@ -404,3 +404,56 @@ pub const GOSSIP_GLOBAL_RATE_PER_MINUTE: u32 = 10_000;
 /// Used in:
 /// - `gossip_discovery.rs`: Global burst allowance
 pub const GOSSIP_GLOBAL_BURST: u32 = 100;
+
+// ============================================================================
+// Gossip Error Recovery Constants
+// ============================================================================
+
+/// Maximum gossip stream error retries before giving up (5 retries).
+///
+/// Tiger Style: Bounded retry count prevents infinite retry loops.
+/// After this many consecutive errors, the receiver task exits.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Receiver task error handling
+pub const GOSSIP_MAX_STREAM_RETRIES: u32 = 5;
+
+/// Gossip stream error backoff durations in seconds.
+///
+/// Tiger Style: Fixed backoff progression: 1s, 2s, 4s, 8s, 16s (capped).
+/// Exponential backoff prevents overwhelming a recovering network.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Receiver task backoff calculation
+pub const GOSSIP_STREAM_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];
+
+// ============================================================================
+// Gossip Announcer Rate Limiting Constants
+// ============================================================================
+
+/// Minimum interval between peer announcements (10 seconds).
+///
+/// Tiger Style: Fixed floor prevents announcement flooding.
+/// This is the normal announcement interval when network is healthy.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Announcer task interval
+pub const GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS: u64 = 10;
+
+/// Maximum interval between peer announcements (60 seconds).
+///
+/// Tiger Style: Upper bound on backoff prevents stale discovery.
+/// Used when announcements are failing to avoid network flooding.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Announcer task adaptive interval
+pub const GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS: u64 = 60;
+
+/// Consecutive announcement failures before increasing interval (3).
+///
+/// Tiger Style: Bounded failures before adaptive backoff.
+/// Prevents flooding the network when broadcast consistently fails.
+///
+/// Used in:
+/// - `gossip_discovery.rs`: Announcer task adaptive logic
+pub const GOSSIP_ANNOUNCE_FAILURE_THRESHOLD: u32 = 3;
