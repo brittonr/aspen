@@ -319,4 +319,229 @@ mod tests {
         assert!(mgr.get_inode(path).is_none());
         assert!(mgr.get_path(inode).is_none());
     }
+
+    // === Additional Tests ===
+
+    #[test]
+    fn test_default_creates_new() {
+        let mgr = InodeManager::default();
+        let entry = mgr.get_path(ROOT_INODE).unwrap();
+        assert_eq!(entry.path, "");
+    }
+
+    #[test]
+    fn test_get_inode_returns_none_for_unknown() {
+        let mgr = InodeManager::new();
+        assert!(mgr.get_inode("nonexistent/path").is_none());
+    }
+
+    #[test]
+    fn test_get_path_returns_none_for_unknown() {
+        let mgr = InodeManager::new();
+        assert!(mgr.get_path(99999).is_none());
+    }
+
+    #[test]
+    fn test_update_type() {
+        let mgr = InodeManager::new();
+
+        // Create as file
+        let inode = mgr.get_or_create("test/path", EntryType::File);
+        let entry = mgr.get_path(inode).unwrap();
+        assert_eq!(entry.entry_type, EntryType::File);
+
+        // Update to directory
+        mgr.update_type(inode, EntryType::Directory);
+        let entry = mgr.get_path(inode).unwrap();
+        assert_eq!(entry.entry_type, EntryType::Directory);
+    }
+
+    #[test]
+    fn test_update_type_unknown_inode() {
+        let mgr = InodeManager::new();
+        // Should not panic
+        mgr.update_type(99999, EntryType::File);
+    }
+
+    #[test]
+    fn test_cache_size() {
+        let mgr = InodeManager::new();
+
+        // Initially just root
+        assert_eq!(mgr.cache_size(), 1);
+
+        // Add some entries
+        mgr.get_or_create("path/a", EntryType::File);
+        mgr.get_or_create("path/b", EntryType::File);
+        mgr.get_or_create("path/c", EntryType::File);
+
+        assert_eq!(mgr.cache_size(), 4);
+    }
+
+    #[test]
+    fn test_inode_never_zero_or_one() {
+        let mgr = InodeManager::new();
+
+        // Test many paths to ensure we never get reserved inodes
+        for i in 0..1000 {
+            let path = format!("test/path/{}", i);
+            let inode = mgr.get_or_create(&path, EntryType::File);
+            assert!(
+                inode >= 2 || inode == ROOT_INODE,
+                "Got reserved inode: {}",
+                inode
+            );
+        }
+    }
+
+    #[test]
+    fn test_access_time_updates() {
+        let mgr = InodeManager::new();
+
+        // Create entry
+        let inode = mgr.get_or_create("test/path", EntryType::File);
+        let entry1 = mgr.get_path(inode).unwrap();
+        let access1 = entry1.last_access;
+
+        // Access again (should update last_access)
+        let _ = mgr.get_or_create("test/path", EntryType::File);
+        let entry2 = mgr.get_path(inode).unwrap();
+        let access2 = entry2.last_access;
+
+        assert!(access2 > access1);
+    }
+
+    #[test]
+    fn test_entry_type_equality() {
+        assert_eq!(EntryType::File, EntryType::File);
+        assert_eq!(EntryType::Directory, EntryType::Directory);
+        assert_ne!(EntryType::File, EntryType::Directory);
+    }
+
+    #[test]
+    fn test_entry_type_clone() {
+        let entry_type = EntryType::File;
+        let cloned = entry_type.clone();
+        assert_eq!(entry_type, cloned);
+    }
+
+    #[test]
+    fn test_entry_type_copy() {
+        let entry_type = EntryType::Directory;
+        let copied: EntryType = entry_type; // Copy trait
+        assert_eq!(entry_type, copied);
+    }
+
+    #[test]
+    fn test_inode_entry_clone() {
+        let entry = InodeEntry {
+            path: "test/path".to_string(),
+            entry_type: EntryType::File,
+            last_access: 42,
+        };
+        let cloned = entry.clone();
+        assert_eq!(entry.path, cloned.path);
+        assert_eq!(entry.entry_type, cloned.entry_type);
+        assert_eq!(entry.last_access, cloned.last_access);
+    }
+
+    #[test]
+    fn test_hash_deterministic() {
+        let mgr = InodeManager::new();
+
+        // Hash same path multiple times
+        let inode1 = mgr.hash_path("consistent/path");
+        let inode2 = mgr.hash_path("consistent/path");
+
+        assert_eq!(inode1, inode2);
+    }
+
+    #[test]
+    fn test_remove_root_inode_still_works() {
+        let mgr = InodeManager::new();
+
+        // Try to remove root (should work but re-lookup via path will fail)
+        mgr.remove(ROOT_INODE);
+
+        // Root should be gone
+        assert!(mgr.get_path(ROOT_INODE).is_none());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_inode() {
+        let mgr = InodeManager::new();
+        // Should not panic
+        mgr.remove(99999);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_path() {
+        let mgr = InodeManager::new();
+        // Should not panic
+        mgr.remove_path("nonexistent/path");
+    }
+
+    #[test]
+    fn test_concurrent_access() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let mgr = Arc::new(InodeManager::new());
+        let mut handles = vec![];
+
+        // Spawn multiple threads accessing the manager
+        for i in 0..10 {
+            let mgr_clone = mgr.clone();
+            let handle = thread::spawn(move || {
+                for j in 0..100 {
+                    let path = format!("thread{}/path{}", i, j);
+                    mgr_clone.get_or_create(&path, EntryType::File);
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Should have 1000 entries + root
+        assert_eq!(mgr.cache_size(), 1001);
+    }
+
+    #[test]
+    fn test_lru_eviction() {
+        // Create a manager with many entries to trigger eviction
+        let mgr = InodeManager::new();
+
+        // Fill cache to capacity (minus root)
+        for i in 0..(MAX_INODE_CACHE - 1) {
+            let path = format!("eviction/path/{}", i);
+            mgr.get_or_create(&path, EntryType::File);
+        }
+
+        // Cache should be at capacity
+        assert_eq!(mgr.cache_size(), MAX_INODE_CACHE);
+
+        // Add one more entry (should trigger eviction)
+        mgr.get_or_create("new/path", EntryType::File);
+
+        // Cache should still be at capacity
+        assert_eq!(mgr.cache_size(), MAX_INODE_CACHE);
+    }
+
+    #[test]
+    fn test_root_never_evicted() {
+        let mgr = InodeManager::new();
+
+        // Fill cache beyond capacity
+        for i in 0..(MAX_INODE_CACHE + 10) {
+            let path = format!("eviction/path/{}", i);
+            mgr.get_or_create(&path, EntryType::File);
+        }
+
+        // Root should still exist
+        assert!(mgr.get_path(ROOT_INODE).is_some());
+    }
 }

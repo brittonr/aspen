@@ -744,3 +744,348 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    /// Create a mock Context for testing.
+    fn mock_context() -> Context {
+        Context::default()
+    }
+
+    // === Path/Key Conversion Tests ===
+
+    #[test]
+    fn test_path_to_key_strips_leading_slash() {
+        assert_eq!(AspenFs::path_to_key("/myapp/config"), "myapp/config");
+        assert_eq!(AspenFs::path_to_key("/simple"), "simple");
+        assert_eq!(AspenFs::path_to_key("/a/b/c"), "a/b/c");
+    }
+
+    #[test]
+    fn test_path_to_key_empty_path() {
+        assert_eq!(AspenFs::path_to_key("/"), "");
+        assert_eq!(AspenFs::path_to_key(""), "");
+    }
+
+    #[test]
+    fn test_path_to_key_no_leading_slash() {
+        // Paths without leading slash pass through
+        assert_eq!(AspenFs::path_to_key("already/no/slash"), "already/no/slash");
+    }
+
+    #[test]
+    fn test_key_to_path_non_empty() {
+        assert_eq!(AspenFs::key_to_path("myapp/config"), "myapp/config");
+        assert_eq!(AspenFs::key_to_path("simple"), "simple");
+    }
+
+    #[test]
+    fn test_key_to_path_empty() {
+        assert_eq!(AspenFs::key_to_path(""), "");
+    }
+
+    // === Mock Filesystem Tests ===
+
+    #[test]
+    fn test_new_mock_creates_filesystem() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        assert!(fs.client.is_none());
+    }
+
+    #[test]
+    fn test_mock_kv_read_returns_none() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let result = fs.kv_read("any_key").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_mock_kv_write_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let result = fs.kv_write("key", b"value");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_kv_delete_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let result = fs.kv_delete("key");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_mock_kv_scan_returns_empty() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let result = fs.kv_scan("prefix/").unwrap();
+        assert!(result.is_empty());
+    }
+
+    // === Size Limit Tests ===
+
+    #[test]
+    fn test_kv_write_rejects_oversized_key() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let oversized_key = "k".repeat(MAX_KEY_SIZE + 1);
+        let result = fs.kv_write(&oversized_key, b"value");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("key too large"));
+    }
+
+    #[test]
+    fn test_kv_write_rejects_oversized_value() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let oversized_value = vec![0u8; MAX_VALUE_SIZE + 1];
+        let result = fs.kv_write("key", &oversized_value);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("value too large"));
+    }
+
+    #[test]
+    fn test_kv_write_accepts_max_key_size() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let max_key = "k".repeat(MAX_KEY_SIZE);
+        let result = fs.kv_write(&max_key, b"value");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_kv_write_accepts_max_value_size() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let max_value = vec![0u8; MAX_VALUE_SIZE];
+        let result = fs.kv_write("key", &max_value);
+        assert!(result.is_ok());
+    }
+
+    // === Attribute Generation Tests ===
+
+    #[test]
+    fn test_make_attr_file() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let attr = fs.make_attr(42, EntryType::File, 1024);
+
+        assert_eq!(attr.st_ino, 42);
+        assert_eq!(attr.st_mode, DEFAULT_FILE_MODE);
+        assert_eq!(attr.st_nlink, 1);
+        assert_eq!(attr.st_uid, 1000);
+        assert_eq!(attr.st_gid, 1000);
+        assert_eq!(attr.st_size, 1024);
+        assert_eq!(attr.st_blksize, i64::from(BLOCK_SIZE));
+    }
+
+    #[test]
+    fn test_make_attr_directory() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let attr = fs.make_attr(1, EntryType::Directory, 0);
+
+        assert_eq!(attr.st_ino, 1);
+        assert_eq!(attr.st_mode, DEFAULT_DIR_MODE);
+        assert_eq!(attr.st_nlink, 2); // Directories have nlink=2
+        assert_eq!(attr.st_size, 0);
+    }
+
+    #[test]
+    fn test_make_attr_block_count() {
+        let fs = AspenFs::new_mock(1000, 1000);
+
+        // Empty file
+        let attr = fs.make_attr(1, EntryType::File, 0);
+        assert_eq!(attr.st_blocks, 0);
+
+        // 1 byte file (1 block)
+        let attr = fs.make_attr(1, EntryType::File, 1);
+        assert_eq!(attr.st_blocks, 1);
+
+        // Exactly 1 block
+        let attr = fs.make_attr(1, EntryType::File, u64::from(BLOCK_SIZE));
+        assert_eq!(attr.st_blocks, 1);
+
+        // Just over 1 block
+        let attr = fs.make_attr(1, EntryType::File, u64::from(BLOCK_SIZE) + 1);
+        assert_eq!(attr.st_blocks, 2);
+    }
+
+    // === Entry Generation Tests ===
+
+    #[test]
+    fn test_make_entry_file() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let entry = fs.make_entry(42, EntryType::File, 512);
+
+        assert_eq!(entry.inode, 42);
+        assert_eq!(entry.generation, 0);
+        assert_eq!(entry.attr.st_ino, 42);
+        assert_eq!(entry.attr.st_size, 512);
+        assert_eq!(entry.attr_timeout, ATTR_TTL);
+        assert_eq!(entry.entry_timeout, ENTRY_TTL);
+    }
+
+    #[test]
+    fn test_make_entry_directory() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let entry = fs.make_entry(1, EntryType::Directory, 0);
+
+        assert_eq!(entry.inode, 1);
+        assert_eq!(entry.attr.st_mode, DEFAULT_DIR_MODE);
+    }
+
+    // === Existence Checks ===
+
+    #[test]
+    fn test_exists_returns_none_in_mock_mode() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        // In mock mode, no keys exist
+        let result = fs.exists("any/path").unwrap();
+        assert!(result.is_none());
+    }
+
+    // === FileSystem Trait Method Tests ===
+
+    #[test]
+    fn test_init_returns_empty_options() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let options = fs.init(FsOptions::empty()).unwrap();
+        assert!(options.is_empty());
+    }
+
+    #[test]
+    fn test_getattr_root() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let (attr, ttl) = fs.getattr(&ctx, ROOT_INODE, None).unwrap();
+
+        assert_eq!(attr.st_ino, ROOT_INODE);
+        assert_eq!(attr.st_mode, DEFAULT_DIR_MODE);
+        assert_eq!(ttl, ATTR_TTL);
+    }
+
+    #[test]
+    fn test_getattr_unknown_inode() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.getattr(&ctx, 99999, None);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_opendir_root() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let (handle, options) = fs.opendir(&ctx, ROOT_INODE, 0).unwrap();
+
+        assert!(handle.is_none()); // Stateless
+        assert!(options.is_empty());
+    }
+
+    #[test]
+    fn test_opendir_unknown_inode() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.opendir(&ctx, 99999, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_open_root_fails() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Root is a directory, open should fail
+        let result = fs.open(&ctx, ROOT_INODE, 0, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::IsADirectory);
+    }
+
+    #[test]
+    fn test_mkdir_and_rmdir() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Create directory under root
+        let name = CString::new("testdir").unwrap();
+        let entry = fs.mkdir(&ctx, ROOT_INODE, &name, 0o755, 0o022).unwrap();
+
+        assert_ne!(entry.inode, ROOT_INODE);
+        assert_eq!(entry.attr.st_mode, DEFAULT_DIR_MODE);
+
+        // Remove directory
+        let result = fs.rmdir(&ctx, ROOT_INODE, &name);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_fsync_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.fsync(&ctx, ROOT_INODE, false, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_flush_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.flush(&ctx, ROOT_INODE, 0, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_release_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.release(&ctx, ROOT_INODE, 0, 0, false, false, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_destroy_is_noop() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        // Should not panic
+        fs.destroy();
+    }
+
+    // === Inode Manager Integration Tests ===
+
+    #[test]
+    fn test_inode_manager_integration() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Create a directory
+        let name = CString::new("mydir").unwrap();
+        let entry = fs.mkdir(&ctx, ROOT_INODE, &name, 0o755, 0o022).unwrap();
+
+        // Inode should be retrievable via getattr
+        let (attr, _) = fs.getattr(&ctx, entry.inode, None).unwrap();
+        assert_eq!(attr.st_ino, entry.inode);
+        assert_eq!(attr.st_mode, DEFAULT_DIR_MODE);
+    }
+
+    #[test]
+    fn test_lookup_root_child() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // First create a directory so there's something to look up
+        let name = CString::new("subdir").unwrap();
+        let _created = fs.mkdir(&ctx, ROOT_INODE, &name, 0o755, 0o022).unwrap();
+
+        // Lookup should fail in mock mode (no actual KV entries)
+        // because exists() returns None
+        let result = fs.lookup(&ctx, ROOT_INODE, &name);
+
+        // In mock mode, lookup fails because kv_read returns None
+        // and directory check (kv_scan) returns empty
+        assert!(result.is_err());
+    }
+}
