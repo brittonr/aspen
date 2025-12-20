@@ -53,6 +53,9 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::auth::{
+    AUTH_HANDSHAKE_TIMEOUT, AuthChallenge, AuthContext, AuthResult, MAX_AUTH_MESSAGE_SIZE,
+};
 use crate::raft::constants::{
     IROH_CONNECT_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_PEERS, MAX_STREAMS_PER_CONNECTION,
 };
@@ -103,11 +106,27 @@ pub struct PeerConnection {
     stream_semaphore: Arc<Semaphore>,
     /// Active stream count (for metrics).
     active_streams: Arc<AtomicU32>,
+    /// Authentication context for Raft RPC (None if auth disabled).
+    auth_context: Option<AuthContext>,
+    /// Our endpoint ID for authentication (32 bytes).
+    our_endpoint_id: [u8; 32],
 }
 
 impl PeerConnection {
     /// Create a new peer connection.
-    pub fn new(connection: Connection, node_id: NodeId) -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// * `connection` - The QUIC connection to the peer
+    /// * `node_id` - The peer's Raft node ID
+    /// * `auth_context` - Optional auth context for HMAC-SHA256 authentication
+    /// * `our_endpoint_id` - Our Iroh endpoint ID for authentication
+    pub fn new(
+        connection: Connection,
+        node_id: NodeId,
+        auth_context: Option<AuthContext>,
+        our_endpoint_id: [u8; 32],
+    ) -> Self {
         Self {
             connection,
             node_id,
@@ -115,6 +134,8 @@ impl PeerConnection {
             health: AsyncMutex::new(ConnectionHealth::Healthy),
             stream_semaphore: Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize)),
             active_streams: Arc::new(AtomicU32::new(0)),
+            auth_context,
+            our_endpoint_id,
         }
     }
 
@@ -177,11 +198,30 @@ impl PeerConnection {
                     debug!(node_id = %self.node_id, "connection health recovered");
                     *health = new_health;
                 }
+                drop(health);
+
+                let active_streams = Arc::clone(&self.active_streams);
+                let (mut send, mut recv) = stream;
+
+                // Perform auth handshake if auth is enabled
+                if let Some(ref auth_ctx) = self.auth_context {
+                    match self
+                        .perform_auth_handshake(&mut send, &mut recv, auth_ctx)
+                        .await
+                    {
+                        Ok(()) => {
+                            debug!(node_id = %self.node_id, "auth handshake successful");
+                        }
+                        Err(err) => {
+                            // Auth failed - clean up and return error
+                            self.active_streams.fetch_sub(1, Ordering::Relaxed);
+                            warn!(node_id = %self.node_id, error = %err, "auth handshake failed");
+                            return Err(err);
+                        }
+                    }
+                }
 
                 // Return stream handle with guard that cleans up on drop
-                let active_streams = Arc::clone(&self.active_streams);
-                let (send, recv) = stream;
-
                 let guard = StreamGuard {
                     _permit: permit,
                     active_streams,
@@ -244,6 +284,122 @@ impl PeerConnection {
     pub fn active_stream_count(&self) -> u32 {
         self.active_streams.load(Ordering::Relaxed)
     }
+
+    /// Perform client-side auth handshake.
+    ///
+    /// Uses length-prefixed framing so auth messages and RPC can share the same stream:
+    /// - Each message is prefixed with a 4-byte big-endian length
+    /// - This allows the server to read auth response without requiring stream finish
+    ///
+    /// Client-side protocol:
+    /// 1. Receive AuthChallenge from server (length-prefixed)
+    /// 2. Compute AuthResponse using our endpoint ID
+    /// 3. Send AuthResponse (length-prefixed)
+    /// 4. Receive AuthResult (length-prefixed)
+    /// 5. Return Ok if authenticated, Err otherwise (stream stays open for RPC)
+    ///
+    /// Tiger Style: Fixed timeouts, bounded message sizes.
+    async fn perform_auth_handshake(
+        &self,
+        send: &mut SendStream,
+        recv: &mut RecvStream,
+        auth_ctx: &AuthContext,
+    ) -> Result<()> {
+        // Step 1: Receive challenge from server (length-prefixed)
+        let challenge_bytes = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+            read_length_prefixed(recv, MAX_AUTH_MESSAGE_SIZE)
+                .await
+                .context("failed to read auth challenge")
+        })
+        .await
+        .context("timeout reading auth challenge")??;
+
+        let challenge: AuthChallenge = postcard::from_bytes(&challenge_bytes)
+            .context("failed to deserialize auth challenge")?;
+
+        debug!(
+            node_id = %self.node_id,
+            protocol_version = challenge.protocol_version,
+            "received auth challenge"
+        );
+
+        // Step 2: Compute response
+        let response = auth_ctx.compute_response(&challenge, &self.our_endpoint_id);
+
+        // Step 3: Send response (length-prefixed, don't finish - RPC follows)
+        let response_bytes =
+            postcard::to_stdvec(&response).context("failed to serialize auth response")?;
+        tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+            write_length_prefixed(send, &response_bytes)
+                .await
+                .context("failed to send auth response")
+        })
+        .await
+        .context("timeout sending auth response")??;
+
+        // Step 4: Receive result (length-prefixed)
+        let result_bytes = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
+            read_length_prefixed(recv, MAX_AUTH_MESSAGE_SIZE)
+                .await
+                .context("failed to read auth result")
+        })
+        .await
+        .context("timeout reading auth result")??;
+
+        let result: AuthResult =
+            postcard::from_bytes(&result_bytes).context("failed to deserialize auth result")?;
+
+        // Step 5: Check result
+        if result.is_ok() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("authentication failed: {:?}", result))
+        }
+    }
+}
+
+/// Read a length-prefixed message from a stream.
+///
+/// Format: 4-byte big-endian length + payload
+/// Tiger Style: Bounded by max_size to prevent memory exhaustion.
+async fn read_length_prefixed(recv: &mut RecvStream, max_size: usize) -> Result<Vec<u8>> {
+    // Read 4-byte length prefix
+    let mut len_buf = [0u8; 4];
+    recv.read_exact(&mut len_buf)
+        .await
+        .context("failed to read length prefix")?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+
+    // Validate length
+    if len > max_size {
+        return Err(anyhow::anyhow!("message too large: {} > {}", len, max_size));
+    }
+
+    // Read payload
+    let mut buf = vec![0u8; len];
+    recv.read_exact(&mut buf)
+        .await
+        .context("failed to read message payload")?;
+
+    Ok(buf)
+}
+
+/// Write a length-prefixed message to a stream.
+///
+/// Format: 4-byte big-endian length + payload
+async fn write_length_prefixed(send: &mut SendStream, data: &[u8]) -> Result<()> {
+    // Write 4-byte length prefix
+    let len = data.len() as u32;
+    send.write_all(&len.to_be_bytes())
+        .await
+        .context("failed to write length prefix")?;
+
+    // Write payload
+    send.write_all(data)
+        .await
+        .context("failed to write message payload")?;
+
+    Ok(())
 }
 
 /// Handle to an acquired stream pair with automatic cleanup.
@@ -289,19 +445,30 @@ pub struct RaftConnectionPool {
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
     /// Background cleanup task handle.
     cleanup_task: AsyncMutex<Option<JoinHandle<()>>>,
+    /// Authentication context for Raft RPC (None if auth disabled).
+    auth_context: Option<AuthContext>,
 }
 
 impl RaftConnectionPool {
     /// Create a new connection pool.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint_manager` - Iroh endpoint manager for creating connections
+    /// * `failure_detector` - Failure detector for tracking node health
+    /// * `auth_context` - Optional authentication context for Raft RPC. When Some,
+    ///   connections use `RAFT_AUTH_ALPN` and perform HMAC-SHA256 handshake.
     pub fn new(
         endpoint_manager: Arc<IrohEndpointManager>,
         failure_detector: Arc<RwLock<NodeFailureDetector>>,
+        auth_context: Option<AuthContext>,
     ) -> Self {
         Self {
             endpoint_manager,
             connections: Arc::new(RwLock::new(HashMap::new())),
             failure_detector,
             cleanup_task: AsyncMutex::new(None),
+            auth_context,
         }
     }
 
@@ -360,6 +527,13 @@ impl RaftConnectionPool {
             "creating new connection to peer"
         );
 
+        // Select ALPN based on auth setting
+        let alpn = if self.auth_context.is_some() {
+            crate::protocol_handlers::RAFT_AUTH_ALPN
+        } else {
+            crate::protocol_handlers::RAFT_ALPN
+        };
+
         // Attempt connection with retries
         let mut attempts = 0;
         let connection = loop {
@@ -369,7 +543,7 @@ impl RaftConnectionPool {
                 IROH_CONNECT_TIMEOUT,
                 self.endpoint_manager
                     .endpoint()
-                    .connect(peer_addr.clone(), crate::protocol_handlers::RAFT_ALPN),
+                    .connect(peer_addr.clone(), alpn),
             )
             .await
             .context("timeout connecting to peer")?;
@@ -413,7 +587,14 @@ impl RaftConnectionPool {
         };
 
         // Create peer connection wrapper
-        let peer_conn = Arc::new(PeerConnection::new(connection, node_id));
+        // PublicKey implements Deref<Target = [u8; 32]>, so we can dereference it
+        let our_endpoint_id: [u8; 32] = *self.endpoint_manager.endpoint().id();
+        let peer_conn = Arc::new(PeerConnection::new(
+            connection,
+            node_id,
+            self.auth_context.clone(),
+            our_endpoint_id,
+        ));
 
         // Store in pool (replace any failed connection)
         {

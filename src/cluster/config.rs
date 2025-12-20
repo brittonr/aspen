@@ -254,6 +254,16 @@ pub struct IrohConfig {
     /// Default: false (Pkarr disabled).
     #[serde(default)]
     pub enable_pkarr: bool,
+
+    /// Enable HMAC-SHA256 authentication for Raft RPC.
+    ///
+    /// When enabled, nodes perform mutual authentication using the cluster
+    /// cookie before accepting Raft RPC requests. Prevents unauthorized nodes
+    /// from participating in consensus.
+    ///
+    /// Default: false (for backwards compatibility).
+    #[serde(default)]
+    pub enable_raft_auth: bool,
 }
 
 impl Default for IrohConfig {
@@ -266,6 +276,7 @@ impl Default for IrohConfig {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
+            enable_raft_auth: false,
         }
     }
 }
@@ -560,6 +571,7 @@ impl NodeConfig {
                 enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
                 dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
+                enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
             },
             docs: DocsConfig {
                 enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
@@ -672,6 +684,9 @@ impl NodeConfig {
         }
         if other.iroh.enable_pkarr {
             self.iroh.enable_pkarr = other.iroh.enable_pkarr;
+        }
+        if other.iroh.enable_raft_auth {
+            self.iroh.enable_raft_auth = other.iroh.enable_raft_auth;
         }
         // Docs config merging
         if other.docs.enabled {
@@ -1023,6 +1038,7 @@ mod tests {
                 enable_dns_discovery: true,
                 dns_discovery_url: Some("https://dns.example.com".into()),
                 enable_pkarr: true,
+                enable_raft_auth: false,
             },
             peers: vec!["peer1".into()],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override

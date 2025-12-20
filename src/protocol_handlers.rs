@@ -639,11 +639,16 @@ async fn handle_authenticated_raft_connection(
 
 /// Handle a single authenticated Raft RPC stream.
 ///
-/// 1. Send AuthChallenge
-/// 2. Receive AuthResponse
+/// Uses length-prefixed framing for auth messages so they can share a stream with RPC:
+/// - Each auth message is prefixed with a 4-byte big-endian length
+/// - RPC message uses read_to_end after auth completes (client finishes send)
+///
+/// Protocol:
+/// 1. Send AuthChallenge (length-prefixed)
+/// 2. Receive AuthResponse (length-prefixed)
 /// 3. Verify HMAC
-/// 4. Send AuthResult
-/// 5. If authenticated, process Raft RPC
+/// 4. Send AuthResult (length-prefixed)
+/// 5. If authenticated, read RPC (read_to_end) and process
 #[instrument(skip(recv, send, raft_core, auth_context))]
 async fn handle_authenticated_raft_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
@@ -652,18 +657,17 @@ async fn handle_authenticated_raft_stream(
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    // Step 1: Generate and send challenge
+    // Step 1: Generate and send challenge (length-prefixed)
     let challenge = auth_context.generate_challenge();
     let challenge_bytes =
         postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
-    send.write_all(&challenge_bytes)
+    write_length_prefixed(&mut send, &challenge_bytes)
         .await
         .context("failed to send challenge")?;
 
-    // Step 2: Receive response with timeout
+    // Step 2: Receive response with timeout (length-prefixed)
     let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-        let buffer = recv
-            .read_to_end(MAX_AUTH_MESSAGE_SIZE)
+        let buffer = read_length_prefixed(&mut recv, MAX_AUTH_MESSAGE_SIZE)
             .await
             .context("failed to read auth response")?;
         let response: AuthResponse =
@@ -678,7 +682,7 @@ async fn handle_authenticated_raft_stream(
             warn!(error = %err, "authentication failed: bad response");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
                 .context("failed to serialize auth result")?;
-            send.write_all(&result_bytes).await.ok();
+            write_length_prefixed(&mut send, &result_bytes).await.ok();
             send.finish().ok();
             return Err(err);
         }
@@ -686,7 +690,7 @@ async fn handle_authenticated_raft_stream(
             warn!("authentication timed out");
             let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
                 .context("failed to serialize auth result")?;
-            send.write_all(&result_bytes).await.ok();
+            write_length_prefixed(&mut send, &result_bytes).await.ok();
             send.finish().ok();
             return Err(anyhow::anyhow!("authentication timeout"));
         }
@@ -695,10 +699,10 @@ async fn handle_authenticated_raft_stream(
     // Step 3: Verify the response
     let auth_result = auth_context.verify_response(&challenge, &response);
 
-    // Step 4: Send result
+    // Step 4: Send result (length-prefixed)
     let result_bytes =
         postcard::to_stdvec(&auth_result).context("failed to serialize auth result")?;
-    send.write_all(&result_bytes)
+    write_length_prefixed(&mut send, &result_bytes)
         .await
         .context("failed to send auth result")?;
 
@@ -710,7 +714,7 @@ async fn handle_authenticated_raft_stream(
 
     debug!("authentication successful, processing Raft RPC");
 
-    // Step 5: Read and process the Raft RPC message
+    // Step 5: Read and process the Raft RPC message (read_to_end - client finishes send)
     let buffer = recv
         .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
         .await
@@ -766,6 +770,64 @@ async fn handle_authenticated_raft_stream(
     send.finish().context("failed to finish send stream")?;
 
     debug!("authenticated Raft RPC response sent successfully");
+
+    Ok(())
+}
+
+// ============================================================================
+// Length-Prefixed Framing Helpers
+// ============================================================================
+
+/// Read a length-prefixed message from a stream.
+///
+/// Format: 4-byte big-endian length + payload
+/// Tiger Style: Bounded by max_size to prevent memory exhaustion.
+async fn read_length_prefixed(
+    recv: &mut iroh::endpoint::RecvStream,
+    max_size: usize,
+) -> anyhow::Result<Vec<u8>> {
+    use anyhow::Context;
+
+    // Read 4-byte length prefix
+    let mut len_buf = [0u8; 4];
+    recv.read_exact(&mut len_buf)
+        .await
+        .context("failed to read length prefix")?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+
+    // Validate length
+    if len > max_size {
+        return Err(anyhow::anyhow!("message too large: {} > {}", len, max_size));
+    }
+
+    // Read payload
+    let mut buf = vec![0u8; len];
+    recv.read_exact(&mut buf)
+        .await
+        .context("failed to read message payload")?;
+
+    Ok(buf)
+}
+
+/// Write a length-prefixed message to a stream.
+///
+/// Format: 4-byte big-endian length + payload
+async fn write_length_prefixed(
+    send: &mut iroh::endpoint::SendStream,
+    data: &[u8],
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    // Write 4-byte length prefix
+    let len = data.len() as u32;
+    send.write_all(&len.to_be_bytes())
+        .await
+        .context("failed to write length prefix")?;
+
+    // Write payload
+    send.write_all(data)
+        .await
+        .context("failed to write message payload")?;
 
     Ok(())
 }

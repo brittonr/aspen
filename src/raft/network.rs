@@ -73,6 +73,7 @@ use tokio::select;
 use tracing::{error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
+use crate::raft::auth::AuthContext;
 use crate::raft::clock_drift_detection::{ClockDriftDetector, current_time_ms};
 use crate::raft::connection_pool::RaftConnectionPool;
 use crate::raft::constants::{
@@ -126,15 +127,25 @@ pub struct IrpcRaftNetworkFactory {
 }
 
 impl IrpcRaftNetworkFactory {
+    /// Create a new Raft network factory.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint_manager` - Iroh endpoint manager for P2P connections
+    /// * `peer_addrs` - Initial peer addresses for fallback lookup
+    /// * `auth_context` - Optional auth context for HMAC-SHA256 authentication.
+    ///   When Some, connections use `RAFT_AUTH_ALPN` and perform handshake.
     pub fn new(
         endpoint_manager: Arc<IrohEndpointManager>,
         peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
+        auth_context: Option<AuthContext>,
     ) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
         let connection_pool = Arc::new(RaftConnectionPool::new(
             Arc::clone(&endpoint_manager),
             Arc::clone(&failure_detector),
+            auth_context,
         ));
 
         // Start the background cleanup task for idle connections

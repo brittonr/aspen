@@ -166,6 +166,13 @@ struct Args {
     #[arg(long)]
     enable_pkarr: bool,
 
+    /// Enable HMAC-SHA256 authentication for Raft RPC.
+    /// When enabled, nodes perform mutual authentication using the cluster
+    /// cookie before accepting Raft RPC requests.
+    /// Default: Raft auth is disabled.
+    #[arg(long)]
+    enable_raft_auth: bool,
+
     /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<direct-addrs>"
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
@@ -221,6 +228,7 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_dns_discovery: args.enable_dns_discovery,
         dns_discovery_url: args.dns_discovery_url.clone(),
         enable_pkarr: args.enable_pkarr,
+        enable_raft_auth: args.enable_raft_auth,
     };
     config.peers = args.peers.clone();
     config

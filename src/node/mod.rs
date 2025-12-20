@@ -68,7 +68,7 @@ use iroh::protocol::Router;
 use crate::api::{ClusterController, KeyValueStore};
 use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
 use crate::cluster::config::NodeConfig;
-use crate::protocol_handlers::RaftProtocolHandler;
+use crate::protocol_handlers::{AuthenticatedRaftProtocolHandler, RaftProtocolHandler};
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -305,22 +305,36 @@ impl Node {
     /// node.spawn_router();
     /// ```
     pub fn spawn_router(&mut self) {
-        use crate::protocol_handlers::RAFT_ALPN;
+        use crate::protocol_handlers::{RAFT_ALPN, RAFT_AUTH_ALPN};
 
-        let raft_handler = RaftProtocolHandler::new(self.handle.raft_node.raft().as_ref().clone());
+        let raft_core = self.handle.raft_node.raft().as_ref().clone();
+        let raft_handler = RaftProtocolHandler::new(raft_core.clone());
 
         let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
+
+        // Always register legacy unauthenticated handler for backwards compatibility
         builder = builder.accept(RAFT_ALPN, raft_handler);
+        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+
+        // Register authenticated handler if enabled
+        if self.handle.config.iroh.enable_raft_auth {
+            let auth_handler =
+                AuthenticatedRaftProtocolHandler::new(raft_core, &self.handle.config.cookie);
+            builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
+            tracing::info!("registered authenticated Raft RPC protocol handler (ALPN: raft-auth)");
+        }
 
         // Add gossip handler if enabled
         if let Some(gossip) = self.handle.iroh_manager.gossip() {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            tracing::info!("registered Gossip protocol handler");
         }
 
         // Spawn the router and store the handle to keep it alive
         // Dropping the Router would shut down protocol handling!
         self.router = Some(builder.spawn());
+        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
     }
 
     /// Gracefully shutdown the node.

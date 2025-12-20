@@ -46,6 +46,7 @@ use crate::cluster::metadata::{MetadataStore, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::raft::StateMachineVariant;
+use crate::raft::auth::AuthContext;
 use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
@@ -270,10 +271,19 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // Parse peer addresses from config if provided
     let peer_addrs = parse_peer_addresses(&config.peers)?;
 
+    // Create auth context if Raft authentication is enabled
+    let auth_context = if config.iroh.enable_raft_auth {
+        info!("Raft authentication enabled - using HMAC-SHA256 challenge-response");
+        Some(AuthContext::new(&config.cookie))
+    } else {
+        None
+    };
+
     // Create network factory
     let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
         iroh_manager.clone(),
         peer_addrs,
+        auth_context,
     ));
 
     // Derive gossip topic ID - always computed for cluster ticket generation,
