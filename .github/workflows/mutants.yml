@@ -1,0 +1,61 @@
+name: Mutation Testing
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutants:
+    name: Mutation Testing (Changed Code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: aspen-builds
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Generate diff against base branch
+        run: |
+          git branch -av
+          git diff origin/${{ github.base_ref }}.. > git.diff
+          echo "Diff size: $(wc -l < git.diff) lines"
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Run mutation tests on changed code
+        run: |
+          nix develop -c cargo mutants \
+            --no-shuffle \
+            --in-diff git.diff \
+            --baseline=skip \
+            --timeout 300
+
+      - name: Upload mutation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants-results
+          path: mutants.out/

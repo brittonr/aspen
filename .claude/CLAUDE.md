@@ -160,14 +160,37 @@ The project is structured into focused modules with narrow APIs:
 
 ## Development Commands
 
+### Long-Running Commands
+
+Use `pueue` for long-running commands (builds, tests, etc.) to prevent blocking the terminal:
+
+```bash
+# Queue a build
+pueue add -- nix develop -c cargo build
+
+# Queue tests
+pueue add -- nix develop -c cargo nextest run
+
+# Queue clippy
+pueue add -- nix develop -c cargo clippy --all-targets -- --deny warnings
+
+# Check progress
+pueue status
+
+# View output of a task
+pueue log <id>
+```
+
+Pueue runs commands in the background and persists across terminal sessions.
+
 ### Building and Testing
 
 ```bash
 # Build the project (inside Nix environment)
-nix develop -c cargo build
+pueue add -- nix develop -c cargo build
 
 # Run tests with cargo-nextest
-nix develop -c cargo nextest run
+pueue add -- nix develop -c cargo nextest run
 
 # Run a specific test
 nix develop -c cargo nextest run <test_name>
@@ -176,7 +199,24 @@ nix develop -c cargo nextest run <test_name>
 nix fmt
 
 # Run clippy lints
-nix develop -c cargo clippy --all-targets -- --deny warnings
+pueue add -- nix develop -c cargo clippy --all-targets -- --deny warnings
+```
+
+### Quick Testing
+
+For faster iteration during development, use the `quick` profile which skips slow tests (proptest, chaos, multi-seed madsim):
+
+```bash
+# Quick tests (~2-5 min instead of ~20-30 min)
+nix develop -c cargo nextest run -P quick
+
+# Run tests for specific module
+nix develop -c cargo nextest run -E 'test(/raft/)'
+nix develop -c cargo nextest run -E 'test(/storage/)'
+nix develop -c cargo nextest run -E 'test(/gossip/)'
+
+# Combine quick profile with module filter
+nix develop -c cargo nextest run -P quick -E 'test(/raft/)'
 ```
 
 ### Test Results
