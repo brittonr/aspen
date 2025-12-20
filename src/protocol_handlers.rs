@@ -98,6 +98,188 @@ use crate::raft::log_subscriber::{
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 
+// ============================================================================
+// Error Sanitization (HIGH-4 Security Enhancement)
+// ============================================================================
+
+/// Sanitize an error message for client consumption.
+///
+/// This function converts internal error messages to user-safe messages that
+/// don't leak implementation details, file paths, or internal state.
+///
+/// # Security Rationale
+///
+/// Internal errors can reveal:
+/// - File paths and system structure
+/// - Database schema and query patterns
+/// - Network topology and peer information
+/// - Internal component names and versions
+///
+/// By categorizing errors and returning generic messages, we prevent
+/// information leakage while still providing useful feedback to clients.
+///
+/// # Tiger Style
+///
+/// - Exhaustive pattern matching for known error types
+/// - Generic fallback for unknown errors
+/// - Full error logged internally at appropriate level
+fn sanitize_error_for_client(err: &anyhow::Error) -> String {
+    // Check for specific error types we can provide better messages for
+    let err_string = err.to_string().to_lowercase();
+
+    // Categorize errors by their root cause
+    if err_string.contains("not leader") || err_string.contains("forward to leader") {
+        return "operation must be performed on leader node".to_string();
+    }
+
+    if err_string.contains("not found") || err_string.contains("key not found") {
+        return "resource not found".to_string();
+    }
+
+    if err_string.contains("not initialized")
+        || err_string.contains("cluster not initialized")
+        || err_string.contains("uninitialized")
+    {
+        return "cluster not initialized".to_string();
+    }
+
+    if err_string.contains("timeout") || err_string.contains("timed out") {
+        return "operation timed out".to_string();
+    }
+
+    if err_string.contains("connection")
+        || err_string.contains("network")
+        || err_string.contains("unreachable")
+    {
+        return "network error".to_string();
+    }
+
+    if err_string.contains("permission") || err_string.contains("unauthorized") {
+        return "permission denied".to_string();
+    }
+
+    if err_string.contains("invalid") || err_string.contains("malformed") {
+        return "invalid request".to_string();
+    }
+
+    if err_string.contains("quorum") || err_string.contains("membership") {
+        return "cluster membership error".to_string();
+    }
+
+    if err_string.contains("snapshot") {
+        return "snapshot operation failed".to_string();
+    }
+
+    if err_string.contains("storage")
+        || err_string.contains("database")
+        || err_string.contains("sqlite")
+        || err_string.contains("redb")
+    {
+        return "storage error".to_string();
+    }
+
+    // Generic fallback - never expose raw error messages
+    "internal error".to_string()
+}
+
+/// Sanitize an error string for client consumption.
+///
+/// Variant of `sanitize_error_for_client` that works with string errors.
+#[allow(dead_code)]
+fn sanitize_error_string_for_client(err: &str) -> String {
+    let err_lower = err.to_lowercase();
+
+    if err_lower.contains("not leader") || err_lower.contains("forward to leader") {
+        return "operation must be performed on leader node".to_string();
+    }
+
+    if err_lower.contains("not found") || err_lower.contains("key not found") {
+        return "resource not found".to_string();
+    }
+
+    if err_lower.contains("not initialized") || err_lower.contains("cluster not initialized") {
+        return "cluster not initialized".to_string();
+    }
+
+    if err_lower.contains("timeout") || err_lower.contains("timed out") {
+        return "operation timed out".to_string();
+    }
+
+    if err_lower.contains("connection") || err_lower.contains("network") {
+        return "network error".to_string();
+    }
+
+    if err_lower.contains("invalid") || err_lower.contains("malformed") {
+        return "invalid request".to_string();
+    }
+
+    // Generic fallback
+    "internal error".to_string()
+}
+
+/// Sanitize a ControlPlaneError for client consumption.
+///
+/// These errors are part of our API and can be returned directly since they
+/// are already designed to be user-facing. However, we still sanitize the
+/// inner reason strings to be safe.
+fn sanitize_control_error(err: &crate::api::ControlPlaneError) -> String {
+    use crate::api::ControlPlaneError;
+    match err {
+        ControlPlaneError::InvalidRequest { .. } => "invalid request".to_string(),
+        ControlPlaneError::NotInitialized => "cluster not initialized".to_string(),
+        ControlPlaneError::Failed { .. } => "operation failed".to_string(),
+        ControlPlaneError::Unsupported { operation, .. } => {
+            format!("operation not supported: {}", operation)
+        }
+    }
+}
+
+/// Sanitize a KeyValueStoreError for client consumption.
+///
+/// Key-value errors are often user-actionable, so we preserve the error category
+/// but remove potentially sensitive implementation details.
+fn sanitize_kv_error(err: &crate::api::KeyValueStoreError) -> String {
+    use crate::api::KeyValueStoreError;
+    match err {
+        KeyValueStoreError::NotFound { .. } => "key not found".to_string(),
+        KeyValueStoreError::Failed { .. } => "operation failed".to_string(),
+        KeyValueStoreError::NotLeader { leader, .. } => {
+            if let Some(leader_id) = leader {
+                format!("not leader; leader is node {}", leader_id)
+            } else {
+                "not leader; leader unknown".to_string()
+            }
+        }
+        KeyValueStoreError::KeyTooLarge { max, .. } => {
+            format!("key too large; max {} bytes", max)
+        }
+        KeyValueStoreError::ValueTooLarge { max, .. } => {
+            format!("value too large; max {} bytes", max)
+        }
+        KeyValueStoreError::BatchTooLarge { max, .. } => {
+            format!("batch too large; max {} keys", max)
+        }
+        KeyValueStoreError::Timeout { duration_ms } => {
+            format!("operation timed out after {}ms", duration_ms)
+        }
+    }
+}
+
+/// Sanitize a blob store error for client consumption.
+///
+/// Blob store errors can contain file paths, IO errors, and other internal details.
+/// We categorize them into user-safe messages.
+fn sanitize_blob_error(err: &crate::blob::BlobStoreError) -> String {
+    use crate::blob::BlobStoreError;
+    match err {
+        BlobStoreError::NotFound { .. } => "blob not found".to_string(),
+        BlobStoreError::TooLarge { max, .. } => format!("blob too large; max {} bytes", max),
+        BlobStoreError::Storage { .. } => "storage error".to_string(),
+        BlobStoreError::Download { .. } => "download failed".to_string(),
+        BlobStoreError::InvalidTicket { .. } => "invalid ticket".to_string(),
+    }
+}
+
 /// ALPN protocol identifier for Raft RPC (legacy, no authentication).
 pub const RAFT_ALPN: &[u8] = b"raft-rpc";
 
@@ -1273,8 +1455,10 @@ async fn handle_client_request(
     let response = match process_client_request(request, &ctx).await {
         Ok(resp) => resp,
         Err(err) => {
+            // Log full error internally for debugging, but return sanitized message to client
+            // HIGH-4: Prevent information leakage through error messages
             warn!(error = %err, "Client request processing failed");
-            ClientRpcResponse::error("INTERNAL_ERROR", err.to_string())
+            ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
         }
     };
 
@@ -1386,7 +1570,8 @@ async fn process_client_request(
 
             Ok(ClientRpcResponse::InitResult(InitResultResponse {
                 success: result.is_ok(),
-                error: result.err().map(|e| e.to_string()),
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_control_error(&e)),
             }))
         }
 
@@ -1400,13 +1585,10 @@ async fn process_client_request(
                     error: None,
                 })),
                 Err(e) => {
-                    let (found, error) = match e {
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    let (found, error) = match &e {
                         crate::api::KeyValueStoreError::NotFound { .. } => (false, None),
-                        crate::api::KeyValueStoreError::NotLeader { leader, reason } => (
-                            false,
-                            Some(format!("not leader: {}; leader={:?}", reason, leader)),
-                        ),
-                        other => (false, Some(other.to_string())),
+                        other => (false, Some(sanitize_kv_error(other))),
                     };
                     Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
                         value: None,
@@ -1432,7 +1614,8 @@ async fn process_client_request(
 
             Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
                 success: result.is_ok(),
-                error: result.err().map(|e| e.to_string()),
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_kv_error(&e)),
             }))
         }
 
@@ -1448,7 +1631,8 @@ async fn process_client_request(
                 Err(e) => Ok(ClientRpcResponse::SnapshotResult(SnapshotResultResponse {
                     success: false,
                     snapshot_index: None,
-                    error: Some(e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_control_error(&e)),
                 })),
             }
         }
@@ -1484,7 +1668,8 @@ async fn process_client_request(
             Ok(ClientRpcResponse::AddLearnerResult(
                 AddLearnerResultResponse {
                     success: result.is_ok(),
-                    error: result.err().map(|e| e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: result.err().map(|e| sanitize_control_error(&e)),
                 },
             ))
         }
@@ -1498,7 +1683,8 @@ async fn process_client_request(
             Ok(ClientRpcResponse::ChangeMembershipResult(
                 ChangeMembershipResultResponse {
                     success: result.is_ok(),
-                    error: result.err().map(|e| e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: result.err().map(|e| sanitize_control_error(&e)),
                 },
             ))
         }
@@ -1595,7 +1781,8 @@ async fn process_client_request(
             Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
                 key,
                 deleted: result.is_ok(),
-                error: result.err().map(|e| e.to_string()),
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_kv_error(&e)),
             }))
         }
 
@@ -1640,7 +1827,8 @@ async fn process_client_request(
                     count: 0,
                     is_truncated: false,
                     continuation_token: None,
-                    error: Some(e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_kv_error(&e)),
                 })),
             }
         }
@@ -1755,7 +1943,8 @@ async fn process_client_request(
                     } else {
                         "Promotion failed".to_string()
                     },
-                    error: result.err().map(|e| e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: result.err().map(|e| sanitize_control_error(&e)),
                 },
             ))
         }
@@ -1818,7 +2007,8 @@ async fn process_client_request(
                 }
                 Err(e) => Ok(ClientRpcResponse::VaultList(VaultListResponse {
                     vaults: vec![],
-                    error: Some(e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_kv_error(&e)),
                 })),
             }
         }
@@ -1863,7 +2053,8 @@ async fn process_client_request(
                 Err(e) => Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
                     vault: vault_name,
                     keys: vec![],
-                    error: Some(e.to_string()),
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_kv_error(&e)),
                 })),
             }
         }
@@ -1882,12 +2073,13 @@ async fn process_client_request(
                         error = %e,
                         "AddPeer: failed to parse endpoint_addr as JSON EndpointAddr"
                     );
+                    // HIGH-4: Don't expose parse error details to clients
                     return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
                         success: false,
-                        error: Some(format!(
-                            "invalid endpoint_addr: expected JSON-serialized EndpointAddr: {}",
-                            e
-                        )),
+                        error: Some(
+                            "invalid endpoint_addr: expected JSON-serialized EndpointAddr"
+                                .to_string(),
+                        ),
                     }));
                 }
             };
@@ -2124,13 +2316,17 @@ async fn process_client_request(
                         error: None,
                     }))
                 }
-                Err(e) => Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
-                    success: false,
-                    hash: None,
-                    size: None,
-                    was_new: None,
-                    error: Some(e.to_string()),
-                })),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob add failed");
+                    Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        size: None,
+                        was_new: None,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
+                }
             }
         }
 
@@ -2149,11 +2345,12 @@ async fn process_client_request(
             // Parse hash from string
             let hash = match hash.parse::<Hash>() {
                 Ok(h) => h,
-                Err(e) => {
+                Err(_) => {
+                    // HIGH-4: Don't expose parse error details
                     return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
                         found: false,
                         data: None,
-                        error: Some(format!("invalid hash: {}", e)),
+                        error: Some("invalid hash".to_string()),
                     }));
                 }
             };
@@ -2169,11 +2366,15 @@ async fn process_client_request(
                     data: None,
                     error: None,
                 })),
-                Err(e) => Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
-                    found: false,
-                    data: None,
-                    error: Some(e.to_string()),
-                })),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob get failed");
+                    Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+                        found: false,
+                        data: None,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
+                }
             }
         }
 
@@ -2204,10 +2405,14 @@ async fn process_client_request(
                     exists,
                     error: None,
                 })),
-                Err(e) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
-                    exists: false,
-                    error: Some(e.to_string()),
-                })),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob has check failed");
+                    Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
+                        exists: false,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
+                }
             }
         }
 
@@ -2228,12 +2433,13 @@ async fn process_client_request(
             // Parse hash from string
             let hash = match hash.parse::<Hash>() {
                 Ok(h) => h,
-                Err(e) => {
+                Err(_) => {
+                    // HIGH-4: Don't expose parse error details
                     return Ok(ClientRpcResponse::GetBlobTicketResult(
                         GetBlobTicketResultResponse {
                             success: false,
                             ticket: None,
-                            error: Some(format!("invalid hash: {}", e)),
+                            error: Some("invalid hash".to_string()),
                         },
                     ));
                 }
@@ -2247,13 +2453,17 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::GetBlobTicketResult(
-                    GetBlobTicketResultResponse {
-                        success: false,
-                        ticket: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob ticket generation failed");
+                    Ok(ClientRpcResponse::GetBlobTicketResult(
+                        GetBlobTicketResultResponse {
+                            success: false,
+                            ticket: None,
+                            error: Some(sanitize_blob_error(&e)),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2300,15 +2510,19 @@ async fn process_client_request(
                         },
                     ))
                 }
-                Err(e) => Ok(ClientRpcResponse::ListBlobsResult(
-                    ListBlobsResultResponse {
-                        blobs: vec![],
-                        count: 0,
-                        has_more: false,
-                        continuation_token: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob list failed");
+                    Ok(ClientRpcResponse::ListBlobsResult(
+                        ListBlobsResultResponse {
+                            blobs: vec![],
+                            count: 0,
+                            has_more: false,
+                            continuation_token: None,
+                            error: Some(sanitize_blob_error(&e)),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2346,12 +2560,16 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::ProtectBlobResult(
-                    ProtectBlobResultResponse {
-                        success: false,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob protect failed");
+                    Ok(ClientRpcResponse::ProtectBlobResult(
+                        ProtectBlobResultResponse {
+                            success: false,
+                            error: Some(sanitize_blob_error(&e)),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2375,12 +2593,16 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::UnprotectBlobResult(
-                    UnprotectBlobResultResponse {
-                        success: false,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "blob unprotect failed");
+                    Ok(ClientRpcResponse::UnprotectBlobResult(
+                        UnprotectBlobResultResponse {
+                            success: false,
+                            error: Some(sanitize_blob_error(&e)),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2405,13 +2627,14 @@ async fn process_client_request(
             // Parse the ticket
             let docs_ticket = match AspenDocsTicket::deserialize(&ticket) {
                 Ok(t) => t,
-                Err(e) => {
+                Err(_) => {
+                    // HIGH-4: Don't expose parse error details
                     return Ok(ClientRpcResponse::AddPeerClusterResult(
                         AddPeerClusterResultResponse {
                             success: false,
                             cluster_id: None,
                             priority: None,
-                            error: Some(format!("invalid ticket: {}", e)),
+                            error: Some("invalid ticket".to_string()),
                         },
                     ));
                 }
@@ -2429,14 +2652,18 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::AddPeerClusterResult(
-                    AddPeerClusterResultResponse {
-                        success: false,
-                        cluster_id: Some(cluster_id),
-                        priority: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "add peer cluster failed");
+                    Ok(ClientRpcResponse::AddPeerClusterResult(
+                        AddPeerClusterResultResponse {
+                            success: false,
+                            cluster_id: Some(cluster_id),
+                            priority: None,
+                            error: Some("peer cluster operation failed".to_string()),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2461,13 +2688,17 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::RemovePeerClusterResult(
-                    RemovePeerClusterResultResponse {
-                        success: false,
-                        cluster_id,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "remove peer cluster failed");
+                    Ok(ClientRpcResponse::RemovePeerClusterResult(
+                        RemovePeerClusterResultResponse {
+                            success: false,
+                            cluster_id,
+                            error: Some("peer cluster operation failed".to_string()),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2618,14 +2849,18 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
-                    UpdatePeerClusterFilterResultResponse {
-                        success: false,
-                        cluster_id,
-                        filter_type: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "update peer cluster filter failed");
+                    Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
+                        UpdatePeerClusterFilterResultResponse {
+                            success: false,
+                            cluster_id,
+                            filter_type: None,
+                            error: Some("peer cluster operation failed".to_string()),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2669,15 +2904,19 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
-                    UpdatePeerClusterPriorityResultResponse {
-                        success: false,
-                        cluster_id,
-                        previous_priority,
-                        new_priority: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "update peer cluster priority failed");
+                    Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
+                        UpdatePeerClusterPriorityResultResponse {
+                            success: false,
+                            cluster_id,
+                            previous_priority,
+                            new_priority: None,
+                            error: Some("peer cluster operation failed".to_string()),
+                        },
+                    ))
+                }
             }
         }
 
@@ -2711,14 +2950,18 @@ async fn process_client_request(
                         error: None,
                     },
                 )),
-                Err(e) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
-                    SetPeerClusterEnabledResultResponse {
-                        success: false,
-                        cluster_id,
-                        enabled: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message to client
+                    warn!(error = %e, "set peer cluster enabled failed");
+                    Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
+                        SetPeerClusterEnabledResultResponse {
+                            success: false,
+                            cluster_id,
+                            enabled: None,
+                            error: Some("peer cluster operation failed".to_string()),
+                        },
+                    ))
+                }
             }
         }
     }
