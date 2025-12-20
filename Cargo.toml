@@ -119,6 +119,7 @@ async-channel = "2.3"
 toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
+lru = "0.12"
 
 # base64 is used by core modules
 base64 = "0.22"

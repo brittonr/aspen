@@ -54,7 +54,29 @@ pub mod inmemory;
 pub mod pure;
 pub mod vault;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
-pub use vault::{VaultInfo, VaultKeyValue, VaultListRequest, VaultListResponse};
+pub use vault::{
+    // Constants
+    MAX_KEYS_PER_VAULT,
+    MAX_RATE_LIMITER_VAULTS,
+    MAX_VAULT_NAME_LENGTH,
+    MAX_VAULT_READS_PER_SECOND,
+    MAX_VAULT_WRITES_PER_SECOND,
+    MAX_VAULTS,
+    SYSTEM_PREFIX,
+    VAULT_META_PREFIX,
+    VAULT_PREFIX,
+    // Types
+    VaultError,
+    VaultInfo,
+    VaultKeyValue,
+    VaultListRequest,
+    VaultListResponse,
+    VaultMetadata,
+    // Functions
+    is_system_key,
+    is_vault_key,
+    validate_client_key,
+};
 
 use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 // Re-export OpenRaft types for observability

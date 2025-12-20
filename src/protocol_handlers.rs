@@ -68,7 +68,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
-    ReadRequest, WriteRequest,
+    ReadRequest, WriteRequest, validate_client_key,
 };
 use crate::blob::IrohBlobStore;
 use crate::client_rpc::{
@@ -1664,6 +1664,14 @@ async fn process_client_request(
         ClientRpcRequest::WriteKey { key, value } => {
             use crate::api::WriteCommand;
 
+            // Validate key against reserved prefixes and vault name rules
+            if let Err(vault_err) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
+                    success: false,
+                    error: Some(vault_err.to_string()),
+                }));
+            }
+
             let result = ctx
                 .kv_store
                 .write(WriteRequest {
@@ -1832,6 +1840,15 @@ async fn process_client_request(
         // =========================================================================
         ClientRpcRequest::DeleteKey { key } => {
             use crate::api::WriteCommand;
+
+            // Validate key against reserved prefixes and vault name rules
+            if let Err(vault_err) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
+                    key,
+                    deleted: false,
+                    error: Some(vault_err.to_string()),
+                }));
+            }
 
             let result = ctx
                 .kv_store
@@ -2028,9 +2045,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ListVaults => {
-            // Vaults are key prefixes ending in ':'
-            // Scan all keys and extract unique vault names with key counts
+            // List all vaults by scanning vault:* keys
             use crate::api::ScanRequest;
+            use crate::api::vault::{VAULT_PREFIX, parse_vault_key};
             use crate::client_rpc::VaultInfo;
             use std::collections::BTreeMap;
 
@@ -2038,7 +2055,7 @@ async fn process_client_request(
             let scan_result = ctx
                 .kv_store
                 .scan(ScanRequest {
-                    prefix: String::new(),
+                    prefix: VAULT_PREFIX.to_string(),
                     limit: Some(10_000),
                     continuation_token: None,
                 })
@@ -2046,14 +2063,11 @@ async fn process_client_request(
 
             match scan_result {
                 Ok(scan_resp) => {
-                    // Count keys per vault (part before ':')
+                    // Count keys per vault using parse_vault_key
                     let mut vault_counts: BTreeMap<String, u64> = BTreeMap::new();
                     for entry in scan_resp.entries {
-                        if let Some(colon_pos) = entry.key.find(':') {
-                            let vault = entry.key[..colon_pos].to_string();
-                            if !vault.is_empty() {
-                                *vault_counts.entry(vault).or_insert(0) += 1;
-                            }
+                        if let Some((vault_name, _)) = parse_vault_key(&entry.key) {
+                            *vault_counts.entry(vault_name).or_insert(0) += 1;
                         }
                     }
 
@@ -2076,12 +2090,22 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetVaultKeys { vault_name } => {
-            // Get all keys with the vault prefix
+            // Get all keys in a vault
             use crate::api::ScanRequest;
+            use crate::api::vault::{parse_vault_key, validate_vault_name, vault_scan_prefix};
             use crate::client_rpc::VaultKeyValue;
 
-            // Build prefix: "vault_name:"
-            let prefix = format!("{}:", vault_name);
+            // Validate vault name
+            if let Err(reason) = validate_vault_name(&vault_name) {
+                return Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
+                    vault: vault_name,
+                    keys: vec![],
+                    error: Some(format!("invalid vault name: {}", reason)),
+                }));
+            }
+
+            // Build correct prefix: "vault:name:"
+            let prefix = vault_scan_prefix(&vault_name);
 
             // Tiger Style: Limit scan to 10,000 keys
             let scan_result = ctx
@@ -2095,14 +2119,15 @@ async fn process_client_request(
 
             match scan_result {
                 Ok(scan_resp) => {
-                    // Extract key-value pairs with the vault prefix stripped
+                    // Extract key-value pairs using parse_vault_key
                     let keys: Vec<VaultKeyValue> = scan_resp
                         .entries
                         .into_iter()
-                        .map(|entry| VaultKeyValue {
-                            // Strip the "vault:" prefix to get just the key name
-                            key: entry.key[prefix.len()..].to_string(),
-                            value: entry.value,
+                        .filter_map(|entry| {
+                            parse_vault_key(&entry.key).map(|(_, key)| VaultKeyValue {
+                                key,
+                                value: entry.value,
+                            })
                         })
                         .collect();
 

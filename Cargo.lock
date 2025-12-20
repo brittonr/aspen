@@ -211,6 +211,7 @@ dependencies = [
  "irpc",
  "libc",
  "log",
+ "lru 0.12.5",
  "mad-turmoil",
  "madsim",
  "mime",
