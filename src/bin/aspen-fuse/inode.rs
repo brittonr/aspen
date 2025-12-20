@@ -16,6 +16,8 @@ pub enum EntryType {
     File,
     /// Directory (can have children).
     Directory,
+    /// Symbolic link (pointer to another path).
+    Symlink,
 }
 
 /// Cached inode entry with path and type information.

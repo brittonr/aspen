@@ -50,3 +50,23 @@ pub const DEFAULT_DIR_MODE: u32 = 0o040755;
 
 /// Block size for file operations.
 pub const BLOCK_SIZE: u32 = 4096;
+
+/// Default symlink mode (0777 with symlink bit).
+pub const DEFAULT_SYMLINK_MODE: u32 = 0o120777;
+
+/// Prefix for symlink target storage in KV.
+/// Format: `<key>.symlink` -> target path
+pub const SYMLINK_SUFFIX: &str = ".symlink";
+
+/// Prefix for extended attribute storage in KV.
+/// Format: `<key>.xattr.<name>` -> attribute value
+pub const XATTR_PREFIX: &str = ".xattr.";
+
+/// Maximum extended attribute name length.
+pub const MAX_XATTR_NAME_SIZE: usize = 255;
+
+/// Maximum extended attribute value size (64 KB).
+pub const MAX_XATTR_VALUE_SIZE: usize = 64 * 1024;
+
+/// Maximum number of extended attributes per file.
+pub const MAX_XATTRS_PER_FILE: usize = 100;

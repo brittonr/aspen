@@ -18,8 +18,9 @@ use tracing::debug;
 
 use crate::client::SharedClient;
 use crate::constants::{
-    ATTR_TTL, BLOCK_SIZE, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, ENTRY_TTL, MAX_KEY_SIZE,
-    MAX_READDIR_ENTRIES, MAX_VALUE_SIZE, ROOT_INODE,
+    ATTR_TTL, BLOCK_SIZE, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, DEFAULT_SYMLINK_MODE, ENTRY_TTL,
+    MAX_KEY_SIZE, MAX_READDIR_ENTRIES, MAX_VALUE_SIZE, MAX_XATTR_NAME_SIZE, MAX_XATTR_VALUE_SIZE,
+    MAX_XATTRS_PER_FILE, ROOT_INODE, SYMLINK_SUFFIX, XATTR_PREFIX,
 };
 use crate::inode::{EntryType, InodeManager};
 
@@ -88,10 +89,11 @@ impl AspenFs {
         let mode = match entry_type {
             EntryType::File => DEFAULT_FILE_MODE,
             EntryType::Directory => DEFAULT_DIR_MODE,
+            EntryType::Symlink => DEFAULT_SYMLINK_MODE,
         };
 
         let nlink = match entry_type {
-            EntryType::File => 1,
+            EntryType::File | EntryType::Symlink => 1,
             EntryType::Directory => 2,
         };
 
@@ -267,13 +269,20 @@ impl FileSystem for AspenFs {
         // Get or create inode
         let inode = self.inodes.get_or_create(&child_path, entry_type);
 
-        // Get size (0 for directories)
+        // Get size (0 for directories, target length for symlinks)
         let size = match entry_type {
             EntryType::File => {
                 let key = Self::path_to_key(&child_path);
                 self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
             EntryType::Directory => 0,
+            EntryType::Symlink => {
+                let key = Self::path_to_key(&child_path);
+                let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
+                self.kv_read(&symlink_key)?
+                    .map(|v| v.len() as u64)
+                    .unwrap_or(0)
+            }
         };
 
         Ok(self.make_entry(inode, entry_type, size))
@@ -303,6 +312,13 @@ impl FileSystem for AspenFs {
                 self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
             EntryType::Directory => 0,
+            EntryType::Symlink => {
+                let key = Self::path_to_key(&entry.path);
+                let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
+                self.kv_read(&symlink_key)?
+                    .map(|v| v.len() as u64)
+                    .unwrap_or(0)
+            }
         };
 
         Ok((self.make_attr(inode, entry.entry_type, size), ATTR_TTL))
@@ -457,6 +473,7 @@ impl FileSystem for AspenFs {
             let dtype = match entry_type {
                 EntryType::File => libc::DT_REG as u32,
                 EntryType::Directory => libc::DT_DIR as u32,
+                EntryType::Symlink => libc::DT_LNK as u32,
             };
 
             let entry = DirEntry {
@@ -741,6 +758,424 @@ impl FileSystem for AspenFs {
         _lock_owner: u64,
     ) -> std::io::Result<()> {
         // No buffering, nothing to flush
+        Ok(())
+    }
+
+    fn rename(
+        &self,
+        _ctx: &Context,
+        olddir: u64,
+        oldname: &CStr,
+        newdir: u64,
+        newname: &CStr,
+        _flags: u32,
+    ) -> std::io::Result<()> {
+        let old_name_str = oldname
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let new_name_str = newname
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+
+        // Get old parent path
+        let old_parent = self.inodes.get_path(olddir).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "old parent not found")
+        })?;
+
+        // Get new parent path
+        let new_parent = self.inodes.get_path(newdir).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "new parent not found")
+        })?;
+
+        // Build old path
+        let old_path = if old_parent.path.is_empty() {
+            old_name_str.to_string()
+        } else {
+            format!("{}/{}", old_parent.path, old_name_str)
+        };
+
+        // Build new path
+        let new_path = if new_parent.path.is_empty() {
+            new_name_str.to_string()
+        } else {
+            format!("{}/{}", new_parent.path, new_name_str)
+        };
+
+        let old_key = Self::path_to_key(&old_path);
+        let new_key = Self::path_to_key(&new_path);
+
+        debug!(old_key, new_key, "rename");
+
+        // Check source exists and get its type
+        let entry_type = self
+            .exists(&old_path)?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "source not found"))?;
+
+        match entry_type {
+            EntryType::File | EntryType::Symlink => {
+                // Read old value
+                let value = self.kv_read(&old_key)?.unwrap_or_default();
+
+                // For symlinks, also copy the target
+                let symlink_old = format!("{}{}", old_key, SYMLINK_SUFFIX);
+                let symlink_target = self.kv_read(&symlink_old)?;
+
+                // Write to new location
+                self.kv_write(&new_key, &value)?;
+
+                // If symlink, also write target
+                if let Some(target) = symlink_target {
+                    let symlink_new = format!("{}{}", new_key, SYMLINK_SUFFIX);
+                    self.kv_write(&symlink_new, &target)?;
+                    self.kv_delete(&symlink_old)?;
+                }
+
+                // Delete old
+                self.kv_delete(&old_key)?;
+
+                // Copy xattrs
+                let xattr_prefix = format!("{}{}", old_key, XATTR_PREFIX);
+                let xattrs = self.kv_scan(&xattr_prefix)?;
+                for xattr_key in xattrs {
+                    if let Some(value) = self.kv_read(&xattr_key)? {
+                        let attr_name = &xattr_key[old_key.len()..];
+                        let new_xattr_key = format!("{}{}", new_key, attr_name);
+                        self.kv_write(&new_xattr_key, &value)?;
+                        self.kv_delete(&xattr_key)?;
+                    }
+                }
+            }
+            EntryType::Directory => {
+                // Rename all children with this prefix
+                let old_prefix = format!("{}/", old_key);
+                let new_prefix = format!("{}/", new_key);
+
+                let children = self.kv_scan(&old_prefix)?;
+                for child_key in children {
+                    if let Some(value) = self.kv_read(&child_key)? {
+                        let suffix = &child_key[old_prefix.len()..];
+                        let new_child_key = format!("{}{}", new_prefix, suffix);
+                        self.kv_write(&new_child_key, &value)?;
+                        self.kv_delete(&child_key)?;
+                    }
+                }
+            }
+        }
+
+        // Update inode cache
+        self.inodes.remove_path(&old_path);
+        self.inodes.get_or_create(&new_path, entry_type);
+
+        Ok(())
+    }
+
+    fn symlink(
+        &self,
+        _ctx: &Context,
+        linkname: &CStr,
+        parent: u64,
+        name: &CStr,
+    ) -> std::io::Result<Entry> {
+        let link_target = linkname
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid target"))?;
+        let name_str = name
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+
+        // Get parent path
+        let parent_entry = self
+            .inodes
+            .get_path(parent)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
+
+        // Build symlink path
+        let link_path = if parent_entry.path.is_empty() {
+            name_str.to_string()
+        } else {
+            format!("{}/{}", parent_entry.path, name_str)
+        };
+
+        let key = Self::path_to_key(&link_path);
+        let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
+
+        debug!(key, link_target, "symlink");
+
+        // Store empty file marker and symlink target
+        self.kv_write(&key, &[])?;
+        self.kv_write(&symlink_key, link_target.as_bytes())?;
+
+        // Allocate inode
+        let inode = self.inodes.get_or_create(&link_path, EntryType::Symlink);
+        let entry = self.make_entry(inode, EntryType::Symlink, link_target.len() as u64);
+
+        Ok(entry)
+    }
+
+    fn readlink(&self, _ctx: &Context, inode: u64) -> std::io::Result<Vec<u8>> {
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        if entry.entry_type != EntryType::Symlink {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "not a symlink",
+            ));
+        }
+
+        let key = Self::path_to_key(&entry.path);
+        let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
+
+        debug!(key, "readlink");
+
+        self.kv_read(&symlink_key)?.ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "symlink target not found")
+        })
+    }
+
+    fn statfs(&self, _ctx: &Context, _inode: u64) -> std::io::Result<libc::statvfs64> {
+        // Return reasonable defaults for a network filesystem
+        // SAFETY: statvfs64 can be safely zero-initialized
+        let mut st: libc::statvfs64 = unsafe { std::mem::zeroed() };
+
+        st.f_bsize = u64::from(BLOCK_SIZE); // Filesystem block size
+        st.f_frsize = u64::from(BLOCK_SIZE); // Fragment size
+        st.f_blocks = 1024 * 1024 * 1024; // Total blocks (1 TB at 4K blocks)
+        st.f_bfree = 1024 * 1024 * 512; // Free blocks (512 GB)
+        st.f_bavail = 1024 * 1024 * 512; // Available blocks
+        st.f_files = 1_000_000; // Total inodes
+        st.f_ffree = 900_000; // Free inodes
+        st.f_favail = 900_000; // Available inodes
+        st.f_namemax = MAX_KEY_SIZE as u64; // Max filename length
+
+        Ok(st)
+    }
+
+    fn access(&self, _ctx: &Context, inode: u64, mask: u32) -> std::io::Result<()> {
+        // Check if the file exists
+        if inode == ROOT_INODE {
+            return Ok(());
+        }
+
+        let entry = self.inodes.get_path(inode);
+        if entry.is_none() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "inode not found",
+            ));
+        }
+
+        // For now, we allow all access (no permission enforcement)
+        // A real implementation would check ctx.uid/gid against file owner
+        // and mode bits
+        let _ = mask; // R_OK=4, W_OK=2, X_OK=1, F_OK=0
+
+        Ok(())
+    }
+
+    fn setxattr(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        name: &CStr,
+        value: &[u8],
+        flags: u32,
+    ) -> std::io::Result<()> {
+        let name_str = name
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+
+        // Validate name length
+        if name_str.len() > MAX_XATTR_NAME_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "xattr name too long",
+            ));
+        }
+
+        // Validate value size
+        if value.len() > MAX_XATTR_VALUE_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "xattr value too large",
+            ));
+        }
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let key = Self::path_to_key(&entry.path);
+        let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
+
+        debug!(key, name_str, value_len = value.len(), "setxattr");
+
+        // Check flags: XATTR_CREATE (1) = fail if exists, XATTR_REPLACE (2) = fail if missing
+        let exists = self.kv_read(&xattr_key)?.is_some();
+
+        if flags & libc::XATTR_CREATE as u32 != 0 && exists {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "xattr already exists",
+            ));
+        }
+
+        if flags & libc::XATTR_REPLACE as u32 != 0 && !exists {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "xattr not found",
+            ));
+        }
+
+        // Check xattr count limit
+        if !exists {
+            let prefix = format!("{}{}", key, XATTR_PREFIX);
+            let xattrs = self.kv_scan(&prefix)?;
+            if xattrs.len() >= MAX_XATTRS_PER_FILE {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::OutOfMemory,
+                    "too many xattrs",
+                ));
+            }
+        }
+
+        self.kv_write(&xattr_key, value)?;
+        Ok(())
+    }
+
+    fn getxattr(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        name: &CStr,
+        size: u32,
+    ) -> std::io::Result<fuse_backend_rs::api::filesystem::GetxattrReply> {
+        use fuse_backend_rs::api::filesystem::GetxattrReply;
+
+        let name_str = name
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let key = Self::path_to_key(&entry.path);
+        let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
+
+        debug!(key, name_str, size, "getxattr");
+
+        let value = self
+            .kv_read(&xattr_key)?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "xattr not found"))?;
+
+        if size == 0 {
+            // Size query only
+            Ok(GetxattrReply::Count(value.len() as u32))
+        } else if size < value.len() as u32 {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "buffer too small",
+            ))
+        } else {
+            Ok(GetxattrReply::Value(value))
+        }
+    }
+
+    fn listxattr(
+        &self,
+        _ctx: &Context,
+        inode: u64,
+        size: u32,
+    ) -> std::io::Result<fuse_backend_rs::api::filesystem::ListxattrReply> {
+        use fuse_backend_rs::api::filesystem::ListxattrReply;
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let key = Self::path_to_key(&entry.path);
+        let prefix = format!("{}{}", key, XATTR_PREFIX);
+
+        debug!(key, size, "listxattr");
+
+        let xattr_keys = self.kv_scan(&prefix)?;
+
+        // Build null-terminated list of names
+        let mut result = Vec::new();
+        for xattr_key in xattr_keys {
+            // Extract name part after prefix
+            if xattr_key.len() > prefix.len() {
+                let name = &xattr_key[prefix.len()..];
+                result.extend_from_slice(name.as_bytes());
+                result.push(0); // null terminator
+            }
+        }
+
+        if size == 0 {
+            // Size query only
+            Ok(ListxattrReply::Count(result.len() as u32))
+        } else if size < result.len() as u32 {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "buffer too small",
+            ))
+        } else {
+            Ok(ListxattrReply::Names(result))
+        }
+    }
+
+    fn removexattr(&self, _ctx: &Context, inode: u64, name: &CStr) -> std::io::Result<()> {
+        let name_str = name
+            .to_str()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let key = Self::path_to_key(&entry.path);
+        let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
+
+        debug!(key, name_str, "removexattr");
+
+        // Check if exists
+        if self.kv_read(&xattr_key)?.is_none() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "xattr not found",
+            ));
+        }
+
+        self.kv_delete(&xattr_key)?;
+        Ok(())
+    }
+
+    fn releasedir(
+        &self,
+        _ctx: &Context,
+        _inode: u64,
+        _flags: u32,
+        _handle: u64,
+    ) -> std::io::Result<()> {
+        // Nothing to release for stateless directory operations
+        Ok(())
+    }
+
+    fn fsyncdir(
+        &self,
+        _ctx: &Context,
+        _inode: u64,
+        _datasync: bool,
+        _handle: u64,
+    ) -> std::io::Result<()> {
+        // Writes are already synchronous through Raft consensus
         Ok(())
     }
 }
@@ -1087,5 +1522,280 @@ mod tests {
         // In mock mode, lookup fails because kv_read returns None
         // and directory check (kv_scan) returns empty
         assert!(result.is_err());
+    }
+
+    // === Symlink Tests ===
+
+    #[test]
+    fn test_make_attr_symlink() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let attr = fs.make_attr(42, EntryType::Symlink, 10);
+
+        assert_eq!(attr.st_ino, 42);
+        assert_eq!(attr.st_mode, DEFAULT_SYMLINK_MODE);
+        assert_eq!(attr.st_nlink, 1);
+        assert_eq!(attr.st_size, 10);
+    }
+
+    #[test]
+    fn test_symlink_creates_entry() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("mylink").unwrap();
+        let target = CString::new("/target/path").unwrap();
+
+        let entry = fs.symlink(&ctx, &target, ROOT_INODE, &name).unwrap();
+
+        assert_ne!(entry.inode, ROOT_INODE);
+        assert_eq!(entry.attr.st_mode, DEFAULT_SYMLINK_MODE);
+    }
+
+    #[test]
+    fn test_readlink_requires_known_inode() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Unknown inode should fail
+        let result = fs.readlink(&ctx, 99999);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_readlink_on_symlink() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Create a symlink first
+        let name = CString::new("link").unwrap();
+        let target = CString::new("/some/target").unwrap();
+        let entry = fs.symlink(&ctx, &target, ROOT_INODE, &name).unwrap();
+
+        // Read the link target - in mock mode returns empty
+        // because kv_read returns None
+        let result = fs.readlink(&ctx, entry.inode);
+        assert!(result.is_err()); // Mock mode has no KV data
+    }
+
+    // === Statfs Tests ===
+
+    #[test]
+    fn test_statfs_returns_valid_data() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let stat = fs.statfs(&ctx, ROOT_INODE).unwrap();
+
+        // Check basic fields
+        assert_eq!(stat.f_bsize, u64::from(BLOCK_SIZE));
+        assert_eq!(stat.f_namemax, MAX_KEY_SIZE as u64);
+        assert!(stat.f_blocks > 0);
+        assert!(stat.f_bfree > 0);
+        assert!(stat.f_bavail > 0);
+    }
+
+    // === Access Tests ===
+
+    #[test]
+    fn test_access_root_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Access check on root should succeed
+        let result = fs.access(&ctx, ROOT_INODE, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_access_unknown_inode_fails() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.access(&ctx, 99999, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    // === Extended Attributes Tests ===
+
+    #[test]
+    fn test_getxattr_unknown_inode_fails() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+        let result = fs.getxattr(&ctx, 99999, &name, 0);
+        // getxattr returns GetxattrReply, check for error via match
+        match result {
+            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
+            Ok(_) => panic!("Expected error for unknown inode"),
+        }
+    }
+
+    #[test]
+    fn test_getxattr_on_root() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+
+        // In mock mode, xattr doesn't exist (returns ENODATA)
+        let result = fs.getxattr(&ctx, ROOT_INODE, &name, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_setxattr_on_root() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+        let value = b"test value";
+
+        // Set xattr on root (should succeed in mock mode)
+        let result = fs.setxattr(&ctx, ROOT_INODE, &name, value, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_setxattr_rejects_oversized_name() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let oversized_name = "x".repeat(MAX_XATTR_NAME_SIZE + 1);
+        let name = CString::new(oversized_name).unwrap();
+        let value = b"test";
+
+        let result = fs.setxattr(&ctx, ROOT_INODE, &name, value, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn test_setxattr_rejects_oversized_value() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+        let oversized_value = vec![0u8; MAX_XATTR_VALUE_SIZE + 1];
+
+        let result = fs.setxattr(&ctx, ROOT_INODE, &name, &oversized_value, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn test_listxattr_on_root() {
+        use fuse_backend_rs::api::filesystem::ListxattrReply;
+
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // In mock mode, returns empty list
+        let result = fs.listxattr(&ctx, ROOT_INODE, 0).unwrap();
+        match result {
+            ListxattrReply::Names(names) => assert!(names.is_empty()),
+            ListxattrReply::Count(count) => assert_eq!(count, 0),
+        }
+    }
+
+    #[test]
+    fn test_removexattr_unknown_inode_fails() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+        let result = fs.removexattr(&ctx, 99999, &name);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_removexattr_on_root() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let name = CString::new("user.test").unwrap();
+
+        // In mock mode, xattr doesn't exist, so removexattr returns NotFound
+        let result = fs.removexattr(&ctx, ROOT_INODE, &name);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    // === Rename Tests ===
+
+    #[test]
+    fn test_rename_unknown_source_fails() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let old_name = CString::new("nonexistent").unwrap();
+        let new_name = CString::new("target").unwrap();
+
+        // Unknown source inode should fail
+        let result = fs.rename(&ctx, 99999, &old_name, ROOT_INODE, &new_name, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_rename_directory() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        // Create a directory
+        let old_name = CString::new("olddir").unwrap();
+        let entry = fs.mkdir(&ctx, ROOT_INODE, &old_name, 0o755, 0o022).unwrap();
+
+        // Rename it - in mock mode, exists() returns None so rename fails
+        // because the source path is not found in KV store
+        let new_name = CString::new("newdir").unwrap();
+        let result = fs.rename(&ctx, ROOT_INODE, &old_name, ROOT_INODE, &new_name, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+
+        // But the inode itself should still be accessible via getattr
+        let (attr, _) = fs.getattr(&ctx, entry.inode, None).unwrap();
+        assert_eq!(attr.st_ino, entry.inode);
+    }
+
+    // === releasedir and fsyncdir Tests ===
+
+    #[test]
+    fn test_releasedir_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.releasedir(&ctx, ROOT_INODE, 0, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_fsyncdir_succeeds() {
+        let fs = AspenFs::new_mock(1000, 1000);
+        let ctx = mock_context();
+
+        let result = fs.fsyncdir(&ctx, ROOT_INODE, false, 0);
+        assert!(result.is_ok());
+    }
+
+    // === Constants Tests ===
+
+    #[test]
+    fn test_symlink_mode_bits() {
+        // 0o120777 = symlink (0o120000) + rwxrwxrwx (0o777)
+        assert_eq!(DEFAULT_SYMLINK_MODE & 0o170000, 0o120000); // Symlink type
+        assert_eq!(DEFAULT_SYMLINK_MODE & 0o777, 0o777); // Permissions
+    }
+
+    #[test]
+    fn test_xattr_constants() {
+        assert_eq!(SYMLINK_SUFFIX, ".symlink");
+        assert_eq!(XATTR_PREFIX, ".xattr.");
+        assert_eq!(MAX_XATTR_NAME_SIZE, 255);
+        assert_eq!(MAX_XATTR_VALUE_SIZE, 64 * 1024);
+        assert_eq!(MAX_XATTRS_PER_FILE, 100);
     }
 }

@@ -360,15 +360,17 @@ mod attributes {
 
 /// Tests for entry type handling.
 mod entry_types {
-    /// DT_REG and DT_DIR values for readdir.
+    /// DT_REG, DT_DIR, and DT_LNK values for readdir.
     const DT_REG: u32 = libc::DT_REG as u32;
     const DT_DIR: u32 = libc::DT_DIR as u32;
+    const DT_LNK: u32 = libc::DT_LNK as u32;
 
     #[test]
     fn test_dt_values() {
         // Standard POSIX d_type values
         assert_eq!(DT_REG, 8); // Regular file
         assert_eq!(DT_DIR, 4); // Directory
+        assert_eq!(DT_LNK, 10); // Symbolic link
     }
 
     #[test]
@@ -377,20 +379,117 @@ mod entry_types {
         enum EntryType {
             File,
             Directory,
+            Symlink,
         }
 
         let file_dtype = match EntryType::File {
             EntryType::File => DT_REG,
             EntryType::Directory => DT_DIR,
+            EntryType::Symlink => DT_LNK,
         };
 
         let dir_dtype = match EntryType::Directory {
             EntryType::File => DT_REG,
             EntryType::Directory => DT_DIR,
+            EntryType::Symlink => DT_LNK,
+        };
+
+        let symlink_dtype = match EntryType::Symlink {
+            EntryType::File => DT_REG,
+            EntryType::Directory => DT_DIR,
+            EntryType::Symlink => DT_LNK,
         };
 
         assert_eq!(file_dtype, DT_REG);
         assert_eq!(dir_dtype, DT_DIR);
+        assert_eq!(symlink_dtype, DT_LNK);
+    }
+}
+
+/// Tests for symlink storage format.
+mod symlinks {
+    /// Symlink suffix used in KV storage.
+    const SYMLINK_SUFFIX: &str = ".symlink";
+
+    #[test]
+    fn test_symlink_key_format() {
+        let key = "myapp/link";
+        let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
+        assert_eq!(symlink_key, "myapp/link.symlink");
+    }
+
+    #[test]
+    fn test_symlink_target_storage() {
+        // Symlink target is stored as value at key.symlink
+        let target = "/target/path";
+        let stored = target.as_bytes();
+        let recovered = std::str::from_utf8(stored).unwrap();
+        assert_eq!(recovered, target);
+    }
+
+    #[test]
+    fn test_symlink_mode_bits() {
+        // 0o120777 = symlink (0o120000) + rwxrwxrwx (0o777)
+        const DEFAULT_SYMLINK_MODE: u32 = 0o120777;
+        assert_eq!(DEFAULT_SYMLINK_MODE & 0o170000, 0o120000); // Symlink type
+        assert_eq!(DEFAULT_SYMLINK_MODE & 0o777, 0o777); // Permissions
+    }
+}
+
+/// Tests for extended attribute (xattr) storage format.
+mod xattrs {
+    /// Prefix for extended attribute storage in KV.
+    const XATTR_PREFIX: &str = ".xattr.";
+
+    /// Maximum xattr name length.
+    const MAX_XATTR_NAME_SIZE: usize = 255;
+
+    /// Maximum xattr value size (64 KB).
+    const MAX_XATTR_VALUE_SIZE: usize = 64 * 1024;
+
+    #[test]
+    fn test_xattr_key_format() {
+        let key = "myapp/file";
+        let xattr_name = "user.description";
+        let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, xattr_name);
+        assert_eq!(xattr_key, "myapp/file.xattr.user.description");
+    }
+
+    #[test]
+    fn test_xattr_list_format() {
+        // Xattr names are returned as null-terminated strings
+        let names = vec!["user.foo", "user.bar", "user.baz"];
+        let mut result = Vec::new();
+        for name in &names {
+            result.extend_from_slice(name.as_bytes());
+            result.push(0); // Null terminator
+        }
+
+        // Parse back
+        let parsed: Vec<&str> = result
+            .split(|&b| b == 0)
+            .filter(|s| !s.is_empty())
+            .map(|s| std::str::from_utf8(s).unwrap())
+            .collect();
+
+        assert_eq!(parsed, names);
+    }
+
+    #[test]
+    fn test_xattr_size_limits() {
+        // Name must be <= 255 bytes
+        let valid_name = "x".repeat(MAX_XATTR_NAME_SIZE);
+        assert!(valid_name.len() <= MAX_XATTR_NAME_SIZE);
+
+        let invalid_name = "x".repeat(MAX_XATTR_NAME_SIZE + 1);
+        assert!(invalid_name.len() > MAX_XATTR_NAME_SIZE);
+
+        // Value must be <= 64 KB
+        let valid_value = vec![0u8; MAX_XATTR_VALUE_SIZE];
+        assert!(valid_value.len() <= MAX_XATTR_VALUE_SIZE);
+
+        let invalid_value = vec![0u8; MAX_XATTR_VALUE_SIZE + 1];
+        assert!(invalid_value.len() > MAX_XATTR_VALUE_SIZE);
     }
 }
 
