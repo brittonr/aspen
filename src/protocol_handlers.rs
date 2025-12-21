@@ -81,7 +81,8 @@ use crate::client_rpc::{
     ListBlobsResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse,
     NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse, ProtectBlobResultResponse,
     RaftMetricsResponse, ReadResultResponse, ScanEntry, ScanResultResponse, SnapshotResultResponse,
-    UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse, WriteResultResponse,
+    SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse,
+    WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
 use crate::raft::auth::{
@@ -1388,6 +1389,8 @@ pub struct ClientProtocolContext {
     pub controller: Arc<dyn ClusterController>,
     /// Key-value store interface.
     pub kv_store: Arc<dyn KeyValueStore>,
+    /// SQL query executor for read-only SQL queries.
+    pub sql_executor: Arc<dyn crate::api::SqlQueryExecutor>,
     /// Iroh endpoint manager for peer info.
     pub endpoint_manager: Arc<IrohEndpointManager>,
     /// Blob store for content-addressed storage (optional).
@@ -3012,6 +3015,125 @@ async fn process_client_request(
                             error: Some("peer cluster operation failed".to_string()),
                         },
                     ))
+                }
+            }
+        }
+
+        ClientRpcRequest::ExecuteSql {
+            query,
+            params,
+            consistency,
+            limit,
+            timeout_ms,
+        } => {
+            use crate::api::{SqlConsistency, SqlQueryExecutor, SqlQueryRequest, SqlValue};
+
+            // Parse consistency level
+            let consistency = match consistency.to_lowercase().as_str() {
+                "stale" => SqlConsistency::Stale,
+                _ => SqlConsistency::Linearizable, // Default to linearizable
+            };
+
+            // Parse parameters from JSON
+            let params: Vec<SqlValue> = if params.is_empty() {
+                Vec::new()
+            } else {
+                match serde_json::from_str::<Vec<serde_json::Value>>(&params) {
+                    Ok(values) => values
+                        .into_iter()
+                        .map(|v| match v {
+                            serde_json::Value::Null => SqlValue::Null,
+                            serde_json::Value::Bool(b) => SqlValue::Integer(if b { 1 } else { 0 }),
+                            serde_json::Value::Number(n) => {
+                                if let Some(i) = n.as_i64() {
+                                    SqlValue::Integer(i)
+                                } else if let Some(f) = n.as_f64() {
+                                    SqlValue::Real(f)
+                                } else {
+                                    SqlValue::Text(n.to_string())
+                                }
+                            }
+                            serde_json::Value::String(s) => SqlValue::Text(s),
+                            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                                SqlValue::Text(v.to_string())
+                            }
+                        })
+                        .collect(),
+                    Err(e) => {
+                        return Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                            success: false,
+                            columns: None,
+                            rows: None,
+                            row_count: None,
+                            is_truncated: None,
+                            execution_time_ms: None,
+                            error: Some(format!("invalid params JSON: {}", e)),
+                        }));
+                    }
+                }
+            };
+
+            // Build request
+            let request = SqlQueryRequest {
+                query,
+                params,
+                consistency,
+                limit,
+                timeout_ms,
+            };
+
+            // Execute SQL query via SqlQueryExecutor trait
+            // The RaftNode implements this trait
+            match ctx.sql_executor.execute_sql(request).await {
+                Ok(result) => {
+                    // Convert SqlValue to serde_json::Value for response
+                    let rows: Vec<Vec<serde_json::Value>> = result
+                        .rows
+                        .into_iter()
+                        .map(|row| {
+                            row.into_iter()
+                                .map(|v| match v {
+                                    SqlValue::Null => serde_json::Value::Null,
+                                    SqlValue::Integer(i) => serde_json::json!(i),
+                                    SqlValue::Real(f) => serde_json::json!(f),
+                                    SqlValue::Text(s) => serde_json::Value::String(s),
+                                    SqlValue::Blob(b) => {
+                                        // Encode blob as base64
+                                        use base64::Engine;
+                                        serde_json::Value::String(
+                                            base64::engine::general_purpose::STANDARD.encode(&b),
+                                        )
+                                    }
+                                })
+                                .collect()
+                        })
+                        .collect();
+
+                    let columns: Vec<String> = result.columns.into_iter().map(|c| c.name).collect();
+
+                    Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                        success: true,
+                        columns: Some(columns),
+                        rows: Some(rows),
+                        row_count: Some(result.row_count),
+                        is_truncated: Some(result.is_truncated),
+                        execution_time_ms: Some(result.execution_time_ms),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    // HIGH-4: Log full error internally, return sanitized message
+                    warn!(error = %e, "SQL query execution failed");
+                    Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                        success: false,
+                        columns: None,
+                        rows: None,
+                        row_count: None,
+                        is_truncated: None,
+                        execution_time_ms: None,
+                        // Return the error message (SQL errors are safe to show)
+                        error: Some(e.to_string()),
+                    }))
                 }
             }
         }

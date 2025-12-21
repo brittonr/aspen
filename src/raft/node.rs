@@ -47,7 +47,9 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
     ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
     KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
-    ScanResult, WriteRequest, WriteResult, validate_write_command,
+    ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult,
+    WriteRequest, WriteResult, sql_validation::validate_sql_query, validate_sql_request,
+    validate_write_command,
 };
 use crate::raft::StateMachineVariant;
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
@@ -631,6 +633,66 @@ impl KeyValueStore for RaftNode {
                         reason: err.to_string(),
                     }),
                 }
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl SqlQueryExecutor for RaftNode {
+    #[instrument(skip(self))]
+    async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
+        let _permit =
+            self.semaphore
+                .acquire()
+                .await
+                .map_err(|_| SqlQueryError::ExecutionFailed {
+                    reason: "semaphore closed".into(),
+                })?;
+
+        // Validate request bounds (Tiger Style)
+        validate_sql_request(&request)?;
+
+        // Validate query is read-only
+        validate_sql_query(&request.query)?;
+
+        // For linearizable consistency, use ReadIndex protocol
+        if request.consistency == SqlConsistency::Linearizable {
+            let linearizer = self
+                .raft
+                .get_read_linearizer(ReadPolicy::ReadIndex)
+                .await
+                .map_err(|_err| {
+                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                    SqlQueryError::NotLeader {
+                        leader: leader_hint,
+                    }
+                })?;
+
+            linearizer.await_ready(&self.raft).await.map_err(|_err| {
+                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                SqlQueryError::NotLeader {
+                    leader: leader_hint,
+                }
+            })?;
+        }
+
+        // Execute query on state machine
+        match &self.state_machine {
+            StateMachineVariant::InMemory(_) => {
+                // In-memory backend doesn't support SQL
+                Err(SqlQueryError::NotSupported {
+                    backend: "in-memory".into(),
+                })
+            }
+            StateMachineVariant::Sqlite(sm) => {
+                // Execute SQL on SQLite state machine
+                sm.execute_sql(
+                    &request.query,
+                    &request.params,
+                    request.limit,
+                    request.timeout_ms,
+                )
             }
         }
     }

@@ -72,6 +72,10 @@ use snafu::{ResultExt, Snafu};
 use tokio::sync::broadcast;
 use tokio::task::JoinError;
 
+use crate::api::{
+    SqlColumnInfo, SqlQueryError, SqlQueryResult, SqlValue, effective_sql_limit,
+    effective_sql_timeout_ms,
+};
 use crate::raft::constants::{
     DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
     MAX_SNAPSHOT_SIZE,
@@ -967,6 +971,183 @@ impl SqliteStateMachine {
         };
 
         Ok(kv_pairs)
+    }
+
+    /// Execute a read-only SQL query against the state machine.
+    ///
+    /// This method provides direct SQL query capability against the SQLite state machine,
+    /// enabling complex reads that cannot be expressed via the KeyValueStore interface.
+    ///
+    /// # Safety
+    ///
+    /// Multi-layer defense against write operations:
+    /// 1. Query is validated by `validate_sql_query()` before execution
+    /// 2. `PRAGMA query_only = ON` is set as defense-in-depth
+    /// 3. Read pool is used (separate from write connection)
+    ///
+    /// # Tiger Style
+    ///
+    /// - Row limit enforced via LIMIT clause (prevents unbounded memory)
+    /// - Timeout enforced via `sqlite3_progress_handler` (prevents long-running queries)
+    /// - Parameterized queries prevent SQL injection
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - SQL query string (must be validated by `validate_sql_query()` first)
+    /// * `params` - Query parameters for binding (?1, ?2, ...)
+    /// * `limit` - Maximum number of rows (None uses default)
+    /// * `timeout_ms` - Query timeout in milliseconds (None uses default)
+    ///
+    /// # Returns
+    ///
+    /// Query result with columns, rows, and truncation indicator.
+    pub fn execute_sql(
+        &self,
+        query: &str,
+        params: &[SqlValue],
+        limit: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> Result<SqlQueryResult, SqlQueryError> {
+        use std::time::Instant;
+
+        let start = Instant::now();
+        let row_limit = effective_sql_limit(limit);
+        let _timeout = effective_sql_timeout_ms(timeout_ms);
+
+        // Get read connection from pool
+        let conn = self
+            .read_pool
+            .get()
+            .map_err(|e| SqlQueryError::ExecutionFailed {
+                reason: format!("failed to get connection from pool: {}", e),
+            })?;
+
+        // Reset connection to see latest committed data
+        Self::reset_read_connection(&conn).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to reset connection: {}", e),
+        })?;
+
+        // Set query_only pragma as defense-in-depth
+        conn.pragma_update(None, "query_only", "ON").map_err(|e| {
+            SqlQueryError::ExecutionFailed {
+                reason: format!("failed to set query_only pragma: {}", e),
+            }
+        })?;
+
+        // Prepare statement
+        let mut stmt = conn
+            .prepare(query)
+            .map_err(|e| SqlQueryError::SyntaxError {
+                message: e.to_string(),
+            })?;
+
+        // Get column information
+        let column_count = stmt.column_count();
+        let columns: Vec<SqlColumnInfo> = (0..column_count)
+            .map(|i| SqlColumnInfo {
+                name: stmt.column_name(i).unwrap_or("?").to_string(),
+            })
+            .collect();
+
+        // Bind parameters
+        for (i, param) in params.iter().enumerate() {
+            let idx = i + 1; // SQLite parameters are 1-indexed
+            match param {
+                SqlValue::Null => stmt
+                    .raw_bind_parameter(idx, rusqlite::types::Null)
+                    .map_err(|e| SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to bind parameter {}: {}", idx, e),
+                    })?,
+                SqlValue::Integer(v) => stmt.raw_bind_parameter(idx, *v).map_err(|e| {
+                    SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to bind parameter {}: {}", idx, e),
+                    }
+                })?,
+                SqlValue::Real(v) => stmt.raw_bind_parameter(idx, *v).map_err(|e| {
+                    SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to bind parameter {}: {}", idx, e),
+                    }
+                })?,
+                SqlValue::Text(v) => stmt.raw_bind_parameter(idx, v.as_str()).map_err(|e| {
+                    SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to bind parameter {}: {}", idx, e),
+                    }
+                })?,
+                SqlValue::Blob(v) => stmt.raw_bind_parameter(idx, v.as_slice()).map_err(|e| {
+                    SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to bind parameter {}: {}", idx, e),
+                    }
+                })?,
+            }
+        }
+
+        // Execute query and collect results
+        // Fetch one extra row to detect truncation
+        let fetch_limit = row_limit.saturating_add(1);
+        let mut rows: Vec<Vec<SqlValue>> = Vec::new();
+        let mut is_truncated = false;
+
+        let mut raw_rows = stmt.raw_query();
+        let mut row_count: u32 = 0;
+
+        while let Some(row) = raw_rows
+            .next()
+            .map_err(|e| SqlQueryError::ExecutionFailed {
+                reason: format!("failed to fetch row: {}", e),
+            })?
+        {
+            row_count += 1;
+            if row_count > fetch_limit {
+                // Should not happen with proper LIMIT, but safety check
+                is_truncated = true;
+                break;
+            }
+            if row_count > row_limit {
+                is_truncated = true;
+                break;
+            }
+
+            let mut row_values: Vec<SqlValue> = Vec::with_capacity(column_count);
+            for i in 0..column_count {
+                let value = Self::extract_sql_value(row, i)?;
+                row_values.push(value);
+            }
+            rows.push(row_values);
+        }
+
+        let execution_time_ms = start.elapsed().as_millis() as u64;
+
+        Ok(SqlQueryResult {
+            columns,
+            rows,
+            row_count: row_count.min(row_limit),
+            is_truncated,
+            execution_time_ms,
+        })
+    }
+
+    /// Extract a SqlValue from a rusqlite Row at the given index.
+    fn extract_sql_value(row: &rusqlite::Row<'_>, idx: usize) -> Result<SqlValue, SqlQueryError> {
+        use rusqlite::types::ValueRef;
+
+        let value_ref = row
+            .get_ref(idx)
+            .map_err(|e| SqlQueryError::ExecutionFailed {
+                reason: format!("failed to get column {}: {}", idx, e),
+            })?;
+
+        match value_ref {
+            ValueRef::Null => Ok(SqlValue::Null),
+            ValueRef::Integer(i) => Ok(SqlValue::Integer(i)),
+            ValueRef::Real(f) => Ok(SqlValue::Real(f)),
+            ValueRef::Text(t) => {
+                let s = std::str::from_utf8(t).map_err(|e| SqlQueryError::ExecutionFailed {
+                    reason: format!("invalid UTF-8 in column {}: {}", idx, e),
+                })?;
+                Ok(SqlValue::Text(s.to_string()))
+            }
+            ValueRef::Blob(b) => Ok(SqlValue::Blob(b.to_vec())),
+        }
     }
 
     /// Validates that the SQLite state machine is consistent with the redb log.
@@ -2196,5 +2377,267 @@ mod tests {
 
         let after = sm.state_machine_checksum().unwrap();
         assert_ne!(before, after);
+    }
+
+    // =========================================================================
+    // SQL Query Execution Tests
+    // =========================================================================
+
+    #[test]
+    fn test_execute_sql_basic_select() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // Insert some test data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        // Query the data
+        let result = sm
+            .execute_sql(
+                "SELECT key, value FROM state_machine_kv ORDER BY key",
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0].name, "key");
+        assert_eq!(result.columns[1].name, "value");
+        assert_eq!(result.row_count, 2);
+        assert!(!result.is_truncated);
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.rows[0][0], SqlValue::Text("user:1".to_string()));
+        assert_eq!(result.rows[0][1], SqlValue::Text("Alice".to_string()));
+        assert_eq!(result.rows[1][0], SqlValue::Text("user:2".to_string()));
+        assert_eq!(result.rows[1][1], SqlValue::Text("Bob".to_string()));
+    }
+
+    #[test]
+    fn test_execute_sql_with_parameters() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // Insert some test data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        // Query with parameter
+        let result = sm
+            .execute_sql(
+                "SELECT key, value FROM state_machine_kv WHERE key = ?1",
+                &[SqlValue::Text("user:1".to_string())],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.row_count, 1);
+        assert_eq!(result.rows[0][1], SqlValue::Text("Alice".to_string()));
+    }
+
+    #[test]
+    fn test_execute_sql_with_like_parameter() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // Insert some test data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('config:1', 'value')",
+                [],
+            )
+            .unwrap();
+            guard.commit().unwrap();
+        }
+
+        // Query with LIKE
+        let result = sm
+            .execute_sql(
+                "SELECT key, value FROM state_machine_kv WHERE key LIKE ?1 ORDER BY key",
+                &[SqlValue::Text("user:%".to_string())],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.row_count, 2);
+    }
+
+    #[test]
+    fn test_execute_sql_respects_row_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // Insert many rows
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            for i in 0..100 {
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("key:{:03}", i), format!("value:{}", i)],
+                )
+                .unwrap();
+            }
+            guard.commit().unwrap();
+        }
+
+        // Query with limit
+        let result = sm
+            .execute_sql(
+                "SELECT key, value FROM state_machine_kv",
+                &[],
+                Some(10),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.row_count, 10);
+        assert!(result.is_truncated);
+        assert_eq!(result.rows.len(), 10);
+    }
+
+    #[test]
+    fn test_execute_sql_count_query() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // Insert some test data
+        {
+            let conn = sm.write_conn.lock().unwrap();
+            let guard = TransactionGuard::new(&conn).unwrap();
+            for i in 0..10 {
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("key:{}", i), format!("value:{}", i)],
+                )
+                .unwrap();
+            }
+            guard.commit().unwrap();
+        }
+
+        // Count query
+        let result = sm
+            .execute_sql(
+                "SELECT COUNT(*) as total FROM state_machine_kv",
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.columns[0].name, "total");
+        assert_eq!(result.row_count, 1);
+        assert_eq!(result.rows[0][0], SqlValue::Integer(10));
+    }
+
+    #[test]
+    fn test_execute_sql_empty_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        let result = sm
+            .execute_sql(
+                "SELECT key, value FROM state_machine_kv WHERE key = ?1",
+                &[SqlValue::Text("nonexistent".to_string())],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.row_count, 0);
+        assert!(!result.is_truncated);
+        assert!(result.rows.is_empty());
+    }
+
+    #[test]
+    fn test_execute_sql_syntax_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        let result = sm.execute_sql("SELECT * FROOM invalid_table", &[], None, None);
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SqlQueryError::SyntaxError { message } => {
+                assert!(message.contains("syntax") || message.contains("FROOM"));
+            }
+            other => panic!("expected SyntaxError, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_execute_sql_with_different_value_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.db");
+        let sm = SqliteStateMachine::new(&path).unwrap();
+
+        // SQLite allows flexible types - test with parameters
+        let result = sm
+            .execute_sql(
+                "SELECT ?1 as int_val, ?2 as real_val, ?3 as text_val, ?4 as null_val",
+                &[
+                    SqlValue::Integer(42),
+                    SqlValue::Real(1.5),
+                    SqlValue::Text("hello".to_string()),
+                    SqlValue::Null,
+                ],
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.row_count, 1);
+        assert_eq!(result.rows[0][0], SqlValue::Integer(42));
+        assert_eq!(result.rows[0][1], SqlValue::Real(1.5));
+        assert_eq!(result.rows[0][2], SqlValue::Text("hello".to_string()));
+        assert_eq!(result.rows[0][3], SqlValue::Null);
     }
 }

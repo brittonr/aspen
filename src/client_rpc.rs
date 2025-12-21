@@ -254,6 +254,26 @@ pub enum ClientRpcRequest {
         /// Whether to enable the subscription.
         enabled: bool,
     },
+
+    // =========================================================================
+    // SQL query operations
+    // =========================================================================
+    /// Execute a read-only SQL query against the state machine.
+    ///
+    /// Only SELECT statements are allowed. The query is validated before
+    /// execution and runs with `PRAGMA query_only = ON` for safety.
+    ExecuteSql {
+        /// SQL query string (must be SELECT or WITH...SELECT).
+        query: String,
+        /// Query parameters (JSON-serialized SqlValue array).
+        params: String,
+        /// Consistency level: "linearizable" (default) or "stale".
+        consistency: String,
+        /// Maximum rows to return (default 1000, max 10000).
+        limit: Option<u32>,
+        /// Query timeout in milliseconds (default 5000, max 30000).
+        timeout_ms: Option<u32>,
+    },
 }
 
 /// Client RPC response protocol.
@@ -383,6 +403,12 @@ pub enum ClientRpcResponse {
 
     /// Set peer cluster enabled result.
     SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse),
+
+    // =========================================================================
+    // SQL query response
+    // =========================================================================
+    /// SQL query result.
+    SqlResult(SqlResultResponse),
 }
 
 /// Health status response.
@@ -921,6 +947,32 @@ pub struct SetPeerClusterEnabledResultResponse {
     /// Whether the peer is now enabled.
     pub enabled: Option<bool>,
     /// Error message if failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// SQL query response types
+// =============================================================================
+
+/// SQL query result response.
+///
+/// Contains the result of a read-only SQL query execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SqlResultResponse {
+    /// Whether the query succeeded.
+    pub success: bool,
+    /// Column names (JSON array).
+    pub columns: Option<Vec<String>>,
+    /// Result rows (JSON array of arrays).
+    /// Each inner array contains the values for one row.
+    pub rows: Option<Vec<Vec<serde_json::Value>>>,
+    /// Number of rows returned.
+    pub row_count: Option<u32>,
+    /// True if more rows exist but were not returned due to limit.
+    pub is_truncated: Option<bool>,
+    /// Query execution time in milliseconds.
+    pub execution_time_ms: Option<u64>,
+    /// Error message if query failed.
     pub error: Option<String>,
 }
 

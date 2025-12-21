@@ -457,3 +457,62 @@ pub const GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS: u64 = 60;
 /// Used in:
 /// - `gossip_discovery.rs`: Announcer task adaptive logic
 pub const GOSSIP_ANNOUNCE_FAILURE_THRESHOLD: u32 = 3;
+
+// ============================================================================
+// SQL Query Constants
+// ============================================================================
+
+/// Maximum SQL query string length (64 KB).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized queries.
+/// Most practical queries are < 10 KB; 64 KB allows for complex CTEs.
+///
+/// Used in:
+/// - `api/sql_validation.rs`: Query validation
+pub const MAX_SQL_QUERY_SIZE: u32 = 64 * 1024;
+
+/// Maximum number of query parameters (100).
+///
+/// Tiger Style: Bounded parameter count prevents pathological cases.
+/// Most queries use < 10 parameters; 100 allows for bulk IN clauses.
+///
+/// Used in:
+/// - `node.rs`: SqlQueryExecutor parameter validation
+pub const MAX_SQL_PARAMS: u32 = 100;
+
+/// Maximum rows returned from SQL query (10,000).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from large result sets.
+/// Clients can use pagination for larger result sets.
+///
+/// Used in:
+/// - `node.rs`: SqlQueryExecutor result limiting
+/// - `storage_sqlite.rs`: Query execution row cap
+pub const MAX_SQL_RESULT_ROWS: u32 = 10_000;
+
+/// Default rows returned from SQL query (1,000).
+///
+/// Tiger Style: Reasonable default that balances utility against resource use.
+/// Applied when client doesn't specify a limit.
+///
+/// Used in:
+/// - `node.rs`: SqlQueryExecutor default limit
+pub const DEFAULT_SQL_RESULT_ROWS: u32 = 1_000;
+
+/// Default SQL query timeout in milliseconds (5 seconds).
+///
+/// Tiger Style: Explicit timeout prevents runaway queries.
+/// 5 seconds is sufficient for most indexed queries.
+///
+/// Used in:
+/// - `node.rs`: SqlQueryExecutor timeout handling
+pub const DEFAULT_SQL_TIMEOUT_MS: u32 = 5_000;
+
+/// Maximum SQL query timeout in milliseconds (30 seconds).
+///
+/// Tiger Style: Upper bound on query execution time.
+/// Prevents clients from requesting indefinite timeouts.
+///
+/// Used in:
+/// - `node.rs`: SqlQueryExecutor timeout validation
+pub const MAX_SQL_TIMEOUT_MS: u32 = 30_000;

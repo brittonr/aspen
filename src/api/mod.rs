@@ -52,11 +52,15 @@ use thiserror::Error;
 
 pub mod inmemory;
 pub mod pure;
+pub mod sql_validation;
 pub mod vault;
 pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
 pub use vault::{SYSTEM_PREFIX, VaultError, is_system_key, validate_client_key};
 
-use crate::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
+use crate::raft::constants::{
+    DEFAULT_SQL_RESULT_ROWS, DEFAULT_SQL_TIMEOUT_MS, MAX_KEY_SIZE, MAX_SETMULTI_KEYS,
+    MAX_SQL_PARAMS, MAX_SQL_QUERY_SIZE, MAX_SQL_RESULT_ROWS, MAX_SQL_TIMEOUT_MS, MAX_VALUE_SIZE,
+};
 // Re-export OpenRaft types for observability
 pub use openraft::ServerState;
 pub use openraft::metrics::RaftMetrics;
@@ -469,5 +473,227 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
 
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         (**self).scan(request).await
+    }
+}
+
+// ============================================================================
+// SQL Query Types and Traits
+// ============================================================================
+
+/// Consistency level for SQL read queries.
+///
+/// - `Linearizable`: Query sees all prior writes (uses Raft ReadIndex protocol).
+///   This is the safe default but has higher latency due to leader confirmation.
+/// - `Stale`: Fast local read without consistency guarantee.
+///   May return stale data if the node is behind the leader.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum SqlConsistency {
+    /// Linearizable consistency via Raft ReadIndex protocol.
+    /// Guarantees the read sees all prior committed writes.
+    #[default]
+    Linearizable,
+    /// Stale read from local state machine.
+    /// Fast but may return outdated data.
+    Stale,
+}
+
+/// A typed SQL value preserving SQLite's type system.
+///
+/// SQLite has a dynamic type system with 5 storage classes.
+/// This enum preserves the type information from query results.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SqlValue {
+    /// SQL NULL value.
+    Null,
+    /// 64-bit signed integer (SQLite INTEGER).
+    Integer(i64),
+    /// 64-bit floating point (SQLite REAL).
+    Real(f64),
+    /// UTF-8 text string (SQLite TEXT).
+    Text(String),
+    /// Binary data (SQLite BLOB).
+    Blob(Vec<u8>),
+}
+
+/// Information about a result column.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SqlColumnInfo {
+    /// Column name (or alias if specified in query).
+    pub name: String,
+}
+
+/// Request to execute a read-only SQL query.
+///
+/// Tiger Style: All parameters have fixed bounds to prevent resource exhaustion.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct SqlQueryRequest {
+    /// SQL query string. Must be a SELECT statement (or WITH...SELECT for CTEs).
+    /// Maximum size: MAX_SQL_QUERY_SIZE (64 KB).
+    pub query: String,
+    /// Query parameters for prepared statement binding (?1, ?2, ...).
+    /// Maximum count: MAX_SQL_PARAMS (100).
+    pub params: Vec<SqlValue>,
+    /// Consistency level for the read operation.
+    pub consistency: SqlConsistency,
+    /// Maximum number of rows to return.
+    /// Default: DEFAULT_SQL_RESULT_ROWS (1,000), Max: MAX_SQL_RESULT_ROWS (10,000).
+    pub limit: Option<u32>,
+    /// Query timeout in milliseconds.
+    /// Default: DEFAULT_SQL_TIMEOUT_MS (5,000), Max: MAX_SQL_TIMEOUT_MS (30,000).
+    pub timeout_ms: Option<u32>,
+}
+
+/// Result of a SQL query execution.
+///
+/// Tiger Style: Bounded results with explicit truncation indicator.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SqlQueryResult {
+    /// Column metadata for the result set.
+    pub columns: Vec<SqlColumnInfo>,
+    /// Result rows, each containing values in column order.
+    pub rows: Vec<Vec<SqlValue>>,
+    /// Number of rows returned.
+    pub row_count: u32,
+    /// True if more rows exist but were not returned due to limit.
+    pub is_truncated: bool,
+    /// Query execution time in milliseconds.
+    pub execution_time_ms: u64,
+}
+
+/// Errors that can occur during SQL query execution.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum SqlQueryError {
+    /// Query is not a valid read-only statement (contains write operations).
+    #[error("query not allowed: {reason}")]
+    QueryNotAllowed { reason: String },
+    /// SQL syntax error or invalid query.
+    #[error("SQL syntax error: {message}")]
+    SyntaxError { message: String },
+    /// Query execution failed.
+    #[error("execution failed: {reason}")]
+    ExecutionFailed { reason: String },
+    /// Query exceeded timeout.
+    #[error("query timed out after {duration_ms}ms")]
+    Timeout { duration_ms: u64 },
+    /// Not the Raft leader (for linearizable reads).
+    #[error("not leader; current leader: {leader:?}")]
+    NotLeader { leader: Option<u64> },
+    /// Query size exceeds limit.
+    #[error("query size {size} exceeds maximum of {max} bytes")]
+    QueryTooLarge { size: usize, max: u32 },
+    /// Too many parameters.
+    #[error("parameter count {count} exceeds maximum of {max}")]
+    TooManyParams { count: usize, max: u32 },
+    /// SQL queries not supported by this backend.
+    #[error("SQL queries not supported by {backend} backend")]
+    NotSupported { backend: String },
+}
+
+/// Validate a SQL query request against Tiger Style bounds.
+///
+/// Checks:
+/// - Query size <= MAX_SQL_QUERY_SIZE
+/// - Parameter count <= MAX_SQL_PARAMS
+/// - Limit <= MAX_SQL_RESULT_ROWS (if specified)
+/// - Timeout <= MAX_SQL_TIMEOUT_MS (if specified)
+pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryError> {
+    // Check query size
+    if request.query.len() > MAX_SQL_QUERY_SIZE as usize {
+        return Err(SqlQueryError::QueryTooLarge {
+            size: request.query.len(),
+            max: MAX_SQL_QUERY_SIZE,
+        });
+    }
+
+    // Check parameter count
+    if request.params.len() > MAX_SQL_PARAMS as usize {
+        return Err(SqlQueryError::TooManyParams {
+            count: request.params.len(),
+            max: MAX_SQL_PARAMS,
+        });
+    }
+
+    // Validate and clamp limit (done in execute, but check upper bound here)
+    if let Some(limit) = request.limit
+        && limit > MAX_SQL_RESULT_ROWS
+    {
+        return Err(SqlQueryError::QueryNotAllowed {
+            reason: format!(
+                "limit {} exceeds maximum of {} rows",
+                limit, MAX_SQL_RESULT_ROWS
+            ),
+        });
+    }
+
+    // Validate timeout
+    if let Some(timeout) = request.timeout_ms
+        && timeout > MAX_SQL_TIMEOUT_MS
+    {
+        return Err(SqlQueryError::QueryNotAllowed {
+            reason: format!(
+                "timeout {}ms exceeds maximum of {}ms",
+                timeout, MAX_SQL_TIMEOUT_MS
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+/// Get effective limit, applying defaults and bounds.
+pub fn effective_sql_limit(request_limit: Option<u32>) -> u32 {
+    request_limit
+        .unwrap_or(DEFAULT_SQL_RESULT_ROWS)
+        .min(MAX_SQL_RESULT_ROWS)
+}
+
+/// Get effective timeout in milliseconds, applying defaults and bounds.
+pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
+    request_timeout
+        .unwrap_or(DEFAULT_SQL_TIMEOUT_MS)
+        .min(MAX_SQL_TIMEOUT_MS)
+}
+
+/// SQL query executor interface.
+///
+/// Provides read-only SQL query execution against the state machine.
+/// This is a separate trait from `KeyValueStore` because:
+/// 1. Not all backends support SQL (in-memory backend uses HashMap)
+/// 2. SQL queries have different consistency and timeout semantics
+/// 3. Keeps the KeyValueStore interface simple
+///
+/// Tiger Style: Queries have bounded size limits to prevent resource exhaustion.
+#[async_trait]
+pub trait SqlQueryExecutor: Send + Sync {
+    /// Execute a read-only SQL query against the state machine.
+    ///
+    /// Only SELECT statements (and WITH...SELECT for CTEs) are allowed.
+    /// The query is executed with `PRAGMA query_only = ON` for defense-in-depth.
+    ///
+    /// # Consistency
+    ///
+    /// - `Linearizable`: Uses Raft ReadIndex to ensure the read sees all
+    ///   committed writes. Higher latency but consistent.
+    /// - `Stale`: Executes directly on local state machine. Fast but may
+    ///   return stale data if this node is behind the leader.
+    ///
+    /// # Errors
+    ///
+    /// - `QueryNotAllowed`: Query contains write operations or forbidden keywords
+    /// - `SyntaxError`: Invalid SQL syntax
+    /// - `ExecutionFailed`: Query execution error (e.g., no such table)
+    /// - `Timeout`: Query exceeded timeout_ms
+    /// - `NotLeader`: Linearizable read on non-leader (includes leader hint)
+    /// - `QueryTooLarge`: Query exceeds MAX_SQL_QUERY_SIZE
+    /// - `TooManyParams`: Parameters exceed MAX_SQL_PARAMS
+    /// - `NotSupported`: Backend doesn't support SQL queries
+    async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError>;
+}
+
+/// Blanket implementation for Arc<T> where T: SqlQueryExecutor.
+#[async_trait]
+impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
+    async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
+        (**self).execute_sql(request).await
     }
 }

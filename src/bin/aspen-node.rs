@@ -289,6 +289,7 @@ async fn main() -> Result<()> {
         node_id: config.node_id,
         controller: controller.clone(),
         kv_store: kv_store.clone(),
+        sql_executor: handle.raft_node.clone(),
         endpoint_manager: handle.iroh_manager.clone(),
         blob_store: handle.blob_store.clone(),
         peer_manager: handle.peer_manager.clone(),
