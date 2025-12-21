@@ -617,6 +617,91 @@ pub enum ClientRpcRequest {
         /// Lease ID to attach the key to.
         lease_id: u64,
     },
+
+    // =========================================================================
+    // Distributed Barrier operations
+    // =========================================================================
+    /// Enter a barrier, waiting until all participants arrive.
+    ///
+    /// Creates the barrier if it doesn't exist. Blocks until the required
+    /// number of participants have entered, or timeout is reached.
+    BarrierEnter {
+        /// Barrier name (unique identifier).
+        name: String,
+        /// Unique identifier for this participant.
+        participant_id: String,
+        /// Number of participants required to release the barrier.
+        required_count: u32,
+        /// Timeout in milliseconds (0 = no timeout).
+        timeout_ms: u64,
+    },
+
+    /// Leave a barrier after work is complete.
+    ///
+    /// Blocks until all participants have left, ensuring coordinated cleanup.
+    BarrierLeave {
+        /// Barrier name.
+        name: String,
+        /// Participant ID that is leaving.
+        participant_id: String,
+        /// Timeout in milliseconds (0 = no timeout).
+        timeout_ms: u64,
+    },
+
+    /// Query barrier status without blocking.
+    BarrierStatus {
+        /// Barrier name.
+        name: String,
+    },
+
+    // =========================================================================
+    // Distributed Semaphore operations
+    // =========================================================================
+    /// Acquire permits from a semaphore, blocking until available.
+    SemaphoreAcquire {
+        /// Semaphore name.
+        name: String,
+        /// Holder ID for tracking ownership.
+        holder_id: String,
+        /// Number of permits to acquire.
+        permits: u32,
+        /// Maximum permits (semaphore capacity).
+        capacity: u32,
+        /// TTL in milliseconds for automatic release.
+        ttl_ms: u64,
+        /// Timeout in milliseconds (0 = no timeout).
+        timeout_ms: u64,
+    },
+
+    /// Try to acquire permits without blocking.
+    SemaphoreTryAcquire {
+        /// Semaphore name.
+        name: String,
+        /// Holder ID for tracking ownership.
+        holder_id: String,
+        /// Number of permits to acquire.
+        permits: u32,
+        /// Maximum permits (semaphore capacity).
+        capacity: u32,
+        /// TTL in milliseconds for automatic release.
+        ttl_ms: u64,
+    },
+
+    /// Release permits back to a semaphore.
+    SemaphoreRelease {
+        /// Semaphore name.
+        name: String,
+        /// Holder ID that acquired the permits.
+        holder_id: String,
+        /// Number of permits to release (0 = all).
+        permits: u32,
+    },
+
+    /// Query semaphore status.
+    SemaphoreStatus {
+        /// Semaphore name.
+        name: String,
+    },
 }
 
 /// Client RPC response protocol.
@@ -819,6 +904,27 @@ pub enum ClientRpcResponse {
 
     /// Lease list result.
     LeaseListResult(LeaseListResultResponse),
+
+    /// Barrier enter result.
+    BarrierEnterResult(BarrierResultResponse),
+
+    /// Barrier leave result.
+    BarrierLeaveResult(BarrierResultResponse),
+
+    /// Barrier status result.
+    BarrierStatusResult(BarrierResultResponse),
+
+    /// Semaphore acquire result.
+    SemaphoreAcquireResult(SemaphoreResultResponse),
+
+    /// Semaphore try-acquire result.
+    SemaphoreTryAcquireResult(SemaphoreResultResponse),
+
+    /// Semaphore release result.
+    SemaphoreReleaseResult(SemaphoreResultResponse),
+
+    /// Semaphore status result.
+    SemaphoreStatusResult(SemaphoreResultResponse),
 }
 
 /// Health status response.
@@ -1771,4 +1877,48 @@ pub struct LeaseInfo {
     pub remaining_ttl_seconds: u32,
     /// Number of keys attached to this lease.
     pub attached_keys: u32,
+}
+
+// ============================================================================
+// Barrier types
+// ============================================================================
+
+/// Barrier operation result response.
+///
+/// Used for BarrierEnter, BarrierLeave, and BarrierStatus operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BarrierResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Current number of participants at the barrier.
+    pub current_count: Option<u32>,
+    /// Required number of participants to release the barrier.
+    pub required_count: Option<u32>,
+    /// Current barrier phase: "waiting", "ready", or "leaving".
+    pub phase: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// ============================================================================
+// Semaphore types
+// ============================================================================
+
+/// Semaphore operation result response.
+///
+/// Used for SemaphoreAcquire, SemaphoreTryAcquire, SemaphoreRelease, and SemaphoreStatus.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemaphoreResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Number of permits acquired (for acquire operations).
+    pub permits_acquired: Option<u32>,
+    /// Number of permits currently available.
+    pub available: Option<u32>,
+    /// Total capacity of the semaphore.
+    pub capacity: Option<u32>,
+    /// Suggested retry delay in milliseconds (if acquire failed due to no permits).
+    pub retry_after_ms: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
 }

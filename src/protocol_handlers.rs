@@ -4624,5 +4624,275 @@ async fn process_client_request(
                 })),
             }
         }
+
+        // =====================================================================
+        // Barrier operations
+        // =====================================================================
+        ClientRpcRequest::BarrierEnter {
+            name,
+            participant_id,
+            required_count,
+            timeout_ms,
+        } => {
+            use crate::client_rpc::BarrierResultResponse;
+            use crate::coordination::BarrierManager;
+
+            let manager = BarrierManager::new(ctx.kv_store.clone());
+            let timeout = if timeout_ms > 0 {
+                Some(std::time::Duration::from_millis(timeout_ms))
+            } else {
+                None
+            };
+
+            match manager
+                .enter(&name, &participant_id, required_count, timeout)
+                .await
+            {
+                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierEnterResult(
+                    BarrierResultResponse {
+                        success: true,
+                        current_count: Some(current),
+                        required_count: Some(required_count),
+                        phase: Some(phase),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::BarrierEnterResult(
+                    BarrierResultResponse {
+                        success: false,
+                        current_count: None,
+                        required_count: None,
+                        phase: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::BarrierLeave {
+            name,
+            participant_id,
+            timeout_ms,
+        } => {
+            use crate::client_rpc::BarrierResultResponse;
+            use crate::coordination::BarrierManager;
+
+            let manager = BarrierManager::new(ctx.kv_store.clone());
+            let timeout = if timeout_ms > 0 {
+                Some(std::time::Duration::from_millis(timeout_ms))
+            } else {
+                None
+            };
+
+            match manager.leave(&name, &participant_id, timeout).await {
+                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierLeaveResult(
+                    BarrierResultResponse {
+                        success: true,
+                        current_count: Some(current),
+                        required_count: None,
+                        phase: Some(phase),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::BarrierLeaveResult(
+                    BarrierResultResponse {
+                        success: false,
+                        current_count: None,
+                        required_count: None,
+                        phase: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::BarrierStatus { name } => {
+            use crate::client_rpc::BarrierResultResponse;
+            use crate::coordination::BarrierManager;
+
+            let manager = BarrierManager::new(ctx.kv_store.clone());
+
+            match manager.status(&name).await {
+                Ok((current, required, phase)) => Ok(ClientRpcResponse::BarrierStatusResult(
+                    BarrierResultResponse {
+                        success: true,
+                        current_count: Some(current),
+                        required_count: Some(required),
+                        phase: Some(phase),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::BarrierStatusResult(
+                    BarrierResultResponse {
+                        success: false,
+                        current_count: None,
+                        required_count: None,
+                        phase: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        // =====================================================================
+        // Semaphore operations
+        // =====================================================================
+        ClientRpcRequest::SemaphoreAcquire {
+            name,
+            holder_id,
+            permits,
+            capacity,
+            ttl_ms,
+            timeout_ms,
+        } => {
+            use crate::client_rpc::SemaphoreResultResponse;
+            use crate::coordination::SemaphoreManager;
+
+            let manager = SemaphoreManager::new(ctx.kv_store.clone());
+            let timeout = if timeout_ms > 0 {
+                Some(std::time::Duration::from_millis(timeout_ms))
+            } else {
+                None
+            };
+
+            match manager
+                .acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout)
+                .await
+            {
+                Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(
+                    SemaphoreResultResponse {
+                        success: true,
+                        permits_acquired: Some(acquired),
+                        available: Some(available),
+                        capacity: Some(capacity),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreAcquireResult(
+                    SemaphoreResultResponse {
+                        success: false,
+                        permits_acquired: None,
+                        available: None,
+                        capacity: None,
+                        retry_after_ms: Some(100), // Suggest 100ms retry
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::SemaphoreTryAcquire {
+            name,
+            holder_id,
+            permits,
+            capacity,
+            ttl_ms,
+        } => {
+            use crate::client_rpc::SemaphoreResultResponse;
+            use crate::coordination::SemaphoreManager;
+
+            let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+            match manager
+                .try_acquire(&name, &holder_id, permits, capacity, ttl_ms)
+                .await
+            {
+                Ok(Some((acquired, available))) => Ok(
+                    ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                        success: true,
+                        permits_acquired: Some(acquired),
+                        available: Some(available),
+                        capacity: Some(capacity),
+                        retry_after_ms: None,
+                        error: None,
+                    }),
+                ),
+                Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(
+                    SemaphoreResultResponse {
+                        success: false,
+                        permits_acquired: None,
+                        available: None,
+                        capacity: Some(capacity),
+                        retry_after_ms: Some(100),
+                        error: Some("No permits available".to_string()),
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(
+                    SemaphoreResultResponse {
+                        success: false,
+                        permits_acquired: None,
+                        available: None,
+                        capacity: None,
+                        retry_after_ms: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::SemaphoreRelease {
+            name,
+            holder_id,
+            permits,
+        } => {
+            use crate::client_rpc::SemaphoreResultResponse;
+            use crate::coordination::SemaphoreManager;
+
+            let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+            match manager.release(&name, &holder_id, permits).await {
+                Ok(available) => Ok(ClientRpcResponse::SemaphoreReleaseResult(
+                    SemaphoreResultResponse {
+                        success: true,
+                        permits_acquired: None,
+                        available: Some(available),
+                        capacity: None,
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreReleaseResult(
+                    SemaphoreResultResponse {
+                        success: false,
+                        permits_acquired: None,
+                        available: None,
+                        capacity: None,
+                        retry_after_ms: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::SemaphoreStatus { name } => {
+            use crate::client_rpc::SemaphoreResultResponse;
+            use crate::coordination::SemaphoreManager;
+
+            let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+            match manager.status(&name).await {
+                Ok((available, capacity)) => Ok(ClientRpcResponse::SemaphoreStatusResult(
+                    SemaphoreResultResponse {
+                        success: true,
+                        permits_acquired: None,
+                        available: Some(available),
+                        capacity: Some(capacity),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreStatusResult(
+                    SemaphoreResultResponse {
+                        success: false,
+                        permits_acquired: None,
+                        available: None,
+                        capacity: None,
+                        retry_after_ms: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
     }
 }

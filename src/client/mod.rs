@@ -77,9 +77,11 @@ pub use constants::{
     MAX_SUBSCRIPTIONS, MAX_TOTAL_CACHE_ENTRIES, RECONNECT_DELAY,
 };
 pub use coordination::{
-    CoordinationRpc, CounterClient, LeaseClient, LeaseGrantResult, LeaseInfoLocal,
+    BarrierClient, BarrierEnterResult, BarrierLeaveResult, BarrierStatusResult, CoordinationRpc,
+    CounterClient, LeaseClient, LeaseGrantResult, LeaseInfoLocal, LeaseKeepaliveHandle,
     LeaseKeepaliveResult, LeaseRevokeResult, LeaseTimeToLiveResult, LockClient, RateLimitResult,
-    RateLimiterClient, RemoteLockGuard, SequenceClient, SignedCounterClient,
+    RateLimiterClient, RemoteLockGuard, SemaphoreAcquireResult, SemaphoreClient,
+    SemaphoreStatusResult, SequenceClient, SignedCounterClient,
 };
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};

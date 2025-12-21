@@ -50,18 +50,22 @@
 //! // Lock released on drop
 //! ```
 
+mod barrier;
 mod counter;
 mod election;
 mod error;
 mod lock;
 mod rate_limiter;
+mod semaphore;
 mod sequence;
 mod types;
 
+pub use barrier::{BarrierManager, BarrierPhase, BarrierState};
 pub use counter::{AtomicCounter, BufferedCounter, CounterConfig, SignedAtomicCounter};
 pub use election::{ElectionConfig, ElectionHandle, LeaderElection, LeadershipState};
 pub use error::{CoordinationError, FenceError, RateLimitError};
 pub use lock::{DistributedLock, LockConfig, LockGuard};
 pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
+pub use semaphore::{SemaphoreHolder, SemaphoreManager, SemaphoreState};
 pub use sequence::{SequenceConfig, SequenceGenerator};
 pub use types::{BucketState, FencingToken, LockEntry, now_unix_ms};

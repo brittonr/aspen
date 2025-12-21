@@ -33,6 +33,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, warn};
 
 use crate::client_rpc::{ClientRpcRequest, ClientRpcResponse};
 
@@ -1380,6 +1382,142 @@ impl<C: CoordinationRpc> LeaseClient<C> {
             _ => bail!("unexpected response type for WriteKeyWithLease"),
         }
     }
+
+    /// Start automatic keepalive for a lease.
+    ///
+    /// Spawns a background task that periodically refreshes the lease's TTL.
+    /// The keepalive runs at the specified interval (typically TTL/3 is recommended).
+    ///
+    /// # Arguments
+    /// * `lease_id` - The lease ID to keep alive
+    /// * `interval` - How often to send keepalive requests
+    ///
+    /// # Returns
+    /// A `LeaseKeepaliveHandle` that can be used to stop the keepalive task.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let result = lease_client.grant(60).await?; // 60 second TTL
+    /// let handle = lease_client.start_keepalive(
+    ///     result.lease_id,
+    ///     Duration::from_secs(20), // keepalive every 20 seconds
+    /// );
+    ///
+    /// // ... do work with the lease ...
+    ///
+    /// handle.stop(); // Stop keepalive when done
+    /// ```
+    pub fn start_keepalive(&self, lease_id: u64, interval: Duration) -> LeaseKeepaliveHandle
+    where
+        C: 'static,
+    {
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+        let client = self.client.clone();
+
+        tokio::spawn(async move {
+            run_keepalive_loop(client, lease_id, interval, cancel_clone).await;
+        });
+
+        LeaseKeepaliveHandle { cancel, lease_id }
+    }
+}
+
+/// Run the keepalive loop until cancelled.
+async fn run_keepalive_loop<C: CoordinationRpc>(
+    client: Arc<C>,
+    lease_id: u64,
+    interval: Duration,
+    cancel: CancellationToken,
+) {
+    use tokio::time::interval as tokio_interval;
+
+    let mut ticker = tokio_interval(interval);
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    debug!(
+        lease_id,
+        interval_secs = interval.as_secs(),
+        "Lease keepalive started"
+    );
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                debug!(lease_id, "Lease keepalive stopped by cancel");
+                break;
+            }
+            _ = ticker.tick() => {
+                match send_keepalive(&client, lease_id).await {
+                    Ok(ttl) => {
+                        debug!(lease_id, ttl_seconds = ttl, "Lease keepalive succeeded");
+                    }
+                    Err(e) => {
+                        warn!(lease_id, error = %e, "Lease keepalive failed");
+                        // Continue trying - the lease might still be valid
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Send a single keepalive request.
+async fn send_keepalive<C: CoordinationRpc>(client: &Arc<C>, lease_id: u64) -> Result<u32> {
+    use crate::client_rpc::LeaseKeepaliveResultResponse;
+
+    let response = client
+        .send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id })
+        .await?;
+
+    match response {
+        ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+            success,
+            ttl_seconds,
+            error,
+            ..
+        }) => {
+            if success {
+                Ok(ttl_seconds.unwrap_or(0))
+            } else {
+                bail!(
+                    "keepalive failed: {}",
+                    error.unwrap_or_else(|| "unknown error".to_string())
+                )
+            }
+        }
+        _ => bail!("unexpected response type"),
+    }
+}
+
+/// Handle for controlling a lease keepalive background task.
+///
+/// When dropped, the keepalive task continues running. Call `stop()` to
+/// cancel the keepalive task explicitly.
+#[derive(Debug)]
+pub struct LeaseKeepaliveHandle {
+    cancel: CancellationToken,
+    lease_id: u64,
+}
+
+impl LeaseKeepaliveHandle {
+    /// Stop the keepalive task.
+    ///
+    /// After calling this, the lease will no longer be automatically refreshed
+    /// and will expire after its TTL.
+    pub fn stop(self) {
+        self.cancel.cancel();
+    }
+
+    /// Get the lease ID being kept alive.
+    pub fn lease_id(&self) -> u64 {
+        self.lease_id
+    }
+
+    /// Check if the keepalive is still running.
+    pub fn is_running(&self) -> bool {
+        !self.cancel.is_cancelled()
+    }
 }
 
 /// Result of a lease grant operation.
@@ -1429,6 +1567,490 @@ pub struct LeaseInfoLocal {
     pub granted_ttl_seconds: u32,
     /// Remaining TTL in seconds.
     pub remaining_ttl_seconds: u32,
+}
+
+// =============================================================================
+// Barrier Client - Distributed synchronization barrier
+// =============================================================================
+
+/// Client for distributed barrier operations.
+///
+/// Provides a high-level API for coordinating multiple participants at
+/// synchronization points. Implements a "double barrier" pattern:
+///
+/// 1. **Enter phase**: Participants register and wait until all arrive
+/// 2. **Work phase**: All participants proceed with their work
+/// 3. **Leave phase**: Participants deregister and wait until all leave
+///
+/// ## Usage
+///
+/// ```ignore
+/// use aspen::client::coordination::BarrierClient;
+///
+/// // Create a barrier client
+/// let barriers = BarrierClient::new(rpc_client);
+///
+/// // Enter barrier with 3 participants
+/// let (count, phase) = barriers.enter("my-barrier", "participant-1", 3, None).await?;
+/// println!("Arrived: {}/{}", count, 3);
+///
+/// // ... do synchronized work ...
+///
+/// // Leave barrier
+/// let (remaining, phase) = barriers.leave("my-barrier", "participant-1", None).await?;
+/// println!("Left: {} remaining", remaining);
+/// ```
+pub struct BarrierClient<C: CoordinationRpc> {
+    client: Arc<C>,
+}
+
+impl<C: CoordinationRpc> BarrierClient<C> {
+    /// Create a new barrier client.
+    pub fn new(client: Arc<C>) -> Self {
+        Self { client }
+    }
+
+    /// Enter a barrier, waiting until all participants arrive.
+    ///
+    /// # Arguments
+    /// * `name` - Barrier name (unique identifier)
+    /// * `participant_id` - Unique identifier for this participant
+    /// * `required_count` - Number of participants required before proceeding
+    /// * `timeout` - Optional timeout for waiting
+    ///
+    /// # Returns
+    /// A tuple of (current_count, phase) on success.
+    pub async fn enter(
+        &self,
+        name: &str,
+        participant_id: &str,
+        required_count: u32,
+        timeout: Option<Duration>,
+    ) -> Result<BarrierEnterResult> {
+        use crate::client_rpc::BarrierResultResponse;
+
+        let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::BarrierEnter {
+                name: name.to_string(),
+                participant_id: participant_id.to_string(),
+                required_count,
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+                success,
+                current_count,
+                required_count: returned_required,
+                phase,
+                error,
+            }) => {
+                if success {
+                    Ok(BarrierEnterResult {
+                        current_count: current_count.unwrap_or(0),
+                        required_count: returned_required.unwrap_or(required_count),
+                        phase: phase.unwrap_or_else(|| "unknown".to_string()),
+                    })
+                } else {
+                    bail!(
+                        "barrier enter failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for BarrierEnter"),
+        }
+    }
+
+    /// Leave a barrier, waiting until all participants leave.
+    ///
+    /// # Arguments
+    /// * `name` - Barrier name
+    /// * `participant_id` - Unique identifier for this participant
+    /// * `timeout` - Optional timeout for waiting
+    ///
+    /// # Returns
+    /// A tuple of (remaining_count, phase) on success.
+    pub async fn leave(
+        &self,
+        name: &str,
+        participant_id: &str,
+        timeout: Option<Duration>,
+    ) -> Result<BarrierLeaveResult> {
+        use crate::client_rpc::BarrierResultResponse;
+
+        let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::BarrierLeave {
+                name: name.to_string(),
+                participant_id: participant_id.to_string(),
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
+                success,
+                current_count,
+                phase,
+                error,
+                ..
+            }) => {
+                if success {
+                    Ok(BarrierLeaveResult {
+                        remaining_count: current_count.unwrap_or(0),
+                        phase: phase.unwrap_or_else(|| "unknown".to_string()),
+                    })
+                } else {
+                    bail!(
+                        "barrier leave failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for BarrierLeave"),
+        }
+    }
+
+    /// Get barrier status without modifying it.
+    ///
+    /// # Arguments
+    /// * `name` - Barrier name
+    ///
+    /// # Returns
+    /// A `BarrierStatusResult` with current state.
+    pub async fn status(&self, name: &str) -> Result<BarrierStatusResult> {
+        use crate::client_rpc::BarrierResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::BarrierStatus {
+                name: name.to_string(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
+                success,
+                current_count,
+                required_count,
+                phase,
+                error,
+            }) => {
+                if success {
+                    Ok(BarrierStatusResult {
+                        current_count: current_count.unwrap_or(0),
+                        required_count: required_count.unwrap_or(0),
+                        phase: phase.unwrap_or_else(|| "none".to_string()),
+                    })
+                } else {
+                    bail!(
+                        "barrier status failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for BarrierStatus"),
+        }
+    }
+}
+
+/// Result of entering a barrier.
+#[derive(Debug, Clone)]
+pub struct BarrierEnterResult {
+    /// Current number of participants.
+    pub current_count: u32,
+    /// Required number of participants.
+    pub required_count: u32,
+    /// Current barrier phase.
+    pub phase: String,
+}
+
+/// Result of leaving a barrier.
+#[derive(Debug, Clone)]
+pub struct BarrierLeaveResult {
+    /// Remaining participants.
+    pub remaining_count: u32,
+    /// Current barrier phase.
+    pub phase: String,
+}
+
+/// Result of querying barrier status.
+#[derive(Debug, Clone)]
+pub struct BarrierStatusResult {
+    /// Current number of participants.
+    pub current_count: u32,
+    /// Required number of participants.
+    pub required_count: u32,
+    /// Current barrier phase.
+    pub phase: String,
+}
+
+// =============================================================================
+// Semaphore Client - Distributed counting semaphore
+// =============================================================================
+
+/// Client for distributed semaphore operations.
+///
+/// Provides a high-level API for limiting concurrent access to a shared resource.
+/// Each permit holder has a TTL for automatic release on crash recovery.
+///
+/// ## Usage
+///
+/// ```ignore
+/// use aspen::client::coordination::SemaphoreClient;
+///
+/// // Create a semaphore client
+/// let sems = SemaphoreClient::new(rpc_client);
+///
+/// // Acquire 2 of 5 permits with 60s TTL
+/// let result = sems.acquire("my-semaphore", "holder-1", 2, 5, Duration::from_secs(60), None).await?;
+/// println!("Acquired: {}, available: {}", result.permits_acquired, result.available);
+///
+/// // ... do work ...
+///
+/// // Release permits
+/// let available = sems.release("my-semaphore", "holder-1", 2).await?;
+/// println!("Available after release: {}", available);
+/// ```
+pub struct SemaphoreClient<C: CoordinationRpc> {
+    client: Arc<C>,
+}
+
+impl<C: CoordinationRpc> SemaphoreClient<C> {
+    /// Create a new semaphore client.
+    pub fn new(client: Arc<C>) -> Self {
+        Self { client }
+    }
+
+    /// Acquire permits, blocking until available or timeout.
+    ///
+    /// # Arguments
+    /// * `name` - Semaphore name (unique identifier)
+    /// * `holder_id` - Unique identifier for this holder
+    /// * `permits` - Number of permits to acquire
+    /// * `capacity` - Maximum permits (creates semaphore if not exists)
+    /// * `ttl` - Time-to-live for automatic release
+    /// * `timeout` - Optional timeout for waiting
+    ///
+    /// # Returns
+    /// A `SemaphoreAcquireResult` on success.
+    pub async fn acquire(
+        &self,
+        name: &str,
+        holder_id: &str,
+        permits: u32,
+        capacity: u32,
+        ttl: Duration,
+        timeout: Option<Duration>,
+    ) -> Result<SemaphoreAcquireResult> {
+        use crate::client_rpc::SemaphoreResultResponse;
+
+        let ttl_ms = ttl.as_millis() as u64;
+        let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::SemaphoreAcquire {
+                name: name.to_string(),
+                holder_id: holder_id.to_string(),
+                permits,
+                capacity,
+                ttl_ms,
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+                success,
+                permits_acquired,
+                available,
+                error,
+                ..
+            }) => {
+                if success {
+                    Ok(SemaphoreAcquireResult {
+                        permits_acquired: permits_acquired.unwrap_or(permits),
+                        available: available.unwrap_or(0),
+                    })
+                } else {
+                    bail!(
+                        "semaphore acquire failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for SemaphoreAcquire"),
+        }
+    }
+
+    /// Try to acquire permits without blocking.
+    ///
+    /// # Arguments
+    /// * `name` - Semaphore name
+    /// * `holder_id` - Unique identifier for this holder
+    /// * `permits` - Number of permits to acquire
+    /// * `capacity` - Maximum permits (creates semaphore if not exists)
+    /// * `ttl` - Time-to-live for automatic release
+    ///
+    /// # Returns
+    /// Some(result) if permits acquired, None if not available.
+    pub async fn try_acquire(
+        &self,
+        name: &str,
+        holder_id: &str,
+        permits: u32,
+        capacity: u32,
+        ttl: Duration,
+    ) -> Result<Option<SemaphoreAcquireResult>> {
+        use crate::client_rpc::SemaphoreResultResponse;
+
+        let ttl_ms = ttl.as_millis() as u64;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::SemaphoreTryAcquire {
+                name: name.to_string(),
+                holder_id: holder_id.to_string(),
+                permits,
+                capacity,
+                ttl_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                success,
+                permits_acquired,
+                available,
+                error,
+                ..
+            }) => {
+                if success {
+                    Ok(Some(SemaphoreAcquireResult {
+                        permits_acquired: permits_acquired.unwrap_or(permits),
+                        available: available.unwrap_or(0),
+                    }))
+                } else if error.is_some() {
+                    bail!(
+                        "semaphore try_acquire failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                } else {
+                    // Not enough permits available
+                    Ok(None)
+                }
+            }
+            _ => bail!("unexpected response type for SemaphoreTryAcquire"),
+        }
+    }
+
+    /// Release permits back to the semaphore.
+    ///
+    /// # Arguments
+    /// * `name` - Semaphore name
+    /// * `holder_id` - Unique identifier for this holder
+    /// * `permits` - Number of permits to release (0 = release all)
+    ///
+    /// # Returns
+    /// The number of available permits after release.
+    pub async fn release(&self, name: &str, holder_id: &str, permits: u32) -> Result<u32> {
+        use crate::client_rpc::SemaphoreResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::SemaphoreRelease {
+                name: name.to_string(),
+                holder_id: holder_id.to_string(),
+                permits,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+                success,
+                available,
+                error,
+                ..
+            }) => {
+                if success {
+                    Ok(available.unwrap_or(0))
+                } else {
+                    bail!(
+                        "semaphore release failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for SemaphoreRelease"),
+        }
+    }
+
+    /// Get semaphore status.
+    ///
+    /// # Arguments
+    /// * `name` - Semaphore name
+    ///
+    /// # Returns
+    /// A `SemaphoreStatusResult` with current state.
+    pub async fn status(&self, name: &str) -> Result<SemaphoreStatusResult> {
+        use crate::client_rpc::SemaphoreResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::SemaphoreStatus {
+                name: name.to_string(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+                success,
+                available,
+                capacity,
+                error,
+                ..
+            }) => {
+                if success {
+                    Ok(SemaphoreStatusResult {
+                        available: available.unwrap_or(0),
+                        capacity: capacity.unwrap_or(0),
+                    })
+                } else {
+                    bail!(
+                        "semaphore status failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for SemaphoreStatus"),
+        }
+    }
+}
+
+/// Result of acquiring semaphore permits.
+#[derive(Debug, Clone)]
+pub struct SemaphoreAcquireResult {
+    /// Number of permits acquired.
+    pub permits_acquired: u32,
+    /// Permits available after acquisition.
+    pub available: u32,
+}
+
+/// Result of querying semaphore status.
+#[derive(Debug, Clone)]
+pub struct SemaphoreStatusResult {
+    /// Available permits.
+    pub available: u32,
+    /// Total capacity.
+    pub capacity: u32,
 }
 
 #[cfg(test)]
@@ -1835,5 +2457,74 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    // ================================
+    // LeaseKeepaliveHandle tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_lease_keepalive_handle_stop() {
+        // This test verifies that the handle can be stopped
+        let client = Arc::new(MockRpcClient::new(vec![]));
+        let lease_client = LeaseClient::new(client);
+
+        let handle = lease_client.start_keepalive(12345, Duration::from_millis(100));
+        assert!(handle.is_running());
+        assert_eq!(handle.lease_id(), 12345);
+
+        handle.stop();
+        // After stop, the task should be cancelled
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        // Can't check is_running after stop since handle is consumed
+    }
+
+    #[tokio::test]
+    async fn test_lease_keepalive_sends_requests() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        // Create a mock that counts keepalive requests
+        struct CountingMockClient {
+            keepalive_count: AtomicU32,
+        }
+
+        impl CoordinationRpc for CountingMockClient {
+            async fn send_coordination_request(
+                &self,
+                request: ClientRpcRequest,
+            ) -> Result<ClientRpcResponse> {
+                match request {
+                    ClientRpcRequest::LeaseKeepalive { .. } => {
+                        self.keepalive_count.fetch_add(1, Ordering::SeqCst);
+                        Ok(ClientRpcResponse::LeaseKeepaliveResult(
+                            LeaseKeepaliveResultResponse {
+                                success: true,
+                                lease_id: Some(12345),
+                                ttl_seconds: Some(60),
+                                error: None,
+                            },
+                        ))
+                    }
+                    _ => bail!("unexpected request"),
+                }
+            }
+        }
+
+        let mock = Arc::new(CountingMockClient {
+            keepalive_count: AtomicU32::new(0),
+        });
+        let lease_client = LeaseClient::new(mock.clone());
+
+        // Start keepalive with 50ms interval
+        let handle = lease_client.start_keepalive(12345, Duration::from_millis(50));
+
+        // Wait for a few keepalives
+        tokio::time::sleep(Duration::from_millis(180)).await;
+
+        handle.stop();
+
+        // Should have sent at least 2-3 keepalives (one immediately, plus 2-3 more)
+        let count = mock.keepalive_count.load(Ordering::SeqCst);
+        assert!(count >= 2, "expected at least 2 keepalives, got {}", count);
     }
 }
