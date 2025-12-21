@@ -95,8 +95,8 @@ use crate::raft::auth::{
 };
 use crate::raft::constants::{
     CLIENT_RPC_BURST, CLIENT_RPC_RATE_LIMIT_PREFIX, CLIENT_RPC_RATE_PER_SECOND,
-    CLIENT_RPC_REQUEST_COUNTER, MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE,
-    MAX_STREAMS_PER_CONNECTION,
+    CLIENT_RPC_REQUEST_COUNTER, CLIENT_RPC_REQUEST_ID_SEQUENCE, MAX_CONCURRENT_CONNECTIONS,
+    MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
 };
 use crate::raft::log_subscriber::{
     EndOfStreamReason, HistoricalLogReader, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage,
@@ -1551,13 +1551,27 @@ async fn handle_client_connection(
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx, client_id))]
+#[instrument(skip(recv, send, ctx, client_id), fields(request_id))]
 async fn handle_client_request(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
     client_id: &str,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
+
+    // Generate unique request ID using distributed sequence
+    // Tiger Style: Monotonic IDs enable cluster-wide request tracing
+    let request_id = {
+        let seq = SequenceGenerator::new(
+            ctx.kv_store.clone(),
+            CLIENT_RPC_REQUEST_ID_SEQUENCE,
+            SequenceConfig::default(),
+        );
+        seq.next().await.unwrap_or(0)
+    };
+
+    // Record request_id in current span for distributed tracing
+    tracing::Span::current().record("request_id", request_id);
 
     // Read the request with size limit
     let buffer = recv
@@ -1569,7 +1583,7 @@ async fn handle_client_request(
     let request: ClientRpcRequest =
         postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
 
-    debug!(request_type = ?request, client_id = %client_id, "received Client request");
+    debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, "received Client request");
 
     // Rate limit check using distributed rate limiter
     // Tiger Style: Per-client rate limiting prevents DoS from individual clients
@@ -2142,6 +2156,16 @@ async fn process_client_request(
                         .unwrap_or(0);
                     let snapshot_index = metrics.snapshot.as_ref().map(|s| s.index).unwrap_or(0);
 
+                    // Get cluster-wide request counter
+                    let request_counter = {
+                        let counter = AtomicCounter::new(
+                            ctx.kv_store.clone(),
+                            CLIENT_RPC_REQUEST_COUNTER,
+                            CounterConfig::default(),
+                        );
+                        counter.get().await.unwrap_or(0)
+                    };
+
                     format!(
                         "# HELP aspen_raft_term Current Raft term\n\
                          # TYPE aspen_raft_term gauge\n\
@@ -2163,7 +2187,10 @@ async fn process_client_request(
                          aspen_raft_snapshot_index{{node_id=\"{}\"}} {}\n\
                          # HELP aspen_node_uptime_seconds Node uptime in seconds\n\
                          # TYPE aspen_node_uptime_seconds counter\n\
-                         aspen_node_uptime_seconds{{node_id=\"{}\"}} {}\n",
+                         aspen_node_uptime_seconds{{node_id=\"{}\"}} {}\n\
+                         # HELP aspen_client_rpc_requests_total Total client RPC requests processed cluster-wide\n\
+                         # TYPE aspen_client_rpc_requests_total counter\n\
+                         aspen_client_rpc_requests_total{{node_id=\"{}\"}} {}\n",
                         ctx.node_id,
                         metrics.current_term,
                         ctx.node_id,
@@ -2177,7 +2204,9 @@ async fn process_client_request(
                         ctx.node_id,
                         snapshot_index,
                         ctx.node_id,
-                        ctx.start_time.elapsed().as_secs()
+                        ctx.start_time.elapsed().as_secs(),
+                        ctx.node_id,
+                        request_counter
                     )
                 }
                 Err(_) => String::new(),

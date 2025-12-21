@@ -65,6 +65,7 @@
 
 pub mod cache;
 pub mod constants;
+pub mod coordination;
 pub mod overlay;
 pub mod subscription;
 pub mod ticket;
@@ -73,6 +74,10 @@ pub use cache::LocalCache;
 pub use constants::{
     CONNECTION_TIMEOUT, DEFAULT_CACHE_TTL, HEARTBEAT_INTERVAL, MAX_CACHE_TTL, MAX_RECONNECT_DELAY,
     MAX_SUBSCRIPTIONS, MAX_TOTAL_CACHE_ENTRIES, RECONNECT_DELAY,
+};
+pub use coordination::{
+    CoordinationRpc, CounterClient, LockClient, RateLimitResult, RateLimiterClient,
+    RemoteLockGuard, SequenceClient, SignedCounterClient,
 };
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};

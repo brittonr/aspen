@@ -554,3 +554,11 @@ pub const CLIENT_RPC_RATE_LIMIT_PREFIX: &str = "_system:ratelimit:client:";
 /// Used in:
 /// - `protocol_handlers.rs`: Request counting for metrics
 pub const CLIENT_RPC_REQUEST_COUNTER: &str = "_system:metrics:client_requests_total";
+
+/// System key for request ID sequence generator.
+///
+/// Tiger Style: Monotonic sequence ensures unique, cluster-wide request IDs.
+///
+/// Used in:
+/// - `protocol_handlers.rs`: Request ID generation for tracing
+pub const CLIENT_RPC_REQUEST_ID_SEQUENCE: &str = "_system:sequence:request_id";
