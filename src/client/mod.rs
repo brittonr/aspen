@@ -79,9 +79,10 @@ pub use constants::{
 pub use coordination::{
     BarrierClient, BarrierEnterResult, BarrierLeaveResult, BarrierStatusResult, CoordinationRpc,
     CounterClient, LeaseClient, LeaseGrantResult, LeaseInfoLocal, LeaseKeepaliveHandle,
-    LeaseKeepaliveResult, LeaseRevokeResult, LeaseTimeToLiveResult, LockClient, RateLimitResult,
-    RateLimiterClient, RemoteLockGuard, SemaphoreAcquireResult, SemaphoreClient,
-    SemaphoreStatusResult, SequenceClient, SignedCounterClient,
+    LeaseKeepaliveResult, LeaseRevokeResult, LeaseTimeToLiveResult, LockClient, RWLockClient,
+    RWLockReadResult, RWLockStatusResult, RWLockWriteResult, RateLimitResult, RateLimiterClient,
+    RemoteLockGuard, SemaphoreAcquireResult, SemaphoreClient, SemaphoreStatusResult,
+    SequenceClient, SignedCounterClient,
 };
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};

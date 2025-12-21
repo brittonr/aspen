@@ -4894,5 +4894,335 @@ async fn process_client_request(
                 )),
             }
         }
+
+        // =====================================================================
+        // Read-Write Lock operations
+        // =====================================================================
+        ClientRpcRequest::RWLockAcquireRead {
+            name,
+            holder_id,
+            ttl_ms,
+            timeout_ms,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+            let timeout = if timeout_ms > 0 {
+                Some(std::time::Duration::from_millis(timeout_ms))
+            } else {
+                None
+            };
+
+            match manager
+                .acquire_read(&name, &holder_id, ttl_ms, timeout)
+                .await
+            {
+                Ok((fencing_token, deadline_ms, reader_count)) => Ok(
+                    ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some("read".to_string()),
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: Some(deadline_ms),
+                        reader_count: Some(reader_count),
+                        writer_holder: None,
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::RWLockAcquireReadResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockTryAcquireRead {
+            name,
+            holder_id,
+            ttl_ms,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager.try_acquire_read(&name, &holder_id, ttl_ms).await {
+                Ok(Some((fencing_token, deadline_ms, reader_count))) => Ok(
+                    ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some("read".to_string()),
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: Some(deadline_ms),
+                        reader_count: Some(reader_count),
+                        writer_holder: None,
+                        error: None,
+                    }),
+                ),
+                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some("lock not available".to_string()),
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockAcquireWrite {
+            name,
+            holder_id,
+            ttl_ms,
+            timeout_ms,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+            let timeout = if timeout_ms > 0 {
+                Some(std::time::Duration::from_millis(timeout_ms))
+            } else {
+                None
+            };
+
+            match manager
+                .acquire_write(&name, &holder_id, ttl_ms, timeout)
+                .await
+            {
+                Ok((fencing_token, deadline_ms)) => Ok(
+                    ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some("write".to_string()),
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: Some(deadline_ms),
+                        reader_count: Some(0),
+                        writer_holder: Some(holder_id),
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockTryAcquireWrite {
+            name,
+            holder_id,
+            ttl_ms,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager.try_acquire_write(&name, &holder_id, ttl_ms).await {
+                Ok(Some((fencing_token, deadline_ms))) => Ok(
+                    ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some("write".to_string()),
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: Some(deadline_ms),
+                        reader_count: Some(0),
+                        writer_holder: Some(holder_id),
+                        error: None,
+                    }),
+                ),
+                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some("lock not available".to_string()),
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockReleaseRead { name, holder_id } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager.release_read(&name, &holder_id).await {
+                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseReadResult(
+                    RWLockResultResponse {
+                        success: true,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RWLockReleaseReadResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockReleaseWrite {
+            name,
+            holder_id,
+            fencing_token,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager
+                .release_write(&name, &holder_id, fencing_token)
+                .await
+            {
+                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(
+                    RWLockResultResponse {
+                        success: true,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockDowngrade {
+            name,
+            holder_id,
+            fencing_token,
+            ttl_ms,
+        } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager
+                .downgrade(&name, &holder_id, fencing_token, ttl_ms)
+                .await
+            {
+                Ok((new_token, deadline_ms, reader_count)) => Ok(
+                    ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some("read".to_string()),
+                        fencing_token: Some(new_token),
+                        deadline_ms: Some(deadline_ms),
+                        reader_count: Some(reader_count),
+                        writer_holder: None,
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::RWLockDowngradeResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RWLockStatus { name } => {
+            use crate::client_rpc::RWLockResultResponse;
+            use crate::coordination::RWLockManager;
+
+            let manager = RWLockManager::new(ctx.kv_store.clone());
+
+            match manager.status(&name).await {
+                Ok((mode, reader_count, writer_holder, fencing_token)) => Ok(
+                    ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+                        success: true,
+                        mode: Some(mode),
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: None,
+                        reader_count: Some(reader_count),
+                        writer_holder,
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::RWLockStatusResult(
+                    RWLockResultResponse {
+                        success: false,
+                        mode: None,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        reader_count: None,
+                        writer_holder: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
     }
 }

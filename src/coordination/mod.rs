@@ -56,6 +56,7 @@ mod election;
 mod error;
 mod lock;
 mod rate_limiter;
+mod rwlock;
 mod semaphore;
 mod sequence;
 mod types;
@@ -66,6 +67,7 @@ pub use election::{ElectionConfig, ElectionHandle, LeaderElection, LeadershipSta
 pub use error::{CoordinationError, FenceError, RateLimitError};
 pub use lock::{DistributedLock, LockConfig, LockGuard};
 pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
+pub use rwlock::{RWLockManager, RWLockMode, RWLockState, ReaderEntry, WriterEntry};
 pub use semaphore::{SemaphoreHolder, SemaphoreManager, SemaphoreState};
 pub use sequence::{SequenceConfig, SequenceGenerator};
 pub use types::{BucketState, FencingToken, LockEntry, now_unix_ms};

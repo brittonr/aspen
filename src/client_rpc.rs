@@ -702,6 +702,89 @@ pub enum ClientRpcRequest {
         /// Semaphore name.
         name: String,
     },
+
+    // =========================================================================
+    // Read-Write Lock operations
+    // =========================================================================
+    /// Acquire read lock (blocking until available or timeout).
+    RWLockAcquireRead {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// TTL in milliseconds.
+        ttl_ms: u64,
+        /// Timeout in milliseconds (0 = no timeout).
+        timeout_ms: u64,
+    },
+
+    /// Try to acquire read lock (non-blocking).
+    RWLockTryAcquireRead {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Acquire write lock (blocking until available or timeout).
+    RWLockAcquireWrite {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// TTL in milliseconds.
+        ttl_ms: u64,
+        /// Timeout in milliseconds (0 = no timeout).
+        timeout_ms: u64,
+    },
+
+    /// Try to acquire write lock (non-blocking).
+    RWLockTryAcquireWrite {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Release read lock.
+    RWLockReleaseRead {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+    },
+
+    /// Release write lock.
+    RWLockReleaseWrite {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// Fencing token for verification.
+        fencing_token: u64,
+    },
+
+    /// Downgrade write lock to read lock.
+    RWLockDowngrade {
+        /// Lock name.
+        name: String,
+        /// Holder identifier.
+        holder_id: String,
+        /// Fencing token for verification.
+        fencing_token: u64,
+        /// New TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Query RWLock status.
+    RWLockStatus {
+        /// Lock name.
+        name: String,
+    },
 }
 
 /// Client RPC response protocol.
@@ -925,6 +1008,33 @@ pub enum ClientRpcResponse {
 
     /// Semaphore status result.
     SemaphoreStatusResult(SemaphoreResultResponse),
+
+    // =========================================================================
+    // Read-Write Lock responses
+    // =========================================================================
+    /// RWLock acquire read result.
+    RWLockAcquireReadResult(RWLockResultResponse),
+
+    /// RWLock try-acquire read result.
+    RWLockTryAcquireReadResult(RWLockResultResponse),
+
+    /// RWLock acquire write result.
+    RWLockAcquireWriteResult(RWLockResultResponse),
+
+    /// RWLock try-acquire write result.
+    RWLockTryAcquireWriteResult(RWLockResultResponse),
+
+    /// RWLock release read result.
+    RWLockReleaseReadResult(RWLockResultResponse),
+
+    /// RWLock release write result.
+    RWLockReleaseWriteResult(RWLockResultResponse),
+
+    /// RWLock downgrade result.
+    RWLockDowngradeResult(RWLockResultResponse),
+
+    /// RWLock status result.
+    RWLockStatusResult(RWLockResultResponse),
 }
 
 /// Health status response.
@@ -1919,6 +2029,31 @@ pub struct SemaphoreResultResponse {
     pub capacity: Option<u32>,
     /// Suggested retry delay in milliseconds (if acquire failed due to no permits).
     pub retry_after_ms: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// ============================================================================
+// Read-Write Lock types
+// ============================================================================
+
+/// Read-write lock operation result response.
+///
+/// Used for RWLockAcquireRead, RWLockAcquireWrite, RWLockRelease, RWLockDowngrade, and RWLockStatus.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RWLockResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Current lock mode: "free", "read", or "write".
+    pub mode: Option<String>,
+    /// Fencing token (for write locks and downgrade).
+    pub fencing_token: Option<u64>,
+    /// Lock deadline in milliseconds since epoch.
+    pub deadline_ms: Option<u64>,
+    /// Number of active readers.
+    pub reader_count: Option<u32>,
+    /// Writer holder ID (if mode == "write").
+    pub writer_holder: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
