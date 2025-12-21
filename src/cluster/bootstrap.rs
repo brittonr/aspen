@@ -47,6 +47,7 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::raft::StateMachineVariant;
 use crate::raft::auth::AuthContext;
+use crate::raft::lease_cleanup::{LeaseCleanupConfig, spawn_lease_cleanup_task};
 use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
@@ -445,6 +446,19 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 cleanup_interval_secs = 60,
                 batch_size = 1000,
                 "TTL cleanup task started"
+            );
+
+            // Spawn lease cleanup background task
+            // This periodically deletes expired leases and their attached keys
+            let _lease_cancel = spawn_lease_cleanup_task(
+                sqlite_state_machine.clone(),
+                LeaseCleanupConfig::default(),
+            );
+            info!(
+                node_id = config.node_id,
+                cleanup_interval_secs = 10,
+                batch_size = 100,
+                "Lease cleanup task started"
             );
 
             let raft = Arc::new(

@@ -480,6 +480,35 @@ impl KeyValueStore for RaftNode {
                     operations: ops,
                 }
             }
+            // Lease operations
+            crate::api::WriteCommand::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => AppRequest::SetWithLease {
+                key: key.clone(),
+                value: value.clone(),
+                lease_id: *lease_id,
+            },
+            crate::api::WriteCommand::SetMultiWithLease { pairs, lease_id } => {
+                AppRequest::SetMultiWithLease {
+                    pairs: pairs.clone(),
+                    lease_id: *lease_id,
+                }
+            }
+            crate::api::WriteCommand::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => AppRequest::LeaseGrant {
+                lease_id: *lease_id,
+                ttl_seconds: *ttl_seconds,
+            },
+            crate::api::WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke {
+                lease_id: *lease_id,
+            },
+            crate::api::WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive {
+                lease_id: *lease_id,
+            },
         };
 
         // Apply write through Raft consensus
@@ -511,6 +540,9 @@ impl KeyValueStore for RaftNode {
                     batch_applied: resp.data.batch_applied,
                     conditions_met: resp.data.conditions_met,
                     failed_condition_index: resp.data.failed_condition_index,
+                    lease_id: resp.data.lease_id,
+                    ttl_seconds: resp.data.ttl_seconds,
+                    keys_deleted: resp.data.keys_deleted,
                 })
             }
             Err(err) => {

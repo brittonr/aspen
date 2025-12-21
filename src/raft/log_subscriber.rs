@@ -289,6 +289,36 @@ pub enum KvOperation {
         /// Operations as (is_set, key, value) tuples.
         operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
     },
+    /// Set a single key-value pair attached to a lease.
+    SetWithLease {
+        key: Vec<u8>,
+        value: Vec<u8>,
+        /// Lease ID this key is attached to.
+        lease_id: u64,
+    },
+    /// Set multiple keys attached to a lease.
+    SetMultiWithLease {
+        pairs: Vec<(Vec<u8>, Vec<u8>)>,
+        /// Lease ID these keys are attached to.
+        lease_id: u64,
+    },
+    /// Grant a new lease.
+    LeaseGrant {
+        /// Lease ID (0 = auto-generated).
+        lease_id: u64,
+        /// TTL in seconds.
+        ttl_seconds: u32,
+    },
+    /// Revoke a lease and delete all attached keys.
+    LeaseRevoke {
+        /// Lease ID to revoke.
+        lease_id: u64,
+    },
+    /// Refresh a lease's TTL.
+    LeaseKeepalive {
+        /// Lease ID to refresh.
+        lease_id: u64,
+    },
     /// No-op entry (used for leader election).
     Noop,
     /// Membership change entry.
@@ -308,10 +338,13 @@ impl KvOperation {
         match self {
             KvOperation::Set { key, .. }
             | KvOperation::SetWithTTL { key, .. }
+            | KvOperation::SetWithLease { key, .. }
             | KvOperation::Delete { key }
             | KvOperation::CompareAndSwap { key, .. }
             | KvOperation::CompareAndDelete { key, .. } => key.starts_with(prefix),
-            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => {
                 pairs.iter().any(|(k, _)| k.starts_with(prefix))
             }
             KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
@@ -319,8 +352,12 @@ impl KvOperation {
             | KvOperation::ConditionalBatch { operations, .. } => {
                 operations.iter().any(|(_, k, _)| k.starts_with(prefix))
             }
-            KvOperation::Noop | KvOperation::MembershipChange { .. } => {
-                // Always include control operations
+            KvOperation::Noop
+            | KvOperation::MembershipChange { .. }
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => {
+                // Always include control/lease operations
                 true
             }
         }
@@ -331,10 +368,13 @@ impl KvOperation {
         match self {
             KvOperation::Set { key, .. }
             | KvOperation::SetWithTTL { key, .. }
+            | KvOperation::SetWithLease { key, .. }
             | KvOperation::Delete { key }
             | KvOperation::CompareAndSwap { key, .. }
             | KvOperation::CompareAndDelete { key, .. } => Some(key),
-            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => {
                 pairs.first().map(|(k, _)| k.as_slice())
             }
             KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
@@ -342,7 +382,11 @@ impl KvOperation {
             | KvOperation::ConditionalBatch { operations, .. } => {
                 operations.first().map(|(_, k, _)| k.as_slice())
             }
-            KvOperation::Noop | KvOperation::MembershipChange { .. } => None,
+            KvOperation::Noop
+            | KvOperation::MembershipChange { .. }
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => None,
         }
     }
 
@@ -351,16 +395,21 @@ impl KvOperation {
         match self {
             KvOperation::Set { .. }
             | KvOperation::SetWithTTL { .. }
+            | KvOperation::SetWithLease { .. }
             | KvOperation::Delete { .. }
             | KvOperation::CompareAndSwap { .. }
             | KvOperation::CompareAndDelete { .. } => 1,
-            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
-                pairs.len()
-            }
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => pairs.len(),
             KvOperation::DeleteMulti { keys } => keys.len(),
             KvOperation::Batch { operations }
             | KvOperation::ConditionalBatch { operations, .. } => operations.len(),
-            KvOperation::Noop | KvOperation::MembershipChange { .. } => 0,
+            KvOperation::Noop
+            | KvOperation::MembershipChange { .. }
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => 0,
         }
     }
 }
@@ -438,6 +487,31 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                     .map(|(is_set, key, value)| (is_set, key.into_bytes(), value.into_bytes()))
                     .collect(),
             },
+            AppRequest::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => KvOperation::SetWithLease {
+                key: key.into_bytes(),
+                value: value.into_bytes(),
+                lease_id,
+            },
+            AppRequest::SetMultiWithLease { pairs, lease_id } => KvOperation::SetMultiWithLease {
+                pairs: pairs
+                    .into_iter()
+                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
+                    .collect(),
+                lease_id,
+            },
+            AppRequest::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => KvOperation::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            },
+            AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke { lease_id },
+            AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive { lease_id },
         }
     }
 }

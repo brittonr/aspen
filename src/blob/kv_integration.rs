@@ -288,6 +288,28 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
             WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
                 WriteCommand::SetMultiWithTTL { pairs, ttl_seconds }
             }
+            // Lease operations pass through - no blob offloading
+            WriteCommand::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => WriteCommand::SetWithLease {
+                key,
+                value,
+                lease_id,
+            },
+            WriteCommand::SetMultiWithLease { pairs, lease_id } => {
+                WriteCommand::SetMultiWithLease { pairs, lease_id }
+            }
+            WriteCommand::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => WriteCommand::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            },
+            WriteCommand::LeaseRevoke { lease_id } => WriteCommand::LeaseRevoke { lease_id },
+            WriteCommand::LeaseKeepalive { lease_id } => WriteCommand::LeaseKeepalive { lease_id },
         };
 
         // Write to underlying KV

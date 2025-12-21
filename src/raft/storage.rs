@@ -1631,6 +1631,48 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             }
                         }
                     }
+                    // Lease operations in in-memory store: store values but don't track leases.
+                    // This is for testing only, not production.
+                    AppRequest::SetWithLease { key, value, .. } => {
+                        sm.data.insert(key.clone(), value.clone());
+                        AppResponse {
+                            value: Some(value.clone()),
+                            ..Default::default()
+                        }
+                    }
+                    AppRequest::SetMultiWithLease { pairs, .. } => {
+                        for (key, value) in pairs {
+                            sm.data.insert(key.clone(), value.clone());
+                        }
+                        AppResponse::default()
+                    }
+                    AppRequest::LeaseGrant {
+                        lease_id,
+                        ttl_seconds,
+                    } => {
+                        // In-memory doesn't track leases, just return success
+                        AppResponse {
+                            lease_id: Some(*lease_id),
+                            ttl_seconds: Some(*ttl_seconds),
+                            ..Default::default()
+                        }
+                    }
+                    AppRequest::LeaseRevoke { lease_id } => {
+                        // In-memory doesn't track leases, just return success
+                        AppResponse {
+                            lease_id: Some(*lease_id),
+                            keys_deleted: Some(0),
+                            ..Default::default()
+                        }
+                    }
+                    AppRequest::LeaseKeepalive { lease_id } => {
+                        // In-memory doesn't track leases, just return success
+                        AppResponse {
+                            lease_id: Some(*lease_id),
+                            ttl_seconds: Some(60), // Dummy value
+                            ..Default::default()
+                        }
+                    }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =

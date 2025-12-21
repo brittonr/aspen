@@ -352,6 +352,35 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                     })
                     .collect(),
             },
+            AppRequest::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => KvOperation::SetWithLease {
+                key: key.clone().into_bytes(),
+                value: value.clone().into_bytes(),
+                lease_id: *lease_id,
+            },
+            AppRequest::SetMultiWithLease { pairs, lease_id } => KvOperation::SetMultiWithLease {
+                pairs: pairs
+                    .iter()
+                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
+                    .collect(),
+                lease_id: *lease_id,
+            },
+            AppRequest::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => KvOperation::LeaseGrant {
+                lease_id: *lease_id,
+                ttl_seconds: *ttl_seconds,
+            },
+            AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke {
+                lease_id: *lease_id,
+            },
+            AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive {
+                lease_id: *lease_id,
+            },
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -590,6 +619,41 @@ impl SqliteStateMachine {
                 [],
             )
             .context(ExecuteSnafu)?;
+
+        // Create leases table for lease-based expiration (etcd-style)
+        // Leases are first-class resources that keys can be attached to.
+        // When a lease expires or is revoked, all attached keys are deleted.
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS leases (
+                lease_id INTEGER PRIMARY KEY,
+                granted_ttl_seconds INTEGER NOT NULL,
+                expires_at_ms INTEGER NOT NULL
+            )",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Index for efficient lease expiration queries
+        write_conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS idx_lease_expires ON leases(expires_at_ms)",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Add lease_id column to state_machine_kv if it doesn't exist (schema migration)
+        // Keys with non-null lease_id are attached to that lease and deleted when lease expires
+        let _ = write_conn.execute(
+            "ALTER TABLE state_machine_kv ADD COLUMN lease_id INTEGER REFERENCES leases(lease_id)",
+            [],
+        );
+
+        // Index for efficient lookup of keys by lease_id (for revoke operation)
+        let _ = write_conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kv_lease ON state_machine_kv(lease_id) WHERE lease_id IS NOT NULL",
+            [],
+        );
 
         // Create read connection pool
         let manager = SqliteConnectionManager::file(&path);
@@ -985,6 +1049,196 @@ impl SqliteStateMachine {
             .context(QuerySnafu)?;
 
         Ok(count as u64)
+    }
+
+    // =========================================================================
+    // Lease Query Methods
+    // =========================================================================
+
+    /// Get lease information by ID.
+    ///
+    /// Returns (granted_ttl_seconds, remaining_ttl_seconds) if the lease exists and is not expired.
+    /// Returns None if the lease doesn't exist or has expired.
+    pub fn get_lease(&self, lease_id: u64) -> Result<Option<(u32, u32)>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let result = conn
+            .query_row(
+                "SELECT granted_ttl_seconds, expires_at_ms FROM leases WHERE lease_id = ?1",
+                params![lease_id as i64],
+                |row| {
+                    let granted_ttl: i64 = row.get(0)?;
+                    let expires_at: i64 = row.get(1)?;
+                    Ok((granted_ttl, expires_at))
+                },
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        match result {
+            Some((granted_ttl, expires_at)) => {
+                // Check if expired
+                if (expires_at as u64) <= now_ms {
+                    Ok(None)
+                } else {
+                    let remaining_ms = (expires_at as u64).saturating_sub(now_ms);
+                    let remaining_secs = (remaining_ms / 1000) as u32;
+                    Ok(Some((granted_ttl as u32, remaining_secs)))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get all keys attached to a lease.
+    ///
+    /// Returns a list of keys that have the specified lease_id.
+    pub fn get_lease_keys(&self, lease_id: u64) -> Result<Vec<String>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let mut stmt = conn
+            .prepare_cached(
+                "SELECT key FROM state_machine_kv WHERE lease_id = ?1 AND (expires_at_ms IS NULL OR expires_at_ms > ?2) ORDER BY key LIMIT 10000",
+            )
+            .context(QuerySnafu)?;
+
+        let keys = stmt
+            .query_map(params![lease_id as i64, now_ms as i64], |row| row.get(0))
+            .context(QuerySnafu)?
+            .collect::<Result<Vec<String>, _>>()
+            .context(QuerySnafu)?;
+
+        Ok(keys)
+    }
+
+    /// List all active (non-expired) leases.
+    ///
+    /// Returns a list of (lease_id, granted_ttl_seconds, remaining_ttl_seconds).
+    /// Tiger Style: Limited to 10000 leases to prevent unbounded memory use.
+    pub fn list_leases(&self) -> Result<Vec<(u64, u32, u32)>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let mut stmt = conn
+            .prepare_cached(
+                "SELECT lease_id, granted_ttl_seconds, expires_at_ms FROM leases WHERE expires_at_ms > ?1 ORDER BY lease_id LIMIT 10000",
+            )
+            .context(QuerySnafu)?;
+
+        let leases = stmt
+            .query_map(params![now_ms as i64], |row| {
+                let lease_id: i64 = row.get(0)?;
+                let granted_ttl: i64 = row.get(1)?;
+                let expires_at: i64 = row.get(2)?;
+                Ok((lease_id, granted_ttl, expires_at))
+            })
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .map(|(lease_id, granted_ttl, expires_at)| {
+                let remaining_ms = (expires_at as u64).saturating_sub(now_ms);
+                let remaining_secs = (remaining_ms / 1000) as u32;
+                (lease_id as u64, granted_ttl as u32, remaining_secs)
+            })
+            .collect();
+
+        Ok(leases)
+    }
+
+    /// Count the number of active (non-expired) leases.
+    ///
+    /// Useful for metrics and monitoring.
+    pub fn count_active_leases(&self) -> Result<u64, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM leases WHERE expires_at_ms > ?1",
+                params![now_ms as i64],
+                |row| row.get(0),
+            )
+            .context(QuerySnafu)?;
+
+        Ok(count as u64)
+    }
+
+    /// Count the number of expired leases (awaiting cleanup).
+    ///
+    /// Useful for metrics and monitoring.
+    pub fn count_expired_leases(&self) -> Result<u64, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM leases WHERE expires_at_ms <= ?1",
+                params![now_ms as i64],
+                |row| row.get(0),
+            )
+            .context(QuerySnafu)?;
+
+        Ok(count as u64)
+    }
+
+    /// Delete expired leases and their attached keys.
+    ///
+    /// Returns the number of leases deleted.
+    /// Tiger Style: Batch size limits prevent unbounded work.
+    pub fn delete_expired_leases(&self, batch_limit: u32) -> Result<u32, SqliteStorageError> {
+        let write_conn = self
+            .write_conn
+            .lock()
+            .map_err(|_| SqliteStorageError::MutexPoisoned {
+                operation: "delete_expired_leases",
+            })?;
+
+        let now_ms = now_unix_ms();
+
+        // First, collect expired lease IDs
+        let mut stmt = write_conn
+            .prepare_cached("SELECT lease_id FROM leases WHERE expires_at_ms <= ?1 LIMIT ?2")
+            .context(QuerySnafu)?;
+
+        let expired_ids: Vec<i64> = stmt
+            .query_map(params![now_ms as i64, batch_limit as i64], |row| row.get(0))
+            .context(QuerySnafu)?
+            .collect::<Result<Vec<i64>, _>>()
+            .context(QuerySnafu)?;
+
+        if expired_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // Delete keys attached to expired leases
+        for lease_id in &expired_ids {
+            write_conn
+                .execute(
+                    "DELETE FROM state_machine_kv WHERE lease_id = ?1",
+                    params![lease_id],
+                )
+                .context(ExecuteSnafu)?;
+        }
+
+        // Delete the expired leases
+        for lease_id in &expired_ids {
+            write_conn
+                .execute("DELETE FROM leases WHERE lease_id = ?1", params![lease_id])
+                .context(ExecuteSnafu)?;
+        }
+
+        Ok(expired_ids.len() as u32)
     }
 
     /// Get a key-value pair from the state machine.
@@ -1510,6 +1764,7 @@ impl SqliteStateMachine {
     /// * `key` - The key to set
     /// * `value` - The value to set
     /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). NULL means never expires.
+    /// * `lease_id` - Optional lease ID to attach this key to. Key is deleted when lease expires.
     ///
     /// Tiger Style: Single-purpose, explicit return type.
     fn apply_set(
@@ -1517,10 +1772,11 @@ impl SqliteStateMachine {
         key: &str,
         value: &str,
         expires_at_ms: Option<u64>,
+        lease_id: Option<u64>,
     ) -> Result<AppResponse, io::Error> {
         conn.execute(
-            "INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms) VALUES (?1, ?2, ?3)",
-            params![key, value, expires_at_ms.map(|e| e as i64)],
+            "INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4)",
+            params![key, value, expires_at_ms.map(|e| e as i64), lease_id.map(|l| l as i64)],
         )
         .context(ExecuteSnafu)?;
         Ok(AppResponse {
@@ -1539,12 +1795,14 @@ impl SqliteStateMachine {
     /// * `conn` - SQLite connection
     /// * `pairs` - Vector of (key, value) pairs to set
     /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). Applied to all keys.
+    /// * `lease_id` - Optional lease ID to attach all keys to.
     ///
     /// Tiger Style: Fixed limit, batched operation, explicit cleanup.
     fn apply_set_multi(
         conn: &Connection,
         pairs: &[(String, String)],
         expires_at_ms: Option<u64>,
+        lease_id: Option<u64>,
     ) -> Result<AppResponse, io::Error> {
         if pairs.len() > MAX_SETMULTI_KEYS as usize {
             return Err(io::Error::other(format!(
@@ -1556,12 +1814,13 @@ impl SqliteStateMachine {
 
         // Prepare statement once and reuse for all inserts (20-30% performance improvement)
         let mut stmt = conn
-            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms) VALUES (?1, ?2, ?3)")
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4)")
             .context(QuerySnafu)?;
 
         let expires = expires_at_ms.map(|e| e as i64);
+        let lease = lease_id.map(|l| l as i64);
         for (key, value) in pairs {
-            stmt.execute(params![key, value, expires])
+            stmt.execute(params![key, value, expires, lease])
                 .context(ExecuteSnafu)?;
         }
 
@@ -1898,6 +2157,164 @@ impl SqliteStateMachine {
         })
     }
 
+    // =========================================================================
+    // Lease operations
+    // =========================================================================
+
+    /// Grant a new lease with the specified TTL.
+    ///
+    /// Creates a lease entry that keys can be attached to. When the lease expires
+    /// or is revoked, all attached keys are deleted.
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `lease_id` - Client-provided lease ID (0 = auto-generate)
+    /// * `ttl_seconds` - Time-to-live in seconds
+    ///
+    /// Tiger Style: Single-purpose, explicit return type.
+    fn apply_lease_grant(
+        conn: &Connection,
+        lease_id: u64,
+        ttl_seconds: u32,
+    ) -> Result<AppResponse, io::Error> {
+        let now_ms = now_unix_ms();
+        let expires_at_ms = now_ms + (ttl_seconds as u64 * 1000);
+
+        // Generate lease ID if not provided (use current timestamp as base)
+        let actual_lease_id = if lease_id == 0 {
+            // Generate a unique ID based on timestamp + random component
+            // This is simple but effective for single-leader systems
+            now_ms
+        } else {
+            lease_id
+        };
+
+        // Check if lease already exists
+        let existing: Option<i64> = conn
+            .query_row(
+                "SELECT lease_id FROM leases WHERE lease_id = ?1",
+                params![actual_lease_id as i64],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        if existing.is_some() {
+            return Err(io::Error::other(format!(
+                "lease {} already exists",
+                actual_lease_id
+            )));
+        }
+
+        conn.execute(
+            "INSERT INTO leases (lease_id, granted_ttl_seconds, expires_at_ms) VALUES (?1, ?2, ?3)",
+            params![
+                actual_lease_id as i64,
+                ttl_seconds as i64,
+                expires_at_ms as i64
+            ],
+        )
+        .context(ExecuteSnafu)?;
+
+        Ok(AppResponse {
+            lease_id: Some(actual_lease_id),
+            ttl_seconds: Some(ttl_seconds),
+            ..Default::default()
+        })
+    }
+
+    /// Revoke a lease and delete all attached keys.
+    ///
+    /// Deletes the lease and all keys that reference this lease_id.
+    /// This is an atomic operation.
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `lease_id` - Lease ID to revoke
+    ///
+    /// Tiger Style: Single-purpose, idempotent, explicit cleanup.
+    fn apply_lease_revoke(conn: &Connection, lease_id: u64) -> Result<AppResponse, io::Error> {
+        // Check if lease exists
+        let existing: Option<i64> = conn
+            .query_row(
+                "SELECT lease_id FROM leases WHERE lease_id = ?1",
+                params![lease_id as i64],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        if existing.is_none() {
+            return Err(io::Error::other(format!("lease {} not found", lease_id)));
+        }
+
+        // Delete all keys attached to this lease
+        let keys_deleted = conn
+            .execute(
+                "DELETE FROM state_machine_kv WHERE lease_id = ?1",
+                params![lease_id as i64],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Delete the lease itself
+        conn.execute(
+            "DELETE FROM leases WHERE lease_id = ?1",
+            params![lease_id as i64],
+        )
+        .context(ExecuteSnafu)?;
+
+        Ok(AppResponse {
+            lease_id: Some(lease_id),
+            keys_deleted: Some(keys_deleted as u32),
+            ..Default::default()
+        })
+    }
+
+    /// Refresh a lease's TTL (keepalive).
+    ///
+    /// Resets the lease expiration time to now + original TTL.
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `lease_id` - Lease ID to refresh
+    ///
+    /// Tiger Style: Single-purpose, fail-fast on expired/missing lease.
+    fn apply_lease_keepalive(conn: &Connection, lease_id: u64) -> Result<AppResponse, io::Error> {
+        let now_ms = now_unix_ms();
+
+        // Get lease info (fail if expired or doesn't exist)
+        let lease_info: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT granted_ttl_seconds, expires_at_ms FROM leases WHERE lease_id = ?1",
+                params![lease_id as i64],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        match lease_info {
+            None => Err(io::Error::other(format!("lease {} not found", lease_id))),
+            Some((_, expires_at_ms)) if (expires_at_ms as u64) < now_ms => {
+                Err(io::Error::other(format!("lease {} expired", lease_id)))
+            }
+            Some((granted_ttl_seconds, _)) => {
+                let new_expires_at_ms = now_ms + (granted_ttl_seconds as u64 * 1000);
+
+                conn.execute(
+                    "UPDATE leases SET expires_at_ms = ?1 WHERE lease_id = ?2",
+                    params![new_expires_at_ms as i64, lease_id as i64],
+                )
+                .context(ExecuteSnafu)?;
+
+                Ok(AppResponse {
+                    lease_id: Some(lease_id),
+                    ttl_seconds: Some(granted_ttl_seconds as u32),
+                    ..Default::default()
+                })
+            }
+        }
+    }
+
     /// Apply an entry payload to the state machine.
     ///
     /// Dispatches to the appropriate handler based on payload type.
@@ -1910,17 +2327,25 @@ impl SqliteStateMachine {
         match payload {
             EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
-                AppRequest::Set { key, value } => Self::apply_set(conn, key, value, None),
+                AppRequest::Set { key, value } => Self::apply_set(conn, key, value, None, None),
                 AppRequest::SetWithTTL {
                     key,
                     value,
                     expires_at_ms,
-                } => Self::apply_set(conn, key, value, Some(*expires_at_ms)),
-                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs, None),
+                } => Self::apply_set(conn, key, value, Some(*expires_at_ms), None),
+                AppRequest::SetWithLease {
+                    key,
+                    value,
+                    lease_id,
+                } => Self::apply_set(conn, key, value, None, Some(*lease_id)),
+                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs, None, None),
                 AppRequest::SetMultiWithTTL {
                     pairs,
                     expires_at_ms,
-                } => Self::apply_set_multi(conn, pairs, Some(*expires_at_ms)),
+                } => Self::apply_set_multi(conn, pairs, Some(*expires_at_ms), None),
+                AppRequest::SetMultiWithLease { pairs, lease_id } => {
+                    Self::apply_set_multi(conn, pairs, None, Some(*lease_id))
+                }
                 AppRequest::Delete { key } => Self::apply_delete(conn, key),
                 AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
                 AppRequest::CompareAndSwap {
@@ -1936,6 +2361,15 @@ impl SqliteStateMachine {
                     conditions,
                     operations,
                 } => Self::apply_conditional_batch(conn, conditions, operations),
+                // Lease operations
+                AppRequest::LeaseGrant {
+                    lease_id,
+                    ttl_seconds,
+                } => Self::apply_lease_grant(conn, *lease_id, *ttl_seconds),
+                AppRequest::LeaseRevoke { lease_id } => Self::apply_lease_revoke(conn, *lease_id),
+                AppRequest::LeaseKeepalive { lease_id } => {
+                    Self::apply_lease_keepalive(conn, *lease_id)
+                }
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

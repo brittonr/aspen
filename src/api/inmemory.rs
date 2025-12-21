@@ -281,6 +281,64 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     })
                 }
             }
+            // Lease operations: in-memory store doesn't track leases, just stores values
+            WriteCommand::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => {
+                inner.insert(key.clone(), value.clone());
+                Ok(WriteResult {
+                    command: Some(WriteCommand::SetWithLease {
+                        key,
+                        value,
+                        lease_id,
+                    }),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::SetMultiWithLease {
+                ref pairs,
+                lease_id,
+            } => {
+                for (key, value) in pairs {
+                    inner.insert(key.clone(), value.clone());
+                }
+                Ok(WriteResult {
+                    command: Some(WriteCommand::SetMultiWithLease {
+                        pairs: pairs.clone(),
+                        lease_id,
+                    }),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => {
+                // In-memory doesn't track leases, just return success
+                Ok(WriteResult {
+                    lease_id: Some(lease_id),
+                    ttl_seconds: Some(ttl_seconds),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::LeaseRevoke { lease_id } => {
+                // In-memory doesn't track leases, just return success
+                Ok(WriteResult {
+                    lease_id: Some(lease_id),
+                    keys_deleted: Some(0),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::LeaseKeepalive { lease_id } => {
+                // In-memory doesn't track leases, just return success
+                Ok(WriteResult {
+                    lease_id: Some(lease_id),
+                    ttl_seconds: Some(60), // Dummy value
+                    ..Default::default()
+                })
+            }
         }
     }
 

@@ -79,10 +79,12 @@ use crate::client_rpc::{
     ClusterTicketResponse, ConditionalBatchWriteResultResponse, CounterResultResponse,
     DeleteResultResponse, DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
     GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse,
-    ListBlobsResultResponse, LockResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES,
-    MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
-    ProtectBlobResultResponse, RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse,
-    ScanEntry, ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse,
+    LeaseGrantResultResponse, LeaseInfo, LeaseKeepaliveResultResponse, LeaseListResultResponse,
+    LeaseRevokeResultResponse, LeaseTimeToLiveResultResponse, ListBlobsResultResponse,
+    LockResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse,
+    NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse, ProtectBlobResultResponse,
+    RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse, ScanEntry,
+    ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse,
     SnapshotResultResponse, SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse,
     VaultListResponse, WatchCancelResultResponse, WatchCreateResultResponse,
     WatchStatusResultResponse, WriteResultResponse,
@@ -1403,6 +1405,8 @@ pub struct ClientProtocolContext {
     pub kv_store: Arc<dyn KeyValueStore>,
     /// SQL query executor for read-only SQL queries.
     pub sql_executor: Arc<dyn crate::api::SqlQueryExecutor>,
+    /// State machine for direct reads (lease queries, etc.).
+    pub state_machine: Option<crate::raft::StateMachineVariant>,
     /// Iroh endpoint manager for peer info.
     pub endpoint_manager: Arc<IrohEndpointManager>,
     /// Blob store for content-addressed storage (optional).
@@ -4398,6 +4402,227 @@ async fn process_client_request(
                     ),
                 },
             ))
+        }
+
+        // =====================================================================
+        // Lease operations
+        // =====================================================================
+        ClientRpcRequest::LeaseGrant {
+            ttl_seconds,
+            lease_id,
+        } => {
+            use crate::api::WriteRequest;
+
+            let actual_lease_id = lease_id.unwrap_or(0);
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: crate::api::WriteCommand::LeaseGrant {
+                        lease_id: actual_lease_id,
+                        ttl_seconds,
+                    },
+                })
+                .await;
+
+            match result {
+                Ok(response) => Ok(ClientRpcResponse::LeaseGrantResult(
+                    LeaseGrantResultResponse {
+                        success: true,
+                        lease_id: response.lease_id,
+                        ttl_seconds: response.ttl_seconds,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::LeaseGrantResult(
+                    LeaseGrantResultResponse {
+                        success: false,
+                        lease_id: None,
+                        ttl_seconds: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::LeaseRevoke { lease_id } => {
+            use crate::api::WriteRequest;
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: crate::api::WriteCommand::LeaseRevoke { lease_id },
+                })
+                .await;
+
+            match result {
+                Ok(response) => Ok(ClientRpcResponse::LeaseRevokeResult(
+                    LeaseRevokeResultResponse {
+                        success: true,
+                        keys_deleted: response.keys_deleted,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::LeaseRevokeResult(
+                    LeaseRevokeResultResponse {
+                        success: false,
+                        keys_deleted: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::LeaseKeepalive { lease_id } => {
+            use crate::api::WriteRequest;
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: crate::api::WriteCommand::LeaseKeepalive { lease_id },
+                })
+                .await;
+
+            match result {
+                Ok(response) => Ok(ClientRpcResponse::LeaseKeepaliveResult(
+                    LeaseKeepaliveResultResponse {
+                        success: true,
+                        lease_id: response.lease_id,
+                        ttl_seconds: response.ttl_seconds,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::LeaseKeepaliveResult(
+                    LeaseKeepaliveResultResponse {
+                        success: false,
+                        lease_id: None,
+                        ttl_seconds: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::LeaseTimeToLive {
+            lease_id,
+            include_keys,
+        } => {
+            // Query state machine for lease info
+            match &ctx.state_machine {
+                Some(sm) => {
+                    match sm.get_lease(lease_id) {
+                        Some((granted_ttl, remaining_ttl)) => {
+                            // Optionally include attached keys
+                            let keys = if include_keys {
+                                Some(sm.get_lease_keys(lease_id))
+                            } else {
+                                None
+                            };
+
+                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(
+                                LeaseTimeToLiveResultResponse {
+                                    success: true,
+                                    lease_id: Some(lease_id),
+                                    granted_ttl_seconds: Some(granted_ttl),
+                                    remaining_ttl_seconds: Some(remaining_ttl),
+                                    keys,
+                                    error: None,
+                                },
+                            ))
+                        }
+                        None => {
+                            // Lease not found or expired
+                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(
+                                LeaseTimeToLiveResultResponse {
+                                    success: false,
+                                    lease_id: Some(lease_id),
+                                    granted_ttl_seconds: None,
+                                    remaining_ttl_seconds: None,
+                                    keys: None,
+                                    error: Some("Lease not found or expired".to_string()),
+                                },
+                            ))
+                        }
+                    }
+                }
+                None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(
+                    LeaseTimeToLiveResultResponse {
+                        success: false,
+                        lease_id: Some(lease_id),
+                        granted_ttl_seconds: None,
+                        remaining_ttl_seconds: None,
+                        keys: None,
+                        error: Some("State machine not available".to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::LeaseList => {
+            // Query state machine for all active leases
+            match &ctx.state_machine {
+                Some(sm) => {
+                    let leases_data = sm.list_leases();
+                    let leases: Vec<LeaseInfo> = leases_data
+                        .into_iter()
+                        .map(|(lease_id, granted_ttl, remaining_ttl)| LeaseInfo {
+                            lease_id,
+                            granted_ttl_seconds: granted_ttl,
+                            remaining_ttl_seconds: remaining_ttl,
+                            // Use LeaseTimeToLive with include_keys=true for key counts
+                            attached_keys: 0,
+                        })
+                        .collect();
+
+                    Ok(ClientRpcResponse::LeaseListResult(
+                        LeaseListResultResponse {
+                            success: true,
+                            leases: Some(leases),
+                            error: None,
+                        },
+                    ))
+                }
+                None => Ok(ClientRpcResponse::LeaseListResult(
+                    LeaseListResultResponse {
+                        success: false,
+                        leases: None,
+                        error: Some("State machine not available".to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::WriteKeyWithLease {
+            key,
+            value,
+            lease_id,
+        } => {
+            use crate::api::WriteRequest;
+
+            // Convert Vec<u8> to String
+            let value_str = String::from_utf8_lossy(&value).to_string();
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: crate::api::WriteCommand::SetWithLease {
+                        key,
+                        value: value_str.clone(),
+                        lease_id,
+                    },
+                })
+                .await;
+
+            match result {
+                Ok(_) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
+                    success: false,
+                    error: Some(format!("{}", e)),
+                })),
+            }
         }
     }
 }

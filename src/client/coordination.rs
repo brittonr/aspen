@@ -1074,12 +1074,370 @@ pub struct WatchInfoLocal {
     pub include_prev_value: bool,
 }
 
+// =============================================================================
+// Lease Client
+// =============================================================================
+
+/// Client for lease operations.
+///
+/// Provides a high-level API for creating, managing, and querying leases
+/// over the client RPC protocol. Leases are similar to etcd's lease model:
+///
+/// - Leases have a TTL (time-to-live)
+/// - Keys can be attached to leases
+/// - When a lease expires or is revoked, all attached keys are deleted
+/// - Leases can be refreshed via keepalive
+///
+/// ## Usage
+///
+/// ```ignore
+/// use aspen::client::coordination::LeaseClient;
+///
+/// // Create a lease client
+/// let leases = LeaseClient::new(rpc_client);
+///
+/// // Grant a new lease with 60 second TTL
+/// let lease = leases.grant(60).await?;
+/// println!("Lease ID: {}", lease.lease_id);
+///
+/// // Write keys attached to the lease
+/// leases.put_with_lease("mykey", b"myvalue", lease.lease_id).await?;
+///
+/// // Refresh the lease (reset TTL)
+/// leases.keepalive(lease.lease_id).await?;
+///
+/// // Query lease info
+/// let info = leases.time_to_live(lease.lease_id, true).await?;
+/// println!("TTL remaining: {}s, keys: {:?}", info.remaining_ttl_seconds, info.keys);
+///
+/// // Revoke the lease (deletes all attached keys)
+/// leases.revoke(lease.lease_id).await?;
+/// ```
+pub struct LeaseClient<C: CoordinationRpc> {
+    client: Arc<C>,
+}
+
+impl<C: CoordinationRpc> LeaseClient<C> {
+    /// Create a new lease client.
+    pub fn new(client: Arc<C>) -> Self {
+        Self { client }
+    }
+
+    /// Grant a new lease with the specified TTL.
+    ///
+    /// # Arguments
+    /// * `ttl_seconds` - Time-to-live in seconds
+    ///
+    /// # Returns
+    /// A `LeaseGrantResult` containing the lease ID and granted TTL.
+    pub async fn grant(&self, ttl_seconds: u32) -> Result<LeaseGrantResult> {
+        self.grant_with_id(ttl_seconds, None).await
+    }
+
+    /// Grant a new lease with a specific ID and TTL.
+    ///
+    /// # Arguments
+    /// * `ttl_seconds` - Time-to-live in seconds
+    /// * `lease_id` - Optional specific lease ID (None = auto-generate)
+    ///
+    /// # Returns
+    /// A `LeaseGrantResult` containing the lease ID and granted TTL.
+    pub async fn grant_with_id(
+        &self,
+        ttl_seconds: u32,
+        lease_id: Option<u64>,
+    ) -> Result<LeaseGrantResult> {
+        use crate::client_rpc::LeaseGrantResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::LeaseGrant {
+                ttl_seconds,
+                lease_id,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                success,
+                lease_id,
+                ttl_seconds,
+                error,
+            }) => {
+                if success {
+                    Ok(LeaseGrantResult {
+                        lease_id: lease_id.unwrap_or(0),
+                        ttl_seconds: ttl_seconds.unwrap_or(0),
+                    })
+                } else {
+                    bail!(
+                        "lease grant failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for LeaseGrant"),
+        }
+    }
+
+    /// Revoke a lease and delete all attached keys.
+    ///
+    /// # Arguments
+    /// * `lease_id` - The lease ID to revoke
+    ///
+    /// # Returns
+    /// A `LeaseRevokeResult` containing the number of keys deleted.
+    pub async fn revoke(&self, lease_id: u64) -> Result<LeaseRevokeResult> {
+        use crate::client_rpc::LeaseRevokeResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::LeaseRevoke { lease_id })
+            .await?;
+
+        match response {
+            ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+                success,
+                keys_deleted,
+                error,
+            }) => {
+                if success {
+                    Ok(LeaseRevokeResult {
+                        keys_deleted: keys_deleted.unwrap_or(0),
+                    })
+                } else {
+                    bail!(
+                        "lease revoke failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for LeaseRevoke"),
+        }
+    }
+
+    /// Refresh a lease's TTL (keepalive).
+    ///
+    /// This resets the lease's deadline to TTL from now. Should be called
+    /// periodically to prevent the lease from expiring.
+    ///
+    /// # Arguments
+    /// * `lease_id` - The lease ID to refresh
+    ///
+    /// # Returns
+    /// A `LeaseKeepaliveResult` containing the remaining TTL.
+    pub async fn keepalive(&self, lease_id: u64) -> Result<LeaseKeepaliveResult> {
+        use crate::client_rpc::LeaseKeepaliveResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id })
+            .await?;
+
+        match response {
+            ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                success,
+                lease_id: returned_id,
+                ttl_seconds,
+                error,
+            }) => {
+                if success {
+                    Ok(LeaseKeepaliveResult {
+                        lease_id: returned_id.unwrap_or(lease_id),
+                        ttl_seconds: ttl_seconds.unwrap_or(0),
+                    })
+                } else {
+                    bail!(
+                        "lease keepalive failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for LeaseKeepalive"),
+        }
+    }
+
+    /// Query lease information including TTL and optionally attached keys.
+    ///
+    /// # Arguments
+    /// * `lease_id` - The lease ID to query
+    /// * `include_keys` - Whether to include the list of attached keys
+    ///
+    /// # Returns
+    /// A `LeaseTimeToLiveResult` with lease metadata.
+    pub async fn time_to_live(
+        &self,
+        lease_id: u64,
+        include_keys: bool,
+    ) -> Result<LeaseTimeToLiveResult> {
+        use crate::client_rpc::LeaseTimeToLiveResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::LeaseTimeToLive {
+                lease_id,
+                include_keys,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                success,
+                lease_id: returned_id,
+                granted_ttl_seconds,
+                remaining_ttl_seconds,
+                keys,
+                error,
+            }) => {
+                if success {
+                    Ok(LeaseTimeToLiveResult {
+                        lease_id: returned_id.unwrap_or(lease_id),
+                        granted_ttl_seconds: granted_ttl_seconds.unwrap_or(0),
+                        remaining_ttl_seconds: remaining_ttl_seconds.unwrap_or(0),
+                        keys: keys.unwrap_or_default(),
+                    })
+                } else {
+                    bail!(
+                        "lease time-to-live query failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for LeaseTimeToLive"),
+        }
+    }
+
+    /// List all active leases.
+    ///
+    /// # Returns
+    /// A vector of `LeaseInfoLocal` for each active lease.
+    pub async fn list(&self) -> Result<Vec<LeaseInfoLocal>> {
+        use crate::client_rpc::LeaseListResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::LeaseList)
+            .await?;
+
+        match response {
+            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                success,
+                leases,
+                error,
+            }) => {
+                if success {
+                    Ok(leases
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|info| LeaseInfoLocal {
+                            lease_id: info.lease_id,
+                            granted_ttl_seconds: info.granted_ttl_seconds,
+                            remaining_ttl_seconds: info.remaining_ttl_seconds,
+                        })
+                        .collect())
+                } else {
+                    bail!(
+                        "lease list failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for LeaseList"),
+        }
+    }
+
+    /// Write a key-value pair attached to a lease.
+    ///
+    /// When the lease expires or is revoked, the key will be automatically deleted.
+    ///
+    /// # Arguments
+    /// * `key` - The key to write
+    /// * `value` - The value to write
+    /// * `lease_id` - The lease ID to attach the key to
+    pub async fn put_with_lease(&self, key: &str, value: &[u8], lease_id: u64) -> Result<()> {
+        use crate::client_rpc::WriteResultResponse;
+
+        let response = self
+            .client
+            .send_coordination_request(ClientRpcRequest::WriteKeyWithLease {
+                key: key.to_string(),
+                value: value.to_vec(),
+                lease_id,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::WriteResult(WriteResultResponse { success, error }) => {
+                if success {
+                    Ok(())
+                } else {
+                    bail!(
+                        "write with lease failed: {}",
+                        error.unwrap_or_else(|| "unknown error".to_string())
+                    )
+                }
+            }
+            _ => bail!("unexpected response type for WriteKeyWithLease"),
+        }
+    }
+}
+
+/// Result of a lease grant operation.
+#[derive(Debug, Clone)]
+pub struct LeaseGrantResult {
+    /// The unique lease ID (server-generated or client-provided).
+    pub lease_id: u64,
+    /// The granted TTL in seconds.
+    pub ttl_seconds: u32,
+}
+
+/// Result of a lease revoke operation.
+#[derive(Debug, Clone)]
+pub struct LeaseRevokeResult {
+    /// Number of keys deleted with the lease.
+    pub keys_deleted: u32,
+}
+
+/// Result of a lease keepalive operation.
+#[derive(Debug, Clone)]
+pub struct LeaseKeepaliveResult {
+    /// The lease ID that was refreshed.
+    pub lease_id: u64,
+    /// The new TTL in seconds after refresh.
+    pub ttl_seconds: u32,
+}
+
+/// Result of a lease time-to-live query.
+#[derive(Debug, Clone)]
+pub struct LeaseTimeToLiveResult {
+    /// The lease ID queried.
+    pub lease_id: u64,
+    /// The original TTL when the lease was granted.
+    pub granted_ttl_seconds: u32,
+    /// The remaining TTL in seconds.
+    pub remaining_ttl_seconds: u32,
+    /// Keys attached to the lease (if requested).
+    pub keys: Vec<String>,
+}
+
+/// Local representation of lease info from list operation.
+#[derive(Debug, Clone)]
+pub struct LeaseInfoLocal {
+    /// Unique lease ID.
+    pub lease_id: u64,
+    /// Original TTL in seconds.
+    pub granted_ttl_seconds: u32,
+    /// Remaining TTL in seconds.
+    pub remaining_ttl_seconds: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::client_rpc::{
-        CounterResultResponse, LockResultResponse, RateLimiterResultResponse,
-        SequenceResultResponse,
+        CounterResultResponse, LeaseGrantResultResponse, LeaseInfo, LeaseKeepaliveResultResponse,
+        LeaseListResultResponse, LeaseRevokeResultResponse, LeaseTimeToLiveResultResponse,
+        LockResultResponse, RateLimiterResultResponse, SequenceResultResponse, WriteResultResponse,
     };
     use std::sync::Mutex;
 
@@ -1203,5 +1561,279 @@ mod tests {
 
         assert_eq!(guard.fencing_token(), 42);
         assert_eq!(guard.deadline_ms(), 1234567890);
+    }
+
+    // ================================
+    // LeaseClient tests
+    // ================================
+
+    #[tokio::test]
+    async fn test_lease_grant_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                success: true,
+                lease_id: Some(12345),
+                ttl_seconds: Some(60),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.grant(60).await.unwrap();
+
+        assert_eq!(result.lease_id, 12345);
+        assert_eq!(result.ttl_seconds, 60);
+    }
+
+    #[tokio::test]
+    async fn test_lease_grant_with_id_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                success: true,
+                lease_id: Some(99999),
+                ttl_seconds: Some(300),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.grant_with_id(300, Some(99999)).await.unwrap();
+
+        assert_eq!(result.lease_id, 99999);
+        assert_eq!(result.ttl_seconds, 300);
+    }
+
+    #[tokio::test]
+    async fn test_lease_grant_failure() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                success: false,
+                lease_id: None,
+                ttl_seconds: None,
+                error: Some("Lease ID already exists".to_string()),
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.grant_with_id(60, Some(12345)).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Lease ID already exists"));
+    }
+
+    #[tokio::test]
+    async fn test_lease_revoke_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+                success: true,
+                keys_deleted: Some(5),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.revoke(12345).await.unwrap();
+
+        assert_eq!(result.keys_deleted, 5);
+    }
+
+    #[tokio::test]
+    async fn test_lease_revoke_not_found() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+                success: false,
+                keys_deleted: None,
+                error: Some("Lease not found".to_string()),
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.revoke(99999).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Lease not found"));
+    }
+
+    #[tokio::test]
+    async fn test_lease_keepalive_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                success: true,
+                lease_id: Some(12345),
+                ttl_seconds: Some(60),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.keepalive(12345).await.unwrap();
+
+        assert_eq!(result.lease_id, 12345);
+        assert_eq!(result.ttl_seconds, 60);
+    }
+
+    #[tokio::test]
+    async fn test_lease_keepalive_expired() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                success: false,
+                lease_id: None,
+                ttl_seconds: None,
+                error: Some("Lease expired or not found".to_string()),
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.keepalive(12345).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Lease expired or not found"));
+    }
+
+    #[tokio::test]
+    async fn test_lease_time_to_live_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                success: true,
+                lease_id: Some(12345),
+                granted_ttl_seconds: Some(60),
+                remaining_ttl_seconds: Some(45),
+                keys: Some(vec!["key1".to_string(), "key2".to_string()]),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.time_to_live(12345, true).await.unwrap();
+
+        assert_eq!(result.lease_id, 12345);
+        assert_eq!(result.granted_ttl_seconds, 60);
+        assert_eq!(result.remaining_ttl_seconds, 45);
+        assert_eq!(result.keys, vec!["key1".to_string(), "key2".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_lease_time_to_live_without_keys() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                success: true,
+                lease_id: Some(12345),
+                granted_ttl_seconds: Some(60),
+                remaining_ttl_seconds: Some(45),
+                keys: None,
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.time_to_live(12345, false).await.unwrap();
+
+        assert_eq!(result.lease_id, 12345);
+        assert!(result.keys.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_lease_time_to_live_not_found() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                success: false,
+                lease_id: None,
+                granted_ttl_seconds: None,
+                remaining_ttl_seconds: None,
+                keys: None,
+                error: Some("Lease not found".to_string()),
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.time_to_live(99999, false).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Lease not found"));
+    }
+
+    #[tokio::test]
+    async fn test_lease_list_success() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                success: true,
+                leases: Some(vec![
+                    LeaseInfo {
+                        lease_id: 100,
+                        granted_ttl_seconds: 60,
+                        remaining_ttl_seconds: 50,
+                        attached_keys: 2,
+                    },
+                    LeaseInfo {
+                        lease_id: 200,
+                        granted_ttl_seconds: 120,
+                        remaining_ttl_seconds: 100,
+                        attached_keys: 5,
+                    },
+                ]),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.list().await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].lease_id, 100);
+        assert_eq!(result[1].lease_id, 200);
+    }
+
+    #[tokio::test]
+    async fn test_lease_list_empty() {
+        let client = Arc::new(MockRpcClient::new(vec![
+            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                success: true,
+                leases: Some(vec![]),
+                error: None,
+            }),
+        ]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client.list().await.unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_lease_put_with_lease_success() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(
+            WriteResultResponse {
+                success: true,
+                error: None,
+            },
+        )]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client
+            .put_with_lease("mykey", b"myvalue", 12345)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_lease_put_with_lease_failure() {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(
+            WriteResultResponse {
+                success: false,
+                error: Some("Lease not found".to_string()),
+            },
+        )]));
+
+        let lease_client = LeaseClient::new(client);
+        let result = lease_client
+            .put_with_lease("mykey", b"myvalue", 12345)
+            .await;
+
+        assert!(result.is_err());
     }
 }

@@ -42,6 +42,7 @@ pub mod connection_pool;
 pub mod constants;
 pub mod integrity;
 pub mod learner_promotion;
+pub mod lease_cleanup;
 pub mod log_subscriber;
 pub mod madsim_network;
 pub mod network;
@@ -173,5 +174,40 @@ impl StateMachineVariant {
             is_truncated,
             continuation_token,
         })
+    }
+
+    // =========================================================================
+    // Lease Query Methods
+    // =========================================================================
+
+    /// Get lease information by ID.
+    ///
+    /// Returns (granted_ttl_seconds, remaining_ttl_seconds) if the lease exists.
+    /// Returns None if the lease doesn't exist, has expired, or storage backend doesn't support leases.
+    pub fn get_lease(&self, lease_id: u64) -> Option<(u32, u32)> {
+        match self {
+            Self::InMemory(_) => None, // In-memory doesn't track leases
+            Self::Sqlite(sm) => sm.get_lease(lease_id).ok().flatten(),
+        }
+    }
+
+    /// Get all keys attached to a lease.
+    ///
+    /// Returns an empty list if the lease doesn't exist or storage doesn't support leases.
+    pub fn get_lease_keys(&self, lease_id: u64) -> Vec<String> {
+        match self {
+            Self::InMemory(_) => vec![], // In-memory doesn't track leases
+            Self::Sqlite(sm) => sm.get_lease_keys(lease_id).unwrap_or_default(),
+        }
+    }
+
+    /// List all active (non-expired) leases.
+    ///
+    /// Returns a list of (lease_id, granted_ttl_seconds, remaining_ttl_seconds).
+    pub fn list_leases(&self) -> Vec<(u64, u32, u32)> {
+        match self {
+            Self::InMemory(_) => vec![], // In-memory doesn't track leases
+            Self::Sqlite(sm) => sm.list_leases().unwrap_or_default(),
+        }
     }
 }

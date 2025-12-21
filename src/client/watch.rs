@@ -285,6 +285,27 @@ impl From<LogEntryPayload> for Vec<WatchEvent> {
             KvOperation::MembershipChange { description } => {
                 vec![WatchEvent::MembershipChange { description, index }]
             }
+            KvOperation::SetWithLease {
+                key,
+                value,
+                lease_id: _,
+            } => vec![WatchEvent::Set {
+                key,
+                value,
+                index,
+                term,
+                committed_at_ms,
+            }],
+            KvOperation::SetMultiWithLease { pairs, lease_id: _ } => vec![WatchEvent::SetMulti {
+                pairs,
+                index,
+                term,
+                committed_at_ms,
+            }],
+            // Lease operations are control-plane, not key-value operations
+            KvOperation::LeaseGrant { .. } => vec![],
+            KvOperation::LeaseRevoke { .. } => vec![],
+            KvOperation::LeaseKeepalive { .. } => vec![],
         }
     }
 }

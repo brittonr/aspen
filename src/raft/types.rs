@@ -157,6 +157,13 @@ pub enum AppRequest {
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
     },
+    /// Set a key attached to a lease. Key is deleted when lease expires or is revoked.
+    SetWithLease {
+        key: String,
+        value: String,
+        /// Lease ID to attach this key to.
+        lease_id: u64,
+    },
     SetMulti {
         pairs: Vec<(String, String)>,
     },
@@ -165,6 +172,12 @@ pub enum AppRequest {
         pairs: Vec<(String, String)>,
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
+    },
+    /// Set multiple keys attached to a lease.
+    SetMultiWithLease {
+        pairs: Vec<(String, String)>,
+        /// Lease ID to attach these keys to.
+        lease_id: u64,
     },
     Delete {
         key: String,
@@ -198,6 +211,28 @@ pub enum AppRequest {
         /// Operations as (is_set, key, value). is_set=true for Set, false for Delete.
         operations: Vec<(bool, String, String)>,
     },
+    // =========================================================================
+    // Lease operations
+    // =========================================================================
+    /// Grant a new lease with specified TTL.
+    /// Returns a unique lease_id that can be attached to keys.
+    LeaseGrant {
+        /// Lease ID (client-provided or 0 for auto-generated).
+        /// If 0, server generates a unique ID.
+        lease_id: u64,
+        /// Time-to-live in seconds.
+        ttl_seconds: u32,
+    },
+    /// Revoke a lease and delete all attached keys.
+    LeaseRevoke {
+        /// Lease ID to revoke.
+        lease_id: u64,
+    },
+    /// Refresh a lease's TTL (keepalive).
+    LeaseKeepalive {
+        /// Lease ID to refresh.
+        lease_id: u64,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -212,6 +247,16 @@ impl fmt::Display for AppRequest {
                 write!(
                     f,
                     "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}"
+                )
+            }
+            AppRequest::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => {
+                write!(
+                    f,
+                    "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}"
                 )
             }
             AppRequest::SetMulti { pairs } => {
@@ -231,6 +276,13 @@ impl fmt::Display for AppRequest {
                 write!(
                     f,
                     "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}",
+                    pairs.len()
+                )
+            }
+            AppRequest::SetMultiWithLease { pairs, lease_id } => {
+                write!(
+                    f,
+                    "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}",
                     pairs.len()
                 )
             }
@@ -272,6 +324,21 @@ impl fmt::Display for AppRequest {
                     operations.len()
                 )
             }
+            AppRequest::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => {
+                write!(
+                    f,
+                    "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}"
+                )
+            }
+            AppRequest::LeaseRevoke { lease_id } => {
+                write!(f, "LeaseRevoke {{ lease_id: {lease_id} }}")
+            }
+            AppRequest::LeaseKeepalive { lease_id } => {
+                write!(f, "LeaseKeepalive {{ lease_id: {lease_id} }}")
+            }
         }
     }
 }
@@ -302,6 +369,17 @@ pub struct AppResponse {
     /// - `Some(false)`: At least one condition failed, no operations applied
     /// - `None`: Not a conditional batch operation
     pub conditions_met: Option<bool>,
+    // =========================================================================
+    // Lease operation responses
+    // =========================================================================
+    /// Lease ID for LeaseGrant operation.
+    pub lease_id: Option<u64>,
+    /// TTL in seconds for lease operations.
+    /// For LeaseGrant/LeaseKeepalive: the granted/remaining TTL.
+    pub ttl_seconds: Option<u32>,
+    /// Number of keys attached to a lease.
+    /// For LeaseRevoke: number of keys deleted with the lease.
+    pub keys_deleted: Option<u32>,
 }
 
 declare_raft_types!(

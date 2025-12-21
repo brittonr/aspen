@@ -293,6 +293,7 @@ async fn main() -> Result<()> {
         controller: controller.clone(),
         kv_store: kv_store.clone(),
         sql_executor: handle.raft_node.clone(),
+        state_machine: Some(handle.raft_node.state_machine().clone()),
         endpoint_manager: handle.iroh_manager.clone(),
         blob_store: handle.blob_store.clone(),
         peer_manager: handle.peer_manager.clone(),

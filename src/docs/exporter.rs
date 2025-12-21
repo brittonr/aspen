@@ -245,10 +245,14 @@ impl DocsExporter {
     #[allow(dead_code)]
     async fn process_payload(&self, payload: LogEntryPayload) -> Result<()> {
         match &payload.operation {
-            KvOperation::Set { key, value } | KvOperation::SetWithTTL { key, value, .. } => {
+            KvOperation::Set { key, value }
+            | KvOperation::SetWithTTL { key, value, .. }
+            | KvOperation::SetWithLease { key, value, .. } => {
                 self.export_set(key, value, payload.index).await?;
             }
-            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => {
                 for (key, value) in pairs {
                     self.export_set(key, value, payload.index).await?;
                 }
@@ -280,7 +284,11 @@ impl DocsExporter {
                     }
                 }
             }
-            KvOperation::Noop | KvOperation::MembershipChange { .. } => {
+            KvOperation::Noop
+            | KvOperation::MembershipChange { .. }
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => {
                 // Skip non-KV operations
                 debug!(log_index = payload.index, "skipping non-KV entry");
             }
@@ -293,7 +301,9 @@ impl DocsExporter {
     /// Filters out entries that exceed size limits.
     fn collect_payload_to_batch(&self, payload: LogEntryPayload, batch: &mut Vec<BatchEntry>) {
         match payload.operation {
-            KvOperation::Set { key, value } | KvOperation::SetWithTTL { key, value, .. } => {
+            KvOperation::Set { key, value }
+            | KvOperation::SetWithTTL { key, value, .. }
+            | KvOperation::SetWithLease { key, value, .. } => {
                 if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
                     batch.push(BatchEntry {
                         key,
@@ -308,7 +318,9 @@ impl DocsExporter {
                     );
                 }
             }
-            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => {
                 for (key, value) in pairs {
                     if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
                         batch.push(BatchEntry {
@@ -374,7 +386,11 @@ impl DocsExporter {
                     }
                 }
             }
-            KvOperation::Noop | KvOperation::MembershipChange { .. } => {
+            KvOperation::Noop
+            | KvOperation::MembershipChange { .. }
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => {
                 // Skip non-KV operations
             }
         }

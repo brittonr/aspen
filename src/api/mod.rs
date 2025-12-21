@@ -299,6 +299,39 @@ pub enum WriteCommand {
         /// Operations to execute if all conditions pass (max 100).
         operations: Vec<BatchOperation>,
     },
+    // =========================================================================
+    // Lease operations
+    // =========================================================================
+    /// Set a key attached to a lease. Key is deleted when lease expires or is revoked.
+    SetWithLease {
+        key: String,
+        value: String,
+        /// Lease ID to attach this key to.
+        lease_id: u64,
+    },
+    /// Set multiple keys attached to a lease.
+    SetMultiWithLease {
+        pairs: Vec<(String, String)>,
+        /// Lease ID to attach these keys to.
+        lease_id: u64,
+    },
+    /// Grant a new lease with specified TTL.
+    LeaseGrant {
+        /// Client-provided lease ID (0 = auto-generate).
+        lease_id: u64,
+        /// Time-to-live in seconds.
+        ttl_seconds: u32,
+    },
+    /// Revoke a lease and delete all attached keys.
+    LeaseRevoke {
+        /// Lease ID to revoke.
+        lease_id: u64,
+    },
+    /// Refresh a lease's TTL.
+    LeaseKeepalive {
+        /// Lease ID to refresh.
+        lease_id: u64,
+    },
 }
 
 /// A single operation within a batch write.
@@ -335,6 +368,13 @@ pub struct WriteResult {
     pub conditions_met: Option<bool>,
     /// Index of first failed condition (for ConditionalBatch).
     pub failed_condition_index: Option<u32>,
+    // Lease operation results
+    /// Lease ID for lease operations.
+    pub lease_id: Option<u64>,
+    /// TTL in seconds for lease operations.
+    pub ttl_seconds: Option<u32>,
+    /// Number of keys deleted (for LeaseRevoke).
+    pub keys_deleted: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -636,6 +676,28 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                     }
                 }
             }
+        }
+        // Lease operations
+        WriteCommand::SetWithLease { key, value, .. } => {
+            check_key(key)?;
+            check_value(value)?;
+        }
+        WriteCommand::SetMultiWithLease { pairs, .. } => {
+            if pairs.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: pairs.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            for (key, value) in pairs {
+                check_key(key)?;
+                check_value(value)?;
+            }
+        }
+        WriteCommand::LeaseGrant { .. }
+        | WriteCommand::LeaseRevoke { .. }
+        | WriteCommand::LeaseKeepalive { .. } => {
+            // No key/value validation needed for lease operations
         }
     }
 
