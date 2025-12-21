@@ -13,6 +13,7 @@ pub mod blob;
 pub mod client;
 pub mod client_rpc;
 pub mod cluster;
+pub mod coordination;
 pub mod docs;
 pub mod node;
 pub mod protocol_handlers;
