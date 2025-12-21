@@ -396,13 +396,46 @@ impl KeyValueStore for RaftNode {
             crate::api::WriteCommand::DeleteMulti { keys } => {
                 AppRequest::DeleteMulti { keys: keys.clone() }
             }
+            crate::api::WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => AppRequest::CompareAndSwap {
+                key: key.clone(),
+                expected: expected.clone(),
+                new_value: new_value.clone(),
+            },
+            crate::api::WriteCommand::CompareAndDelete { key, expected } => {
+                AppRequest::CompareAndDelete {
+                    key: key.clone(),
+                    expected: expected.clone(),
+                }
+            }
         };
 
         // Apply write through Raft consensus
         let result = self.raft.client_write(app_request).await;
 
         match result {
-            Ok(_resp) => {
+            Ok(resp) => {
+                // Check if this was a CAS operation that failed its condition
+                if let Some(false) = resp.data.cas_succeeded {
+                    // CAS condition didn't match - extract key and expected from original command
+                    let (key, expected) = match &request.command {
+                        crate::api::WriteCommand::CompareAndSwap { key, expected, .. } => {
+                            (key.clone(), expected.clone())
+                        }
+                        crate::api::WriteCommand::CompareAndDelete { key, expected } => {
+                            (key.clone(), Some(expected.clone()))
+                        }
+                        _ => unreachable!("cas_succeeded only set for CAS operations"),
+                    };
+                    return Err(KeyValueStoreError::CompareAndSwapFailed {
+                        key,
+                        expected,
+                        actual: resp.data.value,
+                    });
+                }
                 // Write was successful, return the original command
                 Ok(WriteResult {
                     command: request.command,

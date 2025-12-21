@@ -263,6 +263,9 @@ fn sanitize_kv_error(err: &crate::api::KeyValueStoreError) -> String {
         KeyValueStoreError::Timeout { duration_ms } => {
             format!("operation timed out after {}ms", duration_ms)
         }
+        KeyValueStoreError::CompareAndSwapFailed { key, .. } => {
+            format!("compare-and-swap failed for key '{}'", key)
+        }
     }
 }
 
@@ -1733,6 +1736,113 @@ async fn process_client_request(
                 // HIGH-4: Sanitize error messages to prevent information leakage
                 error: result.err().map(|e| sanitize_kv_error(&e)),
             }))
+        }
+
+        ClientRpcRequest::CompareAndSwapKey {
+            key,
+            expected,
+            new_value,
+        } => {
+            use crate::api::WriteCommand;
+            use crate::client_rpc::CompareAndSwapResultResponse;
+
+            // Validate key against reserved _system: prefix
+            if let Err(vault_err) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: None,
+                        error: Some(vault_err.to_string()),
+                    },
+                ));
+            }
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: WriteCommand::CompareAndSwap {
+                        key: key.clone(),
+                        expected: expected.map(|v| String::from_utf8_lossy(&v).to_string()),
+                        new_value: String::from_utf8_lossy(&new_value).to_string(),
+                    },
+                })
+                .await;
+
+            match result {
+                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: true,
+                        actual_value: None,
+                        error: None,
+                    },
+                )),
+                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => Ok(
+                    ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: actual.map(|v| v.into_bytes()),
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: None,
+                        // HIGH-4: Sanitize error messages to prevent information leakage
+                        error: Some(sanitize_kv_error(&e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::CompareAndDeleteKey { key, expected } => {
+            use crate::api::WriteCommand;
+            use crate::client_rpc::CompareAndSwapResultResponse;
+
+            // Validate key against reserved _system: prefix
+            if let Err(vault_err) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: None,
+                        error: Some(vault_err.to_string()),
+                    },
+                ));
+            }
+
+            let result = ctx
+                .kv_store
+                .write(WriteRequest {
+                    command: WriteCommand::CompareAndDelete {
+                        key: key.clone(),
+                        expected: String::from_utf8_lossy(&expected).to_string(),
+                    },
+                })
+                .await;
+
+            match result {
+                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: true,
+                        actual_value: None,
+                        error: None,
+                    },
+                )),
+                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => Ok(
+                    ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: actual.map(|v| v.into_bytes()),
+                        error: None,
+                    }),
+                ),
+                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(
+                    CompareAndSwapResultResponse {
+                        success: false,
+                        actual_value: None,
+                        // HIGH-4: Sanitize error messages to prevent information leakage
+                        error: Some(sanitize_kv_error(&e)),
+                    },
+                )),
+            }
         }
 
         ClientRpcRequest::TriggerSnapshot => {

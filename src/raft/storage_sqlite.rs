@@ -282,6 +282,19 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
             AppRequest::DeleteMulti { keys } => KvOperation::DeleteMulti {
                 keys: keys.iter().map(|k| k.clone().into_bytes()).collect(),
             },
+            AppRequest::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => KvOperation::CompareAndSwap {
+                key: key.clone().into_bytes(),
+                expected: expected.as_ref().map(|e| e.clone().into_bytes()),
+                new_value: new_value.clone().into_bytes(),
+            },
+            AppRequest::CompareAndDelete { key, expected } => KvOperation::CompareAndDelete {
+                key: key.clone().into_bytes(),
+                expected: expected.clone().into_bytes(),
+            },
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -1319,6 +1332,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: Some(value.to_string()),
             deleted: None,
+            cas_succeeded: None,
         })
     }
 
@@ -1354,6 +1368,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: None,
+            cas_succeeded: None,
         })
     }
 
@@ -1370,6 +1385,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: Some(rows > 0),
+            cas_succeeded: None,
         })
     }
 
@@ -1404,6 +1420,131 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: Some(deleted_any),
+            cas_succeeded: None,
+        })
+    }
+
+    /// Apply a compare-and-swap operation.
+    ///
+    /// Atomically updates a key's value if and only if the current value matches
+    /// the expected value. This enables optimistic concurrency control patterns
+    /// like distributed locks, counters, and leader election.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to conditionally update
+    /// * `expected` - The expected current value:
+    ///   - `None`: Key must NOT exist (create-if-absent pattern)
+    ///   - `Some(val)`: Key must exist with exactly this value
+    /// * `new_value` - The value to set if the condition is met
+    ///
+    /// # Returns
+    ///
+    /// - `cas_succeeded: Some(true)` with `value: Some(new_value)` if condition matched
+    /// - `cas_succeeded: Some(false)` with `value: actual_value` if condition didn't match
+    ///
+    /// Tiger Style: Single-purpose, explicit return type, no side effects on failure.
+    fn apply_compare_and_swap(
+        conn: &Connection,
+        key: &str,
+        expected: Option<&str>,
+        new_value: &str,
+    ) -> Result<AppResponse, io::Error> {
+        // Read current value
+        let current: Option<String> = conn
+            .query_row(
+                "SELECT value FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        // Compare expected vs actual
+        let condition_matches = match (expected, &current) {
+            (None, None) => true,                 // Expected no key, found no key
+            (Some(exp), Some(cur)) => exp == cur, // Values match
+            _ => false,                           // Mismatch
+        };
+
+        if !condition_matches {
+            // CAS failed - return actual value for retry
+            return Ok(AppResponse {
+                value: current,
+                deleted: None,
+                cas_succeeded: Some(false),
+            });
+        }
+
+        // CAS succeeded - write new value
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+            params![key, new_value],
+        )
+        .context(ExecuteSnafu)?;
+
+        Ok(AppResponse {
+            value: Some(new_value.to_string()),
+            deleted: None,
+            cas_succeeded: Some(true),
+        })
+    }
+
+    /// Apply a compare-and-delete operation.
+    ///
+    /// Atomically deletes a key if and only if the current value matches
+    /// the expected value. This enables safe cleanup patterns where you
+    /// only want to delete if the value hasn't changed.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to conditionally delete
+    /// * `expected` - The expected current value (key must exist with this value)
+    ///
+    /// # Returns
+    ///
+    /// - `cas_succeeded: Some(true)` with `deleted: Some(true)` if condition matched
+    /// - `cas_succeeded: Some(false)` with `value: actual_value` if condition didn't match
+    ///
+    /// Tiger Style: Single-purpose, explicit return type, no side effects on failure.
+    fn apply_compare_and_delete(
+        conn: &Connection,
+        key: &str,
+        expected: &str,
+    ) -> Result<AppResponse, io::Error> {
+        // Read current value
+        let current: Option<String> = conn
+            .query_row(
+                "SELECT value FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        // Compare expected vs actual
+        let condition_matches = match &current {
+            Some(cur) => expected == cur,
+            None => false, // Key doesn't exist, can't delete
+        };
+
+        if !condition_matches {
+            // CAS failed - return actual value for retry
+            return Ok(AppResponse {
+                value: current,
+                deleted: None,
+                cas_succeeded: Some(false),
+            });
+        }
+
+        // CAS succeeded - delete the key
+        conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
+            .context(ExecuteSnafu)?;
+
+        Ok(AppResponse {
+            value: None,
+            deleted: Some(true),
+            cas_succeeded: Some(true),
         })
     }
 
@@ -1426,6 +1567,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: None,
+            cas_succeeded: None,
         })
     }
 
@@ -1442,12 +1584,21 @@ impl SqliteStateMachine {
             EntryPayload::Blank => Ok(AppResponse {
                 value: None,
                 deleted: None,
+                cas_succeeded: None,
             }),
             EntryPayload::Normal(req) => match req {
                 AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
                 AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
                 AppRequest::Delete { key } => Self::apply_delete(conn, key),
                 AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
+                AppRequest::CompareAndSwap {
+                    key,
+                    expected,
+                    new_value,
+                } => Self::apply_compare_and_swap(conn, key, expected.as_deref(), new_value),
+                AppRequest::CompareAndDelete { key, expected } => {
+                    Self::apply_compare_and_delete(conn, key, expected)
+                }
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

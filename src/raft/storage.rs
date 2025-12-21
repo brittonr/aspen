@@ -1484,6 +1484,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                 EntryPayload::Blank => AppResponse {
                     value: None,
                     deleted: None,
+                    cas_succeeded: None,
                 },
                 EntryPayload::Normal(ref req) => match req {
                     AppRequest::Set { key, value } => {
@@ -1491,6 +1492,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         AppResponse {
                             value: Some(value.clone()),
                             deleted: None,
+                            cas_succeeded: None,
                         }
                     }
                     AppRequest::SetMulti { pairs } => {
@@ -1500,6 +1502,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         AppResponse {
                             value: None,
                             deleted: None,
+                            cas_succeeded: None,
                         }
                     }
                     AppRequest::Delete { key } => {
@@ -1507,6 +1510,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         AppResponse {
                             value: None,
                             deleted: Some(existed),
+                            cas_succeeded: None,
                         }
                     }
                     AppRequest::DeleteMulti { keys } => {
@@ -1518,6 +1522,51 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         AppResponse {
                             value: None,
                             deleted: Some(deleted_any),
+                            cas_succeeded: None,
+                        }
+                    }
+                    AppRequest::CompareAndSwap {
+                        key,
+                        expected,
+                        new_value,
+                    } => {
+                        let current = sm.data.get(key).cloned();
+                        let condition_matches = match (expected.as_ref(), &current) {
+                            (None, None) => true,
+                            (Some(exp), Some(cur)) => exp == cur,
+                            _ => false,
+                        };
+                        if condition_matches {
+                            sm.data.insert(key.clone(), new_value.clone());
+                            AppResponse {
+                                value: Some(new_value.clone()),
+                                deleted: None,
+                                cas_succeeded: Some(true),
+                            }
+                        } else {
+                            AppResponse {
+                                value: current,
+                                deleted: None,
+                                cas_succeeded: Some(false),
+                            }
+                        }
+                    }
+                    AppRequest::CompareAndDelete { key, expected } => {
+                        let current = sm.data.get(key).cloned();
+                        let condition_matches = matches!(&current, Some(cur) if cur == expected);
+                        if condition_matches {
+                            sm.data.remove(key);
+                            AppResponse {
+                                value: None,
+                                deleted: Some(true),
+                                cas_succeeded: Some(true),
+                            }
+                        } else {
+                            AppResponse {
+                                value: current,
+                                deleted: None,
+                                cas_succeeded: Some(false),
+                            }
                         }
                     }
                 },
@@ -1527,6 +1576,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                     AppResponse {
                         value: None,
                         deleted: None,
+                        cas_succeeded: None,
                     }
                 }
             };

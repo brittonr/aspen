@@ -229,10 +229,39 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WriteCommand {
-    Set { key: String, value: String },
-    SetMulti { pairs: Vec<(String, String)> },
-    Delete { key: String },
-    DeleteMulti { keys: Vec<String> },
+    Set {
+        key: String,
+        value: String,
+    },
+    SetMulti {
+        pairs: Vec<(String, String)>,
+    },
+    Delete {
+        key: String,
+    },
+    DeleteMulti {
+        keys: Vec<String>,
+    },
+    /// Compare-and-swap: atomically update value if current value matches expected.
+    ///
+    /// - `expected: None` means the key must NOT exist (create-if-absent)
+    /// - `expected: Some(val)` means the key must exist with exactly that value
+    ///
+    /// If the condition is met, the key is set to `new_value`.
+    /// If not, the operation fails with `CompareAndSwapFailed` error containing the actual value.
+    CompareAndSwap {
+        key: String,
+        expected: Option<String>,
+        new_value: String,
+    },
+    /// Compare-and-delete: atomically delete key if current value matches expected.
+    ///
+    /// The key must exist and have exactly the expected value for the delete to succeed.
+    /// If not, the operation fails with `CompareAndSwapFailed` error containing the actual value.
+    CompareAndDelete {
+        key: String,
+        expected: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -272,6 +301,16 @@ pub enum KeyValueStoreError {
     BatchTooLarge { size: usize, max: u32 },
     #[error("operation timed out after {duration_ms}ms")]
     Timeout { duration_ms: u64 },
+    /// Compare-and-swap operation failed because the current value didn't match expected.
+    ///
+    /// The `actual` field contains the current value of the key (None if key doesn't exist),
+    /// allowing clients to retry with the correct expected value.
+    #[error("compare-and-swap failed for key '{key}': expected {expected:?}, found {actual:?}")]
+    CompareAndSwapFailed {
+        key: String,
+        expected: Option<String>,
+        actual: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -447,6 +486,21 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
             for key in keys {
                 check_key(key)?;
             }
+        }
+        WriteCommand::CompareAndSwap {
+            key,
+            expected,
+            new_value,
+        } => {
+            check_key(key)?;
+            if let Some(exp) = expected {
+                check_value(exp)?;
+            }
+            check_value(new_value)?;
+        }
+        WriteCommand::CompareAndDelete { key, expected } => {
+            check_key(key)?;
+            check_value(expected)?;
         }
     }
 

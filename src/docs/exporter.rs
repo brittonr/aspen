@@ -261,6 +261,14 @@ impl DocsExporter {
                     self.export_delete(key, payload.index).await?;
                 }
             }
+            KvOperation::CompareAndSwap { key, new_value, .. } => {
+                // CAS is a conditional set - export the new value if the operation succeeded
+                self.export_set(key, new_value, payload.index).await?;
+            }
+            KvOperation::CompareAndDelete { key, .. } => {
+                // CAS delete - export the deletion if the operation succeeded
+                self.export_delete(key, payload.index).await?;
+            }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Skip non-KV operations
                 debug!(log_index = payload.index, "skipping non-KV entry");
@@ -315,6 +323,24 @@ impl DocsExporter {
                         is_delete: true,
                     });
                 }
+            }
+            KvOperation::CompareAndSwap { key, new_value, .. } => {
+                // CAS is a conditional set - export the new value
+                if key.len() <= MAX_DOC_KEY_SIZE && new_value.len() <= MAX_DOC_VALUE_SIZE {
+                    batch.push(BatchEntry {
+                        key,
+                        value: new_value,
+                        is_delete: false,
+                    });
+                }
+            }
+            KvOperation::CompareAndDelete { key, .. } => {
+                // CAS delete - export the deletion
+                batch.push(BatchEntry {
+                    key,
+                    value: vec![],
+                    is_delete: true,
+                });
             }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Skip non-KV operations

@@ -167,6 +167,28 @@ fn test_app_request_display_contains_key() {
                         assert!(displayed.contains(k), "Display should contain first key");
                     }
                 }
+                AppRequest::CompareAndSwap { key, new_value, .. } => {
+                    assert!(displayed.contains(key), "Display should contain key");
+                    assert!(
+                        displayed.contains(new_value),
+                        "Display should contain new_value"
+                    );
+                    assert!(
+                        displayed.contains("CompareAndSwap"),
+                        "Display should contain variant name"
+                    );
+                }
+                AppRequest::CompareAndDelete { key, expected } => {
+                    assert!(displayed.contains(key), "Display should contain key");
+                    assert!(
+                        displayed.contains(expected),
+                        "Display should contain expected"
+                    );
+                    assert!(
+                        displayed.contains("CompareAndDelete"),
+                        "Display should contain variant name"
+                    );
+                }
             }
         });
 }
@@ -176,11 +198,12 @@ fn test_app_request_display_contains_key() {
 fn test_app_response_serde_json_roundtrip() {
     check!()
         .with_iterations(1000)
-        .with_type::<(Option<String>, Option<bool>)>()
-        .for_each(|(value, deleted)| {
+        .with_type::<(Option<String>, Option<bool>, Option<bool>)>()
+        .for_each(|(value, deleted, cas_succeeded)| {
             let response = AppResponse {
                 value: value.clone(),
                 deleted: *deleted,
+                cas_succeeded: *cas_succeeded,
             };
             let serialized = serde_json::to_string(&response).expect("Should serialize");
             let deserialized: AppResponse =
@@ -188,6 +211,7 @@ fn test_app_response_serde_json_roundtrip() {
 
             assert_eq!(response.value, deserialized.value);
             assert_eq!(response.deleted, deserialized.deleted);
+            assert_eq!(response.cas_succeeded, deserialized.cas_succeeded);
         });
 }
 
@@ -336,16 +360,27 @@ mod unit_tests {
         let response = AppResponse {
             value: Some("test".to_string()),
             deleted: Some(true),
+            cas_succeeded: None,
         };
         assert_eq!(response.value, Some("test".to_string()));
         assert_eq!(response.deleted, Some(true));
+        assert!(response.cas_succeeded.is_none());
 
         let empty = AppResponse {
             value: None,
             deleted: None,
+            cas_succeeded: None,
         };
         assert!(empty.value.is_none());
         assert!(empty.deleted.is_none());
+        assert!(empty.cas_succeeded.is_none());
+
+        let cas_response = AppResponse {
+            value: Some("new_value".to_string()),
+            deleted: None,
+            cas_succeeded: Some(true),
+        };
+        assert_eq!(cas_response.cas_succeeded, Some(true));
     }
 
     #[test]

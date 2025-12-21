@@ -251,6 +251,20 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 }
                 WriteCommand::DeleteMulti { keys }
             }
+            // CAS operations pass through directly without blob offloading.
+            // CAS is typically used for small values (locks, counters) that don't need offloading.
+            WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            },
+            WriteCommand::CompareAndDelete { key, expected } => {
+                WriteCommand::CompareAndDelete { key, expected }
+            }
         };
 
         // Write to underlying KV

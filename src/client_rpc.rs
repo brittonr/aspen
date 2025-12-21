@@ -54,6 +54,19 @@ pub enum ClientRpcRequest {
     /// Write a key-value pair to the store.
     WriteKey { key: String, value: Vec<u8> },
 
+    /// Compare-and-swap: atomically update value if current value matches expected.
+    ///
+    /// - `expected: None` means the key must NOT exist (create-if-absent)
+    /// - `expected: Some(val)` means the key must exist with exactly that value
+    CompareAndSwapKey {
+        key: String,
+        expected: Option<Vec<u8>>,
+        new_value: Vec<u8>,
+    },
+
+    /// Compare-and-delete: atomically delete key if current value matches expected.
+    CompareAndDeleteKey { key: String, expected: Vec<u8> },
+
     /// Trigger a snapshot.
     TriggerSnapshot,
 
@@ -305,6 +318,9 @@ pub enum ClientRpcResponse {
     /// Write key response.
     WriteResult(WriteResultResponse),
 
+    /// Compare-and-swap result response.
+    CompareAndSwapResult(CompareAndSwapResultResponse),
+
     /// Snapshot trigger response.
     SnapshotResult(SnapshotResultResponse),
 
@@ -493,6 +509,23 @@ pub struct WriteResultResponse {
     /// Whether write succeeded.
     pub success: bool,
     /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Compare-and-swap result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompareAndSwapResultResponse {
+    /// Whether the CAS operation succeeded.
+    ///
+    /// True if the condition matched and the value was updated/deleted.
+    /// False if the condition did not match.
+    pub success: bool,
+    /// The actual value of the key when CAS failed.
+    ///
+    /// This allows clients to retry with the correct expected value.
+    /// None means the key did not exist.
+    pub actual_value: Option<Vec<u8>>,
+    /// Error message if operation failed due to internal error (not CAS condition).
     pub error: Option<String>,
 }
 

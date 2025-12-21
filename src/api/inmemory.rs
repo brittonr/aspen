@@ -150,6 +150,50 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     command: request.command.clone(),
                 })
             }
+            WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => {
+                let current = inner.get(&key).cloned();
+                let condition_matches = match (&expected, &current) {
+                    (None, None) => true,
+                    (Some(exp), Some(cur)) => exp == cur,
+                    _ => false,
+                };
+                if condition_matches {
+                    inner.insert(key.clone(), new_value.clone());
+                    Ok(WriteResult {
+                        command: WriteCommand::CompareAndSwap {
+                            key,
+                            expected,
+                            new_value,
+                        },
+                    })
+                } else {
+                    Err(KeyValueStoreError::CompareAndSwapFailed {
+                        key,
+                        expected,
+                        actual: current,
+                    })
+                }
+            }
+            WriteCommand::CompareAndDelete { key, expected } => {
+                let current = inner.get(&key).cloned();
+                let condition_matches = matches!(&current, Some(cur) if cur == &expected);
+                if condition_matches {
+                    inner.remove(&key);
+                    Ok(WriteResult {
+                        command: WriteCommand::CompareAndDelete { key, expected },
+                    })
+                } else {
+                    Err(KeyValueStoreError::CompareAndSwapFailed {
+                        key,
+                        expected: Some(expected),
+                        actual: current,
+                    })
+                }
+            }
         }
     }
 

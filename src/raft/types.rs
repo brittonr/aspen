@@ -146,10 +146,30 @@ impl fmt::Display for RaftMemberInfo {
 /// Application-level requests replicated through Raft.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum AppRequest {
-    Set { key: String, value: String },
-    SetMulti { pairs: Vec<(String, String)> },
-    Delete { key: String },
-    DeleteMulti { keys: Vec<String> },
+    Set {
+        key: String,
+        value: String,
+    },
+    SetMulti {
+        pairs: Vec<(String, String)>,
+    },
+    Delete {
+        key: String,
+    },
+    DeleteMulti {
+        keys: Vec<String>,
+    },
+    /// Compare-and-swap: atomically update value if current value matches expected.
+    CompareAndSwap {
+        key: String,
+        expected: Option<String>,
+        new_value: String,
+    },
+    /// Compare-and-delete: atomically delete key if current value matches expected.
+    CompareAndDelete {
+        key: String,
+        expected: String,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -177,6 +197,19 @@ impl fmt::Display for AppRequest {
                 }
                 write!(f, "] }}")
             }
+            AppRequest::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => {
+                write!(
+                    f,
+                    "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}"
+                )
+            }
+            AppRequest::CompareAndDelete { key, expected } => {
+                write!(f, "CompareAndDelete {{ key: {key}, expected: {expected} }}")
+            }
         }
     }
 }
@@ -188,6 +221,14 @@ pub struct AppResponse {
     /// Indicates whether a delete operation actually removed a key.
     /// None for operations where deletion is not applicable.
     pub deleted: Option<bool>,
+    /// Indicates whether a compare-and-swap operation succeeded.
+    /// - `Some(true)`: CAS condition matched and operation was applied
+    /// - `Some(false)`: CAS condition did not match, operation was not applied
+    /// - `None`: Not a CAS operation
+    ///
+    /// When `Some(false)`, the `value` field contains the actual current value
+    /// of the key (or None if the key doesn't exist), allowing clients to retry.
+    pub cas_succeeded: Option<bool>,
 }
 
 declare_raft_types!(
@@ -434,9 +475,11 @@ mod tests {
         let resp = AppResponse {
             value: Some("result".to_string()),
             deleted: None,
+            cas_succeeded: None,
         };
         assert_eq!(resp.value, Some("result".to_string()));
         assert!(resp.deleted.is_none());
+        assert!(resp.cas_succeeded.is_none());
     }
 
     #[test]
@@ -444,6 +487,7 @@ mod tests {
         let resp = AppResponse {
             value: None,
             deleted: Some(true),
+            cas_succeeded: None,
         };
         assert!(resp.deleted == Some(true));
     }
@@ -453,8 +497,30 @@ mod tests {
         let resp = AppResponse {
             value: None,
             deleted: Some(false),
+            cas_succeeded: None,
         };
         assert!(resp.deleted == Some(false));
+    }
+
+    #[test]
+    fn test_app_response_cas_succeeded() {
+        let resp = AppResponse {
+            value: Some("new_value".to_string()),
+            deleted: None,
+            cas_succeeded: Some(true),
+        };
+        assert_eq!(resp.cas_succeeded, Some(true));
+    }
+
+    #[test]
+    fn test_app_response_cas_failed() {
+        let resp = AppResponse {
+            value: Some("actual_value".to_string()),
+            deleted: None,
+            cas_succeeded: Some(false),
+        };
+        assert_eq!(resp.cas_succeeded, Some(false));
+        assert_eq!(resp.value, Some("actual_value".to_string()));
     }
 
     #[test]
@@ -462,11 +528,25 @@ mod tests {
         let original = AppResponse {
             value: Some("test_value".to_string()),
             deleted: Some(true),
+            cas_succeeded: None,
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppResponse = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original.value, deserialized.value);
         assert_eq!(original.deleted, deserialized.deleted);
+        assert_eq!(original.cas_succeeded, deserialized.cas_succeeded);
+    }
+
+    #[test]
+    fn test_app_response_cas_serde_roundtrip() {
+        let original = AppResponse {
+            value: Some("cas_value".to_string()),
+            deleted: None,
+            cas_succeeded: Some(true),
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppResponse = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original.cas_succeeded, deserialized.cas_succeeded);
     }
 
     // =========================================================================

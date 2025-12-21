@@ -255,6 +255,14 @@ pub enum KvOperation {
     Delete { key: Vec<u8> },
     /// Delete multiple keys atomically.
     DeleteMulti { keys: Vec<Vec<u8>> },
+    /// Compare-and-swap: atomically update value if current matches expected.
+    CompareAndSwap {
+        key: Vec<u8>,
+        expected: Option<Vec<u8>>,
+        new_value: Vec<u8>,
+    },
+    /// Compare-and-delete: atomically delete if current value matches expected.
+    CompareAndDelete { key: Vec<u8>, expected: Vec<u8> },
     /// No-op entry (used for leader election).
     Noop,
     /// Membership change entry.
@@ -272,9 +280,11 @@ impl KvOperation {
         }
 
         match self {
-            KvOperation::Set { key, .. } => key.starts_with(prefix),
+            KvOperation::Set { key, .. }
+            | KvOperation::Delete { key }
+            | KvOperation::CompareAndSwap { key, .. }
+            | KvOperation::CompareAndDelete { key, .. } => key.starts_with(prefix),
             KvOperation::SetMulti { pairs } => pairs.iter().any(|(k, _)| k.starts_with(prefix)),
-            KvOperation::Delete { key } => key.starts_with(prefix),
             KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Always include control operations
@@ -286,7 +296,10 @@ impl KvOperation {
     /// Returns the primary key affected by this operation, if any.
     pub fn primary_key(&self) -> Option<&[u8]> {
         match self {
-            KvOperation::Set { key, .. } | KvOperation::Delete { key } => Some(key),
+            KvOperation::Set { key, .. }
+            | KvOperation::Delete { key }
+            | KvOperation::CompareAndSwap { key, .. }
+            | KvOperation::CompareAndDelete { key, .. } => Some(key),
             KvOperation::SetMulti { pairs } => pairs.first().map(|(k, _)| k.as_slice()),
             KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
             KvOperation::Noop | KvOperation::MembershipChange { .. } => None,
@@ -296,7 +309,10 @@ impl KvOperation {
     /// Returns the number of keys affected by this operation.
     pub fn key_count(&self) -> usize {
         match self {
-            KvOperation::Set { .. } | KvOperation::Delete { .. } => 1,
+            KvOperation::Set { .. }
+            | KvOperation::Delete { .. }
+            | KvOperation::CompareAndSwap { .. }
+            | KvOperation::CompareAndDelete { .. } => 1,
             KvOperation::SetMulti { pairs } => pairs.len(),
             KvOperation::DeleteMulti { keys } => keys.len(),
             KvOperation::Noop | KvOperation::MembershipChange { .. } => 0,
@@ -323,6 +339,19 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
             },
             AppRequest::DeleteMulti { keys } => KvOperation::DeleteMulti {
                 keys: keys.into_iter().map(String::into_bytes).collect(),
+            },
+            AppRequest::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => KvOperation::CompareAndSwap {
+                key: key.into_bytes(),
+                expected: expected.map(String::into_bytes),
+                new_value: new_value.into_bytes(),
+            },
+            AppRequest::CompareAndDelete { key, expected } => KvOperation::CompareAndDelete {
+                key: key.into_bytes(),
+                expected: expected.into_bytes(),
             },
         }
     }
