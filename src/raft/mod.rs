@@ -54,7 +54,7 @@ pub mod storage;
 pub mod storage_sqlite;
 pub mod storage_validation;
 pub mod supervisor;
-// supervision module removed - was legacy from actor-based architecture
+pub mod ttl_cleanup;
 pub mod types;
 
 use std::sync::Arc;

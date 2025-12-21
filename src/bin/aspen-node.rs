@@ -66,7 +66,10 @@ use aspen::api::{
 };
 use aspen::cluster::bootstrap::{NodeHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
-use aspen::protocol_handlers::{ClientProtocolContext, ClientProtocolHandler, RaftProtocolHandler};
+use aspen::protocol_handlers::{
+    ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
+    LogSubscriberProtocolHandler, RaftProtocolHandler,
+};
 use clap::Parser;
 use tokio::signal;
 use tracing::info;
@@ -330,6 +333,23 @@ async fn main() -> Result<()> {
                 namespace = %docs_sync.namespace_id,
                 "Docs sync protocol handler registered"
             );
+        }
+
+        // Add log subscriber protocol handler if log broadcast is enabled
+        // This enables clients to watch for KV changes via the LOG_SUBSCRIBER_ALPN
+        if let Some(ref log_sender) = handle.log_broadcast {
+            use std::sync::atomic::AtomicU64;
+            // Create committed_index tracker - updated by Raft when commits happen
+            // For now, start at 0; the SqliteStateMachine broadcasts entries on commit
+            let committed_index = Arc::new(AtomicU64::new(0));
+            let log_subscriber_handler = LogSubscriberProtocolHandler::with_sender(
+                &config.cookie,
+                config.node_id,
+                log_sender.clone(),
+                committed_index,
+            );
+            builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
+            info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
         }
 
         builder.spawn()

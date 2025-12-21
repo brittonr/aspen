@@ -69,6 +69,7 @@ pub mod coordination;
 pub mod overlay;
 pub mod subscription;
 pub mod ticket;
+pub mod watch;
 
 pub use cache::LocalCache;
 pub use constants::{
@@ -82,3 +83,4 @@ pub use coordination::{
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};
 pub use ticket::{AspenClientTicket, CLIENT_TICKET_PREFIX};
+pub use watch::{WatchEvent, WatchSession, WatchSubscription};

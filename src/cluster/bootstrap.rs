@@ -54,6 +54,7 @@ use crate::raft::server::RaftRpcServer;
 use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
+use crate::raft::ttl_cleanup::{TtlCleanupConfig, spawn_ttl_cleanup_task};
 use crate::raft::types::NodeId;
 
 /// Handle to a running cluster node.
@@ -126,6 +127,11 @@ pub struct NodeHandle {
     /// Contains the SyncHandle and NamespaceId for accepting incoming
     /// sync connections. None when docs P2P sync is disabled.
     pub docs_sync: Option<crate::docs::DocsSyncResources>,
+    /// TTL cleanup task cancellation token.
+    ///
+    /// Used to gracefully shutdown the background TTL cleanup task.
+    /// None when using InMemory storage (TTL cleanup only applies to SQLite).
+    pub ttl_cleanup_cancel: Option<CancellationToken>,
 }
 
 impl NodeHandle {
@@ -169,6 +175,12 @@ impl NodeHandle {
         if self.docs_sync.is_some() {
             info!("shutting down docs sync");
             drop(self.docs_sync);
+        }
+
+        // Shutdown TTL cleanup task if present
+        if let Some(cancel_token) = &self.ttl_cleanup_cancel {
+            info!("shutting down TTL cleanup task");
+            cancel_token.cancel();
         }
 
         // Stop supervisor
@@ -392,7 +404,8 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     };
 
     // Build OpenRaft instance and state machine variant based on selected storage
-    let (raft, state_machine_variant) = match config.storage_backend {
+    // Returns (raft, state_machine_variant, ttl_cleanup_cancel)
+    let (raft, state_machine_variant, ttl_cleanup_cancel) = match config.storage_backend {
         StorageBackend::InMemory => {
             let log_store = Arc::new(InMemoryLogStore::default());
             let state_machine = InMemoryStateMachine::new();
@@ -406,7 +419,8 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 )
                 .await?,
             );
-            (raft, StateMachineVariant::InMemory(state_machine))
+            // InMemory storage doesn't support TTL cleanup
+            (raft, StateMachineVariant::InMemory(state_machine), None)
         }
         StorageBackend::Sqlite => {
             let log_path = data_dir.join(format!("node_{}.db", config.node_id));
@@ -422,6 +436,17 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 sqlite_state_machine
             };
 
+            // Spawn TTL cleanup background task
+            // This periodically deletes expired keys to prevent unbounded storage growth
+            let ttl_cancel =
+                spawn_ttl_cleanup_task(sqlite_state_machine.clone(), TtlCleanupConfig::default());
+            info!(
+                node_id = config.node_id,
+                cleanup_interval_secs = 60,
+                batch_size = 1000,
+                "TTL cleanup task started"
+            );
+
             let raft = Arc::new(
                 Raft::new(
                     config.node_id.into(),
@@ -433,7 +458,11 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 .await?,
             );
 
-            (raft, StateMachineVariant::Sqlite(sqlite_state_machine))
+            (
+                raft,
+                StateMachineVariant::Sqlite(sqlite_state_machine),
+                Some(ttl_cancel),
+            )
         }
     };
 
@@ -745,6 +774,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         log_broadcast,
         docs_exporter_cancel,
         docs_sync,
+        ttl_cleanup_cancel,
     })
 }
 
@@ -1038,6 +1068,7 @@ mod tests {
             let _: &Arc<RaftNodeHealth> = &handle.health_monitor;
             let _: &CancellationToken = &handle.shutdown_token;
             let _: &TopicId = &handle.gossip_topic_id;
+            let _: &Option<CancellationToken> = &handle.ttl_cleanup_cancel;
         }
     }
 }

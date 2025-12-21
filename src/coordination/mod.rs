@@ -64,4 +64,4 @@ pub use error::{CoordinationError, FenceError, RateLimitError};
 pub use lock::{DistributedLock, LockConfig, LockGuard};
 pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
 pub use sequence::{SequenceConfig, SequenceGenerator};
-pub use types::{BucketState, FencingToken, LockEntry};
+pub use types::{BucketState, FencingToken, LockEntry, now_unix_ms};

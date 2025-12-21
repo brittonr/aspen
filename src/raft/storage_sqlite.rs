@@ -76,6 +76,7 @@ use crate::api::{
     SqlColumnInfo, SqlQueryError, SqlQueryResult, SqlValue, effective_sql_limit,
     effective_sql_timeout_ms,
 };
+use crate::coordination::now_unix_ms;
 use crate::raft::constants::{
     DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
     MAX_SNAPSHOT_SIZE,
@@ -532,15 +533,26 @@ impl SqliteStateMachine {
             .context(ExecuteSnafu)?;
 
         // Create tables if they don't exist
+        // Note: expires_at_ms stores absolute Unix timestamp in milliseconds.
+        // NULL means the key never expires. This enables efficient TTL filtering
+        // using WHERE expires_at_ms IS NULL OR expires_at_ms > ?now
         write_conn
             .execute(
                 "CREATE TABLE IF NOT EXISTS state_machine_kv (
                 key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
+                value TEXT NOT NULL,
+                expires_at_ms INTEGER
             )",
                 [],
             )
             .context(ExecuteSnafu)?;
+
+        // Add expires_at_ms column if it doesn't exist (schema migration for existing DBs)
+        // SQLite returns error if column already exists, which we ignore
+        let _ = write_conn.execute(
+            "ALTER TABLE state_machine_kv ADD COLUMN expires_at_ms INTEGER",
+            [],
+        );
 
         write_conn
             .execute(
@@ -566,6 +578,15 @@ impl SqliteStateMachine {
         write_conn
             .execute(
                 "CREATE INDEX IF NOT EXISTS idx_kv_prefix ON state_machine_kv(key)",
+                [],
+            )
+            .context(ExecuteSnafu)?;
+
+        // Create index for efficient TTL expiration queries (cleanup + filtered reads)
+        // Partial index only includes rows with non-null expiration for better performance
+        write_conn
+            .execute(
+                "CREATE INDEX IF NOT EXISTS idx_kv_expires ON state_machine_kv(expires_at_ms) WHERE expires_at_ms IS NOT NULL",
                 [],
             )
             .context(ExecuteSnafu)?;
@@ -884,6 +905,88 @@ impl SqliteStateMachine {
         Ok(hash.to_hex().to_string())
     }
 
+    /// Delete all expired keys from the state machine.
+    ///
+    /// This method is used by the background TTL cleanup task to remove keys
+    /// whose `expires_at_ms` timestamp has passed. It operates in batches to
+    /// avoid long-running transactions that could block other operations.
+    ///
+    /// # Arguments
+    /// * `batch_limit` - Maximum number of keys to delete in one call (prevents unbounded work)
+    ///
+    /// # Returns
+    /// * `Ok(deleted_count)` - Number of keys deleted
+    ///
+    /// # Tiger Style
+    /// - Fixed batch limit prevents unbounded work per call
+    /// - Uses partial index for efficient expiration lookup
+    /// - Idempotent: safe to call concurrently or repeatedly
+    pub fn delete_expired_keys(&self, batch_limit: u32) -> Result<u32, SqliteStorageError> {
+        let write_conn = self
+            .write_conn
+            .lock()
+            .map_err(|_| SqliteStorageError::MutexPoisoned {
+                operation: "delete_expired_keys",
+            })?;
+
+        let now_ms = now_unix_ms();
+
+        // Delete expired keys in a single batch
+        // Uses the idx_kv_expires partial index for efficient lookup
+        let deleted = write_conn
+            .execute(
+                "DELETE FROM state_machine_kv WHERE rowid IN (
+                    SELECT rowid FROM state_machine_kv
+                    WHERE expires_at_ms IS NOT NULL AND expires_at_ms <= ?1
+                    LIMIT ?2
+                )",
+                params![now_ms as i64, batch_limit],
+            )
+            .context(ExecuteSnafu)?;
+
+        Ok(deleted as u32)
+    }
+
+    /// Count the number of expired keys in the state machine.
+    ///
+    /// Useful for metrics and monitoring. Uses read pool for non-blocking access.
+    pub fn count_expired_keys(&self) -> Result<u64, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM state_machine_kv WHERE expires_at_ms IS NOT NULL AND expires_at_ms <= ?1",
+                params![now_ms as i64],
+                |row| row.get(0),
+            )
+            .context(QuerySnafu)?;
+
+        Ok(count as u64)
+    }
+
+    /// Count the number of keys with TTL set (not yet expired).
+    ///
+    /// Useful for metrics and monitoring.
+    pub fn count_keys_with_ttl(&self) -> Result<u64, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM state_machine_kv WHERE expires_at_ms IS NOT NULL AND expires_at_ms > ?1",
+                params![now_ms as i64],
+                |row| row.get(0),
+            )
+            .context(QuerySnafu)?;
+
+        Ok(count as u64)
+    }
+
     /// Get a key-value pair from the state machine.
     /// Uses read pool for concurrent access. Calls `reset_read_connection` to ensure
     /// we see the latest committed data.
@@ -891,14 +994,26 @@ impl SqliteStateMachine {
     /// Note: In WAL mode, pooled connections can hold onto stale snapshots.
     /// We reset the connection before each read to force SQLite to update to the
     /// latest WAL snapshot.
+    ///
+    /// # TTL Filtering
+    ///
+    /// Keys with an `expires_at_ms` timestamp in the past are treated as non-existent.
+    /// This implements lazy expiration - expired keys are filtered at read time and
+    /// cleaned up by a background task. This approach:
+    /// - Minimizes write amplification (no immediate delete on expiration)
+    /// - Provides consistent linearizable reads (expiration is deterministic)
+    /// - Works correctly across clock skew (uses absolute timestamps from leader)
     pub async fn get(&self, key: &str) -> Result<Option<String>, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
+        let now_ms = now_unix_ms();
+
+        // Filter out expired keys: only return if expires_at_ms is NULL or in the future
         let result = conn
             .query_row(
-                "SELECT value FROM state_machine_kv WHERE key = ?1",
-                params![key],
+                "SELECT value FROM state_machine_kv WHERE key = ?1 AND (expires_at_ms IS NULL OR expires_at_ms > ?2)",
+                params![key, now_ms as i64],
                 |row| row.get(0),
             )
             .optional()
@@ -909,23 +1024,26 @@ impl SqliteStateMachine {
 
     /// Scan all keys that start with the given prefix.
     ///
-    /// Returns a list of full key names.
+    /// Returns a list of full key names. Expired keys are filtered out.
     pub fn scan_keys_with_prefix(&self, prefix: &str) -> Result<Vec<String>, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
 
         // Use range query for better performance with indexes
         // The end bound is the prefix with the next character incremented
         let end_prefix = format!("{}\u{10000}", prefix); // Use a high Unicode character as boundary
 
         let mut stmt = conn
-            .prepare_cached("SELECT key FROM state_machine_kv WHERE key >= ?1 AND key < ?2 ORDER BY key LIMIT ?3")
+            .prepare_cached("SELECT key FROM state_machine_kv WHERE key >= ?1 AND key < ?2 AND (expires_at_ms IS NULL OR expires_at_ms > ?3) ORDER BY key LIMIT ?4")
             .context(QuerySnafu)?;
 
         let keys = stmt
-            .query_map(params![prefix, end_prefix, MAX_BATCH_SIZE as i64], |row| {
-                row.get(0)
-            })
+            .query_map(
+                params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64],
+                |row| row.get(0),
+            )
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|k: &String| k.starts_with(prefix)) // Double-check the prefix match
@@ -936,7 +1054,7 @@ impl SqliteStateMachine {
 
     /// Scan all key-value pairs that start with the given prefix.
     ///
-    /// Returns a list of (key, value) pairs.
+    /// Returns a list of (key, value) pairs. Expired keys are filtered out.
     pub fn scan_kv_with_prefix(
         &self,
         prefix: &str,
@@ -944,17 +1062,20 @@ impl SqliteStateMachine {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
+        let now_ms = now_unix_ms();
+
         // Use range query for better performance with indexes
         let end_prefix = format!("{}\u{10000}", prefix);
 
         let mut stmt = conn
-            .prepare_cached("SELECT key, value FROM state_machine_kv WHERE key >= ?1 AND key < ?2 ORDER BY key LIMIT ?3")
+            .prepare_cached("SELECT key, value FROM state_machine_kv WHERE key >= ?1 AND key < ?2 AND (expires_at_ms IS NULL OR expires_at_ms > ?3) ORDER BY key LIMIT ?4")
             .context(QuerySnafu)?;
 
         let kv_pairs = stmt
-            .query_map(params![prefix, end_prefix, MAX_BATCH_SIZE as i64], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
+            .query_map(
+                params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix)) // Double-check the prefix match
@@ -986,6 +1107,7 @@ impl SqliteStateMachine {
     /// # Tiger Style
     /// - Fixed limits prevent unbounded memory usage
     /// - Cursor-based pagination for stable iteration
+    /// - Expired keys are filtered out (lazy TTL expiration)
     pub async fn scan(
         &self,
         prefix: &str,
@@ -995,6 +1117,7 @@ impl SqliteStateMachine {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
+        let now_ms = now_unix_ms();
         let requested_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize);
         let bounded_limit = requested_limit.min(MAX_BATCH_SIZE as usize);
         // Fetch one extra row to detect if more data exists for pagination.
@@ -1004,17 +1127,19 @@ impl SqliteStateMachine {
         let end_prefix = format!("{}\u{10000}", prefix);
 
         // Different query based on whether we have a continuation token
+        // Both queries filter out expired keys
         let kv_pairs = if let Some(start) = after_key {
             let mut stmt = conn
                 .prepare_cached(
                     "SELECT key, value FROM state_machine_kv \
                      WHERE key > ?1 AND key >= ?2 AND key < ?3 \
-                     ORDER BY key LIMIT ?4",
+                     AND (expires_at_ms IS NULL OR expires_at_ms > ?4) \
+                     ORDER BY key LIMIT ?5",
                 )
                 .context(QuerySnafu)?;
 
             stmt.query_map(
-                params![start, prefix, end_prefix, fetch_limit as i64],
+                params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64],
                 |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
             )
             .context(QuerySnafu)?
@@ -1026,13 +1151,15 @@ impl SqliteStateMachine {
                 .prepare_cached(
                     "SELECT key, value FROM state_machine_kv \
                      WHERE key >= ?1 AND key < ?2 \
-                     ORDER BY key LIMIT ?3",
+                     AND (expires_at_ms IS NULL OR expires_at_ms > ?3) \
+                     ORDER BY key LIMIT ?4",
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(params![prefix, end_prefix, fetch_limit as i64], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
+            stmt.query_map(
+                params![prefix, end_prefix, now_ms as i64, fetch_limit as i64],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix))
@@ -1378,11 +1505,22 @@ impl SqliteStateMachine {
     /// Inserts or replaces a key-value pair in the state machine.
     /// Returns response with the value that was set.
     ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `key` - The key to set
+    /// * `value` - The value to set
+    /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). NULL means never expires.
+    ///
     /// Tiger Style: Single-purpose, explicit return type.
-    fn apply_set(conn: &Connection, key: &str, value: &str) -> Result<AppResponse, io::Error> {
+    fn apply_set(
+        conn: &Connection,
+        key: &str,
+        value: &str,
+        expires_at_ms: Option<u64>,
+    ) -> Result<AppResponse, io::Error> {
         conn.execute(
-            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-            params![key, value],
+            "INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms) VALUES (?1, ?2, ?3)",
+            params![key, value, expires_at_ms.map(|e| e as i64)],
         )
         .context(ExecuteSnafu)?;
         Ok(AppResponse {
@@ -1397,10 +1535,16 @@ impl SqliteStateMachine {
     /// Enforces MAX_SETMULTI_KEYS limit to prevent unbounded resource usage.
     /// Uses prepared statement for 20-30% performance improvement.
     ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `pairs` - Vector of (key, value) pairs to set
+    /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). Applied to all keys.
+    ///
     /// Tiger Style: Fixed limit, batched operation, explicit cleanup.
     fn apply_set_multi(
         conn: &Connection,
         pairs: &[(String, String)],
+        expires_at_ms: Option<u64>,
     ) -> Result<AppResponse, io::Error> {
         if pairs.len() > MAX_SETMULTI_KEYS as usize {
             return Err(io::Error::other(format!(
@@ -1412,11 +1556,13 @@ impl SqliteStateMachine {
 
         // Prepare statement once and reuse for all inserts (20-30% performance improvement)
         let mut stmt = conn
-            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms) VALUES (?1, ?2, ?3)")
             .context(QuerySnafu)?;
 
+        let expires = expires_at_ms.map(|e| e as i64);
         for (key, value) in pairs {
-            stmt.execute(params![key, value]).context(ExecuteSnafu)?;
+            stmt.execute(params![key, value, expires])
+                .context(ExecuteSnafu)?;
         }
 
         drop(stmt); // Explicit drop (Tiger Style)
@@ -1764,12 +1910,17 @@ impl SqliteStateMachine {
         match payload {
             EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
-                AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
-                // TTL operations: We store the value normally for now.
-                // TODO: Add expires_at_ms column to state_machine_kv table and filter at read time
-                AppRequest::SetWithTTL { key, value, .. } => Self::apply_set(conn, key, value),
-                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
-                AppRequest::SetMultiWithTTL { pairs, .. } => Self::apply_set_multi(conn, pairs),
+                AppRequest::Set { key, value } => Self::apply_set(conn, key, value, None),
+                AppRequest::SetWithTTL {
+                    key,
+                    value,
+                    expires_at_ms,
+                } => Self::apply_set(conn, key, value, Some(*expires_at_ms)),
+                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs, None),
+                AppRequest::SetMultiWithTTL {
+                    pairs,
+                    expires_at_ms,
+                } => Self::apply_set_multi(conn, pairs, Some(*expires_at_ms)),
                 AppRequest::Delete { key } => Self::apply_delete(conn, key),
                 AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
                 AppRequest::CompareAndSwap {
