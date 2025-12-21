@@ -25,10 +25,10 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use super::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterState, ControlPlaneError,
-    DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
-    KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
-    ScanResult, WriteCommand, WriteRequest, WriteResult, validate_write_command,
+    AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController,
+    ClusterState, ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest,
+    KeyValueStore, KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry,
+    ScanRequest, ScanResult, WriteCommand, WriteRequest, WriteResult, validate_write_command,
 };
 
 #[derive(Clone, Default)]
@@ -125,7 +125,8 @@ impl KeyValueStore for DeterministicKeyValueStore {
             WriteCommand::Set { key, value } => {
                 inner.insert(key.clone(), value.clone());
                 Ok(WriteResult {
-                    command: WriteCommand::Set { key, value },
+                    command: Some(WriteCommand::Set { key, value }),
+                    ..Default::default()
                 })
             }
             WriteCommand::SetMulti { ref pairs } => {
@@ -133,13 +134,15 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     inner.insert(key.clone(), value.clone());
                 }
                 Ok(WriteResult {
-                    command: request.command.clone(),
+                    command: Some(request.command.clone()),
+                    ..Default::default()
                 })
             }
             WriteCommand::Delete { ref key } => {
                 inner.remove(key);
                 Ok(WriteResult {
-                    command: request.command.clone(),
+                    command: Some(request.command.clone()),
+                    ..Default::default()
                 })
             }
             WriteCommand::DeleteMulti { ref keys } => {
@@ -147,7 +150,8 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     inner.remove(key);
                 }
                 Ok(WriteResult {
-                    command: request.command.clone(),
+                    command: Some(request.command.clone()),
+                    ..Default::default()
                 })
             }
             WriteCommand::CompareAndSwap {
@@ -164,11 +168,12 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 if condition_matches {
                     inner.insert(key.clone(), new_value.clone());
                     Ok(WriteResult {
-                        command: WriteCommand::CompareAndSwap {
+                        command: Some(WriteCommand::CompareAndSwap {
                             key,
                             expected,
                             new_value,
-                        },
+                        }),
+                        ..Default::default()
                     })
                 } else {
                     Err(KeyValueStoreError::CompareAndSwapFailed {
@@ -184,13 +189,76 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 if condition_matches {
                     inner.remove(&key);
                     Ok(WriteResult {
-                        command: WriteCommand::CompareAndDelete { key, expected },
+                        command: Some(WriteCommand::CompareAndDelete { key, expected }),
+                        ..Default::default()
                     })
                 } else {
                     Err(KeyValueStoreError::CompareAndSwapFailed {
                         key,
                         expected: Some(expected),
                         actual: current,
+                    })
+                }
+            }
+            WriteCommand::Batch { ref operations } => {
+                for op in operations {
+                    match op {
+                        BatchOperation::Set { key, value } => {
+                            inner.insert(key.clone(), value.clone());
+                        }
+                        BatchOperation::Delete { key } => {
+                            inner.remove(key);
+                        }
+                    }
+                }
+                Ok(WriteResult {
+                    batch_applied: Some(operations.len() as u32),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::ConditionalBatch {
+                ref conditions,
+                ref operations,
+            } => {
+                // Check all conditions first
+                let mut conditions_met = true;
+                let mut failed_index = None;
+                for (i, cond) in conditions.iter().enumerate() {
+                    let met = match cond {
+                        BatchCondition::ValueEquals { key, expected } => {
+                            inner.get(key).map(|v| v == expected).unwrap_or(false)
+                        }
+                        BatchCondition::KeyExists { key } => inner.contains_key(key),
+                        BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
+                    };
+                    if !met {
+                        conditions_met = false;
+                        failed_index = Some(i as u32);
+                        break;
+                    }
+                }
+
+                if conditions_met {
+                    for op in operations {
+                        match op {
+                            BatchOperation::Set { key, value } => {
+                                inner.insert(key.clone(), value.clone());
+                            }
+                            BatchOperation::Delete { key } => {
+                                inner.remove(key);
+                            }
+                        }
+                    }
+                    Ok(WriteResult {
+                        batch_applied: Some(operations.len() as u32),
+                        conditions_met: Some(true),
+                        ..Default::default()
+                    })
+                } else {
+                    Ok(WriteResult {
+                        conditions_met: Some(false),
+                        failed_condition_index: failed_index,
+                        ..Default::default()
                     })
                 }
             }

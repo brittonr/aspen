@@ -269,6 +269,17 @@ impl DocsExporter {
                 // CAS delete - export the deletion if the operation succeeded
                 self.export_delete(key, payload.index).await?;
             }
+            KvOperation::Batch { operations }
+            | KvOperation::ConditionalBatch { operations, .. } => {
+                // Process each operation in the batch
+                for (is_set, key, value) in operations {
+                    if *is_set {
+                        self.export_set(key, value, payload.index).await?;
+                    } else {
+                        self.export_delete(key, payload.index).await?;
+                    }
+                }
+            }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Skip non-KV operations
                 debug!(log_index = payload.index, "skipping non-KV entry");
@@ -341,6 +352,27 @@ impl DocsExporter {
                     value: vec![],
                     is_delete: true,
                 });
+            }
+            KvOperation::Batch { operations }
+            | KvOperation::ConditionalBatch { operations, .. } => {
+                // Process each operation in the batch
+                for (is_set, key, value) in operations {
+                    if is_set {
+                        if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
+                            batch.push(BatchEntry {
+                                key,
+                                value,
+                                is_delete: false,
+                            });
+                        }
+                    } else {
+                        batch.push(BatchEntry {
+                            key,
+                            value: vec![],
+                            is_delete: true,
+                        });
+                    }
+                }
             }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Skip non-KV operations

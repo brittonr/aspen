@@ -453,3 +453,554 @@ async fn test_lock_contention() {
     let result = lock2.try_acquire().await;
     assert!(result.is_err(), "Second holder should fail to acquire");
 }
+
+// ============================================================================
+// Batch Operation Tests (In-Memory Store)
+// ============================================================================
+
+use aspen::api::{
+    BatchCondition, BatchOperation, KeyValueStore, ReadRequest, WriteCommand, WriteRequest,
+};
+
+#[tokio::test]
+async fn test_batch_write_set_operations() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Batch set multiple keys
+    let request = WriteRequest {
+        command: WriteCommand::Batch {
+            operations: vec![
+                BatchOperation::Set {
+                    key: "key1".to_string(),
+                    value: "value1".to_string(),
+                },
+                BatchOperation::Set {
+                    key: "key2".to_string(),
+                    value: "value2".to_string(),
+                },
+                BatchOperation::Set {
+                    key: "key3".to_string(),
+                    value: "value3".to_string(),
+                },
+            ],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.batch_applied, Some(3));
+
+    // Verify all keys were set
+    let r1 = store
+        .read(ReadRequest {
+            key: "key1".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(r1.value, "value1");
+
+    let r2 = store
+        .read(ReadRequest {
+            key: "key2".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(r2.value, "value2");
+
+    let r3 = store
+        .read(ReadRequest {
+            key: "key3".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(r3.value, "value3");
+}
+
+#[tokio::test]
+async fn test_batch_write_mixed_operations() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // First, set some keys
+    store
+        .write(WriteRequest {
+            command: WriteCommand::Set {
+                key: "to_delete".to_string(),
+                value: "delete_me".to_string(),
+            },
+        })
+        .await
+        .unwrap();
+
+    // Now batch: set one key, delete another
+    let request = WriteRequest {
+        command: WriteCommand::Batch {
+            operations: vec![
+                BatchOperation::Set {
+                    key: "new_key".to_string(),
+                    value: "new_value".to_string(),
+                },
+                BatchOperation::Delete {
+                    key: "to_delete".to_string(),
+                },
+            ],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.batch_applied, Some(2));
+
+    // Verify new key exists
+    let r1 = store
+        .read(ReadRequest {
+            key: "new_key".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(r1.value, "new_value");
+
+    // Verify deleted key is gone
+    let r2 = store
+        .read(ReadRequest {
+            key: "to_delete".to_string(),
+        })
+        .await;
+    assert!(r2.is_err(), "Deleted key should not exist");
+}
+
+#[tokio::test]
+async fn test_conditional_batch_success() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Set up preconditions
+    store
+        .write(WriteRequest {
+            command: WriteCommand::Set {
+                key: "version".to_string(),
+                value: "1".to_string(),
+            },
+        })
+        .await
+        .unwrap();
+
+    // Conditional batch: if version == "1", update to "2" and set new data
+    let request = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::ValueEquals {
+                key: "version".to_string(),
+                expected: "1".to_string(),
+            }],
+            operations: vec![
+                BatchOperation::Set {
+                    key: "version".to_string(),
+                    value: "2".to_string(),
+                },
+                BatchOperation::Set {
+                    key: "data".to_string(),
+                    value: "updated".to_string(),
+                },
+            ],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.conditions_met, Some(true));
+    assert_eq!(result.batch_applied, Some(2));
+
+    // Verify updates
+    let version = store
+        .read(ReadRequest {
+            key: "version".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(version.value, "2");
+
+    let data = store
+        .read(ReadRequest {
+            key: "data".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(data.value, "updated");
+}
+
+#[tokio::test]
+async fn test_conditional_batch_failure() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Set up preconditions
+    store
+        .write(WriteRequest {
+            command: WriteCommand::Set {
+                key: "version".to_string(),
+                value: "2".to_string(), // Not "1"
+            },
+        })
+        .await
+        .unwrap();
+
+    // Conditional batch: if version == "1", update (should fail)
+    let request = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::ValueEquals {
+                key: "version".to_string(),
+                expected: "1".to_string(),
+            }],
+            operations: vec![BatchOperation::Set {
+                key: "data".to_string(),
+                value: "should_not_appear".to_string(),
+            }],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.conditions_met, Some(false));
+    assert_eq!(result.failed_condition_index, Some(0));
+    assert_eq!(result.batch_applied, None);
+
+    // Verify data was NOT written
+    let data_result = store
+        .read(ReadRequest {
+            key: "data".to_string(),
+        })
+        .await;
+    assert!(
+        data_result.is_err(),
+        "Data should not be written on failed condition"
+    );
+}
+
+#[tokio::test]
+async fn test_conditional_batch_key_exists() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Set up: create a key
+    store
+        .write(WriteRequest {
+            command: WriteCommand::Set {
+                key: "existing".to_string(),
+                value: "value".to_string(),
+            },
+        })
+        .await
+        .unwrap();
+
+    // Conditional batch: if key exists, update it
+    let request = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::KeyExists {
+                key: "existing".to_string(),
+            }],
+            operations: vec![BatchOperation::Set {
+                key: "existing".to_string(),
+                value: "updated".to_string(),
+            }],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.conditions_met, Some(true));
+
+    let existing = store
+        .read(ReadRequest {
+            key: "existing".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(existing.value, "updated");
+}
+
+#[tokio::test]
+async fn test_conditional_batch_key_not_exists() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Conditional batch: create only if key doesn't exist
+    let request = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::KeyNotExists {
+                key: "new_key".to_string(),
+            }],
+            operations: vec![BatchOperation::Set {
+                key: "new_key".to_string(),
+                value: "created".to_string(),
+            }],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.conditions_met, Some(true));
+
+    let new_key = store
+        .read(ReadRequest {
+            key: "new_key".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(new_key.value, "created");
+
+    // Try again - should fail because key now exists
+    let request2 = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::KeyNotExists {
+                key: "new_key".to_string(),
+            }],
+            operations: vec![BatchOperation::Set {
+                key: "new_key".to_string(),
+                value: "overwritten".to_string(),
+            }],
+        },
+    };
+
+    let result2 = store.write(request2).await.unwrap();
+    assert_eq!(result2.conditions_met, Some(false));
+
+    // Value should still be "created"
+    let new_key_after = store
+        .read(ReadRequest {
+            key: "new_key".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(new_key_after.value, "created");
+}
+
+#[tokio::test]
+async fn test_conditional_batch_multiple_conditions() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+
+    // Set up multiple keys
+    store
+        .write(WriteRequest {
+            command: WriteCommand::SetMulti {
+                pairs: vec![
+                    ("key1".to_string(), "value1".to_string()),
+                    ("key2".to_string(), "value2".to_string()),
+                ],
+            },
+        })
+        .await
+        .unwrap();
+
+    // Conditional batch: check multiple conditions
+    let request = WriteRequest {
+        command: WriteCommand::ConditionalBatch {
+            conditions: vec![
+                BatchCondition::ValueEquals {
+                    key: "key1".to_string(),
+                    expected: "value1".to_string(),
+                },
+                BatchCondition::KeyExists {
+                    key: "key2".to_string(),
+                },
+                BatchCondition::KeyNotExists {
+                    key: "key3".to_string(),
+                },
+            ],
+            operations: vec![BatchOperation::Set {
+                key: "result".to_string(),
+                value: "all_conditions_passed".to_string(),
+            }],
+        },
+    };
+
+    let result = store.write(request).await.unwrap();
+    assert_eq!(result.conditions_met, Some(true));
+
+    let result_val = store
+        .read(ReadRequest {
+            key: "result".to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(result_val.value, "all_conditions_passed");
+}
+
+// ============================================================================
+// Batch RPC Serialization Tests
+// ============================================================================
+
+use aspen::client_rpc::{
+    BatchCondition as RpcBatchCondition, BatchReadResultResponse, BatchWriteOperation,
+    BatchWriteResultResponse, ConditionalBatchWriteResultResponse,
+};
+
+#[test]
+fn test_batch_read_request_roundtrip() {
+    let request = ClientRpcRequest::BatchRead {
+        keys: vec!["key1".to_string(), "key2".to_string(), "key3".to_string()],
+    };
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcRequest::BatchRead { keys } => {
+            assert_eq!(keys.len(), 3);
+            assert_eq!(keys[0], "key1");
+            assert_eq!(keys[1], "key2");
+            assert_eq!(keys[2], "key3");
+        }
+        _ => panic!("Wrong variant"),
+    }
+}
+
+#[test]
+fn test_batch_write_request_roundtrip() {
+    let request = ClientRpcRequest::BatchWrite {
+        operations: vec![
+            BatchWriteOperation::Set {
+                key: "key1".to_string(),
+                value: b"value1".to_vec(),
+            },
+            BatchWriteOperation::Delete {
+                key: "key2".to_string(),
+            },
+        ],
+    };
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcRequest::BatchWrite { operations } => {
+            assert_eq!(operations.len(), 2);
+            match &operations[0] {
+                BatchWriteOperation::Set { key, value } => {
+                    assert_eq!(key, "key1");
+                    assert_eq!(value, b"value1");
+                }
+                _ => panic!("Expected Set"),
+            }
+            match &operations[1] {
+                BatchWriteOperation::Delete { key } => {
+                    assert_eq!(key, "key2");
+                }
+                _ => panic!("Expected Delete"),
+            }
+        }
+        _ => panic!("Wrong variant"),
+    }
+}
+
+#[test]
+fn test_conditional_batch_write_request_roundtrip() {
+    let request = ClientRpcRequest::ConditionalBatchWrite {
+        conditions: vec![
+            RpcBatchCondition::ValueEquals {
+                key: "version".to_string(),
+                expected: b"1".to_vec(),
+            },
+            RpcBatchCondition::KeyExists {
+                key: "exists".to_string(),
+            },
+            RpcBatchCondition::KeyNotExists {
+                key: "new".to_string(),
+            },
+        ],
+        operations: vec![BatchWriteOperation::Set {
+            key: "data".to_string(),
+            value: b"updated".to_vec(),
+        }],
+    };
+    let serialized = postcard::to_stdvec(&request).expect("serialize");
+    let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcRequest::ConditionalBatchWrite {
+            conditions,
+            operations,
+        } => {
+            assert_eq!(conditions.len(), 3);
+            assert_eq!(operations.len(), 1);
+        }
+        _ => panic!("Wrong variant"),
+    }
+}
+
+#[test]
+fn test_batch_read_result_response_roundtrip() {
+    let response = ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
+        success: true,
+        values: Some(vec![
+            Some(b"value1".to_vec()),
+            None,
+            Some(b"value3".to_vec()),
+        ]),
+        error: None,
+    });
+    let serialized = postcard::to_stdvec(&response).expect("serialize");
+    let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcResponse::BatchReadResult(result) => {
+            assert!(result.success);
+            let values = result.values.unwrap();
+            assert_eq!(values.len(), 3);
+            assert_eq!(values[0], Some(b"value1".to_vec()));
+            assert_eq!(values[1], None);
+            assert_eq!(values[2], Some(b"value3".to_vec()));
+        }
+        _ => panic!("Wrong variant"),
+    }
+}
+
+#[test]
+fn test_batch_write_result_response_roundtrip() {
+    let response = ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
+        success: true,
+        operations_applied: Some(5),
+        error: None,
+    });
+    let serialized = postcard::to_stdvec(&response).expect("serialize");
+    let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcResponse::BatchWriteResult(result) => {
+            assert!(result.success);
+            assert_eq!(result.operations_applied, Some(5));
+        }
+        _ => panic!("Wrong variant"),
+    }
+}
+
+#[test]
+fn test_conditional_batch_write_result_response_roundtrip() {
+    // Test success case
+    let response =
+        ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+            success: true,
+            conditions_met: true,
+            operations_applied: Some(3),
+            failed_condition_index: None,
+            failed_condition_reason: None,
+            error: None,
+        });
+    let serialized = postcard::to_stdvec(&response).expect("serialize");
+    let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+    match deserialized {
+        ClientRpcResponse::ConditionalBatchWriteResult(result) => {
+            assert!(result.success);
+            assert!(result.conditions_met);
+            assert_eq!(result.operations_applied, Some(3));
+        }
+        _ => panic!("Wrong variant"),
+    }
+
+    // Test failure case
+    let response_fail =
+        ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+            success: false,
+            conditions_met: false,
+            operations_applied: None,
+            failed_condition_index: Some(1),
+            failed_condition_reason: Some("value mismatch".to_string()),
+            error: None,
+        });
+    let serialized_fail = postcard::to_stdvec(&response_fail).expect("serialize");
+    let deserialized_fail: ClientRpcResponse =
+        postcard::from_bytes(&serialized_fail).expect("deserialize");
+    match deserialized_fail {
+        ClientRpcResponse::ConditionalBatchWriteResult(result) => {
+            assert!(!result.success);
+            assert!(!result.conditions_met);
+            assert_eq!(result.failed_condition_index, Some(1));
+            assert_eq!(
+                result.failed_condition_reason,
+                Some("value mismatch".to_string())
+            );
+        }
+        _ => panic!("Wrong variant"),
+    }
+}

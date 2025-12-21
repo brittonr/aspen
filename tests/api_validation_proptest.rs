@@ -253,10 +253,11 @@ fn test_write_result_json_roundtrip() {
         .with_type::<(ValidApiKey, ValidApiValue)>()
         .for_each(|(key, value)| {
             let result = WriteResult {
-                command: WriteCommand::Set {
+                command: Some(WriteCommand::Set {
                     key: key.0.clone(),
                     value: value.0.clone(),
-                },
+                }),
+                ..Default::default()
             };
             let serialized = serde_json::to_string(&result).expect("serialize");
             let deserialized: WriteResult = serde_json::from_str(&serialized).expect("deserialize");

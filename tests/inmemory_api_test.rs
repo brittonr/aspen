@@ -748,7 +748,7 @@ async fn test_kv_store_write_returns_command() {
         .unwrap();
 
     match result.command {
-        WriteCommand::Set { key, value } => {
+        Some(WriteCommand::Set { key, value }) => {
             assert_eq!(key, "key1");
             assert_eq!(value, "value1");
         }

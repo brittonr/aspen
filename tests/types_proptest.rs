@@ -189,6 +189,26 @@ fn test_app_request_display_contains_key() {
                         "Display should contain variant name"
                     );
                 }
+                AppRequest::Batch { operations } => {
+                    assert!(
+                        displayed.contains("Batch"),
+                        "Display should contain variant name"
+                    );
+                    // Should contain operation count
+                    assert!(displayed.contains(&operations.len().to_string()));
+                }
+                AppRequest::ConditionalBatch {
+                    conditions,
+                    operations,
+                } => {
+                    assert!(
+                        displayed.contains("ConditionalBatch"),
+                        "Display should contain variant name"
+                    );
+                    // Should contain operation and condition counts
+                    assert!(displayed.contains(&operations.len().to_string()));
+                    assert!(displayed.contains(&conditions.len().to_string()));
+                }
             }
         });
 }
@@ -204,6 +224,7 @@ fn test_app_response_serde_json_roundtrip() {
                 value: value.clone(),
                 deleted: *deleted,
                 cas_succeeded: *cas_succeeded,
+                ..Default::default()
             };
             let serialized = serde_json::to_string(&response).expect("Should serialize");
             let deserialized: AppResponse =
@@ -360,25 +381,21 @@ mod unit_tests {
         let response = AppResponse {
             value: Some("test".to_string()),
             deleted: Some(true),
-            cas_succeeded: None,
+            ..Default::default()
         };
         assert_eq!(response.value, Some("test".to_string()));
         assert_eq!(response.deleted, Some(true));
         assert!(response.cas_succeeded.is_none());
 
-        let empty = AppResponse {
-            value: None,
-            deleted: None,
-            cas_succeeded: None,
-        };
+        let empty = AppResponse::default();
         assert!(empty.value.is_none());
         assert!(empty.deleted.is_none());
         assert!(empty.cas_succeeded.is_none());
 
         let cas_response = AppResponse {
             value: Some("new_value".to_string()),
-            deleted: None,
             cas_succeeded: Some(true),
+            ..Default::default()
         };
         assert_eq!(cas_response.cas_succeeded, Some(true));
     }

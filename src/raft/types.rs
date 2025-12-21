@@ -170,6 +170,21 @@ pub enum AppRequest {
         key: String,
         expected: String,
     },
+    /// Batch write: atomically apply multiple Set/Delete operations.
+    Batch {
+        /// Operations as (is_set, key, value). is_set=true for Set, false for Delete.
+        /// Value is empty string for Delete operations.
+        operations: Vec<(bool, String, String)>,
+    },
+    /// Conditional batch write: apply operations only if all conditions are met.
+    ConditionalBatch {
+        /// Conditions as (condition_type, key, expected_value).
+        /// condition_type: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists.
+        /// expected_value is only used for ValueEquals.
+        conditions: Vec<(u8, String, String)>,
+        /// Operations as (is_set, key, value). is_set=true for Set, false for Delete.
+        operations: Vec<(bool, String, String)>,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -210,12 +225,26 @@ impl fmt::Display for AppRequest {
             AppRequest::CompareAndDelete { key, expected } => {
                 write!(f, "CompareAndDelete {{ key: {key}, expected: {expected} }}")
             }
+            AppRequest::Batch { operations } => {
+                write!(f, "Batch {{ operations: {} }}", operations.len())
+            }
+            AppRequest::ConditionalBatch {
+                conditions,
+                operations,
+            } => {
+                write!(
+                    f,
+                    "ConditionalBatch {{ conditions: {}, operations: {} }}",
+                    conditions.len(),
+                    operations.len()
+                )
+            }
         }
     }
 }
 
 /// Response returned to HTTP clients after applying a request.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AppResponse {
     pub value: Option<String>,
     /// Indicates whether a delete operation actually removed a key.
@@ -229,6 +258,17 @@ pub struct AppResponse {
     /// When `Some(false)`, the `value` field contains the actual current value
     /// of the key (or None if the key doesn't exist), allowing clients to retry.
     pub cas_succeeded: Option<bool>,
+    /// Number of operations applied in a batch.
+    /// Only set for Batch and ConditionalBatch operations.
+    pub batch_applied: Option<u32>,
+    /// For ConditionalBatch: index of first failed condition (0-indexed).
+    /// Only set when conditions_met is Some(false).
+    pub failed_condition_index: Option<u32>,
+    /// For ConditionalBatch: whether all conditions were met.
+    /// - `Some(true)`: All conditions passed, operations were applied
+    /// - `Some(false)`: At least one condition failed, no operations applied
+    /// - `None`: Not a conditional batch operation
+    pub conditions_met: Option<bool>,
 }
 
 declare_raft_types!(
@@ -474,8 +514,7 @@ mod tests {
     fn test_app_response_with_value() {
         let resp = AppResponse {
             value: Some("result".to_string()),
-            deleted: None,
-            cas_succeeded: None,
+            ..Default::default()
         };
         assert_eq!(resp.value, Some("result".to_string()));
         assert!(resp.deleted.is_none());
@@ -485,9 +524,8 @@ mod tests {
     #[test]
     fn test_app_response_deleted_true() {
         let resp = AppResponse {
-            value: None,
             deleted: Some(true),
-            cas_succeeded: None,
+            ..Default::default()
         };
         assert!(resp.deleted == Some(true));
     }
@@ -495,9 +533,8 @@ mod tests {
     #[test]
     fn test_app_response_deleted_false() {
         let resp = AppResponse {
-            value: None,
             deleted: Some(false),
-            cas_succeeded: None,
+            ..Default::default()
         };
         assert!(resp.deleted == Some(false));
     }
@@ -506,8 +543,8 @@ mod tests {
     fn test_app_response_cas_succeeded() {
         let resp = AppResponse {
             value: Some("new_value".to_string()),
-            deleted: None,
             cas_succeeded: Some(true),
+            ..Default::default()
         };
         assert_eq!(resp.cas_succeeded, Some(true));
     }
@@ -516,8 +553,8 @@ mod tests {
     fn test_app_response_cas_failed() {
         let resp = AppResponse {
             value: Some("actual_value".to_string()),
-            deleted: None,
             cas_succeeded: Some(false),
+            ..Default::default()
         };
         assert_eq!(resp.cas_succeeded, Some(false));
         assert_eq!(resp.value, Some("actual_value".to_string()));
@@ -528,7 +565,7 @@ mod tests {
         let original = AppResponse {
             value: Some("test_value".to_string()),
             deleted: Some(true),
-            cas_succeeded: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppResponse = serde_json::from_str(&json).expect("deserialize");
@@ -541,8 +578,8 @@ mod tests {
     fn test_app_response_cas_serde_roundtrip() {
         let original = AppResponse {
             value: Some("cas_value".to_string()),
-            deleted: None,
             cas_succeeded: Some(true),
+            ..Default::default()
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppResponse = serde_json::from_str(&json).expect("deserialize");

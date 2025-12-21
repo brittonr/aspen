@@ -262,6 +262,45 @@ pub enum WriteCommand {
         key: String,
         expected: String,
     },
+    /// Batch write: atomically apply multiple Set/Delete operations.
+    ///
+    /// All operations are applied in a single atomic transaction.
+    /// Unlike SetMulti/DeleteMulti, this allows mixing Set and Delete in one batch.
+    Batch {
+        /// Operations to execute atomically (max 100).
+        operations: Vec<BatchOperation>,
+    },
+    /// Conditional batch write: apply operations only if all conditions are met.
+    ///
+    /// Checks all conditions first (reads are done atomically), then if all pass,
+    /// applies all operations in a single atomic transaction.
+    /// Similar to etcd's `Txn().If(conditions).Then(ops).Commit()`.
+    ConditionalBatch {
+        /// Conditions that must all be true (max 100).
+        conditions: Vec<BatchCondition>,
+        /// Operations to execute if all conditions pass (max 100).
+        operations: Vec<BatchOperation>,
+    },
+}
+
+/// A single operation within a batch write.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BatchOperation {
+    /// Set a key to a value.
+    Set { key: String, value: String },
+    /// Delete a key.
+    Delete { key: String },
+}
+
+/// A condition for conditional batch writes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BatchCondition {
+    /// Key must have exactly this value.
+    ValueEquals { key: String, expected: String },
+    /// Key must exist (any value).
+    KeyExists { key: String },
+    /// Key must not exist.
+    KeyNotExists { key: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -269,9 +308,15 @@ pub struct WriteRequest {
     pub command: WriteCommand,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct WriteResult {
-    pub command: WriteCommand,
+    pub command: Option<WriteCommand>,
+    /// Number of operations applied in a batch (for Batch/ConditionalBatch).
+    pub batch_applied: Option<u32>,
+    /// Whether conditions were met (for ConditionalBatch).
+    pub conditions_met: Option<bool>,
+    /// Index of first failed condition (for ConditionalBatch).
+    pub failed_condition_index: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -501,6 +546,62 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::CompareAndDelete { key, expected } => {
             check_key(key)?;
             check_value(expected)?;
+        }
+        WriteCommand::Batch { operations } => {
+            if operations.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: operations.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            for op in operations {
+                match op {
+                    BatchOperation::Set { key, value } => {
+                        check_key(key)?;
+                        check_value(value)?;
+                    }
+                    BatchOperation::Delete { key } => {
+                        check_key(key)?;
+                    }
+                }
+            }
+        }
+        WriteCommand::ConditionalBatch {
+            conditions,
+            operations,
+        } => {
+            // Check total size of conditions + operations
+            let total_size = conditions.len() + operations.len();
+            if total_size > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: total_size,
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            // Validate conditions
+            for cond in conditions {
+                match cond {
+                    BatchCondition::ValueEquals { key, expected } => {
+                        check_key(key)?;
+                        check_value(expected)?;
+                    }
+                    BatchCondition::KeyExists { key } | BatchCondition::KeyNotExists { key } => {
+                        check_key(key)?;
+                    }
+                }
+            }
+            // Validate operations
+            for op in operations {
+                match op {
+                    BatchOperation::Set { key, value } => {
+                        check_key(key)?;
+                        check_value(value)?;
+                    }
+                    BatchOperation::Delete { key } => {
+                        check_key(key)?;
+                    }
+                }
+            }
         }
     }
 

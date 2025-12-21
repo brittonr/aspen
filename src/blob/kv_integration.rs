@@ -265,6 +265,16 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
             WriteCommand::CompareAndDelete { key, expected } => {
                 WriteCommand::CompareAndDelete { key, expected }
             }
+            // Batch operations pass through directly without blob offloading.
+            // Batches are typically used for transactional operations that don't need offloading.
+            WriteCommand::Batch { operations } => WriteCommand::Batch { operations },
+            WriteCommand::ConditionalBatch {
+                conditions,
+                operations,
+            } => WriteCommand::ConditionalBatch {
+                conditions,
+                operations,
+            },
         };
 
         // Write to underlying KV

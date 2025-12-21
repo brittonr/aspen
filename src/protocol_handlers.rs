@@ -73,10 +73,11 @@ use crate::api::{
 use crate::blob::IrohBlobStore;
 use crate::client_rpc::{
     AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse,
-    BlobListEntry as RpcBlobListEntry, ChangeMembershipResultResponse, CheckpointWalResultResponse,
-    ClientRpcRequest, ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse,
-    ClusterStateResponse, ClusterTicketResponse, CounterResultResponse, DeleteResultResponse,
-    DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
+    BatchReadResultResponse, BatchWriteResultResponse, BlobListEntry as RpcBlobListEntry,
+    ChangeMembershipResultResponse, CheckpointWalResultResponse, ClientRpcRequest,
+    ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse, ClusterStateResponse,
+    ClusterTicketResponse, ConditionalBatchWriteResultResponse, CounterResultResponse,
+    DeleteResultResponse, DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
     GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse,
     ListBlobsResultResponse, LockResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES,
     MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
@@ -4112,6 +4113,233 @@ async fn process_client_request(
                         success: false,
                         tokens_remaining: None,
                         retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        // ==========================================================================
+        // Batch Operations
+        // ==========================================================================
+        ClientRpcRequest::BatchRead { keys } => {
+            use crate::api::KeyValueStoreError;
+            // Validate all keys
+            for key in &keys {
+                if let Err(e) = validate_client_key(key) {
+                    return Ok(ClientRpcResponse::BatchReadResult(
+                        BatchReadResultResponse {
+                            success: false,
+                            values: None,
+                            error: Some(e.to_string()),
+                        },
+                    ));
+                }
+            }
+
+            // Read all keys atomically
+            let mut values = Vec::with_capacity(keys.len());
+            for key in &keys {
+                let request = ReadRequest { key: key.clone() };
+                match ctx.kv_store.read(request).await {
+                    Ok(result) => {
+                        // Key exists - return the value
+                        values.push(Some(result.value.into_bytes()));
+                    }
+                    Err(KeyValueStoreError::NotFound { .. }) => {
+                        // Key doesn't exist - return None for this position
+                        values.push(None);
+                    }
+                    Err(e) => {
+                        // Real error - fail the entire batch
+                        return Ok(ClientRpcResponse::BatchReadResult(
+                            BatchReadResultResponse {
+                                success: false,
+                                values: None,
+                                error: Some(e.to_string()),
+                            },
+                        ));
+                    }
+                }
+            }
+
+            Ok(ClientRpcResponse::BatchReadResult(
+                BatchReadResultResponse {
+                    success: true,
+                    values: Some(values),
+                    error: None,
+                },
+            ))
+        }
+
+        ClientRpcRequest::BatchWrite { operations } => {
+            use crate::api::{BatchOperation, WriteCommand};
+            use crate::client_rpc::BatchWriteOperation;
+
+            // Validate all keys
+            for op in &operations {
+                let key = match op {
+                    BatchWriteOperation::Set { key, .. } => key,
+                    BatchWriteOperation::Delete { key } => key,
+                };
+                if let Err(e) = validate_client_key(key) {
+                    return Ok(ClientRpcResponse::BatchWriteResult(
+                        BatchWriteResultResponse {
+                            success: false,
+                            operations_applied: None,
+                            error: Some(e.to_string()),
+                        },
+                    ));
+                }
+            }
+
+            // Convert to internal batch operations
+            let batch_ops: Vec<BatchOperation> = operations
+                .iter()
+                .map(|op| match op {
+                    BatchWriteOperation::Set { key, value } => BatchOperation::Set {
+                        key: key.clone(),
+                        value: String::from_utf8_lossy(value).to_string(),
+                    },
+                    BatchWriteOperation::Delete { key } => {
+                        BatchOperation::Delete { key: key.clone() }
+                    }
+                })
+                .collect();
+
+            let request = WriteRequest {
+                command: WriteCommand::Batch {
+                    operations: batch_ops,
+                },
+            };
+
+            match ctx.kv_store.write(request).await {
+                Ok(result) => Ok(ClientRpcResponse::BatchWriteResult(
+                    BatchWriteResultResponse {
+                        success: true,
+                        operations_applied: result.batch_applied,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::BatchWriteResult(
+                    BatchWriteResultResponse {
+                        success: false,
+                        operations_applied: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ConditionalBatchWrite {
+            conditions,
+            operations,
+        } => {
+            use crate::api::{BatchCondition as ApiBatchCondition, BatchOperation, WriteCommand};
+            use crate::client_rpc::{BatchCondition, BatchWriteOperation};
+
+            // Validate all keys in conditions
+            for cond in &conditions {
+                let key = match cond {
+                    BatchCondition::ValueEquals { key, .. } => key,
+                    BatchCondition::KeyExists { key } => key,
+                    BatchCondition::KeyNotExists { key } => key,
+                };
+                if let Err(e) = validate_client_key(key) {
+                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(
+                        ConditionalBatchWriteResultResponse {
+                            success: false,
+                            conditions_met: false,
+                            operations_applied: None,
+                            failed_condition_index: None,
+                            failed_condition_reason: Some(e.to_string()),
+                            error: None,
+                        },
+                    ));
+                }
+            }
+
+            // Validate all keys in operations
+            for op in &operations {
+                let key = match op {
+                    BatchWriteOperation::Set { key, .. } => key,
+                    BatchWriteOperation::Delete { key } => key,
+                };
+                if let Err(e) = validate_client_key(key) {
+                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(
+                        ConditionalBatchWriteResultResponse {
+                            success: false,
+                            conditions_met: false,
+                            operations_applied: None,
+                            failed_condition_index: None,
+                            failed_condition_reason: Some(e.to_string()),
+                            error: None,
+                        },
+                    ));
+                }
+            }
+
+            // Convert conditions
+            let api_conditions: Vec<ApiBatchCondition> = conditions
+                .iter()
+                .map(|c| match c {
+                    BatchCondition::ValueEquals { key, expected } => {
+                        ApiBatchCondition::ValueEquals {
+                            key: key.clone(),
+                            expected: String::from_utf8_lossy(expected).to_string(),
+                        }
+                    }
+                    BatchCondition::KeyExists { key } => {
+                        ApiBatchCondition::KeyExists { key: key.clone() }
+                    }
+                    BatchCondition::KeyNotExists { key } => {
+                        ApiBatchCondition::KeyNotExists { key: key.clone() }
+                    }
+                })
+                .collect();
+
+            // Convert operations
+            let batch_ops: Vec<BatchOperation> = operations
+                .iter()
+                .map(|op| match op {
+                    BatchWriteOperation::Set { key, value } => BatchOperation::Set {
+                        key: key.clone(),
+                        value: String::from_utf8_lossy(value).to_string(),
+                    },
+                    BatchWriteOperation::Delete { key } => {
+                        BatchOperation::Delete { key: key.clone() }
+                    }
+                })
+                .collect();
+
+            let request = WriteRequest {
+                command: WriteCommand::ConditionalBatch {
+                    conditions: api_conditions,
+                    operations: batch_ops,
+                },
+            };
+
+            match ctx.kv_store.write(request).await {
+                Ok(result) => {
+                    let conditions_met = result.conditions_met.unwrap_or(false);
+                    Ok(ClientRpcResponse::ConditionalBatchWriteResult(
+                        ConditionalBatchWriteResultResponse {
+                            success: conditions_met,
+                            conditions_met,
+                            operations_applied: result.batch_applied,
+                            failed_condition_index: result.failed_condition_index,
+                            failed_condition_reason: None,
+                            error: None,
+                        },
+                    ))
+                }
+                Err(e) => Ok(ClientRpcResponse::ConditionalBatchWriteResult(
+                    ConditionalBatchWriteResultResponse {
+                        success: false,
+                        conditions_met: false,
+                        operations_applied: None,
+                        failed_condition_index: None,
+                        failed_condition_reason: None,
                         error: Some(e.to_string()),
                     },
                 )),

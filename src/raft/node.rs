@@ -383,6 +383,7 @@ impl KeyValueStore for RaftNode {
         validate_write_command(&request.command)?;
 
         // Convert WriteRequest to AppRequest
+        use crate::api::{BatchCondition, BatchOperation};
         use crate::raft::types::AppRequest;
         let app_request = match &request.command {
             crate::api::WriteCommand::Set { key, value } => AppRequest::Set {
@@ -411,6 +412,46 @@ impl KeyValueStore for RaftNode {
                     expected: expected.clone(),
                 }
             }
+            crate::api::WriteCommand::Batch { operations } => {
+                // Convert to compact tuple format: (is_set, key, value)
+                let ops: Vec<(bool, String, String)> = operations
+                    .iter()
+                    .map(|op| match op {
+                        BatchOperation::Set { key, value } => (true, key.clone(), value.clone()),
+                        BatchOperation::Delete { key } => (false, key.clone(), String::new()),
+                    })
+                    .collect();
+                AppRequest::Batch { operations: ops }
+            }
+            crate::api::WriteCommand::ConditionalBatch {
+                conditions,
+                operations,
+            } => {
+                // Convert conditions to compact tuple format: (type, key, expected)
+                // Types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
+                let conds: Vec<(u8, String, String)> = conditions
+                    .iter()
+                    .map(|c| match c {
+                        BatchCondition::ValueEquals { key, expected } => {
+                            (0, key.clone(), expected.clone())
+                        }
+                        BatchCondition::KeyExists { key } => (1, key.clone(), String::new()),
+                        BatchCondition::KeyNotExists { key } => (2, key.clone(), String::new()),
+                    })
+                    .collect();
+                // Convert operations to compact tuple format
+                let ops: Vec<(bool, String, String)> = operations
+                    .iter()
+                    .map(|op| match op {
+                        BatchOperation::Set { key, value } => (true, key.clone(), value.clone()),
+                        BatchOperation::Delete { key } => (false, key.clone(), String::new()),
+                    })
+                    .collect();
+                AppRequest::ConditionalBatch {
+                    conditions: conds,
+                    operations: ops,
+                }
+            }
         };
 
         // Apply write through Raft consensus
@@ -436,9 +477,12 @@ impl KeyValueStore for RaftNode {
                         actual: resp.data.value,
                     });
                 }
-                // Write was successful, return the original command
+                // Build WriteResult with appropriate fields based on operation type
                 Ok(WriteResult {
-                    command: request.command,
+                    command: Some(request.command),
+                    batch_applied: resp.data.batch_applied,
+                    conditions_met: resp.data.conditions_met,
+                    failed_condition_index: resp.data.failed_condition_index,
                 })
             }
             Err(err) => {

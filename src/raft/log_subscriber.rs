@@ -263,6 +263,19 @@ pub enum KvOperation {
     },
     /// Compare-and-delete: atomically delete if current value matches expected.
     CompareAndDelete { key: Vec<u8>, expected: Vec<u8> },
+    /// Batch of mixed Set/Delete operations.
+    Batch {
+        /// Operations as (is_set, key, value) tuples.
+        operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
+    },
+    /// Conditional batch: operations applied only if all conditions pass.
+    ConditionalBatch {
+        /// Conditions as (type, key, expected) tuples.
+        /// Types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists.
+        conditions: Vec<(u8, Vec<u8>, Vec<u8>)>,
+        /// Operations as (is_set, key, value) tuples.
+        operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
+    },
     /// No-op entry (used for leader election).
     Noop,
     /// Membership change entry.
@@ -286,6 +299,10 @@ impl KvOperation {
             | KvOperation::CompareAndDelete { key, .. } => key.starts_with(prefix),
             KvOperation::SetMulti { pairs } => pairs.iter().any(|(k, _)| k.starts_with(prefix)),
             KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
+            KvOperation::Batch { operations }
+            | KvOperation::ConditionalBatch { operations, .. } => {
+                operations.iter().any(|(_, k, _)| k.starts_with(prefix))
+            }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => {
                 // Always include control operations
                 true
@@ -302,6 +319,10 @@ impl KvOperation {
             | KvOperation::CompareAndDelete { key, .. } => Some(key),
             KvOperation::SetMulti { pairs } => pairs.first().map(|(k, _)| k.as_slice()),
             KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
+            KvOperation::Batch { operations }
+            | KvOperation::ConditionalBatch { operations, .. } => {
+                operations.first().map(|(_, k, _)| k.as_slice())
+            }
             KvOperation::Noop | KvOperation::MembershipChange { .. } => None,
         }
     }
@@ -315,6 +336,8 @@ impl KvOperation {
             | KvOperation::CompareAndDelete { .. } => 1,
             KvOperation::SetMulti { pairs } => pairs.len(),
             KvOperation::DeleteMulti { keys } => keys.len(),
+            KvOperation::Batch { operations }
+            | KvOperation::ConditionalBatch { operations, .. } => operations.len(),
             KvOperation::Noop | KvOperation::MembershipChange { .. } => 0,
         }
     }
@@ -352,6 +375,27 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
             AppRequest::CompareAndDelete { key, expected } => KvOperation::CompareAndDelete {
                 key: key.into_bytes(),
                 expected: expected.into_bytes(),
+            },
+            AppRequest::Batch { operations } => KvOperation::Batch {
+                operations: operations
+                    .into_iter()
+                    .map(|(is_set, key, value)| (is_set, key.into_bytes(), value.into_bytes()))
+                    .collect(),
+            },
+            AppRequest::ConditionalBatch {
+                conditions,
+                operations,
+            } => KvOperation::ConditionalBatch {
+                conditions: conditions
+                    .into_iter()
+                    .map(|(cond_type, key, expected)| {
+                        (cond_type, key.into_bytes(), expected.into_bytes())
+                    })
+                    .collect(),
+                operations: operations
+                    .into_iter()
+                    .map(|(is_set, key, value)| (is_set, key.into_bytes(), value.into_bytes()))
+                    .collect(),
             },
         }
     }

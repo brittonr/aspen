@@ -295,6 +295,43 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                 key: key.clone().into_bytes(),
                 expected: expected.clone().into_bytes(),
             },
+            AppRequest::Batch { operations } => KvOperation::Batch {
+                operations: operations
+                    .iter()
+                    .map(|(is_set, key, value)| {
+                        (
+                            *is_set,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+            },
+            AppRequest::ConditionalBatch {
+                conditions,
+                operations,
+            } => KvOperation::ConditionalBatch {
+                conditions: conditions
+                    .iter()
+                    .map(|(cond_type, key, expected)| {
+                        (
+                            *cond_type,
+                            key.clone().into_bytes(),
+                            expected.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+                operations: operations
+                    .iter()
+                    .map(|(is_set, key, value)| {
+                        (
+                            *is_set,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+            },
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -1331,8 +1368,7 @@ impl SqliteStateMachine {
         .context(ExecuteSnafu)?;
         Ok(AppResponse {
             value: Some(value.to_string()),
-            deleted: None,
-            cas_succeeded: None,
+            ..Default::default()
         })
     }
 
@@ -1367,8 +1403,7 @@ impl SqliteStateMachine {
         drop(stmt); // Explicit drop (Tiger Style)
         Ok(AppResponse {
             value: None,
-            deleted: None,
-            cas_succeeded: None,
+            ..Default::default()
         })
     }
 
@@ -1385,7 +1420,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: Some(rows > 0),
-            cas_succeeded: None,
+            ..Default::default()
         })
     }
 
@@ -1420,7 +1455,7 @@ impl SqliteStateMachine {
         Ok(AppResponse {
             value: None,
             deleted: Some(deleted_any),
-            cas_succeeded: None,
+            ..Default::default()
         })
     }
 
@@ -1471,8 +1506,8 @@ impl SqliteStateMachine {
             // CAS failed - return actual value for retry
             return Ok(AppResponse {
                 value: current,
-                deleted: None,
                 cas_succeeded: Some(false),
+                ..Default::default()
             });
         }
 
@@ -1485,8 +1520,8 @@ impl SqliteStateMachine {
 
         Ok(AppResponse {
             value: Some(new_value.to_string()),
-            deleted: None,
             cas_succeeded: Some(true),
+            ..Default::default()
         })
     }
 
@@ -1532,8 +1567,8 @@ impl SqliteStateMachine {
             // CAS failed - return actual value for retry
             return Ok(AppResponse {
                 value: current,
-                deleted: None,
                 cas_succeeded: Some(false),
+                ..Default::default()
             });
         }
 
@@ -1542,9 +1577,9 @@ impl SqliteStateMachine {
             .context(ExecuteSnafu)?;
 
         Ok(AppResponse {
-            value: None,
             deleted: Some(true),
             cas_succeeded: Some(true),
+            ..Default::default()
         })
     }
 
@@ -1564,10 +1599,137 @@ impl SqliteStateMachine {
             params![membership_bytes],
         )
         .context(ExecuteSnafu)?;
+        Ok(AppResponse::default())
+    }
+
+    /// Apply a batch of mixed Set/Delete operations.
+    ///
+    /// Applies multiple operations atomically in a single transaction.
+    /// Operations use the compact tuple format: (is_set, key, value).
+    ///
+    /// Tiger Style: Fixed limit, batched operation, atomic.
+    fn apply_batch(
+        conn: &Connection,
+        operations: &[(bool, String, String)],
+    ) -> Result<AppResponse, io::Error> {
+        if operations.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "Batch operation with {} ops exceeds maximum limit of {}",
+                operations.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Prepare statements for reuse
+        let mut set_stmt = conn
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .context(QuerySnafu)?;
+        let mut del_stmt = conn
+            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+
+        for (is_set, key, value) in operations {
+            if *is_set {
+                set_stmt
+                    .execute(params![key, value])
+                    .context(ExecuteSnafu)?;
+            } else {
+                del_stmt.execute(params![key]).context(ExecuteSnafu)?;
+            }
+        }
+
+        drop(set_stmt);
+        drop(del_stmt);
         Ok(AppResponse {
-            value: None,
-            deleted: None,
-            cas_succeeded: None,
+            batch_applied: Some(operations.len() as u32),
+            ..Default::default()
+        })
+    }
+
+    /// Apply a conditional batch of operations.
+    ///
+    /// Checks all conditions first, then applies operations only if all conditions pass.
+    /// Condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists.
+    ///
+    /// Tiger Style: Fixed limit, atomic, explicit condition checking.
+    fn apply_conditional_batch(
+        conn: &Connection,
+        conditions: &[(u8, String, String)],
+        operations: &[(bool, String, String)],
+    ) -> Result<AppResponse, io::Error> {
+        if operations.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "ConditionalBatch with {} ops exceeds maximum limit of {}",
+                operations.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+        if conditions.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "ConditionalBatch with {} conditions exceeds maximum limit of {}",
+                conditions.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Check all conditions first
+        let mut conditions_met = true;
+        let mut failed_index = None;
+        for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
+            let current: Option<String> = conn
+                .query_row(
+                    "SELECT value FROM state_machine_kv WHERE key = ?1",
+                    params![key],
+                    |row| row.get(0),
+                )
+                .optional()
+                .context(QuerySnafu)?;
+
+            let met = match cond_type {
+                0 => current.as_ref().map(|v| v == expected).unwrap_or(false), // ValueEquals
+                1 => current.is_some(),                                        // KeyExists
+                2 => current.is_none(),                                        // KeyNotExists
+                _ => false,
+            };
+            if !met {
+                conditions_met = false;
+                failed_index = Some(i as u32);
+                break;
+            }
+        }
+
+        if !conditions_met {
+            return Ok(AppResponse {
+                conditions_met: Some(false),
+                failed_condition_index: failed_index,
+                ..Default::default()
+            });
+        }
+
+        // Apply all operations
+        let mut set_stmt = conn
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .context(QuerySnafu)?;
+        let mut del_stmt = conn
+            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+
+        for (is_set, key, value) in operations {
+            if *is_set {
+                set_stmt
+                    .execute(params![key, value])
+                    .context(ExecuteSnafu)?;
+            } else {
+                del_stmt.execute(params![key]).context(ExecuteSnafu)?;
+            }
+        }
+
+        drop(set_stmt);
+        drop(del_stmt);
+        Ok(AppResponse {
+            batch_applied: Some(operations.len() as u32),
+            conditions_met: Some(true),
+            ..Default::default()
         })
     }
 
@@ -1581,11 +1743,7 @@ impl SqliteStateMachine {
         log_id: &openraft::LogId<AppTypeConfig>,
     ) -> Result<AppResponse, io::Error> {
         match payload {
-            EntryPayload::Blank => Ok(AppResponse {
-                value: None,
-                deleted: None,
-                cas_succeeded: None,
-            }),
+            EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
                 AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
                 AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
@@ -1599,6 +1757,11 @@ impl SqliteStateMachine {
                 AppRequest::CompareAndDelete { key, expected } => {
                     Self::apply_compare_and_delete(conn, key, expected)
                 }
+                AppRequest::Batch { operations } => Self::apply_batch(conn, operations),
+                AppRequest::ConditionalBatch {
+                    conditions,
+                    operations,
+                } => Self::apply_conditional_batch(conn, conditions, operations),
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

@@ -1481,36 +1481,26 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
         while let Some((entry, responder)) = entries.try_next().await? {
             sm.last_applied_log = Some(entry.log_id);
             let response = match entry.payload {
-                EntryPayload::Blank => AppResponse {
-                    value: None,
-                    deleted: None,
-                    cas_succeeded: None,
-                },
+                EntryPayload::Blank => AppResponse::default(),
                 EntryPayload::Normal(ref req) => match req {
                     AppRequest::Set { key, value } => {
                         sm.data.insert(key.clone(), value.clone());
                         AppResponse {
                             value: Some(value.clone()),
-                            deleted: None,
-                            cas_succeeded: None,
+                            ..Default::default()
                         }
                     }
                     AppRequest::SetMulti { pairs } => {
                         for (key, value) in pairs {
                             sm.data.insert(key.clone(), value.clone());
                         }
-                        AppResponse {
-                            value: None,
-                            deleted: None,
-                            cas_succeeded: None,
-                        }
+                        AppResponse::default()
                     }
                     AppRequest::Delete { key } => {
                         let existed = sm.data.remove(key).is_some();
                         AppResponse {
-                            value: None,
                             deleted: Some(existed),
-                            cas_succeeded: None,
+                            ..Default::default()
                         }
                     }
                     AppRequest::DeleteMulti { keys } => {
@@ -1520,9 +1510,8 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             sm.data.remove(key);
                         }
                         AppResponse {
-                            value: None,
                             deleted: Some(deleted_any),
-                            cas_succeeded: None,
+                            ..Default::default()
                         }
                     }
                     AppRequest::CompareAndSwap {
@@ -1540,14 +1529,14 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             sm.data.insert(key.clone(), new_value.clone());
                             AppResponse {
                                 value: Some(new_value.clone()),
-                                deleted: None,
                                 cas_succeeded: Some(true),
+                                ..Default::default()
                             }
                         } else {
                             AppResponse {
                                 value: current,
-                                deleted: None,
                                 cas_succeeded: Some(false),
+                                ..Default::default()
                             }
                         }
                     }
@@ -1557,15 +1546,73 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         if condition_matches {
                             sm.data.remove(key);
                             AppResponse {
-                                value: None,
                                 deleted: Some(true),
                                 cas_succeeded: Some(true),
+                                ..Default::default()
                             }
                         } else {
                             AppResponse {
                                 value: current,
-                                deleted: None,
                                 cas_succeeded: Some(false),
+                                ..Default::default()
+                            }
+                        }
+                    }
+                    AppRequest::Batch { operations } => {
+                        for (is_set, key, value) in operations {
+                            if *is_set {
+                                sm.data.insert(key.clone(), value.clone());
+                            } else {
+                                sm.data.remove(key);
+                            }
+                        }
+                        AppResponse {
+                            batch_applied: Some(operations.len() as u32),
+                            ..Default::default()
+                        }
+                    }
+                    AppRequest::ConditionalBatch {
+                        conditions,
+                        operations,
+                    } => {
+                        // Check all conditions first
+                        // condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
+                        let mut conditions_met = true;
+                        let mut failed_index = None;
+                        for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
+                            let current = sm.data.get(key);
+                            let met = match cond_type {
+                                0 => current.map(|v| v == expected).unwrap_or(false), // ValueEquals
+                                1 => current.is_some(),                               // KeyExists
+                                2 => current.is_none(), // KeyNotExists
+                                _ => false,
+                            };
+                            if !met {
+                                conditions_met = false;
+                                failed_index = Some(i as u32);
+                                break;
+                            }
+                        }
+
+                        if conditions_met {
+                            // Apply all operations
+                            for (is_set, key, value) in operations {
+                                if *is_set {
+                                    sm.data.insert(key.clone(), value.clone());
+                                } else {
+                                    sm.data.remove(key);
+                                }
+                            }
+                            AppResponse {
+                                batch_applied: Some(operations.len() as u32),
+                                conditions_met: Some(true),
+                                ..Default::default()
+                            }
+                        } else {
+                            AppResponse {
+                                conditions_met: Some(false),
+                                failed_condition_index: failed_index,
+                                ..Default::default()
                             }
                         }
                     }
@@ -1573,11 +1620,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =
                         StoredMembership::new(Some(entry.log_id), membership.clone());
-                    AppResponse {
-                        value: None,
-                        deleted: None,
-                        cas_succeeded: None,
-                    }
+                    AppResponse::default()
                 }
             };
             if let Some(responder) = responder {
