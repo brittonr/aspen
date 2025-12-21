@@ -150,8 +150,21 @@ pub enum AppRequest {
         key: String,
         value: String,
     },
+    /// Set with time-to-live. expires_at_ms is Unix timestamp when key expires.
+    SetWithTTL {
+        key: String,
+        value: String,
+        /// Expiration time as Unix timestamp in milliseconds.
+        expires_at_ms: u64,
+    },
     SetMulti {
         pairs: Vec<(String, String)>,
+    },
+    /// Set multiple keys with TTL.
+    SetMultiWithTTL {
+        pairs: Vec<(String, String)>,
+        /// Expiration time as Unix timestamp in milliseconds.
+        expires_at_ms: u64,
     },
     Delete {
         key: String,
@@ -191,6 +204,16 @@ impl fmt::Display for AppRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppRequest::Set { key, value } => write!(f, "Set {{ key: {key}, value: {value} }}"),
+            AppRequest::SetWithTTL {
+                key,
+                value,
+                expires_at_ms,
+            } => {
+                write!(
+                    f,
+                    "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}"
+                )
+            }
             AppRequest::SetMulti { pairs } => {
                 write!(f, "SetMulti {{ pairs: [")?;
                 for (i, (k, v)) in pairs.iter().enumerate() {
@@ -200,6 +223,16 @@ impl fmt::Display for AppRequest {
                     write!(f, "({k}, {v})")?;
                 }
                 write!(f, "] }}")
+            }
+            AppRequest::SetMultiWithTTL {
+                pairs,
+                expires_at_ms,
+            } => {
+                write!(
+                    f,
+                    "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}",
+                    pairs.len()
+                )
             }
             AppRequest::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
             AppRequest::DeleteMulti { keys } => {

@@ -249,8 +249,21 @@ pub struct LogEntryPayload {
 pub enum KvOperation {
     /// Set a single key-value pair.
     Set { key: Vec<u8>, value: Vec<u8> },
+    /// Set a single key-value pair with expiration.
+    SetWithTTL {
+        key: Vec<u8>,
+        value: Vec<u8>,
+        /// Expiration time as Unix timestamp in milliseconds.
+        expires_at_ms: u64,
+    },
     /// Set multiple key-value pairs atomically.
     SetMulti { pairs: Vec<(Vec<u8>, Vec<u8>)> },
+    /// Set multiple keys with TTL.
+    SetMultiWithTTL {
+        pairs: Vec<(Vec<u8>, Vec<u8>)>,
+        /// Expiration time as Unix timestamp in milliseconds.
+        expires_at_ms: u64,
+    },
     /// Delete a single key.
     Delete { key: Vec<u8> },
     /// Delete multiple keys atomically.
@@ -294,10 +307,13 @@ impl KvOperation {
 
         match self {
             KvOperation::Set { key, .. }
+            | KvOperation::SetWithTTL { key, .. }
             | KvOperation::Delete { key }
             | KvOperation::CompareAndSwap { key, .. }
             | KvOperation::CompareAndDelete { key, .. } => key.starts_with(prefix),
-            KvOperation::SetMulti { pairs } => pairs.iter().any(|(k, _)| k.starts_with(prefix)),
+            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+                pairs.iter().any(|(k, _)| k.starts_with(prefix))
+            }
             KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
             KvOperation::Batch { operations }
             | KvOperation::ConditionalBatch { operations, .. } => {
@@ -314,10 +330,13 @@ impl KvOperation {
     pub fn primary_key(&self) -> Option<&[u8]> {
         match self {
             KvOperation::Set { key, .. }
+            | KvOperation::SetWithTTL { key, .. }
             | KvOperation::Delete { key }
             | KvOperation::CompareAndSwap { key, .. }
             | KvOperation::CompareAndDelete { key, .. } => Some(key),
-            KvOperation::SetMulti { pairs } => pairs.first().map(|(k, _)| k.as_slice()),
+            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+                pairs.first().map(|(k, _)| k.as_slice())
+            }
             KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
             KvOperation::Batch { operations }
             | KvOperation::ConditionalBatch { operations, .. } => {
@@ -331,10 +350,13 @@ impl KvOperation {
     pub fn key_count(&self) -> usize {
         match self {
             KvOperation::Set { .. }
+            | KvOperation::SetWithTTL { .. }
             | KvOperation::Delete { .. }
             | KvOperation::CompareAndSwap { .. }
             | KvOperation::CompareAndDelete { .. } => 1,
-            KvOperation::SetMulti { pairs } => pairs.len(),
+            KvOperation::SetMulti { pairs } | KvOperation::SetMultiWithTTL { pairs, .. } => {
+                pairs.len()
+            }
             KvOperation::DeleteMulti { keys } => keys.len(),
             KvOperation::Batch { operations }
             | KvOperation::ConditionalBatch { operations, .. } => operations.len(),
@@ -351,11 +373,30 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                 key: key.into_bytes(),
                 value: value.into_bytes(),
             },
+            AppRequest::SetWithTTL {
+                key,
+                value,
+                expires_at_ms,
+            } => KvOperation::SetWithTTL {
+                key: key.into_bytes(),
+                value: value.into_bytes(),
+                expires_at_ms,
+            },
             AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
                 pairs: pairs
                     .into_iter()
                     .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
                     .collect(),
+            },
+            AppRequest::SetMultiWithTTL {
+                pairs,
+                expires_at_ms,
+            } => KvOperation::SetMultiWithTTL {
+                pairs: pairs
+                    .into_iter()
+                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
+                    .collect(),
+                expires_at_ms,
             },
             AppRequest::Delete { key } => KvOperation::Delete {
                 key: key.into_bytes(),

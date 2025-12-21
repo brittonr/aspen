@@ -129,12 +129,31 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
+            // TTL operations: in-memory store doesn't track TTL, just stores value
+            WriteCommand::SetWithTTL { key, value, .. } => {
+                inner.insert(key.clone(), value.clone());
+                Ok(WriteResult {
+                    command: Some(WriteCommand::Set { key, value }),
+                    ..Default::default()
+                })
+            }
             WriteCommand::SetMulti { ref pairs } => {
                 for (key, value) in pairs {
                     inner.insert(key.clone(), value.clone());
                 }
                 Ok(WriteResult {
                     command: Some(request.command.clone()),
+                    ..Default::default()
+                })
+            }
+            WriteCommand::SetMultiWithTTL { ref pairs, .. } => {
+                for (key, value) in pairs {
+                    inner.insert(key.clone(), value.clone());
+                }
+                Ok(WriteResult {
+                    command: Some(WriteCommand::SetMulti {
+                        pairs: pairs.clone(),
+                    }),
                     ..Default::default()
                 })
             }

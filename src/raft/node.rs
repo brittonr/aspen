@@ -390,9 +390,37 @@ impl KeyValueStore for RaftNode {
                 key: key.clone(),
                 value: value.clone(),
             },
+            crate::api::WriteCommand::SetWithTTL {
+                key,
+                value,
+                ttl_seconds,
+            } => {
+                // Convert TTL in seconds to absolute expiration timestamp in milliseconds
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                AppRequest::SetWithTTL {
+                    key: key.clone(),
+                    value: value.clone(),
+                    expires_at_ms,
+                }
+            }
             crate::api::WriteCommand::SetMulti { pairs } => AppRequest::SetMulti {
                 pairs: pairs.clone(),
             },
+            crate::api::WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                AppRequest::SetMultiWithTTL {
+                    pairs: pairs.clone(),
+                    expires_at_ms,
+                }
+            }
             crate::api::WriteCommand::Delete { key } => AppRequest::Delete { key: key.clone() },
             crate::api::WriteCommand::DeleteMulti { keys } => {
                 AppRequest::DeleteMulti { keys: keys.clone() }

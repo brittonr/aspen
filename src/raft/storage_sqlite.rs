@@ -270,11 +270,30 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                 key: key.clone().into_bytes(),
                 value: value.clone().into_bytes(),
             },
+            AppRequest::SetWithTTL {
+                key,
+                value,
+                expires_at_ms,
+            } => KvOperation::SetWithTTL {
+                key: key.clone().into_bytes(),
+                value: value.clone().into_bytes(),
+                expires_at_ms: *expires_at_ms,
+            },
             AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
                 pairs: pairs
                     .iter()
                     .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
                     .collect(),
+            },
+            AppRequest::SetMultiWithTTL {
+                pairs,
+                expires_at_ms,
+            } => KvOperation::SetMultiWithTTL {
+                pairs: pairs
+                    .iter()
+                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
+                    .collect(),
+                expires_at_ms: *expires_at_ms,
             },
             AppRequest::Delete { key } => KvOperation::Delete {
                 key: key.clone().into_bytes(),
@@ -1746,7 +1765,11 @@ impl SqliteStateMachine {
             EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
                 AppRequest::Set { key, value } => Self::apply_set(conn, key, value),
+                // TTL operations: We store the value normally for now.
+                // TODO: Add expires_at_ms column to state_machine_kv table and filter at read time
+                AppRequest::SetWithTTL { key, value, .. } => Self::apply_set(conn, key, value),
                 AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs),
+                AppRequest::SetMultiWithTTL { pairs, .. } => Self::apply_set_multi(conn, pairs),
                 AppRequest::Delete { key } => Self::apply_delete(conn, key),
                 AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
                 AppRequest::CompareAndSwap {

@@ -528,6 +528,36 @@ pub enum ClientRpcRequest {
         /// Operations to execute if all conditions pass (max 100).
         operations: Vec<BatchWriteOperation>,
     },
+
+    // =========================================================================
+    // Watch operations - Real-time key change notifications
+    // =========================================================================
+    /// Create a watch on keys matching a prefix.
+    ///
+    /// Returns a watch ID that can be used to cancel the watch.
+    /// Events are delivered via the streaming WatchEvent response.
+    /// Similar to etcd's Watch API.
+    WatchCreate {
+        /// Key prefix to watch (empty string watches all keys).
+        prefix: String,
+        /// Starting log index (0 = from beginning, u64::MAX = latest only).
+        /// Useful for resuming watches after disconnect.
+        start_index: u64,
+        /// Include previous value in events (like etcd's prev_kv).
+        include_prev_value: bool,
+    },
+
+    /// Cancel an active watch.
+    WatchCancel {
+        /// Watch ID returned from WatchCreate.
+        watch_id: u64,
+    },
+
+    /// Get current watch status and statistics.
+    WatchStatus {
+        /// Watch ID to query (None = all watches for this connection).
+        watch_id: Option<u64>,
+    },
 }
 
 /// Client RPC response protocol.
@@ -696,6 +726,22 @@ pub enum ClientRpcResponse {
 
     /// Conditional batch write result.
     ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse),
+
+    // =========================================================================
+    // Watch operation responses
+    // =========================================================================
+    /// Watch creation result.
+    WatchCreateResult(WatchCreateResultResponse),
+
+    /// Watch cancellation result.
+    WatchCancelResult(WatchCancelResultResponse),
+
+    /// Watch status result.
+    WatchStatusResult(WatchStatusResultResponse),
+
+    /// Streaming watch event (delivered asynchronously after watch creation).
+    /// NOTE: This is used for the streaming protocol, not request-response.
+    WatchEvent(WatchEventResponse),
 }
 
 /// Health status response.
@@ -1457,4 +1503,103 @@ pub struct ConditionalBatchWriteResultResponse {
     pub failed_condition_reason: Option<String>,
     /// Error message if operation failed due to error (not condition).
     pub error: Option<String>,
+}
+
+// =============================================================================
+// Watch operation response types
+// =============================================================================
+
+/// Watch creation result response.
+///
+/// Returns watch ID on success for use in cancel/status operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchCreateResultResponse {
+    /// Whether watch creation succeeded.
+    pub success: bool,
+    /// Unique watch ID for this subscription.
+    pub watch_id: Option<u64>,
+    /// Current committed log index at watch creation time.
+    /// Useful for understanding the starting point.
+    pub current_index: Option<u64>,
+    /// Error message if watch creation failed.
+    pub error: Option<String>,
+}
+
+/// Watch cancellation result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchCancelResultResponse {
+    /// Whether cancellation succeeded.
+    pub success: bool,
+    /// Watch ID that was cancelled.
+    pub watch_id: u64,
+    /// Error message if cancellation failed (e.g., watch not found).
+    pub error: Option<String>,
+}
+
+/// Watch status result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchStatusResultResponse {
+    /// Whether status query succeeded.
+    pub success: bool,
+    /// List of watch statuses.
+    pub watches: Option<Vec<WatchInfo>>,
+    /// Error message if query failed.
+    pub error: Option<String>,
+}
+
+/// Information about an active watch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchInfo {
+    /// Unique watch ID.
+    pub watch_id: u64,
+    /// Key prefix being watched.
+    pub prefix: String,
+    /// Last sent log index.
+    pub last_sent_index: u64,
+    /// Number of events sent.
+    pub events_sent: u64,
+    /// Watch creation timestamp (ms since epoch).
+    pub created_at_ms: u64,
+    /// Whether the watch includes previous values.
+    pub include_prev_value: bool,
+}
+
+/// Streaming watch event response.
+///
+/// Delivered asynchronously to clients with active watches.
+/// Similar to etcd's WatchResponse.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchEventResponse {
+    /// Watch ID this event belongs to.
+    pub watch_id: u64,
+    /// Log index of this event.
+    pub index: u64,
+    /// Raft term when the operation was committed.
+    pub term: u64,
+    /// Timestamp when committed (ms since epoch).
+    pub committed_at_ms: u64,
+    /// The key-value events in this batch.
+    pub events: Vec<WatchKeyEvent>,
+}
+
+/// A single key change event within a watch response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchKeyEvent {
+    /// Type of event.
+    pub event_type: WatchEventType,
+    /// Key that changed.
+    pub key: String,
+    /// New value (for Put events).
+    pub value: Option<Vec<u8>>,
+    /// Previous value (if include_prev_value was set).
+    pub prev_value: Option<Vec<u8>>,
+}
+
+/// Type of watch event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WatchEventType {
+    /// Key was created or updated.
+    Put,
+    /// Key was deleted.
+    Delete,
 }

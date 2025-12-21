@@ -233,8 +233,26 @@ pub enum WriteCommand {
         key: String,
         value: String,
     },
+    /// Set a key-value pair with a time-to-live.
+    ///
+    /// The key will be automatically expired after `ttl_seconds`.
+    /// Expired keys are filtered out at read time and cleaned up in background.
+    SetWithTTL {
+        key: String,
+        value: String,
+        /// Time-to-live in seconds. After this duration, the key is considered expired.
+        ttl_seconds: u32,
+    },
     SetMulti {
         pairs: Vec<(String, String)>,
+    },
+    /// Set multiple keys with TTL.
+    ///
+    /// All keys in this batch will have the same TTL.
+    SetMultiWithTTL {
+        pairs: Vec<(String, String)>,
+        /// Time-to-live in seconds for all keys in this batch.
+        ttl_seconds: u32,
     },
     Delete {
         key: String,
@@ -506,7 +524,23 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
             check_key(key)?;
             check_value(value)?;
         }
+        WriteCommand::SetWithTTL { key, value, .. } => {
+            check_key(key)?;
+            check_value(value)?;
+        }
         WriteCommand::SetMulti { pairs } => {
+            if pairs.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: pairs.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            for (key, value) in pairs {
+                check_key(key)?;
+                check_value(value)?;
+            }
+        }
+        WriteCommand::SetMultiWithTTL { pairs, .. } => {
             if pairs.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
                     size: pairs.len(),

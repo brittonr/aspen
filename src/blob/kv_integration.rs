@@ -275,6 +275,19 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 conditions,
                 operations,
             },
+            // TTL operations pass through - no blob offloading for TTL values
+            WriteCommand::SetWithTTL {
+                key,
+                value,
+                ttl_seconds,
+            } => WriteCommand::SetWithTTL {
+                key,
+                value,
+                ttl_seconds,
+            },
+            WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
+                WriteCommand::SetMultiWithTTL { pairs, ttl_seconds }
+            }
         };
 
         // Write to underlying KV

@@ -84,7 +84,8 @@ use crate::client_rpc::{
     ProtectBlobResultResponse, RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse,
     ScanEntry, ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse,
     SnapshotResultResponse, SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse,
-    VaultListResponse, WriteResultResponse,
+    VaultListResponse, WatchCancelResultResponse, WatchCreateResultResponse,
+    WatchStatusResultResponse, WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
 use crate::coordination::{
@@ -4344,6 +4345,59 @@ async fn process_client_request(
                     },
                 )),
             }
+        }
+
+        // ==========================================================================
+        // Watch Operations
+        // ==========================================================================
+        ClientRpcRequest::WatchCreate { .. } => {
+            // Watch operations require a streaming connection via LOG_SUBSCRIBER_ALPN.
+            // The ClientRpcRequest::WatchCreate is for documentation completeness,
+            // but actual watch functionality is handled by LogSubscriberProtocolHandler.
+            Ok(ClientRpcResponse::WatchCreateResult(
+                WatchCreateResultResponse {
+                    success: false,
+                    watch_id: None,
+                    current_index: None,
+                    error: Some(
+                        "Watch operations require the streaming protocol. \
+                         Connect via LOG_SUBSCRIBER_ALPN (aspen-logs) for real-time \
+                         key change notifications."
+                            .to_string(),
+                    ),
+                },
+            ))
+        }
+
+        ClientRpcRequest::WatchCancel { watch_id } => {
+            // Same as WatchCreate - streaming protocol required
+            Ok(ClientRpcResponse::WatchCancelResult(
+                WatchCancelResultResponse {
+                    success: false,
+                    watch_id,
+                    error: Some(
+                        "Watch operations require the streaming protocol. \
+                         Use LOG_SUBSCRIBER_ALPN (aspen-logs)."
+                            .to_string(),
+                    ),
+                },
+            ))
+        }
+
+        ClientRpcRequest::WatchStatus { .. } => {
+            // TODO: Could implement this to query LogSubscriberProtocolHandler state
+            // For now, redirect to streaming protocol
+            Ok(ClientRpcResponse::WatchStatusResult(
+                WatchStatusResultResponse {
+                    success: false,
+                    watches: None,
+                    error: Some(
+                        "Watch operations require the streaming protocol. \
+                         Use LOG_SUBSCRIBER_ALPN (aspen-logs)."
+                            .to_string(),
+                    ),
+                },
+            ))
         }
     }
 }

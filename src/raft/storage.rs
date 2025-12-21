@@ -1490,7 +1490,22 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             ..Default::default()
                         }
                     }
+                    // TTL operations in in-memory store: we store the value but don't
+                    // track expiration (in-memory is for testing only, not production).
+                    AppRequest::SetWithTTL { key, value, .. } => {
+                        sm.data.insert(key.clone(), value.clone());
+                        AppResponse {
+                            value: Some(value.clone()),
+                            ..Default::default()
+                        }
+                    }
                     AppRequest::SetMulti { pairs } => {
+                        for (key, value) in pairs {
+                            sm.data.insert(key.clone(), value.clone());
+                        }
+                        AppResponse::default()
+                    }
+                    AppRequest::SetMultiWithTTL { pairs, .. } => {
                         for (key, value) in pairs {
                             sm.data.insert(key.clone(), value.clone());
                         }
