@@ -43,14 +43,14 @@ impl Default for LockConfig {
 ///
 /// Provides mutual exclusion with fencing tokens for correctness
 /// and TTL-based expiration for liveness.
-pub struct DistributedLock<S: KeyValueStore> {
+pub struct DistributedLock<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     key: String,
     holder_id: String,
     config: LockConfig,
 }
 
-impl<S: KeyValueStore + 'static> DistributedLock<S> {
+impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// Create a new distributed lock handle.
     ///
     /// # Arguments
@@ -79,7 +79,6 @@ impl<S: KeyValueStore + 'static> DistributedLock<S> {
     pub async fn acquire(&self) -> Result<LockGuard<S>, CoordinationError> {
         let deadline = Instant::now() + Duration::from_millis(self.config.acquire_timeout_ms);
         let mut backoff_ms = self.config.initial_backoff_ms;
-        let mut rng = rand::rng();
 
         loop {
             match self.try_acquire().await {
@@ -96,7 +95,8 @@ impl<S: KeyValueStore + 'static> DistributedLock<S> {
                     }
 
                     // Calculate wait time with jitter
-                    let jitter = rng.random_range(0..backoff_ms / 2 + 1);
+                    // Create rng here to avoid holding non-Send type across await
+                    let jitter = rand::rng().random_range(0..backoff_ms / 2 + 1);
                     let sleep_ms = backoff_ms + jitter;
 
                     debug!(
@@ -186,6 +186,7 @@ impl<S: KeyValueStore + 'static> DistributedLock<S> {
                     fencing_token: FencingToken(new_token),
                     entry_json: new_json,
                     released_json,
+                    deadline_ms: new_entry.deadline_ms,
                 })
             }
             Err(KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
@@ -295,7 +296,7 @@ impl<S: KeyValueStore + 'static> DistributedLock<S> {
 /// The lock is released when this guard is dropped. The fencing token
 /// should be passed to any external services that need to validate
 /// the lock is still held.
-pub struct LockGuard<S: KeyValueStore + 'static> {
+pub struct LockGuard<S: KeyValueStore + ?Sized + 'static> {
     store: Arc<S>,
     key: String,
     holder_id: String,
@@ -303,9 +304,11 @@ pub struct LockGuard<S: KeyValueStore + 'static> {
     entry_json: String,
     /// Pre-computed released entry JSON for use in Drop.
     released_json: String,
+    /// Lock expiration deadline in Unix milliseconds.
+    deadline_ms: u64,
 }
 
-impl<S: KeyValueStore> LockGuard<S> {
+impl<S: KeyValueStore + ?Sized> LockGuard<S> {
     /// Get the fencing token.
     ///
     /// Include this token in all operations protected by the lock.
@@ -322,6 +325,13 @@ impl<S: KeyValueStore> LockGuard<S> {
     /// Get the holder ID.
     pub fn holder_id(&self) -> &str {
         &self.holder_id
+    }
+
+    /// Get the lock deadline in Unix milliseconds.
+    ///
+    /// The lock expires at this time if not renewed.
+    pub fn deadline_ms(&self) -> u64 {
+        self.deadline_ms
     }
 
     /// Explicitly release the lock.
@@ -366,7 +376,7 @@ impl<S: KeyValueStore> LockGuard<S> {
     }
 }
 
-impl<S: KeyValueStore + 'static> Drop for LockGuard<S> {
+impl<S: KeyValueStore + ?Sized + 'static> Drop for LockGuard<S> {
     fn drop(&mut self) {
         // Best-effort release - lock will expire anyway via TTL
         let store = self.store.clone();

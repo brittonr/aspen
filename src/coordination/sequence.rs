@@ -42,7 +42,7 @@ struct SequenceState {
 /// Generates globally unique, monotonically increasing IDs.
 /// Uses batch reservation for performance - reserves a range of IDs
 /// from the cluster and hands them out locally.
-pub struct SequenceGenerator<S: KeyValueStore> {
+pub struct SequenceGenerator<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     key: String,
     config: SequenceConfig,
@@ -50,7 +50,7 @@ pub struct SequenceGenerator<S: KeyValueStore> {
     state: Mutex<SequenceState>,
 }
 
-impl<S: KeyValueStore> SequenceGenerator<S> {
+impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     /// Create a new sequence generator.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: SequenceConfig) -> Self {
         Self {

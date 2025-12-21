@@ -287,6 +287,214 @@ pub enum ClientRpcRequest {
         /// Query timeout in milliseconds (default 5000, max 30000).
         timeout_ms: Option<u32>,
     },
+
+    // =========================================================================
+    // Coordination primitives - Distributed Lock
+    // =========================================================================
+    /// Acquire a distributed lock with timeout.
+    ///
+    /// Blocks until the lock is acquired or timeout is reached.
+    /// Returns a fencing token on success for safe external operations.
+    LockAcquire {
+        /// Lock key (unique identifier for this lock).
+        key: String,
+        /// Holder ID (unique identifier for this lock holder).
+        holder_id: String,
+        /// Lock TTL in milliseconds (how long before auto-expire).
+        ttl_ms: u64,
+        /// Acquire timeout in milliseconds (how long to wait).
+        timeout_ms: u64,
+    },
+
+    /// Try to acquire a distributed lock without blocking.
+    ///
+    /// Returns immediately with success/failure.
+    LockTryAcquire {
+        /// Lock key.
+        key: String,
+        /// Holder ID.
+        holder_id: String,
+        /// Lock TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Release a distributed lock.
+    ///
+    /// The fencing token must match the current lock holder.
+    LockRelease {
+        /// Lock key.
+        key: String,
+        /// Holder ID that acquired the lock.
+        holder_id: String,
+        /// Fencing token from acquire operation.
+        fencing_token: u64,
+    },
+
+    /// Renew a distributed lock's TTL.
+    ///
+    /// Extends the lock deadline without releasing it.
+    LockRenew {
+        /// Lock key.
+        key: String,
+        /// Holder ID.
+        holder_id: String,
+        /// Fencing token from acquire operation.
+        fencing_token: u64,
+        /// New TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    // =========================================================================
+    // Coordination primitives - Atomic Counter
+    // =========================================================================
+    /// Get the current value of an atomic counter.
+    CounterGet {
+        /// Counter key.
+        key: String,
+    },
+
+    /// Increment an atomic counter by 1.
+    CounterIncrement {
+        /// Counter key.
+        key: String,
+    },
+
+    /// Decrement an atomic counter by 1 (saturates at 0).
+    CounterDecrement {
+        /// Counter key.
+        key: String,
+    },
+
+    /// Add an amount to an atomic counter.
+    CounterAdd {
+        /// Counter key.
+        key: String,
+        /// Amount to add.
+        amount: u64,
+    },
+
+    /// Subtract an amount from an atomic counter (saturates at 0).
+    CounterSubtract {
+        /// Counter key.
+        key: String,
+        /// Amount to subtract.
+        amount: u64,
+    },
+
+    /// Set an atomic counter to a specific value.
+    CounterSet {
+        /// Counter key.
+        key: String,
+        /// New value.
+        value: u64,
+    },
+
+    /// Compare-and-set an atomic counter.
+    ///
+    /// Only updates if current value matches expected.
+    CounterCompareAndSet {
+        /// Counter key.
+        key: String,
+        /// Expected current value.
+        expected: u64,
+        /// New value to set.
+        new_value: u64,
+    },
+
+    // =========================================================================
+    // Coordination primitives - Signed Counter
+    // =========================================================================
+    /// Get the current value of a signed atomic counter.
+    SignedCounterGet {
+        /// Counter key.
+        key: String,
+    },
+
+    /// Add an amount to a signed atomic counter (can be negative).
+    SignedCounterAdd {
+        /// Counter key.
+        key: String,
+        /// Amount to add (negative to subtract).
+        amount: i64,
+    },
+
+    // =========================================================================
+    // Coordination primitives - Sequence Generator
+    // =========================================================================
+    /// Get the next unique ID from a sequence.
+    SequenceNext {
+        /// Sequence key.
+        key: String,
+    },
+
+    /// Reserve a range of IDs from a sequence.
+    ///
+    /// Returns the start of the reserved range [start, start+count).
+    SequenceReserve {
+        /// Sequence key.
+        key: String,
+        /// Number of IDs to reserve.
+        count: u64,
+    },
+
+    /// Get the current (next available) value of a sequence without consuming it.
+    SequenceCurrent {
+        /// Sequence key.
+        key: String,
+    },
+
+    // =========================================================================
+    // Coordination primitives - Rate Limiter
+    // =========================================================================
+    /// Try to acquire tokens from a rate limiter without blocking.
+    ///
+    /// Returns immediately with success/failure and retry_after_ms hint.
+    RateLimiterTryAcquire {
+        /// Rate limiter key.
+        key: String,
+        /// Number of tokens to acquire.
+        tokens: u64,
+        /// Maximum bucket capacity.
+        capacity: u64,
+        /// Token refill rate per second.
+        refill_rate: f64,
+    },
+
+    /// Acquire tokens from a rate limiter with timeout.
+    ///
+    /// Blocks until tokens are available or timeout is reached.
+    RateLimiterAcquire {
+        /// Rate limiter key.
+        key: String,
+        /// Number of tokens to acquire.
+        tokens: u64,
+        /// Maximum bucket capacity.
+        capacity: u64,
+        /// Token refill rate per second.
+        refill_rate: f64,
+        /// Timeout in milliseconds.
+        timeout_ms: u64,
+    },
+
+    /// Check available tokens in a rate limiter without consuming.
+    RateLimiterAvailable {
+        /// Rate limiter key.
+        key: String,
+        /// Maximum bucket capacity.
+        capacity: u64,
+        /// Token refill rate per second.
+        refill_rate: f64,
+    },
+
+    /// Reset a rate limiter to full capacity.
+    RateLimiterReset {
+        /// Rate limiter key.
+        key: String,
+        /// Maximum bucket capacity.
+        capacity: u64,
+        /// Token refill rate per second.
+        refill_rate: f64,
+    },
 }
 
 /// Client RPC response protocol.
@@ -425,6 +633,24 @@ pub enum ClientRpcResponse {
     // =========================================================================
     /// SQL query result.
     SqlResult(SqlResultResponse),
+
+    // =========================================================================
+    // Coordination primitive responses
+    // =========================================================================
+    /// Lock operation result (acquire, try_acquire, release, renew).
+    LockResult(LockResultResponse),
+
+    /// Atomic counter operation result.
+    CounterResult(CounterResultResponse),
+
+    /// Signed atomic counter operation result.
+    SignedCounterResult(SignedCounterResultResponse),
+
+    /// Sequence generator operation result.
+    SequenceResult(SequenceResultResponse),
+
+    /// Rate limiter operation result.
+    RateLimiterResult(RateLimiterResultResponse),
 }
 
 /// Health status response.
@@ -980,6 +1206,81 @@ pub struct SetPeerClusterEnabledResultResponse {
     /// Whether the peer is now enabled.
     pub enabled: Option<bool>,
     /// Error message if failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Coordination primitive response types
+// =============================================================================
+
+/// Lock operation result response.
+///
+/// Used for distributed lock acquire, try_acquire, release, and renew operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LockResultResponse {
+    /// Whether the lock operation succeeded.
+    pub success: bool,
+    /// Fencing token for the lock (if acquired).
+    pub fencing_token: Option<u64>,
+    /// Current holder ID (useful when lock is already held).
+    pub holder_id: Option<String>,
+    /// Lock deadline in Unix milliseconds (when lock expires).
+    pub deadline_ms: Option<u64>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Counter operation result response.
+///
+/// Used for atomic counter get, increment, decrement, add, subtract, set operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CounterResultResponse {
+    /// Whether the counter operation succeeded.
+    pub success: bool,
+    /// Current counter value after operation.
+    pub value: Option<u64>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Signed counter operation result response.
+///
+/// Used for signed atomic counter operations that can go negative.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedCounterResultResponse {
+    /// Whether the counter operation succeeded.
+    pub success: bool,
+    /// Current counter value after operation (can be negative).
+    pub value: Option<i64>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Sequence generator result response.
+///
+/// Used for sequence next, reserve, and current operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SequenceResultResponse {
+    /// Whether the sequence operation succeeded.
+    pub success: bool,
+    /// Sequence value (next ID or start of reserved range).
+    pub value: Option<u64>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Rate limiter result response.
+///
+/// Used for rate limiter try_acquire, acquire, available, and reset operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimiterResultResponse {
+    /// Whether the rate limit operation succeeded (tokens acquired).
+    pub success: bool,
+    /// Remaining tokens after operation.
+    pub tokens_remaining: Option<u64>,
+    /// Milliseconds to wait before retrying (when rate limited).
+    pub retry_after_ms: Option<u64>,
+    /// Error message if operation failed.
     pub error: Option<String>,
 }
 

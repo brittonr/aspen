@@ -104,13 +104,13 @@ impl LeadershipState {
 ///     }
 /// }
 /// ```
-pub struct LeaderElection<S: KeyValueStore + 'static> {
+pub struct LeaderElection<S: KeyValueStore + ?Sized + 'static> {
     lock: DistributedLock<S>,
     config: ElectionConfig,
     candidate_id: String,
 }
 
-impl<S: KeyValueStore + Send + Sync + 'static> LeaderElection<S> {
+impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
     /// Create a new leader election coordinator.
     ///
     /// # Arguments

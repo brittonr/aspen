@@ -36,13 +36,13 @@ impl Default for CounterConfig {
 ///
 /// All operations are linearizable through Raft consensus.
 /// Uses CAS with retry for atomic increment/decrement.
-pub struct AtomicCounter<S: KeyValueStore> {
+pub struct AtomicCounter<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     key: String,
     config: CounterConfig,
 }
 
-impl<S: KeyValueStore> AtomicCounter<S> {
+impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     /// Create a new atomic counter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: CounterConfig) -> Self {
         Self {
@@ -231,13 +231,13 @@ impl<S: KeyValueStore> AtomicCounter<S> {
 }
 
 /// Signed atomic counter (allows negative values).
-pub struct SignedAtomicCounter<S: KeyValueStore> {
+pub struct SignedAtomicCounter<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     key: String,
     config: CounterConfig,
 }
 
-impl<S: KeyValueStore> SignedAtomicCounter<S> {
+impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
     /// Create a new signed counter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: CounterConfig) -> Self {
         Self {

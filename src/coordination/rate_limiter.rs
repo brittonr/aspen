@@ -47,13 +47,13 @@ impl RateLimiterConfig {
 /// Uses cluster-wide state to enforce rate limits across all nodes.
 /// The token bucket algorithm allows controlled bursting while
 /// maintaining a steady-state rate limit.
-pub struct DistributedRateLimiter<S: KeyValueStore> {
+pub struct DistributedRateLimiter<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     key: String,
     config: RateLimiterConfig,
 }
 
-impl<S: KeyValueStore> DistributedRateLimiter<S> {
+impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     /// Create a new rate limiter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: RateLimiterConfig) -> Self {
         Self {

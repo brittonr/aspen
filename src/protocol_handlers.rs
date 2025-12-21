@@ -75,16 +75,21 @@ use crate::client_rpc::{
     AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse,
     BlobListEntry as RpcBlobListEntry, ChangeMembershipResultResponse, CheckpointWalResultResponse,
     ClientRpcRequest, ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse,
-    ClusterStateResponse, ClusterTicketResponse, DeleteResultResponse,
+    ClusterStateResponse, ClusterTicketResponse, CounterResultResponse, DeleteResultResponse,
     DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
     GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse,
-    ListBlobsResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse,
-    NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse, ProtectBlobResultResponse,
-    RaftMetricsResponse, ReadResultResponse, ScanEntry, ScanResultResponse, SnapshotResultResponse,
-    SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse,
-    WriteResultResponse,
+    ListBlobsResultResponse, LockResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES,
+    MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
+    ProtectBlobResultResponse, RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse,
+    ScanEntry, ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse,
+    SnapshotResultResponse, SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse,
+    VaultListResponse, WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
+use crate::coordination::{
+    AtomicCounter, CounterConfig, DistributedLock, DistributedRateLimiter, LockConfig,
+    RateLimiterConfig, SequenceConfig, SequenceGenerator, SignedAtomicCounter,
+};
 use crate::raft::auth::{
     AUTH_HANDSHAKE_TIMEOUT, AuthContext, AuthResponse, AuthResult, MAX_AUTH_MESSAGE_SIZE,
 };
@@ -3245,6 +3250,796 @@ async fn process_client_request(
                         error: Some(e.to_string()),
                     }))
                 }
+            }
+        }
+
+        // =====================================================================
+        // Coordination Primitives - Distributed Lock
+        // =====================================================================
+        ClientRpcRequest::LockAcquire {
+            key,
+            holder_id,
+            ttl_ms,
+            timeout_ms,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let config = LockConfig {
+                ttl_ms,
+                acquire_timeout_ms: timeout_ms,
+                ..Default::default()
+            };
+            let lock = DistributedLock::new(ctx.kv_store.clone(), &key, &holder_id, config);
+
+            match lock.acquire().await {
+                Ok(guard) => {
+                    let token = guard.fencing_token().value();
+                    let deadline = guard.deadline_ms();
+                    // Don't drop the guard here - let it release on its own
+                    // The client is responsible for calling release explicitly
+                    std::mem::forget(guard);
+                    Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: true,
+                        fencing_token: Some(token),
+                        holder_id: Some(holder_id),
+                        deadline_ms: Some(deadline),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    use crate::coordination::CoordinationError;
+                    let (holder, deadline) = match &e {
+                        CoordinationError::LockHeld {
+                            holder,
+                            deadline_ms,
+                        } => (Some(holder.clone()), Some(*deadline_ms)),
+                        _ => (None, None),
+                    };
+                    Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: false,
+                        fencing_token: None,
+                        holder_id: holder,
+                        deadline_ms: deadline,
+                        error: Some(e.to_string()),
+                    }))
+                }
+            }
+        }
+
+        ClientRpcRequest::LockTryAcquire {
+            key,
+            holder_id,
+            ttl_ms,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let config = LockConfig {
+                ttl_ms,
+                ..Default::default()
+            };
+            let lock = DistributedLock::new(ctx.kv_store.clone(), &key, &holder_id, config);
+
+            match lock.try_acquire().await {
+                Ok(guard) => {
+                    let token = guard.fencing_token().value();
+                    let deadline = guard.deadline_ms();
+                    std::mem::forget(guard);
+                    Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: true,
+                        fencing_token: Some(token),
+                        holder_id: Some(holder_id),
+                        deadline_ms: Some(deadline),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    use crate::coordination::CoordinationError;
+                    let (holder, deadline) = match &e {
+                        CoordinationError::LockHeld {
+                            holder,
+                            deadline_ms,
+                        } => (Some(holder.clone()), Some(*deadline_ms)),
+                        _ => (None, None),
+                    };
+                    Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: false,
+                        fencing_token: None,
+                        holder_id: holder,
+                        deadline_ms: deadline,
+                        error: Some(e.to_string()),
+                    }))
+                }
+            }
+        }
+
+        ClientRpcRequest::LockRelease {
+            key,
+            holder_id,
+            fencing_token,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            // Read current lock state and validate holder
+            use crate::api::WriteCommand;
+            use crate::coordination::LockEntry;
+
+            let read_result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
+
+            match read_result {
+                Ok(result) => {
+                    match serde_json::from_str::<LockEntry>(&result.value) {
+                        Ok(entry) => {
+                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token
+                            {
+                                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: false,
+                                    fencing_token: Some(entry.fencing_token),
+                                    holder_id: Some(entry.holder_id),
+                                    deadline_ms: Some(entry.deadline_ms),
+                                    error: Some("lock not held by this holder".to_string()),
+                                }));
+                            }
+
+                            // Release the lock via CAS
+                            let released = entry.released();
+                            let released_json = serde_json::to_string(&released).unwrap();
+
+                            match ctx
+                                .kv_store
+                                .write(WriteRequest {
+                                    command: WriteCommand::CompareAndSwap {
+                                        key: key.clone(),
+                                        expected: Some(result.value),
+                                        new_value: released_json,
+                                    },
+                                })
+                                .await
+                            {
+                                Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: true,
+                                    fencing_token: Some(fencing_token),
+                                    holder_id: Some(holder_id),
+                                    deadline_ms: None,
+                                    error: None,
+                                })),
+                                Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: false,
+                                    fencing_token: None,
+                                    holder_id: None,
+                                    deadline_ms: None,
+                                    error: Some(format!("release failed: {}", e)),
+                                })),
+                            }
+                        }
+                        Err(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                            success: false,
+                            fencing_token: None,
+                            holder_id: None,
+                            deadline_ms: None,
+                            error: Some("invalid lock entry format".to_string()),
+                        })),
+                    }
+                }
+                Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                    Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: true, // Lock doesn't exist, consider it released
+                        fencing_token: Some(fencing_token),
+                        holder_id: Some(holder_id),
+                        deadline_ms: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(format!("read failed: {}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::LockRenew {
+            key,
+            holder_id,
+            fencing_token,
+            ttl_ms,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            use crate::api::WriteCommand;
+            use crate::coordination::LockEntry;
+
+            let read_result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
+
+            match read_result {
+                Ok(result) => match serde_json::from_str::<LockEntry>(&result.value) {
+                    Ok(entry) => {
+                        if entry.holder_id != holder_id || entry.fencing_token != fencing_token {
+                            return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                success: false,
+                                fencing_token: Some(entry.fencing_token),
+                                holder_id: Some(entry.holder_id),
+                                deadline_ms: Some(entry.deadline_ms),
+                                error: Some("lock not held by this holder".to_string()),
+                            }));
+                        }
+
+                        // Create renewed entry
+                        let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
+                        let renewed_json = serde_json::to_string(&renewed).unwrap();
+
+                        match ctx
+                            .kv_store
+                            .write(WriteRequest {
+                                command: WriteCommand::CompareAndSwap {
+                                    key: key.clone(),
+                                    expected: Some(result.value),
+                                    new_value: renewed_json,
+                                },
+                            })
+                            .await
+                        {
+                            Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                success: true,
+                                fencing_token: Some(fencing_token),
+                                holder_id: Some(holder_id),
+                                deadline_ms: Some(renewed.deadline_ms),
+                                error: None,
+                            })),
+                            Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                success: false,
+                                fencing_token: None,
+                                holder_id: None,
+                                deadline_ms: None,
+                                error: Some(format!("renew failed: {}", e)),
+                            })),
+                        }
+                    }
+                    Err(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                        success: false,
+                        fencing_token: None,
+                        holder_id: None,
+                        deadline_ms: None,
+                        error: Some("invalid lock entry format".to_string()),
+                    })),
+                },
+                Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    holder_id: None,
+                    deadline_ms: None,
+                    error: Some(format!("read failed: {}", e)),
+                })),
+            }
+        }
+
+        // =====================================================================
+        // Coordination Primitives - Atomic Counter
+        // =====================================================================
+        ClientRpcRequest::CounterGet { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.get().await {
+                Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterIncrement { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.increment().await {
+                Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterDecrement { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.decrement().await {
+                Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterAdd { key, amount } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.add(amount).await {
+                Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterSubtract { key, amount } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.subtract(amount).await {
+                Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterSet { key, value } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.set(value).await {
+                Ok(()) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::CounterCompareAndSet {
+            key,
+            expected,
+            new_value,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let counter = AtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.compare_and_set(expected, new_value).await {
+                Ok(true) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: true,
+                    value: Some(new_value),
+                    error: None,
+                })),
+                Ok(false) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some("compare-and-set condition not met".to_string()),
+                })),
+                Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        // =====================================================================
+        // Coordination Primitives - Signed Counter
+        // =====================================================================
+        ClientRpcRequest::SignedCounterGet { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: false,
+                        value: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let counter =
+                SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.get().await {
+                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: true,
+                        value: Some(value),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: false,
+                        value: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::SignedCounterAdd { key, amount } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: false,
+                        value: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let counter =
+                SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            match counter.add(amount).await {
+                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: true,
+                        value: Some(value),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(
+                    SignedCounterResultResponse {
+                        success: false,
+                        value: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        // =====================================================================
+        // Coordination Primitives - Sequence Generator
+        // =====================================================================
+        ClientRpcRequest::SequenceNext { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let seq = SequenceGenerator::new(ctx.kv_store.clone(), &key, SequenceConfig::default());
+            match seq.next().await {
+                Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::SequenceReserve { key, count } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let seq = SequenceGenerator::new(ctx.kv_store.clone(), &key, SequenceConfig::default());
+            match seq.reserve(count).await {
+                Ok(start) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: true,
+                    value: Some(start),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        ClientRpcRequest::SequenceCurrent { key } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
+            }
+
+            let seq = SequenceGenerator::new(ctx.kv_store.clone(), &key, SequenceConfig::default());
+            match seq.current().await {
+                Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
+            }
+        }
+
+        // =====================================================================
+        // Coordination Primitives - Rate Limiter
+        // =====================================================================
+        ClientRpcRequest::RateLimiterTryAcquire {
+            key,
+            tokens,
+            capacity,
+            refill_rate,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let config = RateLimiterConfig {
+                capacity,
+                refill_rate,
+                initial_tokens: None,
+            };
+            let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+            match limiter.try_acquire_n(tokens).await {
+                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: true,
+                        tokens_remaining: Some(remaining),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: Some(e.available),
+                        retry_after_ms: Some(e.retry_after_ms),
+                        error: None,
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RateLimiterAcquire {
+            key,
+            tokens,
+            capacity,
+            refill_rate,
+            timeout_ms,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let config = RateLimiterConfig {
+                capacity,
+                refill_rate,
+                initial_tokens: None,
+            };
+            let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+            match limiter
+                .acquire_n(tokens, std::time::Duration::from_millis(timeout_ms))
+                .await
+            {
+                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: true,
+                        tokens_remaining: Some(remaining),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: Some(e.available),
+                        retry_after_ms: Some(e.retry_after_ms),
+                        error: Some("timeout waiting for tokens".to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RateLimiterAvailable {
+            key,
+            capacity,
+            refill_rate,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let config = RateLimiterConfig {
+                capacity,
+                refill_rate,
+                initial_tokens: None,
+            };
+            let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+            match limiter.available().await {
+                Ok(tokens) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: true,
+                        tokens_remaining: Some(tokens),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::RateLimiterReset {
+            key,
+            capacity,
+            refill_rate,
+        } => {
+            if let Err(e) = validate_client_key(&key) {
+                return Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                ));
+            }
+
+            let config = RateLimiterConfig {
+                capacity,
+                refill_rate,
+                initial_tokens: None,
+            };
+            let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+            match limiter.reset().await {
+                Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: true,
+                        tokens_remaining: Some(capacity),
+                        retry_after_ms: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
+                    RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: None,
+                        retry_after_ms: None,
+                        error: Some(e.to_string()),
+                    },
+                )),
             }
         }
     }
