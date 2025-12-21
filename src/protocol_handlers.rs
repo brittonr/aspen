@@ -94,7 +94,9 @@ use crate::raft::auth::{
     AUTH_HANDSHAKE_TIMEOUT, AuthContext, AuthResponse, AuthResult, MAX_AUTH_MESSAGE_SIZE,
 };
 use crate::raft::constants::{
-    MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
+    CLIENT_RPC_BURST, CLIENT_RPC_RATE_LIMIT_PREFIX, CLIENT_RPC_RATE_PER_SECOND,
+    CLIENT_RPC_REQUEST_COUNTER, MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE,
+    MAX_STREAMS_PER_CONNECTION,
 };
 use crate::raft::log_subscriber::{
     EndOfStreamReason, HistoricalLogReader, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage,
@@ -1534,10 +1536,11 @@ async fn handle_client_connection(
         let active_streams_clone = active_streams.clone();
 
         let ctx_clone = Arc::clone(&ctx);
+        let remote_id = remote_node_id.to_string();
         let (send, recv) = stream;
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) = handle_client_request((recv, send), ctx_clone).await {
+            if let Err(err) = handle_client_request((recv, send), ctx_clone, &remote_id).await {
                 error!(error = %err, "failed to handle Client request");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -1548,10 +1551,11 @@ async fn handle_client_connection(
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx))]
+#[instrument(skip(recv, send, ctx, client_id))]
 async fn handle_client_request(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
+    client_id: &str,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -1565,7 +1569,35 @@ async fn handle_client_request(
     let request: ClientRpcRequest =
         postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
 
-    debug!(request_type = ?request, "received Client request");
+    debug!(request_type = ?request, client_id = %client_id, "received Client request");
+
+    // Rate limit check using distributed rate limiter
+    // Tiger Style: Per-client rate limiting prevents DoS from individual clients
+    let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
+    let limiter = DistributedRateLimiter::new(
+        ctx.kv_store.clone(),
+        &rate_limit_key,
+        RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
+    );
+
+    if let Err(e) = limiter.try_acquire().await {
+        warn!(
+            client_id = %client_id,
+            retry_after_ms = e.retry_after_ms,
+            "Client rate limited"
+        );
+        let response = ClientRpcResponse::error(
+            "RATE_LIMITED",
+            format!("Too many requests. Retry after {}ms", e.retry_after_ms),
+        );
+        let response_bytes =
+            postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
+        send.write_all(&response_bytes)
+            .await
+            .context("failed to write rate limit response")?;
+        send.finish().context("failed to finish send stream")?;
+        return Ok(());
+    }
 
     // Process the request and create response
     let response = match process_client_request(request, &ctx).await {
@@ -1585,6 +1617,20 @@ async fn handle_client_request(
         .await
         .context("failed to write Client response")?;
     send.finish().context("failed to finish send stream")?;
+
+    // Increment cluster-wide request counter (best-effort, non-blocking)
+    // Tiger Style: Fire-and-forget counter increment doesn't block request path
+    let kv_store = ctx.kv_store.clone();
+    tokio::spawn(async move {
+        let counter = AtomicCounter::new(
+            kv_store,
+            CLIENT_RPC_REQUEST_COUNTER,
+            CounterConfig::default(),
+        );
+        if let Err(e) = counter.increment().await {
+            debug!(error = %e, "Failed to increment request counter");
+        }
+    });
 
     Ok(())
 }

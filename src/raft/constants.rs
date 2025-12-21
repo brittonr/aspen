@@ -516,3 +516,41 @@ pub const DEFAULT_SQL_TIMEOUT_MS: u32 = 5_000;
 /// Used in:
 /// - `node.rs`: SqlQueryExecutor timeout validation
 pub const MAX_SQL_TIMEOUT_MS: u32 = 30_000;
+
+// ============================================================================
+// Client RPC Rate Limiting Constants
+// ============================================================================
+
+/// Per-client request rate limit (requests per second).
+///
+/// Tiger Style: Fixed limit prevents individual client abuse.
+/// 100 requests/second allows high throughput while preventing DoS.
+///
+/// Used in:
+/// - `protocol_handlers.rs`: Per-client rate limiter
+pub const CLIENT_RPC_RATE_PER_SECOND: f64 = 100.0;
+
+/// Per-client request burst capacity.
+///
+/// Tiger Style: Allows brief bursts for batch operations.
+/// Client can send up to this many requests before rate limiting.
+///
+/// Used in:
+/// - `protocol_handlers.rs`: Per-client rate limiter burst
+pub const CLIENT_RPC_BURST: u64 = 50;
+
+/// System key prefix for internal rate limiter state.
+///
+/// Tiger Style: Isolates internal state from user keyspace.
+///
+/// Used in:
+/// - `protocol_handlers.rs`: Rate limiter key construction
+pub const CLIENT_RPC_RATE_LIMIT_PREFIX: &str = "_system:ratelimit:client:";
+
+/// System key for cluster-wide request counter.
+///
+/// Tiger Style: Single counter tracks total requests across cluster.
+///
+/// Used in:
+/// - `protocol_handlers.rs`: Request counting for metrics
+pub const CLIENT_RPC_REQUEST_COUNTER: &str = "_system:metrics:client_requests_total";
