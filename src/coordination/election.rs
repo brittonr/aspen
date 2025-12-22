@@ -50,7 +50,10 @@ pub enum LeadershipState {
     /// Not currently the leader.
     Follower,
     /// Currently the leader with the given fencing token.
-    Leader { fencing_token: FencingToken },
+    Leader {
+        /// Monotonically increasing token to prevent split-brain scenarios.
+        fencing_token: FencingToken,
+    },
     /// Transitioning (acquiring or releasing leadership).
     Transitioning,
 }

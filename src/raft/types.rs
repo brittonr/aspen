@@ -144,56 +144,93 @@ impl fmt::Display for RaftMemberInfo {
 }
 
 /// Application-level requests replicated through Raft.
+///
+/// All write operations go through Raft consensus to ensure linearizability.
+/// Each variant represents a different KV operation or cluster management command.
+///
+/// # Operation Categories
+///
+/// - **Basic KV**: Set, SetMulti, Delete, DeleteMulti
+/// - **TTL-based expiration**: SetWithTTL, SetMultiWithTTL
+/// - **Lease-based expiration**: SetWithLease, SetMultiWithLease, LeaseGrant, LeaseRevoke, LeaseKeepalive
+/// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
+/// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
+///
+/// # Tiger Style
+///
+/// - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
+/// - Explicit types: String keys/values for text data, u64 for timestamps/IDs
+/// - Clear semantics: Each variant has well-defined success/failure behavior
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum AppRequest {
+    /// Set a single key-value pair.
     Set {
+        /// Key to set.
         key: String,
+        /// Value to store.
         value: String,
     },
     /// Set with time-to-live. expires_at_ms is Unix timestamp when key expires.
     SetWithTTL {
+        /// Key to set.
         key: String,
+        /// Value to store.
         value: String,
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
     },
     /// Set a key attached to a lease. Key is deleted when lease expires or is revoked.
     SetWithLease {
+        /// Key to set.
         key: String,
+        /// Value to store.
         value: String,
         /// Lease ID to attach this key to.
         lease_id: u64,
     },
+    /// Set multiple key-value pairs atomically.
     SetMulti {
+        /// Vector of (key, value) pairs to set.
         pairs: Vec<(String, String)>,
     },
     /// Set multiple keys with TTL.
     SetMultiWithTTL {
+        /// Vector of (key, value) pairs to set.
         pairs: Vec<(String, String)>,
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
     },
     /// Set multiple keys attached to a lease.
     SetMultiWithLease {
+        /// Vector of (key, value) pairs to set.
         pairs: Vec<(String, String)>,
         /// Lease ID to attach these keys to.
         lease_id: u64,
     },
+    /// Delete a single key.
     Delete {
+        /// Key to delete.
         key: String,
     },
+    /// Delete multiple keys atomically.
     DeleteMulti {
+        /// Vector of keys to delete.
         keys: Vec<String>,
     },
     /// Compare-and-swap: atomically update value if current value matches expected.
     CompareAndSwap {
+        /// Key to compare and swap.
         key: String,
+        /// Expected current value (None if key should not exist).
         expected: Option<String>,
+        /// New value to set if comparison succeeds.
         new_value: String,
     },
     /// Compare-and-delete: atomically delete key if current value matches expected.
     CompareAndDelete {
+        /// Key to compare and delete.
         key: String,
+        /// Expected current value that must match for deletion to succeed.
         expected: String,
     },
     /// Batch write: atomically apply multiple Set/Delete operations.
@@ -373,9 +410,30 @@ impl fmt::Display for AppRequest {
     }
 }
 
-/// Response returned to HTTP clients after applying a request.
+/// Response returned after applying a Raft request.
+///
+/// Contains the result of executing an `AppRequest` through the Raft state machine.
+/// Different operations populate different fields based on their semantics.
+///
+/// # Field Usage by Operation
+///
+/// - **Read operations**: `value` contains the retrieved value
+/// - **Delete operations**: `deleted` indicates whether a key was actually removed
+/// - **CAS operations**: `cas_succeeded` indicates success/failure, `value` contains current value on failure
+/// - **Batch operations**: `batch_applied` contains count of applied operations
+/// - **Lease operations**: `lease_id`, `ttl_seconds`, `keys_deleted` for lease management
+/// - **Transactions**: `succeeded`, `txn_results`, `header_revision` for transaction results
+///
+/// # Tiger Style
+///
+/// - Optional fields: Only relevant fields are populated for each operation type
+/// - Explicit types: u32 for counts, u64 for IDs/revisions, bool for flags
+/// - Clear semantics: Field names indicate their purpose (e.g., `cas_succeeded` vs `succeeded`)
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AppResponse {
+    /// Value retrieved by a read operation, or None if key doesn't exist.
+    ///
+    /// For CAS failures, contains the actual current value to enable retries.
     pub value: Option<String>,
     /// Indicates whether a delete operation actually removed a key.
     /// None for operations where deletion is not applicable.
@@ -425,7 +483,20 @@ pub struct AppResponse {
 }
 
 declare_raft_types!(
-    /// Declare type config used by Aspen's embedded Raft node.
+    /// OpenRaft type configuration for Aspen's Raft consensus implementation.
+    ///
+    /// This macro declares the concrete types used throughout the Raft system:
+    /// - **D (Data)**: `AppRequest` - Application-level write commands replicated through Raft
+    /// - **R (Response)**: `AppResponse` - Responses returned after applying commands
+    /// - **NodeId**: `NodeId` - Type-safe 64-bit node identifiers (newtype wrapper around u64)
+    /// - **Node**: `RaftMemberInfo` - Membership metadata containing Iroh P2P connection info
+    ///
+    /// These types are used by:
+    /// - `RaftNode` implementation (src/raft/node.rs)
+    /// - `SqliteStateMachine` and `RedbLogStore` (src/raft/storage*.rs)
+    /// - `IrpcRaftNetwork` for Raft RPC over Iroh (src/raft/network.rs)
+    ///
+    /// Tiger Style: Explicit types prevent accidental mixing of node IDs, log indices, and terms.
     pub AppTypeConfig:
         D = AppRequest,
         R = AppResponse,

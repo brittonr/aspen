@@ -248,34 +248,59 @@ pub struct LogEntryPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum KvOperation {
     /// Set a single key-value pair.
-    Set { key: Vec<u8>, value: Vec<u8> },
+    Set {
+        /// Key to set.
+        key: Vec<u8>,
+        /// Value to store.
+        value: Vec<u8>,
+    },
     /// Set a single key-value pair with expiration.
     SetWithTTL {
+        /// Key to set.
         key: Vec<u8>,
+        /// Value to store.
         value: Vec<u8>,
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
     },
     /// Set multiple key-value pairs atomically.
-    SetMulti { pairs: Vec<(Vec<u8>, Vec<u8>)> },
+    SetMulti {
+        /// Key-value pairs to set.
+        pairs: Vec<(Vec<u8>, Vec<u8>)>,
+    },
     /// Set multiple keys with TTL.
     SetMultiWithTTL {
+        /// Key-value pairs to set.
         pairs: Vec<(Vec<u8>, Vec<u8>)>,
         /// Expiration time as Unix timestamp in milliseconds.
         expires_at_ms: u64,
     },
     /// Delete a single key.
-    Delete { key: Vec<u8> },
+    Delete {
+        /// Key to delete.
+        key: Vec<u8>,
+    },
     /// Delete multiple keys atomically.
-    DeleteMulti { keys: Vec<Vec<u8>> },
+    DeleteMulti {
+        /// Keys to delete.
+        keys: Vec<Vec<u8>>,
+    },
     /// Compare-and-swap: atomically update value if current matches expected.
     CompareAndSwap {
+        /// Key to update.
         key: Vec<u8>,
+        /// Expected current value (None means key must not exist).
         expected: Option<Vec<u8>>,
+        /// New value to set if condition passes.
         new_value: Vec<u8>,
     },
     /// Compare-and-delete: atomically delete if current value matches expected.
-    CompareAndDelete { key: Vec<u8>, expected: Vec<u8> },
+    CompareAndDelete {
+        /// Key to delete.
+        key: Vec<u8>,
+        /// Expected current value.
+        expected: Vec<u8>,
+    },
     /// Batch of mixed Set/Delete operations.
     Batch {
         /// Operations as (is_set, key, value) tuples.
@@ -291,13 +316,16 @@ pub enum KvOperation {
     },
     /// Set a single key-value pair attached to a lease.
     SetWithLease {
+        /// Key to set.
         key: Vec<u8>,
+        /// Value to store.
         value: Vec<u8>,
         /// Lease ID this key is attached to.
         lease_id: u64,
     },
     /// Set multiple keys attached to a lease.
     SetMultiWithLease {
+        /// Key-value pairs to set.
         pairs: Vec<(Vec<u8>, Vec<u8>)>,
         /// Lease ID these keys are attached to.
         lease_id: u64,

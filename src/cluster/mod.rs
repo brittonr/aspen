@@ -96,6 +96,7 @@ pub mod validation;
 /// simulations.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeterministicClusterConfig {
+    /// Optional seed for deterministic behavior in simulations.
     pub simulation_seed: Option<u64>,
 }
 

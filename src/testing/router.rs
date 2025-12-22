@@ -46,9 +46,13 @@ use crate::raft::types::{AppRequest, AppTypeConfig, NodeId, RaftMemberInfo};
 /// Note: This is a test-specific wrapper around a Raft node, distinct from
 /// `crate::raft::types::RaftMemberInfo` which represents node metadata in Raft membership.
 pub struct TestNode {
+    /// The node's unique identifier.
     pub id: NodeId,
+    /// The Raft instance handle for this node.
     pub raft: Raft<AppTypeConfig>,
+    /// The in-memory log store for this node.
     pub log_store: InMemoryLogStore,
+    /// The in-memory state machine for this node.
     pub state_machine: Arc<InMemoryStateMachine>,
 }
 

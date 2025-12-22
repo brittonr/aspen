@@ -51,6 +51,7 @@ pub enum RWLockMode {
 }
 
 impl RWLockMode {
+    /// Convert the mode to a string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             RWLockMode::Free => "free",

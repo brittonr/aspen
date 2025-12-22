@@ -61,76 +61,174 @@ const SNAPSHOT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("snaps
 /// Tiger Style: Explicit error types with actionable context for operators.
 #[derive(Debug, Snafu)]
 pub enum StorageValidationError {
+    /// Failed to open the redb database file.
+    ///
+    /// This can occur if the file is locked, corrupted, or has incorrect permissions.
+    /// Check that the file exists and is readable, and that no other process has it locked.
     #[snafu(display("failed to open redb database at {}: {}", path.display(), source))]
     DatabaseOpenFailed {
+        /// Path to the database file that failed to open.
         path: PathBuf,
+        /// Underlying redb database error.
         #[snafu(source(from(redb::DatabaseError, Box::new)))]
         source: Box<redb::DatabaseError>,
     },
 
+    /// Failed to begin a read-only transaction.
+    ///
+    /// This typically indicates database corruption or resource exhaustion.
+    /// Try restarting the node or restoring from a known-good backup.
     #[snafu(display("failed to begin read transaction: {}", source))]
     BeginReadFailed {
+        /// Underlying redb transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
 
+    /// Failed to open a specific table within the database.
+    ///
+    /// This can occur if the table schema has changed or the database is corrupted.
+    /// Check the table name matches expectations and consider restoring from backup.
     #[snafu(display("failed to open table '{}': {}", table_name, source))]
     OpenTableFailed {
+        /// Name of the table that failed to open.
         table_name: String,
+        /// Underlying redb table error.
         #[snafu(source(from(redb::TableError, Box::new)))]
         source: Box<redb::TableError>,
     },
 
+    /// Failed to read data from a table.
+    ///
+    /// This indicates storage-level corruption or I/O errors.
+    /// Check disk health and filesystem integrity.
     #[snafu(display("failed to read from table: {}", source))]
     TableReadFailed {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Log entries are not sequential (gap detected).
+    ///
+    /// Raft requires a contiguous log from 0..N with no gaps. This error indicates
+    /// entries were lost, likely due to corruption or incomplete write operations.
+    /// Recovery requires restoring from snapshot or backup.
     #[snafu(display(
         "log entries are not monotonic: gap between index {} and {}",
         prev,
         current
     ))]
-    LogNotMonotonic { prev: u64, current: u64 },
+    LogNotMonotonic {
+        /// The last valid log index before the gap.
+        prev: u64,
+        /// The next log index found (should be prev + 1).
+        current: u64,
+    },
 
+    /// Multiple log entries found at the same index.
+    ///
+    /// This violates Raft invariants and indicates serious corruption.
+    /// Recovery requires restoring from a known-good backup.
     #[snafu(display(
         "log entry has duplicate index {}: found multiple entries at same position",
         index
     ))]
-    LogDuplicateIndex { index: u64 },
+    LogDuplicateIndex {
+        /// The log index that appears multiple times.
+        index: u64,
+    },
 
+    /// Snapshot metadata is corrupted or invalid.
+    ///
+    /// Snapshots must have valid metadata (last_log_id, membership).
+    /// Corruption here prevents snapshot restoration. Delete the snapshot
+    /// and allow Raft to create a new one, or restore from backup.
     #[snafu(display("snapshot metadata is corrupted: {}", reason))]
-    SnapshotCorrupted { reason: String },
+    SnapshotCorrupted {
+        /// Human-readable description of what is invalid.
+        reason: String,
+    },
 
+    /// Failed to deserialize binary data.
+    ///
+    /// This indicates corruption or schema version mismatch.
+    /// Check that the data format matches the expected version.
     #[snafu(display("failed to deserialize {}: {}", data_type, source))]
     DeserializeFailed {
+        /// Type of data being deserialized (e.g., "vote state", "log entry").
         data_type: String,
+        /// Underlying bincode deserialization error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
+    /// Vote state is inconsistent or invalid.
+    ///
+    /// The vote state (term, voted_for) must be valid and reasonable.
+    /// Corruption here can cause election failures. Restore from backup.
     #[snafu(display("vote state is inconsistent: {}", reason))]
-    VoteInconsistent { reason: String },
+    VoteInconsistent {
+        /// Human-readable description of what is invalid.
+        reason: String,
+    },
 
+    /// Committed log index is inconsistent with the log.
+    ///
+    /// The committed index must be <= last_log_index. Violation indicates
+    /// corruption or incomplete writes. Restore from backup.
     #[snafu(display("committed log index is inconsistent: {}", reason))]
-    CommittedInconsistent { reason: String },
+    CommittedInconsistent {
+        /// Human-readable description of what is invalid.
+        reason: String,
+    },
 
+    /// Database file does not exist at the specified path.
+    ///
+    /// This is expected for new nodes. For existing nodes, it indicates
+    /// the data directory was deleted or moved.
     #[snafu(display("database file does not exist at {}", path.display()))]
-    DatabaseNotFound { path: PathBuf },
+    DatabaseNotFound {
+        /// Path where the database file was expected.
+        path: PathBuf,
+    },
 }
 
 /// Report generated after successful storage validation.
 ///
 /// Contains metrics and diagnostics useful for monitoring and debugging.
+/// All checks must pass for validation to succeed; any failure returns an error.
+///
+/// # Tiger Style
+///
+/// - Explicit types: u32 for counts, u64 for indices (portable across platforms)
+/// - Bounded operations: Validation completes in <100ms for typical workloads
+/// - Clear metrics: Includes timing for performance monitoring
 #[derive(Debug, Clone)]
 pub struct ValidationReport {
+    /// Node ID of the validated storage.
     pub node_id: NodeId,
+    /// Number of validation checks that passed.
+    ///
+    /// Currently 5 checks are performed:
+    /// 1. Database can be opened
+    /// 2. Log entries are monotonic
+    /// 3. Snapshot metadata is valid
+    /// 4. Vote state is consistent
+    /// 5. Committed index is within bounds
     pub checks_passed: u32,
+    /// Highest log index found in the log (None if log is empty).
     pub last_log_index: Option<u64>,
+    /// Last log index from snapshot metadata (None if no snapshot exists).
     pub last_snapshot_index: Option<u64>,
+    /// Current term from vote state (None if no vote has been recorded).
     pub vote_term: Option<u64>,
+    /// Committed log index (None if no entries have been committed).
     pub committed_index: Option<u64>,
+    /// Time taken to complete validation.
+    ///
+    /// Expected to be <100ms for 1000 log entries on typical hardware.
+    /// Longer durations may indicate slow storage or large log size.
     pub validation_duration: Duration,
 }
 

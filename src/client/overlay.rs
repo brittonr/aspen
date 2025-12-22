@@ -49,18 +49,36 @@ pub struct WriteResult {
 /// Errors that can occur during overlay operations.
 #[derive(Debug, Error)]
 pub enum OverlayError {
+    /// No subscriptions are configured in the overlay.
     #[error("no subscriptions available")]
     NoSubscriptions,
+    /// No subscription with write access is available.
     #[error("no write-capable subscription available")]
     NoWriteSubscription,
+    /// Maximum subscription limit has been exceeded.
     #[error("subscription limit exceeded (max: {max})")]
-    SubscriptionLimitExceeded { max: usize },
+    SubscriptionLimitExceeded {
+        /// Maximum allowed subscriptions.
+        max: usize,
+    },
+    /// Subscription with the specified ID was not found.
     #[error("subscription not found: {id}")]
-    SubscriptionNotFound { id: String },
+    SubscriptionNotFound {
+        /// ID of the missing subscription.
+        id: String,
+    },
+    /// Operation failed for the specified reason.
     #[error("operation failed: {reason}")]
-    OperationFailed { reason: String },
+    OperationFailed {
+        /// Reason for failure.
+        reason: String,
+    },
+    /// Cluster connection error occurred.
     #[error("cluster connection error: {reason}")]
-    ConnectionError { reason: String },
+    ConnectionError {
+        /// Reason for connection failure.
+        reason: String,
+    },
 }
 
 /// Callback type for reading from a subscription.
@@ -86,7 +104,7 @@ pub struct ClientOverlay {
 }
 
 impl ClientOverlay {
-    /// Create a new client overlay.
+    /// Create a new client overlay with no subscriptions.
     pub fn new() -> Self {
         Self {
             subscriptions: RwLock::new(Vec::new()),
@@ -97,6 +115,13 @@ impl ClientOverlay {
     }
 
     /// Add a subscription to the overlay.
+    ///
+    /// Subscriptions are automatically sorted by priority (lower = higher priority).
+    /// If caching is enabled for the subscription, a local cache is created.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SubscriptionLimitExceeded` if the maximum subscription limit is reached.
     pub async fn add_subscription(
         &self,
         subscription: ClusterSubscription,
@@ -138,7 +163,11 @@ impl ClientOverlay {
         Ok(())
     }
 
-    /// Remove a subscription from the overlay.
+    /// Remove a subscription by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SubscriptionNotFound` if the subscription ID is not registered.
     pub async fn remove_subscription(&self, id: &str) -> Result<(), OverlayError> {
         let mut subs = self.subscriptions.write().await;
         let before = subs.len();
@@ -154,7 +183,10 @@ impl ClientOverlay {
         Ok(())
     }
 
-    /// Get all subscriptions.
+    /// Get all active subscriptions, ordered by priority.
+    ///
+    /// Returns a cloned vector of subscriptions sorted by priority
+    /// (lower values = higher priority).
     pub async fn subscriptions(&self) -> Vec<ClusterSubscription> {
         self.subscriptions.read().await.clone()
     }
@@ -264,6 +296,10 @@ impl ClientOverlay {
     }
 
     /// Invalidate cache entries for a key across all subscriptions.
+    ///
+    /// Removes the specified key from all subscription caches.
+    /// This is typically called after a write operation to ensure
+    /// cache consistency.
     pub async fn invalidate(&self, key: &str) {
         let caches = self.caches.read().await;
         for cache in caches.values() {
@@ -271,7 +307,11 @@ impl ClientOverlay {
         }
     }
 
-    /// Invalidate all cache entries matching a prefix.
+    /// Invalidate all cache entries matching a prefix across all subscriptions.
+    ///
+    /// Removes all keys starting with the specified prefix from all
+    /// subscription caches. Useful for invalidating related keys after
+    /// bulk operations.
     pub async fn invalidate_prefix(&self, prefix: &str) {
         let caches = self.caches.read().await;
         for cache in caches.values() {
@@ -279,7 +319,10 @@ impl ClientOverlay {
         }
     }
 
-    /// Clear all caches.
+    /// Clear all subscription caches.
+    ///
+    /// Removes all entries from all subscription caches. This does not
+    /// remove the subscriptions themselves.
     pub async fn clear_caches(&self) {
         let caches = self.caches.read().await;
         for cache in caches.values() {

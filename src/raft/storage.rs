@@ -164,98 +164,148 @@ const INTEGRITY_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new(
 // Redb Storage Errors
 // ====================================================================================
 
+/// Errors that can occur during Raft storage operations.
 #[derive(Debug, Snafu)]
 pub enum StorageError {
+    /// Failed to open the redb database file.
     #[snafu(display("failed to open redb database at {}: {source}", path.display()))]
     OpenDatabase {
+        /// Path to the database file.
         path: PathBuf,
+        /// Underlying redb error.
         #[snafu(source(from(redb::DatabaseError, Box::new)))]
         source: Box<redb::DatabaseError>,
     },
 
+    /// Failed to begin a write transaction.
     #[snafu(display("failed to begin write transaction: {source}"))]
     BeginWrite {
+        /// Underlying redb transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
 
+    /// Failed to begin a read transaction.
     #[snafu(display("failed to begin read transaction: {source}"))]
     BeginRead {
+        /// Underlying redb transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
 
+    /// Failed to open a database table.
     #[snafu(display("failed to open table: {source}"))]
     OpenTable {
+        /// Underlying redb table error.
         #[snafu(source(from(redb::TableError, Box::new)))]
         source: Box<redb::TableError>,
     },
 
+    /// Failed to commit a transaction.
     #[snafu(display("failed to commit transaction: {source}"))]
     Commit {
+        /// Underlying redb commit error.
         #[snafu(source(from(redb::CommitError, Box::new)))]
         source: Box<redb::CommitError>,
     },
 
+    /// Failed to insert a value into a table.
     #[snafu(display("failed to insert into table: {source}"))]
     Insert {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to retrieve a value from a table.
     #[snafu(display("failed to get from table: {source}"))]
     Get {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to remove a value from a table.
     #[snafu(display("failed to remove from table: {source}"))]
     Remove {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to iterate over a table range.
     #[snafu(display("failed to iterate table range: {source}"))]
     Range {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to serialize data with bincode.
     #[snafu(display("failed to serialize data: {source}"))]
     Serialize {
+        /// Underlying bincode error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
+    /// Failed to deserialize data with bincode.
     #[snafu(display("failed to deserialize data: {source}"))]
     Deserialize {
+        /// Underlying bincode error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
+    /// Failed to create a directory for the database.
     #[snafu(display("failed to create directory {}: {source}", path.display()))]
     CreateDirectory {
+        /// Path to the directory that could not be created.
         path: PathBuf,
+        /// Underlying I/O error.
         source: std::io::Error,
     },
 
+    /// Chain integrity violation detected during verification.
+    ///
+    /// This indicates that a log entry's chain hash does not match the expected
+    /// value based on the previous hash. This could indicate hardware corruption
+    /// or tampering.
     #[snafu(display(
         "chain integrity violation at index {index}: expected {expected}, found {found}"
     ))]
     ChainIntegrityViolation {
+        /// Log index where the violation was detected.
         index: u64,
+        /// Expected hash value (hex-encoded).
         expected: String,
+        /// Actual hash value found (hex-encoded).
         found: String,
     },
 
+    /// Snapshot integrity verification failed.
     #[snafu(display("snapshot integrity verification failed: {reason}"))]
-    SnapshotIntegrityFailed { reason: String },
+    SnapshotIntegrityFailed {
+        /// Human-readable reason for the failure.
+        reason: String,
+    },
 
+    /// Chain hash is missing at the specified log index.
+    ///
+    /// This should not occur in normal operation and indicates incomplete
+    /// migration or database corruption.
     #[snafu(display("chain hash missing at index {index}"))]
-    ChainHashMissing { index: u64 },
+    ChainHashMissing {
+        /// Log index where the chain hash is missing.
+        index: u64,
+    },
 
+    /// A storage lock was poisoned due to a panic in another thread.
     #[snafu(display("storage lock poisoned: {context}"))]
-    LockPoisoned { context: String },
+    LockPoisoned {
+        /// Context describing which lock was poisoned.
+        context: String,
+    },
 }
 
 impl From<StorageError> for io::Error {
@@ -265,16 +315,25 @@ impl From<StorageError> for io::Error {
 }
 
 /// In-memory Raft log backed by a simple `BTreeMap`.
+///
+/// Provides fast, non-persistent log storage for testing and simulations.
+/// All data is lost when the store is dropped.
 #[derive(Clone, Debug, Default)]
 pub struct InMemoryLogStore {
+    /// Shared mutable state protected by an async mutex.
     inner: Arc<Mutex<LogStoreInner>>,
 }
 
+/// Internal state for InMemoryLogStore.
 #[derive(Debug, Default)]
 struct LogStoreInner {
+    /// Last log ID that was purged (for snapshot compaction).
     last_purged_log_id: Option<LogIdOf<AppTypeConfig>>,
+    /// Map of log index to log entry.
     log: BTreeMap<u64, <AppTypeConfig as openraft::RaftTypeConfig>::Entry>,
+    /// Last committed log ID.
     committed: Option<LogIdOf<AppTypeConfig>>,
+    /// Current vote state.
     vote: Option<VoteOf<AppTypeConfig>>,
 }
 
@@ -1341,32 +1400,51 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
 }
 
 /// Snapshot blob stored in memory for testing.
+///
+/// Contains both the snapshot metadata (last log ID, membership) and
+/// the serialized state machine data.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoredSnapshot {
+    /// Snapshot metadata (last log ID, membership, snapshot ID).
     pub meta: openraft::SnapshotMeta<AppTypeConfig>,
+    /// Serialized state machine data (JSON-encoded KV map).
     pub data: Vec<u8>,
 }
 
+/// Internal state machine data for InMemoryStateMachine.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 struct StateMachineData {
+    /// Last log ID that was applied to the state machine.
     pub last_applied_log: Option<openraft::LogId<AppTypeConfig>>,
+    /// Last known membership configuration.
     pub last_membership: StoredMembership<AppTypeConfig>,
+    /// Key-value data store.
     pub data: BTreeMap<String, String>,
 }
 
 /// Simple in-memory state machine that mirrors the openraft memstore example.
+///
+/// Provides a non-persistent KV store for testing and simulations. All data
+/// is stored in a `BTreeMap` and lost when the state machine is dropped.
 #[derive(Debug, Default)]
 pub struct InMemoryStateMachine {
+    /// State machine data (last applied log, membership, KV data).
     state_machine: RwLock<StateMachineData>,
+    /// Counter for generating unique snapshot IDs.
     snapshot_idx: AtomicU64,
+    /// Currently held snapshot.
     current_snapshot: RwLock<Option<StoredSnapshot>>,
 }
 
 impl InMemoryStateMachine {
+    /// Create a new in-memory state machine wrapped in an Arc.
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
 
+    /// Get a value from the state machine by key.
+    ///
+    /// Returns `None` if the key does not exist.
     pub async fn get(&self, key: &str) -> Option<String> {
         let sm = self.state_machine.read().await;
         sm.data.get(key).cloned()
@@ -1374,7 +1452,11 @@ impl InMemoryStateMachine {
 
     /// Scan all keys that start with the given prefix.
     ///
-    /// Returns a list of full key names.
+    /// Returns a list of full key names. This is a synchronous blocking operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `prefix` - Key prefix to match
     pub fn scan_keys_with_prefix(&self, prefix: &str) -> Vec<String> {
         // Block on async read - this is a synchronous API for compatibility
         let sm = futures::executor::block_on(self.state_machine.read());
@@ -1387,7 +1469,11 @@ impl InMemoryStateMachine {
 
     /// Scan all key-value pairs that start with the given prefix.
     ///
-    /// Returns a list of (key, value) pairs.
+    /// Returns a list of (key, value) pairs. This is a synchronous blocking operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `prefix` - Key prefix to match
     pub fn scan_kv_with_prefix(&self, prefix: &str) -> Vec<(String, String)> {
         // Block on async read - this is a synchronous API for compatibility
         let sm = futures::executor::block_on(self.state_machine.read());
@@ -1401,6 +1487,10 @@ impl InMemoryStateMachine {
     /// Async version of scan_kv_with_prefix for use in async contexts.
     ///
     /// Returns a list of (key, value) pairs matching the prefix.
+    ///
+    /// # Arguments
+    ///
+    /// * `prefix` - Key prefix to match
     pub async fn scan_kv_with_prefix_async(&self, prefix: &str) -> Vec<(String, String)> {
         let sm = self.state_machine.read().await;
         sm.data

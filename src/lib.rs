@@ -8,13 +8,23 @@
 //! narrow so we can iterate quickly while wiring the real implementations back
 //! in.
 
+#![warn(missing_docs)]
+
+/// Trait definitions for cluster management and key-value operations.
 pub mod api;
+/// Content-addressed blob storage using iroh-blobs.
 pub mod blob;
+/// Client libraries for connecting to Aspen clusters.
 pub mod client;
+/// Client RPC protocol definitions over Iroh.
 pub mod client_rpc;
+/// Cluster coordination and bootstrap logic.
 pub mod cluster;
+/// Distributed coordination primitives (barriers, elections, locks).
 pub mod coordination;
+/// CRDT-based document synchronization using iroh-docs.
 pub mod docs;
+/// Node builder pattern for programmatic configuration.
 pub mod node;
 pub mod protocol_handlers;
 pub mod raft;

@@ -32,6 +32,7 @@ use crate::raft::types::AppTypeConfig;
 /// Sent during leader election to request votes from followers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaftVoteRequest {
+    /// The vote request from OpenRaft.
     pub request: VoteRequest<AppTypeConfig>,
 }
 
@@ -40,6 +41,7 @@ pub struct RaftVoteRequest {
 /// Sent by leader for log replication and heartbeats.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaftAppendEntriesRequest {
+    /// The append entries request from OpenRaft.
     pub request: AppendEntriesRequest<AppTypeConfig>,
 }
 
@@ -52,8 +54,11 @@ pub struct RaftAppendEntriesRequest {
 /// since IRPC requires all fields to be serializable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaftSnapshotRequest {
+    /// The leader's vote information.
     pub vote: VoteOf<AppTypeConfig>,
+    /// Snapshot metadata (last_log_id, last_membership, snapshot_id).
     pub snapshot_meta: openraft::SnapshotMeta<AppTypeConfig>,
+    /// The snapshot data as raw bytes.
     pub snapshot_data: Vec<u8>,
 }
 
@@ -101,8 +106,11 @@ pub enum RaftRpcProtocol {
 /// Any business logic errors are encoded in the response itself.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftRpcResponse {
+    /// Vote response containing vote decision and follower's state.
     Vote(VoteResponse<AppTypeConfig>),
+    /// AppendEntries response (Success, Conflict, or HigherTerm).
     AppendEntries(AppendEntriesResponse<AppTypeConfig>),
+    /// InstallSnapshot response, may fail with RaftError.
     InstallSnapshot(Result<SnapshotResponse<AppTypeConfig>, RaftError<AppTypeConfig>>),
 }
 

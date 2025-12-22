@@ -35,9 +35,12 @@ pub struct SimulationArtifact {
     pub duration_ms: u64,
 }
 
+/// Status of a simulation run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SimulationStatus {
+    /// Simulation completed successfully without errors.
     Passed,
+    /// Simulation failed with an error.
     Failed,
 }
 

@@ -559,51 +559,93 @@ impl Drop for VmManager {
 /// Errors that can occur during VM management.
 #[derive(Debug, Snafu)]
 pub enum VmManagerError {
+    /// I/O error during VM operation (file, process, etc.).
     #[snafu(display("I/O error during {operation}: {source}"))]
     Io {
+        /// The operation that failed.
         operation: &'static str,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
 
+    /// HTTP error when communicating with a VM's API.
     #[snafu(display("HTTP error during {operation}: {source}"))]
     Http {
+        /// The HTTP operation that failed.
         operation: &'static str,
+        /// The underlying HTTP error.
         source: reqwest::Error,
     },
 
+    /// The requested VM was not found in the manager.
     #[snafu(display("VM {node_id} not found"))]
-    VmNotFound { node_id: u64 },
+    VmNotFound {
+        /// The node ID that was not found.
+        node_id: u64,
+    },
 
+    /// A VM with the given node ID already exists.
     #[snafu(display("VM {node_id} already exists"))]
-    DuplicateNode { node_id: u64 },
+    DuplicateNode {
+        /// The duplicate node ID.
+        node_id: u64,
+    },
 
+    /// Maximum number of VMs exceeded.
     #[snafu(display("Too many VMs (max: {max})"))]
-    TooManyVms { max: usize },
+    TooManyVms {
+        /// The maximum allowed number of VMs.
+        max: usize,
+    },
 
+    /// No VMs are registered with the manager.
     #[snafu(display("No VMs registered"))]
     NoVms,
 
+    /// VM is in an unexpected state for the requested operation.
     #[snafu(display("VM {node_id} in invalid state: expected {expected}, got {actual}"))]
     InvalidState {
+        /// The node ID with invalid state.
         node_id: u64,
+        /// The expected state.
         expected: &'static str,
+        /// The actual state found.
         actual: String,
     },
 
+    /// VM process exited unexpectedly.
     #[snafu(display("VM {node_id} exited unexpectedly with code: {:?}", exit_code))]
     VmExited {
+        /// The node ID that exited.
         node_id: u64,
+        /// The exit code, if available.
         exit_code: Option<i32>,
     },
 
+    /// VM did not become healthy within the timeout period.
     #[snafu(display("VM {node_id} did not become healthy within {:?}", timeout))]
-    HealthTimeout { node_id: u64, timeout: Duration },
+    HealthTimeout {
+        /// The node ID that failed health check.
+        node_id: u64,
+        /// The timeout duration that was exceeded.
+        timeout: Duration,
+    },
 
+    /// Cluster initialization failed with an HTTP error.
     #[snafu(display("Cluster initialization failed with status {status}: {body}"))]
-    ClusterInitFailed { status: u16, body: String },
+    ClusterInitFailed {
+        /// HTTP status code returned.
+        status: u16,
+        /// Response body with error details.
+        body: String,
+    },
 
+    /// Network setup for VM failed.
     #[snafu(display("Network setup failed: {message}"))]
-    NetworkSetup { message: String },
+    NetworkSetup {
+        /// Error message describing the network failure.
+        message: String,
+    },
 }
 
 #[cfg(test)]

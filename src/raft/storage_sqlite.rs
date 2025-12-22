@@ -85,55 +85,188 @@ use crate::raft::integrity::{GENESIS_HASH, SnapshotIntegrity};
 use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
 
-/// Errors that can occur when using SQLite storage
+/// Errors that can occur when using SQLite storage.
+///
+/// All errors include contextual information for operators to diagnose issues.
+/// Tiger Style: Explicit error types with actionable messages for operational debugging.
 #[derive(Debug, Snafu)]
 pub enum SqliteStorageError {
+    /// Failed to open or create the SQLite database file.
+    ///
+    /// This can occur if:
+    /// - The file path is invalid or inaccessible
+    /// - File permissions prevent read/write access
+    /// - The parent directory does not exist
+    /// - Another process has locked the database file
+    /// - The file is corrupted or has an incompatible schema version
+    ///
+    /// Recovery: Check file permissions, ensure parent directory exists,
+    /// verify no other processes are using the database.
     #[snafu(display("failed to open sqlite database at {}: {source}", path.display()))]
     OpenDatabase {
+        /// Path to the database file that failed to open.
         path: PathBuf,
+        /// Underlying rusqlite error.
         source: rusqlite::Error,
     },
 
+    /// Failed to execute a SQL statement.
+    ///
+    /// This typically indicates:
+    /// - Syntax error in SQL (programming bug)
+    /// - Constraint violation (unique, foreign key, etc.)
+    /// - Database is locked or busy
+    /// - Disk full or I/O error
+    ///
+    /// Recovery: Check the error message for specific SQL error codes.
+    /// SQLITE_BUSY errors may resolve with retry. Other errors may require
+    /// operator intervention or restore from backup.
     #[snafu(display("failed to execute SQL statement: {source}"))]
-    Execute { source: rusqlite::Error },
+    Execute {
+        /// Underlying rusqlite error.
+        source: rusqlite::Error,
+    },
 
+    /// Failed to query the database.
+    ///
+    /// This indicates a read operation failed, which can occur due to:
+    /// - Database corruption
+    /// - I/O errors
+    /// - Connection was closed
+    ///
+    /// Recovery: Check disk health, verify database integrity with PRAGMA integrity_check.
     #[snafu(display("failed to query database: {source}"))]
-    Query { source: rusqlite::Error },
+    Query {
+        /// Underlying rusqlite error.
+        source: rusqlite::Error,
+    },
 
+    /// Failed to serialize data with bincode.
+    ///
+    /// This indicates a programming error where data structures cannot be
+    /// serialized to binary format. Should not occur in production.
+    ///
+    /// Recovery: File a bug report with reproduction steps.
     #[snafu(display("failed to serialize data: {source}"))]
-    Serialize { source: bincode::Error },
+    Serialize {
+        /// Underlying bincode serialization error.
+        source: bincode::Error,
+    },
 
+    /// Failed to deserialize data with bincode.
+    ///
+    /// This indicates:
+    /// - Database corruption (data is not in expected format)
+    /// - Schema version mismatch (data was written by incompatible version)
+    /// - Partial write operation (data is incomplete)
+    ///
+    /// Recovery: Restore from backup or snapshot. If persistent, may indicate
+    /// need for data migration.
     #[snafu(display("failed to deserialize data: {source}"))]
-    Deserialize { source: bincode::Error },
+    Deserialize {
+        /// Underlying bincode deserialization error.
+        source: bincode::Error,
+    },
 
+    /// Failed to serialize data to JSON.
+    ///
+    /// This indicates a programming error where data structures cannot be
+    /// serialized to JSON. Should not occur in production.
+    ///
+    /// Recovery: File a bug report with reproduction steps.
     #[snafu(display("failed to serialize JSON: {source}"))]
-    JsonSerialize { source: serde_json::Error },
+    JsonSerialize {
+        /// Underlying JSON serialization error.
+        source: serde_json::Error,
+    },
 
+    /// Failed to deserialize JSON data.
+    ///
+    /// This indicates:
+    /// - Invalid JSON format in stored data
+    /// - Schema version mismatch
+    ///
+    /// Recovery: Check the stored JSON for correctness. May require manual repair
+    /// or restore from backup.
     #[snafu(display("failed to deserialize JSON: {source}"))]
-    JsonDeserialize { source: serde_json::Error },
+    JsonDeserialize {
+        /// Underlying JSON deserialization error.
+        source: serde_json::Error,
+    },
 
+    /// Failed to create a directory in the filesystem.
+    ///
+    /// This occurs during database initialization when the parent directory
+    /// does not exist and cannot be created.
+    ///
+    /// Recovery: Check filesystem permissions, ensure disk is not full,
+    /// verify path is valid.
     #[snafu(display("failed to create directory {}: {source}", path.display()))]
     CreateDirectory {
+        /// Path to the directory that failed to be created.
         path: PathBuf,
+        /// Underlying I/O error.
         source: std::io::Error,
     },
 
+    /// I/O error occurred while accessing a file or directory.
+    ///
+    /// This indicates filesystem-level problems:
+    /// - Disk full
+    /// - Permission denied
+    /// - File not found
+    /// - Hardware failure
+    ///
+    /// Recovery: Check disk space, permissions, and hardware health.
     #[snafu(display("I/O error on path {}: {source}", path.display()))]
     IoError {
+        /// Path where the I/O error occurred.
         path: PathBuf,
+        /// Underlying I/O error.
         source: std::io::Error,
     },
 
+    /// Connection pool error (failed to acquire or return a connection).
+    ///
+    /// This indicates the read connection pool is exhausted or unhealthy.
+    /// All connections may be in use or failed.
+    ///
+    /// Recovery: Check connection pool size (DEFAULT_READ_POOL_SIZE),
+    /// verify connections are being returned properly, check for connection leaks.
     #[snafu(display("connection pool error: {source}"))]
-    PoolError { source: r2d2::Error },
+    PoolError {
+        /// Underlying r2d2 pool error.
+        source: r2d2::Error,
+    },
 
+    /// Failed to build the connection pool during initialization.
+    ///
+    /// This indicates the database file cannot be opened with the
+    /// configured pool settings.
+    ///
+    /// Recovery: Check database file permissions and integrity,
+    /// verify pool configuration is valid.
     #[snafu(display("failed to build connection pool: {source}"))]
-    PoolBuild { source: r2d2::Error },
+    PoolBuild {
+        /// Underlying r2d2 pool build error.
+        source: r2d2::Error,
+    },
 
+    /// Internal mutex was poisoned (another thread panicked while holding the lock).
+    ///
+    /// This is a critical error indicating the database may be in an inconsistent state.
+    /// The write connection lock was held by a thread that panicked, potentially
+    /// leaving an uncommitted transaction or corrupted state.
+    ///
+    /// Recovery: Restart the node immediately. Do not attempt to continue operating.
+    /// Check for panics in logs. May require restore from backup if corruption occurred.
     #[snafu(display(
         "storage lock poisoned during {operation} - database may be in inconsistent state, restart required"
     ))]
-    MutexPoisoned { operation: &'static str },
+    MutexPoisoned {
+        /// The operation that was being performed when the lock was poisoned.
+        operation: &'static str,
+    },
 }
 
 impl From<SqliteStorageError> for io::Error {
@@ -150,7 +283,10 @@ impl From<SqliteStorageError> for io::Error {
 /// - RAII: Automatic cleanup via Drop trait
 /// - Explicit commit: Caller must explicitly commit to persist changes
 struct TransactionGuard<'a> {
+    /// The SQLite connection this transaction is associated with.
     conn: &'a Connection,
+    /// Whether the transaction has been committed.
+    /// If false when dropped, the transaction is rolled back.
     committed: bool,
 }
 
@@ -201,13 +337,20 @@ impl Drop for TransactionGuard<'_> {
     }
 }
 
-/// Stored snapshot format (matches redb implementation)
+/// Stored snapshot format (matches redb implementation).
+///
+/// Encapsulates a Raft snapshot with metadata, data payload, and optional integrity verification.
+/// Used for persisting and restoring state machine snapshots to/from SQLite.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredSnapshot {
+    /// Raft snapshot metadata (last_log_id, membership config, snapshot ID).
     pub meta: openraft::SnapshotMeta<AppTypeConfig>,
+    /// Serialized snapshot data (bincode-encoded key-value state).
     pub data: Vec<u8>,
     /// Snapshot integrity verification (optional for backwards compatibility).
-    /// New snapshots always include integrity; old snapshots may not.
+    ///
+    /// New snapshots always include integrity hash for corruption detection.
+    /// Old snapshots may not have this field (default to None on deserialization).
     #[serde(default)]
     pub integrity: Option<SnapshotIntegrity>,
 }

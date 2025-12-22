@@ -49,32 +49,56 @@ pub enum ClientRpcRequest {
     InitCluster,
 
     /// Read a key from the key-value store.
-    ReadKey { key: String },
+    ReadKey {
+        /// Key to read.
+        key: String,
+    },
 
     /// Write a key-value pair to the store.
-    WriteKey { key: String, value: Vec<u8> },
+    WriteKey {
+        /// Key to write.
+        key: String,
+        /// Value to write.
+        value: Vec<u8>,
+    },
 
     /// Compare-and-swap: atomically update value if current value matches expected.
     ///
     /// - `expected: None` means the key must NOT exist (create-if-absent)
     /// - `expected: Some(val)` means the key must exist with exactly that value
     CompareAndSwapKey {
+        /// Key to update.
         key: String,
+        /// Expected current value (None = must not exist).
         expected: Option<Vec<u8>>,
+        /// New value to set if condition matches.
         new_value: Vec<u8>,
     },
 
     /// Compare-and-delete: atomically delete key if current value matches expected.
-    CompareAndDeleteKey { key: String, expected: Vec<u8> },
+    CompareAndDeleteKey {
+        /// Key to delete.
+        key: String,
+        /// Expected current value.
+        expected: Vec<u8>,
+    },
 
     /// Trigger a snapshot.
     TriggerSnapshot,
 
     /// Add a learner node to the cluster.
-    AddLearner { node_id: u64, addr: String },
+    AddLearner {
+        /// ID of the learner node.
+        node_id: u64,
+        /// Network address of the learner.
+        addr: String,
+    },
 
     /// Change cluster membership.
-    ChangeMembership { members: Vec<u64> },
+    ChangeMembership {
+        /// New set of voting member IDs.
+        members: Vec<u64>,
+    },
 
     /// Ping for connection health check.
     Ping,
@@ -89,7 +113,10 @@ pub enum ClientRpcRequest {
     // New operations (migrated from HTTP API)
     // =========================================================================
     /// Delete a key from the key-value store.
-    DeleteKey { key: String },
+    DeleteKey {
+        /// Key to delete.
+        key: String,
+    },
 
     /// Scan keys with prefix and pagination.
     ScanKeys {
@@ -121,10 +148,14 @@ pub enum ClientRpcRequest {
     ListVaults,
 
     /// Get keys in a specific vault.
-    GetVaultKeys { vault_name: String },
+    GetVaultKeys {
+        /// Name of the vault to query.
+        vault_name: String,
+    },
 
     /// Add a peer to the network factory.
     AddPeer {
+        /// Node ID of the peer.
         node_id: u64,
         /// JSON-serialized EndpointAddr.
         endpoint_addr: String,

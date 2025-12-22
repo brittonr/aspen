@@ -626,19 +626,32 @@ fn run_tc(args: &[&str]) -> Result<(), FaultError> {
 /// Fault injection errors.
 #[derive(Debug, Snafu)]
 pub enum FaultError {
+    /// I/O error during fault injection operation.
     #[snafu(display("I/O error during {operation}: {source}"))]
     Io {
+        /// The operation that failed.
         operation: &'static str,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
 
+    /// External command (tc, iptables, etc.) failed.
     #[snafu(display("Command failed: {command}\nStderr: {stderr}"))]
-    CommandFailed { command: String, stderr: String },
+    CommandFailed {
+        /// The command that failed.
+        command: String,
+        /// Standard error output from the command.
+        stderr: String,
+    },
 
+    /// A fault parameter is invalid or out of range.
     #[snafu(display("Invalid parameter {name}={value} (max: {max})"))]
     InvalidParameter {
+        /// The parameter name.
         name: &'static str,
+        /// The invalid value provided.
         value: String,
+        /// The maximum allowed value.
         max: String,
     },
 }

@@ -297,20 +297,37 @@ fn enable_ip_forwarding() -> Result<(), NetworkError> {
 /// Network-related errors.
 #[derive(Debug, Snafu)]
 pub enum NetworkError {
+    /// I/O error during network operation.
     #[snafu(display("I/O error during {operation}: {source}"))]
     Io {
+        /// The network operation that failed.
         operation: &'static str,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
 
+    /// External network command (ip, brctl, etc.) failed.
     #[snafu(display("Command failed: {command}\nStderr: {stderr}"))]
-    CommandFailed { command: String, stderr: String },
+    CommandFailed {
+        /// The command that failed.
+        command: String,
+        /// Standard error output from the command.
+        stderr: String,
+    },
 
+    /// The specified network bridge was not found.
     #[snafu(display("Bridge {name} not found"))]
-    BridgeNotFound { name: String },
+    BridgeNotFound {
+        /// The bridge name that was not found.
+        name: String,
+    },
 
+    /// The specified TAP device was not found.
     #[snafu(display("TAP device {name} not found"))]
-    TapNotFound { name: String },
+    TapNotFound {
+        /// The TAP device name that was not found.
+        name: String,
+    },
 }
 
 #[cfg(test)]

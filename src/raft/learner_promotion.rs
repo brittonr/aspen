@@ -59,34 +59,65 @@ use crate::raft::types::NodeId;
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]
 pub enum PromotionError {
+    /// Learner is not healthy or reachable according to failure detector.
     #[snafu(display("Learner {} is not healthy or reachable", learner_id))]
-    LearnerUnhealthy { learner_id: NodeId },
+    LearnerUnhealthy {
+        /// ID of the unhealthy learner.
+        learner_id: NodeId,
+    },
 
+    /// Learner's log is too far behind the leader to safely promote.
     #[snafu(display("Learner {} is too far behind (lag: {} entries)", learner_id, lag))]
-    LearnerLagging { learner_id: NodeId, lag: u64 },
+    LearnerLagging {
+        /// ID of the lagging learner.
+        learner_id: NodeId,
+        /// Number of log entries the learner is behind.
+        lag: u64,
+    },
 
+    /// Cluster would lose quorum if the failed node is removed.
     #[snafu(display("Cluster lacks quorum without failed node {:?}", failed_node_id))]
-    NoQuorumWithoutFailedNode { failed_node_id: Option<NodeId> },
+    NoQuorumWithoutFailedNode {
+        /// ID of the failed node being replaced.
+        failed_node_id: Option<NodeId>,
+    },
 
+    /// Membership change attempted during cooldown period.
     #[snafu(display("Membership was changed recently (wait {:?})", remaining))]
-    MembershipChangeTooRecent { remaining: Duration },
+    MembershipChangeTooRecent {
+        /// Time remaining in the cooldown period.
+        remaining: Duration,
+    },
 
+    /// Promoting this learner would exceed the maximum voter limit.
     #[snafu(display("Maximum voters ({}) would be exceeded", MAX_VOTERS))]
     MaxVotersExceeded,
 
+    /// Specified learner does not exist in the cluster.
     #[snafu(display("Learner {} not found in cluster", learner_id))]
-    LearnerNotFound { learner_id: NodeId },
+    LearnerNotFound {
+        /// ID of the learner that was not found.
+        learner_id: NodeId,
+    },
 
+    /// Specified node is already a voter, not a learner.
     #[snafu(display("Node {} is not a learner (already a voter)", node_id))]
-    NotALearner { node_id: NodeId },
+    NotALearner {
+        /// ID of the node that is already a voter.
+        node_id: NodeId,
+    },
 
+    /// Failed to retrieve cluster metrics from Raft.
     #[snafu(display("Failed to get cluster metrics: {}", source))]
     MetricsError {
+        /// Underlying error from the metrics operation.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
+    /// Failed to execute the membership change operation.
     #[snafu(display("Failed to change membership: {}", source))]
     MembershipChangeError {
+        /// Underlying error from the membership change operation.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 }
@@ -275,6 +306,10 @@ where
     /// Verify learner is healthy and reachable.
     ///
     /// Queries NodeFailureDetector if available, otherwise succeeds.
+    ///
+    /// # Parameters
+    ///
+    /// * `learner_id` - ID of the learner node to verify.
     async fn verify_learner_healthy(
         &self,
         learner_id: impl Into<NodeId>,
@@ -297,6 +332,11 @@ where
     ///
     /// Checks replication lag from Raft metrics. Learner must be within
     /// LEARNER_LAG_THRESHOLD (100 entries) of the leader's log.
+    ///
+    /// # Parameters
+    ///
+    /// * `learner_id` - ID of the learner node to verify.
+    /// * `metrics` - Current Raft metrics containing replication state.
     async fn verify_learner_caught_up(
         &self,
         learner_id: NodeId,
@@ -330,6 +370,11 @@ where
     ///
     /// Quorum = (voters / 2) + 1. When replacing a node, verify the cluster
     /// has quorum without the replaced node.
+    ///
+    /// # Parameters
+    ///
+    /// * `current_voters` - Current set of voting nodes in the cluster.
+    /// * `replace_node` - Optional node being replaced (if any).
     async fn verify_quorum(
         &self,
         current_voters: &[NodeId],
@@ -357,6 +402,12 @@ where
     /// Build new membership set by promoting learner and optionally replacing a voter.
     ///
     /// Tiger Style: Bounded membership (max 100 voters), deterministic ordering.
+    ///
+    /// # Parameters
+    ///
+    /// * `current` - Current set of voting nodes.
+    /// * `promote` - Learner node to promote to voter.
+    /// * `replace` - Optional voter to remove (if replacing a failed node).
     fn build_new_membership(
         &self,
         current: &[NodeId],

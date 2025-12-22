@@ -176,7 +176,7 @@ struct Args {
     #[arg(long)]
     enable_raft_auth: bool,
 
-    /// Peer node addresses in format: node_id@addr. Example: "1@<node-id>:<direct-addrs>"
+    /// Peer node addresses in format: node_id@addr. Example: `"1@node-id:direct-addrs"`
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
     peers: Vec<String>,

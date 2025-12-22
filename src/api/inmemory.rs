@@ -32,12 +32,32 @@ use super::{
     validate_write_command,
 };
 
+/// In-memory deterministic implementation of [`ClusterController`] for testing.
+///
+/// This implementation stores cluster state in memory without persistence,
+/// making it useful for unit tests and simulation testing where repeatability
+/// is more important than durability.
+///
+/// # Example
+///
+/// ```ignore
+/// use aspen::api::{ClusterController, DeterministicClusterController, InitRequest, ClusterNode};
+///
+/// let controller = DeterministicClusterController::new();
+/// controller.init(InitRequest {
+///     initial_members: vec![ClusterNode::new(1, "node1", None)],
+/// }).await?;
+/// ```
 #[derive(Clone, Default)]
 pub struct DeterministicClusterController {
     state: Arc<Mutex<ClusterState>>,
 }
 
 impl DeterministicClusterController {
+    /// Create a new in-memory cluster controller.
+    ///
+    /// The controller starts with an empty cluster state. Call [`ClusterController::init()`]
+    /// to initialize the cluster with founding members.
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
@@ -105,12 +125,43 @@ impl ClusterController for DeterministicClusterController {
     }
 }
 
+/// In-memory deterministic implementation of [`KeyValueStore`] for testing.
+///
+/// This implementation stores key-value pairs in a HashMap without persistence,
+/// making it useful for unit tests, property-based testing, and simulation testing.
+/// Unlike the production Raft-backed implementation, this provides instant operations
+/// without network I/O or consensus overhead.
+///
+/// # Limitations
+///
+/// - No TTL or lease tracking (values stored indefinitely)
+/// - No revision metadata (version/create_revision/mod_revision always return defaults)
+/// - No persistence across restarts
+/// - Single-node only (no replication)
+///
+/// # Example
+///
+/// ```ignore
+/// use aspen::api::{KeyValueStore, DeterministicKeyValueStore, WriteRequest, WriteCommand};
+///
+/// let store = DeterministicKeyValueStore::new();
+/// store.write(WriteRequest {
+///     command: WriteCommand::Set {
+///         key: "test".into(),
+///         value: "value".into(),
+///     },
+/// }).await?;
+/// ```
 #[derive(Clone, Default)]
 pub struct DeterministicKeyValueStore {
     inner: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl DeterministicKeyValueStore {
+    /// Create a new in-memory key-value store.
+    ///
+    /// The store starts empty. All operations are performed in memory
+    /// with no persistence or replication.
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }

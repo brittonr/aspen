@@ -2,15 +2,15 @@
 //!
 //! This module provides high-level coordination primitives for distributed systems:
 //!
-//! - [`DistributedLock`] - Mutual exclusion with fencing tokens
-//! - [`LeaderElection`] - Leader election with automatic lease renewal
-//! - [`AtomicCounter`] - Race-free increment/decrement
-//! - [`SequenceGenerator`] - Monotonically increasing unique IDs
-//! - [`DistributedRateLimiter`] - Token bucket rate limiting
-//! - [`QueueManager`] - Distributed FIFO queue with visibility timeout
-//! - [`ServiceRegistry`] - Service discovery with health checks
+//! - `DistributedLock` - Mutual exclusion with fencing tokens
+//! - `LeaderElection` - Leader election with automatic lease renewal
+//! - `AtomicCounter` - Race-free increment/decrement
+//! - `SequenceGenerator` - Monotonically increasing unique IDs
+//! - `DistributedRateLimiter` - Token bucket rate limiting
+//! - `QueueManager` - Distributed FIFO queue with visibility timeout
+//! - `ServiceRegistry` - Service discovery with health checks
 //!
-//! All primitives are built on top of the [`KeyValueStore`] trait's CAS operations,
+//! All primitives are built on top of the [`crate::api::KeyValueStore`] trait's CAS operations,
 //! providing linearizable semantics through Raft consensus.
 //!
 //! ## Leader Election Example

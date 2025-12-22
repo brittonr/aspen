@@ -817,9 +817,17 @@ impl<C: CoordinationRpc> BatchClient<C> {
 #[derive(Debug, Clone)]
 pub enum BatchWriteOp {
     /// Set a key to a value.
-    Set { key: String, value: Vec<u8> },
+    Set {
+        /// Key to set.
+        key: String,
+        /// Value to set.
+        value: Vec<u8>,
+    },
     /// Delete a key.
-    Delete { key: String },
+    Delete {
+        /// Key to delete.
+        key: String,
+    },
 }
 
 impl BatchWriteOp {
@@ -841,11 +849,22 @@ impl BatchWriteOp {
 #[derive(Debug, Clone)]
 pub enum BatchConditionOp {
     /// Key must have this exact value.
-    ValueEquals { key: String, expected: Vec<u8> },
+    ValueEquals {
+        /// Key to check.
+        key: String,
+        /// Expected value.
+        expected: Vec<u8>,
+    },
     /// Key must exist.
-    KeyExists { key: String },
+    KeyExists {
+        /// Key to check.
+        key: String,
+    },
     /// Key must not exist.
-    KeyNotExists { key: String },
+    KeyNotExists {
+        /// Key to check.
+        key: String,
+    },
 }
 
 impl BatchConditionOp {

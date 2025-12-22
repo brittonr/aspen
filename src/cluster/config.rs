@@ -242,7 +242,7 @@ pub struct IrohConfig {
 
     /// Custom DNS discovery service URL.
     ///
-    /// If not provided, uses n0's public DNS service (https://dns.iroh.link).
+    /// If not provided, uses n0's public DNS service (<https://dns.iroh.link>).
     /// Only relevant when enable_dns_discovery is true.
     pub dns_discovery_url: Option<String>,
 
@@ -507,12 +507,20 @@ fn default_peer_reconnect_interval_secs() -> u64 {
 }
 
 /// Control-plane backend implementation.
+///
+/// Selects which implementation handles cluster consensus and coordination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ControlBackend {
     /// Deterministic in-memory implementation for testing.
+    ///
+    /// Uses an in-memory store without network communication, allowing
+    /// for fast and reproducible tests.
     Deterministic,
     /// Production Raft-backed implementation.
+    ///
+    /// Uses openraft consensus with persistent storage and network
+    /// communication via Iroh.
     #[default]
     RaftActor,
 }
@@ -953,20 +961,33 @@ fn parse_env_vec(key: &str) -> Vec<String> {
 /// Configuration loading and parsing errors.
 #[derive(Debug, Snafu)]
 pub enum ConfigError {
+    /// Failed to read configuration file from disk.
     #[snafu(display("failed to read config file {}: {source}", path.display()))]
     ReadFile {
+        /// Path to the configuration file that could not be read.
         path: PathBuf,
+        /// Underlying I/O error.
         source: std::io::Error,
     },
 
+    /// Failed to parse TOML configuration file.
     #[snafu(display("failed to parse TOML config file {}: {source}", path.display()))]
     ParseToml {
+        /// Path to the TOML file that could not be parsed.
         path: PathBuf,
+        /// TOML deserialization error.
         source: toml::de::Error,
     },
 
+    /// Configuration validation failed.
+    ///
+    /// This error occurs when configuration values are invalid (e.g., node_id is zero,
+    /// election timeout ordering is wrong, etc.).
     #[snafu(display("configuration validation failed: {message}"))]
-    Validation { message: String },
+    Validation {
+        /// Human-readable description of the validation failure.
+        message: String,
+    },
 }
 
 #[cfg(test)]

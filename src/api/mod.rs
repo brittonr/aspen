@@ -71,6 +71,10 @@ pub use openraft::metrics::RaftMetrics;
 /// which is stored in Raft membership state for persistent discovery.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClusterNode {
+    /// Unique identifier for this node within the cluster.
+    ///
+    /// This is the Raft NodeId used for consensus operations. Must be unique
+    /// across all nodes in the cluster and stable across restarts.
     pub id: u64,
     /// Display address for logging and human-readable output.
     /// When Iroh address is available, this is derived from `iroh_addr.id()`.
@@ -105,51 +109,160 @@ impl ClusterNode {
 }
 
 /// Reflects the state of the cluster from the perspective of the control plane.
+///
+/// Provides a snapshot of cluster topology including all known nodes,
+/// current voting members, and learner nodes.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClusterState {
+    /// All nodes known to the cluster (both voters and learners).
     pub nodes: Vec<ClusterNode>,
+    /// Node IDs of current voting members participating in Raft consensus.
     pub members: Vec<u64>,
+    /// Non-voting learner nodes that replicate data but don't vote.
     pub learners: Vec<ClusterNode>,
 }
 
+/// Request to initialize a new Raft cluster.
+///
+/// Used with [`ClusterController::init()`] to bootstrap a cluster.
+/// The initial members become the founding voters of the cluster.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InitRequest {
+    /// The founding voting members of the cluster.
+    ///
+    /// Must contain at least one node. For fault tolerance, use an odd
+    /// number of nodes (3 or 5 recommended for production).
     pub initial_members: Vec<ClusterNode>,
 }
 
+/// Request to add a non-voting learner to the cluster.
+///
+/// Used with [`ClusterController::add_learner()`] to add nodes that
+/// replicate data without participating in consensus voting.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AddLearnerRequest {
+    /// The learner node to add to the cluster.
     pub learner: ClusterNode,
 }
 
+/// Request to change the voting membership of the cluster.
+///
+/// Used with [`ClusterController::change_membership()`] to reconfigure
+/// which nodes participate in Raft consensus voting.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChangeMembershipRequest {
+    /// The complete set of node IDs that should be voting members.
+    ///
+    /// This replaces the current voter set entirely. Include all nodes
+    /// that should vote, not just new additions.
     pub members: Vec<u64>,
 }
 
+/// Errors that can occur during cluster control plane operations.
+///
+/// These errors indicate failures in cluster management operations like
+/// initialization, membership changes, and state queries.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ControlPlaneError {
+    /// The request contained invalid parameters or configuration.
+    ///
+    /// Check the `reason` field for details about what was invalid.
     #[error("invalid request: {reason}")]
-    InvalidRequest { reason: String },
+    InvalidRequest {
+        /// Human-readable description of what was invalid in the request.
+        reason: String,
+    },
+
+    /// The cluster has not been initialized yet.
+    ///
+    /// Call [`ClusterController::init()`] to bootstrap the cluster
+    /// before attempting other operations.
     #[error("cluster not initialized")]
     NotInitialized,
+
+    /// The operation failed due to a Raft or internal error.
+    ///
+    /// This may indicate the node is not the leader, quorum is unavailable,
+    /// or another internal error occurred.
     #[error("operation failed: {reason}")]
-    Failed { reason: String },
+    Failed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
+
+    /// The operation is not supported by this backend implementation.
+    ///
+    /// Some backends (like in-memory test implementations) may not support
+    /// all operations.
     #[error("operation not supported by {backend} backend: {operation}")]
-    Unsupported { backend: String, operation: String },
+    Unsupported {
+        /// Name of the backend implementation (e.g., "in-memory", "sqlite").
+        backend: String,
+        /// Name of the unsupported operation.
+        operation: String,
+    },
 }
 
+/// Manages cluster membership and Raft consensus operations.
+///
+/// This trait provides the control plane interface for initializing clusters,
+/// managing node membership, and monitoring cluster health. All operations
+/// that modify cluster membership require leader status.
 #[async_trait]
 pub trait ClusterController: Send + Sync {
+    /// Initialize a new Raft cluster with founding members.
+    ///
+    /// Bootstrap a cluster by establishing the initial voting membership.
+    /// This is a one-time operation per cluster - calling init on an already
+    /// initialized cluster will fail.
+    ///
+    /// # Errors
+    ///
+    /// - `InvalidRequest`: Empty or invalid member list
+    /// - `Failed`: Cluster already initialized or Raft error
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError>;
+
+    /// Add a non-voting learner node to the cluster.
+    ///
+    /// Learners replicate the Raft log but don't participate in leader elections
+    /// or vote counting. This is typically the first step when adding a new node
+    /// to an existing cluster, allowing it to catch up before becoming a voter.
+    ///
+    /// # Errors
+    ///
+    /// - `NotInitialized`: Cluster has not been initialized
+    /// - `InvalidRequest`: Invalid node configuration
+    /// - `Failed`: Not leader or Raft operation failed
     async fn add_learner(
         &self,
         request: AddLearnerRequest,
     ) -> Result<ClusterState, ControlPlaneError>;
+
+    /// Change the set of voting members in the cluster.
+    ///
+    /// Atomically reconfigure which nodes participate in Raft consensus.
+    /// The membership change replaces the entire voter set - include all
+    /// nodes that should vote, not just additions.
+    ///
+    /// # Errors
+    ///
+    /// - `NotInitialized`: Cluster has not been initialized
+    /// - `InvalidRequest`: Invalid member set (empty, non-existent nodes)
+    /// - `Failed`: Not leader, quorum unavailable, or Raft error
     async fn change_membership(
         &self,
         request: ChangeMembershipRequest,
     ) -> Result<ClusterState, ControlPlaneError>;
+
+    /// Get the current cluster topology and membership state.
+    ///
+    /// Returns information about all known nodes, current voting members,
+    /// and learners. This reflects the committed Raft membership state.
+    ///
+    /// # Errors
+    ///
+    /// - `NotInitialized`: Cluster has not been initialized
+    /// - `Failed`: Unable to read cluster state
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError>;
 
     /// Get the current Raft metrics for observability.
@@ -227,10 +340,18 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
     }
 }
 
+/// Commands for modifying key-value state through Raft consensus.
+///
+/// All write commands are replicated through Raft and applied atomically.
+/// Tiger Style: Fixed limits on batch sizes and key/value lengths to prevent
+/// unbounded resource usage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WriteCommand {
+    /// Set a single key-value pair.
     Set {
+        /// The key to set.
         key: String,
+        /// The value to set.
         value: String,
     },
     /// Set a key-value pair with a time-to-live.
@@ -238,26 +359,35 @@ pub enum WriteCommand {
     /// The key will be automatically expired after `ttl_seconds`.
     /// Expired keys are filtered out at read time and cleaned up in background.
     SetWithTTL {
+        /// The key to set.
         key: String,
+        /// The value to set.
         value: String,
         /// Time-to-live in seconds. After this duration, the key is considered expired.
         ttl_seconds: u32,
     },
+    /// Set multiple key-value pairs atomically.
     SetMulti {
+        /// The key-value pairs to set.
         pairs: Vec<(String, String)>,
     },
     /// Set multiple keys with TTL.
     ///
     /// All keys in this batch will have the same TTL.
     SetMultiWithTTL {
+        /// The key-value pairs to set.
         pairs: Vec<(String, String)>,
         /// Time-to-live in seconds for all keys in this batch.
         ttl_seconds: u32,
     },
+    /// Delete a single key.
     Delete {
+        /// The key to delete.
         key: String,
     },
+    /// Delete multiple keys atomically.
     DeleteMulti {
+        /// The keys to delete.
         keys: Vec<String>,
     },
     /// Compare-and-swap: atomically update value if current value matches expected.
@@ -268,8 +398,11 @@ pub enum WriteCommand {
     /// If the condition is met, the key is set to `new_value`.
     /// If not, the operation fails with `CompareAndSwapFailed` error containing the actual value.
     CompareAndSwap {
+        /// The key to update.
         key: String,
+        /// Expected current value (None means key must not exist).
         expected: Option<String>,
+        /// New value to set if condition is met.
         new_value: String,
     },
     /// Compare-and-delete: atomically delete key if current value matches expected.
@@ -277,7 +410,9 @@ pub enum WriteCommand {
     /// The key must exist and have exactly the expected value for the delete to succeed.
     /// If not, the operation fails with `CompareAndSwapFailed` error containing the actual value.
     CompareAndDelete {
+        /// The key to delete.
         key: String,
+        /// Expected current value for the delete to succeed.
         expected: String,
     },
     /// Batch write: atomically apply multiple Set/Delete operations.
@@ -304,13 +439,16 @@ pub enum WriteCommand {
     // =========================================================================
     /// Set a key attached to a lease. Key is deleted when lease expires or is revoked.
     SetWithLease {
+        /// The key to set.
         key: String,
+        /// The value to set.
         value: String,
         /// Lease ID to attach this key to.
         lease_id: u64,
     },
     /// Set multiple keys attached to a lease.
     SetMultiWithLease {
+        /// The key-value pairs to set.
         pairs: Vec<(String, String)>,
         /// Lease ID to attach these keys to.
         lease_id: u64,
@@ -384,20 +522,39 @@ pub enum WriteCommand {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BatchOperation {
     /// Set a key to a value.
-    Set { key: String, value: String },
+    Set {
+        /// The key to set.
+        key: String,
+        /// The value to set.
+        value: String,
+    },
     /// Delete a key.
-    Delete { key: String },
+    Delete {
+        /// The key to delete.
+        key: String,
+    },
 }
 
 /// A condition for conditional batch writes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BatchCondition {
     /// Key must have exactly this value.
-    ValueEquals { key: String, expected: String },
+    ValueEquals {
+        /// The key to check.
+        key: String,
+        /// The expected value.
+        expected: String,
+    },
     /// Key must exist (any value).
-    KeyExists { key: String },
+    KeyExists {
+        /// The key that must exist.
+        key: String,
+    },
     /// Key must not exist.
-    KeyNotExists { key: String },
+    KeyNotExists {
+        /// The key that must not exist.
+        key: String,
+    },
 }
 
 // ============================================================================
@@ -453,13 +610,29 @@ pub struct TxnCompare {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TxnOp {
     /// Set a key to a value.
-    Put { key: String, value: String },
+    Put {
+        /// The key to set.
+        key: String,
+        /// The value to set.
+        value: String,
+    },
     /// Delete a key.
-    Delete { key: String },
+    Delete {
+        /// The key to delete.
+        key: String,
+    },
     /// Read a key (result included in response).
-    Get { key: String },
+    Get {
+        /// The key to read.
+        key: String,
+    },
     /// Range scan with prefix (bounded by limit).
-    Range { prefix: String, limit: u32 },
+    Range {
+        /// Key prefix to match.
+        prefix: String,
+        /// Maximum number of results.
+        limit: u32,
+    },
 }
 
 /// Result of a single transaction operation.
@@ -506,13 +679,21 @@ pub struct KeyValueWithRevision {
     pub mod_revision: u64,
 }
 
+/// Request to perform a write operation through Raft consensus.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WriteRequest {
+    /// The write command to execute.
     pub command: WriteCommand,
 }
 
+/// Result of a write operation.
+///
+/// Contains different fields depending on the type of write command executed.
+/// Tiger Style: Optional fields allow the same struct to represent results from
+/// different command types without allocating unnecessary data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct WriteResult {
+    /// The command that was executed (echo for validation).
     pub command: Option<WriteCommand>,
     /// Number of operations applied in a batch (for Batch/ConditionalBatch).
     pub batch_applied: Option<u32>,
@@ -536,8 +717,10 @@ pub struct WriteResult {
     pub header_revision: Option<u64>,
 }
 
+/// Request to read a single key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReadRequest {
+    /// The key to read.
     pub key: String,
 }
 
@@ -550,30 +733,70 @@ pub struct ReadResult {
     pub kv: Option<KeyValueWithRevision>,
 }
 
+/// Errors that can occur during key-value operations.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum KeyValueStoreError {
+    /// The requested key was not found in the store.
     #[error("key '{key}' not found")]
-    NotFound { key: String },
+    NotFound {
+        /// The key that was not found.
+        key: String,
+    },
+    /// The operation failed due to an internal error.
     #[error("operation failed: {reason}")]
-    Failed { reason: String },
+    Failed {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
+    /// The operation was rejected because this node is not the leader.
     #[error("not leader; current leader: {leader:?}; {reason}")]
-    NotLeader { leader: Option<u64>, reason: String },
+    NotLeader {
+        /// The current leader node ID, if known.
+        leader: Option<u64>,
+        /// Additional context about the rejection.
+        reason: String,
+    },
+    /// The key exceeds the maximum allowed size.
     #[error("key size {size} exceeds maximum of {max} bytes")]
-    KeyTooLarge { size: usize, max: u32 },
+    KeyTooLarge {
+        /// Actual size of the key in bytes.
+        size: usize,
+        /// Maximum allowed size in bytes.
+        max: u32,
+    },
+    /// The value exceeds the maximum allowed size.
     #[error("value size {size} exceeds maximum of {max} bytes")]
-    ValueTooLarge { size: usize, max: u32 },
+    ValueTooLarge {
+        /// Actual size of the value in bytes.
+        size: usize,
+        /// Maximum allowed size in bytes.
+        max: u32,
+    },
+    /// The batch operation exceeds the maximum allowed number of keys.
     #[error("batch size {size} exceeds maximum of {max} keys")]
-    BatchTooLarge { size: usize, max: u32 },
+    BatchTooLarge {
+        /// Actual number of keys in the batch.
+        size: usize,
+        /// Maximum allowed batch size.
+        max: u32,
+    },
+    /// The operation timed out.
     #[error("operation timed out after {duration_ms}ms")]
-    Timeout { duration_ms: u64 },
+    Timeout {
+        /// Duration in milliseconds before timeout.
+        duration_ms: u64,
+    },
     /// Compare-and-swap operation failed because the current value didn't match expected.
     ///
     /// The `actual` field contains the current value of the key (None if key doesn't exist),
     /// allowing clients to retry with the correct expected value.
     #[error("compare-and-swap failed for key '{key}': expected {expected:?}, found {actual:?}")]
     CompareAndSwapFailed {
+        /// The key being compared.
         key: String,
+        /// The expected value.
         expected: Option<String>,
+        /// The actual current value.
         actual: Option<String>,
     },
     /// Key cannot be empty.
@@ -584,13 +807,17 @@ pub enum KeyValueStoreError {
     EmptyKey,
 }
 
+/// Request to delete a key from the distributed store.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeleteRequest {
+    /// The key to delete.
     pub key: String,
 }
 
+/// Result of a delete operation on the distributed store.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeleteResult {
+    /// The key that was requested for deletion.
     pub key: String,
     /// True if the key existed and was deleted, false if it didn't exist.
     pub deleted: bool,
@@ -940,7 +1167,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
     Ok(())
 }
 
-/// Implement KeyValueStore for Arc<T> where T: KeyValueStore.
+/// Implement KeyValueStore for `Arc<T>` where T: KeyValueStore.
 ///
 /// This allows Arc-wrapped KeyValueStore implementations to be used
 /// directly where the trait is expected.
@@ -1052,28 +1279,56 @@ pub struct SqlQueryResult {
 pub enum SqlQueryError {
     /// Query is not a valid read-only statement (contains write operations).
     #[error("query not allowed: {reason}")]
-    QueryNotAllowed { reason: String },
+    QueryNotAllowed {
+        /// Explanation of why the query is not allowed.
+        reason: String,
+    },
     /// SQL syntax error or invalid query.
     #[error("SQL syntax error: {message}")]
-    SyntaxError { message: String },
+    SyntaxError {
+        /// Error message from the SQL parser or validator.
+        message: String,
+    },
     /// Query execution failed.
     #[error("execution failed: {reason}")]
-    ExecutionFailed { reason: String },
+    ExecutionFailed {
+        /// Description of the execution failure.
+        reason: String,
+    },
     /// Query exceeded timeout.
     #[error("query timed out after {duration_ms}ms")]
-    Timeout { duration_ms: u64 },
+    Timeout {
+        /// Duration in milliseconds before the query timed out.
+        duration_ms: u64,
+    },
     /// Not the Raft leader (for linearizable reads).
     #[error("not leader; current leader: {leader:?}")]
-    NotLeader { leader: Option<u64> },
+    NotLeader {
+        /// The current leader node ID, if known.
+        leader: Option<u64>,
+    },
     /// Query size exceeds limit.
     #[error("query size {size} exceeds maximum of {max} bytes")]
-    QueryTooLarge { size: usize, max: u32 },
+    QueryTooLarge {
+        /// Actual size of the query in bytes.
+        size: usize,
+        /// Maximum allowed query size in bytes.
+        max: u32,
+    },
     /// Too many parameters.
     #[error("parameter count {count} exceeds maximum of {max}")]
-    TooManyParams { count: usize, max: u32 },
+    TooManyParams {
+        /// Actual number of parameters provided.
+        count: usize,
+        /// Maximum allowed parameter count.
+        max: u32,
+    },
     /// SQL queries not supported by this backend.
     #[error("SQL queries not supported by {backend} backend")]
-    NotSupported { backend: String },
+    NotSupported {
+        /// Name of the backend implementation.
+        backend: String,
+    },
 }
 
 /// Validate a SQL query request against Tiger Style bounds.
@@ -1177,7 +1432,7 @@ pub trait SqlQueryExecutor: Send + Sync {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError>;
 }
 
-/// Blanket implementation for Arc<T> where T: SqlQueryExecutor.
+/// Blanket implementation for `Arc<T>` where T: SqlQueryExecutor.
 #[async_trait]
 impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {

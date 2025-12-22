@@ -48,6 +48,7 @@ pub enum BarrierPhase {
 }
 
 impl BarrierPhase {
+    /// Convert the phase to a string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             BarrierPhase::Waiting => "waiting",

@@ -36,26 +36,47 @@
 //! handle.raft_node.write(write_request).await?;
 //! ```
 
+/// Authentication and authorization for Raft operations.
 pub mod auth;
+/// Clock drift detection for monitoring time synchronization between nodes.
 pub mod clock_drift_detection;
+/// Connection pooling for efficient peer communication.
 pub mod connection_pool;
+/// Tiger Style resource limits and timeouts.
 pub mod constants;
+/// Storage integrity checks and validation.
 pub mod integrity;
+/// Learner to voter promotion logic.
 pub mod learner_promotion;
+/// Background task for cleaning up expired leases.
 pub mod lease_cleanup;
+/// Log subscription for observing Raft log changes.
 pub mod log_subscriber;
+/// Deterministic simulation network for madsim testing.
 pub mod madsim_network;
+/// Raft network layer implementation over Iroh.
 pub mod network;
+/// RaftNode implementation with direct async APIs.
 pub mod node;
+/// Node failure detection and health monitoring.
 pub mod node_failure_detection;
+/// Pure functions for Raft operations (no side effects).
 pub mod pure;
+/// IRPC service definitions for Raft RPC over Iroh.
 pub mod rpc;
+/// Raft server protocol handlers.
 pub mod server;
+/// Storage implementations (in-memory and redb).
 pub mod storage;
+/// SQLite-based state machine implementation.
 pub mod storage_sqlite;
+/// Offline storage validation and integrity checks.
 pub mod storage_validation;
+/// Task supervision with restart logic.
 pub mod supervisor;
+/// Background task for cleaning up expired TTL keys.
 pub mod ttl_cleanup;
+/// Type definitions and configurations for OpenRaft.
 pub mod types;
 
 use std::sync::Arc;
@@ -75,7 +96,9 @@ use crate::raft::storage_sqlite::SqliteStateMachine;
 /// queried a placeholder state machine.
 #[derive(Clone, Debug)]
 pub enum StateMachineVariant {
+    /// In-memory state machine (for testing).
     InMemory(Arc<InMemoryStateMachine>),
+    /// SQLite-backed state machine (for production).
     Sqlite(Arc<SqliteStateMachine>),
 }
 

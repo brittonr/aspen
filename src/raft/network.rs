@@ -113,7 +113,7 @@ pub struct IrpcRaftNetworkFactory {
     /// With `RaftMemberInfo`, the primary source of peer addresses is now the
     /// Raft membership state, passed to `new_client()` via the `node` parameter.
     ///
-    /// Uses Arc<RwLock> to allow concurrent peer addition during runtime.
+    /// Uses `Arc<RwLock<T>>` to allow concurrent peer addition during runtime.
     peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
     /// Failure detector for distinguishing actor crashes from node crashes.
     ///

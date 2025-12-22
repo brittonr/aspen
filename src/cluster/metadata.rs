@@ -262,93 +262,174 @@ fn current_timestamp_secs() -> Result<u64, MetadataError> {
         .map(|d| d.as_secs())
 }
 
-/// Metadata store errors.
+/// Errors that can occur during metadata store operations.
 #[derive(Debug, Snafu)]
 pub enum MetadataError {
+    /// Failed to create the parent directory for the database file.
+    ///
+    /// Occurs when initializing a new metadata store and the filesystem
+    /// denies directory creation (permissions, disk full, etc.).
     #[snafu(display("failed to create directory {}: {source}", path.display()))]
     CreateDirectory {
+        /// Path to the directory that could not be created.
         path: PathBuf,
+        /// Underlying I/O error from the filesystem.
         source: std::io::Error,
     },
 
+    /// Failed to open or create the redb database file.
+    ///
+    /// Occurs when the database file cannot be accessed, is corrupted,
+    /// or when redb encounters an initialization error.
     #[snafu(display("failed to open database at {}: {source}", path.display()))]
     OpenDatabase {
+        /// Path to the database file that could not be opened.
         path: PathBuf,
+        /// Underlying redb database error.
         #[snafu(source(from(redb::DatabaseError, Box::new)))]
         source: Box<redb::DatabaseError>,
     },
 
+    /// Failed to begin a write transaction.
+    ///
+    /// Occurs when the database cannot start a new write transaction,
+    /// typically due to lock contention or database corruption.
     #[snafu(display("failed to begin write transaction: {source}"))]
     BeginWrite {
+        /// Underlying redb transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
 
+    /// Failed to begin a read transaction.
+    ///
+    /// Occurs when the database cannot start a new read transaction,
+    /// typically due to database corruption or I/O errors.
     #[snafu(display("failed to begin read transaction: {source}"))]
     BeginRead {
+        /// Underlying redb transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
 
+    /// Failed to open the node metadata table.
+    ///
+    /// Occurs when the table structure is corrupted or incompatible
+    /// with the current schema definition.
     #[snafu(display("failed to open table: {source}"))]
     OpenTable {
+        /// Underlying redb table error.
         #[snafu(source(from(redb::TableError, Box::new)))]
         source: Box<redb::TableError>,
     },
 
+    /// Failed to commit a transaction.
+    ///
+    /// Occurs when changes cannot be persisted to disk, typically due
+    /// to I/O errors or disk full conditions.
     #[snafu(display("failed to commit transaction: {source}"))]
     Commit {
+        /// Underlying redb commit error.
         #[snafu(source(from(redb::CommitError, Box::new)))]
         source: Box<redb::CommitError>,
     },
 
+    /// Failed to insert a record into the table.
+    ///
+    /// Occurs when the database cannot write the node metadata,
+    /// typically due to storage errors or corruption.
     #[snafu(display("failed to insert into table: {source}"))]
     Insert {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to retrieve a record from the table.
+    ///
+    /// Occurs when the database cannot read the requested node metadata,
+    /// typically due to I/O errors or corruption.
     #[snafu(display("failed to get from table: {source}"))]
     Get {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to remove a record from the table.
+    ///
+    /// Occurs when the database cannot delete the node metadata,
+    /// typically due to storage errors or corruption.
     #[snafu(display("failed to remove from table: {source}"))]
     Remove {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to create a range iterator over the table.
+    ///
+    /// Occurs when the database cannot prepare to scan records,
+    /// typically due to storage errors or corruption.
     #[snafu(display("failed to iterate table range: {source}"))]
     Range {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to iterate through table records.
+    ///
+    /// Occurs when the database encounters an error while scanning
+    /// records, typically due to I/O errors or corruption.
     #[snafu(display("failed to iterate table: {source}"))]
     Iterator {
+        /// Underlying redb storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
 
+    /// Failed to serialize node metadata to bytes.
+    ///
+    /// Occurs when bincode cannot encode the NodeMetadata structure,
+    /// typically indicating a programming error or incompatible data.
     #[snafu(display("failed to serialize metadata: {source}"))]
     Serialize {
+        /// Underlying bincode serialization error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
+    /// Failed to deserialize node metadata from bytes.
+    ///
+    /// Occurs when the stored data is corrupted or incompatible with
+    /// the current NodeMetadata schema.
     #[snafu(display("failed to deserialize metadata: {source}"))]
     Deserialize {
+        /// Underlying bincode deserialization error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
+    /// The requested node was not found in the registry.
+    ///
+    /// Occurs when attempting to access or update a node that has not
+    /// been registered or has been removed.
     #[snafu(display("node {node_id} not found in metadata store"))]
-    NodeNotFound { node_id: u64 },
+    NodeNotFound {
+        /// ID of the node that was not found.
+        node_id: u64,
+    },
 
+    /// System clock is set before Unix epoch.
+    ///
+    /// Occurs when generating timestamps and the system time is invalid
+    /// (before 1970-01-01). Indicates a misconfigured system clock.
     #[snafu(display("system time is before Unix epoch (clock misconfigured)"))]
-    SystemTime { source: std::time::SystemTimeError },
+    SystemTime {
+        /// Underlying system time error.
+        source: std::time::SystemTimeError,
+    },
 }
 
 #[cfg(test)]

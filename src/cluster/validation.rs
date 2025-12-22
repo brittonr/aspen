@@ -18,37 +18,57 @@ use snafu::Snafu;
 /// Validation errors for configuration fields.
 #[derive(Debug, Snafu, PartialEq, Eq)]
 pub enum ValidationError {
+    /// Node ID was set to zero (reserved/invalid value).
     #[snafu(display("node_id must be non-zero"))]
     NodeIdZero,
 
+    /// Cluster cookie was set to an empty string.
     #[snafu(display("cluster cookie cannot be empty"))]
     CookieEmpty,
 
+    /// Cluster cookie is using the unsafe default value.
     #[snafu(display(
         "using default cluster cookie is not allowed - all clusters with default cookie share \
          the same gossip topic. Set a unique cookie via --cookie, ASPEN_COOKIE env var, or config file"
     ))]
     CookieUnsafeDefault,
 
+    /// Raft heartbeat interval was set to zero.
     #[snafu(display("heartbeat_interval_ms must be greater than 0"))]
     HeartbeatIntervalZero,
 
+    /// Minimum election timeout was set to zero.
     #[snafu(display("election_timeout_min_ms must be greater than 0"))]
     ElectionTimeoutMinZero,
 
+    /// Maximum election timeout was set to zero.
     #[snafu(display("election_timeout_max_ms must be greater than 0"))]
     ElectionTimeoutMaxZero,
 
+    /// Maximum election timeout is not greater than minimum.
     #[snafu(display(
         "election_timeout_max_ms ({max}) must be greater than election_timeout_min_ms ({min})"
     ))]
-    ElectionTimeoutOrder { min: u64, max: u64 },
+    ElectionTimeoutOrder {
+        /// Minimum election timeout in milliseconds.
+        min: u64,
+        /// Maximum election timeout in milliseconds.
+        max: u64,
+    },
 
+    /// Iroh secret key has incorrect length.
     #[snafu(display("iroh secret key must be 64 hex characters (32 bytes), got {len}"))]
-    SecretKeyLength { len: usize },
+    SecretKeyLength {
+        /// Actual length of the provided key in characters.
+        len: usize,
+    },
 
+    /// Iroh secret key contains invalid hexadecimal characters.
     #[snafu(display("iroh secret key must be valid hex: {reason}"))]
-    SecretKeyInvalidHex { reason: String },
+    SecretKeyInvalidHex {
+        /// Description of why the hex is invalid.
+        reason: String,
+    },
 }
 
 /// Required length for Iroh secret key in hex characters.

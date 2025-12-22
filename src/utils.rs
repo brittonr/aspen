@@ -9,9 +9,13 @@ use std::path::Path;
 /// Disk space information for a filesystem.
 #[derive(Debug, Clone)]
 pub struct DiskSpace {
+    /// Total size of the filesystem in bytes.
     pub total_bytes: u64,
+    /// Available space in bytes (for unprivileged users).
     pub available_bytes: u64,
+    /// Used space in bytes.
     pub used_bytes: u64,
+    /// Usage as a percentage (0-100).
     pub usage_percent: u64,
 }
 

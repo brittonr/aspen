@@ -84,7 +84,10 @@ pub enum ConnectionHealth {
     /// Connection is healthy and operational.
     Healthy,
     /// Connection has experienced failures but may recover.
-    Degraded { consecutive_failures: u32 },
+    Degraded {
+        /// Number of consecutive failures observed.
+        consecutive_failures: u32,
+    },
     /// Connection has failed and should be replaced.
     Failed,
 }

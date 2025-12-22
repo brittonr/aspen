@@ -2086,6 +2086,7 @@ impl AspenRaftTester {
         result
     }
 
+    /// Finalize the simulation and return the collected artifact.
     pub fn end(mut self) -> SimulationArtifact {
         let duration = self.start_time.elapsed();
         self.metrics.duration_ms = duration.as_millis() as u64;
