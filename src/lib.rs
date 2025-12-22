@@ -12,6 +12,8 @@
 
 /// Trait definitions for cluster management and key-value operations.
 pub mod api;
+/// Capability-based authorization system.
+pub mod auth;
 /// Content-addressed blob storage using iroh-blobs.
 pub mod blob;
 /// Client libraries for connecting to Aspen clusters.

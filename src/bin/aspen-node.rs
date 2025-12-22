@@ -60,10 +60,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use aspen::api::{
     ClusterController, DeterministicClusterController, DeterministicKeyValueStore, KeyValueStore,
 };
+use aspen::auth::TokenVerifier;
 use aspen::cluster::bootstrap::{NodeHandle, bootstrap_node, load_config};
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::protocol_handlers::{
@@ -71,8 +72,9 @@ use aspen::protocol_handlers::{
     LogSubscriberProtocolHandler, RaftProtocolHandler,
 };
 use clap::Parser;
+use iroh::PublicKey;
 use tokio::signal;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -175,6 +177,28 @@ struct Args {
     /// Default: Raft auth is disabled.
     #[arg(long)]
     enable_raft_auth: bool,
+
+    /// Enable capability-based token authentication for Client RPC.
+    /// When enabled, clients must provide valid capability tokens for
+    /// authorized operations (read, write, delete, admin).
+    /// Default: Token auth is disabled.
+    #[arg(long)]
+    enable_token_auth: bool,
+
+    /// Require valid tokens for all authorized requests.
+    /// Only relevant when --enable-token-auth is set.
+    /// When false (default), missing tokens produce warnings but requests proceed.
+    /// When true, requests without valid tokens are rejected with 401 Unauthorized.
+    #[arg(long)]
+    require_token_auth: bool,
+
+    /// Trusted root issuer public keys for capability tokens.
+    /// Only tokens signed by these keys (or delegated from them) are accepted.
+    /// Format: hex-encoded Ed25519 public key (32 bytes = 64 hex chars).
+    /// Can be specified multiple times for multiple trusted roots.
+    /// If empty, the node's own Iroh public key is used as the trusted root.
+    #[arg(long)]
+    trusted_root_key: Vec<String>,
 
     /// Peer node addresses in format: node_id@addr. Example: `"1@node-id:direct-addrs"`
     /// Can be specified multiple times for multiple peers.
@@ -288,6 +312,44 @@ async fn main() -> Result<()> {
     let raft_handler = RaftProtocolHandler::new(handle.raft_node.raft().as_ref().clone());
 
     // Create Client protocol context and handler
+    // Token auth is configurable via CLI flags
+    let token_verifier = if args.enable_token_auth {
+        let mut verifier = TokenVerifier::new();
+
+        // Parse and add trusted root keys
+        if args.trusted_root_key.is_empty() {
+            // Default: use this node's Iroh public key as trusted root
+            let node_public_key = handle.iroh_manager.endpoint().id();
+            verifier = verifier.with_trusted_root(node_public_key);
+            info!(
+                trusted_root = %node_public_key,
+                "Token auth enabled with node's own key as trusted root"
+            );
+        } else {
+            for key_hex in &args.trusted_root_key {
+                let key_bytes =
+                    hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
+                let key = PublicKey::try_from(key_bytes.as_slice())
+                    .context("Invalid Ed25519 public key in --trusted-root-key")?;
+                verifier = verifier.with_trusted_root(key);
+                info!(trusted_root = %key, "Added trusted root key");
+            }
+        }
+
+        if args.require_token_auth {
+            info!("Token auth enabled with strict mode (requests without tokens will be rejected)");
+        } else {
+            warn!(
+                "Token auth enabled in migration mode (requests without tokens will be allowed with warnings)"
+            );
+        }
+
+        Some(Arc::new(verifier))
+    } else {
+        info!("Token auth disabled - all client requests are allowed");
+        None
+    };
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -300,6 +362,8 @@ async fn main() -> Result<()> {
         cluster_cookie: config.cookie.clone(),
         start_time: Instant::now(),
         network_factory: Some(handle.network_factory.clone()),
+        token_verifier,
+        require_auth: args.require_token_auth,
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 

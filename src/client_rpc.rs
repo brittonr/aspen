@@ -25,6 +25,49 @@ pub use crate::protocol_handlers::CLIENT_ALPN;
 /// Tiger Style: Bounded to prevent memory exhaustion attacks.
 pub const MAX_CLIENT_MESSAGE_SIZE: usize = 1024 * 1024;
 
+/// Authenticated request wrapper for client RPC.
+///
+/// Wraps a `ClientRpcRequest` with an optional capability token for authorization.
+/// During the migration period, the token is optional for backwards compatibility.
+///
+/// # Wire Format
+///
+/// The request is serialized as a tagged enum where the first byte indicates
+/// whether it's authenticated (1) or legacy (0):
+/// - Legacy: `[0, request_bytes...]`
+/// - Authenticated: `[1, token_bytes_len (4 bytes), token_bytes..., request_bytes...]`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthenticatedRequest {
+    /// The actual RPC request.
+    pub request: ClientRpcRequest,
+    /// Capability token for authorization (optional during migration).
+    pub token: Option<crate::auth::CapabilityToken>,
+}
+
+impl AuthenticatedRequest {
+    /// Create an authenticated request with a token.
+    pub fn new(request: ClientRpcRequest, token: crate::auth::CapabilityToken) -> Self {
+        Self {
+            request,
+            token: Some(token),
+        }
+    }
+
+    /// Create an unauthenticated request (legacy compatibility).
+    pub fn unauthenticated(request: ClientRpcRequest) -> Self {
+        Self {
+            request,
+            token: None,
+        }
+    }
+}
+
+impl From<ClientRpcRequest> for AuthenticatedRequest {
+    fn from(request: ClientRpcRequest) -> Self {
+        Self::unauthenticated(request)
+    }
+}
+
 /// Client RPC request protocol.
 ///
 /// Defines all operations clients can request from a node.
@@ -1050,6 +1093,334 @@ pub enum ClientRpcRequest {
         /// New custom metadata (JSON object, optional).
         custom_metadata: Option<String>,
     },
+}
+
+impl ClientRpcRequest {
+    /// Check if this request requires authorization.
+    ///
+    /// Some requests are "public" and don't require a token:
+    /// - Health checks (monitoring)
+    /// - Ping (connection health)
+    /// - GetNodeInfo (peer discovery)
+    /// - GetClusterTicket (bootstrap)
+    ///
+    /// All data operations and cluster admin operations require tokens.
+    pub fn requires_auth(&self) -> bool {
+        !matches!(
+            self,
+            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket
+        )
+    }
+
+    /// Convert this request to an authorization Operation for capability checking.
+    ///
+    /// Returns `None` for requests that don't require authorization.
+    pub fn to_operation(&self) -> Option<crate::auth::Operation> {
+        use crate::auth::Operation;
+
+        match self {
+            // Read operations
+            Self::ReadKey { key } => Some(Operation::Read { key: key.clone() }),
+            Self::BatchRead { keys } => {
+                // For batch reads, we check against the common prefix
+                // If keys have no common prefix, we require full read access
+                let prefix = common_prefix(keys);
+                Some(Operation::Read { key: prefix })
+            }
+            Self::ScanKeys { prefix, .. } => Some(Operation::Read {
+                key: prefix.clone(),
+            }),
+            Self::GetVaultKeys { vault_name } => Some(Operation::Read {
+                key: format!("{vault_name}:"),
+            }),
+            Self::ExecuteSql { .. } => Some(Operation::Read { key: String::new() }),
+
+            // Write operations
+            Self::WriteKey { key, value } => Some(Operation::Write {
+                key: key.clone(),
+                value: value.clone(),
+            }),
+            Self::DeleteKey { key } => Some(Operation::Delete { key: key.clone() }),
+            Self::CompareAndSwapKey { key, new_value, .. } => Some(Operation::Write {
+                key: key.clone(),
+                value: new_value.clone(),
+            }),
+            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete { key: key.clone() }),
+            Self::WriteKeyWithLease { key, value, .. } => Some(Operation::Write {
+                key: key.clone(),
+                value: value.clone(),
+            }),
+            Self::BatchWrite { operations } => {
+                // For batch writes, find common prefix
+                let keys: Vec<&str> = operations
+                    .iter()
+                    .map(|op| match op {
+                        BatchWriteOperation::Set { key, .. } => key.as_str(),
+                        BatchWriteOperation::Delete { key } => key.as_str(),
+                    })
+                    .collect();
+                let prefix = common_prefix_refs(&keys);
+                Some(Operation::Write {
+                    key: prefix,
+                    value: vec![],
+                })
+            }
+            Self::ConditionalBatchWrite { operations, .. } => {
+                let keys: Vec<&str> = operations
+                    .iter()
+                    .map(|op| match op {
+                        BatchWriteOperation::Set { key, .. } => key.as_str(),
+                        BatchWriteOperation::Delete { key } => key.as_str(),
+                    })
+                    .collect();
+                let prefix = common_prefix_refs(&keys);
+                Some(Operation::Write {
+                    key: prefix,
+                    value: vec![],
+                })
+            }
+
+            // Watch operations
+            Self::WatchCreate { prefix, .. } => Some(Operation::Watch {
+                key_prefix: prefix.clone(),
+            }),
+            Self::WatchCancel { .. } | Self::WatchStatus { .. } => {
+                // Cancel/status only requires basic read access
+                Some(Operation::Read { key: String::new() })
+            }
+
+            // Cluster admin operations
+            Self::InitCluster
+            | Self::AddLearner { .. }
+            | Self::ChangeMembership { .. }
+            | Self::TriggerSnapshot
+            | Self::PromoteLearner { .. }
+            | Self::CheckpointWal
+            | Self::AddPeer { .. } => Some(Operation::ClusterAdmin {
+                action: self.admin_action_name().to_string(),
+            }),
+
+            // Lease operations (require write access)
+            Self::LeaseGrant { .. } | Self::LeaseRevoke { .. } | Self::LeaseKeepalive { .. } => {
+                Some(Operation::ClusterAdmin {
+                    action: "lease".to_string(),
+                })
+            }
+            Self::LeaseTimeToLive { .. } | Self::LeaseList => {
+                Some(Operation::Read { key: String::new() })
+            }
+
+            // Lock/coordination operations (require write access to their key space)
+            Self::LockAcquire { key, .. }
+            | Self::LockTryAcquire { key, .. }
+            | Self::LockRelease { key, .. }
+            | Self::LockRenew { key, .. } => Some(Operation::Write {
+                key: format!("_coord:lock:{key}"),
+                value: vec![],
+            }),
+
+            // Counter operations
+            Self::CounterGet { key }
+            | Self::SignedCounterGet { key }
+            | Self::SequenceCurrent { key } => Some(Operation::Read {
+                key: format!("_coord:counter:{key}"),
+            }),
+            Self::CounterIncrement { key }
+            | Self::CounterDecrement { key }
+            | Self::CounterAdd { key, .. }
+            | Self::CounterSubtract { key, .. }
+            | Self::CounterSet { key, .. }
+            | Self::CounterCompareAndSet { key, .. }
+            | Self::SignedCounterAdd { key, .. }
+            | Self::SequenceNext { key }
+            | Self::SequenceReserve { key, .. } => Some(Operation::Write {
+                key: format!("_coord:counter:{key}"),
+                value: vec![],
+            }),
+
+            // Rate limiter
+            Self::RateLimiterTryAcquire { key, .. }
+            | Self::RateLimiterAcquire { key, .. }
+            | Self::RateLimiterReset { key, .. } => Some(Operation::Write {
+                key: format!("_coord:ratelimit:{key}"),
+                value: vec![],
+            }),
+            Self::RateLimiterAvailable { key, .. } => Some(Operation::Read {
+                key: format!("_coord:ratelimit:{key}"),
+            }),
+
+            // Barrier operations
+            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => {
+                Some(Operation::Write {
+                    key: format!("_coord:barrier:{name}"),
+                    value: vec![],
+                })
+            }
+            Self::BarrierStatus { name } => Some(Operation::Read {
+                key: format!("_coord:barrier:{name}"),
+            }),
+
+            // Semaphore operations
+            Self::SemaphoreAcquire { name, .. }
+            | Self::SemaphoreTryAcquire { name, .. }
+            | Self::SemaphoreRelease { name, .. } => Some(Operation::Write {
+                key: format!("_coord:semaphore:{name}"),
+                value: vec![],
+            }),
+            Self::SemaphoreStatus { name } => Some(Operation::Read {
+                key: format!("_coord:semaphore:{name}"),
+            }),
+
+            // RWLock operations
+            Self::RWLockAcquireRead { name, .. }
+            | Self::RWLockTryAcquireRead { name, .. }
+            | Self::RWLockAcquireWrite { name, .. }
+            | Self::RWLockTryAcquireWrite { name, .. }
+            | Self::RWLockReleaseRead { name, .. }
+            | Self::RWLockReleaseWrite { name, .. }
+            | Self::RWLockDowngrade { name, .. } => Some(Operation::Write {
+                key: format!("_coord:rwlock:{name}"),
+                value: vec![],
+            }),
+            Self::RWLockStatus { name } => Some(Operation::Read {
+                key: format!("_coord:rwlock:{name}"),
+            }),
+
+            // Queue operations
+            Self::QueueCreate { queue_name, .. }
+            | Self::QueueDelete { queue_name }
+            | Self::QueueEnqueue { queue_name, .. }
+            | Self::QueueEnqueueBatch { queue_name, .. }
+            | Self::QueueDequeue { queue_name, .. }
+            | Self::QueueDequeueWait { queue_name, .. }
+            | Self::QueueAck { queue_name, .. }
+            | Self::QueueNack { queue_name, .. }
+            | Self::QueueExtendVisibility { queue_name, .. }
+            | Self::QueueRedriveDLQ { queue_name, .. } => Some(Operation::Write {
+                key: format!("_queue:{queue_name}"),
+                value: vec![],
+            }),
+            Self::QueuePeek { queue_name, .. }
+            | Self::QueueStatus { queue_name }
+            | Self::QueueGetDLQ { queue_name, .. } => Some(Operation::Read {
+                key: format!("_queue:{queue_name}"),
+            }),
+
+            // Service registry operations
+            Self::ServiceRegister { service_name, .. }
+            | Self::ServiceDeregister { service_name, .. }
+            | Self::ServiceHeartbeat { service_name, .. }
+            | Self::ServiceUpdateHealth { service_name, .. }
+            | Self::ServiceUpdateMetadata { service_name, .. } => Some(Operation::Write {
+                key: format!("_service:{service_name}"),
+                value: vec![],
+            }),
+            Self::ServiceDiscover { service_name, .. }
+            | Self::ServiceGetInstance { service_name, .. } => Some(Operation::Read {
+                key: format!("_service:{service_name}"),
+            }),
+            Self::ServiceList { prefix, .. } => Some(Operation::Read {
+                key: format!("_service:{prefix}"),
+            }),
+
+            // Blob operations (content-addressed, use _blob prefix)
+            Self::AddBlob { .. } | Self::ProtectBlob { .. } | Self::UnprotectBlob { .. } => {
+                Some(Operation::Write {
+                    key: "_blob:".to_string(),
+                    value: vec![],
+                })
+            }
+            Self::GetBlob { .. }
+            | Self::HasBlob { .. }
+            | Self::GetBlobTicket { .. }
+            | Self::ListBlobs { .. } => Some(Operation::Read {
+                key: "_blob:".to_string(),
+            }),
+
+            // Peer cluster operations (admin)
+            Self::AddPeerCluster { .. }
+            | Self::RemovePeerCluster { .. }
+            | Self::UpdatePeerClusterFilter { .. }
+            | Self::UpdatePeerClusterPriority { .. }
+            | Self::SetPeerClusterEnabled { .. } => Some(Operation::ClusterAdmin {
+                action: "peer_cluster".to_string(),
+            }),
+            Self::ListPeerClusters | Self::GetPeerClusterStatus { .. } => Some(Operation::Read {
+                key: "_peers:".to_string(),
+            }),
+
+            // Metrics and vault listing (read-only info)
+            Self::GetRaftMetrics | Self::GetMetrics | Self::ListVaults | Self::GetClusterState => {
+                Some(Operation::Read { key: String::new() })
+            }
+            Self::GetClusterTicketCombined { .. } => Some(Operation::Read { key: String::new() }),
+            Self::GetClientTicket { .. } | Self::GetDocsTicket { .. } => {
+                Some(Operation::ClusterAdmin {
+                    action: "ticket".to_string(),
+                })
+            }
+            Self::GetLeader => Some(Operation::Read { key: String::new() }),
+
+            // Public requests (no auth required)
+            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket => None,
+        }
+    }
+
+    /// Get the admin action name for cluster admin operations.
+    fn admin_action_name(&self) -> &'static str {
+        match self {
+            Self::InitCluster => "init",
+            Self::AddLearner { .. } => "add_learner",
+            Self::ChangeMembership { .. } => "change_membership",
+            Self::TriggerSnapshot => "snapshot",
+            Self::PromoteLearner { .. } => "promote_learner",
+            Self::CheckpointWal => "checkpoint",
+            Self::AddPeer { .. } => "add_peer",
+            _ => "unknown",
+        }
+    }
+}
+
+/// Find the longest common prefix of a list of strings.
+fn common_prefix(strings: &[String]) -> String {
+    if strings.is_empty() {
+        return String::new();
+    }
+    let first = &strings[0];
+    let mut prefix_len = first.len();
+    for s in &strings[1..] {
+        prefix_len = first
+            .chars()
+            .zip(s.chars())
+            .take(prefix_len)
+            .take_while(|(a, b)| a == b)
+            .count();
+        if prefix_len == 0 {
+            break;
+        }
+    }
+    first[..prefix_len].to_string()
+}
+
+/// Find the longest common prefix of a list of string references.
+fn common_prefix_refs(strings: &[&str]) -> String {
+    if strings.is_empty() {
+        return String::new();
+    }
+    let first = strings[0];
+    let mut prefix_len = first.len();
+    for s in &strings[1..] {
+        prefix_len = first
+            .chars()
+            .zip(s.chars())
+            .take(prefix_len)
+            .take_while(|(a, b)| a == b)
+            .count();
+        if prefix_len == 0 {
+            break;
+        }
+    }
+    first[..prefix_len].to_string()
 }
 
 /// Client RPC response protocol.

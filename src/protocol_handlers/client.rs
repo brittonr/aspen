@@ -2,6 +2,7 @@
 //!
 //! Handles client RPC connections over Iroh with the `aspen-client` ALPN.
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
@@ -15,6 +16,7 @@ use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
     ReadRequest, WriteRequest, validate_client_key,
 };
+use crate::auth::TokenVerifier;
 use crate::blob::IrohBlobStore;
 use crate::client_rpc::{
     AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse,
@@ -80,6 +82,16 @@ pub struct ClientProtocolContext {
     ///
     /// When present, enables AddPeer RPC to register peers in the network factory.
     pub network_factory: Option<Arc<crate::raft::network::IrpcRaftNetworkFactory>>,
+    /// Token verifier for capability-based authorization.
+    ///
+    /// Optional during migration period. When `None`, all requests are allowed.
+    /// When `Some`, requests that require auth must provide valid tokens.
+    pub token_verifier: Option<Arc<TokenVerifier>>,
+    /// Whether to require authentication for all authorized requests.
+    ///
+    /// When `false` (default), missing tokens are allowed during migration.
+    /// When `true`, requests without valid tokens are rejected.
+    pub require_auth: bool,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -236,11 +248,20 @@ async fn handle_client_request(
         .await
         .context("failed to read Client request")?;
 
-    // Deserialize the request
-    let request: ClientRpcRequest =
-        postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
+    // Try to parse as AuthenticatedRequest first (new format)
+    // Fall back to legacy ClientRpcRequest for backwards compatibility
+    let (request, token) =
+        match postcard::from_bytes::<crate::client_rpc::AuthenticatedRequest>(&buffer) {
+            Ok(auth_req) => (auth_req.request, auth_req.token),
+            Err(_) => {
+                // Legacy format: parse as plain ClientRpcRequest
+                let req: ClientRpcRequest = postcard::from_bytes(&buffer)
+                    .context("failed to deserialize Client request")?;
+                (req, None)
+            }
+        };
 
-    debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, "received Client request");
+    debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 
     // Rate limit check using distributed rate limiter
     // Tiger Style: Per-client rate limiting prevents DoS from individual clients
@@ -268,6 +289,71 @@ async fn handle_client_request(
             .context("failed to write rate limit response")?;
         send.finish().context("failed to finish send stream")?;
         return Ok(());
+    }
+
+    // Authorization check: verify capability token if auth is enabled
+    // Tiger Style: Fail-fast on authorization errors before processing request
+    if let Some(ref verifier) = ctx.token_verifier {
+        // Check if this request requires authorization
+        if let Some(operation) = request.to_operation() {
+            match &token {
+                Some(cap_token) => {
+                    // Parse client_id as PublicKey for audience verification
+                    let presenter = iroh::PublicKey::from_str(client_id).ok();
+
+                    // Verify token and authorize the operation
+                    if let Err(auth_err) =
+                        verifier.authorize(cap_token, &operation, presenter.as_ref())
+                    {
+                        warn!(
+                            client_id = %client_id,
+                            error = %auth_err,
+                            operation = ?operation,
+                            "Authorization failed"
+                        );
+                        let response = ClientRpcResponse::error(
+                            "UNAUTHORIZED",
+                            format!("Authorization failed: {}", auth_err),
+                        );
+                        let response_bytes = postcard::to_stdvec(&response)
+                            .context("failed to serialize auth error response")?;
+                        send.write_all(&response_bytes)
+                            .await
+                            .context("failed to write auth error response")?;
+                        send.finish().context("failed to finish send stream")?;
+                        return Ok(());
+                    }
+                    debug!(client_id = %client_id, operation = ?operation, "Authorization succeeded");
+                }
+                None => {
+                    // No token provided - check if auth is required
+                    if ctx.require_auth {
+                        warn!(
+                            client_id = %client_id,
+                            operation = ?operation,
+                            "Missing authentication token"
+                        );
+                        let response = ClientRpcResponse::error(
+                            "UNAUTHORIZED",
+                            "Authentication required but no token provided",
+                        );
+                        let response_bytes = postcard::to_stdvec(&response)
+                            .context("failed to serialize auth error response")?;
+                        send.write_all(&response_bytes)
+                            .await
+                            .context("failed to write auth error response")?;
+                        send.finish().context("failed to finish send stream")?;
+                        return Ok(());
+                    }
+                    // During migration: warn but allow unauthenticated requests
+                    debug!(
+                        client_id = %client_id,
+                        operation = ?operation,
+                        "Unauthenticated request allowed (migration mode)"
+                    );
+                }
+            }
+        }
     }
 
     // Process the request and create response

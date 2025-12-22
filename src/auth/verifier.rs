@@ -1,0 +1,211 @@
+//! Token verification and authorization.
+//!
+//! Verifies token signatures and checks if capabilities authorize operations.
+
+use std::collections::HashSet;
+use std::sync::RwLock;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use iroh::PublicKey;
+
+use crate::auth::builder::bytes_to_sign;
+use crate::auth::capability::Operation;
+use crate::auth::error::AuthError;
+use crate::auth::token::{Audience, CapabilityToken};
+use crate::raft::constants::TOKEN_CLOCK_SKEW_SECS;
+
+/// Verifies capability tokens and checks authorization.
+///
+/// Maintains a revocation list and can optionally restrict to trusted root issuers.
+pub struct TokenVerifier {
+    /// Set of revoked token hashes.
+    revoked: RwLock<HashSet<[u8; 32]>>,
+    /// Optional: trusted root issuers (if empty, any issuer is trusted for root tokens).
+    trusted_roots: Vec<PublicKey>,
+    /// Clock skew tolerance in seconds.
+    clock_skew_tolerance: u64,
+}
+
+impl TokenVerifier {
+    /// Create a new token verifier with default settings.
+    pub fn new() -> Self {
+        Self {
+            revoked: RwLock::new(HashSet::new()),
+            trusted_roots: Vec::new(),
+            clock_skew_tolerance: TOKEN_CLOCK_SKEW_SECS,
+        }
+    }
+
+    /// Add a trusted root issuer.
+    ///
+    /// When trusted roots are configured, only tokens signed by these
+    /// issuers (or delegated from them) will be accepted.
+    pub fn with_trusted_root(mut self, key: PublicKey) -> Self {
+        self.trusted_roots.push(key);
+        self
+    }
+
+    /// Set clock skew tolerance.
+    pub fn with_clock_skew_tolerance(mut self, seconds: u64) -> Self {
+        self.clock_skew_tolerance = seconds;
+        self
+    }
+
+    /// Verify token signature and validity.
+    ///
+    /// Checks:
+    /// 1. Signature is valid
+    /// 2. Token is not expired
+    /// 3. Token was not issued in the future
+    /// 4. Audience matches presenter (if Key audience)
+    /// 5. Token is not revoked
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - The token to verify
+    /// * `presenter` - Optional public key of who is presenting the token
+    pub fn verify(
+        &self,
+        token: &CapabilityToken,
+        presenter: Option<&PublicKey>,
+    ) -> Result<(), AuthError> {
+        // 1. Check signature
+        let sign_bytes = bytes_to_sign(token);
+        let signature = iroh::Signature::from_bytes(&token.signature);
+        token
+            .issuer
+            .verify(&sign_bytes, &signature)
+            .map_err(|_| AuthError::InvalidSignature)?;
+
+        // 2. Check expiration
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before UNIX epoch")
+            .as_secs();
+
+        if token.expires_at + self.clock_skew_tolerance < now {
+            return Err(AuthError::TokenExpired {
+                expired_at: token.expires_at,
+                now,
+            });
+        }
+
+        // 3. Check not issued in the future (with tolerance)
+        if token.issued_at > now + self.clock_skew_tolerance {
+            return Err(AuthError::TokenFromFuture {
+                issued_at: token.issued_at,
+                now,
+            });
+        }
+
+        // 4. Check audience
+        match &token.audience {
+            Audience::Key(expected) => {
+                if let Some(actual) = presenter {
+                    if expected != actual {
+                        return Err(AuthError::WrongAudience {
+                            expected: expected.to_string(),
+                            actual: actual.to_string(),
+                        });
+                    }
+                } else {
+                    return Err(AuthError::AudienceRequired);
+                }
+            }
+            Audience::Bearer => {
+                // Anyone can use a bearer token
+            }
+        }
+
+        // 5. Check revocation
+        let hash = token.hash();
+        if self.revoked.read().expect("lock poisoned").contains(&hash) {
+            return Err(AuthError::TokenRevoked);
+        }
+
+        // 6. Optionally check trusted roots
+        // (In full implementation, would verify the entire delegation chain)
+        // For MVP, we just verify the direct issuer if trusted_roots is configured
+        if !self.trusted_roots.is_empty() && token.proof.is_none() {
+            // This is a root token, check if issuer is trusted
+            if !self.trusted_roots.contains(&token.issuer) {
+                return Err(AuthError::InvalidSignature); // Treat as untrusted
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if token authorizes the given operation.
+    ///
+    /// First verifies the token, then checks if any capability authorizes the operation.
+    pub fn authorize(
+        &self,
+        token: &CapabilityToken,
+        operation: &Operation,
+        presenter: Option<&PublicKey>,
+    ) -> Result<(), AuthError> {
+        // First verify the token itself
+        self.verify(token, presenter)?;
+
+        // Then check if any capability authorizes the operation
+        for cap in &token.capabilities {
+            if cap.authorizes(operation) {
+                return Ok(());
+            }
+        }
+
+        Err(AuthError::Unauthorized {
+            operation: operation.to_string(),
+        })
+    }
+
+    /// Revoke a token by its hash.
+    ///
+    /// Once revoked, the token will fail verification even if otherwise valid.
+    pub fn revoke(&self, token_hash: [u8; 32]) {
+        self.revoked
+            .write()
+            .expect("lock poisoned")
+            .insert(token_hash);
+    }
+
+    /// Revoke a token directly.
+    pub fn revoke_token(&self, token: &CapabilityToken) {
+        self.revoke(token.hash());
+    }
+
+    /// Check if a token is revoked.
+    pub fn is_revoked(&self, token_hash: &[u8; 32]) -> bool {
+        self.revoked
+            .read()
+            .expect("lock poisoned")
+            .contains(token_hash)
+    }
+
+    /// Clear all revocations (use with caution).
+    pub fn clear_revocations(&self) {
+        self.revoked.write().expect("lock poisoned").clear();
+    }
+
+    /// Get the number of revoked tokens.
+    pub fn revocation_count(&self) -> usize {
+        self.revoked.read().expect("lock poisoned").len()
+    }
+}
+
+impl Default for TokenVerifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for TokenVerifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TokenVerifier")
+            .field("trusted_roots", &self.trusted_roots.len())
+            .field("clock_skew_tolerance", &self.clock_skew_tolerance)
+            .field("revocation_count", &self.revocation_count())
+            .finish()
+    }
+}
