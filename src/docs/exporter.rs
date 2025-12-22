@@ -313,6 +313,16 @@ impl DocsExporter {
                 process_ops(success);
                 process_ops(failure);
             }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                // Process all write operations
+                for (is_set, key, value) in write_set {
+                    if *is_set {
+                        self.export_set(key, value, payload.index).await?;
+                    } else {
+                        self.export_delete(key, payload.index).await?;
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -441,6 +451,26 @@ impl DocsExporter {
                         _ => {
                             // Get/Range - no export needed
                         }
+                    }
+                }
+            }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                // Process all write operations
+                for (is_set, key, value) in write_set {
+                    if is_set {
+                        if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
+                            batch.push(BatchEntry {
+                                key,
+                                value,
+                                is_delete: false,
+                            });
+                        }
+                    } else {
+                        batch.push(BatchEntry {
+                            key,
+                            value: vec![],
+                            is_delete: true,
+                        });
                     }
                 }
             }

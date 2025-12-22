@@ -328,6 +328,14 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 success,
                 failure,
             },
+            // OptimisticTransaction operations pass through directly
+            WriteCommand::OptimisticTransaction {
+                read_set,
+                write_set,
+            } => WriteCommand::OptimisticTransaction {
+                read_set,
+                write_set,
+            },
         };
 
         // Write to underlying KV

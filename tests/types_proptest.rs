@@ -278,6 +278,18 @@ fn test_app_request_display_contains_key() {
                     assert!(displayed.contains(&success.len().to_string()));
                     assert!(displayed.contains(&failure.len().to_string()));
                 }
+                AppRequest::OptimisticTransaction {
+                    read_set,
+                    write_set,
+                } => {
+                    assert!(
+                        displayed.contains("OptimisticTransaction"),
+                        "Display should contain variant name"
+                    );
+                    // Should contain read and write set sizes
+                    assert!(displayed.contains(&read_set.len().to_string()));
+                    assert!(displayed.contains(&write_set.len().to_string()));
+                }
             }
         });
 }

@@ -559,6 +559,25 @@ impl KeyValueStore for RaftNode {
                     failure: convert_ops(failure),
                 }
             }
+            crate::api::WriteCommand::OptimisticTransaction {
+                read_set,
+                write_set,
+            } => {
+                // Convert WriteOp to compact tuple format: (is_set, key, value)
+                let write_ops: Vec<(bool, String, String)> = write_set
+                    .iter()
+                    .map(|op| match op {
+                        crate::api::WriteOp::Set { key, value } => {
+                            (true, key.clone(), value.clone())
+                        }
+                        crate::api::WriteOp::Delete { key } => (false, key.clone(), String::new()),
+                    })
+                    .collect();
+                AppRequest::OptimisticTransaction {
+                    read_set: read_set.clone(),
+                    write_set: write_ops,
+                }
+            }
         };
 
         // Apply write through Raft consensus
@@ -596,6 +615,10 @@ impl KeyValueStore for RaftNode {
                     succeeded: resp.data.succeeded,
                     txn_results: resp.data.txn_results,
                     header_revision: resp.data.header_revision,
+                    occ_conflict: resp.data.occ_conflict,
+                    conflict_key: resp.data.conflict_key,
+                    conflict_expected_version: resp.data.conflict_expected_version,
+                    conflict_actual_version: resp.data.conflict_actual_version,
                 })
             }
             Err(err) => {

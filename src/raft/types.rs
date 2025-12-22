@@ -287,6 +287,21 @@ pub enum AppRequest {
         /// Failure branch operations (same format as success).
         failure: Vec<(u8, String, String)>,
     },
+    // =========================================================================
+    // Optimistic Concurrency Control (OCC) transaction
+    // =========================================================================
+    /// Optimistic transaction with read set conflict detection (FoundationDB-style).
+    /// Validates that all keys in read_set still have expected versions, then applies write_set.
+    /// If any key version has changed, returns ConflictError without applying any operations.
+    OptimisticTransaction {
+        /// Read set: keys with their expected versions at read time.
+        /// Each tuple is (key, expected_version).
+        /// If current version != expected_version, transaction fails with conflict.
+        read_set: Vec<(String, i64)>,
+        /// Write set: operations to apply if all version checks pass.
+        /// Each tuple is (is_set, key, value). is_set=true for Set, false for Delete.
+        write_set: Vec<(bool, String, String)>,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -406,6 +421,17 @@ impl fmt::Display for AppRequest {
                     failure.len()
                 )
             }
+            AppRequest::OptimisticTransaction {
+                read_set,
+                write_set,
+            } => {
+                write!(
+                    f,
+                    "OptimisticTransaction {{ read_set: {}, write_set: {} }}",
+                    read_set.len(),
+                    write_set.len()
+                )
+            }
         }
     }
 }
@@ -480,6 +506,22 @@ pub struct AppResponse {
     pub txn_results: Option<Vec<crate::api::TxnOpResult>>,
     /// For Transaction: the cluster revision after this transaction.
     pub header_revision: Option<u64>,
+    // =========================================================================
+    // Optimistic Concurrency Control (OCC) responses
+    // =========================================================================
+    /// For OptimisticTransaction: key that caused a version conflict.
+    /// Only set when occ_conflict is Some(true).
+    pub conflict_key: Option<String>,
+    /// For OptimisticTransaction: expected version of the conflicting key.
+    /// Only set when occ_conflict is Some(true).
+    pub conflict_expected_version: Option<i64>,
+    /// For OptimisticTransaction: actual version of the conflicting key.
+    /// Only set when occ_conflict is Some(true).
+    pub conflict_actual_version: Option<i64>,
+    /// For OptimisticTransaction: whether a version conflict was detected.
+    /// - `Some(true)`: Conflict detected, transaction was NOT applied
+    /// - `Some(false)` or `None`: No conflict, transaction was applied successfully
+    pub occ_conflict: Option<bool>,
 }
 
 declare_raft_types!(

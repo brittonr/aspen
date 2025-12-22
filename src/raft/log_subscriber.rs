@@ -356,6 +356,14 @@ pub enum KvOperation {
         /// Failure branch operations.
         failure: Vec<(u8, Vec<u8>, Vec<u8>)>,
     },
+    /// Optimistic transaction with read set version validation.
+    OptimisticTransaction {
+        /// Read set: keys with expected versions for conflict detection.
+        read_set: Vec<(Vec<u8>, i64)>,
+        /// Write set: operations to apply if no conflicts.
+        /// Format: (is_set, key, value). is_set=true for Set, false for Delete.
+        write_set: Vec<(bool, Vec<u8>, Vec<u8>)>,
+    },
     /// No-op entry (used for leader election).
     Noop,
     /// Membership change entry.
@@ -410,6 +418,10 @@ impl KvOperation {
                 };
                 check_ops(success) || check_ops(failure)
             }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                // Check if any write operation affects the prefix
+                write_set.iter().any(|(_, key, _)| key.starts_with(prefix))
+            }
         }
     }
 
@@ -440,6 +452,10 @@ impl KvOperation {
             KvOperation::Transaction { success, .. } => {
                 // Return the first key from success branch
                 success.first().map(|(_, k, _)| k.as_slice())
+            }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                // Return the first key from write set
+                write_set.first().map(|(_, k, _)| k.as_slice())
             }
         }
     }
@@ -475,6 +491,7 @@ impl KvOperation {
                 };
                 count_mods(success) + count_mods(failure)
             }
+            KvOperation::OptimisticTransaction { write_set, .. } => write_set.len(),
         }
     }
 }
@@ -599,6 +616,23 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                     compare: cmp,
                     success: succ,
                     failure: fail,
+                }
+            }
+            AppRequest::OptimisticTransaction {
+                read_set,
+                write_set,
+            } => {
+                let reads = read_set
+                    .into_iter()
+                    .map(|(k, v)| (k.into_bytes(), v))
+                    .collect();
+                let writes = write_set
+                    .into_iter()
+                    .map(|(is_set, k, v)| (is_set, k.into_bytes(), v.into_bytes()))
+                    .collect();
+                KvOperation::OptimisticTransaction {
+                    read_set: reads,
+                    write_set: writes,
                 }
             }
         }

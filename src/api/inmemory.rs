@@ -28,7 +28,7 @@ use super::{
     AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController,
     ClusterState, ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest,
     KeyValueStore, KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest,
-    ReadResult, ScanRequest, ScanResult, WriteCommand, WriteRequest, WriteResult,
+    ReadResult, ScanRequest, ScanResult, WriteCommand, WriteOp, WriteRequest, WriteResult,
     validate_write_command,
 };
 
@@ -482,6 +482,28 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     succeeded: Some(all_passed),
                     txn_results: Some(results),
                     header_revision: Some(0), // In-memory doesn't track revisions
+                    ..Default::default()
+                })
+            }
+            WriteCommand::OptimisticTransaction {
+                read_set: _,
+                write_set,
+            } => {
+                // In-memory doesn't track versions, so we can't do proper OCC validation
+                // Just apply the writes and return success
+                for op in &write_set {
+                    match op {
+                        WriteOp::Set { key, value } => {
+                            inner.insert(key.clone(), value.clone());
+                        }
+                        WriteOp::Delete { key } => {
+                            inner.remove(key);
+                        }
+                    }
+                }
+                Ok(WriteResult {
+                    occ_conflict: Some(false),
+                    batch_applied: Some(write_set.len() as u32),
                     ..Default::default()
                 })
             }

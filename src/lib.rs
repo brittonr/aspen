@@ -30,6 +30,8 @@ pub mod docs;
 pub mod node;
 pub mod protocol_handlers;
 pub mod raft;
+/// Sharding module for horizontal scaling via key-based partitioning.
+pub mod sharding;
 pub mod simulation;
 
 /// Testing infrastructure for deterministic multi-node Raft tests.

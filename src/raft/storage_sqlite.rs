@@ -561,6 +561,25 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                     })
                     .collect(),
             },
+            AppRequest::OptimisticTransaction {
+                read_set,
+                write_set,
+            } => KvOperation::OptimisticTransaction {
+                read_set: read_set
+                    .iter()
+                    .map(|(key, version)| (key.clone().into_bytes(), *version))
+                    .collect(),
+                write_set: write_set
+                    .iter()
+                    .map(|(is_set, key, value)| {
+                        (
+                            *is_set,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+            },
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -2080,6 +2099,7 @@ impl SqliteStateMachine {
     /// * `conn` - SQLite connection
     /// * `key` - The key to set
     /// * `value` - The value to set
+    /// * `log_index` - The Raft log index for this operation (used for mod_revision)
     /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). NULL means never expires.
     /// * `lease_id` - Optional lease ID to attach this key to. Key is deleted when lease expires.
     ///
@@ -2088,12 +2108,28 @@ impl SqliteStateMachine {
         conn: &Connection,
         key: &str,
         value: &str,
+        log_index: u64,
         expires_at_ms: Option<u64>,
         lease_id: Option<u64>,
     ) -> Result<AppResponse, io::Error> {
+        // Query existing version and create_revision before update
+        let existing: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT version, create_revision FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        let (new_version, create_rev) = match existing {
+            Some((version, create_rev)) => (version + 1, create_rev),
+            None => (1, log_index as i64),
+        };
+
         conn.execute(
-            "INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4)",
-            params![key, value, expires_at_ms.map(|e| e as i64), lease_id.map(|l| l as i64)],
+            "INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![key, value, new_version, create_rev, log_index as i64, expires_at_ms.map(|e| e as i64), lease_id.map(|l| l as i64)],
         )
         .context(ExecuteSnafu)?;
         Ok(AppResponse {
@@ -2111,6 +2147,7 @@ impl SqliteStateMachine {
     /// # Arguments
     /// * `conn` - SQLite connection
     /// * `pairs` - Vector of (key, value) pairs to set
+    /// * `log_index` - The Raft log index for this operation (used for mod_revision)
     /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). Applied to all keys.
     /// * `lease_id` - Optional lease ID to attach all keys to.
     ///
@@ -2118,6 +2155,7 @@ impl SqliteStateMachine {
     fn apply_set_multi(
         conn: &Connection,
         pairs: &[(String, String)],
+        log_index: u64,
         expires_at_ms: Option<u64>,
         lease_id: Option<u64>,
     ) -> Result<AppResponse, io::Error> {
@@ -2129,19 +2167,47 @@ impl SqliteStateMachine {
             )));
         }
 
-        // Prepare statement once and reuse for all inserts (20-30% performance improvement)
-        let mut stmt = conn
-            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4)")
+        // Prepare statements for querying existing versions and inserting
+        let mut query_stmt = conn
+            .prepare("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+        let mut insert_stmt = conn
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision, expires_at_ms, lease_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
             .context(QuerySnafu)?;
 
         let expires = expires_at_ms.map(|e| e as i64);
         let lease = lease_id.map(|l| l as i64);
+        let log_idx = log_index as i64;
+
         for (key, value) in pairs {
-            stmt.execute(params![key, value, expires, lease])
+            // Query existing version and create_revision
+            let existing: Option<(i64, i64)> = query_stmt
+                .query_row(params![key], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                })
+                .optional()
+                .context(QuerySnafu)?;
+
+            let (new_version, create_rev) = match existing {
+                Some((version, create_rev)) => (version + 1, create_rev),
+                None => (1, log_idx),
+            };
+
+            insert_stmt
+                .execute(params![
+                    key,
+                    value,
+                    new_version,
+                    create_rev,
+                    log_idx,
+                    expires,
+                    lease
+                ])
                 .context(ExecuteSnafu)?;
         }
 
-        drop(stmt); // Explicit drop (Tiger Style)
+        drop(query_stmt); // Explicit drop (Tiger Style)
+        drop(insert_stmt);
         Ok(AppResponse {
             value: None,
             ..Default::default()
@@ -2213,6 +2279,7 @@ impl SqliteStateMachine {
     ///   - `None`: Key must NOT exist (create-if-absent pattern)
     ///   - `Some(val)`: Key must exist with exactly this value
     /// * `new_value` - The value to set if the condition is met
+    /// * `log_index` - The Raft log index for this operation (used for mod_revision)
     ///
     /// # Returns
     ///
@@ -2225,16 +2292,19 @@ impl SqliteStateMachine {
         key: &str,
         expected: Option<&str>,
         new_value: &str,
+        log_index: u64,
     ) -> Result<AppResponse, io::Error> {
-        // Read current value
-        let current: Option<String> = conn
+        // Read current value and version info
+        let current_row: Option<(String, i64, i64)> = conn
             .query_row(
-                "SELECT value FROM state_machine_kv WHERE key = ?1",
+                "SELECT value, version, create_revision FROM state_machine_kv WHERE key = ?1",
                 params![key],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .optional()
             .context(QuerySnafu)?;
+
+        let current = current_row.as_ref().map(|(v, _, _)| v.clone());
 
         // Compare expected vs actual
         let condition_matches = match (expected, &current) {
@@ -2252,10 +2322,16 @@ impl SqliteStateMachine {
             });
         }
 
-        // CAS succeeded - write new value
+        // Calculate version and create_revision
+        let (new_version, create_rev) = match current_row {
+            Some((_, version, create_rev)) => (version + 1, create_rev),
+            None => (1, log_index as i64),
+        };
+
+        // CAS succeeded - write new value with version tracking
         conn.execute(
-            "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-            params![key, new_value],
+            "INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, new_value, new_version, create_rev, log_index as i64],
         )
         .context(ExecuteSnafu)?;
 
@@ -2352,6 +2428,7 @@ impl SqliteStateMachine {
     fn apply_batch(
         conn: &Connection,
         operations: &[(bool, String, String)],
+        log_index: u64,
     ) -> Result<AppResponse, io::Error> {
         if operations.len() > MAX_SETMULTI_KEYS as usize {
             return Err(io::Error::other(format!(
@@ -2362,23 +2439,42 @@ impl SqliteStateMachine {
         }
 
         // Prepare statements for reuse
+        let mut query_stmt = conn
+            .prepare("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
         let mut set_stmt = conn
-            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
             .context(QuerySnafu)?;
         let mut del_stmt = conn
             .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
             .context(QuerySnafu)?;
 
+        let log_idx = log_index as i64;
+
         for (is_set, key, value) in operations {
             if *is_set {
+                // Query existing version and create_revision
+                let existing: Option<(i64, i64)> = query_stmt
+                    .query_row(params![key], |row| {
+                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                    })
+                    .optional()
+                    .context(QuerySnafu)?;
+
+                let (new_version, create_rev) = match existing {
+                    Some((version, create_rev)) => (version + 1, create_rev),
+                    None => (1, log_idx),
+                };
+
                 set_stmt
-                    .execute(params![key, value])
+                    .execute(params![key, value, new_version, create_rev, log_idx])
                     .context(ExecuteSnafu)?;
             } else {
                 del_stmt.execute(params![key]).context(ExecuteSnafu)?;
             }
         }
 
+        drop(query_stmt);
         drop(set_stmt);
         drop(del_stmt);
         Ok(AppResponse {
@@ -2397,6 +2493,7 @@ impl SqliteStateMachine {
         conn: &Connection,
         conditions: &[(u8, String, String)],
         operations: &[(bool, String, String)],
+        log_index: u64,
     ) -> Result<AppResponse, io::Error> {
         if operations.len() > MAX_SETMULTI_KEYS as usize {
             return Err(io::Error::other(format!(
@@ -2447,29 +2544,160 @@ impl SqliteStateMachine {
             });
         }
 
-        // Apply all operations
+        // Apply all operations with version tracking
+        let mut query_stmt = conn
+            .prepare("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
         let mut set_stmt = conn
-            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)")
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
             .context(QuerySnafu)?;
         let mut del_stmt = conn
             .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
             .context(QuerySnafu)?;
 
+        let log_idx = log_index as i64;
+
         for (is_set, key, value) in operations {
             if *is_set {
+                // Query existing version and create_revision
+                let existing: Option<(i64, i64)> = query_stmt
+                    .query_row(params![key], |row| {
+                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                    })
+                    .optional()
+                    .context(QuerySnafu)?;
+
+                let (new_version, create_rev) = match existing {
+                    Some((version, create_rev)) => (version + 1, create_rev),
+                    None => (1, log_idx),
+                };
+
                 set_stmt
-                    .execute(params![key, value])
+                    .execute(params![key, value, new_version, create_rev, log_idx])
                     .context(ExecuteSnafu)?;
             } else {
                 del_stmt.execute(params![key]).context(ExecuteSnafu)?;
             }
         }
 
+        drop(query_stmt);
         drop(set_stmt);
         drop(del_stmt);
         Ok(AppResponse {
             batch_applied: Some(operations.len() as u32),
             conditions_met: Some(true),
+            ..Default::default()
+        })
+    }
+
+    // =========================================================================
+    // Optimistic Concurrency Control (OCC) transactions
+    // =========================================================================
+
+    /// Apply an optimistic transaction with read set conflict detection.
+    ///
+    /// Validates that all keys in the read set still have the expected versions.
+    /// If any key has been modified, returns a conflict error without applying
+    /// any operations. If all versions match, applies the write set atomically.
+    ///
+    /// This implements FoundationDB-style OCC semantics:
+    /// 1. Client reads keys and captures their versions
+    /// 2. Client computes new values based on the reads
+    /// 3. Client submits transaction with read_set (version checks) and write_set
+    /// 4. State machine validates versions, applies writes if no conflicts
+    ///
+    /// Tiger Style: Fixed limits, atomic, fail-fast conflict detection.
+    fn apply_optimistic_transaction(
+        conn: &Connection,
+        log_index: u64,
+        read_set: &[(String, i64)],
+        write_set: &[(bool, String, String)],
+    ) -> Result<AppResponse, io::Error> {
+        // Validate limits (Tiger Style)
+        if read_set.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "OptimisticTransaction with {} reads exceeds limit of {}",
+                read_set.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+        if write_set.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "OptimisticTransaction with {} writes exceeds limit of {}",
+                write_set.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Phase 1: Validate read set - check all versions match
+        let mut query_stmt = conn
+            .prepare("SELECT version FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+
+        for (key, expected_version) in read_set {
+            let current_version: i64 = query_stmt
+                .query_row(params![key], |row| row.get(0))
+                .optional()
+                .context(QuerySnafu)?
+                .unwrap_or(0); // Non-existent key has version 0
+
+            if current_version != *expected_version {
+                // Conflict detected - return error with details
+                return Ok(AppResponse {
+                    occ_conflict: Some(true),
+                    conflict_key: Some(key.clone()),
+                    conflict_expected_version: Some(*expected_version),
+                    conflict_actual_version: Some(current_version),
+                    ..Default::default()
+                });
+            }
+        }
+        drop(query_stmt);
+
+        // Phase 2: No conflicts - apply write set with version tracking
+        let mut version_query_stmt = conn
+            .prepare("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+        let mut set_stmt = conn
+            .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .context(QuerySnafu)?;
+        let mut del_stmt = conn
+            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
+            .context(QuerySnafu)?;
+
+        let log_idx = log_index as i64;
+
+        for (is_set, key, value) in write_set {
+            if *is_set {
+                // Query existing version and create_revision
+                let existing: Option<(i64, i64)> = version_query_stmt
+                    .query_row(params![key], |row| {
+                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                    })
+                    .optional()
+                    .context(QuerySnafu)?;
+
+                let (new_version, create_rev) = match existing {
+                    Some((version, create_rev)) => (version + 1, create_rev),
+                    None => (1, log_idx),
+                };
+
+                set_stmt
+                    .execute(params![key, value, new_version, create_rev, log_idx])
+                    .context(ExecuteSnafu)?;
+            } else {
+                del_stmt.execute(params![key]).context(ExecuteSnafu)?;
+            }
+        }
+
+        drop(version_query_stmt);
+        drop(set_stmt);
+        drop(del_stmt);
+
+        Ok(AppResponse {
+            occ_conflict: Some(false),
+            batch_applied: Some(write_set.len() as u32),
+            header_revision: Some(log_index),
             ..Default::default()
         })
     }
@@ -2968,27 +3196,32 @@ impl SqliteStateMachine {
         payload: &EntryPayload<AppTypeConfig>,
         log_id: &openraft::LogId<AppTypeConfig>,
     ) -> Result<AppResponse, io::Error> {
+        let log_index = log_id.index;
         match payload {
             EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
-                AppRequest::Set { key, value } => Self::apply_set(conn, key, value, None, None),
+                AppRequest::Set { key, value } => {
+                    Self::apply_set(conn, key, value, log_index, None, None)
+                }
                 AppRequest::SetWithTTL {
                     key,
                     value,
                     expires_at_ms,
-                } => Self::apply_set(conn, key, value, Some(*expires_at_ms), None),
+                } => Self::apply_set(conn, key, value, log_index, Some(*expires_at_ms), None),
                 AppRequest::SetWithLease {
                     key,
                     value,
                     lease_id,
-                } => Self::apply_set(conn, key, value, None, Some(*lease_id)),
-                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs, None, None),
+                } => Self::apply_set(conn, key, value, log_index, None, Some(*lease_id)),
+                AppRequest::SetMulti { pairs } => {
+                    Self::apply_set_multi(conn, pairs, log_index, None, None)
+                }
                 AppRequest::SetMultiWithTTL {
                     pairs,
                     expires_at_ms,
-                } => Self::apply_set_multi(conn, pairs, Some(*expires_at_ms), None),
+                } => Self::apply_set_multi(conn, pairs, log_index, Some(*expires_at_ms), None),
                 AppRequest::SetMultiWithLease { pairs, lease_id } => {
-                    Self::apply_set_multi(conn, pairs, None, Some(*lease_id))
+                    Self::apply_set_multi(conn, pairs, log_index, None, Some(*lease_id))
                 }
                 AppRequest::Delete { key } => Self::apply_delete(conn, key),
                 AppRequest::DeleteMulti { keys } => Self::apply_delete_multi(conn, keys),
@@ -2996,15 +3229,21 @@ impl SqliteStateMachine {
                     key,
                     expected,
                     new_value,
-                } => Self::apply_compare_and_swap(conn, key, expected.as_deref(), new_value),
+                } => Self::apply_compare_and_swap(
+                    conn,
+                    key,
+                    expected.as_deref(),
+                    new_value,
+                    log_index,
+                ),
                 AppRequest::CompareAndDelete { key, expected } => {
                     Self::apply_compare_and_delete(conn, key, expected)
                 }
-                AppRequest::Batch { operations } => Self::apply_batch(conn, operations),
+                AppRequest::Batch { operations } => Self::apply_batch(conn, operations, log_index),
                 AppRequest::ConditionalBatch {
                     conditions,
                     operations,
-                } => Self::apply_conditional_batch(conn, conditions, operations),
+                } => Self::apply_conditional_batch(conn, conditions, operations, log_index),
                 // Lease operations
                 AppRequest::LeaseGrant {
                     lease_id,
@@ -3019,6 +3258,10 @@ impl SqliteStateMachine {
                     success,
                     failure,
                 } => Self::apply_transaction(conn, log_id.index, compare, success, failure),
+                AppRequest::OptimisticTransaction {
+                    read_set,
+                    write_set,
+                } => Self::apply_optimistic_transaction(conn, log_index, read_set, write_set),
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

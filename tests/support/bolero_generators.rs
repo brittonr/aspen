@@ -1305,7 +1305,8 @@ mod tests {
                 | AppRequest::LeaseGrant { .. }
                 | AppRequest::LeaseRevoke { .. }
                 | AppRequest::LeaseKeepalive { .. }
-                | AppRequest::Transaction { .. } => {}
+                | AppRequest::Transaction { .. }
+                | AppRequest::OptimisticTransaction { .. } => {}
             });
 
         // With 200 iterations and 25% probability each, should see all variants

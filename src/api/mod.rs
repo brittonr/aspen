@@ -516,6 +516,70 @@ pub enum WriteCommand {
         /// Max 100 operations (Tiger Style).
         failure: Vec<TxnOp>,
     },
+    // =========================================================================
+    // Optimistic Concurrency Control (OCC) Transaction
+    // =========================================================================
+    /// Optimistic transaction with read set conflict detection.
+    ///
+    /// Implements Optimistic Concurrency Control (OCC) similar to FoundationDB.
+    /// The client captures a "read set" of keys with their versions at read time,
+    /// then submits the transaction with a "write set" of operations to apply.
+    ///
+    /// At commit time, the state machine validates that all keys in the read set
+    /// still have the expected versions. If any key has been modified since read,
+    /// the transaction is rejected with a `ConflictError`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Client reads key at version 5
+    /// let result = store.read("balance").await?;
+    /// let balance: i64 = result.value.parse()?;
+    /// let version = result.version; // 5
+    ///
+    /// // Client computes new balance
+    /// let new_balance = balance + 100;
+    ///
+    /// // Client submits optimistic transaction
+    /// store.write(WriteCommand::OptimisticTransaction {
+    ///     read_set: vec![("balance".into(), version)],
+    ///     write_set: vec![WriteOp::Set {
+    ///         key: "balance".into(),
+    ///         value: new_balance.to_string(),
+    ///     }],
+    /// }).await?;
+    /// ```
+    ///
+    /// If another client modified "balance" between the read and commit,
+    /// this transaction will fail with `ConflictError` and the client can retry.
+    OptimisticTransaction {
+        /// Keys that were read with their expected versions at read time.
+        /// If any key's current version differs from expected, transaction fails.
+        /// Max 100 entries (Tiger Style).
+        read_set: Vec<(String, i64)>,
+        /// Operations to apply if all read set validations pass.
+        /// Max 100 operations (Tiger Style).
+        write_set: Vec<WriteOp>,
+    },
+}
+
+/// Operations for optimistic transactions.
+///
+/// These are the write operations that can be included in an `OptimisticTransaction`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum WriteOp {
+    /// Set a key to a value.
+    Set {
+        /// The key to set.
+        key: String,
+        /// The value to set.
+        value: String,
+    },
+    /// Delete a key.
+    Delete {
+        /// The key to delete.
+        key: String,
+    },
 }
 
 /// A single operation within a batch write.
@@ -715,6 +779,15 @@ pub struct WriteResult {
     pub txn_results: Option<Vec<TxnOpResult>>,
     /// For Transaction: the cluster revision after this transaction.
     pub header_revision: Option<u64>,
+    // OCC transaction results
+    /// For OptimisticTransaction: whether a conflict was detected.
+    pub occ_conflict: Option<bool>,
+    /// For OptimisticTransaction: the key that had a version mismatch.
+    pub conflict_key: Option<String>,
+    /// For OptimisticTransaction: the expected version.
+    pub conflict_expected_version: Option<i64>,
+    /// For OptimisticTransaction: the actual version found.
+    pub conflict_actual_version: Option<i64>,
 }
 
 /// Request to read a single key.
@@ -1161,6 +1234,40 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         | WriteCommand::LeaseRevoke { .. }
         | WriteCommand::LeaseKeepalive { .. } => {
             // No key/value validation needed for lease operations
+        }
+        WriteCommand::OptimisticTransaction {
+            read_set,
+            write_set,
+        } => {
+            // Tiger Style: Validate batch sizes
+            if read_set.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: read_set.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            if write_set.len() > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: write_set.len(),
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            // Validate read set keys
+            for (key, _) in read_set {
+                check_key(key)?;
+            }
+            // Validate write set keys and values
+            for op in write_set {
+                match op {
+                    WriteOp::Set { key, value } => {
+                        check_key(key)?;
+                        check_value(value)?;
+                    }
+                    WriteOp::Delete { key } => {
+                        check_key(key)?;
+                    }
+                }
+            }
         }
     }
 

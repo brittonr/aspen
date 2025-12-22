@@ -340,6 +340,33 @@ impl From<LogEntryPayload> for Vec<WatchEvent> {
                 }
                 events
             }
+            KvOperation::OptimisticTransaction {
+                read_set: _,
+                write_set,
+            } => {
+                // Convert write set to watch events (read set is for validation only)
+                write_set
+                    .into_iter()
+                    .map(|(is_set, key, value)| {
+                        if is_set {
+                            WatchEvent::Set {
+                                key,
+                                value,
+                                index,
+                                term,
+                                committed_at_ms,
+                            }
+                        } else {
+                            WatchEvent::Delete {
+                                key,
+                                index,
+                                term,
+                                committed_at_ms,
+                            }
+                        }
+                    })
+                    .collect()
+            }
         }
     }
 }

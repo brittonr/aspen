@@ -1771,6 +1771,22 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             ..Default::default()
                         }
                     }
+                    // OptimisticTransaction: in-memory state machine doesn't track versions,
+                    // so we can't do proper OCC validation. Just apply the writes.
+                    AppRequest::OptimisticTransaction { write_set, .. } => {
+                        for (is_set, key, value) in write_set {
+                            if *is_set {
+                                sm.data.insert(key.clone(), value.clone());
+                            } else {
+                                sm.data.remove(key);
+                            }
+                        }
+                        AppResponse {
+                            occ_conflict: Some(false),
+                            batch_applied: Some(write_set.len() as u32),
+                            ..Default::default()
+                        }
+                    }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =
