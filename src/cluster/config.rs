@@ -165,6 +165,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub peer_sync: PeerSyncConfig,
 
+    /// Horizontal sharding configuration.
+    #[serde(default)]
+    pub sharding: ShardingConfig,
+
     /// Peer node addresses.
     /// Format: "node_id@endpoint_id:direct_addrs"
     #[serde(default)]
@@ -202,6 +206,7 @@ impl Default for NodeConfig {
             docs: DocsConfig::default(),
             blobs: BlobConfig::default(),
             peer_sync: PeerSyncConfig::default(),
+            sharding: ShardingConfig::default(),
             peers: vec![],
             sqlite_read_pool_size: default_sqlite_read_pool_size(),
         }
@@ -506,6 +511,76 @@ impl Default for PeerSyncConfig {
     }
 }
 
+/// Horizontal sharding configuration.
+///
+/// Enables distributing data across multiple independent Raft clusters (shards)
+/// for horizontal scaling. Each shard handles a subset of the key space
+/// determined by consistent hashing.
+///
+/// # Architecture
+///
+/// ```text
+/// ShardedKeyValueStore
+///     |
+///     +-- ShardRouter (consistent hashing)
+///     |
+///     +-- shards[0] -> RaftNode (shard-0/ directory)
+///     +-- shards[1] -> RaftNode (shard-1/ directory)
+///     +-- shards[2] -> RaftNode (shard-2/ directory)
+///     ...
+/// ```
+///
+/// # TOML Example
+///
+/// ```toml
+/// [sharding]
+/// enabled = true
+/// num_shards = 4
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardingConfig {
+    /// Enable horizontal sharding.
+    ///
+    /// When enabled, the node will create multiple RaftNode instances (one per shard)
+    /// and route operations using consistent hashing.
+    ///
+    /// Default: false (single-node mode).
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Number of shards to create.
+    ///
+    /// Must be between 1 and 256 (MAX_SHARDS).
+    /// Each shard gets its own storage directory and Raft consensus group.
+    ///
+    /// Default: 4 shards.
+    #[serde(default = "default_num_shards")]
+    pub num_shards: u32,
+
+    /// List of shard IDs this node should host.
+    ///
+    /// If empty, the node hosts all shards (0..num_shards).
+    /// This allows selective shard placement for multi-node deployments.
+    ///
+    /// Default: empty (host all shards).
+    #[serde(default)]
+    pub local_shards: Vec<u32>,
+}
+
+impl Default for ShardingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            num_shards: default_num_shards(),
+            local_shards: vec![],
+        }
+    }
+}
+
+fn default_num_shards() -> u32 {
+    crate::sharding::DEFAULT_SHARDS
+}
+
 fn default_peer_sync_priority() -> u32 {
     100
 }
@@ -626,6 +701,15 @@ impl NodeConfig {
                     .unwrap_or_else(default_peer_reconnect_interval_secs),
                 max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS")
                     .unwrap_or(0),
+            },
+            sharding: ShardingConfig {
+                enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
+                num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS")
+                    .unwrap_or_else(default_num_shards),
+                local_shards: parse_env_vec("ASPEN_SHARDING_LOCAL_SHARDS")
+                    .into_iter()
+                    .filter_map(|s| s.parse().ok())
+                    .collect(),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
             sqlite_read_pool_size: parse_env("ASPEN_SQLITE_READ_POOL_SIZE")
@@ -760,6 +844,16 @@ impl NodeConfig {
         }
         if other.peer_sync.max_reconnect_attempts != 0 {
             self.peer_sync.max_reconnect_attempts = other.peer_sync.max_reconnect_attempts;
+        }
+        // Sharding config merging
+        if other.sharding.enabled {
+            self.sharding.enabled = other.sharding.enabled;
+        }
+        if other.sharding.num_shards != default_num_shards() {
+            self.sharding.num_shards = other.sharding.num_shards;
+        }
+        if !other.sharding.local_shards.is_empty() {
+            self.sharding.local_shards = other.sharding.local_shards;
         }
         if !other.peers.is_empty() {
             self.peers = other.peers;
@@ -909,6 +1003,33 @@ impl NodeConfig {
         // Network port validation (using extracted pure function)
         if let Some(warning) = check_http_port(self.http_addr.port()) {
             warn!(http_addr = %self.http_addr, "{}", warning);
+        }
+
+        // Sharding configuration validation
+        if self.sharding.enabled {
+            use crate::sharding::{MAX_SHARDS, MIN_SHARDS};
+
+            // Validate num_shards is within bounds
+            if self.sharding.num_shards < MIN_SHARDS || self.sharding.num_shards > MAX_SHARDS {
+                return Err(ConfigError::Validation {
+                    message: format!(
+                        "sharding.num_shards must be between {} and {}, got {}",
+                        MIN_SHARDS, MAX_SHARDS, self.sharding.num_shards
+                    ),
+                });
+            }
+
+            // Validate local_shards are within range
+            for &shard_id in &self.sharding.local_shards {
+                if shard_id >= self.sharding.num_shards {
+                    return Err(ConfigError::Validation {
+                        message: format!(
+                            "sharding.local_shards contains invalid shard_id {}, must be < num_shards ({})",
+                            shard_id, self.sharding.num_shards
+                        ),
+                    });
+                }
+            }
         }
 
         Ok(())

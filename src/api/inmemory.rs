@@ -4,22 +4,15 @@
 //! for use in unit tests and deterministic simulation testing. These implementations
 //! mirror the behavior of production backends without network or disk I/O.
 //!
-//! # Test Coverage
+//! # OCC Support
 //!
-//! TODO: Add unit tests for DeterministicClusterController:
-//!       - init() with empty members (should error)
-//!       - add_learner() idempotency
-//!       - change_membership() with invalid node IDs
-//!       Coverage: 5.00% function coverage - used as test fixture, not tested directly
-//!
-//! TODO: Add unit tests for DeterministicKeyValueStore:
-//!       - WriteCommand validation boundary testing
-//!       - scan() with continuation tokens
-//!       - delete() idempotency verification
-//!       Coverage: 7.14% line coverage - tested via proptest generators
+//! The in-memory backend now supports optimistic concurrency control (OCC) with
+//! proper version tracking. Each key stores version, create_revision, and mod_revision
+//! metadata to enable conflict detection in OptimisticTransaction operations.
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -31,6 +24,18 @@ use super::{
     ReadResult, ScanRequest, ScanResult, WriteCommand, WriteOp, WriteRequest, WriteResult,
     validate_write_command,
 };
+
+/// Value with version tracking for OCC support.
+#[derive(Clone, Debug)]
+struct VersionedValue {
+    value: String,
+    /// Per-key version counter (1, 2, 3... increments on each write)
+    version: i64,
+    /// Revision when key was first created
+    create_revision: u64,
+    /// Revision when key was last modified
+    mod_revision: u64,
+}
 
 /// In-memory deterministic implementation of [`ClusterController`] for testing.
 ///
@@ -132,10 +137,16 @@ impl ClusterController for DeterministicClusterController {
 /// Unlike the production Raft-backed implementation, this provides instant operations
 /// without network I/O or consensus overhead.
 ///
+/// # OCC Support
+///
+/// This backend now supports optimistic concurrency control with proper version tracking:
+/// - Each key tracks `version` (increments on each write), `create_revision`, and `mod_revision`
+/// - OptimisticTransaction validates read_set versions before applying writes
+/// - Conflicts return detailed error info (key, expected version, actual version)
+///
 /// # Limitations
 ///
 /// - No TTL or lease tracking (values stored indefinitely)
-/// - No revision metadata (version/create_revision/mod_revision always return defaults)
 /// - No persistence across restarts
 /// - Single-node only (no replication)
 ///
@@ -152,9 +163,28 @@ impl ClusterController for DeterministicClusterController {
 ///     },
 /// }).await?;
 /// ```
-#[derive(Clone, Default)]
 pub struct DeterministicKeyValueStore {
-    inner: Arc<Mutex<HashMap<String, String>>>,
+    inner: Arc<Mutex<HashMap<String, VersionedValue>>>,
+    /// Global revision counter (simulates Raft log index)
+    revision: AtomicU64,
+}
+
+impl Clone for DeterministicKeyValueStore {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            revision: AtomicU64::new(self.revision.load(Ordering::SeqCst)),
+        }
+    }
+}
+
+impl Default for DeterministicKeyValueStore {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(HashMap::new())),
+            revision: AtomicU64::new(0),
+        }
+    }
 }
 
 impl DeterministicKeyValueStore {
@@ -165,6 +195,34 @@ impl DeterministicKeyValueStore {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
+
+    /// Get the next revision number (simulates Raft log index).
+    fn next_revision(&self) -> u64 {
+        self.revision.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Insert or update a key with proper version tracking.
+    fn insert_versioned(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        value: String,
+        revision: u64,
+    ) {
+        let existing = inner.get(&key);
+        let (new_version, create_rev) = match existing {
+            Some(v) => (v.version + 1, v.create_revision),
+            None => (1, revision),
+        };
+        inner.insert(
+            key,
+            VersionedValue {
+                value,
+                version: new_version,
+                create_revision: create_rev,
+                mod_revision: revision,
+            },
+        );
+    }
 }
 
 #[async_trait]
@@ -172,40 +230,45 @@ impl KeyValueStore for DeterministicKeyValueStore {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         validate_write_command(&request.command)?;
 
+        let revision = self.next_revision();
         let mut inner = self.inner.lock().await;
         match request.command.clone() {
             WriteCommand::Set { key, value } => {
-                inner.insert(key.clone(), value.clone());
+                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 Ok(WriteResult {
                     command: Some(WriteCommand::Set { key, value }),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
             // TTL operations: in-memory store doesn't track TTL, just stores value
             WriteCommand::SetWithTTL { key, value, .. } => {
-                inner.insert(key.clone(), value.clone());
+                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 Ok(WriteResult {
                     command: Some(WriteCommand::Set { key, value }),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
             WriteCommand::SetMulti { ref pairs } => {
                 for (key, value) in pairs {
-                    inner.insert(key.clone(), value.clone());
+                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
                 Ok(WriteResult {
                     command: Some(request.command.clone()),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
             WriteCommand::SetMultiWithTTL { ref pairs, .. } => {
                 for (key, value) in pairs {
-                    inner.insert(key.clone(), value.clone());
+                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
                 Ok(WriteResult {
                     command: Some(WriteCommand::SetMulti {
                         pairs: pairs.clone(),
                     }),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
@@ -230,20 +293,21 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 expected,
                 new_value,
             } => {
-                let current = inner.get(&key).cloned();
+                let current = inner.get(&key).map(|v| v.value.clone());
                 let condition_matches = match (&expected, &current) {
                     (None, None) => true,
                     (Some(exp), Some(cur)) => exp == cur,
                     _ => false,
                 };
                 if condition_matches {
-                    inner.insert(key.clone(), new_value.clone());
+                    Self::insert_versioned(&mut inner, key.clone(), new_value.clone(), revision);
                     Ok(WriteResult {
                         command: Some(WriteCommand::CompareAndSwap {
                             key,
                             expected,
                             new_value,
                         }),
+                        header_revision: Some(revision),
                         ..Default::default()
                     })
                 } else {
@@ -255,12 +319,13 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 }
             }
             WriteCommand::CompareAndDelete { key, expected } => {
-                let current = inner.get(&key).cloned();
+                let current = inner.get(&key).map(|v| v.value.clone());
                 let condition_matches = matches!(&current, Some(cur) if cur == &expected);
                 if condition_matches {
                     inner.remove(&key);
                     Ok(WriteResult {
                         command: Some(WriteCommand::CompareAndDelete { key, expected }),
+                        header_revision: Some(revision),
                         ..Default::default()
                     })
                 } else {
@@ -275,7 +340,12 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 for op in operations {
                     match op {
                         BatchOperation::Set { key, value } => {
-                            inner.insert(key.clone(), value.clone());
+                            Self::insert_versioned(
+                                &mut inner,
+                                key.clone(),
+                                value.clone(),
+                                revision,
+                            );
                         }
                         BatchOperation::Delete { key } => {
                             inner.remove(key);
@@ -284,6 +354,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 }
                 Ok(WriteResult {
                     batch_applied: Some(operations.len() as u32),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
@@ -296,9 +367,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 let mut failed_index = None;
                 for (i, cond) in conditions.iter().enumerate() {
                     let met = match cond {
-                        BatchCondition::ValueEquals { key, expected } => {
-                            inner.get(key).map(|v| v == expected).unwrap_or(false)
-                        }
+                        BatchCondition::ValueEquals { key, expected } => inner
+                            .get(key)
+                            .map(|v| &v.value == expected)
+                            .unwrap_or(false),
                         BatchCondition::KeyExists { key } => inner.contains_key(key),
                         BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
                     };
@@ -313,7 +385,12 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     for op in operations {
                         match op {
                             BatchOperation::Set { key, value } => {
-                                inner.insert(key.clone(), value.clone());
+                                Self::insert_versioned(
+                                    &mut inner,
+                                    key.clone(),
+                                    value.clone(),
+                                    revision,
+                                );
                             }
                             BatchOperation::Delete { key } => {
                                 inner.remove(key);
@@ -323,6 +400,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     Ok(WriteResult {
                         batch_applied: Some(operations.len() as u32),
                         conditions_met: Some(true),
+                        header_revision: Some(revision),
                         ..Default::default()
                     })
                 } else {
@@ -339,13 +417,14 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 value,
                 lease_id,
             } => {
-                inner.insert(key.clone(), value.clone());
+                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 Ok(WriteResult {
                     command: Some(WriteCommand::SetWithLease {
                         key,
                         value,
                         lease_id,
                     }),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
@@ -354,13 +433,14 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 lease_id,
             } => {
                 for (key, value) in pairs {
-                    inner.insert(key.clone(), value.clone());
+                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
                 Ok(WriteResult {
                     command: Some(WriteCommand::SetMultiWithLease {
                         pairs: pairs.clone(),
                         lease_id,
                     }),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
@@ -401,10 +481,12 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 // Evaluate all comparisons
                 let mut all_passed = true;
                 for cmp in &compare {
-                    let current_value = inner.get(&cmp.key).cloned();
+                    let current_versioned = inner.get(&cmp.key);
                     let passed = match cmp.target {
                         CompareTarget::Value => {
-                            let actual = current_value.unwrap_or_default();
+                            let actual = current_versioned
+                                .map(|v| v.value.clone())
+                                .unwrap_or_default();
                             match cmp.op {
                                 CompareOp::Equal => actual == cmp.value,
                                 CompareOp::NotEqual => actual != cmp.value,
@@ -412,12 +494,29 @@ impl KeyValueStore for DeterministicKeyValueStore {
                                 CompareOp::Less => actual < cmp.value,
                             }
                         }
-                        // In-memory doesn't track versions/revisions - use defaults
-                        CompareTarget::Version
-                        | CompareTarget::CreateRevision
-                        | CompareTarget::ModRevision => {
+                        CompareTarget::Version => {
+                            let compare_val: i64 = cmp.value.parse().unwrap_or(0);
+                            let actual = current_versioned.map(|v| v.version).unwrap_or(0);
+                            match cmp.op {
+                                CompareOp::Equal => actual == compare_val,
+                                CompareOp::NotEqual => actual != compare_val,
+                                CompareOp::Greater => actual > compare_val,
+                                CompareOp::Less => actual < compare_val,
+                            }
+                        }
+                        CompareTarget::CreateRevision => {
                             let compare_val: u64 = cmp.value.parse().unwrap_or(0);
-                            let actual = if current_value.is_some() { 1u64 } else { 0 };
+                            let actual = current_versioned.map(|v| v.create_revision).unwrap_or(0);
+                            match cmp.op {
+                                CompareOp::Equal => actual == compare_val,
+                                CompareOp::NotEqual => actual != compare_val,
+                                CompareOp::Greater => actual > compare_val,
+                                CompareOp::Less => actual < compare_val,
+                            }
+                        }
+                        CompareTarget::ModRevision => {
+                            let compare_val: u64 = cmp.value.parse().unwrap_or(0);
+                            let actual = current_versioned.map(|v| v.mod_revision).unwrap_or(0);
                             match cmp.op {
                                 CompareOp::Equal => actual == compare_val,
                                 CompareOp::NotEqual => actual != compare_val,
@@ -439,8 +538,13 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 for op in ops {
                     match op {
                         TxnOp::Put { key, value } => {
-                            inner.insert(key.clone(), value.clone());
-                            results.push(TxnOpResult::Put { revision: 0 }); // In-memory doesn't track revisions
+                            Self::insert_versioned(
+                                &mut inner,
+                                key.clone(),
+                                value.clone(),
+                                revision,
+                            );
+                            results.push(TxnOpResult::Put { revision });
                         }
                         TxnOp::Delete { key } => {
                             let deleted = if inner.remove(key).is_some() { 1 } else { 0 };
@@ -449,10 +553,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                         TxnOp::Get { key } => {
                             let kv = inner.get(key).map(|v| KeyValueWithRevision {
                                 key: key.clone(),
-                                value: v.clone(),
-                                version: 1,
-                                create_revision: 0,
-                                mod_revision: 0,
+                                value: v.value.clone(),
+                                version: v.version as u64,
+                                create_revision: v.create_revision,
+                                mod_revision: v.mod_revision,
                             });
                             results.push(TxnOpResult::Get { kv });
                         }
@@ -467,10 +571,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                                 .take(*limit as usize)
                                 .map(|(k, v)| KeyValueWithRevision {
                                     key: k.clone(),
-                                    value: v.clone(),
-                                    version: 1,
-                                    create_revision: 0,
-                                    mod_revision: 0,
+                                    value: v.value.clone(),
+                                    version: v.version as u64,
+                                    create_revision: v.create_revision,
+                                    mod_revision: v.mod_revision,
                                 })
                                 .collect();
                             results.push(TxnOpResult::Range { kvs, more });
@@ -481,29 +585,52 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 Ok(WriteResult {
                     succeeded: Some(all_passed),
                     txn_results: Some(results),
-                    header_revision: Some(0), // In-memory doesn't track revisions
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
             WriteCommand::OptimisticTransaction {
-                read_set: _,
+                read_set,
                 write_set,
             } => {
-                // In-memory doesn't track versions, so we can't do proper OCC validation
-                // Just apply the writes and return success
+                // Phase 1: Validate read set versions
+                // Check that each key in the read_set still has the expected version
+                for (key, expected_version) in &read_set {
+                    let current_version = inner.get(key).map(|v| v.version).unwrap_or(0);
+                    if current_version != *expected_version {
+                        // Conflict detected - return error with details
+                        return Ok(WriteResult {
+                            occ_conflict: Some(true),
+                            conflict_key: Some(key.clone()),
+                            conflict_expected_version: Some(*expected_version),
+                            conflict_actual_version: Some(current_version),
+                            ..Default::default()
+                        });
+                    }
+                }
+
+                // Phase 2: Apply write set with version tracking
+                // All read set versions matched, so we can safely apply the writes
                 for op in &write_set {
                     match op {
                         WriteOp::Set { key, value } => {
-                            inner.insert(key.clone(), value.clone());
+                            Self::insert_versioned(
+                                &mut inner,
+                                key.clone(),
+                                value.clone(),
+                                revision,
+                            );
                         }
                         WriteOp::Delete { key } => {
                             inner.remove(key);
                         }
                     }
                 }
+
                 Ok(WriteResult {
                     occ_conflict: Some(false),
                     batch_applied: Some(write_set.len() as u32),
+                    header_revision: Some(revision),
                     ..Default::default()
                 })
             }
@@ -513,13 +640,13 @@ impl KeyValueStore for DeterministicKeyValueStore {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let guard = self.inner.lock().await;
         match guard.get(&request.key) {
-            Some(value) => Ok(ReadResult {
+            Some(versioned) => Ok(ReadResult {
                 kv: Some(KeyValueWithRevision {
                     key: request.key,
-                    value: value.clone(),
-                    version: 1,         // In-memory doesn't track versions
-                    create_revision: 0, // In-memory doesn't track revisions
-                    mod_revision: 0,
+                    value: versioned.value.clone(),
+                    version: versioned.version as u64,
+                    create_revision: versioned.create_revision,
+                    mod_revision: versioned.mod_revision,
                 }),
             }),
             None => Err(KeyValueStoreError::NotFound { key: request.key }),
@@ -573,12 +700,12 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let entries: Vec<KeyValueWithRevision> = matching
             .into_iter()
             .take(limit)
-            .map(|(key, value)| KeyValueWithRevision {
+            .map(|(key, versioned)| KeyValueWithRevision {
                 key,
-                value,
-                version: 1,         // In-memory doesn't track versions
-                create_revision: 0, // In-memory doesn't track revisions
-                mod_revision: 0,
+                value: versioned.value,
+                version: versioned.version as u64,
+                create_revision: versioned.create_revision,
+                mod_revision: versioned.mod_revision,
             })
             .collect();
 
