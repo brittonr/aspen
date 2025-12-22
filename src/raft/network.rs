@@ -82,9 +82,11 @@ use crate::raft::constants::{
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
     RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps,
-    RaftSnapshotRequest, RaftVoteRequest,
+    RaftSnapshotRequest, RaftVoteRequest, SHARD_PREFIX_SIZE, encode_shard_prefix,
+    try_decode_shard_prefix,
 };
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
+use crate::sharding::router::ShardId;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -218,6 +220,54 @@ impl IrpcRaftNetworkFactory {
     pub async fn peer_addrs(&self) -> HashMap<NodeId, iroh::EndpointAddr> {
         self.peer_addrs.read().await.clone()
     }
+
+    /// Create a network client for a specific shard.
+    ///
+    /// This creates an `IrpcRaftNetwork` that will prepend the shard ID to all
+    /// RPC messages, enabling routing to the correct Raft core on the remote node.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` - Target node ID
+    /// * `node` - Target node's Raft member info containing Iroh address
+    /// * `shard_id` - Shard ID to route RPCs to
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = factory.new_client_for_shard(target_id, &member_info, 5).await;
+    /// // All RPCs from this client will be routed to shard 5 on the target node
+    /// ```
+    pub async fn new_client_for_shard(
+        &mut self,
+        target: NodeId,
+        node: &RaftMemberInfo,
+        shard_id: ShardId,
+    ) -> IrpcRaftNetwork {
+        // Update the fallback cache with this address
+        {
+            let mut peers = self.peer_addrs.write().await;
+            if peers.len() < MAX_PEERS as usize || peers.contains_key(&target) {
+                peers.insert(target, node.iroh_addr.clone());
+            }
+        }
+
+        info!(
+            target_node = %target,
+            shard_id,
+            endpoint_id = %node.iroh_addr.id,
+            "creating sharded network client"
+        );
+
+        IrpcRaftNetwork {
+            connection_pool: Arc::clone(&self.connection_pool),
+            peer_addr: Some(node.iroh_addr.clone()),
+            target,
+            failure_detector: Arc::clone(&self.failure_detector),
+            drift_detector: Arc::clone(&self.drift_detector),
+            shard_id: Some(shard_id),
+        }
+    }
 }
 
 impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
@@ -248,6 +298,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
             target,
             failure_detector: Arc::clone(&self.failure_detector),
             drift_detector: Arc::clone(&self.drift_detector),
+            shard_id: None, // Non-sharded mode for backward compatibility
         }
     }
 }
@@ -258,12 +309,23 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
 /// - Explicit error handling for connection failures
 /// - Fail fast if peer address is missing
 /// - Connection pooling for efficient stream multiplexing
+///
+/// # Sharded Mode
+///
+/// When `shard_id` is `Some`, all RPC messages are prefixed with a 4-byte
+/// big-endian shard ID. This enables routing to the correct Raft core on
+/// the remote node when using the sharded ALPN (`raft-shard`).
 pub struct IrpcRaftNetwork {
     connection_pool: Arc<RaftConnectionPool>,
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
     drift_detector: Arc<RwLock<ClockDriftDetector>>,
+    /// Optional shard ID for sharded RPC routing.
+    ///
+    /// When set, all RPC messages are prefixed with this shard ID,
+    /// and responses are expected to include the shard ID prefix.
+    shard_id: Option<ShardId>,
 }
 
 impl IrpcRaftNetwork {
@@ -344,12 +406,24 @@ impl IrpcRaftNetwork {
         // Record client send time (t1) for clock drift detection
         let client_send_ms = current_time_ms();
 
-        // Serialize and send the request
+        // Serialize the request
         let serialized =
             postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
+
+        // If sharded mode, prepend shard ID prefix
+        let message = if let Some(shard_id) = self.shard_id {
+            let mut prefixed = Vec::with_capacity(SHARD_PREFIX_SIZE + serialized.len());
+            prefixed.extend_from_slice(&encode_shard_prefix(shard_id));
+            prefixed.extend_from_slice(&serialized);
+            prefixed
+        } else {
+            serialized
+        };
+
+        // Send the request
         stream_handle
             .send
-            .write_all(&serialized)
+            .write_all(&message)
             .await
             .context("failed to write RPC request to stream")?;
         stream_handle
@@ -371,15 +445,39 @@ impl IrpcRaftNetwork {
         // Record client receive time (t4) for clock drift detection
         let client_recv_ms = current_time_ms();
 
+        // If sharded mode, strip shard ID prefix from response and verify
+        let response_bytes = if let Some(expected_shard_id) = self.shard_id {
+            let response_shard_id = try_decode_shard_prefix(&response_buf).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "sharded response too short: expected at least {} bytes, got {}",
+                    SHARD_PREFIX_SIZE,
+                    response_buf.len()
+                )
+            })?;
+
+            if response_shard_id != expected_shard_id {
+                return Err(anyhow::anyhow!(
+                    "shard ID mismatch: expected {}, got {}",
+                    expected_shard_id,
+                    response_shard_id
+                ));
+            }
+
+            &response_buf[SHARD_PREFIX_SIZE..]
+        } else {
+            &response_buf[..]
+        };
+
         info!(
-            response_size = response_buf.len(),
+            response_size = response_bytes.len(),
+            shard_id = ?self.shard_id,
             "received RPC response bytes"
         );
 
         // Try to deserialize as response with timestamps first (new format)
         // Fall back to legacy format for backward compatibility
         let response: RaftRpcResponse = if let Ok(response_with_ts) =
-            postcard::from_bytes::<RaftRpcResponseWithTimestamps>(&response_buf)
+            postcard::from_bytes::<RaftRpcResponseWithTimestamps>(response_bytes)
         {
             // Update clock drift detector if timestamps are present
             if let Some(timestamps) = response_with_ts.timestamps {
@@ -394,12 +492,12 @@ impl IrpcRaftNetwork {
             response_with_ts.inner
         } else {
             // Fall back to legacy format (no timestamps)
-            postcard::from_bytes::<RaftRpcResponse>(&response_buf)
+            postcard::from_bytes::<RaftRpcResponse>(response_bytes)
                 .map_err(|e| {
                     error!(
                         error = %e,
-                        bytes_len = response_buf.len(),
-                        first_bytes = ?response_buf.get(..20.min(response_buf.len())),
+                        bytes_len = response_bytes.len(),
+                        first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
                         "failed to deserialize RPC response"
                     );
                     e

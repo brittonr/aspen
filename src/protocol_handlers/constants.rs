@@ -11,6 +11,14 @@ pub const RAFT_ALPN: &[u8] = b"raft-rpc";
 /// This is the recommended ALPN for production deployments.
 pub const RAFT_AUTH_ALPN: &[u8] = b"raft-auth";
 
+/// ALPN protocol identifier for sharded Raft RPC.
+///
+/// Handles RPC for multiple Raft shards over a single connection. Each message
+/// is prefixed with a 4-byte big-endian shard ID that routes to the appropriate
+/// Raft core. This enables horizontal scaling to hundreds of shards without
+/// requiring per-shard ALPN registration.
+pub const RAFT_SHARDED_ALPN: &[u8] = b"raft-shard";
+
 /// Re-export LOG_SUBSCRIBER_ALPN for convenience.
 pub use crate::raft::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
