@@ -562,3 +562,88 @@ pub const CLIENT_RPC_REQUEST_COUNTER: &str = "_system:metrics:client_requests_to
 /// Used in:
 /// - `protocol_handlers.rs`: Request ID generation for tracing
 pub const CLIENT_RPC_REQUEST_ID_SEQUENCE: &str = "_system:sequence:request_id";
+
+// ============================================================================
+// Distributed Queue Constants
+// ============================================================================
+
+/// Maximum queue item payload size (1 MB, same as MAX_VALUE_SIZE).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized payloads.
+/// Queue items should be bounded like all other values.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Enqueue payload validation
+pub const MAX_QUEUE_ITEM_SIZE: u32 = 1024 * 1024;
+
+/// Maximum items in a batch enqueue/dequeue operation (100).
+///
+/// Tiger Style: Bounded batch size prevents pathological memory use.
+/// Balances throughput against memory consumption.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Batch operation limits
+pub const MAX_QUEUE_BATCH_SIZE: u32 = 100;
+
+/// Maximum visibility timeout (1 hour = 3,600,000 ms).
+///
+/// Tiger Style: Upper bound prevents indefinite item locking.
+/// Most processing should complete within 1 hour.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Visibility timeout validation
+pub const MAX_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 3_600_000;
+
+/// Default visibility timeout (30 seconds = 30,000 ms).
+///
+/// Tiger Style: Reasonable default for most processing tasks.
+/// Short enough to detect failures quickly, long enough for typical work.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Default config value
+pub const DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 30_000;
+
+/// Maximum queue item TTL (7 days = 604,800,000 ms).
+///
+/// Tiger Style: Upper bound on item lifetime prevents indefinite storage.
+/// Items older than 7 days are likely stale.
+///
+/// Used in:
+/// - `coordination/queue.rs`: TTL validation
+pub const MAX_QUEUE_ITEM_TTL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// Default deduplication window TTL (5 minutes = 300,000 ms).
+///
+/// Tiger Style: Reasonable window for catching duplicate submissions.
+/// Long enough for retry scenarios, short enough to not bloat storage.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Deduplication entry TTL
+pub const DEFAULT_QUEUE_DEDUP_TTL_MS: u64 = 300_000;
+
+/// Maximum items to scan during cleanup operations (1000).
+///
+/// Tiger Style: Bounded cleanup prevents pathological scan times.
+/// Multiple cleanup cycles can handle larger backlogs.
+///
+/// Used in:
+/// - `coordination/queue.rs`: Expired item cleanup
+pub const MAX_QUEUE_CLEANUP_BATCH: u32 = 1000;
+
+/// Default polling interval for blocking dequeue (100 ms).
+///
+/// Tiger Style: Bounded polling frequency prevents CPU spin.
+/// Short enough for responsive dequeue, long enough to avoid overhead.
+///
+/// Used in:
+/// - `coordination/queue.rs`: dequeue_wait polling
+pub const DEFAULT_QUEUE_POLL_INTERVAL_MS: u64 = 100;
+
+/// Maximum polling interval for blocking dequeue (1 second).
+///
+/// Tiger Style: Upper bound on backoff prevents long waits.
+/// Used when queue is empty for extended periods.
+///
+/// Used in:
+/// - `coordination/queue.rs`: dequeue_wait backoff cap
+pub const MAX_QUEUE_POLL_INTERVAL_MS: u64 = 1000;

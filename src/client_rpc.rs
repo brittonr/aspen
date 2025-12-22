@@ -785,6 +785,135 @@ pub enum ClientRpcRequest {
         /// Lock name.
         name: String,
     },
+
+    // =========================================================================
+    // Queue operations
+    // =========================================================================
+    /// Create a distributed queue.
+    QueueCreate {
+        /// Queue name.
+        queue_name: String,
+        /// Default visibility timeout in milliseconds.
+        default_visibility_timeout_ms: Option<u64>,
+        /// Default item TTL in milliseconds (0 = no expiration).
+        default_ttl_ms: Option<u64>,
+        /// Max delivery attempts before DLQ (0 = no limit).
+        max_delivery_attempts: Option<u32>,
+    },
+
+    /// Delete a queue and all its items.
+    QueueDelete {
+        /// Queue name.
+        queue_name: String,
+    },
+
+    /// Enqueue an item to a distributed queue.
+    QueueEnqueue {
+        /// Queue name.
+        queue_name: String,
+        /// Item payload.
+        payload: Vec<u8>,
+        /// Optional TTL in milliseconds.
+        ttl_ms: Option<u64>,
+        /// Optional message group ID for FIFO ordering.
+        message_group_id: Option<String>,
+        /// Optional deduplication ID.
+        deduplication_id: Option<String>,
+    },
+
+    /// Enqueue multiple items in a batch.
+    QueueEnqueueBatch {
+        /// Queue name.
+        queue_name: String,
+        /// Items to enqueue (payload, ttl_ms, message_group_id, deduplication_id).
+        items: Vec<QueueEnqueueItem>,
+    },
+
+    /// Dequeue items from a queue with visibility timeout (non-blocking).
+    QueueDequeue {
+        /// Queue name.
+        queue_name: String,
+        /// Consumer ID.
+        consumer_id: String,
+        /// Maximum items to return.
+        max_items: u32,
+        /// Visibility timeout in milliseconds.
+        visibility_timeout_ms: u64,
+    },
+
+    /// Dequeue items with blocking wait.
+    QueueDequeueWait {
+        /// Queue name.
+        queue_name: String,
+        /// Consumer ID.
+        consumer_id: String,
+        /// Maximum items to return.
+        max_items: u32,
+        /// Visibility timeout in milliseconds.
+        visibility_timeout_ms: u64,
+        /// Wait timeout in milliseconds.
+        wait_timeout_ms: u64,
+    },
+
+    /// Peek at items without removing them.
+    QueuePeek {
+        /// Queue name.
+        queue_name: String,
+        /// Maximum items to return.
+        max_items: u32,
+    },
+
+    /// Acknowledge successful processing of an item.
+    QueueAck {
+        /// Queue name.
+        queue_name: String,
+        /// Receipt handle from dequeue.
+        receipt_handle: String,
+    },
+
+    /// Negative acknowledge - return to queue or move to DLQ.
+    QueueNack {
+        /// Queue name.
+        queue_name: String,
+        /// Receipt handle from dequeue.
+        receipt_handle: String,
+        /// Whether to move directly to DLQ.
+        move_to_dlq: bool,
+        /// Optional error message.
+        error_message: Option<String>,
+    },
+
+    /// Extend visibility timeout for a pending item.
+    QueueExtendVisibility {
+        /// Queue name.
+        queue_name: String,
+        /// Receipt handle.
+        receipt_handle: String,
+        /// Additional timeout in milliseconds.
+        additional_timeout_ms: u64,
+    },
+
+    /// Get queue status.
+    QueueStatus {
+        /// Queue name.
+        queue_name: String,
+    },
+
+    /// Get items from dead letter queue.
+    QueueGetDLQ {
+        /// Queue name.
+        queue_name: String,
+        /// Maximum items to return.
+        max_items: u32,
+    },
+
+    /// Move DLQ item back to main queue.
+    QueueRedriveDLQ {
+        /// Queue name.
+        queue_name: String,
+        /// Item ID in DLQ.
+        item_id: u64,
+    },
 }
 
 /// Client RPC response protocol.
@@ -1035,6 +1164,45 @@ pub enum ClientRpcResponse {
 
     /// RWLock status result.
     RWLockStatusResult(RWLockResultResponse),
+
+    // =========================================================================
+    // Queue responses
+    // =========================================================================
+    /// Queue create result.
+    QueueCreateResult(QueueCreateResultResponse),
+
+    /// Queue delete result.
+    QueueDeleteResult(QueueDeleteResultResponse),
+
+    /// Queue enqueue result.
+    QueueEnqueueResult(QueueEnqueueResultResponse),
+
+    /// Queue enqueue batch result.
+    QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse),
+
+    /// Queue dequeue result.
+    QueueDequeueResult(QueueDequeueResultResponse),
+
+    /// Queue peek result.
+    QueuePeekResult(QueuePeekResultResponse),
+
+    /// Queue ack result.
+    QueueAckResult(QueueAckResultResponse),
+
+    /// Queue nack result.
+    QueueNackResult(QueueNackResultResponse),
+
+    /// Queue extend visibility result.
+    QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse),
+
+    /// Queue status result.
+    QueueStatusResult(QueueStatusResultResponse),
+
+    /// Queue get DLQ result.
+    QueueGetDLQResult(QueueGetDLQResultResponse),
+
+    /// Queue redrive DLQ result.
+    QueueRedriveDLQResult(QueueRedriveDLQResultResponse),
 }
 
 /// Health status response.
@@ -2054,6 +2222,210 @@ pub struct RWLockResultResponse {
     pub reader_count: Option<u32>,
     /// Writer holder ID (if mode == "write").
     pub writer_holder: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// ============================================================================
+// Queue types
+// ============================================================================
+
+/// Item to enqueue in a batch operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueEnqueueItem {
+    /// Item payload.
+    pub payload: Vec<u8>,
+    /// Optional TTL in milliseconds.
+    pub ttl_ms: Option<u64>,
+    /// Optional message group ID for FIFO ordering.
+    pub message_group_id: Option<String>,
+    /// Optional deduplication ID.
+    pub deduplication_id: Option<String>,
+}
+
+/// Queue create operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueCreateResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// True if queue was created, false if it already existed.
+    pub created: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue delete operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueDeleteResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Number of items deleted.
+    pub items_deleted: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue enqueue operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueEnqueueResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Item ID assigned to the enqueued item.
+    pub item_id: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue batch enqueue operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueEnqueueBatchResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Item IDs assigned to the enqueued items.
+    pub item_ids: Vec<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A dequeued item with receipt handle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueDequeuedItemResponse {
+    /// Item ID.
+    pub item_id: u64,
+    /// Item payload.
+    pub payload: Vec<u8>,
+    /// Receipt handle for ack/nack.
+    pub receipt_handle: String,
+    /// Number of delivery attempts (including this one).
+    pub delivery_attempts: u32,
+    /// Original enqueue time (Unix ms).
+    pub enqueued_at_ms: u64,
+    /// Visibility deadline (Unix ms).
+    pub visibility_deadline_ms: u64,
+}
+
+/// Queue dequeue operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueDequeueResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Dequeued items.
+    pub items: Vec<QueueDequeuedItemResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A queue item for peek response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueItemResponse {
+    /// Item ID.
+    pub item_id: u64,
+    /// Item payload.
+    pub payload: Vec<u8>,
+    /// Original enqueue time (Unix ms).
+    pub enqueued_at_ms: u64,
+    /// Expiration time (Unix ms), 0 = no expiration.
+    pub expires_at_ms: u64,
+    /// Number of delivery attempts.
+    pub delivery_attempts: u32,
+}
+
+/// Queue peek operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueuePeekResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Peeked items.
+    pub items: Vec<QueueItemResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue ack operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueAckResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue nack operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueNackResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue extend visibility operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueExtendVisibilityResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// New visibility deadline (Unix ms).
+    pub new_deadline_ms: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue status result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueStatusResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the queue exists.
+    pub exists: bool,
+    /// Approximate number of visible items.
+    pub visible_count: Option<u64>,
+    /// Approximate number of pending items.
+    pub pending_count: Option<u64>,
+    /// Approximate number of DLQ items.
+    pub dlq_count: Option<u64>,
+    /// Total items enqueued.
+    pub total_enqueued: Option<u64>,
+    /// Total items acked.
+    pub total_acked: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A DLQ item response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueDLQItemResponse {
+    /// Item ID.
+    pub item_id: u64,
+    /// Item payload.
+    pub payload: Vec<u8>,
+    /// Original enqueue time (Unix ms).
+    pub enqueued_at_ms: u64,
+    /// Delivery attempts before moving to DLQ.
+    pub delivery_attempts: u32,
+    /// Reason for moving to DLQ.
+    pub reason: String,
+    /// Time moved to DLQ (Unix ms).
+    pub moved_at_ms: u64,
+    /// Last error message (if any).
+    pub last_error: Option<String>,
+}
+
+/// Queue get DLQ operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueGetDLQResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// DLQ items.
+    pub items: Vec<QueueDLQItemResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Queue redrive DLQ operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueRedriveDLQResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

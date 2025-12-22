@@ -7,6 +7,7 @@
 //! - [`AtomicCounter`] - Race-free increment/decrement
 //! - [`SequenceGenerator`] - Monotonically increasing unique IDs
 //! - [`DistributedRateLimiter`] - Token bucket rate limiting
+//! - [`QueueManager`] - Distributed FIFO queue with visibility timeout
 //!
 //! All primitives are built on top of the [`KeyValueStore`] trait's CAS operations,
 //! providing linearizable semantics through Raft consensus.
@@ -55,6 +56,7 @@ mod counter;
 mod election;
 mod error;
 mod lock;
+mod queue;
 mod rate_limiter;
 mod rwlock;
 mod semaphore;
@@ -66,6 +68,10 @@ pub use counter::{AtomicCounter, BufferedCounter, CounterConfig, SignedAtomicCou
 pub use election::{ElectionConfig, ElectionHandle, LeaderElection, LeadershipState};
 pub use error::{CoordinationError, FenceError, RateLimitError};
 pub use lock::{DistributedLock, LockConfig, LockGuard};
+pub use queue::{
+    DLQItem, DLQReason, DequeuedItem, EnqueueOptions, PendingItem, QueueConfig, QueueItem,
+    QueueManager, QueueState, QueueStats, QueueStatus,
+};
 pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
 pub use rwlock::{RWLockManager, RWLockMode, RWLockState, ReaderEntry, WriterEntry};
 pub use semaphore::{SemaphoreHolder, SemaphoreManager, SemaphoreState};
