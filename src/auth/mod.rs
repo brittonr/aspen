@@ -31,12 +31,14 @@
 mod builder;
 mod capability;
 mod error;
+mod revocation;
 mod token;
 mod verifier;
 
 pub use builder::{TokenBuilder, generate_root_token};
 pub use capability::{Capability, Operation};
 pub use error::AuthError;
+pub use revocation::{KeyValueRevocationStore, RevocationStore};
 pub use token::{Audience, CapabilityToken};
 pub use verifier::TokenVerifier;
 

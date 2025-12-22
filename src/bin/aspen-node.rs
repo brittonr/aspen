@@ -200,6 +200,12 @@ struct Args {
     #[arg(long)]
     trusted_root_key: Vec<String>,
 
+    /// Output root token to file during cluster initialization.
+    /// Only generates a token when initializing a NEW cluster (not joining existing).
+    /// The token will have full cluster access (all keys, admin, delegation).
+    #[arg(long)]
+    output_root_token: Option<PathBuf>,
+
     /// Peer node addresses in format: node_id@addr. Example: `"1@node-id:direct-addrs"`
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
@@ -303,7 +309,36 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node with simplified architecture
-    let handle = bootstrap_node(config.clone()).await?;
+    let mut handle = bootstrap_node(config.clone()).await?;
+
+    // Generate and output root token if requested
+    // This should only happen when initializing a NEW cluster
+    if let Some(ref token_path) = args.output_root_token {
+        // Generate root token using the node's Iroh secret key
+        let secret_key = handle.iroh_manager.endpoint().secret_key();
+        let token = aspen::auth::generate_root_token(
+            secret_key,
+            std::time::Duration::from_secs(365 * 24 * 60 * 60),
+        )
+        .context("failed to generate root token")?;
+
+        // Encode to base64 for text transmission
+        let token_base64 = token.to_base64().context("failed to encode root token")?;
+
+        // Write to file
+        std::fs::write(token_path, &token_base64)
+            .with_context(|| format!("failed to write token to {}", token_path.display()))?;
+
+        let issuer = token.issuer;
+        info!(
+            token_path = %token_path.display(),
+            issuer = %issuer,
+            "root token written to file"
+        );
+
+        // Store token in handle for programmatic access
+        handle.root_token = Some(token);
+    }
 
     // Build controller and KV store based on control backend
     let (controller, kv_store) = setup_controllers(&config, &handle);

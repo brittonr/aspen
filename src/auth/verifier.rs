@@ -192,6 +192,32 @@ impl TokenVerifier {
     pub fn revocation_count(&self) -> usize {
         self.revoked.read().expect("lock poisoned").len()
     }
+
+    /// Load revoked tokens from persistent storage.
+    ///
+    /// This populates the in-memory revocation cache from a persistent store.
+    /// Typically called during node startup to restore revocations.
+    ///
+    /// # Arguments
+    ///
+    /// * `hashes` - Slice of 32-byte token hashes to mark as revoked
+    pub fn load_revoked(&self, hashes: &[[u8; 32]]) {
+        let mut revoked = self.revoked.write().expect("lock poisoned");
+        revoked.extend(hashes.iter().copied());
+    }
+
+    /// Get all revoked hashes.
+    ///
+    /// Returns a snapshot of all currently revoked token hashes.
+    /// Useful for persistence or debugging.
+    pub fn get_all_revoked(&self) -> Vec<[u8; 32]> {
+        self.revoked
+            .read()
+            .expect("lock poisoned")
+            .iter()
+            .copied()
+            .collect()
+    }
 }
 
 impl Default for TokenVerifier {

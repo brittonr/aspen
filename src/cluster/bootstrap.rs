@@ -31,7 +31,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use iroh::EndpointAddr;
 use iroh_gossip::proto::TopicId;
 use openraft::{Config as RaftConfig, Raft};
@@ -39,6 +39,7 @@ use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
+use crate::auth::CapabilityToken;
 use crate::blob::IrohBlobStore;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::gossip_discovery::GossipPeerDiscovery;
@@ -133,6 +134,11 @@ pub struct NodeHandle {
     /// Used to gracefully shutdown the background TTL cleanup task.
     /// None when using InMemory storage (TTL cleanup only applies to SQLite).
     pub ttl_cleanup_cancel: Option<CancellationToken>,
+    /// Root token generated during cluster initialization (if requested).
+    ///
+    /// Only present when the node initialized a new cluster (not joining existing)
+    /// and token generation was requested via bootstrap configuration.
+    pub root_token: Option<CapabilityToken>,
 }
 
 impl NodeHandle {
@@ -234,8 +240,13 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         .ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
 
     // Ensure data directory exists
-    std::fs::create_dir_all(data_dir)
-        .with_context(|| format!("failed to create data directory: {}", data_dir.display()))?;
+    std::fs::create_dir_all(data_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "failed to create data directory {}: {}",
+            data_dir.display(),
+            e
+        )
+    })?;
 
     // MetadataStore expects a path to the database file, not directory
     let metadata_db_path = data_dir.join("metadata.redb");
@@ -261,7 +272,8 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
 
     // Parse secret key if provided
     let iroh_config = if let Some(secret_key_hex) = &config.iroh.secret_key {
-        let bytes = hex::decode(secret_key_hex).context("invalid secret key hex")?;
+        let bytes = hex::decode(secret_key_hex)
+            .map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
         let secret_key = iroh::SecretKey::from_bytes(
             &bytes
                 .try_into()
@@ -589,8 +601,12 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // Initialize blob store if enabled
     let blob_store = if config.blobs.enabled {
         let blobs_dir = data_dir.join("blobs");
-        std::fs::create_dir_all(&blobs_dir).with_context(|| {
-            format!("failed to create blobs directory: {}", blobs_dir.display())
+        std::fs::create_dir_all(&blobs_dir).map_err(|e| {
+            anyhow::anyhow!(
+                "failed to create blobs directory {}: {}",
+                blobs_dir.display(),
+                e
+            )
         })?;
 
         match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
@@ -789,6 +805,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         docs_exporter_cancel,
         docs_sync,
         ttl_cleanup_cancel,
+        root_token: None, // Set by caller after cluster init
     })
 }
 
@@ -822,7 +839,7 @@ pub fn load_config(
     // Merge TOML file if provided
     if let Some(path) = toml_path {
         let toml_config = NodeConfig::from_toml_file(path)
-            .with_context(|| format!("failed to load config from {}", path.display()))?;
+            .map_err(|e| anyhow::anyhow!("failed to load config from {}: {}", path.display(), e))?;
         config.merge(toml_config);
     }
 
@@ -832,7 +849,7 @@ pub fn load_config(
     // Validate final configuration
     config
         .validate()
-        .context("configuration validation failed")?;
+        .map_err(|e| anyhow::anyhow!("configuration validation failed: {}", e))?;
 
     Ok(config)
 }
@@ -851,17 +868,18 @@ fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, Endpoin
 
         let node_id: u64 = parts[0]
             .parse()
-            .context(format!("invalid node_id in peer spec '{}'", spec))?;
+            .map_err(|e| anyhow::anyhow!("invalid node_id in peer spec '{}': {}", spec, e))?;
 
         // Parse endpoint address (could be full JSON or just ID)
         let addr = if parts[1].starts_with('{') {
-            serde_json::from_str(parts[1])
-                .context(format!("invalid JSON endpoint in peer spec '{}'", spec))?
+            serde_json::from_str(parts[1]).map_err(|e| {
+                anyhow::anyhow!("invalid JSON endpoint in peer spec '{}': {}", spec, e)
+            })?
         } else {
             // Parse as bare endpoint ID
-            let endpoint_id = parts[1]
-                .parse()
-                .context(format!("invalid endpoint_id in peer spec '{}'", spec))?;
+            let endpoint_id = parts[1].parse().map_err(|e| {
+                anyhow::anyhow!("invalid endpoint_id in peer spec '{}': {}", spec, e)
+            })?;
             EndpointAddr::new(endpoint_id)
         };
 
