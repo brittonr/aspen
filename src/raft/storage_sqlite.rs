@@ -9,13 +9,13 @@
 //!
 //! - `SqliteStateMachine`: RaftStateMachine implementation with pooled reads
 //! - `SnapshotBuilder`: Incremental snapshot creation from SQLite state
-//! - Connection pooling: r2d2 manages bounded read connections (DEFAULT_READ_POOL_SIZE = 8)
+//! - Connection pooling: r2d2 manages bounded read connections (DEFAULT_READ_POOL_SIZE = 50)
 //! - Batch operations: SetMulti supports up to MAX_SETMULTI_KEYS (100) keys
 //! - Snapshot metadata: Tracks last applied log and membership in separate table
 //!
 //! # Tiger Style
 //!
-//! - Fixed limits: MAX_BATCH_SIZE (1024), MAX_SETMULTI_KEYS (100), read pool size (8)
+//! - Fixed limits: MAX_BATCH_SIZE (1024), MAX_SETMULTI_KEYS (100), read pool size (50)
 //! - Explicit types: u64 for log indices, i64 for SQLite integers (cross-platform)
 //! - Resource bounds: Connection pool prevents unbounded connection growth
 //! - Error handling: SNAFU errors with actionable context for operators
@@ -3834,7 +3834,7 @@ mod tests {
 
     #[test]
     fn test_default_read_pool_size_constant() {
-        assert_eq!(DEFAULT_READ_POOL_SIZE, 10);
+        assert_eq!(DEFAULT_READ_POOL_SIZE, 50);
     }
 
     #[test]

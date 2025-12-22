@@ -71,6 +71,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 
+use crate::raft::constants::DEFAULT_READ_POOL_SIZE;
 use crate::raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
@@ -168,6 +169,16 @@ pub struct NodeConfig {
     /// Format: "node_id@endpoint_id:direct_addrs"
     #[serde(default)]
     pub peers: Vec<String>,
+
+    /// SQLite read connection pool size.
+    ///
+    /// Controls the number of concurrent read connections to SQLite.
+    /// SQLite WAL mode handles many concurrent readers efficiently.
+    ///
+    /// Tiger Style: Bounded pool prevents unbounded connection creation.
+    /// Default is 50 (5% of MAX_CONCURRENT_OPS = 1000).
+    #[serde(default = "default_sqlite_read_pool_size")]
+    pub sqlite_read_pool_size: u32,
 }
 
 impl Default for NodeConfig {
@@ -192,6 +203,7 @@ impl Default for NodeConfig {
             blobs: BlobConfig::default(),
             peer_sync: PeerSyncConfig::default(),
             peers: vec![],
+            sqlite_read_pool_size: default_sqlite_read_pool_size(),
         }
     }
 }
@@ -616,6 +628,8 @@ impl NodeConfig {
                     .unwrap_or(0),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
+            sqlite_read_pool_size: parse_env("ASPEN_SQLITE_READ_POOL_SIZE")
+                .unwrap_or_else(default_sqlite_read_pool_size),
         }
     }
 
@@ -749,6 +763,10 @@ impl NodeConfig {
         }
         if !other.peers.is_empty() {
             self.peers = other.peers;
+        }
+        // SQLite pool size: override if non-default
+        if other.sqlite_read_pool_size != default_sqlite_read_pool_size() {
+            self.sqlite_read_pool_size = other.sqlite_read_pool_size;
         }
     }
 
@@ -944,6 +962,10 @@ fn default_enable_gossip() -> bool {
 
 fn default_enable_mdns() -> bool {
     true
+}
+
+fn default_sqlite_read_pool_size() -> u32 {
+    DEFAULT_READ_POOL_SIZE
 }
 
 // Helper functions for parsing environment variables

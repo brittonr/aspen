@@ -159,14 +159,16 @@ pub const MAX_PEERS: u32 = 1000;
 /// - `storage_sqlite.rs`: Snapshot builder validation
 pub const MAX_SNAPSHOT_ENTRIES: u32 = 1_000_000;
 
-/// Default size for the SQLite read connection pool (10 connections).
+/// Default size for the SQLite read connection pool (50 connections).
 ///
 /// Tiger Style: Fixed pool size prevents unbounded connection creation.
-/// Balances concurrency against resource usage.
+/// Sized at 5% of MAX_CONCURRENT_OPS (1000) to balance concurrency against
+/// resource usage. SQLite WAL mode handles many concurrent readers efficiently.
 ///
 /// Used in:
 /// - `storage_sqlite.rs`: Connection pool initialization
-pub const DEFAULT_READ_POOL_SIZE: u32 = 10;
+/// - `cluster/config.rs`: Default for NodeConfig.sqlite_read_pool_size
+pub const DEFAULT_READ_POOL_SIZE: u32 = 50;
 
 // ============================================================================
 // Actor and Concurrency Constants

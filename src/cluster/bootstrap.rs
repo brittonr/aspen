@@ -440,7 +440,10 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
             let log_store = Arc::new(RedbLogStore::new(&log_path)?);
 
             let state_machine_path = data_dir.join(format!("node_{}_state.db", config.node_id));
-            let sqlite_state_machine = SqliteStateMachine::new(&state_machine_path)?;
+            let sqlite_state_machine = SqliteStateMachine::with_pool_size(
+                &state_machine_path,
+                config.sqlite_read_pool_size,
+            )?;
 
             // Wire up log broadcast channel to state machine if docs export is enabled
             let sqlite_state_machine = if let Some(ref sender) = log_broadcast {
