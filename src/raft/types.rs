@@ -233,6 +233,23 @@ pub enum AppRequest {
         /// Lease ID to refresh.
         lease_id: u64,
     },
+    // =========================================================================
+    // Multi-key transactions
+    // =========================================================================
+    /// Transaction with If/Then/Else semantics (etcd-style).
+    /// Compares conditions, then executes success branch if all pass, else failure branch.
+    Transaction {
+        /// Comparison conditions as (target, op, key, value).
+        /// target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision.
+        /// op: 0=Equal, 1=NotEqual, 2=Greater, 3=Less.
+        compare: Vec<(u8, u8, String, String)>,
+        /// Success branch operations as (op_type, key, value).
+        /// op_type: 0=Put, 1=Delete, 2=Get, 3=Range.
+        /// For Range, value contains the limit as a string.
+        success: Vec<(u8, String, String)>,
+        /// Failure branch operations (same format as success).
+        failure: Vec<(u8, String, String)>,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -339,6 +356,19 @@ impl fmt::Display for AppRequest {
             AppRequest::LeaseKeepalive { lease_id } => {
                 write!(f, "LeaseKeepalive {{ lease_id: {lease_id} }}")
             }
+            AppRequest::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
+                write!(
+                    f,
+                    "Transaction {{ compare: {}, success: {}, failure: {} }}",
+                    compare.len(),
+                    success.len(),
+                    failure.len()
+                )
+            }
         }
     }
 }
@@ -380,6 +410,18 @@ pub struct AppResponse {
     /// Number of keys attached to a lease.
     /// For LeaseRevoke: number of keys deleted with the lease.
     pub keys_deleted: Option<u32>,
+    // =========================================================================
+    // Transaction operation responses
+    // =========================================================================
+    /// For Transaction: whether the success branch was executed.
+    /// `Some(true)`: All comparisons passed, success branch executed.
+    /// `Some(false)`: At least one comparison failed, failure branch executed.
+    /// `None`: Not a transaction operation.
+    pub succeeded: Option<bool>,
+    /// For Transaction: results of the executed operations.
+    pub txn_results: Option<Vec<crate::api::TxnOpResult>>,
+    /// For Transaction: the cluster revision after this transaction.
+    pub header_revision: Option<u64>,
 }
 
 declare_raft_types!(

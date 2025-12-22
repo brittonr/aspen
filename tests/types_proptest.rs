@@ -264,6 +264,20 @@ fn test_app_request_display_contains_key() {
                     );
                     assert!(displayed.contains(&lease_id.to_string()));
                 }
+                AppRequest::Transaction {
+                    compare,
+                    success,
+                    failure,
+                } => {
+                    assert!(
+                        displayed.contains("Transaction"),
+                        "Display should contain variant name"
+                    );
+                    // Should contain operation counts
+                    assert!(displayed.contains(&compare.len().to_string()));
+                    assert!(displayed.contains(&success.len().to_string()));
+                    assert!(displayed.contains(&failure.len().to_string()));
+                }
             }
         });
 }

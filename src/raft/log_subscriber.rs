@@ -319,6 +319,15 @@ pub enum KvOperation {
         /// Lease ID to refresh.
         lease_id: u64,
     },
+    /// Multi-key transaction with If/Then/Else semantics.
+    Transaction {
+        /// Comparison conditions as (target, op, key, value).
+        compare: Vec<(u8, u8, Vec<u8>, Vec<u8>)>,
+        /// Success branch operations as (op_type, key, value).
+        success: Vec<(u8, Vec<u8>, Vec<u8>)>,
+        /// Failure branch operations.
+        failure: Vec<(u8, Vec<u8>, Vec<u8>)>,
+    },
     /// No-op entry (used for leader election).
     Noop,
     /// Membership change entry.
@@ -360,6 +369,19 @@ impl KvOperation {
                 // Always include control/lease operations
                 true
             }
+            KvOperation::Transaction {
+                success, failure, ..
+            } => {
+                // Check if any operation in success or failure branches affects the prefix
+                let check_ops = |ops: &[(u8, Vec<u8>, Vec<u8>)]| {
+                    ops.iter().any(|(op_type, key, _)| {
+                        // op_type: 0=Put, 1=Delete, 2=Get, 3=Range
+                        // Put and Delete modify keys, Get and Range just read
+                        (*op_type == 0 || *op_type == 1) && key.starts_with(prefix)
+                    })
+                };
+                check_ops(success) || check_ops(failure)
+            }
         }
     }
 
@@ -387,6 +409,10 @@ impl KvOperation {
             | KvOperation::LeaseGrant { .. }
             | KvOperation::LeaseRevoke { .. }
             | KvOperation::LeaseKeepalive { .. } => None,
+            KvOperation::Transaction { success, .. } => {
+                // Return the first key from success branch
+                success.first().map(|(_, k, _)| k.as_slice())
+            }
         }
     }
 
@@ -410,6 +436,17 @@ impl KvOperation {
             | KvOperation::LeaseGrant { .. }
             | KvOperation::LeaseRevoke { .. }
             | KvOperation::LeaseKeepalive { .. } => 0,
+            KvOperation::Transaction {
+                success, failure, ..
+            } => {
+                // Count put/delete operations in both branches (get/range don't modify keys)
+                let count_mods = |ops: &[(u8, Vec<u8>, Vec<u8>)]| {
+                    ops.iter()
+                        .filter(|(op_type, _, _)| *op_type == 0 || *op_type == 1)
+                        .count()
+                };
+                count_mods(success) + count_mods(failure)
+            }
         }
     }
 }
@@ -512,6 +549,30 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
             },
             AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke { lease_id },
             AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive { lease_id },
+            AppRequest::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
+                // Convert String-based tuples to Vec<u8>-based tuples
+                let cmp = compare
+                    .into_iter()
+                    .map(|(t, o, k, v)| (t, o, k.into_bytes(), v.into_bytes()))
+                    .collect();
+                let succ = success
+                    .into_iter()
+                    .map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes()))
+                    .collect();
+                let fail = failure
+                    .into_iter()
+                    .map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes()))
+                    .collect();
+                KvOperation::Transaction {
+                    compare: cmp,
+                    success: succ,
+                    failure: fail,
+                }
+            }
         }
     }
 }

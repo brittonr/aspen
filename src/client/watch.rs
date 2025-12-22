@@ -306,6 +306,40 @@ impl From<LogEntryPayload> for Vec<WatchEvent> {
             KvOperation::LeaseGrant { .. } => vec![],
             KvOperation::LeaseRevoke { .. } => vec![],
             KvOperation::LeaseKeepalive { .. } => vec![],
+            KvOperation::Transaction {
+                success, failure, ..
+            } => {
+                // Convert transaction operations to watch events
+                // Include both branches since we don't know which executed
+                let mut events = Vec::new();
+                for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
+                    match op_type {
+                        0 => {
+                            // Put
+                            events.push(WatchEvent::Set {
+                                key,
+                                value,
+                                index,
+                                term,
+                                committed_at_ms,
+                            });
+                        }
+                        1 => {
+                            // Delete
+                            events.push(WatchEvent::Delete {
+                                key,
+                                index,
+                                term,
+                                committed_at_ms,
+                            });
+                        }
+                        _ => {
+                            // Get/Range - no watch event needed
+                        }
+                    }
+                }
+                events
+            }
         }
     }
 }

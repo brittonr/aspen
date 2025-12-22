@@ -1673,6 +1673,14 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             ..Default::default()
                         }
                     }
+                    // Transaction: in-memory state machine doesn't support transactions yet
+                    AppRequest::Transaction { .. } => {
+                        // TODO: Implement transaction support for in-memory state machine
+                        AppResponse {
+                            succeeded: Some(false),
+                            ..Default::default()
+                        }
+                    }
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =

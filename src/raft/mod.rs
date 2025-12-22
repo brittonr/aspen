@@ -61,7 +61,8 @@ pub mod types;
 use std::sync::Arc;
 
 use crate::api::{
-    DEFAULT_SCAN_LIMIT, KeyValueStoreError, MAX_SCAN_RESULTS, ScanEntry, ScanRequest, ScanResult,
+    DEFAULT_SCAN_LIMIT, KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ScanRequest,
+    ScanResult,
 };
 use crate::raft::constants::MAX_BATCH_SIZE;
 use crate::raft::storage::InMemoryStateMachine;
@@ -151,10 +152,16 @@ impl StateMachineVariant {
 
         // Check if truncated and build entries
         let is_truncated = filtered.len() > limit;
-        let entries: Vec<ScanEntry> = filtered
+        let entries: Vec<KeyValueWithRevision> = filtered
             .into_iter()
             .take(limit)
-            .map(|(key, value)| ScanEntry { key, value })
+            .map(|(key, value)| KeyValueWithRevision {
+                key,
+                value,
+                version: 1,         // In-memory doesn't track versions
+                create_revision: 0, // In-memory doesn't track revisions
+                mod_revision: 0,
+            })
             .collect();
 
         // Generate continuation token if truncated

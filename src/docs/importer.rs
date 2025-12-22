@@ -317,7 +317,10 @@ impl DocsImporter {
             })
             .await
         {
-            Ok(result) => KeyOrigin::from_bytes(result.value.as_bytes()),
+            Ok(result) => {
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                KeyOrigin::from_bytes(value.as_bytes())
+            }
             Err(crate::api::KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => {
                 warn!(error = %e, "failed to read origin, proceeding with import");
@@ -424,7 +427,7 @@ mod tests {
             })
             .await
         {
-            Ok(result) => Some(result.value),
+            Ok(result) => result.kv.map(|kv| kv.value),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => panic!("unexpected error: {}", e),
         }

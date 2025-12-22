@@ -496,7 +496,7 @@ async fn test_batch_write_set_operations() {
         })
         .await
         .unwrap();
-    assert_eq!(r1.value, "value1");
+    assert_eq!(r1.kv.unwrap().value, "value1");
 
     let r2 = store
         .read(ReadRequest {
@@ -504,7 +504,7 @@ async fn test_batch_write_set_operations() {
         })
         .await
         .unwrap();
-    assert_eq!(r2.value, "value2");
+    assert_eq!(r2.kv.unwrap().value, "value2");
 
     let r3 = store
         .read(ReadRequest {
@@ -512,7 +512,7 @@ async fn test_batch_write_set_operations() {
         })
         .await
         .unwrap();
-    assert_eq!(r3.value, "value3");
+    assert_eq!(r3.kv.unwrap().value, "value3");
 }
 
 #[tokio::test]
@@ -555,7 +555,7 @@ async fn test_batch_write_mixed_operations() {
         })
         .await
         .unwrap();
-    assert_eq!(r1.value, "new_value");
+    assert_eq!(r1.kv.unwrap().value, "new_value");
 
     // Verify deleted key is gone
     let r2 = store
@@ -612,7 +612,7 @@ async fn test_conditional_batch_success() {
         })
         .await
         .unwrap();
-    assert_eq!(version.value, "2");
+    assert_eq!(version.kv.unwrap().value, "2");
 
     let data = store
         .read(ReadRequest {
@@ -620,7 +620,7 @@ async fn test_conditional_batch_success() {
         })
         .await
         .unwrap();
-    assert_eq!(data.value, "updated");
+    assert_eq!(data.kv.unwrap().value, "updated");
 }
 
 #[tokio::test]
@@ -706,7 +706,7 @@ async fn test_conditional_batch_key_exists() {
         })
         .await
         .unwrap();
-    assert_eq!(existing.value, "updated");
+    assert_eq!(existing.kv.unwrap().value, "updated");
 }
 
 #[tokio::test]
@@ -735,7 +735,7 @@ async fn test_conditional_batch_key_not_exists() {
         })
         .await
         .unwrap();
-    assert_eq!(new_key.value, "created");
+    assert_eq!(new_key.kv.unwrap().value, "created");
 
     // Try again - should fail because key now exists
     let request2 = WriteRequest {
@@ -760,7 +760,7 @@ async fn test_conditional_batch_key_not_exists() {
         })
         .await
         .unwrap();
-    assert_eq!(new_key_after.value, "created");
+    assert_eq!(new_key_after.kv.unwrap().value, "created");
 }
 
 #[tokio::test]
@@ -811,7 +811,7 @@ async fn test_conditional_batch_multiple_conditions() {
         })
         .await
         .unwrap();
-    assert_eq!(result_val.value, "all_conditions_passed");
+    assert_eq!(result_val.kv.unwrap().value, "all_conditions_passed");
 }
 
 // ============================================================================

@@ -903,10 +903,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
             .await
         {
             Ok(result) => {
-                if result.value.is_empty() {
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                if value.is_empty() {
                     Ok(None)
                 } else {
-                    let state: RWLockState = serde_json::from_str(&result.value)?;
+                    let state: RWLockState = serde_json::from_str(&value)?;
                     Ok(Some(state))
                 }
             }

@@ -46,10 +46,10 @@ use tracing::{error, info, instrument, warn};
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
     ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
-    KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry, ScanRequest,
-    ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult,
-    WriteRequest, WriteResult, sql_validation::validate_sql_query, validate_sql_request,
-    validate_write_command,
+    KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult,
+    ScanRequest, ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest,
+    SqlQueryResult, WriteRequest, WriteResult, sql_validation::validate_sql_query,
+    validate_sql_request, validate_write_command,
 };
 use crate::raft::StateMachineVariant;
 use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
@@ -509,6 +509,56 @@ impl KeyValueStore for RaftNode {
             crate::api::WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive {
                 lease_id: *lease_id,
             },
+            crate::api::WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
+                use crate::api::{CompareOp, CompareTarget, TxnOp};
+
+                // Convert compare conditions to compact format:
+                // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
+                // op: 0=Equal, 1=NotEqual, 2=Greater, 3=Less
+                let cmp: Vec<(u8, u8, String, String)> = compare
+                    .iter()
+                    .map(|c| {
+                        let target = match c.target {
+                            CompareTarget::Value => 0,
+                            CompareTarget::Version => 1,
+                            CompareTarget::CreateRevision => 2,
+                            CompareTarget::ModRevision => 3,
+                        };
+                        let op = match c.op {
+                            CompareOp::Equal => 0,
+                            CompareOp::NotEqual => 1,
+                            CompareOp::Greater => 2,
+                            CompareOp::Less => 3,
+                        };
+                        (target, op, c.key.clone(), c.value.clone())
+                    })
+                    .collect();
+
+                // Convert operations to compact format:
+                // op_type: 0=Put, 1=Delete, 2=Get, 3=Range
+                let convert_ops = |ops: &[TxnOp]| -> Vec<(u8, String, String)> {
+                    ops.iter()
+                        .map(|op| match op {
+                            TxnOp::Put { key, value } => (0, key.clone(), value.clone()),
+                            TxnOp::Delete { key } => (1, key.clone(), String::new()),
+                            TxnOp::Get { key } => (2, key.clone(), String::new()),
+                            TxnOp::Range { prefix, limit } => {
+                                (3, prefix.clone(), limit.to_string())
+                            }
+                        })
+                        .collect()
+                };
+
+                AppRequest::Transaction {
+                    compare: cmp,
+                    success: convert_ops(success),
+                    failure: convert_ops(failure),
+                }
+            }
         };
 
         // Apply write through Raft consensus
@@ -543,6 +593,9 @@ impl KeyValueStore for RaftNode {
                     lease_id: resp.data.lease_id,
                     ttl_seconds: resp.data.ttl_seconds,
                     keys_deleted: resp.data.keys_deleted,
+                    succeeded: resp.data.succeeded,
+                    txn_results: resp.data.txn_results,
+                    header_revision: resp.data.header_revision,
                 })
             }
             Err(err) => {
@@ -603,16 +656,18 @@ impl KeyValueStore for RaftNode {
         match &self.state_machine {
             StateMachineVariant::InMemory(sm) => match sm.get(&request.key).await {
                 Some(value) => Ok(ReadResult {
-                    key: request.key,
-                    value,
+                    kv: Some(KeyValueWithRevision {
+                        key: request.key,
+                        value,
+                        version: 1,         // In-memory doesn't track versions
+                        create_revision: 0, // In-memory doesn't track revisions
+                        mod_revision: 0,
+                    }),
                 }),
                 None => Err(KeyValueStoreError::NotFound { key: request.key }),
             },
-            StateMachineVariant::Sqlite(sm) => match sm.get(&request.key).await {
-                Ok(Some(value)) => Ok(ReadResult {
-                    key: request.key,
-                    value,
-                }),
+            StateMachineVariant::Sqlite(sm) => match sm.get_with_revision(&request.key).await {
+                Ok(Some(kv)) => Ok(ReadResult { kv: Some(kv) }),
                 Ok(None) => Err(KeyValueStoreError::NotFound { key: request.key }),
                 Err(err) => Err(KeyValueStoreError::Failed {
                     reason: err.to_string(),
@@ -720,10 +775,16 @@ impl KeyValueStore for RaftNode {
 
                 // Take limit+1 to check if there are more results
                 let is_truncated = filtered.len() > limit;
-                let entries: Vec<ScanEntry> = filtered
+                let entries: Vec<KeyValueWithRevision> = filtered
                     .into_iter()
                     .take(limit)
-                    .map(|(key, value)| ScanEntry { key, value })
+                    .map(|(key, value)| KeyValueWithRevision {
+                        key,
+                        value,
+                        version: 1,         // In-memory doesn't track versions
+                        create_revision: 0, // In-memory doesn't track revisions
+                        mod_revision: 0,
+                    })
                     .collect();
 
                 let continuation_token = if is_truncated {
@@ -740,18 +801,17 @@ impl KeyValueStore for RaftNode {
                 })
             }
             StateMachineVariant::Sqlite(sm) => {
-                // SQLite scan with pagination
+                // SQLite scan with pagination - returns KeyValueWithRevision directly
                 let start_key = _request.continuation_token.as_deref();
-                let all_pairs = sm.scan(&_request.prefix, start_key, Some(limit + 1)).await;
+                let all_entries = sm
+                    .scan_with_revision(&_request.prefix, start_key, Some(limit + 1))
+                    .await;
 
-                match all_pairs {
-                    Ok(pairs) => {
-                        let is_truncated = pairs.len() > limit;
-                        let entries: Vec<ScanEntry> = pairs
-                            .into_iter()
-                            .take(limit)
-                            .map(|(key, value)| ScanEntry { key, value })
-                            .collect();
+                match all_entries {
+                    Ok(entries_full) => {
+                        let is_truncated = entries_full.len() > limit;
+                        let entries: Vec<KeyValueWithRevision> =
+                            entries_full.into_iter().take(limit).collect();
 
                         let continuation_token = if is_truncated {
                             entries.last().map(|e| e.key.clone())

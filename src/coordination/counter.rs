@@ -62,8 +62,8 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
             .await
         {
             Ok(result) => {
-                result
-                    .value
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                value
                     .parse::<u64>()
                     .map_err(|_| CoordinationError::CorruptedData {
                         key: self.key.clone(),
@@ -257,8 +257,8 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
             .await
         {
             Ok(result) => {
-                result
-                    .value
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                value
                     .parse::<i64>()
                     .map_err(|_| CoordinationError::CorruptedData {
                         key: self.key.clone(),

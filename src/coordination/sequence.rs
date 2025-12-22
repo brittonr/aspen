@@ -104,23 +104,25 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     pub async fn reserve(&self, count: u64) -> Result<u64, CoordinationError> {
         loop {
             // Read current sequence value
-            let current =
-                match self
-                    .store
-                    .read(ReadRequest {
-                        key: self.key.clone(),
-                    })
-                    .await
-                {
-                    Ok(result) => result.value.parse::<u64>().map_err(|_| {
-                        CoordinationError::CorruptedData {
+            let current = match self
+                .store
+                .read(ReadRequest {
+                    key: self.key.clone(),
+                })
+                .await
+            {
+                Ok(result) => {
+                    let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| CoordinationError::CorruptedData {
                             key: self.key.clone(),
                             reason: "not a valid u64".to_string(),
-                        }
-                    })?,
-                    Err(KeyValueStoreError::NotFound { .. }) => self.config.start_value - 1,
-                    Err(e) => return Err(CoordinationError::Storage { source: e }),
-                };
+                        })?
+                }
+                Err(KeyValueStoreError::NotFound { .. }) => self.config.start_value - 1,
+                Err(e) => return Err(CoordinationError::Storage { source: e }),
+            };
 
             // Check for overflow
             let new_value =
@@ -188,9 +190,9 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
             .await
         {
             Ok(result) => {
+                let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 let value =
-                    result
-                        .value
+                    value_str
                         .parse::<u64>()
                         .map_err(|_| CoordinationError::CorruptedData {
                             key: self.key.clone(),
@@ -215,8 +217,8 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
             .await
         {
             Ok(result) => {
-                result
-                    .value
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                value
                     .parse::<u64>()
                     .map_err(|_| CoordinationError::CorruptedData {
                         key: self.key.clone(),

@@ -332,6 +332,52 @@ pub enum WriteCommand {
         /// Lease ID to refresh.
         lease_id: u64,
     },
+    // =========================================================================
+    // Transaction operations (etcd-style If/Then/Else)
+    // =========================================================================
+    /// Transaction: atomic If/Then/Else with rich comparisons.
+    ///
+    /// Evaluates all comparisons in `compare`. If ALL pass, executes `success` operations.
+    /// If ANY comparison fails, executes `failure` operations instead.
+    ///
+    /// Similar to etcd's `Txn().If(...).Then(...).Else(...).Commit()`.
+    ///
+    /// # Comparison Targets
+    ///
+    /// - `Value`: Compare the key's current value
+    /// - `Version`: Compare the key's version (per-key modification counter)
+    /// - `CreateRevision`: Compare when the key was first created (Raft log index)
+    /// - `ModRevision`: Compare when the key was last modified (Raft log index)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Atomic check-and-update: only update if version matches
+    /// WriteCommand::Transaction {
+    ///     compare: vec![TxnCompare {
+    ///         key: "config".into(),
+    ///         target: CompareTarget::Version,
+    ///         op: CompareOp::Equal,
+    ///         value: "5".into(),
+    ///     }],
+    ///     success: vec![TxnOp::Put {
+    ///         key: "config".into(),
+    ///         value: "new_value".into(),
+    ///     }],
+    ///     failure: vec![TxnOp::Get { key: "config".into() }],
+    /// }
+    /// ```
+    Transaction {
+        /// Comparisons that must ALL be true for success branch.
+        /// Max 100 comparisons (Tiger Style).
+        compare: Vec<TxnCompare>,
+        /// Operations to execute if all comparisons pass.
+        /// Max 100 operations (Tiger Style).
+        success: Vec<TxnOp>,
+        /// Operations to execute if any comparison fails.
+        /// Max 100 operations (Tiger Style).
+        failure: Vec<TxnOp>,
+    },
 }
 
 /// A single operation within a batch write.
@@ -352,6 +398,112 @@ pub enum BatchCondition {
     KeyExists { key: String },
     /// Key must not exist.
     KeyNotExists { key: String },
+}
+
+// ============================================================================
+// Transaction types (etcd-style If/Then/Else)
+// ============================================================================
+
+/// Comparison target for transaction conditions.
+///
+/// Specifies what attribute of a key to compare against.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompareTarget {
+    /// Compare the value of the key.
+    Value,
+    /// Compare the version (per-key modification counter, starts at 1).
+    Version,
+    /// Compare the create revision (Raft log index when key was created).
+    CreateRevision,
+    /// Compare the mod revision (Raft log index of last modification).
+    ModRevision,
+}
+
+/// Comparison operator for transaction conditions.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CompareOp {
+    /// Equal (==)
+    Equal,
+    /// Not equal (!=)
+    NotEqual,
+    /// Greater than (>)
+    Greater,
+    /// Less than (<)
+    Less,
+}
+
+/// A comparison condition for transactions.
+///
+/// Used in the `compare` clause of a `Transaction` to check key state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TxnCompare {
+    /// Key to check.
+    pub key: String,
+    /// What attribute to compare (value, version, create_revision, mod_revision).
+    pub target: CompareTarget,
+    /// Comparison operator.
+    pub op: CompareOp,
+    /// Value to compare against.
+    /// - For Value: the expected string value
+    /// - For Version/CreateRevision/ModRevision: the numeric value as string
+    pub value: String,
+}
+
+/// Operations that can be performed in a transaction branch.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TxnOp {
+    /// Set a key to a value.
+    Put { key: String, value: String },
+    /// Delete a key.
+    Delete { key: String },
+    /// Read a key (result included in response).
+    Get { key: String },
+    /// Range scan with prefix (bounded by limit).
+    Range { prefix: String, limit: u32 },
+}
+
+/// Result of a single transaction operation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TxnOpResult {
+    /// Result of a Put operation.
+    Put {
+        /// The revision after this put.
+        revision: u64,
+    },
+    /// Result of a Delete operation.
+    Delete {
+        /// Number of keys deleted (0 or 1).
+        deleted: u32,
+    },
+    /// Result of a Get operation.
+    Get {
+        /// The key-value with revision info, None if key not found.
+        kv: Option<KeyValueWithRevision>,
+    },
+    /// Result of a Range operation.
+    Range {
+        /// Matching key-values with revision info.
+        kvs: Vec<KeyValueWithRevision>,
+        /// True if more results available beyond limit.
+        more: bool,
+    },
+}
+
+/// Key-value pair with revision metadata.
+///
+/// Returned by read operations and transaction Get/Range results.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KeyValueWithRevision {
+    /// The key.
+    pub key: String,
+    /// The value.
+    pub value: String,
+    /// Per-key version counter (1, 2, 3...). Reset to 1 on delete+recreate.
+    pub version: u64,
+    /// Raft log index when key was first created.
+    pub create_revision: u64,
+    /// Raft log index of last modification.
+    pub mod_revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -375,6 +527,13 @@ pub struct WriteResult {
     pub ttl_seconds: Option<u32>,
     /// Number of keys deleted (for LeaseRevoke).
     pub keys_deleted: Option<u32>,
+    // Transaction results
+    /// For Transaction: whether the success branch was executed (all comparisons passed).
+    pub succeeded: Option<bool>,
+    /// For Transaction: results of the executed operations (from success or failure branch).
+    pub txn_results: Option<Vec<TxnOpResult>>,
+    /// For Transaction: the cluster revision after this transaction.
+    pub header_revision: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -382,10 +541,13 @@ pub struct ReadRequest {
     pub key: String,
 }
 
+/// Response from a read operation.
+///
+/// Contains the key-value with full revision metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReadResult {
-    pub key: String,
-    pub value: String,
+    /// The key-value with revision metadata, None if key not found.
+    pub kv: Option<KeyValueWithRevision>,
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -442,20 +604,13 @@ pub struct ScanRequest {
     pub continuation_token: Option<String>,
 }
 
-/// A single key-value pair from a scan operation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScanEntry {
-    pub key: String,
-    pub value: String,
-}
-
 /// Response from a scan operation.
 ///
 /// Tiger Style: Bounded results with explicit truncation indicator.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanResult {
-    /// Matching key-value pairs (ordered by key).
-    pub entries: Vec<ScanEntry>,
+    /// Matching key-value pairs with revision metadata (ordered by key).
+    pub entries: Vec<KeyValueWithRevision>,
     /// Total number of entries returned.
     pub count: u32,
     /// True if more results are available.
@@ -498,16 +653,23 @@ pub trait KeyValueStore: Send + Sync {
     /// - `Failed`: Raft replication or other internal error
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
 
-    /// Read a value by key.
+    /// Read a value by key with revision metadata.
     ///
-    /// Returns the current committed value for the specified key.
+    /// Returns the current committed value for the specified key with full revision info.
+    /// If the key doesn't exist, returns `ReadResult { kv: None }`.
+    ///
     /// Read consistency depends on the backend implementation:
     /// - Raft backend: Linearizable reads (leader-only or read index)
     /// - In-memory backend: Local reads (for testing)
     ///
+    /// # Returns
+    ///
+    /// `ReadResult` containing `Option<KeyValueWithRevision>`:
+    /// - `Some(kv)` if key exists with version, create_revision, mod_revision
+    /// - `None` if key does not exist
+    ///
     /// # Errors
     ///
-    /// - `NotFound`: Key does not exist in the store
     /// - `Timeout`: Read did not complete within timeout
     /// - `Failed`: Internal error
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
@@ -520,8 +682,10 @@ pub trait KeyValueStore: Send + Sync {
 
     /// Scan keys matching a prefix with pagination support.
     ///
-    /// Returns keys in sorted order (lexicographic). The continuation_token
-    /// from the response can be used to fetch the next page of results.
+    /// Returns keys in sorted order (lexicographic) with full revision metadata.
+    /// The continuation_token from the response can be used to fetch the next page.
+    ///
+    /// Each entry includes version, create_revision, and mod_revision.
     ///
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     /// Maximum limit is MAX_SCAN_RESULTS (10,000).
@@ -673,6 +837,68 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                     }
                     BatchOperation::Delete { key } => {
                         check_key(key)?;
+                    }
+                }
+            }
+        }
+        // Transaction operations
+        WriteCommand::Transaction {
+            compare,
+            success,
+            failure,
+        } => {
+            // Check total size of all components
+            let total_size = compare.len() + success.len() + failure.len();
+            if total_size > MAX_SETMULTI_KEYS as usize {
+                return Err(KeyValueStoreError::BatchTooLarge {
+                    size: total_size,
+                    max: MAX_SETMULTI_KEYS,
+                });
+            }
+            // Validate comparisons
+            for cmp in compare {
+                check_key(&cmp.key)?;
+                check_value(&cmp.value)?;
+            }
+            // Validate success operations
+            for op in success {
+                match op {
+                    TxnOp::Put { key, value } => {
+                        check_key(key)?;
+                        check_value(value)?;
+                    }
+                    TxnOp::Delete { key } | TxnOp::Get { key } => {
+                        check_key(key)?;
+                    }
+                    TxnOp::Range { prefix, limit } => {
+                        check_key(prefix)?;
+                        if *limit > MAX_SCAN_RESULTS {
+                            return Err(KeyValueStoreError::BatchTooLarge {
+                                size: *limit as usize,
+                                max: MAX_SCAN_RESULTS,
+                            });
+                        }
+                    }
+                }
+            }
+            // Validate failure operations
+            for op in failure {
+                match op {
+                    TxnOp::Put { key, value } => {
+                        check_key(key)?;
+                        check_value(value)?;
+                    }
+                    TxnOp::Delete { key } | TxnOp::Get { key } => {
+                        check_key(key)?;
+                    }
+                    TxnOp::Range { prefix, limit } => {
+                        check_key(prefix)?;
+                        if *limit > MAX_SCAN_RESULTS {
+                            return Err(KeyValueStoreError::BatchTooLarge {
+                                size: *limit as usize,
+                                max: MAX_SCAN_RESULTS,
+                            });
+                        }
                     }
                 }
             }

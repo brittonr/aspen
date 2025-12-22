@@ -277,12 +277,12 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
             .await
         {
             Ok(result) => {
-                let entry: LockEntry = serde_json::from_str(&result.value).map_err(|_| {
-                    CoordinationError::CorruptedData {
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                let entry: LockEntry =
+                    serde_json::from_str(&value).map_err(|_| CoordinationError::CorruptedData {
                         key: self.key.clone(),
                         reason: "invalid JSON".to_string(),
-                    }
-                })?;
+                    })?;
                 Ok(Some(entry))
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(None),

@@ -208,12 +208,12 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             .await
         {
             Ok(result) => {
-                let state: BucketState = serde_json::from_str(&result.value).map_err(|_| {
-                    CoordinationError::CorruptedData {
+                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                let state: BucketState =
+                    serde_json::from_str(&value).map_err(|_| CoordinationError::CorruptedData {
                         key: self.key.clone(),
                         reason: "invalid bucket state JSON".to_string(),
-                    }
-                })?;
+                    })?;
                 Ok(state)
             }
             Err(KeyValueStoreError::NotFound { .. }) => {

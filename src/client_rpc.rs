@@ -1542,13 +1542,22 @@ pub struct ScanResultResponse {
     pub error: Option<String>,
 }
 
-/// Single entry from scan operation.
+/// Single entry from scan operation with revision metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanEntry {
     /// Key name.
     pub key: String,
     /// Value (as UTF-8 string).
     pub value: String,
+    /// Per-key version counter (1, 2, 3...). Reset to 1 on delete+recreate.
+    #[serde(default)]
+    pub version: u64,
+    /// Raft log index when key was first created.
+    #[serde(default)]
+    pub create_revision: u64,
+    /// Raft log index of last modification.
+    #[serde(default)]
+    pub mod_revision: u64,
 }
 
 /// Prometheus metrics response.

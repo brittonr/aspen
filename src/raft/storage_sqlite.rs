@@ -381,6 +381,43 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
             AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive {
                 lease_id: *lease_id,
             },
+            AppRequest::Transaction {
+                compare,
+                success,
+                failure,
+            } => KvOperation::Transaction {
+                compare: compare
+                    .iter()
+                    .map(|(target, op, key, value)| {
+                        (
+                            *target,
+                            *op,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+                success: success
+                    .iter()
+                    .map(|(op_type, key, value)| {
+                        (
+                            *op_type,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+                failure: failure
+                    .iter()
+                    .map(|(op_type, key, value)| {
+                        (
+                            *op_type,
+                            key.clone().into_bytes(),
+                            value.clone().into_bytes(),
+                        )
+                    })
+                    .collect(),
+            },
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -652,6 +689,33 @@ impl SqliteStateMachine {
         // Index for efficient lookup of keys by lease_id (for revoke operation)
         let _ = write_conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_kv_lease ON state_machine_kv(lease_id) WHERE lease_id IS NOT NULL",
+            [],
+        );
+
+        // Schema migration: Add revision tracking columns (v2)
+        // - create_revision: Raft log index when key was first created
+        // - mod_revision: Raft log index of last modification
+        // - version: Per-key counter (1, 2, 3...), reset on delete+recreate
+        let _ = write_conn.execute(
+            "ALTER TABLE state_machine_kv ADD COLUMN create_revision INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = write_conn.execute(
+            "ALTER TABLE state_machine_kv ADD COLUMN mod_revision INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = write_conn.execute(
+            "ALTER TABLE state_machine_kv ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+
+        // Index for efficient revision-based queries
+        let _ = write_conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kv_mod_revision ON state_machine_kv(mod_revision)",
+            [],
+        );
+        let _ = write_conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_kv_create_revision ON state_machine_kv(create_revision)",
             [],
         );
 
@@ -1276,6 +1340,39 @@ impl SqliteStateMachine {
         Ok(result)
     }
 
+    /// Get a key with full revision metadata.
+    ///
+    /// Returns the value along with version, create_revision, and mod_revision.
+    pub async fn get_with_revision(
+        &self,
+        key: &str,
+    ) -> Result<Option<crate::api::KeyValueWithRevision>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+
+        let result = conn
+            .query_row(
+                "SELECT key, value, version, create_revision, mod_revision FROM state_machine_kv \
+                 WHERE key = ?1 AND (expires_at_ms IS NULL OR expires_at_ms > ?2)",
+                params![key, now_ms as i64],
+                |row| {
+                    Ok(crate::api::KeyValueWithRevision {
+                        key: row.get(0)?,
+                        value: row.get(1)?,
+                        version: row.get::<_, i64>(2)? as u64,
+                        create_revision: row.get::<_, i64>(3)? as u64,
+                        mod_revision: row.get::<_, i64>(4)? as u64,
+                    })
+                },
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        Ok(result)
+    }
+
     /// Scan all keys that start with the given prefix.
     ///
     /// Returns a list of full key names. Expired keys are filtered out.
@@ -1417,6 +1514,83 @@ impl SqliteStateMachine {
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix))
+            .collect()
+        };
+
+        Ok(kv_pairs)
+    }
+
+    /// Scan keys matching a prefix with pagination support, returning revision metadata.
+    ///
+    /// Similar to `scan()` but returns `KeyValueWithRevision` with version and revision info.
+    pub async fn scan_with_revision(
+        &self,
+        prefix: &str,
+        after_key: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<crate::api::KeyValueWithRevision>, SqliteStorageError> {
+        let conn = self.read_pool.get().context(PoolSnafu)?;
+        Self::reset_read_connection(&conn)?;
+
+        let now_ms = now_unix_ms();
+        let requested_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize);
+        let bounded_limit = requested_limit.min(MAX_BATCH_SIZE as usize);
+        let fetch_limit = bounded_limit
+            .saturating_add(1)
+            .min(MAX_BATCH_SIZE as usize + 1);
+        let end_prefix = format!("{}\u{10000}", prefix);
+
+        let kv_pairs = if let Some(start) = after_key {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT key, value, version, create_revision, mod_revision FROM state_machine_kv \
+                     WHERE key > ?1 AND key >= ?2 AND key < ?3 \
+                     AND (expires_at_ms IS NULL OR expires_at_ms > ?4) \
+                     ORDER BY key LIMIT ?5",
+                )
+                .context(QuerySnafu)?;
+
+            stmt.query_map(
+                params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64],
+                |row| {
+                    Ok(crate::api::KeyValueWithRevision {
+                        key: row.get(0)?,
+                        value: row.get(1)?,
+                        version: row.get::<_, i64>(2)? as u64,
+                        create_revision: row.get::<_, i64>(3)? as u64,
+                        mod_revision: row.get::<_, i64>(4)? as u64,
+                    })
+                },
+            )
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|kv| kv.key.starts_with(prefix))
+            .collect()
+        } else {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT key, value, version, create_revision, mod_revision FROM state_machine_kv \
+                     WHERE key >= ?1 AND key < ?2 \
+                     AND (expires_at_ms IS NULL OR expires_at_ms > ?3) \
+                     ORDER BY key LIMIT ?4",
+                )
+                .context(QuerySnafu)?;
+
+            stmt.query_map(
+                params![prefix, end_prefix, now_ms as i64, fetch_limit as i64],
+                |row| {
+                    Ok(crate::api::KeyValueWithRevision {
+                        key: row.get(0)?,
+                        value: row.get(1)?,
+                        version: row.get::<_, i64>(2)? as u64,
+                        create_revision: row.get::<_, i64>(3)? as u64,
+                        mod_revision: row.get::<_, i64>(4)? as u64,
+                    })
+                },
+            )
+            .context(QuerySnafu)?
+            .filter_map(|r| r.ok())
+            .filter(|kv| kv.key.starts_with(prefix))
             .collect()
         };
 
@@ -2158,6 +2332,333 @@ impl SqliteStateMachine {
     }
 
     // =========================================================================
+    // Transaction operations (etcd-style If/Then/Else)
+    // =========================================================================
+
+    /// Apply an etcd-style transaction with If/Then/Else semantics.
+    ///
+    /// Evaluates all compare conditions. If all pass, executes success branch;
+    /// otherwise executes failure branch. Operations are atomic.
+    ///
+    /// Compare tuple format: (target, op, key, value)
+    /// - target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
+    /// - op: 0=Equal, 1=NotEqual, 2=Greater, 3=Less
+    ///
+    /// Operation tuple format: (op_type, key, value)
+    /// - op_type: 0=Put, 1=Delete, 2=Get, 3=Range
+    ///
+    /// Tiger Style: Fixed limits, atomic, explicit condition checking.
+    fn apply_transaction(
+        conn: &Connection,
+        log_index: u64,
+        compare: &[(u8, u8, String, String)],
+        success: &[(u8, String, String)],
+        failure: &[(u8, String, String)],
+    ) -> Result<AppResponse, io::Error> {
+        // Validate limits (Tiger Style)
+        if compare.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "Transaction with {} comparisons exceeds limit of {}",
+                compare.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+        if success.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "Transaction success branch with {} ops exceeds limit of {}",
+                success.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+        if failure.len() > MAX_SETMULTI_KEYS as usize {
+            return Err(io::Error::other(format!(
+                "Transaction failure branch with {} ops exceeds limit of {}",
+                failure.len(),
+                MAX_SETMULTI_KEYS
+            )));
+        }
+
+        // Evaluate all compare conditions
+        let all_conditions_met = Self::evaluate_transaction_compares(conn, compare)?;
+
+        // Select branch to execute
+        let ops_to_execute = if all_conditions_met { success } else { failure };
+
+        // Execute operations and collect results
+        let txn_results = Self::execute_transaction_ops(conn, log_index, ops_to_execute)?;
+
+        Ok(AppResponse {
+            succeeded: Some(all_conditions_met),
+            txn_results: Some(txn_results),
+            header_revision: Some(log_index),
+            ..Default::default()
+        })
+    }
+
+    /// Evaluate transaction compare conditions.
+    ///
+    /// Returns true if all conditions pass, false otherwise.
+    fn evaluate_transaction_compares(
+        conn: &Connection,
+        compare: &[(u8, u8, String, String)],
+    ) -> Result<bool, io::Error> {
+        for (target, op, key, expected) in compare {
+            // Fetch key metadata
+            let row: Option<(String, i64, i64, i64)> = conn
+                .query_row(
+                    "SELECT value, version, create_revision, mod_revision FROM state_machine_kv WHERE key = ?1",
+                    params![key],
+                    |row| Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, i64>(3)?,
+                    )),
+                )
+                .optional()
+                .context(QuerySnafu)?;
+
+            let condition_met = match (target, row.as_ref()) {
+                // Value comparisons
+                (0, Some((value, _, _, _))) => {
+                    Self::compare_values(op, value.as_str(), expected.as_str())
+                }
+                (0, None) => {
+                    // Key doesn't exist - compare against empty string
+                    Self::compare_values(op, "", expected.as_str())
+                }
+                // Version comparisons
+                (1, Some((_, version, _, _))) => {
+                    let expected_version: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, *version, expected_version)
+                }
+                (1, None) => {
+                    // Key doesn't exist - version is 0
+                    let expected_version: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, 0, expected_version)
+                }
+                // CreateRevision comparisons
+                (2, Some((_, _, create_rev, _))) => {
+                    let expected_rev: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, *create_rev, expected_rev)
+                }
+                (2, None) => {
+                    let expected_rev: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, 0, expected_rev)
+                }
+                // ModRevision comparisons
+                (3, Some((_, _, _, mod_rev))) => {
+                    let expected_rev: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, *mod_rev, expected_rev)
+                }
+                (3, None) => {
+                    let expected_rev: i64 = expected.parse().unwrap_or(0);
+                    Self::compare_numbers(op, 0, expected_rev)
+                }
+                // Unknown target type
+                _ => false,
+            };
+
+            if !condition_met {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Compare two string values using the specified operator.
+    fn compare_values(op: &u8, actual: &str, expected: &str) -> bool {
+        match op {
+            0 => actual == expected, // Equal
+            1 => actual != expected, // NotEqual
+            2 => actual > expected,  // Greater
+            3 => actual < expected,  // Less
+            _ => false,
+        }
+    }
+
+    /// Compare two numbers using the specified operator.
+    fn compare_numbers(op: &u8, actual: i64, expected: i64) -> bool {
+        match op {
+            0 => actual == expected, // Equal
+            1 => actual != expected, // NotEqual
+            2 => actual > expected,  // Greater
+            3 => actual < expected,  // Less
+            _ => false,
+        }
+    }
+
+    /// Execute transaction operations and collect results.
+    fn execute_transaction_ops(
+        conn: &Connection,
+        log_index: u64,
+        ops: &[(u8, String, String)],
+    ) -> Result<Vec<crate::api::TxnOpResult>, io::Error> {
+        let mut results = Vec::with_capacity(ops.len());
+
+        for (op_type, key, value) in ops {
+            let result = match op_type {
+                0 => {
+                    // Put operation
+                    Self::apply_transaction_put(conn, log_index, key, value)?
+                }
+                1 => {
+                    // Delete operation
+                    Self::apply_transaction_delete(conn, key)?
+                }
+                2 => {
+                    // Get operation
+                    Self::apply_transaction_get(conn, key)?
+                }
+                3 => {
+                    // Range operation (key is prefix, value is limit as string)
+                    let limit: u32 = value.parse().unwrap_or(100);
+                    Self::apply_transaction_range(conn, key, limit)?
+                }
+                _ => {
+                    // Unknown operation type - skip
+                    continue;
+                }
+            };
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
+    /// Execute a Put operation within a transaction.
+    fn apply_transaction_put(
+        conn: &Connection,
+        log_index: u64,
+        key: &str,
+        value: &str,
+    ) -> Result<crate::api::TxnOpResult, io::Error> {
+        // Check if key exists to determine if create or update
+        let existing: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT version, create_revision FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        let (new_version, create_rev) = match existing {
+            Some((version, create_rev)) => (version + 1, create_rev),
+            None => (1, log_index as i64),
+        };
+
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, value, new_version, create_rev, log_index as i64],
+        )
+        .context(ExecuteSnafu)?;
+
+        Ok(crate::api::TxnOpResult::Put {
+            revision: log_index,
+        })
+    }
+
+    /// Execute a Delete operation within a transaction.
+    fn apply_transaction_delete(
+        conn: &Connection,
+        key: &str,
+    ) -> Result<crate::api::TxnOpResult, io::Error> {
+        let deleted = conn
+            .execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
+            .context(ExecuteSnafu)?;
+
+        Ok(crate::api::TxnOpResult::Delete {
+            deleted: deleted as u32,
+        })
+    }
+
+    /// Execute a Get operation within a transaction.
+    fn apply_transaction_get(
+        conn: &Connection,
+        key: &str,
+    ) -> Result<crate::api::TxnOpResult, io::Error> {
+        use crate::api::KeyValueWithRevision;
+
+        let kv: Option<KeyValueWithRevision> = conn
+            .query_row(
+                "SELECT key, value, version, create_revision, mod_revision FROM state_machine_kv WHERE key = ?1",
+                params![key],
+                |row| Ok(KeyValueWithRevision {
+                    key: row.get::<_, String>(0)?,
+                    value: row.get::<_, String>(1)?,
+                    version: row.get::<_, i64>(2)? as u64,
+                    create_revision: row.get::<_, i64>(3)? as u64,
+                    mod_revision: row.get::<_, i64>(4)? as u64,
+                }),
+            )
+            .optional()
+            .context(QuerySnafu)?;
+
+        Ok(crate::api::TxnOpResult::Get { kv })
+    }
+
+    /// Execute a Range operation within a transaction.
+    fn apply_transaction_range(
+        conn: &Connection,
+        prefix: &str,
+        limit: u32,
+    ) -> Result<crate::api::TxnOpResult, io::Error> {
+        use crate::api::KeyValueWithRevision;
+
+        // Calculate range end for prefix scan
+        let end_key = Self::prefix_end(prefix);
+        let actual_limit = (limit as usize).min(MAX_SETMULTI_KEYS as usize);
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT key, value, version, create_revision, mod_revision
+                 FROM state_machine_kv
+                 WHERE key >= ?1 AND key < ?2
+                 ORDER BY key
+                 LIMIT ?3",
+            )
+            .context(QuerySnafu)?;
+
+        let rows = stmt
+            .query_map(params![prefix, &end_key, actual_limit + 1], |row| {
+                Ok(KeyValueWithRevision {
+                    key: row.get::<_, String>(0)?,
+                    value: row.get::<_, String>(1)?,
+                    version: row.get::<_, i64>(2)? as u64,
+                    create_revision: row.get::<_, i64>(3)? as u64,
+                    mod_revision: row.get::<_, i64>(4)? as u64,
+                })
+            })
+            .context(QuerySnafu)?;
+
+        let mut kvs: Vec<KeyValueWithRevision> =
+            rows.filter_map(|r| r.ok()).take(actual_limit).collect();
+
+        // Check if there are more results
+        let more = kvs.len() > actual_limit;
+        if more {
+            kvs.pop();
+        }
+
+        Ok(crate::api::TxnOpResult::Range { kvs, more })
+    }
+
+    /// Calculate the end key for a prefix range scan.
+    fn prefix_end(prefix: &str) -> String {
+        let mut bytes = prefix.as_bytes().to_vec();
+        // Find the last byte that can be incremented
+        while let Some(last) = bytes.pop() {
+            if last < 0xFF {
+                bytes.push(last + 1);
+                return String::from_utf8_lossy(&bytes).into_owned();
+            }
+        }
+        // All bytes were 0xFF - use a key that's effectively infinity
+        "\x7F".repeat(prefix.len() + 1)
+    }
+
+    // =========================================================================
     // Lease operations
     // =========================================================================
 
@@ -2370,6 +2871,11 @@ impl SqliteStateMachine {
                 AppRequest::LeaseKeepalive { lease_id } => {
                     Self::apply_lease_keepalive(conn, *lease_id)
                 }
+                AppRequest::Transaction {
+                    compare,
+                    success,
+                    failure,
+                } => Self::apply_transaction(conn, log_id.index, compare, success, failure),
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

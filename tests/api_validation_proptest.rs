@@ -10,9 +10,9 @@ mod support;
 use bolero::check;
 
 use aspen::api::{
-    ClusterNode, ClusterState, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, MAX_SCAN_RESULTS,
-    ReadRequest, ReadResult, ScanEntry, ScanRequest, ScanResult, WriteCommand, WriteRequest,
-    WriteResult, validate_write_command,
+    ClusterNode, ClusterState, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult,
+    KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanRequest, ScanResult,
+    WriteCommand, WriteRequest, WriteResult, validate_write_command,
 };
 use aspen::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 use support::bolero_generators::{
@@ -287,8 +287,13 @@ fn test_read_result_json_roundtrip() {
         .with_type::<(ValidApiKey, ValidApiValue)>()
         .for_each(|(key, value)| {
             let result = ReadResult {
-                key: key.0.clone(),
-                value: value.0.clone(),
+                kv: Some(KeyValueWithRevision {
+                    key: key.0.clone(),
+                    value: value.0.clone(),
+                    version: 1,
+                    create_revision: 0,
+                    mod_revision: 0,
+                }),
             };
             let serialized = serde_json::to_string(&result).expect("serialize");
             let deserialized: ReadResult = serde_json::from_str(&serialized).expect("deserialize");
@@ -347,19 +352,23 @@ fn test_scan_request_json_roundtrip() {
         });
 }
 
-/// ScanEntry serializes/deserializes correctly.
+/// KeyValueWithRevision serializes/deserializes correctly.
 #[test]
-fn test_scan_entry_json_roundtrip() {
+fn test_key_value_with_revision_json_roundtrip() {
     check!()
         .with_iterations(1000)
         .with_type::<(ValidApiKey, ValidApiValue)>()
         .for_each(|(key, value)| {
-            let entry = ScanEntry {
+            let entry = KeyValueWithRevision {
                 key: key.0.clone(),
                 value: value.0.clone(),
+                version: 1,
+                create_revision: 0,
+                mod_revision: 0,
             };
             let serialized = serde_json::to_string(&entry).expect("serialize");
-            let deserialized: ScanEntry = serde_json::from_str(&serialized).expect("deserialize");
+            let deserialized: KeyValueWithRevision =
+                serde_json::from_str(&serialized).expect("deserialize");
             assert_eq!(entry, deserialized);
         });
 }
@@ -372,10 +381,13 @@ fn test_scan_result_json_roundtrip() {
         .with_type::<(u32, bool, OptionalContinuationToken)>()
         .for_each(|(count, is_truncated, continuation_token)| {
             let count = count % 100;
-            let entries: Vec<ScanEntry> = (0..count.min(10))
-                .map(|i| ScanEntry {
+            let entries: Vec<KeyValueWithRevision> = (0..count.min(10))
+                .map(|i| KeyValueWithRevision {
                     key: format!("key_{}", i),
                     value: format!("value_{}", i),
+                    version: 1,
+                    create_revision: i as u64,
+                    mod_revision: i as u64,
                 })
                 .collect();
             let result = ScanResult {

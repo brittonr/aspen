@@ -132,7 +132,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
             })
             .await
         {
-            Ok(result) => Some(result.value),
+            Ok(result) => result.kv.map(|kv| kv.value),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(_) => None,
         }
@@ -145,13 +145,21 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
         // Read from KV
         let result = self.kv.read(request.clone()).await?;
 
-        if is_blob_ref(&result.value) {
+        // Extract value from kv field
+        let value = match &result.kv {
+            Some(kv) => &kv.value,
+            None => return Ok(result), // No value, return as-is
+        };
+
+        if is_blob_ref(value) {
             // Resolve blob reference
-            match self.resolve_blob_ref(&result.value).await {
-                Ok(Some(resolved)) => Ok(ReadResult {
-                    key: result.key,
-                    value: resolved,
-                }),
+            match self.resolve_blob_ref(value).await {
+                Ok(Some(resolved)) => {
+                    // Create new result with resolved value
+                    let mut kv = result.kv.unwrap(); // Safe: we checked above
+                    kv.value = resolved;
+                    Ok(ReadResult { kv: Some(kv) })
+                }
                 Ok(None) => {
                     // Blob not found, return raw reference as fallback
                     warn!(key = %request.key, "blob not found, returning raw reference");
@@ -310,6 +318,16 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
             },
             WriteCommand::LeaseRevoke { lease_id } => WriteCommand::LeaseRevoke { lease_id },
             WriteCommand::LeaseKeepalive { lease_id } => WriteCommand::LeaseKeepalive { lease_id },
+            // Transaction operations pass through directly (blob processing not supported in transactions)
+            WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            } => WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            },
         };
 
         // Write to underlying KV

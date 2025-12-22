@@ -1761,11 +1761,14 @@ async fn process_client_request(
             let result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
 
             match result {
-                Ok(resp) => Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
-                    value: Some(resp.value.into_bytes()),
-                    found: true,
-                    error: None,
-                })),
+                Ok(resp) => {
+                    let value = resp.kv.map(|kv| kv.value.into_bytes());
+                    Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
+                        value,
+                        found: true,
+                        error: None,
+                    }))
+                }
                 Err(e) => {
                     // HIGH-4: Sanitize error messages to prevent information leakage
                     let (found, error) = match &e {
@@ -2110,13 +2113,16 @@ async fn process_client_request(
 
             match result {
                 Ok(scan_resp) => {
-                    // Convert from api::ScanEntry to client_rpc::ScanEntry
+                    // Convert from api::KeyValueWithRevision to client_rpc::ScanEntry
                     let entries: Vec<ScanEntry> = scan_resp
                         .entries
                         .into_iter()
                         .map(|e| ScanEntry {
                             key: e.key,
                             value: e.value,
+                            version: e.version,
+                            create_revision: e.create_revision,
+                            mod_revision: e.mod_revision,
                         })
                         .collect();
 
@@ -3472,7 +3478,8 @@ async fn process_client_request(
 
             match read_result {
                 Ok(result) => {
-                    match serde_json::from_str::<LockEntry>(&result.value) {
+                    let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                    match serde_json::from_str::<LockEntry>(&value) {
                         Ok(entry) => {
                             if entry.holder_id != holder_id || entry.fencing_token != fencing_token
                             {
@@ -3494,7 +3501,7 @@ async fn process_client_request(
                                 .write(WriteRequest {
                                     command: WriteCommand::CompareAndSwap {
                                         key: key.clone(),
-                                        expected: Some(result.value),
+                                        expected: Some(value),
                                         new_value: released_json,
                                     },
                                 })
@@ -3566,57 +3573,61 @@ async fn process_client_request(
             let read_result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
 
             match read_result {
-                Ok(result) => match serde_json::from_str::<LockEntry>(&result.value) {
-                    Ok(entry) => {
-                        if entry.holder_id != holder_id || entry.fencing_token != fencing_token {
-                            return Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                                success: false,
-                                fencing_token: Some(entry.fencing_token),
-                                holder_id: Some(entry.holder_id),
-                                deadline_ms: Some(entry.deadline_ms),
-                                error: Some("lock not held by this holder".to_string()),
-                            }));
-                        }
+                Ok(result) => {
+                    let value = result.kv.map(|kv| kv.value).unwrap_or_default();
+                    match serde_json::from_str::<LockEntry>(&value) {
+                        Ok(entry) => {
+                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token
+                            {
+                                return Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: false,
+                                    fencing_token: Some(entry.fencing_token),
+                                    holder_id: Some(entry.holder_id),
+                                    deadline_ms: Some(entry.deadline_ms),
+                                    error: Some("lock not held by this holder".to_string()),
+                                }));
+                            }
 
-                        // Create renewed entry
-                        let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
-                        let renewed_json = serde_json::to_string(&renewed).unwrap();
+                            // Create renewed entry
+                            let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
+                            let renewed_json = serde_json::to_string(&renewed).unwrap();
 
-                        match ctx
-                            .kv_store
-                            .write(WriteRequest {
-                                command: WriteCommand::CompareAndSwap {
-                                    key: key.clone(),
-                                    expected: Some(result.value),
-                                    new_value: renewed_json,
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                                success: true,
-                                fencing_token: Some(fencing_token),
-                                holder_id: Some(holder_id),
-                                deadline_ms: Some(renewed.deadline_ms),
-                                error: None,
-                            })),
-                            Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                                success: false,
-                                fencing_token: None,
-                                holder_id: None,
-                                deadline_ms: None,
-                                error: Some(format!("renew failed: {}", e)),
-                            })),
+                            match ctx
+                                .kv_store
+                                .write(WriteRequest {
+                                    command: WriteCommand::CompareAndSwap {
+                                        key: key.clone(),
+                                        expected: Some(value),
+                                        new_value: renewed_json,
+                                    },
+                                })
+                                .await
+                            {
+                                Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: true,
+                                    fencing_token: Some(fencing_token),
+                                    holder_id: Some(holder_id),
+                                    deadline_ms: Some(renewed.deadline_ms),
+                                    error: None,
+                                })),
+                                Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                                    success: false,
+                                    fencing_token: None,
+                                    holder_id: None,
+                                    deadline_ms: None,
+                                    error: Some(format!("renew failed: {}", e)),
+                                })),
+                            }
                         }
+                        Err(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+                            success: false,
+                            fencing_token: None,
+                            holder_id: None,
+                            deadline_ms: None,
+                            error: Some("invalid lock entry format".to_string()),
+                        })),
                     }
-                    Err(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
-                        success: false,
-                        fencing_token: None,
-                        holder_id: None,
-                        deadline_ms: None,
-                        error: Some("invalid lock entry format".to_string()),
-                    })),
-                },
+                }
                 Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
                     success: false,
                     fencing_token: None,
@@ -4149,7 +4160,8 @@ async fn process_client_request(
                 match ctx.kv_store.read(request).await {
                     Ok(result) => {
                         // Key exists - return the value
-                        values.push(Some(result.value.into_bytes()));
+                        let value_bytes = result.kv.map(|kv| kv.value.into_bytes());
+                        values.push(value_bytes);
                     }
                     Err(KeyValueStoreError::NotFound { .. }) => {
                         // Key doesn't exist - return None for this position

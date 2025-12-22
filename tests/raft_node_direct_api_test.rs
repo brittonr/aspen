@@ -297,8 +297,9 @@ async fn test_write_read_cycle() {
     assert!(read_result.is_ok(), "read failed: {:?}", read_result);
 
     let result = read_result.unwrap();
-    assert_eq!(result.key, "mykey");
-    assert_eq!(result.value, "myvalue");
+    let kv = result.kv.unwrap();
+    assert_eq!(kv.key, "mykey");
+    assert_eq!(kv.value, "myvalue");
 
     node.shutdown().await.unwrap();
 }
@@ -409,7 +410,7 @@ async fn test_set_multi_writes_multiple_keys() {
             key: format!("key{}", i),
         };
         let result = raft_node.read(read_request).await.unwrap();
-        assert_eq!(result.value, format!("value{}", i));
+        assert_eq!(result.kv.unwrap().value, format!("value{}", i));
     }
 
     node.shutdown().await.unwrap();
@@ -552,7 +553,7 @@ async fn test_overwrite_existing_key() {
         })
         .await
         .unwrap();
-    assert_eq!(read1.value, "value1");
+    assert_eq!(read1.kv.unwrap().value, "value1");
 
     // Overwrite with new value
     let write2 = WriteRequest {
@@ -570,7 +571,7 @@ async fn test_overwrite_existing_key() {
         })
         .await
         .unwrap();
-    assert_eq!(read2.value, "value2");
+    assert_eq!(read2.kv.unwrap().value, "value2");
 
     node.shutdown().await.unwrap();
 }

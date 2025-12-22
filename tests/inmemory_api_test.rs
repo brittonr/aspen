@@ -253,8 +253,9 @@ async fn test_kv_store_set_and_read() {
         .await
         .unwrap();
 
-    assert_eq!(result.key, "key1");
-    assert_eq!(result.value, "value1");
+    let kv = result.kv.unwrap();
+    assert_eq!(kv.key, "key1");
+    assert_eq!(kv.value, "value1");
 }
 
 #[tokio::test]
@@ -290,7 +291,7 @@ async fn test_kv_store_set_overwrites() {
         .await
         .unwrap();
 
-    assert_eq!(result.value, "updated");
+    assert_eq!(result.kv.unwrap().value, "updated");
 }
 
 #[tokio::test]
@@ -318,7 +319,7 @@ async fn test_kv_store_set_multi() {
             })
             .await
             .unwrap();
-        assert_eq!(result.value, format!("value{}", i));
+        assert_eq!(result.kv.unwrap().value, format!("value{}", i));
     }
 }
 
@@ -844,7 +845,7 @@ fn test_kv_store_write_read_consistency() {
                     .read(ReadRequest { key: key.0.clone() })
                     .await
                     .unwrap();
-                assert_eq!(result.value, value.0);
+                assert_eq!(result.kv.unwrap().value, value.0);
             });
         });
 }

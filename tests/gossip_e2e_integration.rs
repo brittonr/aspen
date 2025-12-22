@@ -160,7 +160,7 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
             key: "test-key".to_string(),
         })
         .await?;
-    assert_eq!(value1.value, "test-value");
+    assert_eq!(value1.kv.unwrap().value, "test-value");
     info!("Leader read verified");
 
     info!("Data successfully replicated to all nodes");
@@ -270,7 +270,7 @@ async fn test_multi_node_cluster_manual_config() -> Result<()> {
             key: "multi-node-key".to_string(),
         })
         .await?;
-    assert_eq!(value.value, "multi-node-value");
+    assert_eq!(value.kv.unwrap().value, "multi-node-value");
 
     info!("Data replicated successfully to all {} nodes", num_nodes);
 

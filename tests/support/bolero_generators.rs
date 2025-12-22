@@ -1304,7 +1304,8 @@ mod tests {
                 | AppRequest::SetMultiWithLease { .. }
                 | AppRequest::LeaseGrant { .. }
                 | AppRequest::LeaseRevoke { .. }
-                | AppRequest::LeaseKeepalive { .. } => {}
+                | AppRequest::LeaseKeepalive { .. }
+                | AppRequest::Transaction { .. } => {}
             });
 
         // With 200 iterations and 25% probability each, should see all variants

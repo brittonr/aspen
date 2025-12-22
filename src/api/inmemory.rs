@@ -27,8 +27,9 @@ use tokio::sync::Mutex;
 use super::{
     AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController,
     ClusterState, ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest,
-    KeyValueStore, KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanEntry,
-    ScanRequest, ScanResult, WriteCommand, WriteRequest, WriteResult, validate_write_command,
+    KeyValueStore, KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest,
+    ReadResult, ScanRequest, ScanResult, WriteCommand, WriteRequest, WriteResult,
+    validate_write_command,
 };
 
 #[derive(Clone, Default)]
@@ -339,6 +340,100 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
+            WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
+                use crate::api::{CompareOp, CompareTarget, TxnOp, TxnOpResult};
+
+                // Evaluate all comparisons
+                let mut all_passed = true;
+                for cmp in &compare {
+                    let current_value = inner.get(&cmp.key).cloned();
+                    let passed = match cmp.target {
+                        CompareTarget::Value => {
+                            let actual = current_value.unwrap_or_default();
+                            match cmp.op {
+                                CompareOp::Equal => actual == cmp.value,
+                                CompareOp::NotEqual => actual != cmp.value,
+                                CompareOp::Greater => actual > cmp.value,
+                                CompareOp::Less => actual < cmp.value,
+                            }
+                        }
+                        // In-memory doesn't track versions/revisions - use defaults
+                        CompareTarget::Version
+                        | CompareTarget::CreateRevision
+                        | CompareTarget::ModRevision => {
+                            let compare_val: u64 = cmp.value.parse().unwrap_or(0);
+                            let actual = if current_value.is_some() { 1u64 } else { 0 };
+                            match cmp.op {
+                                CompareOp::Equal => actual == compare_val,
+                                CompareOp::NotEqual => actual != compare_val,
+                                CompareOp::Greater => actual > compare_val,
+                                CompareOp::Less => actual < compare_val,
+                            }
+                        }
+                    };
+                    if !passed {
+                        all_passed = false;
+                        break;
+                    }
+                }
+
+                // Execute the appropriate branch
+                let ops = if all_passed { &success } else { &failure };
+                let mut results = Vec::new();
+
+                for op in ops {
+                    match op {
+                        TxnOp::Put { key, value } => {
+                            inner.insert(key.clone(), value.clone());
+                            results.push(TxnOpResult::Put { revision: 0 }); // In-memory doesn't track revisions
+                        }
+                        TxnOp::Delete { key } => {
+                            let deleted = if inner.remove(key).is_some() { 1 } else { 0 };
+                            results.push(TxnOpResult::Delete { deleted });
+                        }
+                        TxnOp::Get { key } => {
+                            let kv = inner.get(key).map(|v| KeyValueWithRevision {
+                                key: key.clone(),
+                                value: v.clone(),
+                                version: 1,
+                                create_revision: 0,
+                                mod_revision: 0,
+                            });
+                            results.push(TxnOpResult::Get { kv });
+                        }
+                        TxnOp::Range { prefix, limit } => {
+                            let matching: Vec<_> = inner
+                                .iter()
+                                .filter(|(k, _)| k.starts_with(prefix))
+                                .collect();
+                            let more = matching.len() > *limit as usize;
+                            let kvs: Vec<_> = matching
+                                .into_iter()
+                                .take(*limit as usize)
+                                .map(|(k, v)| KeyValueWithRevision {
+                                    key: k.clone(),
+                                    value: v.clone(),
+                                    version: 1,
+                                    create_revision: 0,
+                                    mod_revision: 0,
+                                })
+                                .collect();
+                            results.push(TxnOpResult::Range { kvs, more });
+                        }
+                    }
+                }
+
+                Ok(WriteResult {
+                    succeeded: Some(all_passed),
+                    txn_results: Some(results),
+                    header_revision: Some(0), // In-memory doesn't track revisions
+                    ..Default::default()
+                })
+            }
         }
     }
 
@@ -346,8 +441,13 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let guard = self.inner.lock().await;
         match guard.get(&request.key) {
             Some(value) => Ok(ReadResult {
-                key: request.key,
-                value: value.clone(),
+                kv: Some(KeyValueWithRevision {
+                    key: request.key,
+                    value: value.clone(),
+                    version: 1,         // In-memory doesn't track versions
+                    create_revision: 0, // In-memory doesn't track revisions
+                    mod_revision: 0,
+                }),
             }),
             None => Err(KeyValueStoreError::NotFound { key: request.key }),
         }
@@ -397,10 +497,16 @@ impl KeyValueStore for DeterministicKeyValueStore {
 
         // Take limit + 1 to check if there are more results
         let is_truncated = matching.len() > limit;
-        let entries: Vec<ScanEntry> = matching
+        let entries: Vec<KeyValueWithRevision> = matching
             .into_iter()
             .take(limit)
-            .map(|(key, value)| ScanEntry { key, value })
+            .map(|(key, value)| KeyValueWithRevision {
+                key,
+                value,
+                version: 1,         // In-memory doesn't track versions
+                create_revision: 0, // In-memory doesn't track revisions
+                mod_revision: 0,
+            })
             .collect();
 
         // Generate continuation token if truncated
