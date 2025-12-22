@@ -5675,5 +5675,420 @@ async fn process_client_request(
                 )),
             }
         }
+
+        // =====================================================================
+        // Service Registry handlers
+        // =====================================================================
+        ClientRpcRequest::ServiceRegister {
+            service_name,
+            instance_id,
+            address,
+            version,
+            tags,
+            weight,
+            custom_metadata,
+            ttl_ms,
+            lease_id,
+        } => {
+            use crate::client_rpc::ServiceRegisterResultResponse;
+            use crate::coordination::{
+                HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry,
+            };
+            use std::collections::HashMap;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            // Parse tags from JSON array
+            let tags_vec: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
+
+            // Parse custom metadata from JSON object
+            let custom_map: HashMap<String, String> =
+                serde_json::from_str(&custom_metadata).unwrap_or_default();
+
+            let metadata = ServiceInstanceMetadata {
+                version,
+                tags: tags_vec,
+                weight,
+                custom: custom_map,
+            };
+
+            let options = RegisterOptions {
+                ttl_ms: if ttl_ms == 0 { None } else { Some(ttl_ms) },
+                initial_status: Some(HealthStatus::Healthy),
+                lease_id,
+            };
+
+            match registry
+                .register(&service_name, &instance_id, &address, metadata, options)
+                .await
+            {
+                Ok((fencing_token, deadline_ms)) => Ok(ClientRpcResponse::ServiceRegisterResult(
+                    ServiceRegisterResultResponse {
+                        success: true,
+                        fencing_token: Some(fencing_token),
+                        deadline_ms: Some(deadline_ms),
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceRegisterResult(
+                    ServiceRegisterResultResponse {
+                        success: false,
+                        fencing_token: None,
+                        deadline_ms: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceDeregister {
+            service_name,
+            instance_id,
+            fencing_token,
+        } => {
+            use crate::client_rpc::ServiceDeregisterResultResponse;
+            use crate::coordination::ServiceRegistry;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            match registry
+                .deregister(&service_name, &instance_id, fencing_token)
+                .await
+            {
+                Ok(was_registered) => Ok(ClientRpcResponse::ServiceDeregisterResult(
+                    ServiceDeregisterResultResponse {
+                        success: true,
+                        was_registered,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceDeregisterResult(
+                    ServiceDeregisterResultResponse {
+                        success: false,
+                        was_registered: false,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceDiscover {
+            service_name,
+            healthy_only,
+            tags,
+            version_prefix,
+            limit,
+        } => {
+            use crate::client_rpc::{ServiceDiscoverResultResponse, ServiceInstanceResponse};
+            use crate::coordination::{DiscoveryFilter, ServiceRegistry};
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            // Parse tags from JSON array
+            let tags_vec: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
+
+            let filter = DiscoveryFilter {
+                healthy_only,
+                tags: tags_vec,
+                version_prefix,
+                limit,
+            };
+
+            match registry.discover(&service_name, filter).await {
+                Ok(instances) => {
+                    let response_instances: Vec<ServiceInstanceResponse> = instances
+                        .into_iter()
+                        .map(|inst| ServiceInstanceResponse {
+                            instance_id: inst.instance_id,
+                            service_name: inst.service_name,
+                            address: inst.address,
+                            health_status: match inst.health_status {
+                                crate::coordination::HealthStatus::Healthy => "healthy".to_string(),
+                                crate::coordination::HealthStatus::Unhealthy => {
+                                    "unhealthy".to_string()
+                                }
+                                crate::coordination::HealthStatus::Unknown => "unknown".to_string(),
+                            },
+                            version: inst.metadata.version,
+                            tags: inst.metadata.tags,
+                            weight: inst.metadata.weight,
+                            custom_metadata: serde_json::to_string(&inst.metadata.custom)
+                                .unwrap_or_default(),
+                            registered_at_ms: inst.registered_at_ms,
+                            last_heartbeat_ms: inst.last_heartbeat_ms,
+                            deadline_ms: inst.deadline_ms,
+                            lease_id: inst.lease_id,
+                            fencing_token: inst.fencing_token,
+                        })
+                        .collect();
+                    let count = response_instances.len() as u32;
+                    Ok(ClientRpcResponse::ServiceDiscoverResult(
+                        ServiceDiscoverResultResponse {
+                            success: true,
+                            instances: response_instances,
+                            count,
+                            error: None,
+                        },
+                    ))
+                }
+                Err(e) => Ok(ClientRpcResponse::ServiceDiscoverResult(
+                    ServiceDiscoverResultResponse {
+                        success: false,
+                        instances: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceList { prefix, limit } => {
+            use crate::client_rpc::ServiceListResultResponse;
+            use crate::coordination::ServiceRegistry;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            match registry.discover_services(&prefix, limit).await {
+                Ok(services) => {
+                    let count = services.len() as u32;
+                    Ok(ClientRpcResponse::ServiceListResult(
+                        ServiceListResultResponse {
+                            success: true,
+                            services,
+                            count,
+                            error: None,
+                        },
+                    ))
+                }
+                Err(e) => Ok(ClientRpcResponse::ServiceListResult(
+                    ServiceListResultResponse {
+                        success: false,
+                        services: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceGetInstance {
+            service_name,
+            instance_id,
+        } => {
+            use crate::client_rpc::{ServiceGetInstanceResultResponse, ServiceInstanceResponse};
+            use crate::coordination::ServiceRegistry;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            match registry.get_instance(&service_name, &instance_id).await {
+                Ok(Some(inst)) => {
+                    let response_instance = ServiceInstanceResponse {
+                        instance_id: inst.instance_id,
+                        service_name: inst.service_name,
+                        address: inst.address,
+                        health_status: match inst.health_status {
+                            crate::coordination::HealthStatus::Healthy => "healthy".to_string(),
+                            crate::coordination::HealthStatus::Unhealthy => "unhealthy".to_string(),
+                            crate::coordination::HealthStatus::Unknown => "unknown".to_string(),
+                        },
+                        version: inst.metadata.version,
+                        tags: inst.metadata.tags,
+                        weight: inst.metadata.weight,
+                        custom_metadata: serde_json::to_string(&inst.metadata.custom)
+                            .unwrap_or_default(),
+                        registered_at_ms: inst.registered_at_ms,
+                        last_heartbeat_ms: inst.last_heartbeat_ms,
+                        deadline_ms: inst.deadline_ms,
+                        lease_id: inst.lease_id,
+                        fencing_token: inst.fencing_token,
+                    };
+                    Ok(ClientRpcResponse::ServiceGetInstanceResult(
+                        ServiceGetInstanceResultResponse {
+                            success: true,
+                            found: true,
+                            instance: Some(response_instance),
+                            error: None,
+                        },
+                    ))
+                }
+                Ok(None) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
+                    ServiceGetInstanceResultResponse {
+                        success: true,
+                        found: false,
+                        instance: None,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
+                    ServiceGetInstanceResultResponse {
+                        success: false,
+                        found: false,
+                        instance: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceHeartbeat {
+            service_name,
+            instance_id,
+            fencing_token,
+        } => {
+            use crate::client_rpc::ServiceHeartbeatResultResponse;
+            use crate::coordination::ServiceRegistry;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            match registry
+                .heartbeat(&service_name, &instance_id, fencing_token)
+                .await
+            {
+                Ok((new_deadline, health_status)) => {
+                    let status_str = match health_status {
+                        crate::coordination::HealthStatus::Healthy => "healthy",
+                        crate::coordination::HealthStatus::Unhealthy => "unhealthy",
+                        crate::coordination::HealthStatus::Unknown => "unknown",
+                    };
+                    Ok(ClientRpcResponse::ServiceHeartbeatResult(
+                        ServiceHeartbeatResultResponse {
+                            success: true,
+                            new_deadline_ms: Some(new_deadline),
+                            health_status: Some(status_str.to_string()),
+                            error: None,
+                        },
+                    ))
+                }
+                Err(e) => Ok(ClientRpcResponse::ServiceHeartbeatResult(
+                    ServiceHeartbeatResultResponse {
+                        success: false,
+                        new_deadline_ms: None,
+                        health_status: None,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceUpdateHealth {
+            service_name,
+            instance_id,
+            fencing_token,
+            status,
+        } => {
+            use crate::client_rpc::ServiceUpdateHealthResultResponse;
+            use crate::coordination::{HealthStatus, ServiceRegistry};
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            let health_status = match status.to_lowercase().as_str() {
+                "healthy" => HealthStatus::Healthy,
+                "unhealthy" => HealthStatus::Unhealthy,
+                _ => HealthStatus::Unknown,
+            };
+
+            match registry
+                .update_health(&service_name, &instance_id, fencing_token, health_status)
+                .await
+            {
+                Ok(()) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
+                    ServiceUpdateHealthResultResponse {
+                        success: true,
+                        error: None,
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
+                    ServiceUpdateHealthResultResponse {
+                        success: false,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
+
+        ClientRpcRequest::ServiceUpdateMetadata {
+            service_name,
+            instance_id,
+            fencing_token,
+            version,
+            tags,
+            weight,
+            custom_metadata,
+        } => {
+            use crate::client_rpc::ServiceUpdateMetadataResultResponse;
+            use crate::coordination::ServiceRegistry;
+            use std::collections::HashMap;
+
+            let registry = ServiceRegistry::new(ctx.kv_store.clone());
+
+            // We need to get existing instance first to merge metadata
+            match registry.get_instance(&service_name, &instance_id).await {
+                Ok(Some(mut instance)) => {
+                    // Verify fencing token
+                    if instance.fencing_token != fencing_token {
+                        return Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
+                            ServiceUpdateMetadataResultResponse {
+                                success: false,
+                                error: Some("fencing token mismatch".to_string()),
+                            },
+                        ));
+                    }
+
+                    // Update fields that were provided
+                    if let Some(v) = version {
+                        instance.metadata.version = v;
+                    }
+                    if let Some(t) = tags
+                        && let Ok(parsed_tags) = serde_json::from_str::<Vec<String>>(&t)
+                    {
+                        instance.metadata.tags = parsed_tags;
+                    }
+                    if let Some(w) = weight {
+                        instance.metadata.weight = w;
+                    }
+                    if let Some(c) = custom_metadata
+                        && let Ok(parsed_custom) =
+                            serde_json::from_str::<HashMap<String, String>>(&c)
+                    {
+                        instance.metadata.custom = parsed_custom;
+                    }
+
+                    match registry
+                        .update_metadata(
+                            &service_name,
+                            &instance_id,
+                            fencing_token,
+                            instance.metadata,
+                        )
+                        .await
+                    {
+                        Ok(()) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
+                            ServiceUpdateMetadataResultResponse {
+                                success: true,
+                                error: None,
+                            },
+                        )),
+                        Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
+                            ServiceUpdateMetadataResultResponse {
+                                success: false,
+                                error: Some(format!("{}", e)),
+                            },
+                        )),
+                    }
+                }
+                Ok(None) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
+                    ServiceUpdateMetadataResultResponse {
+                        success: false,
+                        error: Some("instance not found".to_string()),
+                    },
+                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
+                    ServiceUpdateMetadataResultResponse {
+                        success: false,
+                        error: Some(format!("{}", e)),
+                    },
+                )),
+            }
+        }
     }
 }

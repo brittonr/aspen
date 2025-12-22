@@ -83,8 +83,9 @@ pub use coordination::{
     QueueCreateConfig, QueueDLQItemInfo, QueueDequeuedItem, QueueEnqueueBatchItem,
     QueueEnqueueOptions, QueuePeekedItem, QueueStatusInfo, RWLockClient, RWLockReadResult,
     RWLockStatusResult, RWLockWriteResult, RateLimitResult, RateLimiterClient, RemoteLockGuard,
-    SemaphoreAcquireResult, SemaphoreClient, SemaphoreStatusResult, SequenceClient,
-    SignedCounterClient,
+    SemaphoreAcquireResult, SemaphoreClient, SemaphoreStatusResult, SequenceClient, ServiceClient,
+    ServiceDiscoveryFilter, ServiceHeartbeatHandle, ServiceInstanceInfo, ServiceMetadataUpdate,
+    ServiceRegisterOptions, ServiceRegistration, SignedCounterClient,
 };
 pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
 pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};

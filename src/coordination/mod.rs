@@ -8,6 +8,7 @@
 //! - [`SequenceGenerator`] - Monotonically increasing unique IDs
 //! - [`DistributedRateLimiter`] - Token bucket rate limiting
 //! - [`QueueManager`] - Distributed FIFO queue with visibility timeout
+//! - [`ServiceRegistry`] - Service discovery with health checks
 //!
 //! All primitives are built on top of the [`KeyValueStore`] trait's CAS operations,
 //! providing linearizable semantics through Raft consensus.
@@ -58,6 +59,7 @@ mod error;
 mod lock;
 mod queue;
 mod rate_limiter;
+mod registry;
 mod rwlock;
 mod semaphore;
 mod sequence;
@@ -73,6 +75,10 @@ pub use queue::{
     QueueManager, QueueState, QueueStats, QueueStatus,
 };
 pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
+pub use registry::{
+    DiscoveryFilter, HealthStatus, RegisterOptions, ServiceInstance, ServiceInstanceMetadata,
+    ServiceMetadata, ServiceRegistry,
+};
 pub use rwlock::{RWLockManager, RWLockMode, RWLockState, ReaderEntry, WriterEntry};
 pub use semaphore::{SemaphoreHolder, SemaphoreManager, SemaphoreState};
 pub use sequence::{SequenceConfig, SequenceGenerator};

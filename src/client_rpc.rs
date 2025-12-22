@@ -914,6 +914,111 @@ pub enum ClientRpcRequest {
         /// Item ID in DLQ.
         item_id: u64,
     },
+
+    // =========================================================================
+    // Service Registry operations
+    // =========================================================================
+    /// Register a service instance.
+    ServiceRegister {
+        /// Service name.
+        service_name: String,
+        /// Unique instance identifier.
+        instance_id: String,
+        /// Network address (host:port).
+        address: String,
+        /// Version string.
+        version: String,
+        /// Tags for filtering (JSON array).
+        tags: String,
+        /// Load balancing weight.
+        weight: u32,
+        /// Custom metadata (JSON object).
+        custom_metadata: String,
+        /// TTL in milliseconds (0 = default).
+        ttl_ms: u64,
+        /// Optional lease ID to attach to.
+        lease_id: Option<u64>,
+    },
+
+    /// Deregister a service instance.
+    ServiceDeregister {
+        /// Service name.
+        service_name: String,
+        /// Instance identifier.
+        instance_id: String,
+        /// Fencing token from registration.
+        fencing_token: u64,
+    },
+
+    /// Discover service instances.
+    ServiceDiscover {
+        /// Service name.
+        service_name: String,
+        /// Only return healthy instances.
+        healthy_only: bool,
+        /// Filter by tags (JSON array).
+        tags: String,
+        /// Filter by version prefix.
+        version_prefix: Option<String>,
+        /// Maximum instances to return.
+        limit: Option<u32>,
+    },
+
+    /// Discover services by name prefix.
+    ServiceList {
+        /// Service name prefix.
+        prefix: String,
+        /// Maximum services to return.
+        limit: u32,
+    },
+
+    /// Get a specific service instance.
+    ServiceGetInstance {
+        /// Service name.
+        service_name: String,
+        /// Instance identifier.
+        instance_id: String,
+    },
+
+    /// Send heartbeat to renew TTL.
+    ServiceHeartbeat {
+        /// Service name.
+        service_name: String,
+        /// Instance identifier.
+        instance_id: String,
+        /// Fencing token from registration.
+        fencing_token: u64,
+    },
+
+    /// Update instance health status.
+    ServiceUpdateHealth {
+        /// Service name.
+        service_name: String,
+        /// Instance identifier.
+        instance_id: String,
+        /// Fencing token.
+        fencing_token: u64,
+        /// New health status: "healthy", "unhealthy", "unknown".
+        status: String,
+    },
+
+    /// Update instance metadata.
+    ServiceUpdateMetadata {
+        /// Service name.
+        service_name: String,
+        /// Instance identifier.
+        instance_id: String,
+        /// Fencing token.
+        fencing_token: u64,
+        /// New version (optional).
+        version: Option<String>,
+        /// New tags (JSON array, optional).
+        tags: Option<String>,
+        /// New weight (optional).
+        weight: Option<u32>,
+        /// New custom metadata (JSON object, optional).
+        custom_metadata: Option<String>,
+    },
 }
 
 /// Client RPC response protocol.
@@ -1203,6 +1308,33 @@ pub enum ClientRpcResponse {
 
     /// Queue redrive DLQ result.
     QueueRedriveDLQResult(QueueRedriveDLQResultResponse),
+
+    // =========================================================================
+    // Service Registry responses
+    // =========================================================================
+    /// Service register result.
+    ServiceRegisterResult(ServiceRegisterResultResponse),
+
+    /// Service deregister result.
+    ServiceDeregisterResult(ServiceDeregisterResultResponse),
+
+    /// Service discover result.
+    ServiceDiscoverResult(ServiceDiscoverResultResponse),
+
+    /// Service list result.
+    ServiceListResult(ServiceListResultResponse),
+
+    /// Service get instance result.
+    ServiceGetInstanceResult(ServiceGetInstanceResultResponse),
+
+    /// Service heartbeat result.
+    ServiceHeartbeatResult(ServiceHeartbeatResultResponse),
+
+    /// Service update health result.
+    ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse),
+
+    /// Service update metadata result.
+    ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse),
 }
 
 /// Health status response.
@@ -2424,6 +2556,135 @@ pub struct QueueGetDLQResultResponse {
 /// Queue redrive DLQ operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueRedriveDLQResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// ============================================================================
+// Service Registry types
+// ============================================================================
+
+/// Service register operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceRegisterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Fencing token for this registration.
+    pub fencing_token: Option<u64>,
+    /// Registration deadline (Unix ms).
+    pub deadline_ms: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service deregister operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceDeregisterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the instance was registered before removal.
+    pub was_registered: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A service instance in discovery results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceInstanceResponse {
+    /// Unique instance identifier.
+    pub instance_id: String,
+    /// Service name.
+    pub service_name: String,
+    /// Network address (host:port).
+    pub address: String,
+    /// Health status: "healthy", "unhealthy", "unknown".
+    pub health_status: String,
+    /// Version string.
+    pub version: String,
+    /// Tags for filtering.
+    pub tags: Vec<String>,
+    /// Load balancing weight.
+    pub weight: u32,
+    /// Custom metadata (JSON object).
+    pub custom_metadata: String,
+    /// Registration time (Unix ms).
+    pub registered_at_ms: u64,
+    /// Last heartbeat time (Unix ms).
+    pub last_heartbeat_ms: u64,
+    /// TTL deadline (Unix ms).
+    pub deadline_ms: u64,
+    /// Associated lease ID (if any).
+    pub lease_id: Option<u64>,
+    /// Fencing token.
+    pub fencing_token: u64,
+}
+
+/// Service discover operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceDiscoverResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of matching instances.
+    pub instances: Vec<ServiceInstanceResponse>,
+    /// Number of instances returned.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service list operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of service names.
+    pub services: Vec<String>,
+    /// Number of services returned.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service get instance operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceGetInstanceResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the instance was found.
+    pub found: bool,
+    /// The instance (if found).
+    pub instance: Option<ServiceInstanceResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service heartbeat operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceHeartbeatResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// New deadline (Unix ms).
+    pub new_deadline_ms: Option<u64>,
+    /// Current health status.
+    pub health_status: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service update health operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceUpdateHealthResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Service update metadata operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceUpdateMetadataResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
     /// Error message if the operation failed.
