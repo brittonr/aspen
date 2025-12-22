@@ -2,7 +2,6 @@
 //!
 //! Handles client RPC connections over Iroh with the `aspen-client` ALPN.
 
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
@@ -205,11 +204,12 @@ async fn handle_client_connection(
         let active_streams_clone = active_streams.clone();
 
         let ctx_clone = Arc::clone(&ctx);
-        let remote_id = remote_node_id.to_string();
+        // Pass the PublicKey directly - no string conversion needed
+        // This eliminates the security risk of parsing failures
         let (send, recv) = stream;
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) = handle_client_request((recv, send), ctx_clone, &remote_id).await {
+            if let Err(err) = handle_client_request((recv, send), ctx_clone, remote_node_id).await {
                 error!(error = %err, "failed to handle Client request");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -220,11 +220,11 @@ async fn handle_client_connection(
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx, client_id), fields(request_id))]
+#[instrument(skip(recv, send, ctx), fields(client_id = %client_id, request_id))]
 async fn handle_client_request(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
-    client_id: &str,
+    client_id: iroh::PublicKey,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -298,13 +298,12 @@ async fn handle_client_request(
         if let Some(operation) = request.to_operation() {
             match &token {
                 Some(cap_token) => {
-                    // Parse client_id as PublicKey for audience verification
-                    let presenter = iroh::PublicKey::from_str(client_id).ok();
+                    // No parsing needed - client_id is already a PublicKey from Iroh connection
+                    // This is type-safe and eliminates the security risk of parsing failures
+                    let presenter = Some(&client_id);
 
                     // Verify token and authorize the operation
-                    if let Err(auth_err) =
-                        verifier.authorize(cap_token, &operation, presenter.as_ref())
-                    {
+                    if let Err(auth_err) = verifier.authorize(cap_token, &operation, presenter) {
                         warn!(
                             client_id = %client_id,
                             error = %auth_err,
