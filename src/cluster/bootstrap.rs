@@ -46,6 +46,7 @@ use crate::cluster::gossip_discovery::GossipPeerDiscovery;
 use crate::cluster::metadata::{MetadataStore, NodeStatus};
 use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
+use crate::protocol_handlers::ShardedRaftProtocolHandler;
 use crate::raft::StateMachineVariant;
 use crate::raft::auth::AuthContext;
 use crate::raft::lease_cleanup::{LeaseCleanupConfig, spawn_lease_cleanup_task};
@@ -58,6 +59,9 @@ use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
 use crate::raft::ttl_cleanup::{TtlCleanupConfig, spawn_ttl_cleanup_task};
 use crate::raft::types::NodeId;
+use crate::sharding::{
+    ShardConfig, ShardId, ShardStoragePaths, ShardedKeyValueStore, encode_shard_node_id,
+};
 
 /// Handle to a running cluster node.
 ///
@@ -220,6 +224,622 @@ impl NodeHandle {
 
         Ok(())
     }
+}
+
+// ============================================================================
+// Sharded Bootstrap Infrastructure
+// ============================================================================
+
+/// Base node resources shared across all shards.
+///
+/// Contains the transport and discovery infrastructure that is shared
+/// by all shards on a node. This is separated from Raft-specific resources
+/// to enable per-shard Raft instances while sharing the common P2P transport.
+pub struct BaseNodeResources {
+    /// Node configuration.
+    pub config: NodeConfig,
+    /// Metadata store for cluster nodes.
+    pub metadata_store: Arc<MetadataStore>,
+    /// Iroh endpoint manager for P2P transport.
+    pub iroh_manager: Arc<IrohEndpointManager>,
+    /// IRPC network factory for dynamic peer addition.
+    pub network_factory: Arc<IrpcRaftNetworkFactory>,
+    /// Gossip discovery service (if enabled).
+    pub gossip_discovery: Option<GossipPeerDiscovery>,
+    /// Gossip topic ID for peer discovery and cluster tickets.
+    pub gossip_topic_id: TopicId,
+    /// Cancellation token for shutdown.
+    pub shutdown_token: CancellationToken,
+    /// Blob store for content-addressed storage (optional).
+    pub blob_store: Option<Arc<IrohBlobStore>>,
+}
+
+/// Handle to a running sharded cluster node.
+///
+/// Contains multiple independent Raft instances (one per shard) that share
+/// the same underlying Iroh P2P transport. Each shard is a separate Raft
+/// consensus group with its own leader election and log replication.
+///
+/// # Architecture
+///
+/// ```text
+/// ShardedNodeHandle
+///     ├── base (BaseNodeResources)
+///     │     └── iroh_manager (shared P2P transport)
+///     │
+///     ├── shard_nodes
+///     │     ├── shard 0 → RaftNode (shard-0/raft-log.db, shard-0/state-machine.db)
+///     │     ├── shard 1 → RaftNode (shard-1/raft-log.db, shard-1/state-machine.db)
+///     │     └── shard N → RaftNode (shard-N/raft-log.db, shard-N/state-machine.db)
+///     │
+///     ├── sharded_kv (routes keys to correct shard)
+///     │
+///     └── sharded_handler (ALPN: raft-shard)
+/// ```
+pub struct ShardedNodeHandle {
+    /// Base node resources (Iroh, metadata, gossip - shared across shards).
+    pub base: BaseNodeResources,
+    /// Map of shard ID to Raft node for that shard.
+    pub shard_nodes: HashMap<ShardId, Arc<RaftNode>>,
+    /// Sharded key-value store wrapping all shard nodes.
+    pub sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
+    /// Protocol handler for sharded Raft RPC.
+    pub sharded_handler: Arc<ShardedRaftProtocolHandler>,
+    /// Supervisor for health monitoring.
+    pub supervisor: Arc<Supervisor>,
+    /// Health monitors for each shard.
+    pub health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>>,
+    /// TTL cleanup cancellation tokens (one per shard using SQLite).
+    pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
+    /// Peer manager for cluster-to-cluster sync (optional).
+    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    /// Log broadcast sender for DocsExporter (optional).
+    /// Note: In sharded mode, only shard 0 exports to docs for simplicity.
+    pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    /// DocsExporter cancellation token (optional).
+    pub docs_exporter_cancel: Option<CancellationToken>,
+    /// Docs sync resources for P2P CRDT replication (optional).
+    pub docs_sync: Option<crate::docs::DocsSyncResources>,
+    /// Root token generated during cluster initialization (if requested).
+    pub root_token: Option<CapabilityToken>,
+}
+
+impl ShardedNodeHandle {
+    /// Gracefully shutdown all shards and the node.
+    pub async fn shutdown(self) -> Result<()> {
+        info!(
+            node_id = self.base.config.node_id,
+            shard_count = self.shard_nodes.len(),
+            "shutting down sharded node"
+        );
+
+        // Signal shutdown to all components
+        self.base.shutdown_token.cancel();
+
+        // Stop gossip discovery if enabled
+        if let Some(gossip_discovery) = self.base.gossip_discovery {
+            info!("shutting down gossip discovery");
+            if let Err(err) = gossip_discovery.shutdown().await {
+                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
+            }
+        }
+
+        // Shutdown peer manager if present
+        if let Some(peer_manager) = &self.peer_manager {
+            info!("shutting down peer manager");
+            peer_manager.shutdown();
+        }
+
+        // Shutdown DocsExporter if present
+        if let Some(cancel_token) = &self.docs_exporter_cancel {
+            info!("shutting down DocsExporter");
+            cancel_token.cancel();
+        }
+
+        // Shutdown docs sync if present
+        if self.docs_sync.is_some() {
+            info!("shutting down docs sync");
+            drop(self.docs_sync);
+        }
+
+        // Shutdown TTL cleanup tasks for all shards
+        for (shard_id, cancel_token) in &self.ttl_cleanup_cancels {
+            info!(shard_id, "shutting down TTL cleanup task for shard");
+            cancel_token.cancel();
+        }
+
+        // Stop supervisor
+        info!("shutting down supervisor");
+        self.supervisor.stop();
+
+        // Shutdown blob store if present
+        if let Some(blob_store) = &self.base.blob_store {
+            info!("shutting down blob store");
+            if let Err(err) = blob_store.shutdown().await {
+                error!(error = ?err, "failed to shutdown blob store gracefully");
+            }
+        }
+
+        // Shutdown Iroh endpoint
+        info!("shutting down Iroh endpoint");
+        self.base.iroh_manager.shutdown().await?;
+
+        // Update node status
+        if let Err(err) = self.base.metadata_store.update_status(
+            self.base.config.node_id,
+            NodeStatus::Offline,
+        ) {
+            error!(
+                error = ?err,
+                node_id = self.base.config.node_id,
+                "failed to update node status to offline"
+            );
+        }
+
+        info!(
+            node_id = self.base.config.node_id,
+            "sharded node shutdown complete"
+        );
+        Ok(())
+    }
+
+    /// Get a reference to the first shard's RaftNode (shard 0).
+    ///
+    /// Used for compatibility with single-shard APIs and initialization.
+    pub fn primary_shard(&self) -> Option<&Arc<RaftNode>> {
+        self.shard_nodes.get(&0)
+    }
+
+    /// Get the number of shards hosted by this node.
+    pub fn shard_count(&self) -> usize {
+        self.shard_nodes.len()
+    }
+
+    /// Get the list of shard IDs hosted by this node.
+    pub fn local_shard_ids(&self) -> Vec<ShardId> {
+        self.shard_nodes.keys().copied().collect()
+    }
+}
+
+/// Bootstrap base node resources (Iroh, metadata, gossip) without Raft.
+///
+/// This function sets up the shared transport and discovery infrastructure
+/// that is used by all shards. Call this before creating per-shard Raft instances.
+async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
+    info!(
+        node_id = config.node_id,
+        "bootstrapping base node resources (Iroh, metadata, gossip)"
+    );
+
+    // Initialize metadata store
+    let data_dir = config
+        .data_dir
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
+
+    // Ensure data directory exists
+    std::fs::create_dir_all(data_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "failed to create data directory {}: {}",
+            data_dir.display(),
+            e
+        )
+    })?;
+
+    // MetadataStore expects a path to the database file, not directory
+    let metadata_db_path = data_dir.join("metadata.redb");
+    let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
+
+    // Create Iroh endpoint configuration
+    let iroh_config = IrohEndpointConfig::default()
+        .with_gossip(config.iroh.enable_gossip)
+        .with_mdns(config.iroh.enable_mdns)
+        .with_dns_discovery(config.iroh.enable_dns_discovery)
+        .with_pkarr(config.iroh.enable_pkarr);
+
+    let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
+        iroh_config.with_dns_discovery_url(dns_url.clone())
+    } else {
+        iroh_config
+    };
+
+    // Parse secret key if provided
+    let iroh_config = if let Some(secret_key_hex) = &config.iroh.secret_key {
+        let bytes = hex::decode(secret_key_hex)
+            .map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
+        let secret_key = iroh::SecretKey::from_bytes(
+            &bytes
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
+        );
+        iroh_config.with_secret_key(secret_key)
+    } else {
+        iroh_config
+    };
+
+    // Create Iroh endpoint manager
+    let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
+
+    info!(
+        node_id = config.node_id,
+        endpoint_id = %iroh_manager.node_addr().id,
+        "created Iroh endpoint"
+    );
+
+    // Parse peer addresses from config if provided
+    let peer_addrs = parse_peer_addresses(&config.peers)?;
+
+    // Create auth context if Raft authentication is enabled
+    let auth_context = if config.iroh.enable_raft_auth {
+        info!("Raft authentication enabled - using HMAC-SHA256 challenge-response");
+        Some(AuthContext::new(&config.cookie))
+    } else {
+        None
+    };
+
+    // Create network factory
+    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
+        iroh_manager.clone(),
+        peer_addrs,
+        auth_context,
+    ));
+
+    // Derive gossip topic ID
+    let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
+        match AspenClusterTicket::deserialize(ticket_str) {
+            Ok(ticket) => {
+                info!(
+                    cluster_id = %ticket.cluster_id,
+                    bootstrap_peers = ticket.bootstrap.len(),
+                    "using topic ID from cluster ticket"
+                );
+                ticket.topic_id
+            }
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    "failed to parse gossip ticket, falling back to cookie-derived topic"
+                );
+                derive_topic_id_from_cookie(&config.cookie)
+            }
+        }
+    } else {
+        derive_topic_id_from_cookie(&config.cookie)
+    };
+
+    // Setup gossip discovery if enabled
+    let gossip_discovery = if config.iroh.enable_gossip {
+        info!(
+            node_id = config.node_id,
+            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+            "starting gossip discovery"
+        );
+
+        match GossipPeerDiscovery::spawn(
+            gossip_topic_id,
+            config.node_id.into(),
+            &iroh_manager,
+            Some(network_factory.clone()),
+        )
+        .await
+        {
+            Ok(discovery) => {
+                info!(
+                    node_id = config.node_id,
+                    topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+                    "gossip discovery started successfully"
+                );
+                Some(discovery)
+            }
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    node_id = config.node_id,
+                    "failed to start gossip discovery, continuing without it"
+                );
+                None
+            }
+        }
+    } else {
+        info!(
+            node_id = config.node_id,
+            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
+            "gossip discovery disabled by configuration"
+        );
+        None
+    };
+
+    // Initialize blob store if enabled
+    let blob_store = if config.blobs.enabled {
+        let blobs_dir = data_dir.join("blobs");
+        std::fs::create_dir_all(&blobs_dir).map_err(|e| {
+            anyhow::anyhow!(
+                "failed to create blobs directory {}: {}",
+                blobs_dir.display(),
+                e
+            )
+        })?;
+
+        match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
+            Ok(store) => {
+                info!(
+                    node_id = config.node_id,
+                    path = %blobs_dir.display(),
+                    "blob store initialized"
+                );
+                Some(Arc::new(store))
+            }
+            Err(err) => {
+                warn!(
+                    error = ?err,
+                    node_id = config.node_id,
+                    "failed to initialize blob store, continuing without it"
+                );
+                None
+            }
+        }
+    } else {
+        info!(node_id = config.node_id, "blob store disabled by configuration");
+        None
+    };
+
+    let shutdown_token = CancellationToken::new();
+
+    Ok(BaseNodeResources {
+        config: config.clone(),
+        metadata_store,
+        iroh_manager,
+        network_factory,
+        gossip_discovery,
+        gossip_topic_id,
+        shutdown_token,
+        blob_store,
+    })
+}
+
+/// Bootstrap a sharded cluster node.
+///
+/// Creates multiple independent Raft instances (one per shard) that share
+/// the same Iroh P2P transport. Each shard is a separate consensus group
+/// with its own leader election and log.
+///
+/// # Arguments
+///
+/// * `config` - Node configuration with sharding enabled
+///
+/// # Returns
+///
+/// A `ShardedNodeHandle` containing all shard RaftNodes and the sharded KV store.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Sharding is not enabled in config
+/// - Base node bootstrap fails
+/// - Any shard's Raft instance fails to initialize
+pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHandle> {
+    ensure!(
+        config.sharding.enabled,
+        "sharding must be enabled to use bootstrap_sharded_node"
+    );
+
+    let num_shards = config.sharding.num_shards;
+    let local_shards: Vec<ShardId> = if config.sharding.local_shards.is_empty() {
+        // Host all shards by default
+        (0..num_shards).collect()
+    } else {
+        config.sharding.local_shards.clone()
+    };
+
+    info!(
+        node_id = config.node_id,
+        num_shards,
+        local_shards = ?local_shards,
+        "bootstrapping sharded node"
+    );
+
+    // Bootstrap base resources (Iroh, metadata, gossip)
+    let base = bootstrap_base_node(&config).await?;
+
+    // Create sharded protocol handler
+    let sharded_handler = Arc::new(ShardedRaftProtocolHandler::new());
+
+    // Create ShardedKeyValueStore with router
+    let shard_config = ShardConfig::new(num_shards);
+    let sharded_kv = Arc::new(ShardedKeyValueStore::<RaftNode>::new(shard_config));
+
+    // Create supervisor for all shards
+    let supervisor = Supervisor::new(format!("sharded-node-{}", config.node_id));
+
+    let data_dir = config.data_dir.as_ref().expect("data_dir must be set");
+
+    let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
+    let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();
+    let mut ttl_cleanup_cancels: HashMap<ShardId, CancellationToken> = HashMap::new();
+
+    // Create Raft config (shared across shards with per-shard cluster name)
+    let base_raft_config = RaftConfig {
+        heartbeat_interval: config.heartbeat_interval_ms,
+        election_timeout_min: config.election_timeout_min_ms,
+        election_timeout_max: config.election_timeout_max_ms,
+        replication_lag_threshold: 10000,
+        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
+        max_in_snapshot_log_to_keep: 100,
+        enable_tick: true,
+        ..RaftConfig::default()
+    };
+
+    // For each local shard, create Raft instance
+    for &shard_id in &local_shards {
+        info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
+
+        // Generate storage paths for this shard
+        let paths = ShardStoragePaths::new(data_dir, shard_id);
+        paths.ensure_dir_exists().map_err(|e| {
+            anyhow::anyhow!(
+                "failed to create shard directory {}: {}",
+                paths.shard_dir.display(),
+                e
+            )
+        })?;
+
+        // Encode shard-aware node ID (shard in upper 16 bits)
+        let shard_node_id = encode_shard_node_id(config.node_id, shard_id);
+
+        // Create shard-specific Raft config
+        let raft_config = Arc::new(RaftConfig {
+            cluster_name: format!("{}-shard-{}", config.cookie, shard_id),
+            ..base_raft_config.clone()
+        });
+
+        // Create storage based on backend type
+        let (raft, state_machine_variant, ttl_cancel) = match config.storage_backend {
+            StorageBackend::InMemory => {
+                let log_store = Arc::new(InMemoryLogStore::default());
+                let state_machine = InMemoryStateMachine::new();
+                let raft = Arc::new(
+                    Raft::new(
+                        shard_node_id.into(),
+                        raft_config.clone(),
+                        base.network_factory.as_ref().clone(),
+                        log_store.as_ref().clone(),
+                        state_machine.clone(),
+                    )
+                    .await?,
+                );
+                (raft, StateMachineVariant::InMemory(state_machine), None)
+            }
+            StorageBackend::Sqlite => {
+                let log_store = Arc::new(RedbLogStore::new(&paths.log_path)?);
+                let sqlite_state_machine = SqliteStateMachine::with_pool_size(
+                    &paths.state_machine_path,
+                    config.sqlite_read_pool_size,
+                )?;
+
+                // Spawn TTL cleanup background task
+                let ttl_cancel = spawn_ttl_cleanup_task(
+                    sqlite_state_machine.clone(),
+                    TtlCleanupConfig::default(),
+                );
+                info!(
+                    node_id = config.node_id,
+                    shard_id,
+                    "TTL cleanup task started for shard"
+                );
+
+                // Spawn lease cleanup background task
+                let _lease_cancel = spawn_lease_cleanup_task(
+                    sqlite_state_machine.clone(),
+                    LeaseCleanupConfig::default(),
+                );
+                info!(
+                    node_id = config.node_id,
+                    shard_id,
+                    "Lease cleanup task started for shard"
+                );
+
+                let raft = Arc::new(
+                    Raft::new(
+                        shard_node_id.into(),
+                        raft_config.clone(),
+                        base.network_factory.as_ref().clone(),
+                        log_store.as_ref().clone(),
+                        sqlite_state_machine.clone(),
+                    )
+                    .await?,
+                );
+
+                (
+                    raft,
+                    StateMachineVariant::Sqlite(sqlite_state_machine),
+                    Some(ttl_cancel),
+                )
+            }
+        };
+
+        info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
+
+        // Register Raft core with sharded protocol handler
+        sharded_handler.register_shard(shard_id, raft.as_ref().clone());
+
+        // Create RaftNode wrapper
+        let raft_node = Arc::new(RaftNode::new(
+            shard_node_id.into(),
+            raft.clone(),
+            state_machine_variant,
+        ));
+
+        // Create health monitor
+        let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
+
+        // Register with ShardedKeyValueStore
+        sharded_kv.add_shard(shard_id, raft_node.clone()).await;
+
+        // Store in maps
+        shard_nodes.insert(shard_id, raft_node);
+        health_monitors.insert(shard_id, health_monitor);
+        if let Some(cancel) = ttl_cancel {
+            ttl_cleanup_cancels.insert(shard_id, cancel);
+        }
+    }
+
+    // Initialize peer sync if enabled (using shard 0 for now)
+    let peer_manager = if config.peer_sync.enabled {
+        if let Some(shard_0) = shard_nodes.get(&0) {
+            use crate::docs::{DocsImporter, PeerManager};
+
+            let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone()));
+            let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
+
+            info!(
+                node_id = config.node_id,
+                "peer sync initialized (using shard 0)"
+            );
+            Some(manager)
+        } else {
+            warn!(
+                node_id = config.node_id,
+                "peer sync requested but shard 0 not hosted locally"
+            );
+            None
+        }
+    } else {
+        None
+    };
+
+    // Register node in metadata store
+    use crate::cluster::metadata::NodeMetadata;
+    base.metadata_store.register_node(NodeMetadata {
+        node_id: config.node_id,
+        endpoint_id: base.iroh_manager.node_addr().id.to_string(),
+        raft_addr: String::new(),
+        status: NodeStatus::Online,
+        last_updated_secs: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    })?;
+
+    info!(
+        node_id = config.node_id,
+        shard_count = shard_nodes.len(),
+        "sharded node bootstrap complete"
+    );
+
+    Ok(ShardedNodeHandle {
+        base,
+        shard_nodes,
+        sharded_kv,
+        sharded_handler,
+        supervisor,
+        health_monitors,
+        ttl_cleanup_cancels,
+        peer_manager,
+        log_broadcast: None,
+        docs_exporter_cancel: None,
+        docs_sync: None,
+        root_token: None,
+    })
 }
 
 /// Bootstrap a cluster node with simplified architecture.
@@ -1104,6 +1724,77 @@ mod tests {
             let _: &CancellationToken = &handle.shutdown_token;
             let _: &TopicId = &handle.gossip_topic_id;
             let _: &Option<CancellationToken> = &handle.ttl_cleanup_cancel;
+        }
+    }
+
+    // =========================================================================
+    // ShardedNodeHandle Tests (struct properties)
+    // =========================================================================
+
+    #[test]
+    fn test_sharded_node_handle_fields_are_public() {
+        // Verify ShardedNodeHandle fields are accessible (compile-time check)
+        // This test ensures the API remains stable
+        fn _check_handle_fields(handle: &ShardedNodeHandle) {
+            let _: &BaseNodeResources = &handle.base;
+            let _: &HashMap<ShardId, Arc<RaftNode>> = &handle.shard_nodes;
+            let _: &Arc<ShardedKeyValueStore<RaftNode>> = &handle.sharded_kv;
+            let _: &Arc<crate::protocol_handlers::ShardedRaftProtocolHandler> =
+                &handle.sharded_handler;
+            let _: &Arc<Supervisor> = &handle.supervisor;
+            let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.health_monitors;
+            let _: &HashMap<ShardId, CancellationToken> = &handle.ttl_cleanup_cancels;
+            let _: &Option<Arc<crate::docs::PeerManager>> = &handle.peer_manager;
+            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
+            let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
+            let _: &Option<crate::docs::DocsSyncResources> = &handle.docs_sync;
+            let _: &Option<CapabilityToken> = &handle.root_token;
+        }
+    }
+
+    #[test]
+    fn test_base_node_resources_fields_are_public() {
+        // Verify BaseNodeResources fields are accessible (compile-time check)
+        fn _check_base_fields(base: &BaseNodeResources) {
+            let _: &NodeConfig = &base.config;
+            let _: &Arc<MetadataStore> = &base.metadata_store;
+            let _: &Arc<IrohEndpointManager> = &base.iroh_manager;
+            let _: &Arc<IrpcRaftNetworkFactory> = &base.network_factory;
+            let _: &Option<GossipPeerDiscovery> = &base.gossip_discovery;
+            let _: &TopicId = &base.gossip_topic_id;
+            let _: &CancellationToken = &base.shutdown_token;
+            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &base.blob_store;
+        }
+    }
+
+    // =========================================================================
+    // ShardedNodeHandle Method Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sharded_node_handle_shard_count_accessor() {
+        // Test that shard_count() returns correct value
+        // This is a compile-time check that the method exists
+        fn _check_shard_count(handle: &ShardedNodeHandle) -> usize {
+            handle.shard_count()
+        }
+    }
+
+    #[test]
+    fn test_sharded_node_handle_local_shard_ids_accessor() {
+        // Test that local_shard_ids() returns correct type
+        // This is a compile-time check that the method exists
+        fn _check_local_shard_ids(handle: &ShardedNodeHandle) -> Vec<ShardId> {
+            handle.local_shard_ids()
+        }
+    }
+
+    #[test]
+    fn test_sharded_node_handle_primary_shard_accessor() {
+        // Test that primary_shard() returns correct type
+        // This is a compile-time check that the method exists
+        fn _check_primary_shard(handle: &ShardedNodeHandle) -> Option<&Arc<RaftNode>> {
+            handle.primary_shard()
         }
     }
 }
