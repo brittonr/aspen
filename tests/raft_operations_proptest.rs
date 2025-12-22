@@ -237,61 +237,13 @@ fn test_write_idempotency() {
         });
 }
 
-// Test 5: Empty Key Behavior
-// Note: This test verifies the system's consistent handling of empty keys.
-// The current implementation allows empty keys (they are valid strings),
-// so we test that empty key writes round-trip correctly.
-#[test]
-fn test_empty_key_behavior() {
-    check!()
-        .with_iterations(50)
-        .with_type::<ValidValue>()
-        .for_each(|value| {
-            // Property: Empty key writes should round-trip consistently
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let router = init_single_node_cluster()
-                    .await
-                    .expect("Failed to init cluster");
+// Note: Empty key validation is tested at the API layer in:
+// - src/api/mod.rs (unit tests for all WriteCommand variants)
+// - tests/api_validation_proptest.rs (property-based tests)
+// The AspenRouter test harness bypasses API validation to test Raft internals,
+// so empty key rejection is not tested here.
 
-                // Write with empty key
-                router
-                    .write(0, String::new(), value.0.clone())
-                    .await
-                    .expect("empty key write failed");
-
-                // Wait for the write to be applied
-                router
-                    .wait(NodeId(0), Some(std::time::Duration::from_millis(2000)))
-                    .applied_index(Some(2), "empty key write applied")
-                    .await
-                    .expect("Failed to wait for write");
-
-                // Verify we can read back the empty key
-                let stored = router.read(0, "").await;
-                assert_eq!(
-                    stored,
-                    Some(value.0.clone()),
-                    "Empty key should be readable after write"
-                );
-
-                // Verify the system is still functional for normal keys
-                router
-                    .write(0, "normal_key".to_string(), "normal_value".to_string())
-                    .await
-                    .expect("normal write failed");
-
-                let normal_stored = router.read(0, "normal_key").await;
-                assert_eq!(
-                    normal_stored,
-                    Some("normal_value".to_string()),
-                    "Normal key should work alongside empty key"
-                );
-            });
-        });
-}
-
-// Test 6: Large Value Handling
+// Test 5: Large Value Handling
 #[test]
 fn test_large_value_writes() {
     check!()

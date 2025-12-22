@@ -585,13 +585,17 @@ mod boundary_tests {
     }
 
     #[test]
-    fn test_empty_key_is_valid() {
-        // Empty key is technically valid (size 0 <= 1024)
+    fn test_empty_key_is_rejected() {
+        // Tiger Style: Empty keys are rejected to prevent issues with prefix scans
+        // and to ensure all keys have meaningful identifiers.
         let cmd = WriteCommand::Set {
             key: "".to_string(),
             value: "value".to_string(),
         };
-        assert!(validate_write_command(&cmd).is_ok());
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(aspen::api::KeyValueStoreError::EmptyKey)
+        ));
     }
 
     #[test]
