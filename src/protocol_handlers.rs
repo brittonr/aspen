@@ -277,6 +277,7 @@ fn sanitize_kv_error(err: &crate::api::KeyValueStoreError) -> String {
         KeyValueStoreError::CompareAndSwapFailed { key, .. } => {
             format!("compare-and-swap failed for key '{}'", key)
         }
+        KeyValueStoreError::EmptyKey => "key cannot be empty".to_string(),
     }
 }
 

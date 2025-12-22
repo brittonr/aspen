@@ -576,6 +576,12 @@ pub enum KeyValueStoreError {
         expected: Option<String>,
         actual: Option<String>,
     },
+    /// Key cannot be empty.
+    ///
+    /// Tiger Style: Empty keys are rejected to prevent issues with prefix scans
+    /// and to ensure all keys have meaningful identifiers.
+    #[error("key cannot be empty")]
+    EmptyKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -695,11 +701,15 @@ pub trait KeyValueStore: Send + Sync {
 /// Validate a write command against fixed size limits.
 ///
 /// Enforces:
+/// - Key is non-empty
 /// - Key length <= MAX_KEY_SIZE bytes
 /// - Value length <= MAX_VALUE_SIZE bytes
 /// - Batch length (SetMulti/DeleteMulti) <= MAX_SETMULTI_KEYS
 pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStoreError> {
     let check_key = |key: &str| {
+        if key.is_empty() {
+            return Err(KeyValueStoreError::EmptyKey);
+        }
         let len = key.len();
         if len > MAX_KEY_SIZE as usize {
             Err(KeyValueStoreError::KeyTooLarge {
@@ -1172,5 +1182,187 @@ pub trait SqlQueryExecutor: Send + Sync {
 impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
         (**self).execute_sql(request).await
+    }
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+
+    #[test]
+    fn empty_key_rejected() {
+        let cmd = WriteCommand::Set {
+            key: "".into(),
+            value: "v".into(),
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn valid_key_accepted() {
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn key_too_large_rejected() {
+        let big_key = "x".repeat(MAX_KEY_SIZE as usize + 1);
+        let cmd = WriteCommand::Set {
+            key: big_key,
+            value: "v".into(),
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::KeyTooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn value_too_large_rejected() {
+        let big_value = "x".repeat(MAX_VALUE_SIZE as usize + 1);
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value: big_value,
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::ValueTooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn batch_too_large_rejected() {
+        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS + 1)
+            .map(|i| (format!("k{}", i), "v".into()))
+            .collect();
+        let cmd = WriteCommand::SetMulti { pairs };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::BatchTooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn transaction_total_size_validated() {
+        let compare: Vec<_> = (0..50)
+            .map(|i| TxnCompare {
+                key: format!("k{}", i),
+                target: CompareTarget::Value,
+                op: CompareOp::Equal,
+                value: "v".into(),
+            })
+            .collect();
+        let success: Vec<_> = (0..51)
+            .map(|i| TxnOp::Get {
+                key: format!("k{}", i),
+            })
+            .collect();
+        let cmd = WriteCommand::Transaction {
+            compare,
+            success,
+            failure: vec![],
+        };
+        // Total = 50 + 51 = 101 > MAX_SETMULTI_KEYS (100)
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::BatchTooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn empty_key_in_setmulti_rejected() {
+        let cmd = WriteCommand::SetMulti {
+            pairs: vec![("".into(), "v".into())],
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn empty_key_in_transaction_rejected() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![TxnCompare {
+                key: "".into(),
+                target: CompareTarget::Value,
+                op: CompareOp::Equal,
+                value: "v".into(),
+            }],
+            success: vec![],
+            failure: vec![],
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn empty_key_in_delete_rejected() {
+        let cmd = WriteCommand::Delete { key: "".into() };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn empty_key_in_deletemulti_rejected() {
+        let cmd = WriteCommand::DeleteMulti {
+            keys: vec!["".into()],
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn empty_key_in_compare_and_swap_rejected() {
+        let cmd = WriteCommand::CompareAndSwap {
+            key: "".into(),
+            expected: None,
+            new_value: "v".into(),
+        };
+        assert!(matches!(
+            validate_write_command(&cmd),
+            Err(KeyValueStoreError::EmptyKey)
+        ));
+    }
+
+    #[test]
+    fn boundary_key_size_accepted() {
+        let key = "x".repeat(MAX_KEY_SIZE as usize);
+        let cmd = WriteCommand::Set {
+            key,
+            value: "v".into(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn boundary_value_size_accepted() {
+        let value = "x".repeat(MAX_VALUE_SIZE as usize);
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn boundary_batch_size_accepted() {
+        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS)
+            .map(|i| (format!("k{}", i), "v".into()))
+            .collect();
+        let cmd = WriteCommand::SetMulti { pairs };
+        assert!(validate_write_command(&cmd).is_ok());
     }
 }
