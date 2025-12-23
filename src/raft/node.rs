@@ -982,11 +982,17 @@ impl SqlQueryExecutor for RaftNode {
                     request.timeout_ms,
                 )
             }
-            StateMachineVariant::Redb(_) => {
-                // Redb backend doesn't support SQL (Phase 3 of migration plan)
-                Err(SqlQueryError::NotSupported {
-                    backend: "redb".into(),
-                })
+            StateMachineVariant::Redb(sm) => {
+                // Execute SQL on Redb state machine via DataFusion
+                let executor = crate::sql::RedbSqlExecutor::new(sm.db().clone());
+                executor
+                    .execute(
+                        &request.query,
+                        &request.params,
+                        request.limit,
+                        request.timeout_ms,
+                    )
+                    .await
             }
         }
     }

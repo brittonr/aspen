@@ -128,6 +128,10 @@ parking_lot = "0.12"
 # base64 is used by core modules
 base64 = "0.22"
 
+# DataFusion SQL engine (Phase 3 of migration plan)
+datafusion = { version = "45", default-features = false, features = ["nested_expressions"] }
+arrow = "54"
+
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }
 crossterm = { version = "0.28", features = ["event-stream"], optional = true }
