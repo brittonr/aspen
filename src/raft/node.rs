@@ -722,6 +722,21 @@ impl KeyValueStore for RaftNode {
                     reason: err.to_string(),
                 }),
             },
+            StateMachineVariant::Redb(sm) => match sm.get(&request.key) {
+                Ok(Some(entry)) => Ok(ReadResult {
+                    kv: Some(KeyValueWithRevision {
+                        key: request.key,
+                        value: entry.value,
+                        version: entry.version as u64,
+                        create_revision: entry.create_revision as u64,
+                        mod_revision: entry.mod_revision as u64,
+                    }),
+                }),
+                Ok(None) => Err(KeyValueStoreError::NotFound { key: request.key }),
+                Err(err) => Err(KeyValueStoreError::Failed {
+                    reason: err.to_string(),
+                }),
+            },
         }
     }
 
@@ -880,6 +895,33 @@ impl KeyValueStore for RaftNode {
                     }),
                 }
             }
+            StateMachineVariant::Redb(sm) => {
+                // Redb scan with pagination
+                let start_key = _request.continuation_token.as_deref();
+                match sm.scan(&_request.prefix, start_key, Some(limit + 1)) {
+                    Ok(entries_full) => {
+                        let is_truncated = entries_full.len() > limit;
+                        let entries: Vec<KeyValueWithRevision> =
+                            entries_full.into_iter().take(limit).collect();
+
+                        let continuation_token = if is_truncated {
+                            entries.last().map(|e| e.key.clone())
+                        } else {
+                            None
+                        };
+
+                        Ok(ScanResult {
+                            count: entries.len() as u32,
+                            entries,
+                            is_truncated,
+                            continuation_token,
+                        })
+                    }
+                    Err(err) => Err(KeyValueStoreError::Failed {
+                        reason: err.to_string(),
+                    }),
+                }
+            }
         }
     }
 }
@@ -939,6 +981,12 @@ impl SqlQueryExecutor for RaftNode {
                     request.limit,
                     request.timeout_ms,
                 )
+            }
+            StateMachineVariant::Redb(_) => {
+                // Redb backend doesn't support SQL (Phase 3 of migration plan)
+                Err(SqlQueryError::NotSupported {
+                    backend: "redb".into(),
+                })
             }
         }
     }

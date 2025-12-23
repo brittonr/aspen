@@ -191,3 +191,7 @@ harness = false
 [[bench]]
 name = "concurrency"
 harness = false
+
+[[bench]]
+name = "production"
+harness = false

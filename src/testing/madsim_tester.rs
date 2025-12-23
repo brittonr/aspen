@@ -701,6 +701,31 @@ impl AspenRaftTester {
                         },
                     }
                 }
+                StorageBackend::Redb => {
+                    // For madsim testing, use InMemory mode for Redb backend
+                    // as we want deterministic simulation without disk I/O
+                    let log_store = InMemoryLogStore::default();
+                    let state_machine = InMemoryStateMachine::new();
+
+                    let network_factory =
+                        MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
+
+                    let raft = Raft::new(
+                        node_id,
+                        raft_config.clone(),
+                        network_factory,
+                        log_store,
+                        state_machine.clone(),
+                    )
+                    .await
+                    .expect("failed to create raft instance");
+
+                    TestNode::InMemory {
+                        raft,
+                        state_machine,
+                        connected: AtomicBool::new(true),
+                    }
+                }
             };
 
             router

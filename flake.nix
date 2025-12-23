@@ -663,25 +663,67 @@
             };
 
             # Benchmarking command
-            # Usage: nix run .#bench [filter]
-            #   nix run .#bench           - Run all benchmarks
-            #   nix run .#bench kv_write  - Run benchmarks matching "kv_write"
+            # Usage: nix run .#bench [suite] [filter]
+            #   nix run .#bench                    - Run all benchmarks
+            #   nix run .#bench production        - Run production benchmarks only
+            #   nix run .#bench kv_operations     - Run kv_operations benchmarks only
+            #   nix run .#bench storage           - Run storage benchmarks only
+            #   nix run .#bench workloads         - Run workload benchmarks only
+            #   nix run .#bench concurrency       - Run concurrency benchmarks only
+            #   nix run .#bench -- kv_write       - Run all benchmarks matching "kv_write"
             bench = {
               type = "app";
               program = "${pkgs.writeShellScript "bench" ''
                 set -e
-                FILTER="''${1:-}"
+                SUITE="''${1:-}"
+                FILTER="''${2:-}"
 
-                if [ -n "$FILTER" ]; then
-                  echo "Running benchmarks matching: $FILTER"
-                  nix develop -c cargo bench --bench kv_operations -- "$FILTER"
-                else
-                  echo "Running all benchmarks..."
-                  nix develop -c cargo bench
-                fi
+                case "$SUITE" in
+                  production|kv_operations|storage|workloads|concurrency)
+                    if [ -n "$FILTER" ]; then
+                      echo "Running $SUITE benchmarks matching: $FILTER"
+                      nix develop -c cargo bench --bench "$SUITE" -- "$FILTER"
+                    else
+                      echo "Running $SUITE benchmarks..."
+                      nix develop -c cargo bench --bench "$SUITE"
+                    fi
+                    ;;
+                  "")
+                    echo "Running all benchmarks..."
+                    nix develop -c cargo bench
+                    ;;
+                  *)
+                    # Treat as filter for all benchmarks
+                    echo "Running all benchmarks matching: $SUITE"
+                    nix develop -c cargo bench -- "$SUITE"
+                    ;;
+                esac
 
                 echo ""
                 echo "HTML reports available at: target/criterion/report/index.html"
+              ''}";
+            };
+
+            # Production benchmarks (realistic latencies with SQLite + Iroh)
+            # Usage: nix run .#bench-production [filter]
+            bench-production = {
+              type = "app";
+              program = "${pkgs.writeShellScript "bench-production" ''
+                set -e
+                FILTER="''${1:-}"
+
+                echo "Running production benchmarks (SQLite + Iroh networking)..."
+                echo "These show realistic distributed system latencies."
+                echo ""
+
+                if [ -n "$FILTER" ]; then
+                  nix develop -c cargo bench --bench production -- "$FILTER"
+                else
+                  nix develop -c cargo bench --bench production
+                fi
+
+                echo ""
+                echo "HTML reports available at: target/criterion/production/report/index.html"
               ''}";
             };
 

@@ -272,3 +272,134 @@ pub const VALUE_SIZE_SMALL: usize = 64;
 pub const VALUE_SIZE_MEDIUM: usize = 1024;
 #[allow(dead_code)]
 pub const VALUE_SIZE_LARGE: usize = 65536;
+
+// ====================================================================================
+// Production Node Setup Helpers (Real Storage + Networking)
+// ====================================================================================
+
+use aspen::api::{
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
+};
+use aspen::node::{Node, NodeBuilder};
+use aspen::raft::storage::StorageBackend;
+
+/// Setup a single production node with SQLite storage for realistic benchmarking.
+///
+/// Unlike setup_single_node_cluster() which uses in-memory storage, this creates
+/// a real node with:
+/// - SQLite state machine (with fsync)
+/// - Redb log store (persistent)
+/// - Iroh P2P networking (even for single node)
+///
+/// Returns the Node (caller must keep temp_dir alive for cleanup).
+/// Tiger Style: Real I/O, production-like latencies.
+#[allow(dead_code)]
+pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
+    let data_dir = temp_dir.path().join("node-1");
+
+    let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
+        .with_storage(StorageBackend::Sqlite)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+
+    node.spawn_router();
+
+    // Initialize single-node cluster
+    let raft_node = node.raft_node();
+    let endpoint_addr = node.endpoint_addr();
+    raft_node
+        .init(InitRequest {
+            initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
+        })
+        .await?;
+
+    // Wait for leader state
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    Ok(node)
+}
+
+/// Setup a 3-node production cluster with real Iroh networking.
+///
+/// Creates a fully replicated cluster with:
+/// - 3 nodes each with SQLite state machine
+/// - Real Iroh QUIC connections between nodes
+/// - Node 1 as initial leader, nodes 2 and 3 as voters
+///
+/// Returns Vec of nodes with node[0] as the leader.
+/// Tiger Style: Real network I/O, quorum replication latencies.
+#[allow(dead_code)]
+pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>> {
+    // Node 1 (will become leader)
+    let mut node1 = NodeBuilder::new(aspen::node::NodeId(1), temp_dir.path().join("node-1"))
+        .with_storage(StorageBackend::Sqlite)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node1.spawn_router();
+
+    // Node 2
+    let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
+        .with_storage(StorageBackend::Sqlite)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node2.spawn_router();
+
+    // Node 3
+    let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
+        .with_storage(StorageBackend::Sqlite)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node3.spawn_router();
+
+    // Initialize cluster with node1 as leader
+    let raft1 = node1.raft_node();
+    raft1
+        .init(InitRequest {
+            initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        })
+        .await?;
+
+    // Wait for node1 to become leader
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Add node2 as learner
+    raft1
+        .add_learner(AddLearnerRequest {
+            learner: ClusterNode::with_iroh_addr(2, node2.endpoint_addr()),
+        })
+        .await?;
+
+    // Add node3 as learner
+    raft1
+        .add_learner(AddLearnerRequest {
+            learner: ClusterNode::with_iroh_addr(3, node3.endpoint_addr()),
+        })
+        .await?;
+
+    // Wait for replication to catch up
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Promote learners to voters
+    raft1
+        .change_membership(ChangeMembershipRequest {
+            members: vec![1, 2, 3],
+        })
+        .await?;
+
+    // Wait for membership change to propagate
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    Ok(vec![node1, node2, node3])
+}

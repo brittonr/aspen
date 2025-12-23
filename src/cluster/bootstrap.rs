@@ -55,6 +55,7 @@ use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::node::{RaftNode, RaftNodeHealth};
 use crate::raft::server::RaftRpcServer;
 use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
+use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
 use crate::raft::ttl_cleanup::{TtlCleanupConfig, spawn_ttl_cleanup_task};
@@ -760,6 +761,33 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
                     Some(ttl_cancel),
                 )
             }
+            StorageBackend::Redb => {
+                // Single-fsync storage: shared redb for both log and state machine
+                let db_path = paths.log_path.with_extension("shared.redb");
+                let shared_storage = Arc::new(SharedRedbStorage::new(&db_path).map_err(|e| {
+                    anyhow::anyhow!("failed to open shared redb storage for shard: {}", e)
+                })?);
+
+                info!(
+                    node_id = config.node_id,
+                    shard_id,
+                    path = %db_path.display(),
+                    "created shared redb storage for shard (single-fsync mode)"
+                );
+
+                let raft = Arc::new(
+                    Raft::new(
+                        shard_node_id.into(),
+                        raft_config.clone(),
+                        base.network_factory.as_ref().clone(),
+                        shared_storage.as_ref().clone(),
+                        shared_storage.as_ref().clone(),
+                    )
+                    .await?,
+                );
+
+                (raft, StateMachineVariant::Redb(shared_storage), None)
+            }
         };
 
         info!(
@@ -1120,6 +1148,35 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 StateMachineVariant::Sqlite(sqlite_state_machine),
                 Some(ttl_cancel),
             )
+        }
+        StorageBackend::Redb => {
+            // Single-fsync storage: shared redb for both log and state machine
+            let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
+            let shared_storage = Arc::new(
+                SharedRedbStorage::with_broadcast(&db_path, log_broadcast.clone())
+                    .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
+            );
+
+            info!(
+                node_id = config.node_id,
+                path = %db_path.display(),
+                "created shared redb storage (single-fsync mode)"
+            );
+
+            // Create Raft instance with shared storage for both log and state machine
+            let raft = Arc::new(
+                Raft::new(
+                    config.node_id.into(),
+                    raft_config.clone(),
+                    network_factory.as_ref().clone(),
+                    shared_storage.as_ref().clone(),
+                    shared_storage.as_ref().clone(),
+                )
+                .await?,
+            );
+
+            // Redb doesn't have separate TTL cleanup yet (handled in-line during apply)
+            (raft, StateMachineVariant::Redb(shared_storage), None)
         }
     };
 

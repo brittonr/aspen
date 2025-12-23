@@ -87,8 +87,9 @@ use crate::utils::ensure_disk_space_available;
 
 /// Storage backend selection for Raft log and state machine.
 ///
-/// Aspen supports two storage backends:
+/// Aspen supports three storage backends:
 /// - **Sqlite**: Persistent storage using redb for logs and SQLite for state machine (default, production)
+/// - **Redb**: Single-fsync storage using shared redb for both log and state machine (optimized)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -100,8 +101,14 @@ pub enum StorageBackend {
     /// Persistent storage using SQLite for state machine and redb for logs.
     /// Default storage backend for production deployments and integration tests.
     /// Uses redb for the append-only Raft log and SQLite for the state machine.
+    /// Write latency: ~9ms (two fsyncs: log + state machine)
     #[default]
     Sqlite,
+    /// Single-fsync storage using shared redb for both log and state machine.
+    /// Bundles state mutations into log appends for single-fsync durability.
+    /// Write latency: ~2-3ms (single fsync)
+    /// Use for: latency-sensitive production deployments.
+    Redb,
 }
 
 impl std::str::FromStr for StorageBackend {
@@ -110,9 +117,10 @@ impl std::str::FromStr for StorageBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "inmemory" | "in-memory" | "memory" => Ok(StorageBackend::InMemory),
-            "sqlite" | "sql" | "persistent" | "disk" | "redb" => Ok(StorageBackend::Sqlite),
+            "sqlite" | "sql" | "persistent" | "disk" => Ok(StorageBackend::Sqlite),
+            "redb" | "single-fsync" | "fast" => Ok(StorageBackend::Redb),
             _ => Err(format!(
-                "Invalid storage backend '{}'. Valid options: inmemory, sqlite",
+                "Invalid storage backend '{}'. Valid options: inmemory, sqlite, redb",
                 s
             )),
         }
@@ -124,6 +132,7 @@ impl std::fmt::Display for StorageBackend {
         match self {
             StorageBackend::InMemory => write!(f, "inmemory"),
             StorageBackend::Sqlite => write!(f, "sqlite"),
+            StorageBackend::Redb => write!(f, "redb"),
         }
     }
 }
@@ -1923,7 +1932,23 @@ mod tests {
         );
         assert_eq!(
             "redb".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
+            StorageBackend::Redb
+        );
+    }
+
+    #[test]
+    fn test_storage_backend_from_str_redb() {
+        assert_eq!(
+            "redb".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Redb
+        );
+        assert_eq!(
+            "single-fsync".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Redb
+        );
+        assert_eq!(
+            "fast".parse::<StorageBackend>().unwrap(),
+            StorageBackend::Redb
         );
     }
 
