@@ -302,6 +302,35 @@ pub enum AppRequest {
         /// Each tuple is (is_set, key, value). is_set=true for Set, false for Delete.
         write_set: Vec<(bool, String, String)>,
     },
+    // =========================================================================
+    // Shard topology operations
+    // =========================================================================
+    /// Split a shard into two shards at a given key.
+    /// Applied atomically through Raft consensus on shard 0 (control plane).
+    ShardSplit {
+        /// Shard being split.
+        source_shard: u32,
+        /// Key at which to split (keys >= this go to new shard).
+        split_key: String,
+        /// ID for the new shard being created.
+        new_shard_id: u32,
+        /// Expected topology version (prevents stale splits).
+        topology_version: u64,
+    },
+    /// Merge two adjacent shards into one.
+    ShardMerge {
+        /// Shard to be merged (will become tombstone).
+        source_shard: u32,
+        /// Shard to merge into (will expand to cover source's range).
+        target_shard: u32,
+        /// Expected topology version (prevents stale merges).
+        topology_version: u64,
+    },
+    /// Direct topology update (internal command).
+    TopologyUpdate {
+        /// Serialized ShardTopology (bincode).
+        topology_data: Vec<u8>,
+    },
 }
 
 impl fmt::Display for AppRequest {
@@ -432,6 +461,30 @@ impl fmt::Display for AppRequest {
                     write_set.len()
                 )
             }
+            AppRequest::ShardSplit {
+                source_shard,
+                split_key,
+                new_shard_id,
+                topology_version,
+            } => {
+                write!(
+                    f,
+                    "ShardSplit {{ source: {source_shard}, split_key: {split_key}, new: {new_shard_id}, version: {topology_version} }}"
+                )
+            }
+            AppRequest::ShardMerge {
+                source_shard,
+                target_shard,
+                topology_version,
+            } => {
+                write!(
+                    f,
+                    "ShardMerge {{ source: {source_shard}, target: {target_shard}, version: {topology_version} }}"
+                )
+            }
+            AppRequest::TopologyUpdate { topology_data } => {
+                write!(f, "TopologyUpdate {{ size: {} }}", topology_data.len())
+            }
         }
     }
 }
@@ -522,6 +575,12 @@ pub struct AppResponse {
     /// - `Some(true)`: Conflict detected, transaction was NOT applied
     /// - `Some(false)` or `None`: No conflict, transaction was applied successfully
     pub occ_conflict: Option<bool>,
+    // =========================================================================
+    // Shard topology responses
+    // =========================================================================
+    /// For ShardSplit/ShardMerge/TopologyUpdate: the new topology version.
+    /// Used for clients to track topology changes and invalidate caches.
+    pub topology_version: Option<u64>,
 }
 
 declare_raft_types!(

@@ -84,6 +84,7 @@ use crate::raft::constants::{
 use crate::raft::integrity::{GENESIS_HASH, SnapshotIntegrity};
 use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
 use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
+use crate::sharding::topology::ShardTopology;
 
 /// Errors that can occur when using SQLite storage.
 ///
@@ -580,6 +581,10 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                     })
                     .collect(),
             },
+            // Shard topology operations are control plane only, not KV operations
+            AppRequest::ShardSplit { .. }
+            | AppRequest::ShardMerge { .. }
+            | AppRequest::TopologyUpdate { .. } => KvOperation::Noop,
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -880,6 +885,21 @@ impl SqliteStateMachine {
             "CREATE INDEX IF NOT EXISTS idx_kv_create_revision ON state_machine_kv(create_revision)",
             [],
         );
+
+        // Create shard topology table for dynamic sharding (TiKV-style multi-raft)
+        // Stores serialized ShardTopology as a single BLOB value.
+        // The topology is versioned and replicated via Raft to shard 0.
+        write_conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS shard_topology (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL,
+                data BLOB NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+                [],
+            )
+            .context(ExecuteSnafu)?;
 
         // Create read connection pool
         let manager = SqliteConnectionManager::file(&path);
@@ -3187,6 +3207,157 @@ impl SqliteStateMachine {
         }
     }
 
+    /// Apply a shard split operation.
+    ///
+    /// Loads the current topology, applies the split, and persists the updated topology.
+    /// This operation is executed on shard 0 (the control plane shard).
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `source_shard` - ID of the shard being split
+    /// * `split_key` - The key at which to split (keys >= this go to new shard)
+    /// * `new_shard_id` - ID for the new shard
+    /// * `topology_version` - Expected topology version for optimistic concurrency
+    /// * `timestamp` - Unix timestamp in seconds for the operation
+    ///
+    /// Tiger Style: Atomic, versioned, fail-fast on version mismatch.
+    fn apply_shard_split(
+        conn: &Connection,
+        source_shard: u32,
+        split_key: &str,
+        new_shard_id: u32,
+        topology_version: u64,
+        timestamp: u64,
+    ) -> Result<AppResponse, io::Error> {
+        // Load current topology
+        let mut topology = Self::load_topology(conn)?;
+
+        // Verify version for optimistic concurrency control
+        if topology.version != topology_version {
+            return Err(io::Error::other(format!(
+                "topology version mismatch: expected {}, got {}",
+                topology_version, topology.version
+            )));
+        }
+
+        // Apply the split
+        topology
+            .apply_split(source_shard, split_key.to_string(), new_shard_id, timestamp)
+            .map_err(|e| io::Error::other(format!("shard split failed: {:?}", e)))?;
+
+        // Persist updated topology
+        Self::save_topology(conn, &topology)?;
+
+        Ok(AppResponse {
+            topology_version: Some(topology.version),
+            ..Default::default()
+        })
+    }
+
+    /// Apply a shard merge operation.
+    ///
+    /// Loads the current topology, applies the merge, and persists the updated topology.
+    /// The source shard is tombstoned and its range is absorbed by the target shard.
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `source_shard` - ID of the shard being merged (will be tombstoned)
+    /// * `target_shard` - ID of the shard that will absorb the source
+    /// * `topology_version` - Expected topology version for optimistic concurrency
+    /// * `timestamp` - Unix timestamp in seconds for the operation
+    ///
+    /// Tiger Style: Atomic, versioned, fail-fast on version mismatch.
+    fn apply_shard_merge(
+        conn: &Connection,
+        source_shard: u32,
+        target_shard: u32,
+        topology_version: u64,
+        timestamp: u64,
+    ) -> Result<AppResponse, io::Error> {
+        // Load current topology
+        let mut topology = Self::load_topology(conn)?;
+
+        // Verify version for optimistic concurrency control
+        if topology.version != topology_version {
+            return Err(io::Error::other(format!(
+                "topology version mismatch: expected {}, got {}",
+                topology_version, topology.version
+            )));
+        }
+
+        // Apply the merge
+        topology
+            .apply_merge(source_shard, target_shard, timestamp)
+            .map_err(|e| io::Error::other(format!("shard merge failed: {:?}", e)))?;
+
+        // Persist updated topology
+        Self::save_topology(conn, &topology)?;
+
+        Ok(AppResponse {
+            topology_version: Some(topology.version),
+            ..Default::default()
+        })
+    }
+
+    /// Apply a full topology update.
+    ///
+    /// Replaces the current topology with the provided serialized topology data.
+    /// Used for initial topology setup or full topology sync.
+    ///
+    /// # Arguments
+    /// * `conn` - SQLite connection
+    /// * `topology_data` - Serialized ShardTopology bytes
+    ///
+    /// Tiger Style: Atomic, versioned.
+    fn apply_topology_update(
+        conn: &Connection,
+        topology_data: &[u8],
+    ) -> Result<AppResponse, io::Error> {
+        // Deserialize the topology
+        let topology: ShardTopology = bincode::deserialize(topology_data)
+            .map_err(|e| io::Error::other(format!("failed to deserialize topology: {}", e)))?;
+
+        // Persist the topology
+        Self::save_topology(conn, &topology)?;
+
+        Ok(AppResponse {
+            topology_version: Some(topology.version),
+            ..Default::default()
+        })
+    }
+
+    /// Load the current shard topology from the database.
+    ///
+    /// Returns an empty topology if none exists yet.
+    fn load_topology(conn: &Connection) -> Result<ShardTopology, io::Error> {
+        let row: Option<Vec<u8>> = conn
+            .query_row("SELECT data FROM shard_topology WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .optional()
+            .context(QuerySnafu)?;
+
+        match row {
+            Some(data) => bincode::deserialize(&data)
+                .map_err(|e| io::Error::other(format!("failed to deserialize topology: {}", e))),
+            None => Ok(ShardTopology::empty()),
+        }
+    }
+
+    /// Save the shard topology to the database.
+    fn save_topology(conn: &Connection, topology: &ShardTopology) -> Result<(), io::Error> {
+        let data = bincode::serialize(topology)
+            .map_err(|e| io::Error::other(format!("failed to serialize topology: {}", e)))?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO shard_topology (id, version, data, updated_at) VALUES (1, ?1, ?2, ?3)",
+            params![topology.version as i64, data, topology.updated_at as i64],
+        )
+        .context(ExecuteSnafu)?;
+
+        Ok(())
+    }
+
     /// Apply an entry payload to the state machine.
     ///
     /// Dispatches to the appropriate handler based on payload type.
@@ -3262,6 +3433,40 @@ impl SqliteStateMachine {
                     read_set,
                     write_set,
                 } => Self::apply_optimistic_transaction(conn, log_index, read_set, write_set),
+                // Shard topology operations (control plane operations on shard 0)
+                AppRequest::ShardSplit {
+                    source_shard,
+                    split_key,
+                    new_shard_id,
+                    topology_version,
+                } => {
+                    let timestamp = now_unix_ms() / 1000; // Convert to seconds
+                    Self::apply_shard_split(
+                        conn,
+                        *source_shard,
+                        split_key,
+                        *new_shard_id,
+                        *topology_version,
+                        timestamp,
+                    )
+                }
+                AppRequest::ShardMerge {
+                    source_shard,
+                    target_shard,
+                    topology_version,
+                } => {
+                    let timestamp = now_unix_ms() / 1000; // Convert to seconds
+                    Self::apply_shard_merge(
+                        conn,
+                        *source_shard,
+                        *target_shard,
+                        *topology_version,
+                        timestamp,
+                    )
+                }
+                AppRequest::TopologyUpdate { topology_data } => {
+                    Self::apply_topology_update(conn, topology_data)
+                }
             },
             EntryPayload::Membership(membership) => {
                 Self::apply_membership(conn, log_id, membership)

@@ -79,6 +79,7 @@ use crate::raft::constants::{
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::pure::calculate_backoff_duration;
 use crate::raft::types::NodeId;
+use crate::sharding::topology::TopologyAnnouncement;
 
 /// Current gossip message protocol version.
 ///
@@ -180,6 +181,7 @@ impl SignedPeerAnnouncement {
     }
 
     /// Serialize to bytes using postcard.
+    #[allow(dead_code)]
     fn to_bytes(&self) -> Result<Vec<u8>> {
         postcard::to_stdvec(self).context("failed to serialize signed peer announcement")
     }
@@ -196,6 +198,107 @@ impl SignedPeerAnnouncement {
         }
 
         Some(signed)
+    }
+}
+
+/// Signed topology announcement for cryptographic verification.
+///
+/// Wraps a `TopologyAnnouncement` with an Ed25519 signature from the sender's
+/// Iroh secret key. Used to broadcast topology version updates so nodes can
+/// detect when they have stale topology information.
+///
+/// Tiger Style: Fixed 64-byte signature, fail-fast verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SignedTopologyAnnouncement {
+    /// The topology announcement payload.
+    announcement: TopologyAnnouncement,
+    /// Ed25519 signature over the serialized announcement (64 bytes).
+    signature: Signature,
+    /// Public key of the signing node (for verification without endpoint_addr).
+    public_key: PublicKey,
+}
+
+impl SignedTopologyAnnouncement {
+    /// Create a signed topology announcement.
+    #[allow(dead_code)]
+    fn sign(announcement: TopologyAnnouncement, secret_key: &SecretKey) -> Result<Self> {
+        let announcement_bytes = postcard::to_stdvec(&announcement)
+            .context("failed to serialize topology announcement")?;
+        let signature = secret_key.sign(&announcement_bytes);
+        let public_key = secret_key.public();
+
+        Ok(Self {
+            announcement,
+            signature,
+            public_key,
+        })
+    }
+
+    /// Verify the signature and return the inner announcement if valid.
+    fn verify(&self) -> Option<&TopologyAnnouncement> {
+        let announcement_bytes = postcard::to_stdvec(&self.announcement).ok()?;
+
+        match self.public_key.verify(&announcement_bytes, &self.signature) {
+            Ok(()) => Some(&self.announcement),
+            Err(_) => None,
+        }
+    }
+
+    /// Serialize to bytes using postcard.
+    #[allow(dead_code)]
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        postcard::to_stdvec(self).context("failed to serialize signed topology announcement")
+    }
+
+    /// Deserialize from bytes using postcard.
+    #[allow(dead_code)]
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let signed: Self = postcard::from_bytes(bytes).ok()?;
+
+        // Reject unknown future versions
+        if signed.announcement.version > TopologyAnnouncement::PROTOCOL_VERSION {
+            return None;
+        }
+
+        Some(signed)
+    }
+}
+
+/// Envelope for gossip messages supporting multiple message types.
+///
+/// This allows peer announcements and topology announcements to share
+/// the same gossip topic while being distinguishable by type.
+///
+/// Tiger Style: Versioned enum for forward compatibility.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum GossipMessage {
+    /// Peer endpoint address announcement.
+    PeerAnnouncement(SignedPeerAnnouncement),
+    /// Topology version announcement (for cache invalidation).
+    TopologyAnnouncement(SignedTopologyAnnouncement),
+}
+
+impl GossipMessage {
+    /// Serialize to bytes using postcard.
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        postcard::to_stdvec(self).context("failed to serialize gossip message")
+    }
+
+    /// Deserialize from bytes using postcard.
+    ///
+    /// Falls back to parsing as legacy SignedPeerAnnouncement for backwards compatibility.
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        // Try new envelope format first
+        if let Ok(msg) = postcard::from_bytes::<Self>(bytes) {
+            return Some(msg);
+        }
+
+        // Fall back to legacy SignedPeerAnnouncement format for backwards compat
+        if let Some(signed) = SignedPeerAnnouncement::from_bytes(bytes) {
+            return Some(GossipMessage::PeerAnnouncement(signed));
+        }
+
+        None
     }
 }
 
@@ -454,7 +557,9 @@ impl GossipPeerDiscovery {
                             }
                         };
 
-                        match signed.to_bytes() {
+                        // Wrap in GossipMessage envelope for versioned message handling
+                        let gossip_msg = GossipMessage::PeerAnnouncement(signed);
+                        match gossip_msg.to_bytes() {
                             Ok(bytes) => {
                                 match announcer_sender.broadcast(bytes.into()).await {
                                     Ok(()) => {
@@ -558,88 +663,128 @@ impl GossipPeerDiscovery {
                             continue;
                         }
 
-                        // Parse signed announcement
-                        let signed = match SignedPeerAnnouncement::from_bytes(&msg.content) {
-                            Some(s) => s,
+                        // Parse gossip message (supports both peer and topology announcements)
+                        let gossip_msg = match GossipMessage::from_bytes(&msg.content) {
+                            Some(m) => m,
                             None => {
-                                tracing::warn!("failed to parse signed peer announcement");
+                                tracing::warn!("failed to parse gossip message");
                                 continue;
                             }
                         };
 
-                        // Verify signature - reject if invalid
-                        let announcement = match signed.verify() {
-                            Some(ann) => ann,
-                            None => {
-                                tracing::warn!(
-                                    "rejected peer announcement with invalid signature from endpoint_id={:?}",
-                                    signed.announcement.endpoint_addr.id
-                                );
-                                continue;
-                            }
-                        };
+                        match gossip_msg {
+                            GossipMessage::PeerAnnouncement(signed) => {
+                                // Verify signature - reject if invalid
+                                let announcement = match signed.verify() {
+                                    Some(ann) => ann,
+                                    None => {
+                                        tracing::warn!(
+                                            "rejected peer announcement with invalid signature from endpoint_id={:?}",
+                                            signed.announcement.endpoint_addr.id
+                                        );
+                                        continue;
+                                    }
+                                };
 
-                        // Filter out our own announcements
-                        if announcement.node_id == receiver_node_id {
-                            tracing::trace!("ignoring self-announcement");
-                            continue;
-                        }
+                                // Filter out our own announcements
+                                if announcement.node_id == receiver_node_id {
+                                    tracing::trace!("ignoring self-announcement");
+                                    continue;
+                                }
 
-                        tracing::debug!(
-                            "received verified peer announcement from node_id={}, endpoint_id={:?}",
-                            announcement.node_id,
-                            announcement.endpoint_addr.id
-                        );
-
-                        // Add peer to network factory's fallback cache.
-                        //
-                        // ARCHITECTURAL NOTE: Gossip discovery intentionally does NOT
-                        // automatically trigger add_learner() to add discovered peers to
-                        // Raft membership. This separation is by design:
-                        //
-                        // 1. Transport vs Application Layer: Gossip provides transport-layer
-                        //    connectivity (who can I talk to?), while Raft membership is an
-                        //    application-layer concern (who is part of the cluster?).
-                        //
-                        // 2. Security: Automatic promotion would allow any gossiping node to
-                        //    join the cluster, creating a Sybil attack vector.
-                        //
-                        // 3. Bounded Growth: Manual add_learner() calls ensure cluster
-                        //    membership is explicitly controlled by operators.
-                        //
-                        // 4. Address Persistence: Addresses ARE persisted! When a peer is
-                        //    added via add_learner(), their RaftMemberInfo (with iroh_addr) is
-                        //    stored in Raft membership and persisted to the state machine.
-                        //    On restart, these addresses are recovered automatically.
-                        //
-                        // The network factory's peer_addrs map is just a fallback cache for
-                        // addresses not yet in Raft membership. Once a peer is promoted to
-                        // learner/voter, their address comes from the Raft membership state.
-                        if let Some(ref factory) = receiver_network_factory {
-                            factory
-                                .add_peer(
+                                tracing::debug!(
+                                    "received verified peer announcement from node_id={}, endpoint_id={:?}",
                                     announcement.node_id,
-                                    announcement.endpoint_addr.clone(),
-                                )
-                                .await;
+                                    announcement.endpoint_addr.id
+                                );
 
-                            tracing::info!(
-                                "added peer to network factory: node_id={}, endpoint_id={:?}",
-                                announcement.node_id,
-                                announcement.endpoint_addr.id
-                            );
+                                // Add peer to network factory's fallback cache.
+                                //
+                                // ARCHITECTURAL NOTE: Gossip discovery intentionally does NOT
+                                // automatically trigger add_learner() to add discovered peers to
+                                // Raft membership. This separation is by design:
+                                //
+                                // 1. Transport vs Application Layer: Gossip provides transport-layer
+                                //    connectivity (who can I talk to?), while Raft membership is an
+                                //    application-layer concern (who is part of the cluster?).
+                                //
+                                // 2. Security: Automatic promotion would allow any gossiping node to
+                                //    join the cluster, creating a Sybil attack vector.
+                                //
+                                // 3. Bounded Growth: Manual add_learner() calls ensure cluster
+                                //    membership is explicitly controlled by operators.
+                                //
+                                // 4. Address Persistence: Addresses ARE persisted! When a peer is
+                                //    added via add_learner(), their RaftMemberInfo (with iroh_addr) is
+                                //    stored in Raft membership and persisted to the state machine.
+                                //    On restart, these addresses are recovered automatically.
+                                //
+                                // The network factory's peer_addrs map is just a fallback cache for
+                                // addresses not yet in Raft membership. Once a peer is promoted to
+                                // learner/voter, their address comes from the Raft membership state.
+                                if let Some(ref factory) = receiver_network_factory {
+                                    factory
+                                        .add_peer(
+                                            announcement.node_id,
+                                            announcement.endpoint_addr.clone(),
+                                        )
+                                        .await;
+
+                                    tracing::info!(
+                                        "added peer to network factory: node_id={}, endpoint_id={:?}",
+                                        announcement.node_id,
+                                        announcement.endpoint_addr.id
+                                    );
+                                }
+
+                                // Log the discovery details
+                                let relay_urls: Vec<_> =
+                                    announcement.endpoint_addr.relay_urls().collect();
+                                tracing::info!(
+                                    "discovered verified peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
+                                    announcement.node_id,
+                                    announcement.endpoint_addr.id,
+                                    relay_urls,
+                                    announcement.endpoint_addr.addrs.len()
+                                );
+                            }
+                            GossipMessage::TopologyAnnouncement(signed) => {
+                                // Verify signature - reject if invalid
+                                let announcement = match signed.verify() {
+                                    Some(ann) => ann,
+                                    None => {
+                                        tracing::warn!(
+                                            "rejected topology announcement with invalid signature from node_id={}",
+                                            signed.announcement.node_id
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                // Filter out our own announcements
+                                if announcement.node_id == u64::from(receiver_node_id) {
+                                    tracing::trace!("ignoring self-topology-announcement");
+                                    continue;
+                                }
+
+                                tracing::debug!(
+                                    "received verified topology announcement from node_id={}, version={}, hash={}",
+                                    announcement.node_id,
+                                    announcement.topology_version,
+                                    announcement.topology_hash
+                                );
+
+                                // TODO: Compare with local topology version and trigger sync if stale.
+                                // This will be implemented when we add the topology sync RPC.
+                                // For now, just log the announcement so nodes can observe topology changes.
+                                tracing::info!(
+                                    "topology announcement: node_id={}, version={}, term={}",
+                                    announcement.node_id,
+                                    announcement.topology_version,
+                                    announcement.term
+                                );
+                            }
                         }
-
-                        // Log the discovery details
-                        let relay_urls: Vec<_> =
-                            announcement.endpoint_addr.relay_urls().collect();
-                        tracing::info!(
-                            "discovered verified peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
-                            announcement.node_id,
-                            announcement.endpoint_addr.id,
-                            relay_urls,
-                            announcement.endpoint_addr.addrs.len()
-                        );
                     }
                     Some(Ok(Event::NeighborUp(neighbor_id))) => {
                         tracing::debug!("neighbor up: {:?}", neighbor_id);
@@ -1059,5 +1204,124 @@ mod tests {
         // peer_a (older) should be evicted, peer_b should remain
         assert!(!limiter.per_peer.contains_key(&peer_a));
         assert!(limiter.per_peer.contains_key(&peer_b));
+    }
+
+    // ========================================================================
+    // Topology Announcement Tests
+    // ========================================================================
+
+    #[test]
+    fn test_signed_topology_announcement_sign_and_verify() {
+        let secret_key = SecretKey::from([42u8; 32]);
+        let announcement = TopologyAnnouncement::new(123, 1, 0xDEADBEEF, 5, 1000000);
+        let signed = SignedTopologyAnnouncement::sign(announcement.clone(), &secret_key).unwrap();
+
+        // Verify should succeed with correct key
+        let verified = signed.verify();
+        assert!(verified.is_some());
+        assert_eq!(verified.unwrap().node_id, announcement.node_id);
+        assert_eq!(
+            verified.unwrap().topology_version,
+            announcement.topology_version
+        );
+    }
+
+    #[test]
+    fn test_signed_topology_announcement_roundtrip() {
+        let secret_key = SecretKey::from([99u8; 32]);
+        let announcement = TopologyAnnouncement::new(456, 2, 0xCAFEBABE, 10, 2000000);
+        let signed = SignedTopologyAnnouncement::sign(announcement, &secret_key).unwrap();
+
+        // Serialize and deserialize
+        let bytes = signed.to_bytes().unwrap();
+        let deserialized = SignedTopologyAnnouncement::from_bytes(&bytes).unwrap();
+
+        // Verify still works after roundtrip
+        assert!(deserialized.verify().is_some());
+        assert_eq!(
+            deserialized.verify().unwrap().topology_version,
+            signed.verify().unwrap().topology_version
+        );
+    }
+
+    #[test]
+    fn test_signed_topology_announcement_wrong_key_rejected() {
+        let real_key = SecretKey::from([11u8; 32]);
+        let fake_key = SecretKey::from([22u8; 32]);
+        let announcement = TopologyAnnouncement::new(789, 3, 0x12345678, 15, 3000000);
+
+        // Sign with real key, but replace the public_key with a different one
+        let mut signed = SignedTopologyAnnouncement::sign(announcement, &real_key).unwrap();
+        signed.public_key = fake_key.public();
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    // ========================================================================
+    // GossipMessage Envelope Tests
+    // ========================================================================
+
+    #[test]
+    fn test_gossip_message_peer_announcement_roundtrip() {
+        let secret_key = SecretKey::from([50u8; 32]);
+        let node_id = 100u64;
+        let addr = EndpointAddr::new(secret_key.public());
+
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
+        let signed = SignedPeerAnnouncement::sign(announcement, &secret_key).unwrap();
+        let msg = GossipMessage::PeerAnnouncement(signed);
+
+        let bytes = msg.to_bytes().unwrap();
+        let deserialized = GossipMessage::from_bytes(&bytes).unwrap();
+
+        match deserialized {
+            GossipMessage::PeerAnnouncement(s) => {
+                assert!(s.verify().is_some());
+            }
+            _ => panic!("expected PeerAnnouncement"),
+        }
+    }
+
+    #[test]
+    fn test_gossip_message_topology_announcement_roundtrip() {
+        let secret_key = SecretKey::from([60u8; 32]);
+        let announcement = TopologyAnnouncement::new(200, 5, 0xAABBCCDD, 20, 4000000);
+        let signed = SignedTopologyAnnouncement::sign(announcement, &secret_key).unwrap();
+        let msg = GossipMessage::TopologyAnnouncement(signed);
+
+        let bytes = msg.to_bytes().unwrap();
+        let deserialized = GossipMessage::from_bytes(&bytes).unwrap();
+
+        match deserialized {
+            GossipMessage::TopologyAnnouncement(s) => {
+                assert!(s.verify().is_some());
+                assert_eq!(s.verify().unwrap().topology_version, 5);
+            }
+            _ => panic!("expected TopologyAnnouncement"),
+        }
+    }
+
+    #[test]
+    fn test_gossip_message_backwards_compat_legacy_peer_announcement() {
+        let secret_key = SecretKey::from([70u8; 32]);
+        let node_id = 300u64;
+        let addr = EndpointAddr::new(secret_key.public());
+
+        let announcement = PeerAnnouncement::new(node_id.into(), addr).unwrap();
+        let signed = SignedPeerAnnouncement::sign(announcement, &secret_key).unwrap();
+
+        // Serialize using the OLD format (just SignedPeerAnnouncement, not GossipMessage)
+        let legacy_bytes = signed.to_bytes().unwrap();
+
+        // Should still parse as GossipMessage via backwards compat fallback
+        let deserialized = GossipMessage::from_bytes(&legacy_bytes).unwrap();
+
+        match deserialized {
+            GossipMessage::PeerAnnouncement(s) => {
+                assert!(s.verify().is_some());
+            }
+            _ => panic!("expected PeerAnnouncement from legacy format"),
+        }
     }
 }

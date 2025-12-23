@@ -336,6 +336,30 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 read_set,
                 write_set,
             },
+            // Shard topology operations pass through directly (control plane operations)
+            WriteCommand::ShardSplit {
+                source_shard,
+                split_key,
+                new_shard_id,
+                topology_version,
+            } => WriteCommand::ShardSplit {
+                source_shard,
+                split_key,
+                new_shard_id,
+                topology_version,
+            },
+            WriteCommand::ShardMerge {
+                source_shard,
+                target_shard,
+                topology_version,
+            } => WriteCommand::ShardMerge {
+                source_shard,
+                target_shard,
+                topology_version,
+            },
+            WriteCommand::TopologyUpdate { topology_data } => {
+                WriteCommand::TopologyUpdate { topology_data }
+            }
         };
 
         // Write to underlying KV

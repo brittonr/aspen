@@ -214,6 +214,13 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
                 }));
                 keys
             }
+            // Shard topology operations are control plane only (shard 0)
+            // and don't involve user keys
+            WriteCommand::ShardSplit { .. }
+            | WriteCommand::ShardMerge { .. }
+            | WriteCommand::TopologyUpdate { .. } => {
+                return Ok(None); // Control plane operations
+            }
         };
 
         if keys.is_empty() {

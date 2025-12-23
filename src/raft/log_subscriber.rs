@@ -635,6 +635,11 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                     write_set: writes,
                 }
             }
+            // Shard topology operations are converted to Noop for log subscribers
+            // (subscribers don't need to track topology changes)
+            AppRequest::ShardSplit { .. }
+            | AppRequest::ShardMerge { .. }
+            | AppRequest::TopologyUpdate { .. } => KvOperation::Noop,
         }
     }
 }

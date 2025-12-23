@@ -578,6 +578,32 @@ impl KeyValueStore for RaftNode {
                     write_set: write_ops,
                 }
             }
+            // Shard topology operations
+            crate::api::WriteCommand::ShardSplit {
+                source_shard,
+                split_key,
+                new_shard_id,
+                topology_version,
+            } => AppRequest::ShardSplit {
+                source_shard: *source_shard,
+                split_key: split_key.clone(),
+                new_shard_id: *new_shard_id,
+                topology_version: *topology_version,
+            },
+            crate::api::WriteCommand::ShardMerge {
+                source_shard,
+                target_shard,
+                topology_version,
+            } => AppRequest::ShardMerge {
+                source_shard: *source_shard,
+                target_shard: *target_shard,
+                topology_version: *topology_version,
+            },
+            crate::api::WriteCommand::TopologyUpdate { topology_data } => {
+                AppRequest::TopologyUpdate {
+                    topology_data: topology_data.clone(),
+                }
+            }
         };
 
         // Apply write through Raft consensus

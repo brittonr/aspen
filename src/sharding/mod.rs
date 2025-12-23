@@ -37,12 +37,19 @@
 //! ```
 
 pub mod consistent_hash;
+pub mod metrics;
 pub mod router;
 pub mod sharded;
+pub mod topology;
 
 pub use consistent_hash::JumpHash;
+pub use metrics::{MetricsSnapshot, ShardMetricsAtomic, ShardMetricsCollector};
 pub use router::{ShardConfig, ShardId, ShardRange, ShardRouter};
 pub use sharded::ShardedKeyValueStore;
+pub use topology::{
+    KeyRange, ShardInfo, ShardMetrics, ShardState, ShardTopology, TopologyAnnouncement,
+    TopologyError,
+};
 
 /// Maximum number of shards supported.
 ///

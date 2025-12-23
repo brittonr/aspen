@@ -634,6 +634,13 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
+            // Shard topology operations are not supported in the in-memory store
+            // These require the Raft-backed state machine for proper coordination
+            WriteCommand::ShardSplit { .. }
+            | WriteCommand::ShardMerge { .. }
+            | WriteCommand::TopologyUpdate { .. } => Err(KeyValueStoreError::Failed {
+                reason: "shard topology operations not supported in in-memory store".to_string(),
+            }),
         }
     }
 

@@ -1306,7 +1306,10 @@ mod tests {
                 | AppRequest::LeaseRevoke { .. }
                 | AppRequest::LeaseKeepalive { .. }
                 | AppRequest::Transaction { .. }
-                | AppRequest::OptimisticTransaction { .. } => {}
+                | AppRequest::OptimisticTransaction { .. }
+                | AppRequest::ShardSplit { .. }
+                | AppRequest::ShardMerge { .. }
+                | AppRequest::TopologyUpdate { .. } => {}
             });
 
         // With 200 iterations and 25% probability each, should see all variants

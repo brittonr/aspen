@@ -1787,6 +1787,11 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             ..Default::default()
                         }
                     }
+                    // Shard topology operations: in-memory doesn't support sharding,
+                    // just return success (for testing purposes only).
+                    AppRequest::ShardSplit { .. }
+                    | AppRequest::ShardMerge { .. }
+                    | AppRequest::TopologyUpdate { .. } => AppResponse::default(),
                 },
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership =

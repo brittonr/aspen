@@ -561,6 +561,66 @@ pub enum WriteCommand {
         /// Max 100 operations (Tiger Style).
         write_set: Vec<WriteOp>,
     },
+    // =========================================================================
+    // Shard topology operations (applied atomically via Raft)
+    // =========================================================================
+    /// Split a shard into two shards at a given key.
+    ///
+    /// This command is applied atomically through Raft consensus on shard 0
+    /// (the control plane shard). All replicas apply the split at the same
+    /// log index, ensuring consistent topology across the cluster.
+    ///
+    /// After split:
+    /// - Source shard owns keys in range `[original_start, split_key)`
+    /// - New shard owns keys in range `[split_key, original_end)`
+    ///
+    /// # TiKV-Style Split Protocol
+    ///
+    /// 1. Leader detects split trigger (size > 64MB or QPS > 2500)
+    /// 2. Leader computes split key (median or load-based)
+    /// 3. Leader proposes ShardSplit through Raft
+    /// 4. All replicas apply split at same log index
+    /// 5. Topology broadcast via gossip
+    ShardSplit {
+        /// Shard being split.
+        source_shard: u32,
+        /// Key at which to split (keys >= this go to new shard).
+        split_key: String,
+        /// ID for the new shard being created.
+        new_shard_id: u32,
+        /// Expected topology version (prevents stale splits).
+        topology_version: u64,
+    },
+    /// Merge two adjacent shards into one.
+    ///
+    /// The source shard's keys are moved to the target shard, and the source
+    /// shard becomes a tombstone (kept for redirect purposes, then cleaned up).
+    ///
+    /// # Merge Conditions
+    ///
+    /// - Both shards must be in Active state
+    /// - Shards must have adjacent key ranges
+    /// - Combined size should be < 48MB (to leave room before next split)
+    ShardMerge {
+        /// Shard to be merged (will become tombstone).
+        source_shard: u32,
+        /// Shard to merge into (will expand to cover source's range).
+        target_shard: u32,
+        /// Expected topology version (prevents stale merges).
+        topology_version: u64,
+    },
+    /// Update the shard topology (internal command).
+    ///
+    /// Used for direct topology updates such as:
+    /// - Initial topology creation
+    /// - Membership changes within shards
+    /// - Tombstone cleanup
+    ///
+    /// This is an internal command, not typically used by clients.
+    TopologyUpdate {
+        /// Serialized ShardTopology (bincode).
+        topology_data: Vec<u8>,
+    },
 }
 
 /// Operations for optimistic transactions.
@@ -878,6 +938,41 @@ pub enum KeyValueStoreError {
     /// and to ensure all keys have meaningful identifiers.
     #[error("key cannot be empty")]
     EmptyKey,
+    /// The key has moved to a different shard.
+    ///
+    /// This error is returned when a shard split or merge has occurred and
+    /// the requested key is now owned by a different shard. Clients should
+    /// update their topology cache and retry the request to the new shard.
+    #[error("key '{key}' moved to shard {new_shard_id} (topology version {topology_version})")]
+    ShardMoved {
+        /// The key that was requested.
+        key: String,
+        /// The shard that now owns this key.
+        new_shard_id: u32,
+        /// Current topology version (client should update cache).
+        topology_version: u64,
+    },
+    /// The shard is not in a state that allows this operation.
+    ///
+    /// For example, a shard that is splitting or merging may reject writes.
+    #[error("shard {shard_id} is {state}, operation not allowed")]
+    ShardNotReady {
+        /// The shard that rejected the operation.
+        shard_id: u32,
+        /// Current state of the shard.
+        state: String,
+    },
+    /// Topology version mismatch.
+    ///
+    /// The topology version in the request doesn't match the current version.
+    /// This typically indicates a race condition with another topology change.
+    #[error("topology version mismatch: expected {expected}, got {actual}")]
+    TopologyVersionMismatch {
+        /// Expected topology version.
+        expected: u64,
+        /// Actual current topology version.
+        actual: u64,
+    },
 }
 
 /// Request to delete a key from the distributed store.
@@ -1267,6 +1362,23 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                         check_key(key)?;
                     }
                 }
+            }
+        }
+        // Shard topology operations
+        WriteCommand::ShardSplit { split_key, .. } => {
+            // Split key must be non-empty and within size limits
+            check_key(split_key)?;
+        }
+        WriteCommand::ShardMerge { .. } => {
+            // No key/value validation needed for merge operations
+        }
+        WriteCommand::TopologyUpdate { topology_data } => {
+            // Validate topology data size (max 1MB, reasonable for up to 256 shards)
+            if topology_data.len() > MAX_VALUE_SIZE as usize {
+                return Err(KeyValueStoreError::ValueTooLarge {
+                    size: topology_data.len(),
+                    max: MAX_VALUE_SIZE,
+                });
             }
         }
     }

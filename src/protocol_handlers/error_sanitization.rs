@@ -167,6 +167,25 @@ pub fn sanitize_kv_error(err: &crate::api::KeyValueStoreError) -> String {
             format!("compare-and-swap failed for key '{}'", key)
         }
         KeyValueStoreError::EmptyKey => "key cannot be empty".to_string(),
+        KeyValueStoreError::ShardMoved {
+            new_shard_id,
+            topology_version,
+            ..
+        } => {
+            format!(
+                "key moved to shard {}; update topology (version {})",
+                new_shard_id, topology_version
+            )
+        }
+        KeyValueStoreError::ShardNotReady { shard_id, state } => {
+            format!("shard {} is {}; retry later", shard_id, state)
+        }
+        KeyValueStoreError::TopologyVersionMismatch { expected, actual } => {
+            format!(
+                "topology version mismatch: expected {}, got {}",
+                expected, actual
+            )
+        }
     }
 }
 
