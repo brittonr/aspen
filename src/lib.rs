@@ -26,6 +26,8 @@ pub mod cluster;
 pub mod coordination;
 /// CRDT-based document synchronization using iroh-docs.
 pub mod docs;
+/// FoundationDB-style layer abstractions (tuple encoding, subspaces).
+pub mod layer;
 /// Node builder pattern for programmatic configuration.
 pub mod node;
 pub mod protocol_handlers;
