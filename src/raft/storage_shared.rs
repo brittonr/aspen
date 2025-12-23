@@ -317,6 +317,9 @@ pub struct SharedRedbStorage {
     /// TODO: Implement log broadcast for Redb backend (Phase 2)
     #[allow(dead_code)]
     log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    /// Pending responses computed during append() to be sent in apply().
+    /// Key is log index, value is the computed AppResponse.
+    pending_responses: Arc<StdRwLock<BTreeMap<u64, AppResponse>>>,
 }
 
 impl SharedRedbStorage {
@@ -387,6 +390,7 @@ impl SharedRedbStorage {
             path,
             chain_tip: Arc::new(StdRwLock::new(chain_tip)),
             log_broadcast,
+            pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
         })
     }
 
@@ -629,6 +633,109 @@ impl SharedRedbStorage {
         }
 
         Ok(results)
+    }
+
+    // =========================================================================
+    // TTL Cleanup Methods
+    // =========================================================================
+
+    /// Delete expired keys in a batch.
+    ///
+    /// Returns the number of keys deleted.
+    /// This is used by the background TTL cleanup task.
+    ///
+    /// # Tiger Style
+    /// - Fixed batch limit prevents unbounded work per call
+    /// - Iterates over all keys (no index for TTL in Redb)
+    /// - Idempotent: safe to call concurrently or repeatedly
+    pub fn delete_expired_keys(&self, batch_limit: u32) -> Result<u32, SharedStorageError> {
+        let now_ms = now_unix_ms();
+        let mut deleted: u32 = 0;
+
+        // Collect keys to delete (scan + filter)
+        let keys_to_delete: Vec<Vec<u8>> = {
+            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+            let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+
+            let mut keys = Vec::new();
+            for item in table.iter().context(RangeSnafu)? {
+                if keys.len() >= batch_limit as usize {
+                    break;
+                }
+
+                let (key, value) = item.context(GetSnafu)?;
+                let entry: KvEntry =
+                    bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+
+                if let Some(expires_at) = entry.expires_at_ms
+                    && expires_at <= now_ms
+                {
+                    keys.push(key.value().to_vec());
+                }
+            }
+            keys
+        };
+
+        // Delete in a write transaction
+        if !keys_to_delete.is_empty() {
+            let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+            {
+                let mut table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+                for key in &keys_to_delete {
+                    table.remove(key.as_slice()).context(RemoveSnafu)?;
+                    deleted += 1;
+                }
+            }
+            write_txn.commit().context(CommitSnafu)?;
+        }
+
+        Ok(deleted)
+    }
+
+    /// Count the number of expired keys in the state machine.
+    ///
+    /// Useful for metrics and monitoring.
+    pub fn count_expired_keys(&self) -> Result<u64, SharedStorageError> {
+        let now_ms = now_unix_ms();
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+
+        let mut count: u64 = 0;
+        for item in table.iter().context(RangeSnafu)? {
+            let (_key, value) = item.context(GetSnafu)?;
+            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+
+            if let Some(expires_at) = entry.expires_at_ms
+                && expires_at <= now_ms
+            {
+                count += 1;
+            }
+        }
+
+        Ok(count)
+    }
+
+    /// Count the number of keys with TTL set (not yet expired).
+    ///
+    /// Useful for metrics and monitoring.
+    pub fn count_keys_with_ttl(&self) -> Result<u64, SharedStorageError> {
+        let now_ms = now_unix_ms();
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+
+        let mut count: u64 = 0;
+        for item in table.iter().context(RangeSnafu)? {
+            let (_key, value) = item.context(GetSnafu)?;
+            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+
+            if let Some(expires_at) = entry.expires_at_ms
+                && expires_at > now_ms
+            {
+                count += 1;
+            }
+        }
+
+        Ok(count)
     }
 
     /// Get the current chain tip for verification.
@@ -1187,6 +1294,8 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         // Track last applied log and membership for future use (e.g., log broadcast)
         let mut _last_applied_log_id: Option<LogIdOf<AppTypeConfig>> = None;
         let mut _last_membership: Option<StoredMembership<AppTypeConfig>> = None;
+        // Collect responses to store after successful commit
+        let mut pending_response_batch: Vec<(u64, AppResponse)> = Vec::new();
 
         {
             let mut log_table = write_txn
@@ -1221,16 +1330,16 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                     .insert(index, entry_hash.as_slice())
                     .context(InsertSnafu)?;
 
-                // Apply state mutation based on payload
-                match &entry.payload {
+                // Apply state mutation based on payload and collect response
+                let response = match &entry.payload {
                     EntryPayload::Normal(request) => {
                         // Apply the request to state machine tables
-                        let _response = Self::apply_request_in_txn(
+                        Self::apply_request_in_txn(
                             &mut kv_table,
                             &mut leases_table,
                             request,
                             index,
-                        )?;
+                        )?
                     }
                     EntryPayload::Membership(membership) => {
                         // Store membership in state machine metadata
@@ -1241,11 +1350,14 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                             .insert("last_membership", membership_bytes.as_slice())
                             .context(InsertSnafu)?;
                         _last_membership = Some(stored);
+                        AppResponse::default()
                     }
                     EntryPayload::Blank => {
                         // No-op for blank entries
+                        AppResponse::default()
                     }
-                }
+                };
+                pending_response_batch.push((index, response));
 
                 // Update last_applied
                 _last_applied_log_id = Some(log_id);
@@ -1288,6 +1400,19 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                     })?;
             chain_tip.hash = new_tip_hash;
             chain_tip.index = new_tip_index;
+        }
+
+        // Store collected responses for retrieval in apply()
+        if !pending_response_batch.is_empty() {
+            let mut pending_responses =
+                self.pending_responses
+                    .write()
+                    .map_err(|_| SharedStorageError::LockPoisoned {
+                        context: "writing pending_responses after append".into(),
+                    })?;
+            for (index, response) in pending_response_batch {
+                pending_responses.insert(index, response);
+            }
         }
 
         callback.io_completed(Ok(()));
@@ -1385,6 +1510,18 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         }
         write_txn.commit().context(CommitSnafu)?;
 
+        // Clean up pending responses for purged log entries to prevent memory leak
+        {
+            let mut pending_responses =
+                self.pending_responses
+                    .write()
+                    .map_err(|_| SharedStorageError::LockPoisoned {
+                        context: "writing pending_responses during purge".into(),
+                    })?;
+            // Remove all responses for indices <= purge index
+            pending_responses.retain(|&idx, _| idx > log_id.index());
+        }
+
         self.write_raft_meta("last_purged_log_id", &log_id)?;
         Ok(())
     }
@@ -1426,21 +1563,27 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     ///
     /// This is the key to single-fsync performance. The state machine mutations
     /// are bundled into the log append transaction, so there's nothing to do here
-    /// except send the responses via the responders.
+    /// except retrieve and send the responses via the responders.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
     where
         Strm:
             Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
     {
         // State was already applied during append().
-        // Just send default responses for each entry.
+        // Retrieve the computed responses and send them via responders.
         // EntryResponder<C> is a tuple: (Entry<C>, Option<ApplyResponder<C>>)
         while let Some((entry, responder_opt)) = entries.try_next().await? {
-            // Update last applied log (read-only tracking, actual state was applied in append())
-            let _log_id = entry.log_id;
-            // Respond with default response if responder is present
+            let log_index = entry.log_id.index;
+            // Respond with the pre-computed response if responder is present
             if let Some(responder) = responder_opt {
-                responder.send(AppResponse::default());
+                // Retrieve response computed during append(), fall back to default
+                let response = self
+                    .pending_responses
+                    .write()
+                    .map_err(|_| io::Error::other("pending_responses lock poisoned in apply"))?
+                    .remove(&log_index)
+                    .unwrap_or_default();
+                responder.send(response);
             }
         }
 

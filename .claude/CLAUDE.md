@@ -133,6 +133,7 @@ Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP end
 See `docs/architecture/` for detailed architecture documents:
 
 - `layer-architecture.md` - Analysis of FoundationDB-style layer patterns (tuples, subspaces, indexes)
+- `migration.md` - **READ THIS**: Plan for SQL layer on Redb (single-fsync architecture, ~2-3ms writes vs current ~9ms)
 
 The project is structured into focused modules with narrow APIs:
 
@@ -264,14 +265,20 @@ nix develop -c cargo bench -- "kv_write"
 
 **Current benchmark suites:**
 
-- `kv_operations`: Single read/write, batch writes, prefix scans
+- `kv_operations`: Synthetic benchmarks with in-memory storage (for protocol testing)
+- `production`: Production-realistic benchmarks with SQLite + Iroh networking
 
-**Baseline metrics (in-memory, single-node):**
+**Baseline metrics (production storage, SQLite + Iroh):**
 
-- Single write: ~38 µs (26K ops/sec)
-- Single read: ~160 ns (6.2M ops/sec)
-- Batch write (100 keys): ~4 ms (25K elem/sec)
-- Prefix scan (1000 keys): ~151 µs
+- Single-node write: ~9 ms (110 ops/sec) - includes SQLite fsync
+- Single-node read: ~10 us (100K ops/sec) - SQLite pool + ReadIndex
+- 3-node write: ~17 ms (58 ops/sec) - fsync + Iroh QUIC quorum
+- 3-node read: ~36 us (27K ops/sec) - ReadIndex over network
+
+**Synthetic benchmarks (in-memory, for protocol testing only):**
+
+- In-memory write: ~34 us (no disk, no network - NOT production representative)
+- In-memory read: ~170 ns (BTreeMap lookup - NOT production representative)
 
 ### Nix Development
 

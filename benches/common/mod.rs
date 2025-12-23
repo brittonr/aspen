@@ -316,8 +316,12 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
         })
         .await?;
 
-    // Wait for leader state
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for leader state using OpenRaft Wait API
+    raft_node
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .state(ServerState::Leader, "node becomes leader")
+        .await?;
 
     Ok(node)
 }
@@ -354,8 +358,12 @@ pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Nod
         })
         .await?;
 
-    // Wait for leader state
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for leader state using OpenRaft Wait API
+    raft_node
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .state(ServerState::Leader, "node becomes leader")
+        .await?;
 
     Ok(node)
 }
@@ -409,8 +417,12 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         })
         .await?;
 
-    // Wait for node1 to become leader
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for node1 to become leader using OpenRaft Wait API
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .state(ServerState::Leader, "node1 becomes leader")
+        .await?;
 
     // Add node2 as learner
     raft1
@@ -426,8 +438,14 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         })
         .await?;
 
-    // Wait for replication to catch up
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Get current log index and wait for replication to catch up
+    let metrics = raft1.raft().metrics().borrow().clone();
+    let current_index = metrics.last_log_index.unwrap_or(0);
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .applied_index_at_least(Some(current_index), "learners catch up")
+        .await?;
 
     // Promote learners to voters
     raft1
@@ -436,8 +454,117 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         })
         .await?;
 
-    // Wait for membership change to propagate
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for membership change to propagate to all nodes
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .voter_ids(
+            [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
+            "all nodes are voters",
+        )
+        .await?;
+
+    Ok(vec![node1, node2, node3])
+}
+
+/// Setup a 3-node production cluster with Redb single-fsync storage.
+///
+/// Creates a fully replicated cluster with:
+/// - 3 nodes each with SharedRedbStorage (single-fsync)
+/// - Real Iroh QUIC connections between nodes
+/// - Node 1 as initial leader, nodes 2 and 3 as voters
+///
+/// Expected to significantly outperform SQLite-based 3-node cluster due to
+/// single-fsync architecture (~5-8ms vs ~19ms per write).
+///
+/// Returns Vec of nodes with node[0] as the leader.
+/// Tiger Style: Real network I/O, optimized single-fsync latencies.
+#[allow(dead_code)]
+pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<Node>> {
+    // Node 1 (will become leader)
+    let mut node1 = NodeBuilder::new(aspen::node::NodeId(1), temp_dir.path().join("node-1"))
+        .with_storage(StorageBackend::Redb)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node1.spawn_router();
+
+    // Node 2
+    let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
+        .with_storage(StorageBackend::Redb)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node2.spawn_router();
+
+    // Node 3
+    let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
+        .with_storage(StorageBackend::Redb)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+    node3.spawn_router();
+
+    // Initialize cluster with node1 as leader
+    let raft1 = node1.raft_node();
+    raft1
+        .init(InitRequest {
+            initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        })
+        .await?;
+
+    // Wait for node1 to become leader using OpenRaft Wait API
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .state(ServerState::Leader, "node1 becomes leader")
+        .await?;
+
+    // Add node2 as learner
+    raft1
+        .add_learner(AddLearnerRequest {
+            learner: ClusterNode::with_iroh_addr(2, node2.endpoint_addr()),
+        })
+        .await?;
+
+    // Add node3 as learner
+    raft1
+        .add_learner(AddLearnerRequest {
+            learner: ClusterNode::with_iroh_addr(3, node3.endpoint_addr()),
+        })
+        .await?;
+
+    // Get current log index and wait for replication to catch up
+    let metrics = raft1.raft().metrics().borrow().clone();
+    let current_index = metrics.last_log_index.unwrap_or(0);
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .applied_index_at_least(Some(current_index), "learners catch up")
+        .await?;
+
+    // Promote learners to voters
+    raft1
+        .change_membership(ChangeMembershipRequest {
+            members: vec![1, 2, 3],
+        })
+        .await?;
+
+    // Wait for membership change to propagate to all nodes
+    raft1
+        .raft()
+        .wait(Some(Duration::from_secs(5)))
+        .voter_ids(
+            [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
+            "all nodes are voters",
+        )
+        .await?;
 
     Ok(vec![node1, node2, node3])
 }

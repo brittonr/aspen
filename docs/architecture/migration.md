@@ -11,14 +11,43 @@
 
 ### Phase 1 Results
 
-**Target exceeded!** Achieved 6.3x write improvement (better than 3x target):
+**Target exceeded!** Achieved 6x single-node and 5.8x 3-node write improvement:
 
-| Metric | SQLite (Before) | Redb (After) | Improvement |
-|--------|-----------------|--------------|-------------|
-| Single-node write | 10.5 ms | **1.69 ms** | **6.2x faster** |
-| Single-node read | 13.9 µs | **5.7 µs** | **2.4x faster** |
-| Write throughput | 94 ops/sec | **594 ops/sec** | **6.3x higher** |
-| Read throughput | 72K ops/sec | **175K ops/sec** | **2.4x higher** |
+#### Single-Node Performance
+
+| Metric | SQLite | Redb | Improvement |
+|--------|--------|------|-------------|
+| Write latency | 9.9 ms | **1.65 ms** | **6x faster** |
+| Read latency | 9.0 µs | **5.0 µs** | **1.8x faster** |
+| Write throughput | 101 ops/sec | **607 ops/sec** | **6x higher** |
+| Read throughput | 111K ops/sec | **198K ops/sec** | **1.8x higher** |
+
+#### 3-Node Cluster Performance (2025-12-23)
+
+| Metric | SQLite | Redb | Improvement |
+|--------|--------|------|-------------|
+| Write latency | 18.5 ms | **3.2 ms** | **5.8x faster** |
+| Read latency | 39.5 µs | **31.0 µs** | **1.3x faster** |
+| Write throughput | 54 ops/sec | **311 ops/sec** | **5.8x higher** |
+| Read throughput | 25K ops/sec | **32K ops/sec** | **1.3x higher** |
+
+The 3-node results validate the single-fsync architecture under quorum replication with real Iroh QUIC networking.
+
+#### Phase 1 Enhancements (2025-12-23)
+
+**Response Handling Fix**: Fixed bug where `AppResponse` values (CAS results, batch counts, lease IDs) were discarded during `append()`. Now responses are stored in `pending_responses` map and retrieved during `apply()`.
+
+**Wait API Polling**: Replaced fixed 500ms sleeps in benchmark setup with OpenRaft Wait API conditions:
+
+- `.state(ServerState::Leader, ...)` - wait for leader election
+- `.applied_index_at_least(...)` - wait for replication
+- `.voter_ids([...], ...)` - wait for membership propagation
+
+**TTL Cleanup Task**: Added background TTL cleanup for Redb storage (matching SQLite implementation):
+
+- `delete_expired_keys(batch_limit)` - batch deletion of expired keys
+- `count_expired_keys()` / `count_keys_with_ttl()` - metrics support
+- `spawn_redb_ttl_cleanup_task()` - background task with CancellationToken
 
 ### Phase 2 Results
 
@@ -226,6 +255,7 @@ pub struct SharedRedbStorage {
     db: Arc<Database>,
     path: PathBuf,
     chain_tip: Arc<RwLock<ChainTipState>>,
+    pending_responses: Arc<RwLock<BTreeMap<u64, AppResponse>>>,  // Store responses from append()
 }
 
 // Tables (all in single Redb database)
@@ -238,9 +268,14 @@ const SM_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_met
 // Key innovation: apply() is a no-op since state is applied during append()
 impl RaftStateMachine for SharedRedbStorage {
     async fn apply(&mut self, entries: Strm) -> Result<(), io::Error> {
-        // State was already applied during append() - just send responses
+        // State was already applied during append()
+        // Retrieve pre-computed responses from pending_responses map
         while let Some((entry, responder)) = entries.try_next().await? {
-            if let Some(r) = responder { r.send(AppResponse::default()); }
+            if let Some(r) = responder {
+                let response = self.pending_responses.write()?.remove(&entry.log_id.index)
+                    .unwrap_or_default();
+                r.send(response);
+            }
         }
         Ok(())
     }
@@ -546,13 +581,15 @@ tests/sql_redb_integration_test.rs  # Integration tests (~385 lines)
 src/layer/index.rs             # Secondary indexes (~400 lines)
 ```
 
-### Modified Files (6 files)
+### Modified Files (8 files)
 
 ```
 src/lib.rs                     # Add pub mod layer, pub mod sql (done)
 src/raft/storage.rs            # Add StorageBackend::Redb (done)
 src/raft/mod.rs                # Add StateMachineVariant::Redb (done)
 src/raft/node.rs               # Wire up DataFusion SQL (done)
+src/raft/ttl_cleanup.rs        # Add spawn_redb_ttl_cleanup_task (done)
+src/cluster/bootstrap.rs       # Spawn Redb TTL cleanup task (done)
 src/node/mod.rs                # Wire up Redb backend in NodeBuilder (done)
 Cargo.toml                     # Add datafusion, arrow deps (done)
 ```
@@ -602,14 +639,12 @@ c.bench_function("prod_write/batch_redb", |b| {
 
 ### Success Metrics
 
-| Metric | Before | Target | Actual | Status |
-|--------|--------|--------|--------|--------|
-| Single-node write | 10.5ms | <3ms | **1.69ms** | **EXCEEDED** |
-| Single-node read | 13.9µs | - | **5.7µs** | **2.4x faster** |
-| Production write (SQLite+Iroh) | ~10ms | <10ms | **9.18ms** | **ACHIEVED** |
-| Production read (SQLite+Iroh) | ~13µs | - | **10.2µs** | **Improved** |
-| 3-node write | ~18ms | <15ms | **18.4ms** | Stable |
-| 3-node read | ~43µs | - | **42.7µs** | Stable |
+| Metric | SQLite | Redb | Improvement | Status |
+|--------|--------|------|-------------|--------|
+| Single-node write | 9.9 ms | **1.65 ms** | **6x** | **EXCEEDED** |
+| Single-node read | 9.0 µs | **5.0 µs** | **1.8x** | **EXCEEDED** |
+| 3-node write | 18.5 ms | **3.2 ms** | **5.8x** | **EXCEEDED** |
+| 3-node read | 39.5 µs | **31.0 µs** | **1.3x** | **IMPROVED** |
 | DataFusion scan overhead | N/A | <2x raw Redb | TBD | Phase 3 |
 
 ### Crash Recovery Tests - COMPLETE
@@ -650,9 +685,12 @@ async fn test_multiple_crash_recovery_cycles_seed_400() {
 
 ## Success Criteria
 
-- [x] Phase 1: `prod_write/single` drops from ~9ms to ~2-3ms (Actual: 10.5ms → 1.69ms)
+- [x] Phase 1: `prod_write/single` drops from ~9ms to ~2-3ms (Actual: 9.9ms → 1.65ms = **6x**)
+- [x] Phase 1: 3-node write drops from ~18ms to <8ms (Actual: 18.5ms → 3.2ms = **5.8x**)
 - [x] Phase 1: All existing Raft tests pass with Redb backend (1811/1818 tests pass)
 - [x] Phase 1: Crash recovery tests pass with madsim (4/4 tests pass)
+- [x] Phase 1: Response handling fixed (pending_responses map) (2025-12-23)
+- [x] Phase 1: TTL cleanup task for Redb (2025-12-23)
 - [x] Phase 2: Tuple encoding matches FoundationDB spec (type codes, null escaping, integer ordering)
 - [x] Phase 2: Property-based tests verify encoding correctness (17 proptest cases)
 - [x] Phase 2: Subspace pattern for namespace isolation (12 unit tests)

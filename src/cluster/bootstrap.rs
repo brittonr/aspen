@@ -58,7 +58,9 @@ use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore,
 use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
-use crate::raft::ttl_cleanup::{TtlCleanupConfig, spawn_ttl_cleanup_task};
+use crate::raft::ttl_cleanup::{
+    TtlCleanupConfig, spawn_redb_ttl_cleanup_task, spawn_ttl_cleanup_task,
+};
 use crate::raft::types::NodeId;
 use crate::sharding::{
     ShardConfig, ShardId, ShardStoragePaths, ShardedKeyValueStore, encode_shard_node_id,
@@ -1175,8 +1177,15 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
                 .await?,
             );
 
-            // Redb doesn't have separate TTL cleanup yet (handled in-line during apply)
-            (raft, StateMachineVariant::Redb(shared_storage), None)
+            // Spawn TTL cleanup background task for Redb
+            let ttl_cancel =
+                spawn_redb_ttl_cleanup_task(shared_storage.clone(), TtlCleanupConfig::default());
+            info!(node_id = config.node_id, "Redb TTL cleanup task started");
+            (
+                raft,
+                StateMachineVariant::Redb(shared_storage),
+                Some(ttl_cancel),
+            )
         }
     };
 

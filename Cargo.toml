@@ -199,3 +199,7 @@ harness = false
 [[bench]]
 name = "production"
 harness = false
+
+[[bench]]
+name = "sql"
+harness = false
