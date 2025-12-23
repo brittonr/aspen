@@ -230,11 +230,109 @@ fn bench_prod_read_3node(c: &mut Criterion) {
     });
 }
 
+/// Benchmark single-node write with Redb single-fsync storage.
+///
+/// This uses SharedRedbStorage which bundles log and state machine
+/// operations into a single transaction with one fsync, expected to
+/// reduce latency from ~9ms (SQLite) to ~2-3ms.
+fn bench_redb_write_single(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let node = rt.block_on(async {
+        common::setup_production_single_node_redb(&temp_dir)
+            .await
+            .expect("setup single node with redb")
+    });
+
+    let counter = AtomicU64::new(0);
+    let mut group = c.benchmark_group("redb_write");
+    group.throughput(Throughput::Elements(1));
+
+    group.bench_function("single", |b| {
+        b.to_async(&rt).iter(|| {
+            let key = format!("key-{:08}", counter.fetch_add(1, Ordering::Relaxed));
+            let kv = node.kv_store();
+            async move {
+                kv.write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key,
+                        value: "benchmark-value".to_string(),
+                    },
+                })
+                .await
+                .expect("write failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        node.shutdown().await.expect("shutdown failed");
+    });
+}
+
+/// Benchmark single-node read with Redb single-fsync storage.
+fn bench_redb_read_single(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let node = rt.block_on(async {
+        let node = common::setup_production_single_node_redb(&temp_dir)
+            .await
+            .expect("setup single node with redb");
+
+        // Pre-populate with 1000 keys
+        let kv = node.kv_store();
+        for i in 0..1000 {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("read-key-{:06}", i),
+                    value: format!("read-value-{:06}", i),
+                },
+            })
+            .await
+            .expect("populate failed");
+        }
+        node
+    });
+
+    let counter = AtomicU64::new(0);
+    let mut group = c.benchmark_group("redb_read");
+    group.throughput(Throughput::Elements(1));
+
+    group.bench_function("single", |b| {
+        b.to_async(&rt).iter(|| {
+            let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
+            let key = format!("read-key-{:06}", key_idx);
+            let kv = node.kv_store();
+            async move { kv.read(ReadRequest { key }).await.expect("read failed") }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        node.shutdown().await.expect("shutdown failed");
+    });
+}
+
 criterion_group!(
     production_benches,
     bench_prod_write_single,
     bench_prod_read_single,
     bench_prod_write_3node,
     bench_prod_read_3node,
+    bench_redb_write_single,
+    bench_redb_read_single,
 );
 criterion_main!(production_benches);

@@ -120,12 +120,11 @@ impl StateMachineVariant {
             Self::Sqlite(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
                 reason: format!("sqlite storage read error: {}", err),
             }),
-            Self::Redb(sm) => sm
-                .get(key)
-                .map(|opt| opt.map(|e| e.value))
-                .map_err(|err| KeyValueStoreError::Failed {
+            Self::Redb(sm) => sm.get(key).map(|opt| opt.map(|e| e.value)).map_err(|err| {
+                KeyValueStoreError::Failed {
                     reason: format!("redb storage read error: {}", err),
-                }),
+                }
+            }),
         }
     }
 
@@ -169,10 +168,8 @@ impl StateMachineVariant {
                         reason: format!("redb storage scan error: {}", err),
                     })?;
                 // Convert KeyValueWithRevision to (String, String) pairs
-                let kv_pairs: Vec<(String, String)> = entries
-                    .into_iter()
-                    .map(|e| (e.key, e.value))
-                    .collect();
+                let kv_pairs: Vec<(String, String)> =
+                    entries.into_iter().map(|e| (e.key, e.value)).collect();
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
         }

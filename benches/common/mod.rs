@@ -322,6 +322,44 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
     Ok(node)
 }
 
+/// Setup a single production node with Redb single-fsync storage for benchmarking.
+///
+/// Unlike SQLite which requires two fsyncs (log + state machine), this uses
+/// SharedRedbStorage which bundles both into a single transaction:
+/// - Single fsync per write (log + state in one commit)
+/// - Expected latency: ~2-3ms vs ~9ms for SQLite
+///
+/// Returns the Node (caller must keep temp_dir alive for cleanup).
+/// Tiger Style: Real I/O, optimized single-fsync latencies.
+#[allow(dead_code)]
+pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Node> {
+    let data_dir = temp_dir.path().join("node-1");
+
+    let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
+        .with_storage(StorageBackend::Redb)
+        .with_cookie("bench-cluster")
+        .with_heartbeat_interval_ms(100)
+        .with_election_timeout_ms(300, 600)
+        .start()
+        .await?;
+
+    node.spawn_router();
+
+    // Initialize single-node cluster
+    let raft_node = node.raft_node();
+    let endpoint_addr = node.endpoint_addr();
+    raft_node
+        .init(InitRequest {
+            initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
+        })
+        .await?;
+
+    // Wait for leader state
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    Ok(node)
+}
+
 /// Setup a 3-node production cluster with real Iroh networking.
 ///
 /// Creates a fully replicated cluster with:

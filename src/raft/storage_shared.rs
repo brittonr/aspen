@@ -160,7 +160,9 @@ pub enum SharedStorageError {
     /// Failed to open the redb database file.
     #[snafu(display("failed to open redb database at {}: {source}", path.display()))]
     OpenDatabase {
+        /// Path to the database file.
         path: PathBuf,
+        /// The underlying database error.
         #[snafu(source(from(redb::DatabaseError, Box::new)))]
         source: Box<redb::DatabaseError>,
     },
@@ -168,6 +170,7 @@ pub enum SharedStorageError {
     /// Failed to begin a write transaction.
     #[snafu(display("failed to begin write transaction: {source}"))]
     BeginWrite {
+        /// The underlying transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
@@ -175,6 +178,7 @@ pub enum SharedStorageError {
     /// Failed to begin a read transaction.
     #[snafu(display("failed to begin read transaction: {source}"))]
     BeginRead {
+        /// The underlying transaction error.
         #[snafu(source(from(redb::TransactionError, Box::new)))]
         source: Box<redb::TransactionError>,
     },
@@ -182,6 +186,7 @@ pub enum SharedStorageError {
     /// Failed to open a database table.
     #[snafu(display("failed to open table: {source}"))]
     OpenTable {
+        /// The underlying table error.
         #[snafu(source(from(redb::TableError, Box::new)))]
         source: Box<redb::TableError>,
     },
@@ -189,6 +194,7 @@ pub enum SharedStorageError {
     /// Failed to commit a transaction.
     #[snafu(display("failed to commit transaction: {source}"))]
     Commit {
+        /// The underlying commit error.
         #[snafu(source(from(redb::CommitError, Box::new)))]
         source: Box<redb::CommitError>,
     },
@@ -196,6 +202,7 @@ pub enum SharedStorageError {
     /// Failed to insert a value into a table.
     #[snafu(display("failed to insert into table: {source}"))]
     Insert {
+        /// The underlying storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
@@ -203,6 +210,7 @@ pub enum SharedStorageError {
     /// Failed to retrieve a value from a table.
     #[snafu(display("failed to get from table: {source}"))]
     Get {
+        /// The underlying storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
@@ -210,6 +218,7 @@ pub enum SharedStorageError {
     /// Failed to remove a value from a table.
     #[snafu(display("failed to remove from table: {source}"))]
     Remove {
+        /// The underlying storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
@@ -217,6 +226,7 @@ pub enum SharedStorageError {
     /// Failed to iterate over a table range.
     #[snafu(display("failed to iterate table range: {source}"))]
     Range {
+        /// The underlying storage error.
         #[snafu(source(from(redb::StorageError, Box::new)))]
         source: Box<redb::StorageError>,
     },
@@ -224,6 +234,7 @@ pub enum SharedStorageError {
     /// Failed to serialize data with bincode.
     #[snafu(display("failed to serialize data: {source}"))]
     Serialize {
+        /// The underlying bincode error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
@@ -231,21 +242,35 @@ pub enum SharedStorageError {
     /// Failed to deserialize data with bincode.
     #[snafu(display("failed to deserialize data: {source}"))]
     Deserialize {
+        /// The underlying bincode error.
         #[snafu(source(from(bincode::Error, Box::new)))]
         source: Box<bincode::Error>,
     },
 
     /// Failed to create a directory.
     #[snafu(display("failed to create directory {}: {source}", path.display()))]
-    CreateDirectory { path: PathBuf, source: std::io::Error },
+    CreateDirectory {
+        /// Path to the directory.
+        path: PathBuf,
+        /// The underlying IO error.
+        source: std::io::Error,
+    },
 
     /// A storage lock was poisoned.
     #[snafu(display("storage lock poisoned: {context}"))]
-    LockPoisoned { context: String },
+    LockPoisoned {
+        /// Context about which lock was poisoned.
+        context: String,
+    },
 
     /// Batch exceeds maximum size.
     #[snafu(display("batch size {} exceeds maximum {}", size, max))]
-    BatchTooLarge { size: usize, max: u32 },
+    BatchTooLarge {
+        /// Actual batch size.
+        size: usize,
+        /// Maximum allowed batch size.
+        max: u32,
+    },
 }
 
 impl From<SharedStorageError> for io::Error {
@@ -325,16 +350,30 @@ impl SharedRedbStorage {
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;
         {
             // Log tables
-            write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+            write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(RAFT_META_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(SNAPSHOT_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(INTEGRITY_META_TABLE)
+                .context(OpenTableSnafu)?;
 
             // State machine tables
             write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+            write_txn
+                .open_table(SM_LEASES_TABLE)
+                .context(OpenTableSnafu)?;
+            write_txn
+                .open_table(SM_META_TABLE)
+                .context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -365,7 +404,9 @@ impl SharedRedbStorage {
     fn load_chain_tip(db: &Arc<Database>) -> Result<ChainTipState, SharedStorageError> {
         let read_txn = db.begin_read().context(BeginReadSnafu)?;
 
-        let meta_table = read_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+        let meta_table = read_txn
+            .open_table(INTEGRITY_META_TABLE)
+            .context(OpenTableSnafu)?;
 
         let tip_hash = meta_table
             .get("chain_tip_hash")
@@ -390,7 +431,9 @@ impl SharedRedbStorage {
             (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),
             _ => {
                 // Check if we have any chain hashes
-                let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+                let hash_table = read_txn
+                    .open_table(CHAIN_HASH_TABLE)
+                    .context(OpenTableSnafu)?;
 
                 if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
                     let (key, value) = last.context(GetSnafu)?;
@@ -414,7 +457,9 @@ impl SharedRedbStorage {
         key: &str,
     ) -> Result<Option<T>, SharedStorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
+        let table = read_txn
+            .open_table(RAFT_META_TABLE)
+            .context(OpenTableSnafu)?;
 
         match table.get(key).context(GetSnafu)? {
             Some(value) => {
@@ -426,12 +471,20 @@ impl SharedRedbStorage {
     }
 
     /// Write metadata to RAFT_META_TABLE.
-    fn write_raft_meta<T: Serialize>(&self, key: &str, value: &T) -> Result<(), SharedStorageError> {
+    fn write_raft_meta<T: Serialize>(
+        &self,
+        key: &str,
+        value: &T,
+    ) -> Result<(), SharedStorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
+            let mut table = write_txn
+                .open_table(RAFT_META_TABLE)
+                .context(OpenTableSnafu)?;
             let serialized = bincode::serialize(value).context(SerializeSnafu)?;
-            table.insert(key, serialized.as_slice()).context(InsertSnafu)?;
+            table
+                .insert(key, serialized.as_slice())
+                .context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
         Ok(())
@@ -441,7 +494,9 @@ impl SharedRedbStorage {
     fn delete_raft_meta(&self, key: &str) -> Result<(), SharedStorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
+            let mut table = write_txn
+                .open_table(RAFT_META_TABLE)
+                .context(OpenTableSnafu)?;
             table.remove(key).context(RemoveSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -476,10 +531,10 @@ impl SharedRedbStorage {
                     bincode::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 // Check expiration
-                if let Some(expires_at) = entry.expires_at_ms {
-                    if now_unix_ms() > expires_at {
-                        return Ok(None); // Expired
-                    }
+                if let Some(expires_at) = entry.expires_at_ms
+                    && now_unix_ms() > expires_at
+                {
+                    return Ok(None); // Expired
                 }
 
                 Ok(Some(entry))
@@ -516,7 +571,9 @@ impl SharedRedbStorage {
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
         let now_ms = now_unix_ms();
-        let bounded_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize).min(MAX_BATCH_SIZE as usize);
+        let bounded_limit = limit
+            .unwrap_or(MAX_BATCH_SIZE as usize)
+            .min(MAX_BATCH_SIZE as usize);
         let prefix_bytes = prefix.as_bytes();
 
         let mut results = Vec::with_capacity(bounded_limit.min(128));
@@ -540,10 +597,10 @@ impl SharedRedbStorage {
             };
 
             // Check continuation token
-            if let Some(after) = after_key {
-                if key_str <= after {
-                    continue;
-                }
+            if let Some(after) = after_key
+                && key_str <= after
+            {
+                continue;
             }
 
             let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
@@ -552,10 +609,10 @@ impl SharedRedbStorage {
             };
 
             // Check expiration
-            if let Some(expires_at) = entry.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = entry.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             results.push(KeyValueWithRevision {
@@ -588,7 +645,9 @@ impl SharedRedbStorage {
     /// Read chain hash at a specific log index.
     fn read_chain_hash_at(&self, index: u64) -> Result<Option<ChainHash>, SharedStorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+        let table = read_txn
+            .open_table(CHAIN_HASH_TABLE)
+            .context(OpenTableSnafu)?;
 
         match table.get(index).context(GetSnafu)? {
             Some(value) => {
@@ -643,7 +702,9 @@ impl SharedRedbStorage {
         };
 
         let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
-        kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
+        kv_table
+            .insert(key_bytes, entry_bytes.as_slice())
+            .context(InsertSnafu)?;
 
         Ok(AppResponse {
             value: Some(value.to_string()),
@@ -656,7 +717,10 @@ impl SharedRedbStorage {
         kv_table: &mut redb::Table<&[u8], &[u8]>,
         key: &str,
     ) -> Result<AppResponse, SharedStorageError> {
-        let existed = kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some();
+        let existed = kv_table
+            .remove(key.as_bytes())
+            .context(RemoveSnafu)?
+            .is_some();
         Ok(AppResponse {
             deleted: Some(existed),
             ..Default::default()
@@ -699,7 +763,10 @@ impl SharedRedbStorage {
 
         let mut deleted_any = false;
         for key in keys {
-            let existed = kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some();
+            let existed = kv_table
+                .remove(key.as_bytes())
+                .context(RemoveSnafu)?
+                .is_some();
             deleted_any |= existed;
         }
 
@@ -729,9 +796,9 @@ impl SharedRedbStorage {
 
         // Check condition
         let condition_matches = match (expected, current_value) {
-            (None, None) => true,           // Expected no key, found no key
+            (None, None) => true,                 // Expected no key, found no key
             (Some(exp), Some(cur)) => exp == cur, // Values match
-            _ => false,                     // Mismatch
+            _ => false,                           // Mismatch
         };
 
         if !condition_matches {
@@ -758,7 +825,9 @@ impl SharedRedbStorage {
         };
 
         let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
-        kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
+        kv_table
+            .insert(key_bytes, entry_bytes.as_slice())
+            .context(InsertSnafu)?;
 
         Ok(AppResponse {
             value: Some(new_value.to_string()),
@@ -853,7 +922,10 @@ impl SharedRedbStorage {
                 .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
 
             let met = match cond_type {
-                0 => current.as_ref().map(|e| e.value.as_str() == expected).unwrap_or(false), // ValueEquals
+                0 => current
+                    .as_ref()
+                    .map(|e| e.value.as_str() == expected)
+                    .unwrap_or(false), // ValueEquals
                 1 => current.is_some(), // KeyExists
                 2 => current.is_none(), // KeyNotExists
                 _ => false,
@@ -889,44 +961,59 @@ impl SharedRedbStorage {
             AppRequest::Set { key, value } => {
                 Self::apply_set_in_txn(kv_table, key, value, log_index, None, None)
             }
-            AppRequest::SetWithTTL { key, value, expires_at_ms } => {
+            AppRequest::SetWithTTL {
+                key,
+                value,
+                expires_at_ms,
+            } => {
                 Self::apply_set_in_txn(kv_table, key, value, log_index, Some(*expires_at_ms), None)
             }
             AppRequest::SetMulti { pairs } => {
                 Self::apply_set_multi_in_txn(kv_table, pairs, log_index, None, None)
             }
-            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
+            AppRequest::SetMultiWithTTL {
+                pairs,
+                expires_at_ms,
+            } => {
                 Self::apply_set_multi_in_txn(kv_table, pairs, log_index, Some(*expires_at_ms), None)
             }
             AppRequest::Delete { key } => Self::apply_delete_in_txn(kv_table, key),
             AppRequest::DeleteMulti { keys } => Self::apply_delete_multi_in_txn(kv_table, keys),
-            AppRequest::CompareAndSwap { key, expected, new_value } => {
-                Self::apply_compare_and_swap_in_txn(
-                    kv_table,
-                    key,
-                    expected.as_deref(),
-                    new_value,
-                    log_index,
-                )
-            }
+            AppRequest::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => Self::apply_compare_and_swap_in_txn(
+                kv_table,
+                key,
+                expected.as_deref(),
+                new_value,
+                log_index,
+            ),
             AppRequest::CompareAndDelete { key, expected } => {
                 Self::apply_compare_and_delete_in_txn(kv_table, key, expected)
             }
             AppRequest::Batch { operations } => {
                 Self::apply_batch_in_txn(kv_table, operations, log_index)
             }
-            AppRequest::ConditionalBatch { conditions, operations } => {
-                Self::apply_conditional_batch_in_txn(kv_table, conditions, operations, log_index)
-            }
+            AppRequest::ConditionalBatch {
+                conditions,
+                operations,
+            } => Self::apply_conditional_batch_in_txn(kv_table, conditions, operations, log_index),
             // Lease operations
-            AppRequest::SetWithLease { key, value, lease_id } => {
-                Self::apply_set_in_txn(kv_table, key, value, log_index, None, Some(*lease_id))
-            }
+            AppRequest::SetWithLease {
+                key,
+                value,
+                lease_id,
+            } => Self::apply_set_in_txn(kv_table, key, value, log_index, None, Some(*lease_id)),
             AppRequest::SetMultiWithLease { pairs, lease_id } => {
                 Self::apply_set_multi_in_txn(kv_table, pairs, log_index, None, Some(*lease_id))
             }
             // TODO: Implement full lease support
-            AppRequest::LeaseGrant { lease_id, ttl_seconds } => Ok(AppResponse {
+            AppRequest::LeaseGrant {
+                lease_id,
+                ttl_seconds,
+            } => Ok(AppResponse {
                 lease_id: Some(*lease_id),
                 ttl_seconds: Some(*ttl_seconds),
                 ..Default::default()
@@ -940,14 +1027,21 @@ impl SharedRedbStorage {
                 ..Default::default()
             }),
             // Transaction operations - simplified for now
-            AppRequest::Transaction { compare: _, success: _, failure: _ } => {
+            AppRequest::Transaction {
+                compare: _,
+                success: _,
+                failure: _,
+            } => {
                 // TODO: Implement full transaction support
                 Ok(AppResponse {
                     succeeded: Some(true),
                     ..Default::default()
                 })
             }
-            AppRequest::OptimisticTransaction { read_set: _, write_set: _ } => {
+            AppRequest::OptimisticTransaction {
+                read_set: _,
+                write_set: _,
+            } => {
                 // TODO: Implement OCC
                 Ok(AppResponse::default())
             }
@@ -972,7 +1066,9 @@ impl RaftLogReader<AppTypeConfig> for SharedRedbStorage {
         RB: RangeBounds<u64> + Clone + Debug + OptionalSend,
     {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+        let table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
 
         let mut entries = Vec::new();
         let iter = table.range(range).context(RangeSnafu)?;
@@ -1002,7 +1098,9 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
     async fn get_log_state(&mut self) -> Result<LogState<AppTypeConfig>, io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+        let table = read_txn
+            .open_table(RAFT_LOG_TABLE)
+            .context(OpenTableSnafu)?;
 
         // Get last log entry
         let last_log_id = table
@@ -1019,7 +1117,8 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
             })
             .transpose()?;
 
-        let last_purged: Option<LogIdOf<AppTypeConfig>> = self.read_raft_meta("last_purged_log_id")?;
+        let last_purged: Option<LogIdOf<AppTypeConfig>> =
+            self.read_raft_meta("last_purged_log_id")?;
         let last = last_log_id.or(last_purged);
 
         Ok(LogState {
@@ -1072,12 +1171,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         // Get current chain tip
         let mut prev_hash = {
-            let chain_tip = self
-                .chain_tip
-                .read()
-                .map_err(|_| SharedStorageError::LockPoisoned {
-                    context: "reading chain_tip for append".into(),
-                })?;
+            let chain_tip =
+                self.chain_tip
+                    .read()
+                    .map_err(|_| SharedStorageError::LockPoisoned {
+                        context: "reading chain_tip for append".into(),
+                    })?;
             chain_tip.hash
         };
 
@@ -1090,11 +1189,19 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         let mut _last_membership: Option<StoredMembership<AppTypeConfig>> = None;
 
         {
-            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+            let mut log_table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
             let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
-            let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+            let mut leases_table = write_txn
+                .open_table(SM_LEASES_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut sm_meta_table = write_txn
+                .open_table(SM_META_TABLE)
+                .context(OpenTableSnafu)?;
 
             for entry in entries {
                 let log_id = entry.log_id();
@@ -1107,8 +1214,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                 // Compute chain hash
                 let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
 
-                log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
-                hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
+                log_table
+                    .insert(index, data.as_slice())
+                    .context(InsertSnafu)?;
+                hash_table
+                    .insert(index, entry_hash.as_slice())
+                    .context(InsertSnafu)?;
 
                 // Apply state mutation based on payload
                 match &entry.payload {
@@ -1124,7 +1235,8 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                     EntryPayload::Membership(membership) => {
                         // Store membership in state machine metadata
                         let stored = StoredMembership::new(Some(log_id), membership.clone());
-                        let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+                        let membership_bytes =
+                            bincode::serialize(&stored).context(SerializeSnafu)?;
                         sm_meta_table
                             .insert("last_membership", membership_bytes.as_slice())
                             .context(InsertSnafu)?;
@@ -1150,8 +1262,9 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
             // Update chain tip in integrity metadata
             if has_entries {
-                let mut integrity_table =
-                    write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+                let mut integrity_table = write_txn
+                    .open_table(INTEGRITY_META_TABLE)
+                    .context(OpenTableSnafu)?;
                 integrity_table
                     .insert("chain_tip_hash", new_tip_hash.as_slice())
                     .context(InsertSnafu)?;
@@ -1167,12 +1280,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         // Update cached chain tip after successful commit
         if has_entries {
-            let mut chain_tip = self
-                .chain_tip
-                .write()
-                .map_err(|_| SharedStorageError::LockPoisoned {
-                    context: "writing chain_tip after append".into(),
-                })?;
+            let mut chain_tip =
+                self.chain_tip
+                    .write()
+                    .map_err(|_| SharedStorageError::LockPoisoned {
+                        context: "writing chain_tip after append".into(),
+                    })?;
             chain_tip.hash = new_tip_hash;
             chain_tip.index = new_tip_index;
         }
@@ -1186,8 +1299,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+            let mut log_table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
 
             // Collect keys to remove
             let keys: Vec<u64> = log_table
@@ -1219,12 +1336,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         };
 
         {
-            let mut chain_tip = self
-                .chain_tip
-                .write()
-                .map_err(|_| SharedStorageError::LockPoisoned {
-                    context: "writing chain_tip after truncate".into(),
-                })?;
+            let mut chain_tip =
+                self.chain_tip
+                    .write()
+                    .map_err(|_| SharedStorageError::LockPoisoned {
+                        context: "writing chain_tip after truncate".into(),
+                    })?;
             *chain_tip = new_tip;
         }
 
@@ -1244,8 +1361,12 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+            let mut log_table = write_txn
+                .open_table(RAFT_LOG_TABLE)
+                .context(OpenTableSnafu)?;
+            let mut hash_table = write_txn
+                .open_table(CHAIN_HASH_TABLE)
+                .context(OpenTableSnafu)?;
 
             // Collect keys to remove
             let keys: Vec<u64> = log_table
@@ -1285,17 +1406,20 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// Reads from SM_META_TABLE which is updated during append().
     async fn applied_state(
         &mut self,
-    ) -> Result<(Option<LogIdOf<AppTypeConfig>>, StoredMembership<AppTypeConfig>), io::Error> {
+    ) -> Result<
+        (
+            Option<LogIdOf<AppTypeConfig>>,
+            StoredMembership<AppTypeConfig>,
+        ),
+        io::Error,
+    > {
         let last_applied: Option<LogIdOf<AppTypeConfig>> =
             self.read_sm_meta("last_applied_log")?.flatten();
 
         let membership: Option<StoredMembership<AppTypeConfig>> =
             self.read_sm_meta("last_membership")?;
 
-        Ok((
-            last_applied,
-            membership.unwrap_or_else(StoredMembership::default),
-        ))
+        Ok((last_applied, membership.unwrap_or_default()))
     }
 
     /// Apply entries - NO-OP because state is already applied during append().
@@ -1305,7 +1429,8 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// except send the responses via the responders.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
     where
-        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+        Strm:
+            Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
     {
         // State was already applied during append().
         // Just send default responses for each entry.
@@ -1328,7 +1453,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         }
     }
 
-    async fn begin_receiving_snapshot(&mut self) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {
+    async fn begin_receiving_snapshot(
+        &mut self,
+    ) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {
         Ok(Cursor::new(Vec::new()))
     }
 
@@ -1347,7 +1474,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+            let mut sm_meta_table = write_txn
+                .open_table(SM_META_TABLE)
+                .context(OpenTableSnafu)?;
 
             // Clear existing KV data
             // Note: redb doesn't have a clear() method, so we iterate and remove
@@ -1373,14 +1502,14 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
             }
 
             // Update last_applied
-            let log_id_bytes =
-                bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
+            let log_id_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
             sm_meta_table
                 .insert("last_applied_log", log_id_bytes.as_slice())
                 .context(InsertSnafu)?;
 
             // Update membership (meta.last_membership is already a StoredMembership)
-            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            let membership_bytes =
+                bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
             sm_meta_table
                 .insert("last_membership", membership_bytes.as_slice())
                 .context(InsertSnafu)?;
@@ -1397,11 +1526,11 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         Ok(())
     }
 
-    async fn get_current_snapshot(
-        &mut self,
-    ) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {
+    async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
+        let table = read_txn
+            .open_table(SNAPSHOT_TABLE)
+            .context(OpenTableSnafu)?;
 
         match table.get("current").context(GetSnafu)? {
             Some(value) => {
@@ -1464,10 +1593,10 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             };
 
             // Skip expired entries
-            if let Some(expires_at) = entry.expires_at_ms {
-                if now_ms > expires_at {
-                    continue;
-                }
+            if let Some(expires_at) = entry.expires_at_ms
+                && now_ms > expires_at
+            {
+                continue;
             }
 
             kv_entries.insert(key_str, entry);
@@ -1505,7 +1634,9 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
 
         let write_txn = self.storage.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
+            let mut table = write_txn
+                .open_table(SNAPSHOT_TABLE)
+                .context(OpenTableSnafu)?;
             let stored_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
             table
                 .insert("current", stored_bytes.as_slice())
@@ -1564,7 +1695,9 @@ mod tests {
                 lease_id: None,
             };
             let entry_bytes = bincode::serialize(&entry).unwrap();
-            kv_table.insert(b"test_key".as_slice(), entry_bytes.as_slice()).unwrap();
+            kv_table
+                .insert(b"test_key".as_slice(), entry_bytes.as_slice())
+                .unwrap();
         }
         write_txn.commit().unwrap();
 
@@ -1596,7 +1729,9 @@ mod tests {
                     lease_id: None,
                 };
                 let entry_bytes = bincode::serialize(&entry).unwrap();
-                kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).unwrap();
+                kv_table
+                    .insert(key.as_bytes(), entry_bytes.as_slice())
+                    .unwrap();
             }
         }
         write_txn.commit().unwrap();
