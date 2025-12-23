@@ -9,7 +9,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use openraft::{Config, ServerState};
+use tempfile::TempDir;
 
+use aspen::raft::storage::RedbLogStore;
+use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::{NodeId, RaftMemberInfo};
 use aspen::testing::{AspenRouter, create_test_raft_member_info};
 
@@ -22,6 +25,7 @@ pub fn default_timeout() -> Option<Duration> {
 ///
 /// Returns the router and the leader node ID.
 /// The cluster is fully initialized and ready for operations.
+#[allow(dead_code)]
 pub async fn setup_single_node_cluster() -> Result<(AspenRouter, NodeId)> {
     let config = Arc::new(
         Config {
@@ -94,6 +98,7 @@ pub async fn setup_three_node_cluster() -> Result<(AspenRouter, NodeId)> {
 ///
 /// Writes `count` key-value pairs with format "key-{i}" -> "value-{i}".
 /// Uses bounded batch size for Tiger Style compliance.
+#[allow(dead_code)]
 pub async fn populate_test_data(router: &AspenRouter, node_id: NodeId, count: usize) -> Result<()> {
     // Tiger Style: process in bounded batches to avoid memory spikes
     const BATCH_SIZE: usize = 100;
@@ -125,6 +130,7 @@ pub async fn populate_test_data(router: &AspenRouter, node_id: NodeId, count: us
 ///
 /// Returns a pre-allocated Vec with the specified count.
 /// Tiger Style: bounded size, pre-allocated capacity.
+#[allow(dead_code)]
 pub fn generate_kv_pairs(count: usize, prefix: &str) -> Vec<(String, String)> {
     let mut pairs = Vec::with_capacity(count);
     for i in 0..count {
@@ -195,3 +201,74 @@ pub fn generate_workload(
 
     ops
 }
+
+// ====================================================================================
+// Storage Layer Setup Helpers
+// ====================================================================================
+
+/// Setup an isolated RedbLogStore for benchmarking.
+///
+/// Returns the log store and temp directory (must keep TempDir alive for cleanup).
+/// Tiger Style: RAII cleanup via TempDir.
+#[allow(dead_code)]
+pub fn setup_redb_log_store() -> Result<(RedbLogStore, TempDir)> {
+    let temp_dir = TempDir::new()?;
+    let db_path = temp_dir.path().join("raft-log.redb");
+    let store = RedbLogStore::new(&db_path)?;
+    Ok((store, temp_dir))
+}
+
+/// Setup an isolated SqliteStateMachine for benchmarking.
+///
+/// Returns the state machine and temp directory (must keep TempDir alive for cleanup).
+/// Tiger Style: RAII cleanup via TempDir.
+#[allow(dead_code)]
+pub fn setup_sqlite_state_machine() -> Result<(Arc<SqliteStateMachine>, TempDir)> {
+    let temp_dir = TempDir::new()?;
+    let db_path = temp_dir.path().join("state-machine.db");
+    let sm = SqliteStateMachine::new(&db_path)?;
+    Ok((sm, temp_dir))
+}
+
+/// Setup an isolated SqliteStateMachine with custom pool size.
+///
+/// Tiger Style: Explicit pool size parameter.
+#[allow(dead_code)]
+pub fn setup_sqlite_state_machine_with_pool(
+    pool_size: u32,
+) -> Result<(Arc<SqliteStateMachine>, TempDir)> {
+    let temp_dir = TempDir::new()?;
+    let db_path = temp_dir.path().join("state-machine.db");
+    let sm = SqliteStateMachine::with_pool_size(&db_path, pool_size)?;
+    Ok((sm, temp_dir))
+}
+
+// ====================================================================================
+// Value Generation Helpers
+// ====================================================================================
+
+/// Generate a value of specific size (repeating pattern).
+///
+/// Uses a pattern that doesn't compress well to simulate realistic data.
+/// Tiger Style: Pre-allocated with exact capacity.
+#[allow(dead_code)]
+pub fn generate_value(size: usize) -> String {
+    const PATTERN: &str = "0123456789abcdef";
+    let full_repeats = size / PATTERN.len();
+    let remainder = size % PATTERN.len();
+
+    let mut value = String::with_capacity(size);
+    for _ in 0..full_repeats {
+        value.push_str(PATTERN);
+    }
+    value.push_str(&PATTERN[..remainder]);
+    value
+}
+
+/// Common value sizes for benchmarking.
+#[allow(dead_code)]
+pub const VALUE_SIZE_SMALL: usize = 64;
+#[allow(dead_code)]
+pub const VALUE_SIZE_MEDIUM: usize = 1024;
+#[allow(dead_code)]
+pub const VALUE_SIZE_LARGE: usize = 65536;

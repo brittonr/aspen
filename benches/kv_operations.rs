@@ -4,6 +4,8 @@
 //! - Single key read/write
 //! - Batch writes (SetMulti)
 //! - Prefix scans
+//! - Value size impact (64B, 1KB, 64KB)
+//! - Multi-node cluster operations (3-node quorum)
 //!
 //! Run with: `nix develop -c cargo bench --bench kv_operations`
 
@@ -13,7 +15,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
-use common::{generate_kv_pairs, populate_test_data, setup_single_node_cluster};
+use common::{
+    VALUE_SIZE_LARGE, VALUE_SIZE_MEDIUM, VALUE_SIZE_SMALL, generate_kv_pairs, generate_value,
+    populate_test_data, setup_single_node_cluster, setup_three_node_cluster,
+};
 
 /// Benchmark single key write operations.
 ///
@@ -185,12 +190,177 @@ fn bench_scan(c: &mut Criterion) {
     group.finish();
 }
 
+// ====================================================================================
+// Value Size Benchmarks
+// ====================================================================================
+
+/// Benchmark: Write operations with varying value sizes.
+///
+/// Measures impact of value size on write throughput (64B, 1KB, 64KB).
+fn bench_write_value_sizes(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    // Setup cluster
+    let (router, leader) = rt.block_on(async { setup_single_node_cluster().await.unwrap() });
+
+    let mut group = c.benchmark_group("kv_write_value_size");
+    group.throughput(Throughput::Elements(1));
+
+    for (size_name, size) in [
+        ("64B", VALUE_SIZE_SMALL),
+        ("1KB", VALUE_SIZE_MEDIUM),
+        ("64KB", VALUE_SIZE_LARGE),
+    ] {
+        let counter = AtomicU64::new(0);
+        let value = generate_value(size);
+
+        group.bench_with_input(BenchmarkId::from_parameter(size_name), &size, |b, _| {
+            b.to_async(&rt).iter(|| {
+                let key = format!(
+                    "size-{}-{}",
+                    size_name,
+                    counter.fetch_add(1, Ordering::Relaxed)
+                );
+                let router = &router;
+                let v = value.clone();
+
+                async move { router.write(leader, key, v).await.unwrap() }
+            })
+        });
+    }
+
+    group.finish();
+}
+
+/// Benchmark: Read operations with varying value sizes.
+///
+/// Measures impact of value size on read throughput (64B, 1KB, 64KB).
+fn bench_read_value_sizes(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let mut group = c.benchmark_group("kv_read_value_size");
+    group.throughput(Throughput::Elements(1));
+
+    for (size_name, size) in [
+        ("64B", VALUE_SIZE_SMALL),
+        ("1KB", VALUE_SIZE_MEDIUM),
+        ("64KB", VALUE_SIZE_LARGE),
+    ] {
+        // Setup fresh cluster for each value size
+        let (router, leader) = rt.block_on(async {
+            let (router, leader) = setup_single_node_cluster().await.unwrap();
+
+            // Pre-populate with 1000 keys of this size
+            let value = generate_value(size);
+            for i in 0..1000 {
+                let key = format!("size-{}-{:06}", size_name, i);
+                router.write(leader, key, value.clone()).await.unwrap();
+            }
+
+            (router, leader)
+        });
+
+        let counter = AtomicU64::new(0);
+
+        group.bench_with_input(BenchmarkId::from_parameter(size_name), &size, |b, _| {
+            b.to_async(&rt).iter(|| {
+                let idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
+                let key = format!("size-{}-{:06}", size_name, idx);
+                let router = &router;
+
+                async move { router.read(leader, &key).await }
+            })
+        });
+    }
+
+    group.finish();
+}
+
+// ====================================================================================
+// Multi-Node Cluster Benchmarks
+// ====================================================================================
+
+/// Benchmark: 3-node cluster write operations.
+///
+/// Measures quorum write latency with Raft replication.
+fn bench_3node_write_single(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    // Setup 3-node cluster
+    let (router, leader) = rt.block_on(async { setup_three_node_cluster().await.unwrap() });
+
+    let mut group = c.benchmark_group("kv_write_3node");
+    group.throughput(Throughput::Elements(1));
+
+    let counter = AtomicU64::new(0);
+    let value = "benchmark-value-256-bytes-padding-".repeat(7);
+
+    group.bench_function("single", |b| {
+        b.to_async(&rt).iter(|| {
+            let key = format!("3node-write-{}", counter.fetch_add(1, Ordering::Relaxed));
+            let router = &router;
+            let v = value.clone();
+
+            async move { router.write(leader, key, v).await.unwrap() }
+        })
+    });
+
+    group.finish();
+}
+
+/// Benchmark: 3-node cluster read operations.
+///
+/// Measures linearizable read latency from leader.
+fn bench_3node_read_single(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    // Setup 3-node cluster and pre-populate data
+    let (router, leader) = rt.block_on(async {
+        let (router, leader) = setup_three_node_cluster().await.unwrap();
+        populate_test_data(&router, leader, 10_000).await.unwrap();
+        (router, leader)
+    });
+
+    let mut group = c.benchmark_group("kv_read_3node");
+    group.throughput(Throughput::Elements(1));
+
+    let counter = AtomicU64::new(0);
+
+    group.bench_function("single", |b| {
+        b.to_async(&rt).iter(|| {
+            let idx = counter.fetch_add(1, Ordering::Relaxed) % 10_000;
+            let key = format!("key-{:06}", idx);
+            let router = &router;
+
+            async move { router.read(leader, &key).await }
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_write_single,
     bench_read_single,
     bench_write_batch,
     bench_scan,
+    bench_write_value_sizes,
+    bench_read_value_sizes,
+    bench_3node_write_single,
+    bench_3node_read_single,
 );
 
 criterion_main!(benches);

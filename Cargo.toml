@@ -179,3 +179,15 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
 [[bench]]
 name = "kv_operations"
 harness = false
+
+[[bench]]
+name = "storage"
+harness = false
+
+[[bench]]
+name = "workloads"
+harness = false
+
+[[bench]]
+name = "concurrency"
+harness = false
