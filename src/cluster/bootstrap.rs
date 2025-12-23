@@ -365,10 +365,11 @@ impl ShardedNodeHandle {
         self.base.iroh_manager.shutdown().await?;
 
         // Update node status
-        if let Err(err) = self.base.metadata_store.update_status(
-            self.base.config.node_id,
-            NodeStatus::Offline,
-        ) {
+        if let Err(err) = self
+            .base
+            .metadata_store
+            .update_status(self.base.config.node_id, NodeStatus::Offline)
+        {
             error!(
                 error = ?err,
                 node_id = self.base.config.node_id,
@@ -579,7 +580,10 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
             }
         }
     } else {
-        info!(node_id = config.node_id, "blob store disabled by configuration");
+        info!(
+            node_id = config.node_id,
+            "blob store disabled by configuration"
+        );
         None
     };
 
@@ -671,7 +675,10 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
 
     // For each local shard, create Raft instance
     for &shard_id in &local_shards {
-        info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
+        info!(
+            node_id = config.node_id,
+            shard_id, "creating Raft instance for shard"
+        );
 
         // Generate storage paths for this shard
         let paths = ShardStoragePaths::new(data_dir, shard_id);
@@ -723,8 +730,7 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
                 );
                 info!(
                     node_id = config.node_id,
-                    shard_id,
-                    "TTL cleanup task started for shard"
+                    shard_id, "TTL cleanup task started for shard"
                 );
 
                 // Spawn lease cleanup background task
@@ -734,8 +740,7 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
                 );
                 info!(
                     node_id = config.node_id,
-                    shard_id,
-                    "Lease cleanup task started for shard"
+                    shard_id, "Lease cleanup task started for shard"
                 );
 
                 let raft = Arc::new(
@@ -757,7 +762,10 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
             }
         };
 
-        info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
+        info!(
+            node_id = config.node_id,
+            shard_id, "created OpenRaft instance for shard"
+        );
 
         // Register Raft core with sharded protocol handler
         sharded_handler.register_shard(shard_id, raft.as_ref().clone());

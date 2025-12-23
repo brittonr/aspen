@@ -71,7 +71,7 @@ use aspen::cluster::bootstrap::{
 use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
 use aspen::protocol_handlers::{
     ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
-    LogSubscriberProtocolHandler, RaftProtocolHandler, RAFT_SHARDED_ALPN,
+    LogSubscriberProtocolHandler, RAFT_SHARDED_ALPN, RaftProtocolHandler,
 };
 use clap::Parser;
 use iroh::PublicKey;
@@ -368,92 +368,94 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node based on sharding configuration
-    let (node_mode, controller, kv_store, primary_raft_node, network_factory) =
-        if config.sharding.enabled {
-            // Sharded mode: multiple Raft instances
-            let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
+    let (node_mode, controller, kv_store, primary_raft_node, network_factory) = if config
+        .sharding
+        .enabled
+    {
+        // Sharded mode: multiple Raft instances
+        let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
 
-            // Generate and output root token if requested
-            if let Some(ref token_path) = args.output_root_token {
-                let secret_key = sharded_handle.base.iroh_manager.endpoint().secret_key();
-                let token = aspen::auth::generate_root_token(
-                    secret_key,
-                    std::time::Duration::from_secs(365 * 24 * 60 * 60),
-                )
-                .context("failed to generate root token")?;
+        // Generate and output root token if requested
+        if let Some(ref token_path) = args.output_root_token {
+            let secret_key = sharded_handle.base.iroh_manager.endpoint().secret_key();
+            let token = aspen::auth::generate_root_token(
+                secret_key,
+                std::time::Duration::from_secs(365 * 24 * 60 * 60),
+            )
+            .context("failed to generate root token")?;
 
-                let token_base64 = token.to_base64().context("failed to encode root token")?;
-                std::fs::write(token_path, &token_base64)
-                    .with_context(|| format!("failed to write token to {}", token_path.display()))?;
-
-                info!(
-                    token_path = %token_path.display(),
-                    issuer = %token.issuer,
-                    "root token written to file"
-                );
-                sharded_handle.root_token = Some(token);
-            }
-
-            // For sharded mode, use the ShardedKeyValueStore as the KV store
-            // Use shard 0's RaftNode for ClusterController operations
-            let kv_store: KeyValueStoreHandle = sharded_handle.sharded_kv.clone();
-            let primary_shard = sharded_handle
-                .primary_shard()
-                .cloned()
-                .expect("shard 0 must be present");
-            let controller: ClusterControllerHandle = primary_shard.clone();
-            let network_factory = sharded_handle.base.network_factory.clone();
+            let token_base64 = token.to_base64().context("failed to encode root token")?;
+            std::fs::write(token_path, &token_base64)
+                .with_context(|| format!("failed to write token to {}", token_path.display()))?;
 
             info!(
-                num_shards = sharded_handle.shard_count(),
-                local_shards = ?sharded_handle.local_shard_ids(),
-                "sharded node bootstrap complete"
+                token_path = %token_path.display(),
+                issuer = %token.issuer,
+                "root token written to file"
             );
+            sharded_handle.root_token = Some(token);
+        }
 
-            (
-                NodeMode::Sharded(sharded_handle),
-                controller,
-                kv_store,
-                primary_shard,
-                network_factory,
+        // For sharded mode, use the ShardedKeyValueStore as the KV store
+        // Use shard 0's RaftNode for ClusterController operations
+        let kv_store: KeyValueStoreHandle = sharded_handle.sharded_kv.clone();
+        let primary_shard = sharded_handle
+            .primary_shard()
+            .cloned()
+            .expect("shard 0 must be present");
+        let controller: ClusterControllerHandle = primary_shard.clone();
+        let network_factory = sharded_handle.base.network_factory.clone();
+
+        info!(
+            num_shards = sharded_handle.shard_count(),
+            local_shards = ?sharded_handle.local_shard_ids(),
+            "sharded node bootstrap complete"
+        );
+
+        (
+            NodeMode::Sharded(sharded_handle),
+            controller,
+            kv_store,
+            primary_shard,
+            network_factory,
+        )
+    } else {
+        // Non-sharded mode: single Raft instance
+        let mut handle = bootstrap_node(config.clone()).await?;
+
+        // Generate and output root token if requested
+        if let Some(ref token_path) = args.output_root_token {
+            let secret_key = handle.iroh_manager.endpoint().secret_key();
+            let token = aspen::auth::generate_root_token(
+                secret_key,
+                std::time::Duration::from_secs(365 * 24 * 60 * 60),
             )
-        } else {
-            // Non-sharded mode: single Raft instance
-            let mut handle = bootstrap_node(config.clone()).await?;
+            .context("failed to generate root token")?;
 
-            // Generate and output root token if requested
-            if let Some(ref token_path) = args.output_root_token {
-                let secret_key = handle.iroh_manager.endpoint().secret_key();
-                let token = aspen::auth::generate_root_token(
-                    secret_key,
-                    std::time::Duration::from_secs(365 * 24 * 60 * 60),
-                )
-                .context("failed to generate root token")?;
+            let token_base64 = token.to_base64().context("failed to encode root token")?;
+            std::fs::write(token_path, &token_base64)
+                .with_context(|| format!("failed to write token to {}", token_path.display()))?;
 
-                let token_base64 = token.to_base64().context("failed to encode root token")?;
-                std::fs::write(token_path, &token_base64)
-                    .with_context(|| format!("failed to write token to {}", token_path.display()))?;
+            info!(
+                token_path = %token_path.display(),
+                issuer = %token.issuer,
+                "root token written to file"
+            );
+            handle.root_token = Some(token);
+        }
 
-                info!(
-                    token_path = %token_path.display(),
-                    issuer = %token.issuer,
-                    "root token written to file"
-                );
-                handle.root_token = Some(token);
-            }
+        let (controller, kv_store) = setup_controllers(&config, &handle);
+        let primary_raft_node = handle.raft_node.clone();
+        let network_factory = handle.network_factory.clone();
 
-            let (controller, kv_store) = setup_controllers(&config, &handle);
-            let primary_raft_node = handle.raft_node.clone();
-            let network_factory = handle.network_factory.clone();
-
-            (
-                NodeMode::Single(handle),
-                controller,
-                kv_store,
-                primary_raft_node,
-                network_factory,
-            )
-        };
+        (
+            NodeMode::Single(handle),
+            controller,
+            kv_store,
+            primary_raft_node,
+            network_factory,
+        )
+    };
 
     // Create token verifier if authentication is enabled
     let token_verifier = if args.enable_token_auth {
@@ -531,8 +533,7 @@ async fn main() -> Result<()> {
 
                 // Also register legacy ALPN routing to shard 0 for backward compatibility
                 if let Some(shard_0) = handle.primary_shard() {
-                    let legacy_handler =
-                        RaftProtocolHandler::new(shard_0.raft().as_ref().clone());
+                    let legacy_handler = RaftProtocolHandler::new(shard_0.raft().as_ref().clone());
                     builder = builder.accept(RAFT_ALPN, legacy_handler);
                     info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
                 }

@@ -1957,6 +1957,49 @@ async fn process_client_request(
             }
         }
 
+        ClientRpcRequest::GetKeyOrigin { key } => {
+            use crate::client_rpc::KeyOriginResultResponse;
+
+            let Some(ref peer_manager) = ctx.peer_manager else {
+                return Ok(ClientRpcResponse::KeyOriginResult(
+                    KeyOriginResultResponse {
+                        found: false,
+                        key: key.clone(),
+                        cluster_id: None,
+                        priority: None,
+                        timestamp_secs: None,
+                        is_local: None,
+                    },
+                ));
+            };
+
+            match peer_manager.importer().get_key_origin(&key).await {
+                Some(origin) => {
+                    let is_local = origin.is_local();
+                    Ok(ClientRpcResponse::KeyOriginResult(
+                        KeyOriginResultResponse {
+                            found: true,
+                            key,
+                            cluster_id: Some(origin.cluster_id),
+                            priority: Some(origin.priority),
+                            timestamp_secs: Some(origin.timestamp_secs),
+                            is_local: Some(is_local),
+                        },
+                    ))
+                }
+                None => Ok(ClientRpcResponse::KeyOriginResult(
+                    KeyOriginResultResponse {
+                        found: false,
+                        key,
+                        cluster_id: None,
+                        priority: None,
+                        timestamp_secs: None,
+                        is_local: None,
+                    },
+                )),
+            }
+        }
+
         ClientRpcRequest::ExecuteSql {
             query,
             params,

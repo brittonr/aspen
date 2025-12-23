@@ -342,6 +342,15 @@ pub enum ClientRpcRequest {
         enabled: bool,
     },
 
+    /// Get the origin metadata for a key.
+    ///
+    /// Returns information about which cluster a key was imported from,
+    /// including the cluster ID, priority, and timestamp.
+    GetKeyOrigin {
+        /// The key to look up origin for.
+        key: String,
+    },
+
     // =========================================================================
     // SQL query operations
     // =========================================================================
@@ -1345,7 +1354,9 @@ impl ClientRpcRequest {
             | Self::SetPeerClusterEnabled { .. } => Some(Operation::ClusterAdmin {
                 action: "peer_cluster".to_string(),
             }),
-            Self::ListPeerClusters | Self::GetPeerClusterStatus { .. } => Some(Operation::Read {
+            Self::ListPeerClusters
+            | Self::GetPeerClusterStatus { .. }
+            | Self::GetKeyOrigin { .. } => Some(Operation::Read {
                 key: "_peers:".to_string(),
             }),
 
@@ -1553,6 +1564,9 @@ pub enum ClientRpcResponse {
 
     /// Set peer cluster enabled result.
     SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse),
+
+    /// Key origin lookup result.
+    KeyOriginResult(KeyOriginResultResponse),
 
     // =========================================================================
     // SQL query response
@@ -2302,6 +2316,23 @@ pub struct SetPeerClusterEnabledResultResponse {
     pub enabled: Option<bool>,
     /// Error message if failed.
     pub error: Option<String>,
+}
+
+/// Key origin lookup result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyOriginResultResponse {
+    /// Whether the key has origin metadata.
+    pub found: bool,
+    /// The key that was looked up.
+    pub key: String,
+    /// Cluster ID that wrote the key (if found).
+    pub cluster_id: Option<String>,
+    /// Priority of the origin cluster (if found). Lower = higher priority.
+    pub priority: Option<u32>,
+    /// Unix timestamp when the key was last updated (if found).
+    pub timestamp_secs: Option<u64>,
+    /// Whether this is a local cluster origin (priority 0).
+    pub is_local: Option<bool>,
 }
 
 // =============================================================================

@@ -389,6 +389,29 @@ impl DocsImporter {
     pub fn shutdown(&self) {
         self.cancel.cancel();
     }
+
+    /// Get the origin metadata for a key.
+    ///
+    /// Returns the origin information (cluster ID, priority, timestamp)
+    /// for a key if it was imported from a peer cluster.
+    ///
+    /// # Arguments
+    /// * `key` - The key to look up origin for
+    ///
+    /// # Returns
+    /// * `Some(KeyOrigin)` - If the key has origin metadata
+    /// * `None` - If the key has no origin (local write or doesn't exist)
+    pub async fn get_key_origin(&self, key: &str) -> Option<KeyOrigin> {
+        let origin_key = KeyOrigin::storage_key(key);
+
+        match self.kv_store.read(ReadRequest { key: origin_key }).await {
+            Ok(result) => {
+                let value = result.kv.map(|kv| kv.value)?;
+                KeyOrigin::from_bytes(value.as_bytes())
+            }
+            Err(_) => None,
+        }
+    }
 }
 
 /// Result of attempting to import an entry.
