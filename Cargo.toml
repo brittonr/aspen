@@ -176,3 +176,6 @@ virtiofs = ["fuse", "dep:vhost"]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
 
 # Benchmarks
+[[bench]]
+name = "kv_operations"
+harness = false

@@ -662,6 +662,29 @@
               ''}";
             };
 
+            # Benchmarking command
+            # Usage: nix run .#bench [filter]
+            #   nix run .#bench           - Run all benchmarks
+            #   nix run .#bench kv_write  - Run benchmarks matching "kv_write"
+            bench = {
+              type = "app";
+              program = "${pkgs.writeShellScript "bench" ''
+                set -e
+                FILTER="''${1:-}"
+
+                if [ -n "$FILTER" ]; then
+                  echo "Running benchmarks matching: $FILTER"
+                  nix develop -c cargo bench --bench kv_operations -- "$FILTER"
+                else
+                  echo "Running all benchmarks..."
+                  nix develop -c cargo bench
+                fi
+
+                echo ""
+                echo "HTML reports available at: target/criterion/report/index.html"
+              ''}";
+            };
+
             # Code coverage command
             # Usage: nix run .#coverage [subcommand]
             #   nix run .#coverage        - Show summary (default)

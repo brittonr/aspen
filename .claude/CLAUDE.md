@@ -130,6 +130,10 @@ Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP end
 
 ## Architecture
 
+See `docs/architecture/` for detailed architecture documents:
+
+- `layer-architecture.md` - Analysis of FoundationDB-style layer patterns (tuples, subspaces, indexes)
+
 The project is structured into focused modules with narrow APIs:
 
 - **src/api/** (393 lines): Trait definitions for `ClusterController` and `KeyValueStore` interfaces
@@ -240,6 +244,34 @@ target/nextest/default/junit.xml
 # Run Aspen cluster smoke test (3-node cluster with Raft operations)
 ./scripts/aspen-cluster-smoke.sh
 ```
+
+### Running Benchmarks
+
+```bash
+# Run all benchmarks (preferred)
+nix run .#bench
+
+# Run benchmarks matching a filter
+nix run .#bench kv_write
+nix run .#bench kv_read
+
+# Alternative: Run directly with cargo
+nix develop -c cargo bench --bench kv_operations
+nix develop -c cargo bench -- "kv_write"
+```
+
+**Benchmark results** are saved to `target/criterion/` with HTML reports.
+
+**Current benchmark suites:**
+
+- `kv_operations`: Single read/write, batch writes, prefix scans
+
+**Baseline metrics (in-memory, single-node):**
+
+- Single write: ~38 µs (26K ops/sec)
+- Single read: ~160 ns (6.2M ops/sec)
+- Batch write (100 keys): ~4 ms (25K elem/sec)
+- Prefix scan (1000 keys): ~151 µs
 
 ### Nix Development
 
