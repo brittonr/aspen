@@ -508,6 +508,7 @@ async fn main() -> Result<()> {
         network_factory: Some(network_factory),
         token_verifier,
         require_auth: args.require_token_auth,
+        topology: None, // TODO: Wire up sharding topology when enabled
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 

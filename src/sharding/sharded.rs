@@ -35,17 +35,25 @@ use crate::api::{
 };
 
 use super::router::{ShardConfig, ShardId, ShardRouter};
+use super::topology::{ShardState, ShardTopology};
 
 /// A sharded KeyValueStore that distributes keys across multiple shards.
 ///
 /// Each shard is an independent KeyValueStore (typically a RaftNode) that
 /// handles a subset of the key space determined by consistent hashing.
+///
+/// When a shard is not available locally (due to split/merge), the store
+/// returns `ShardMoved` errors with redirect information so clients can
+/// update their topology cache and retry.
 #[derive(Clone)]
 pub struct ShardedKeyValueStore<KV: KeyValueStore> {
     /// Router for determining which shard owns each key.
     router: ShardRouter,
     /// Map from shard ID to the KeyValueStore for that shard.
     shards: Arc<RwLock<HashMap<ShardId, Arc<KV>>>>,
+    /// Optional topology reference for ShardMoved error generation.
+    /// When set, enables proper redirect responses with successor info.
+    topology: Option<Arc<RwLock<ShardTopology>>>,
 }
 
 impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
@@ -60,7 +68,32 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
         Self {
             router: ShardRouter::new(config),
             shards: Arc::new(RwLock::new(HashMap::new())),
+            topology: None,
         }
+    }
+
+    /// Create a new sharded store with topology reference for ShardMoved errors.
+    ///
+    /// When the topology is set, the store can return proper ShardMoved errors
+    /// with successor shard information when a shard is not available locally.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Shard configuration specifying number of shards
+    /// * `topology` - Shared topology reference for redirect info
+    pub fn with_topology(config: ShardConfig, topology: Arc<RwLock<ShardTopology>>) -> Self {
+        Self {
+            router: ShardRouter::new(config),
+            shards: Arc::new(RwLock::new(HashMap::new())),
+            topology: Some(topology),
+        }
+    }
+
+    /// Set the topology reference for ShardMoved error generation.
+    ///
+    /// This can be called after construction to enable proper redirect responses.
+    pub fn set_topology(&mut self, topology: Arc<RwLock<ShardTopology>>) {
+        self.topology = Some(topology);
     }
 
     /// Register a KeyValueStore for a specific shard.
@@ -96,29 +129,180 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
 
     /// Get the shard for a specific key.
     ///
-    /// Returns an error if the shard is not registered.
+    /// Returns `ShardMoved` error with redirect info if the shard is not local.
+    /// When topology is available, checks for tombstoned shards and includes
+    /// successor information in the error.
     async fn get_shard(&self, key: &str) -> Result<Arc<KV>, KeyValueStoreError> {
         let shard_id = self.router.get_shard_for_key(key);
-        self.shards
-            .read()
-            .await
-            .get(&shard_id)
-            .cloned()
-            .ok_or_else(|| KeyValueStoreError::Failed {
-                reason: format!("shard {} not available for key {}", shard_id, key),
-            })
+
+        // Try to get the shard locally
+        if let Some(shard) = self.shards.read().await.get(&shard_id).cloned() {
+            return Ok(shard);
+        }
+
+        // Shard not local - generate ShardMoved error with redirect info
+        self.make_shard_moved_error(key, shard_id).await
     }
 
     /// Get the shard by ID.
+    ///
+    /// Returns `ShardMoved` error with redirect info if the shard is not local.
     async fn get_shard_by_id(&self, shard_id: ShardId) -> Result<Arc<KV>, KeyValueStoreError> {
-        self.shards
-            .read()
-            .await
-            .get(&shard_id)
-            .cloned()
-            .ok_or_else(|| KeyValueStoreError::Failed {
-                reason: format!("shard {} not available", shard_id),
-            })
+        if let Some(shard) = self.shards.read().await.get(&shard_id).cloned() {
+            return Ok(shard);
+        }
+
+        // Shard not local - generate ShardMoved error
+        self.make_shard_moved_error_by_id(shard_id).await
+    }
+
+    /// Generate a ShardMoved error with proper redirect information.
+    ///
+    /// Checks the topology for tombstoned shards and includes successor info.
+    async fn make_shard_moved_error(
+        &self,
+        key: &str,
+        shard_id: ShardId,
+    ) -> Result<Arc<KV>, KeyValueStoreError> {
+        // Check topology for redirect info if available
+        if let Some(ref topology) = self.topology {
+            let topo = topology.read().await;
+
+            if let Some(info) = topo.get_shard(shard_id) {
+                // If shard is tombstoned, return successor info
+                if let ShardState::Tombstone {
+                    successor_shard_id: Some(successor),
+                    ..
+                } = &info.state
+                {
+                    return Err(KeyValueStoreError::ShardMoved {
+                        key: key.to_string(),
+                        new_shard_id: *successor,
+                        topology_version: topo.version,
+                    });
+                }
+
+                // If shard is in transitional state, return ShardNotReady
+                if info.state.is_transitioning() {
+                    let state_name = match &info.state {
+                        ShardState::Splitting { .. } => "splitting",
+                        ShardState::Merging { .. } => "merging",
+                        _ => "transitioning",
+                    };
+                    return Err(KeyValueStoreError::ShardNotReady {
+                        shard_id,
+                        state: state_name.to_string(),
+                    });
+                }
+            }
+
+            // Shard not in topology or is active but not local
+            return Err(KeyValueStoreError::ShardMoved {
+                key: key.to_string(),
+                new_shard_id: shard_id,
+                topology_version: topo.version,
+            });
+        }
+
+        // No topology available - fallback to generic ShardMoved
+        Err(KeyValueStoreError::ShardMoved {
+            key: key.to_string(),
+            new_shard_id: shard_id,
+            topology_version: 0,
+        })
+    }
+
+    /// Generate a ShardMoved error by shard ID (when key is unknown).
+    async fn make_shard_moved_error_by_id(
+        &self,
+        shard_id: ShardId,
+    ) -> Result<Arc<KV>, KeyValueStoreError> {
+        // Check topology for redirect info if available
+        if let Some(ref topology) = self.topology {
+            let topo = topology.read().await;
+
+            if let Some(info) = topo.get_shard(shard_id) {
+                // If shard is tombstoned, return successor info
+                if let ShardState::Tombstone {
+                    successor_shard_id: Some(successor),
+                    ..
+                } = &info.state
+                {
+                    return Err(KeyValueStoreError::ShardMoved {
+                        key: String::new(),
+                        new_shard_id: *successor,
+                        topology_version: topo.version,
+                    });
+                }
+
+                // If shard is in transitional state, return ShardNotReady
+                if info.state.is_transitioning() {
+                    let state_name = match &info.state {
+                        ShardState::Splitting { .. } => "splitting",
+                        ShardState::Merging { .. } => "merging",
+                        _ => "transitioning",
+                    };
+                    return Err(KeyValueStoreError::ShardNotReady {
+                        shard_id,
+                        state: state_name.to_string(),
+                    });
+                }
+            }
+
+            // Shard not in topology or is active but not local
+            return Err(KeyValueStoreError::ShardMoved {
+                key: String::new(),
+                new_shard_id: shard_id,
+                topology_version: topo.version,
+            });
+        }
+
+        // No topology available - fallback to generic ShardMoved
+        Err(KeyValueStoreError::ShardMoved {
+            key: String::new(),
+            new_shard_id: shard_id,
+            topology_version: 0,
+        })
+    }
+
+    /// Check if a shard can accept writes based on its state.
+    ///
+    /// Returns an error if the shard is transitioning or tombstoned.
+    async fn check_shard_writable(&self, shard_id: ShardId) -> Result<(), KeyValueStoreError> {
+        if let Some(ref topology) = self.topology {
+            let topo = topology.read().await;
+
+            if let Some(info) = topo.get_shard(shard_id)
+                && !info.state.can_write()
+            {
+                match &info.state {
+                    ShardState::Splitting { .. } => {
+                        return Err(KeyValueStoreError::ShardNotReady {
+                            shard_id,
+                            state: "splitting".to_string(),
+                        });
+                    }
+                    ShardState::Merging { target_shard_id } => {
+                        return Err(KeyValueStoreError::ShardMoved {
+                            key: String::new(),
+                            new_shard_id: *target_shard_id,
+                            topology_version: topo.version,
+                        });
+                    }
+                    ShardState::Tombstone {
+                        successor_shard_id, ..
+                    } => {
+                        return Err(KeyValueStoreError::ShardMoved {
+                            key: String::new(),
+                            new_shard_id: successor_shard_id.unwrap_or(shard_id),
+                            topology_version: topo.version,
+                        });
+                    }
+                    ShardState::Active => {} // Can write
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Get the router.
@@ -252,6 +436,9 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
             .validate_same_shard(&request.command)?
             .unwrap_or_default();
 
+        // Check shard is in writable state (not splitting/merging/tombstone)
+        self.check_shard_writable(shard_id).await?;
+
         let shard = self.get_shard_by_id(shard_id).await?;
         shard.write(request).await
     }
@@ -374,7 +561,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sharded_store_missing_shard() {
+    async fn test_sharded_store_missing_shard_returns_shard_moved() {
         let config = ShardConfig::new(4);
         let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
             ShardedKeyValueStore::new(config);
@@ -384,15 +571,18 @@ mod tests {
 
         // Find a key that routes to a missing shard
         let mut test_key = String::new();
+        let mut expected_shard = 0;
         for i in 0..100 {
             let key = format!("key_{}", i);
-            if store.router.get_shard_for_key(&key) != 0 {
+            let shard = store.router.get_shard_for_key(&key);
+            if shard != 0 {
                 test_key = key;
+                expected_shard = shard;
                 break;
             }
         }
 
-        // Attempt to write should fail
+        // Attempt to write should fail with ShardMoved error
         let write_req = WriteRequest {
             command: WriteCommand::Set {
                 key: test_key.clone(),
@@ -400,7 +590,149 @@ mod tests {
             },
         };
         let result = store.write(write_req).await;
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(KeyValueStoreError::ShardMoved {
+                new_shard_id,
+                ..
+            }) if new_shard_id == expected_shard
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_shard_moved_with_topology_tombstone() {
+        let config = ShardConfig::new(2);
+
+        // Create topology where shard 1 is tombstoned with successor shard 0
+        let mut topology = ShardTopology::new(2, 1000);
+        topology
+            .apply_merge(1, 0, 2000)
+            .expect("merge should succeed");
+
+        let topology = Arc::new(RwLock::new(topology));
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
+            ShardedKeyValueStore::with_topology(config, topology.clone());
+
+        // Only add shard 0
+        store.add_shard(0, DeterministicKeyValueStore::new()).await;
+
+        // Find a key that routes to shard 1 (the tombstoned shard)
+        let mut test_key = String::new();
+        for i in 0..100 {
+            let key = format!("key_{}", i);
+            if store.router.get_shard_for_key(&key) == 1 {
+                test_key = key;
+                break;
+            }
+        }
+
+        // Should return ShardMoved pointing to successor (shard 0)
+        let read_req = ReadRequest {
+            key: test_key.clone(),
+        };
+        let result = store.read(read_req).await;
+        assert!(matches!(
+            result,
+            Err(KeyValueStoreError::ShardMoved {
+                new_shard_id: 0,
+                topology_version: 2,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_shard_not_ready_when_splitting() {
+        let config = ShardConfig::new(2);
+
+        // Create topology where shard 0 is splitting
+        let mut topology = ShardTopology::new(2, 1000);
+        if let Some(shard) = topology.get_shard_mut(0) {
+            shard.state = ShardState::Splitting {
+                split_key: "m".to_string(),
+                new_shard_id: 2,
+            };
+        }
+
+        let topology = Arc::new(RwLock::new(topology));
+        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> =
+            ShardedKeyValueStore::new(config);
+        store.set_topology(topology);
+
+        // Add shard 0
+        store.add_shard(0, DeterministicKeyValueStore::new()).await;
+
+        // Find a key that routes to shard 0
+        let mut test_key = String::new();
+        for i in 0..100 {
+            let key = format!("key_{}", i);
+            if store.router.get_shard_for_key(&key) == 0 {
+                test_key = key;
+                break;
+            }
+        }
+
+        // Write should fail with ShardNotReady
+        let write_req = WriteRequest {
+            command: WriteCommand::Set {
+                key: test_key.clone(),
+                value: "value".to_string(),
+            },
+        };
+        let result = store.write(write_req).await;
+        assert!(matches!(
+            result,
+            Err(KeyValueStoreError::ShardNotReady {
+                shard_id: 0,
+                state,
+            }) if state == "splitting"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_shard_moved_when_merging() {
+        let config = ShardConfig::new(2);
+
+        // Create topology where shard 1 is merging into shard 0
+        let mut topology = ShardTopology::new(2, 1000);
+        if let Some(shard) = topology.get_shard_mut(1) {
+            shard.state = ShardState::Merging { target_shard_id: 0 };
+        }
+
+        let topology = Arc::new(RwLock::new(topology));
+        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> =
+            ShardedKeyValueStore::new(config);
+        store.set_topology(topology);
+
+        // Add both shards
+        store.add_shard(0, DeterministicKeyValueStore::new()).await;
+        store.add_shard(1, DeterministicKeyValueStore::new()).await;
+
+        // Find a key that routes to shard 1
+        let mut test_key = String::new();
+        for i in 0..100 {
+            let key = format!("key_{}", i);
+            if store.router.get_shard_for_key(&key) == 1 {
+                test_key = key;
+                break;
+            }
+        }
+
+        // Write to merging shard should fail with ShardMoved pointing to target
+        let write_req = WriteRequest {
+            command: WriteCommand::Set {
+                key: test_key.clone(),
+                value: "value".to_string(),
+            },
+        };
+        let result = store.write(write_req).await;
+        assert!(matches!(
+            result,
+            Err(KeyValueStoreError::ShardMoved {
+                new_shard_id: 0,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]

@@ -91,6 +91,10 @@ pub struct ClientProtocolContext {
     /// When `false` (default), missing tokens are allowed during migration.
     /// When `true`, requests without valid tokens are rejected.
     pub require_auth: bool,
+    /// Shard topology for GetTopology RPC (optional).
+    ///
+    /// When present, enables topology queries for shard-aware clients.
+    pub topology: Option<Arc<tokio::sync::RwLock<crate::sharding::topology::ShardTopology>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -4879,6 +4883,57 @@ async fn process_client_request(
                         error: Some(format!("{}", e)),
                     },
                 )),
+            }
+        }
+
+        // =====================================================================
+        // Sharding operations
+        // =====================================================================
+        ClientRpcRequest::GetTopology { client_version } => {
+            use crate::client_rpc::TopologyResultResponse;
+
+            match &ctx.topology {
+                Some(topology) => {
+                    let topo = topology.read().await;
+
+                    // Check if client already has current version
+                    if let Some(cv) = client_version
+                        && cv == topo.version
+                    {
+                        return Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
+                            success: true,
+                            version: topo.version,
+                            updated: false,
+                            topology_data: None,
+                            shard_count: topo.shard_count() as u32,
+                            error: None,
+                        }));
+                    }
+
+                    // Serialize topology for client
+                    let topology_data = serde_json::to_string(&*topo)
+                        .map_err(|e| anyhow::anyhow!("failed to serialize topology: {}", e))?;
+
+                    Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
+                        success: true,
+                        version: topo.version,
+                        updated: true,
+                        topology_data: Some(topology_data),
+                        shard_count: topo.shard_count() as u32,
+                        error: None,
+                    }))
+                }
+                None => {
+                    // Topology not configured on this node
+                    Ok(ClientRpcResponse::TopologyResult(TopologyResultResponse {
+                        success: false,
+                        version: 0,
+                        updated: false,
+                        topology_data: None,
+                        shard_count: 0,
+                        error: Some("topology not configured on this node".to_string()),
+                    }))
+                }
             }
         }
     }

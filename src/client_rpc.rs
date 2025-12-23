@@ -1102,6 +1102,22 @@ pub enum ClientRpcRequest {
         /// New custom metadata (JSON object, optional).
         custom_metadata: Option<String>,
     },
+
+    // =========================================================================
+    // Sharding operations - Topology management
+    // =========================================================================
+    /// Get the current shard topology.
+    ///
+    /// Returns the cluster's shard topology including version, shard info,
+    /// and key range mappings. Clients use this for shard-aware routing.
+    ///
+    /// The optional `client_version` parameter enables conditional fetching:
+    /// - If provided and matches current version, returns `updated: false`
+    /// - Otherwise returns the full topology data
+    GetTopology {
+        /// Client's current topology version (for conditional fetch).
+        client_version: Option<u64>,
+    },
 }
 
 impl ClientRpcRequest {
@@ -1117,7 +1133,11 @@ impl ClientRpcRequest {
     pub fn requires_auth(&self) -> bool {
         !matches!(
             self,
-            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket
+            Self::GetHealth
+                | Self::Ping
+                | Self::GetNodeInfo
+                | Self::GetClusterTicket
+                | Self::GetTopology { .. }
         )
     }
 
@@ -1373,7 +1393,11 @@ impl ClientRpcRequest {
             Self::GetLeader => Some(Operation::Read { key: String::new() }),
 
             // Public requests (no auth required)
-            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket => None,
+            Self::GetHealth
+            | Self::Ping
+            | Self::GetNodeInfo
+            | Self::GetClusterTicket
+            | Self::GetTopology { .. } => None,
         }
     }
 
@@ -1751,6 +1775,12 @@ pub enum ClientRpcResponse {
 
     /// Service update metadata result.
     ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse),
+
+    // =========================================================================
+    // Sharding responses
+    // =========================================================================
+    /// Get topology result.
+    TopologyResult(TopologyResultResponse),
 }
 
 /// Health status response.
@@ -3129,6 +3159,27 @@ pub struct ServiceUpdateHealthResultResponse {
 pub struct ServiceUpdateMetadataResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Sharding response types
+// =============================================================================
+
+/// Shard topology result for GetTopology RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopologyResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Current topology version.
+    pub version: u64,
+    /// Whether the topology was updated (false if client version matches).
+    pub updated: bool,
+    /// Serialized ShardTopology (JSON) if updated is true.
+    pub topology_data: Option<String>,
+    /// Number of shards in the topology.
+    pub shard_count: u32,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

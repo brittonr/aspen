@@ -36,12 +36,14 @@
 //! assert!(shard_id < 4);
 //! ```
 
+pub mod automation;
 pub mod consistent_hash;
 pub mod metrics;
 pub mod router;
 pub mod sharded;
 pub mod topology;
 
+pub use automation::{AutomationConfig, ShardAutomationManager};
 pub use consistent_hash::JumpHash;
 pub use metrics::{MetricsSnapshot, ShardMetricsAtomic, ShardMetricsCollector};
 pub use router::{ShardConfig, ShardId, ShardRange, ShardRouter};
