@@ -394,6 +394,10 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .start()
         .await?;
     node1.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node1.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Node 2
     let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
@@ -406,6 +410,10 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .start()
         .await?;
     node2.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node2.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Node 3
     let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
@@ -418,6 +426,10 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .start()
         .await?;
     node3.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node3.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Initialize cluster with node1 as leader
     let raft1 = node1.raft_node();
@@ -430,7 +442,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     // Wait for node1 to become leader using OpenRaft Wait API
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .state(ServerState::Leader, "node1 becomes leader")
         .await?;
 
@@ -453,7 +465,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     let current_index = metrics.last_log_index.unwrap_or(0);
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .applied_index_at_least(Some(current_index), "learners catch up")
         .await?;
 
@@ -467,7 +479,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     // Wait for membership change to propagate to all nodes
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .voter_ids(
             [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
             "all nodes are voters",
@@ -502,6 +514,10 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .start()
         .await?;
     node1.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node1.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Node 2
     let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
@@ -514,6 +530,10 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .start()
         .await?;
     node2.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node2.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Node 3
     let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
@@ -526,6 +546,10 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .start()
         .await?;
     node3.spawn_router();
+    // Wait for the endpoint to be fully online and Router to start accepting
+    node3.handle().iroh_manager.endpoint().online().await;
+    // Small delay to ensure Router's accept loop is running
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Initialize cluster with node1 as leader
     let raft1 = node1.raft_node();
@@ -538,7 +562,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     // Wait for node1 to become leader using OpenRaft Wait API
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .state(ServerState::Leader, "node1 becomes leader")
         .await?;
 
@@ -561,7 +585,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     let current_index = metrics.last_log_index.unwrap_or(0);
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .applied_index_at_least(Some(current_index), "learners catch up")
         .await?;
 
@@ -575,7 +599,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     // Wait for membership change to propagate to all nodes
     raft1
         .raft()
-        .wait(Some(Duration::from_secs(5)))
+        .wait(Some(Duration::from_secs(10)))
         .voter_ids(
             [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
             "all nodes are voters",

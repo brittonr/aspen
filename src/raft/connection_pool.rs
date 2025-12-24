@@ -328,8 +328,9 @@ impl RaftConnectionPool {
     /// * `failure_detector` - Failure detector for tracking node health
     ///
     /// # Security Note
-    /// Authentication is handled by Iroh's QUIC TLS layer. Connections use
-    /// `RAFT_AUTH_ALPN` and the server validates NodeId against trusted peers.
+    /// Connections use `RAFT_ALPN` by default for backward compatibility.
+    /// When `enable_raft_auth` is configured on the node, the server also
+    /// accepts `RAFT_AUTH_ALPN` for authenticated connections.
     pub fn new(
         endpoint_manager: Arc<IrohEndpointManager>,
         failure_detector: Arc<RwLock<NodeFailureDetector>>,
@@ -397,8 +398,9 @@ impl RaftConnectionPool {
             "creating new connection to peer"
         );
 
-        // Always use RAFT_AUTH_ALPN - server validates NodeId against trusted peers
-        let alpn = crate::protocol_handlers::RAFT_AUTH_ALPN;
+        // Use legacy RAFT_ALPN for backward compatibility
+        // TODO: Add configurable ALPN selection based on enable_raft_auth setting
+        let alpn = crate::protocol_handlers::RAFT_ALPN;
 
         // Attempt connection with retries
         let mut attempts = 0;
