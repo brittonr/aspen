@@ -784,3 +784,58 @@ pub const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 ///
 /// Tiger Style: Fixed tolerance for clock drift between nodes.
 pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
+
+// ============================================================================
+// Hanging Prevention Timeout Constants
+// ============================================================================
+// These timeouts prevent indefinite hangs during network partitions, high
+// concurrency, or cluster topology changes. All critical async operations
+// must have explicit timeouts.
+
+/// Timeout for ReadIndex linearizability check (5 seconds).
+///
+/// Tiger Style: Explicit timeout prevents indefinite hangs when leader is unavailable.
+/// Applied to all ReadIndex `await_ready()` calls to ensure bounded wait times.
+///
+/// Used in:
+/// - `node.rs`: KeyValueStore::read(), KeyValueStore::scan(), SqlQueryExecutor::execute_sql()
+pub const READ_INDEX_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Timeout for cluster membership operations (30 seconds).
+///
+/// Tiger Style: Explicit timeout prevents hangs during partition events.
+/// Applied to init(), add_learner(), and change_membership() operations.
+/// Membership operations may require multiple round trips and quorum confirmation.
+///
+/// Used in:
+/// - `node.rs`: ClusterController::init(), add_learner(), change_membership()
+pub const MEMBERSHIP_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Timeout for gossip subscription (10 seconds).
+///
+/// Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
+/// If gossip is unavailable, the node should continue without it (non-fatal).
+///
+/// Used in:
+/// - `gossip_discovery.rs`: GossipPeerDiscovery::spawn()
+pub const GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Timeout for snapshot installation per segment (5000 milliseconds).
+///
+/// Tiger Style: Explicit timeout prevents hangs during large snapshot transfers.
+/// Default OpenRaft value of 200ms is too short for production snapshots.
+/// 5 seconds allows for 100MB snapshots at ~20MB/s transfer rate.
+///
+/// Used in:
+/// - `bootstrap.rs`: RaftConfig::install_snapshot_timeout
+pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
+
+/// Capacity of failure detector update channel.
+///
+/// Tiger Style: Bounded channel prevents unbounded task spawning.
+/// Used to batch failure detector updates from multiple concurrent RPC failures
+/// through a single consumer task instead of spawning unbounded tasks.
+///
+/// Used in:
+/// - `network.rs`: IrpcRaftNetworkFactory failure update channel
+pub const FAILURE_DETECTOR_CHANNEL_CAPACITY: usize = 100;
