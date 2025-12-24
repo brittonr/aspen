@@ -26,12 +26,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, oneshot};
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::sync::Mutex;
+use tokio::sync::oneshot;
 use tokio::time::Instant;
 
-use crate::api::{KeyValueStoreError, WriteCommand, WriteResult};
-use crate::raft::types::{AppRequest, AppTypeConfig};
+use crate::api::KeyValueStoreError;
+use crate::api::WriteCommand;
+use crate::api::WriteResult;
+use crate::raft::types::AppRequest;
+use crate::raft::types::AppTypeConfig;
 
 /// Configuration for write batching behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,14 +206,9 @@ impl WriteBatcher {
     /// Returns when the write has been committed through Raft.
     /// Simple Set/Delete operations are batched together.
     /// Complex operations bypass batching for correctness.
-    pub async fn write_shared(
-        self: &Arc<Self>,
-        command: WriteCommand,
-    ) -> Result<WriteResult, KeyValueStoreError> {
+    pub async fn write_shared(self: &Arc<Self>, command: WriteCommand) -> Result<WriteResult, KeyValueStoreError> {
         match &command {
-            WriteCommand::Set { key, value } => {
-                self.batch_set_shared(key.clone(), value.clone()).await
-            }
+            WriteCommand::Set { key, value } => self.batch_set_shared(key.clone(), value.clone()).await,
             WriteCommand::Delete { key } => self.batch_delete_shared(key.clone()).await,
             // Other operations go directly to Raft (not batchable)
             _ => self.write_direct(command).await,
@@ -233,11 +233,7 @@ impl WriteBatcher {
     }
 
     /// Batch a Set operation (Arc version with timeout support).
-    async fn batch_set_shared(
-        self: &Arc<Self>,
-        key: String,
-        value: String,
-    ) -> Result<WriteResult, KeyValueStoreError> {
+    async fn batch_set_shared(self: &Arc<Self>, key: String, value: String) -> Result<WriteResult, KeyValueStoreError> {
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len() + value.len();
 
@@ -245,8 +241,7 @@ impl WriteBatcher {
             let mut state = self.state.lock().await;
 
             // Check if adding this would exceed limits
-            let would_exceed_entries =
-                state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
+            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
             let would_exceed_bytes =
                 state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
 
@@ -288,18 +283,14 @@ impl WriteBatcher {
     }
 
     /// Batch a Delete operation (Arc version with timeout support).
-    async fn batch_delete_shared(
-        self: &Arc<Self>,
-        key: String,
-    ) -> Result<WriteResult, KeyValueStoreError> {
+    async fn batch_delete_shared(self: &Arc<Self>, key: String) -> Result<WriteResult, KeyValueStoreError> {
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len();
 
         let flush_action = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries =
-                state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
+            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
             let would_exceed_bytes =
                 state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
 
@@ -337,19 +328,14 @@ impl WriteBatcher {
     }
 
     /// Batch a Set operation (non-Arc version, no timeout).
-    async fn batch_set(
-        &self,
-        key: String,
-        value: String,
-    ) -> Result<WriteResult, KeyValueStoreError> {
+    async fn batch_set(&self, key: String, value: String) -> Result<WriteResult, KeyValueStoreError> {
         let (tx, rx) = oneshot::channel();
         let op_bytes = key.len() + value.len();
 
         let should_flush = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries =
-                state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
+            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
             let would_exceed_bytes =
                 state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
 
@@ -388,8 +374,7 @@ impl WriteBatcher {
         let should_flush = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries =
-                state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
+            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
             let would_exceed_bytes =
                 state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
 
@@ -537,8 +522,7 @@ impl WriteBatcher {
         }
 
         // Build the Raft batch operation
-        let operations: Vec<(bool, String, String)> =
-            batch.iter().map(|p| p.operation.clone()).collect();
+        let operations: Vec<(bool, String, String)> = batch.iter().map(|p| p.operation.clone()).collect();
 
         let app_request = AppRequest::Batch { operations };
 
@@ -578,7 +562,8 @@ impl WriteBatcher {
 
     /// Write directly to Raft without batching.
     async fn write_direct(&self, command: WriteCommand) -> Result<WriteResult, KeyValueStoreError> {
-        use crate::api::{BatchCondition, BatchOperation};
+        use crate::api::BatchCondition;
+        use crate::api::BatchOperation;
 
         let app_request = match &command {
             WriteCommand::Set { key, value } => AppRequest::Set {
@@ -591,10 +576,9 @@ impl WriteBatcher {
                 value,
                 ttl_seconds,
             } => {
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
+                let now_ms =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as u64;
                 let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
                 AppRequest::SetWithTTL {
                     key: key.clone(),
@@ -602,14 +586,11 @@ impl WriteBatcher {
                     expires_at_ms,
                 }
             }
-            WriteCommand::SetMulti { pairs } => AppRequest::SetMulti {
-                pairs: pairs.clone(),
-            },
+            WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
             WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
+                let now_ms =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as u64;
                 let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
                 AppRequest::SetMultiWithTTL {
                     pairs: pairs.clone(),
@@ -640,16 +621,11 @@ impl WriteBatcher {
                     .collect();
                 AppRequest::Batch { operations: ops }
             }
-            WriteCommand::ConditionalBatch {
-                conditions,
-                operations,
-            } => {
+            WriteCommand::ConditionalBatch { conditions, operations } => {
                 let conds: Vec<(u8, String, String)> = conditions
                     .iter()
                     .map(|c| match c {
-                        BatchCondition::ValueEquals { key, expected } => {
-                            (0, key.clone(), expected.clone())
-                        }
+                        BatchCondition::ValueEquals { key, expected } => (0, key.clone(), expected.clone()),
                         BatchCondition::KeyExists { key } => (1, key.clone(), String::new()),
                         BatchCondition::KeyNotExists { key } => (2, key.clone(), String::new()),
                     })
@@ -667,11 +643,7 @@ impl WriteBatcher {
                 }
             }
             // Lease operations
-            WriteCommand::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => AppRequest::SetWithLease {
+            WriteCommand::SetWithLease { key, value, lease_id } => AppRequest::SetWithLease {
                 key: key.clone(),
                 value: value.clone(),
                 lease_id: *lease_id,
@@ -680,25 +652,20 @@ impl WriteBatcher {
                 pairs: pairs.clone(),
                 lease_id: *lease_id,
             },
-            WriteCommand::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => AppRequest::LeaseGrant {
+            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => AppRequest::LeaseGrant {
                 lease_id: *lease_id,
                 ttl_seconds: *ttl_seconds,
             },
-            WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke {
-                lease_id: *lease_id,
-            },
-            WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive {
-                lease_id: *lease_id,
-            },
+            WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke { lease_id: *lease_id },
+            WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive { lease_id: *lease_id },
             WriteCommand::Transaction {
                 compare,
                 success,
                 failure,
             } => {
-                use crate::api::{CompareOp, CompareTarget, TxnOp};
+                use crate::api::CompareOp;
+                use crate::api::CompareTarget;
+                use crate::api::TxnOp;
                 let cmp: Vec<(u8, u8, String, String)> = compare
                     .iter()
                     .map(|c| {
@@ -724,9 +691,7 @@ impl WriteBatcher {
                             TxnOp::Put { key, value } => (0, key.clone(), value.clone()),
                             TxnOp::Delete { key } => (1, key.clone(), String::new()),
                             TxnOp::Get { key } => (2, key.clone(), String::new()),
-                            TxnOp::Range { prefix, limit } => {
-                                (3, prefix.clone(), limit.to_string())
-                            }
+                            TxnOp::Range { prefix, limit } => (3, prefix.clone(), limit.to_string()),
                         })
                         .collect()
                 };
@@ -737,10 +702,7 @@ impl WriteBatcher {
                     failure: convert_ops(failure),
                 }
             }
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 use crate::api::WriteOp;
                 let write_ops: Vec<(bool, String, String)> = write_set
                     .iter()

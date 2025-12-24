@@ -6,7 +6,9 @@ use std::env;
 use std::process;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use futures::stream::{self};
 use openraft::entry::RaftEntry;
 use openraft::storage::RaftStateMachine;

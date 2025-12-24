@@ -86,14 +86,16 @@ pub mod types;
 pub mod write_batcher;
 
 // Re-export key types for convenience
-pub use write_batcher::BatchConfig;
-
 use std::sync::Arc;
 
-use crate::api::{
-    DEFAULT_SCAN_LIMIT, KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ScanRequest,
-    ScanResult,
-};
+pub use write_batcher::BatchConfig;
+
+use crate::api::DEFAULT_SCAN_LIMIT;
+use crate::api::KeyValueStoreError;
+use crate::api::KeyValueWithRevision;
+use crate::api::MAX_SCAN_RESULTS;
+use crate::api::ScanRequest;
+use crate::api::ScanResult;
 use crate::raft::constants::MAX_BATCH_SIZE;
 use crate::raft::storage::InMemoryStateMachine;
 use crate::raft::storage_shared::SharedRedbStorage;
@@ -127,10 +129,8 @@ impl StateMachineVariant {
             Self::Sqlite(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
                 reason: format!("sqlite storage read error: {}", err),
             }),
-            Self::Redb(sm) => sm.get(key).map(|opt| opt.map(|e| e.value)).map_err(|err| {
-                KeyValueStoreError::Failed {
-                    reason: format!("redb storage read error: {}", err),
-                }
+            Self::Redb(sm) => sm.get(key).map(|opt| opt.map(|e| e.value)).map_err(|err| KeyValueStoreError::Failed {
+                reason: format!("redb storage read error: {}", err),
             }),
         }
     }
@@ -140,11 +140,7 @@ impl StateMachineVariant {
     /// Returns keys in sorted order (lexicographic).
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     pub async fn scan(&self, request: &ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        let limit = request
-            .limit
-            .unwrap_or(DEFAULT_SCAN_LIMIT)
-            .min(MAX_SCAN_RESULTS)
-            .min(MAX_BATCH_SIZE) as usize;
+        let limit = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE) as usize;
         let fetch_limit = limit.saturating_add(1);
 
         // Decode continuation token (format: base64(last_key))
@@ -160,23 +156,22 @@ impl StateMachineVariant {
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
             Self::Sqlite(sm) => {
-                let kv_pairs = sm
-                    .scan(&request.prefix, start_after.as_deref(), Some(fetch_limit))
-                    .await
-                    .map_err(|err| KeyValueStoreError::Failed {
-                        reason: format!("sqlite storage scan error: {}", err),
+                let kv_pairs =
+                    sm.scan(&request.prefix, start_after.as_deref(), Some(fetch_limit)).await.map_err(|err| {
+                        KeyValueStoreError::Failed {
+                            reason: format!("sqlite storage scan error: {}", err),
+                        }
                     })?;
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
             Self::Redb(sm) => {
-                let entries = sm
-                    .scan(&request.prefix, start_after.as_deref(), Some(fetch_limit))
-                    .map_err(|err| KeyValueStoreError::Failed {
+                let entries = sm.scan(&request.prefix, start_after.as_deref(), Some(fetch_limit)).map_err(|err| {
+                    KeyValueStoreError::Failed {
                         reason: format!("redb storage scan error: {}", err),
-                    })?;
+                    }
+                })?;
                 // Convert KeyValueWithRevision to (String, String) pairs
-                let kv_pairs: Vec<(String, String)> =
-                    entries.into_iter().map(|e| (e.key, e.value)).collect();
+                let kv_pairs: Vec<(String, String)> = entries.into_iter().map(|e| (e.key, e.value)).collect();
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
         }
@@ -193,10 +188,7 @@ impl StateMachineVariant {
 
         // Filter to entries after continuation token
         let filtered: Vec<_> = if let Some(after) = start_after {
-            kv_pairs
-                .into_iter()
-                .filter(|(k, _)| k.as_str() > after.as_str())
-                .collect()
+            kv_pairs.into_iter().filter(|(k, _)| k.as_str() > after.as_str()).collect()
         } else {
             kv_pairs
         };
@@ -217,9 +209,7 @@ impl StateMachineVariant {
 
         // Generate continuation token if truncated
         let continuation_token = if is_truncated {
-            entries
-                .last()
-                .map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
+            entries.last().map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
         } else {
             None
         };
@@ -241,7 +231,8 @@ impl StateMachineVariant {
     /// Get lease information by ID.
     ///
     /// Returns (granted_ttl_seconds, remaining_ttl_seconds) if the lease exists.
-    /// Returns None if the lease doesn't exist, has expired, or storage backend doesn't support leases.
+    /// Returns None if the lease doesn't exist, has expired, or storage backend doesn't support
+    /// leases.
     pub fn get_lease(&self, lease_id: u64) -> Option<(u32, u32)> {
         match self {
             Self::InMemory(_) => None, // In-memory doesn't track leases

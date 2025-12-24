@@ -14,7 +14,8 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -54,26 +55,14 @@ async fn test_network_partition_simulation() -> Result<()> {
         node0.initialize(nodes).await?;
 
         // Wait for leader election
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
 
-        router
-            .wait(0, timeout())
-            .state(ServerState::Leader, "node 0 is leader")
-            .await?;
+        router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
 
         // Wait for followers to catch up
-        router
-            .wait(1, timeout())
-            .state(ServerState::Follower, "node 1 is follower")
-            .await?;
+        router.wait(1, timeout()).state(ServerState::Follower, "node 1 is follower").await?;
 
-        router
-            .wait(2, timeout())
-            .state(ServerState::Follower, "node 2 is follower")
-            .await?;
+        router.wait(2, timeout()).state(ServerState::Follower, "node 2 is follower").await?;
     }
 
     tracing::info!("--- write initial data to cluster");
@@ -84,20 +73,11 @@ async fn test_network_partition_simulation() -> Result<()> {
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
         // Wait for replication to all nodes
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(2), "leader has data")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(2), "leader has data").await?;
 
-        router
-            .wait(1, timeout())
-            .log_index_at_least(Some(2), "follower 1 has data")
-            .await?;
+        router.wait(1, timeout()).log_index_at_least(Some(2), "follower 1 has data").await?;
 
-        router
-            .wait(2, timeout())
-            .log_index_at_least(Some(2), "follower 2 has data")
-            .await?;
+        router.wait(2, timeout()).log_index_at_least(Some(2), "follower 2 has data").await?;
     }
 
     tracing::info!("--- verify data replicated to all nodes");
@@ -118,22 +98,11 @@ async fn test_network_partition_simulation() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Check if node 1 or 2 became leader
-        let node1_state = router
-            .wait(1, Some(Duration::from_secs(3)))
-            .state(ServerState::Leader, "")
-            .await
-            .is_ok();
+        let node1_state = router.wait(1, Some(Duration::from_secs(3))).state(ServerState::Leader, "").await.is_ok();
 
-        let node2_state = router
-            .wait(2, Some(Duration::from_secs(3)))
-            .state(ServerState::Leader, "")
-            .await
-            .is_ok();
+        let node2_state = router.wait(2, Some(Duration::from_secs(3))).state(ServerState::Leader, "").await.is_ok();
 
-        assert!(
-            node1_state || node2_state,
-            "Either node 1 or 2 should become leader after node 0 is isolated"
-        );
+        assert!(node1_state || node2_state, "Either node 1 or 2 should become leader after node 0 is isolated");
 
         // Determine which node is the new leader
         let new_leader = if node1_state { 1 } else { 2 };
@@ -146,17 +115,10 @@ async fn test_network_partition_simulation() -> Result<()> {
             .map_err(|e| anyhow::anyhow!("write to new leader failed: {}", e))?;
 
         // Verify the isolated node 0 doesn't see the new write
-        assert_eq!(
-            router.read(0, "key2").await,
-            None,
-            "Isolated node shouldn't see new writes"
-        );
+        assert_eq!(router.read(0, "key2").await, None, "Isolated node shouldn't see new writes");
 
         // Verify the active cluster has the new write
-        assert_eq!(
-            router.read(new_leader, "key2").await,
-            Some("value2".to_string())
-        );
+        assert_eq!(router.read(new_leader, "key2").await, Some("value2".to_string()));
     }
 
     tracing::info!("--- recover node 0 from partition");
@@ -168,24 +130,14 @@ async fn test_network_partition_simulation() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Node 0 should now be a follower
-        router
-            .wait(0, timeout())
-            .state(ServerState::Follower, "node 0 is follower after recovery")
-            .await?;
+        router.wait(0, timeout()).state(ServerState::Follower, "node 0 is follower after recovery").await?;
 
         // Verify node 0 has caught up and now sees key2
         // This might take a moment for replication
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(3), "node 0 caught up")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(3), "node 0 caught up").await?;
 
         let val = router.read(0, "key2").await;
-        assert_eq!(
-            val,
-            Some("value2".to_string()),
-            "Recovered node should see writes that happened during partition"
-        );
+        assert_eq!(val, Some("value2".to_string()), "Recovered node should see writes that happened during partition");
     }
 
     Ok(())
@@ -208,10 +160,7 @@ async fn test_network_delay() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
     }
 
     tracing::info!("--- set network delay to 50ms");

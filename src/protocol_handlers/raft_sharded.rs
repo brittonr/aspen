@@ -31,22 +31,29 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
 use openraft::Raft;
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::raft::constants::{
-    MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
-};
-use crate::raft::rpc::{
-    RaftRpcProtocol, RaftRpcResponse, SHARD_PREFIX_SIZE, encode_shard_prefix,
-    try_decode_shard_prefix,
-};
+use crate::raft::constants::MAX_CONCURRENT_CONNECTIONS;
+use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::raft::rpc::RaftRpcProtocol;
+use crate::raft::rpc::RaftRpcResponse;
+use crate::raft::rpc::SHARD_PREFIX_SIZE;
+use crate::raft::rpc::encode_shard_prefix;
+use crate::raft::rpc::try_decode_shard_prefix;
 use crate::raft::types::AppTypeConfig;
 use crate::sharding::router::ShardId;
 
@@ -97,11 +104,7 @@ impl ShardedRaftProtocolHandler {
     ///
     /// # Returns
     /// The previous Raft core if one was already registered for this shard.
-    pub fn register_shard(
-        &self,
-        shard_id: ShardId,
-        raft_core: Raft<AppTypeConfig>,
-    ) -> Option<Raft<AppTypeConfig>> {
+    pub fn register_shard(&self, shard_id: ShardId, raft_core: Raft<AppTypeConfig>) -> Option<Raft<AppTypeConfig>> {
         let mut cores = self.shard_cores.write();
         let previous = cores.insert(shard_id, raft_core);
         info!(shard_id, replaced = previous.is_some(), "registered shard");
@@ -156,9 +159,7 @@ impl ProtocolHandler for ShardedRaftProtocolHandler {
                     "Sharded Raft connection limit reached ({}), rejecting connection from {}",
                     MAX_CONCURRENT_CONNECTIONS, remote_node_id
                 );
-                return Err(AcceptError::from_err(std::io::Error::other(
-                    "connection limit reached",
-                )));
+                return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
             }
         };
 
@@ -245,18 +246,11 @@ async fn handle_sharded_rpc_stream(
     use anyhow::Context;
 
     // Read the RPC message with size limit
-    let buffer = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .context("failed to read RPC message")?;
+    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
 
     // Extract shard ID from the prefix
     let shard_id = try_decode_shard_prefix(&buffer).ok_or_else(|| {
-        anyhow::anyhow!(
-            "message too short: expected at least {} bytes, got {}",
-            SHARD_PREFIX_SIZE,
-            buffer.len()
-        )
+        anyhow::anyhow!("message too short: expected at least {} bytes, got {}", SHARD_PREFIX_SIZE, buffer.len())
     })?;
 
     debug!(shard_id, "routing sharded Raft RPC");
@@ -273,23 +267,19 @@ async fn handle_sharded_rpc_stream(
             warn!(shard_id, "received RPC for unknown shard");
             // Send error response with shard ID prefix
             let error_response = ShardNotFoundResponse { shard_id };
-            let response_bytes = postcard::to_stdvec(&error_response)
-                .context("failed to serialize error response")?;
-            let mut prefixed_response =
-                Vec::with_capacity(SHARD_PREFIX_SIZE + response_bytes.len());
+            let response_bytes = postcard::to_stdvec(&error_response).context("failed to serialize error response")?;
+            let mut prefixed_response = Vec::with_capacity(SHARD_PREFIX_SIZE + response_bytes.len());
             prefixed_response.extend_from_slice(&encode_shard_prefix(shard_id));
             prefixed_response.extend_from_slice(&response_bytes);
-            send.write_all(&prefixed_response)
-                .await
-                .context("failed to write error response")?;
+            send.write_all(&prefixed_response).await.context("failed to write error response")?;
             send.finish().context("failed to finish error stream")?;
             return Ok(());
         }
     };
 
     // Deserialize the RPC request (skip shard prefix)
-    let request: RaftRpcProtocol = postcard::from_bytes(&buffer[SHARD_PREFIX_SIZE..])
-        .context("failed to deserialize RPC request")?;
+    let request: RaftRpcProtocol =
+        postcard::from_bytes(&buffer[SHARD_PREFIX_SIZE..]).context("failed to deserialize RPC request")?;
 
     debug!(shard_id, request_type = ?request, "received sharded Raft RPC request");
 
@@ -330,22 +320,15 @@ async fn handle_sharded_rpc_stream(
     };
 
     // Serialize response with shard ID prefix
-    let response_bytes =
-        postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
 
     let mut prefixed_response = Vec::with_capacity(SHARD_PREFIX_SIZE + response_bytes.len());
     prefixed_response.extend_from_slice(&encode_shard_prefix(shard_id));
     prefixed_response.extend_from_slice(&response_bytes);
 
-    debug!(
-        shard_id,
-        response_size = prefixed_response.len(),
-        "sending sharded Raft RPC response"
-    );
+    debug!(shard_id, response_size = prefixed_response.len(), "sending sharded Raft RPC response");
 
-    send.write_all(&prefixed_response)
-        .await
-        .context("failed to write RPC response")?;
+    send.write_all(&prefixed_response).await.context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
 
     debug!(shard_id, "sharded Raft RPC response sent successfully");

@@ -19,16 +19,26 @@
 mod support;
 
 use aspen::raft::constants::MAX_RPC_MESSAGE_SIZE;
-use aspen::raft::rpc::{
-    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps,
-    RaftSnapshotRequest, RaftVoteRequest, TimestampInfo,
-};
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::rpc::RaftAppendEntriesRequest;
+use aspen::raft::rpc::RaftRpcProtocol;
+use aspen::raft::rpc::RaftRpcResponse;
+use aspen::raft::rpc::RaftRpcResponseWithTimestamps;
+use aspen::raft::rpc::RaftSnapshotRequest;
+use aspen::raft::rpc::RaftVoteRequest;
+use aspen::raft::rpc::TimestampInfo;
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
+use openraft::Membership;
+use openraft::SnapshotMeta;
+use openraft::Vote;
 use openraft::error::RaftError;
-use openraft::raft::{AppendEntriesResponse, SnapshotResponse, VoteResponse};
+use openraft::raft::AppendEntriesResponse;
+use openraft::raft::SnapshotResponse;
+use openraft::raft::VoteResponse;
 use openraft::testing::log_id;
-use openraft::{Membership, SnapshotMeta, Vote};
-use support::mock_iroh::{MockIrohNetwork, RAFT_ALPN};
+use support::mock_iroh::MockIrohNetwork;
+use support::mock_iroh::RAFT_ALPN;
 
 // ============================================================================
 // Phase 1: RPC Request Serialization Tests
@@ -58,8 +68,7 @@ async fn test_vote_request_serialization() {
     );
 
     // Deserialize
-    let deserialized: RaftRpcProtocol =
-        postcard::from_bytes(&bytes).expect("failed to deserialize vote request");
+    let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("failed to deserialize vote request");
 
     match deserialized {
         RaftRpcProtocol::Vote(req) => {
@@ -120,10 +129,7 @@ async fn test_append_entries_request_serialization() {
     let rpc = RaftRpcProtocol::AppendEntries(append_request);
     let bytes = postcard::to_stdvec(&rpc).expect("serialize");
 
-    assert!(
-        bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize,
-        "append entries request exceeds size limit"
-    );
+    assert!(bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize, "append entries request exceeds size limit");
 
     let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("deserialize");
 
@@ -153,20 +159,13 @@ async fn test_append_entries_heartbeat_serialization() {
     let bytes = postcard::to_stdvec(&rpc).expect("serialize");
 
     // Heartbeats should be small
-    assert!(
-        bytes.len() < 200,
-        "heartbeat should be small: {} bytes",
-        bytes.len()
-    );
+    assert!(bytes.len() < 200, "heartbeat should be small: {} bytes", bytes.len());
 
     let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("deserialize");
 
     match deserialized {
         RaftRpcProtocol::AppendEntries(req) => {
-            assert!(
-                req.request.entries.is_empty(),
-                "heartbeat should have no entries"
-            );
+            assert!(req.request.entries.is_empty(), "heartbeat should have no entries");
         }
         _ => panic!("expected AppendEntries variant"),
     }
@@ -179,10 +178,8 @@ async fn test_install_snapshot_request_serialization() {
     let snapshot_data = b"snapshot-content-key1=value1,key2=value2".to_vec();
 
     // Create membership for snapshot meta using new_with_defaults
-    let membership = Membership::<AppTypeConfig>::new_with_defaults(
-        vec![btreeset! {NodeId::from(1), NodeId::from(2)}],
-        [],
-    );
+    let membership =
+        Membership::<AppTypeConfig>::new_with_defaults(vec![btreeset! {NodeId::from(1), NodeId::from(2)}], []);
 
     let snapshot_request = RaftSnapshotRequest {
         vote: Vote::new(5, NodeId::from(1)),
@@ -200,10 +197,7 @@ async fn test_install_snapshot_request_serialization() {
     let rpc = RaftRpcProtocol::InstallSnapshot(snapshot_request.clone());
     let bytes = postcard::to_stdvec(&rpc).expect("serialize");
 
-    assert!(
-        bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize,
-        "snapshot request exceeds size limit"
-    );
+    assert!(bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize, "snapshot request exceeds size limit");
 
     let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("deserialize");
 
@@ -211,10 +205,7 @@ async fn test_install_snapshot_request_serialization() {
         RaftRpcProtocol::InstallSnapshot(req) => {
             assert_eq!(req.vote.leader_id().term, 5);
             assert_eq!(req.snapshot_meta.snapshot_id, "test-snapshot-001");
-            assert_eq!(
-                req.snapshot_data,
-                b"snapshot-content-key1=value1,key2=value2".to_vec()
-            );
+            assert_eq!(req.snapshot_data, b"snapshot-content-key1=value1,key2=value2".to_vec());
         }
         _ => panic!("expected InstallSnapshot variant"),
     }
@@ -226,8 +217,7 @@ async fn test_large_snapshot_serialization() {
     // Create 1MB of snapshot data
     let snapshot_data = vec![0xABu8; 1024 * 1024];
 
-    let membership =
-        Membership::<AppTypeConfig>::new_with_defaults(vec![btreeset! {NodeId::from(1)}], []);
+    let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![btreeset! {NodeId::from(1)}], []);
 
     let snapshot_request = RaftSnapshotRequest {
         vote: Vote::new(1, NodeId::from(1)),
@@ -247,10 +237,7 @@ async fn test_large_snapshot_serialization() {
 
     // Should be slightly larger than 1MB due to metadata
     assert!(bytes.len() > 1024 * 1024);
-    assert!(
-        bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize,
-        "1MB snapshot should fit in 10MB limit"
-    );
+    assert!(bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize, "1MB snapshot should fit in 10MB limit");
 
     let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("deserialize");
 
@@ -342,10 +329,7 @@ async fn test_append_entries_response_conflict() {
 /// Test AppendEntriesResponse::HigherVote serialization.
 #[tokio::test]
 async fn test_append_entries_response_higher_vote() {
-    let response = RaftRpcResponse::AppendEntries(AppendEntriesResponse::HigherVote(Vote::new(
-        10,
-        NodeId::from(5),
-    )));
+    let response = RaftRpcResponse::AppendEntries(AppendEntriesResponse::HigherVote(Vote::new(10, NodeId::from(5))));
 
     let bytes = postcard::to_stdvec(&response).expect("serialize");
     let deserialized: RaftRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
@@ -362,14 +346,9 @@ async fn test_append_entries_response_higher_vote() {
 /// Test AppendEntriesResponse::PartialSuccess serialization.
 #[tokio::test]
 async fn test_append_entries_response_partial_success() {
-    let response =
-        RaftRpcResponse::AppendEntries(AppendEntriesResponse::PartialSuccess(Some(log_id::<
-            AppTypeConfig,
-        >(
-            3,
-            NodeId::from(1),
-            50,
-        ))));
+    let response = RaftRpcResponse::AppendEntries(AppendEntriesResponse::PartialSuccess(Some(
+        log_id::<AppTypeConfig>(3, NodeId::from(1), 50),
+    )));
 
     let bytes = postcard::to_stdvec(&response).expect("serialize");
     let deserialized: RaftRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
@@ -440,8 +419,7 @@ async fn test_response_with_timestamps() {
     };
 
     let bytes = postcard::to_stdvec(&response).expect("serialize");
-    let deserialized: RaftRpcResponseWithTimestamps =
-        postcard::from_bytes(&bytes).expect("deserialize");
+    let deserialized: RaftRpcResponseWithTimestamps = postcard::from_bytes(&bytes).expect("deserialize");
 
     assert!(deserialized.timestamps.is_some());
     let ts = deserialized.timestamps.unwrap();
@@ -465,8 +443,7 @@ async fn test_response_without_timestamps() {
     };
 
     let bytes = postcard::to_stdvec(&response).expect("serialize");
-    let deserialized: RaftRpcResponseWithTimestamps =
-        postcard::from_bytes(&bytes).expect("deserialize");
+    let deserialized: RaftRpcResponseWithTimestamps = postcard::from_bytes(&bytes).expect("deserialize");
 
     assert!(deserialized.timestamps.is_none());
 }
@@ -487,8 +464,7 @@ async fn test_timestamp_large_values() {
     };
 
     let bytes = postcard::to_stdvec(&response).expect("serialize");
-    let deserialized: RaftRpcResponseWithTimestamps =
-        postcard::from_bytes(&bytes).expect("deserialize");
+    let deserialized: RaftRpcResponseWithTimestamps = postcard::from_bytes(&bytes).expect("deserialize");
 
     let ts = deserialized.timestamps.unwrap();
     assert_eq!(ts.server_recv_ms, u64::MAX - 1000);
@@ -525,10 +501,7 @@ async fn test_truncated_message_rejected() {
     let truncated = &bytes[..bytes.len() / 2];
     let result: Result<RaftRpcProtocol, _> = postcard::from_bytes(truncated);
 
-    assert!(
-        result.is_err(),
-        "truncated message should fail to deserialize"
-    );
+    assert!(result.is_err(), "truncated message should fail to deserialize");
 }
 
 /// Test empty message rejection.
@@ -581,10 +554,7 @@ async fn test_mock_vote_rpc_flow() {
 
     // Server receives and processes request
     let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
-    let received_bytes = server_recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let received_bytes = server_recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
 
     let received: RaftRpcProtocol = postcard::from_bytes(&received_bytes).unwrap();
     assert!(matches!(received, RaftRpcProtocol::Vote(_)));
@@ -607,10 +577,7 @@ async fn test_mock_vote_rpc_flow() {
     server_send.finish().unwrap();
 
     // Client receives response
-    let response_data = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let response_data = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
     let response: RaftRpcResponseWithTimestamps = postcard::from_bytes(&response_data).unwrap();
 
     match response.inner {
@@ -664,10 +631,7 @@ async fn test_mock_append_entries_rpc_flow() {
 
     // Server receives
     let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
-    let received_bytes = server_recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let received_bytes = server_recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
 
     let received: RaftRpcProtocol = postcard::from_bytes(&received_bytes).unwrap();
     match received {
@@ -691,10 +655,7 @@ async fn test_mock_append_entries_rpc_flow() {
     server_send.finish().unwrap();
 
     // Client receives
-    let response_data = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let response_data = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
     let response: RaftRpcResponseWithTimestamps = postcard::from_bytes(&response_data).unwrap();
 
     match response.inner {
@@ -722,8 +683,7 @@ async fn test_mock_install_snapshot_rpc_flow() {
     // Create snapshot request with realistic data
     let snapshot_data = b"key1=value1\nkey2=value2\nkey3=value3".to_vec();
 
-    let membership =
-        Membership::<AppTypeConfig>::new_with_defaults(vec![btreeset! {NodeId::from(1)}], []);
+    let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![btreeset! {NodeId::from(1)}], []);
 
     let snapshot_request = RaftSnapshotRequest {
         vote: Vote::new(2, NodeId::from(1)),
@@ -745,10 +705,7 @@ async fn test_mock_install_snapshot_rpc_flow() {
 
     // Server receives
     let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
-    let received_bytes = server_recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let received_bytes = server_recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
 
     let received: RaftRpcProtocol = postcard::from_bytes(&received_bytes).unwrap();
     match received {
@@ -775,10 +732,7 @@ async fn test_mock_install_snapshot_rpc_flow() {
     server_send.finish().unwrap();
 
     // Client receives
-    let response_data = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .unwrap();
+    let response_data = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
     let response: RaftRpcResponseWithTimestamps = postcard::from_bytes(&response_data).unwrap();
 
     match response.inner {
@@ -824,10 +778,7 @@ async fn test_concurrent_rpc_streams() {
     let mut terms_received = vec![];
     for _ in 0..3 {
         let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
-        let bytes = server_recv
-            .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-            .await
-            .unwrap();
+        let bytes = server_recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
         let received: RaftRpcProtocol = postcard::from_bytes(&bytes).unwrap();
 
         match received {
@@ -857,10 +808,7 @@ async fn test_concurrent_rpc_streams() {
 
     // Client receives all 3 responses
     for recv in [&mut recv1, &mut recv2, &mut recv3] {
-        let bytes = recv
-            .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-            .await
-            .unwrap();
+        let bytes = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.unwrap();
         let response: RaftRpcResponseWithTimestamps = postcard::from_bytes(&bytes).unwrap();
         assert!(matches!(response.inner, RaftRpcResponse::Vote(_)));
     }
@@ -886,10 +834,7 @@ async fn test_rpc_network_partition() {
 
     // Now connection should succeed
     let result = client_ep.connect(server_ep.id(), RAFT_ALPN).await;
-    assert!(
-        result.is_ok(),
-        "connection should succeed after partition heals"
-    );
+    assert!(result.is_ok(), "connection should succeed after partition heals");
 }
 
 /// Test handling of connection close during RPC.
@@ -907,10 +852,7 @@ async fn test_rpc_connection_closed() {
 
     // Opening stream should fail
     let result = client_conn.open_bi().await;
-    assert!(
-        result.is_err(),
-        "opening stream on closed connection should fail"
-    );
+    assert!(result.is_err(), "opening stream on closed connection should fail");
 }
 
 // Convenience macro for btreeset (used in Membership tests)

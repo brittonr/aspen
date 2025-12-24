@@ -12,7 +12,9 @@
 //! - [FoundationDB Tuple Layer](https://github.com/apple/foundationdb/blob/main/design/tuple.md)
 //! - [Proptest Guide](https://proptest-rs.github.io/proptest/proptest/index.html)
 
-use aspen::layer::{Element, Subspace, Tuple};
+use aspen::layer::Element;
+use aspen::layer::Subspace;
+use aspen::layer::Tuple;
 use proptest::prelude::*;
 
 // =============================================================================
@@ -380,10 +382,7 @@ fn test_negative_integer_ordering() {
         i64::MAX,
     ];
 
-    let packed: Vec<Vec<u8>> = values
-        .iter()
-        .map(|&n| Tuple::new().push(n).pack())
-        .collect();
+    let packed: Vec<Vec<u8>> = values.iter().map(|&n| Tuple::new().push(n).pack()).collect();
 
     for i in 1..packed.len() {
         assert!(
@@ -400,12 +399,7 @@ fn test_negative_integer_ordering() {
 #[test]
 fn test_mixed_type_tuples() {
     // Test tuples with mixed types
-    let tuple = Tuple::new()
-        .push("string")
-        .push(42i64)
-        .push(vec![1u8, 2, 3])
-        .push(true)
-        .push(1.23456789f64);
+    let tuple = Tuple::new().push("string").push(42i64).push(vec![1u8, 2, 3]).push(true).push(1.23456789f64);
 
     let packed = tuple.pack();
     let unpacked = Tuple::unpack(&packed).expect("unpack should succeed");

@@ -8,11 +8,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 use crate::coordination::types::now_unix_ms;
 
 /// Semaphore key prefix.
@@ -46,12 +52,7 @@ impl SemaphoreState {
     /// Calculate available permits, accounting for expired holders.
     fn available_permits(&self) -> u32 {
         let now = now_unix_ms();
-        let used: u32 = self
-            .holders
-            .iter()
-            .filter(|h| h.deadline_ms > now)
-            .map(|h| h.permits)
-            .sum();
+        let used: u32 = self.holders.iter().filter(|h| h.deadline_ms > now).map(|h| h.permits).sum();
         self.capacity.saturating_sub(used)
     }
 
@@ -105,10 +106,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                 bail!("semaphore acquire timeout");
             }
 
-            match self
-                .try_acquire(name, holder_id, permits, capacity, ttl_ms)
-                .await?
-            {
+            match self.try_acquire(name, holder_id, permits, capacity, ttl_ms).await? {
                 Some(result) => return Ok(result),
                 None => {
                     // Wait and retry
@@ -139,11 +137,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                 None => {
                     // Create new semaphore
                     if permits > capacity {
-                        bail!(
-                            "requested permits {} exceeds capacity {}",
-                            permits,
-                            capacity
-                        );
+                        bail!("requested permits {} exceeds capacity {}", permits, capacity);
                     }
 
                     let now = now_unix_ms();
@@ -250,13 +244,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                     {
                         Ok(_) => {
                             let new_available = new_state.available_permits();
-                            debug!(
-                                name,
-                                holder_id,
-                                permits,
-                                available = new_available,
-                                "acquired permits"
-                            );
+                            debug!(name, holder_id, permits, available = new_available, "acquired permits");
                             return Ok(Some((permits, new_available)));
                         }
                         Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
@@ -382,11 +370,7 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // Acquire 2 of 3 permits
-        let (acquired, available) = manager
-            .try_acquire("test", "h1", 2, 3, 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (acquired, available) = manager.try_acquire("test", "h1", 2, 3, 60000).await.unwrap().unwrap();
 
         assert_eq!(acquired, 2);
         assert_eq!(available, 1);
@@ -402,20 +386,13 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // Acquire all permits
-        let (acquired, available) = manager
-            .try_acquire("test", "h1", 3, 3, 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (acquired, available) = manager.try_acquire("test", "h1", 3, 3, 60000).await.unwrap().unwrap();
 
         assert_eq!(acquired, 3);
         assert_eq!(available, 0);
 
         // Try to acquire more - should fail
-        let result = manager
-            .try_acquire("test", "h2", 1, 3, 60000)
-            .await
-            .unwrap();
+        let result = manager.try_acquire("test", "h2", 1, 3, 60000).await.unwrap();
 
         assert!(result.is_none());
     }
@@ -431,10 +408,7 @@ mod tests {
         assert_eq!(capacity, 0);
 
         // Create semaphore
-        manager
-            .try_acquire("test", "h1", 2, 5, 60000)
-            .await
-            .unwrap();
+        manager.try_acquire("test", "h1", 2, 5, 60000).await.unwrap();
 
         let (available, capacity) = manager.status("test").await.unwrap();
         assert_eq!(available, 3);
@@ -447,28 +421,16 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // First holder gets 2
-        manager
-            .try_acquire("test", "h1", 2, 5, 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        manager.try_acquire("test", "h1", 2, 5, 60000).await.unwrap().unwrap();
 
         // Second holder gets 2
-        let (acquired, available) = manager
-            .try_acquire("test", "h2", 2, 5, 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (acquired, available) = manager.try_acquire("test", "h2", 2, 5, 60000).await.unwrap().unwrap();
 
         assert_eq!(acquired, 2);
         assert_eq!(available, 1);
 
         // Third holder can only get 1
-        let (acquired, available) = manager
-            .try_acquire("test", "h3", 1, 5, 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (acquired, available) = manager.try_acquire("test", "h3", 1, 5, 60000).await.unwrap().unwrap();
 
         assert_eq!(acquired, 1);
         assert_eq!(available, 0);

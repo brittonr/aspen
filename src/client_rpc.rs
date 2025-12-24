@@ -15,7 +15,8 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // Re-export ALPN constant from canonical location
 pub use crate::protocol_handlers::CLIENT_ALPN;
@@ -55,10 +56,7 @@ impl AuthenticatedRequest {
 
     /// Create an unauthenticated request (legacy compatibility).
     pub fn unauthenticated(request: ClientRpcRequest) -> Self {
-        Self {
-            request,
-            token: None,
-        }
+        Self { request, token: None }
     }
 }
 
@@ -1133,11 +1131,7 @@ impl ClientRpcRequest {
     pub fn requires_auth(&self) -> bool {
         !matches!(
             self,
-            Self::GetHealth
-                | Self::Ping
-                | Self::GetNodeInfo
-                | Self::GetClusterTicket
-                | Self::GetTopology { .. }
+            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket | Self::GetTopology { .. }
         )
     }
 
@@ -1156,9 +1150,7 @@ impl ClientRpcRequest {
                 let prefix = common_prefix(keys);
                 Some(Operation::Read { key: prefix })
             }
-            Self::ScanKeys { prefix, .. } => Some(Operation::Read {
-                key: prefix.clone(),
-            }),
+            Self::ScanKeys { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
             Self::GetVaultKeys { vault_name } => Some(Operation::Read {
                 key: format!("{vault_name}:"),
             }),
@@ -1235,9 +1227,7 @@ impl ClientRpcRequest {
                     action: "lease".to_string(),
                 })
             }
-            Self::LeaseTimeToLive { .. } | Self::LeaseList => {
-                Some(Operation::Read { key: String::new() })
-            }
+            Self::LeaseTimeToLive { .. } | Self::LeaseList => Some(Operation::Read { key: String::new() }),
 
             // Lock/coordination operations (require write access to their key space)
             Self::LockAcquire { key, .. }
@@ -1249,11 +1239,11 @@ impl ClientRpcRequest {
             }),
 
             // Counter operations
-            Self::CounterGet { key }
-            | Self::SignedCounterGet { key }
-            | Self::SequenceCurrent { key } => Some(Operation::Read {
-                key: format!("_coord:counter:{key}"),
-            }),
+            Self::CounterGet { key } | Self::SignedCounterGet { key } | Self::SequenceCurrent { key } => {
+                Some(Operation::Read {
+                    key: format!("_coord:counter:{key}"),
+                })
+            }
             Self::CounterIncrement { key }
             | Self::CounterDecrement { key }
             | Self::CounterAdd { key, .. }
@@ -1279,12 +1269,10 @@ impl ClientRpcRequest {
             }),
 
             // Barrier operations
-            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => {
-                Some(Operation::Write {
-                    key: format!("_coord:barrier:{name}"),
-                    value: vec![],
-                })
-            }
+            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => Some(Operation::Write {
+                key: format!("_coord:barrier:{name}"),
+                value: vec![],
+            }),
             Self::BarrierStatus { name } => Some(Operation::Read {
                 key: format!("_coord:barrier:{name}"),
             }),
@@ -1344,27 +1332,25 @@ impl ClientRpcRequest {
                 key: format!("_service:{service_name}"),
                 value: vec![],
             }),
-            Self::ServiceDiscover { service_name, .. }
-            | Self::ServiceGetInstance { service_name, .. } => Some(Operation::Read {
-                key: format!("_service:{service_name}"),
-            }),
+            Self::ServiceDiscover { service_name, .. } | Self::ServiceGetInstance { service_name, .. } => {
+                Some(Operation::Read {
+                    key: format!("_service:{service_name}"),
+                })
+            }
             Self::ServiceList { prefix, .. } => Some(Operation::Read {
                 key: format!("_service:{prefix}"),
             }),
 
             // Blob operations (content-addressed, use _blob prefix)
-            Self::AddBlob { .. } | Self::ProtectBlob { .. } | Self::UnprotectBlob { .. } => {
-                Some(Operation::Write {
+            Self::AddBlob { .. } | Self::ProtectBlob { .. } | Self::UnprotectBlob { .. } => Some(Operation::Write {
+                key: "_blob:".to_string(),
+                value: vec![],
+            }),
+            Self::GetBlob { .. } | Self::HasBlob { .. } | Self::GetBlobTicket { .. } | Self::ListBlobs { .. } => {
+                Some(Operation::Read {
                     key: "_blob:".to_string(),
-                    value: vec![],
                 })
             }
-            Self::GetBlob { .. }
-            | Self::HasBlob { .. }
-            | Self::GetBlobTicket { .. }
-            | Self::ListBlobs { .. } => Some(Operation::Read {
-                key: "_blob:".to_string(),
-            }),
 
             // Peer cluster operations (admin)
             Self::AddPeerCluster { .. }
@@ -1374,30 +1360,26 @@ impl ClientRpcRequest {
             | Self::SetPeerClusterEnabled { .. } => Some(Operation::ClusterAdmin {
                 action: "peer_cluster".to_string(),
             }),
-            Self::ListPeerClusters
-            | Self::GetPeerClusterStatus { .. }
-            | Self::GetKeyOrigin { .. } => Some(Operation::Read {
-                key: "_peers:".to_string(),
-            }),
+            Self::ListPeerClusters | Self::GetPeerClusterStatus { .. } | Self::GetKeyOrigin { .. } => {
+                Some(Operation::Read {
+                    key: "_peers:".to_string(),
+                })
+            }
 
             // Metrics and vault listing (read-only info)
             Self::GetRaftMetrics | Self::GetMetrics | Self::ListVaults | Self::GetClusterState => {
                 Some(Operation::Read { key: String::new() })
             }
             Self::GetClusterTicketCombined { .. } => Some(Operation::Read { key: String::new() }),
-            Self::GetClientTicket { .. } | Self::GetDocsTicket { .. } => {
-                Some(Operation::ClusterAdmin {
-                    action: "ticket".to_string(),
-                })
-            }
+            Self::GetClientTicket { .. } | Self::GetDocsTicket { .. } => Some(Operation::ClusterAdmin {
+                action: "ticket".to_string(),
+            }),
             Self::GetLeader => Some(Operation::Read { key: String::new() }),
 
             // Public requests (no auth required)
-            Self::GetHealth
-            | Self::Ping
-            | Self::GetNodeInfo
-            | Self::GetClusterTicket
-            | Self::GetTopology { .. } => None,
+            Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket | Self::GetTopology { .. } => {
+                None
+            }
         }
     }
 
@@ -1424,12 +1406,7 @@ fn common_prefix(strings: &[String]) -> String {
     let first = &strings[0];
     let mut prefix_len = first.len();
     for s in &strings[1..] {
-        prefix_len = first
-            .chars()
-            .zip(s.chars())
-            .take(prefix_len)
-            .take_while(|(a, b)| a == b)
-            .count();
+        prefix_len = first.chars().zip(s.chars()).take(prefix_len).take_while(|(a, b)| a == b).count();
         if prefix_len == 0 {
             break;
         }
@@ -1445,12 +1422,7 @@ fn common_prefix_refs(strings: &[&str]) -> String {
     let first = strings[0];
     let mut prefix_len = first.len();
     for s in &strings[1..] {
-        prefix_len = first
-            .chars()
-            .zip(s.chars())
-            .take(prefix_len)
-            .take_while(|(a, b)| a == b)
-            .count();
+        prefix_len = first.chars().zip(s.chars()).take(prefix_len).take_while(|(a, b)| a == b).count();
         if prefix_len == 0 {
             break;
         }
@@ -2811,7 +2783,8 @@ pub struct SemaphoreResultResponse {
 
 /// Read-write lock operation result response.
 ///
-/// Used for RWLockAcquireRead, RWLockAcquireWrite, RWLockRelease, RWLockDowngrade, and RWLockStatus.
+/// Used for RWLockAcquireRead, RWLockAcquireWrite, RWLockRelease, RWLockDowngrade, and
+/// RWLockStatus.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RWLockResultResponse {
     /// Whether the operation succeeded.

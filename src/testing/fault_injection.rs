@@ -47,8 +47,11 @@
 
 use std::process::Command;
 
-use snafu::{ResultExt, Snafu};
-use tracing::{debug, info, warn};
+use snafu::ResultExt;
+use snafu::Snafu;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 /// Maximum latency that can be injected (ms).
 /// Tiger Style: Fixed limit to prevent unbounded resource use.
@@ -104,28 +107,10 @@ impl NetworkPartition {
 
         for target_ip in &self.target_ips {
             // Block traffic from source to target
-            run_iptables(&[
-                "-I",
-                "FORWARD",
-                "-s",
-                &self.source_ip,
-                "-d",
-                target_ip,
-                "-j",
-                "DROP",
-            ])?;
+            run_iptables(&["-I", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"])?;
 
             // Block traffic from target to source (symmetric partition)
-            run_iptables(&[
-                "-I",
-                "FORWARD",
-                "-s",
-                target_ip,
-                "-d",
-                &self.source_ip,
-                "-j",
-                "DROP",
-            ])?;
+            run_iptables(&["-I", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"])?;
         }
 
         Ok(())
@@ -145,27 +130,9 @@ impl NetworkPartition {
 
         for target_ip in &self.target_ips {
             // Remove DROP rules
-            let _ = run_iptables(&[
-                "-D",
-                "FORWARD",
-                "-s",
-                &self.source_ip,
-                "-d",
-                target_ip,
-                "-j",
-                "DROP",
-            ]);
+            let _ = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]);
 
-            let _ = run_iptables(&[
-                "-D",
-                "FORWARD",
-                "-s",
-                target_ip,
-                "-d",
-                &self.source_ip,
-                "-j",
-                "DROP",
-            ]);
+            let _ = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]);
         }
 
         self.active = false;
@@ -234,11 +201,7 @@ impl AsymmetricPartition {
     /// # Errors
     ///
     /// Returns an error if the iptables rules cannot be created.
-    pub fn create(
-        source_ip: &str,
-        target_ips: &[&str],
-        direction: PartitionDirection,
-    ) -> Result<Self, FaultError> {
+    pub fn create(source_ip: &str, target_ips: &[&str], direction: PartitionDirection) -> Result<Self, FaultError> {
         let mut partition = Self {
             source_ip: source_ip.to_string(),
             target_ips: target_ips.iter().map(|s| s.to_string()).collect(),
@@ -264,29 +227,11 @@ impl AsymmetricPartition {
             match self.direction {
                 PartitionDirection::OutboundOnly => {
                     // Block traffic from source to target (source can't send)
-                    run_iptables(&[
-                        "-I",
-                        "FORWARD",
-                        "-s",
-                        &self.source_ip,
-                        "-d",
-                        target_ip,
-                        "-j",
-                        "DROP",
-                    ])?;
+                    run_iptables(&["-I", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"])?;
                 }
                 PartitionDirection::InboundOnly => {
                     // Block traffic from target to source (source can't receive)
-                    run_iptables(&[
-                        "-I",
-                        "FORWARD",
-                        "-s",
-                        target_ip,
-                        "-d",
-                        &self.source_ip,
-                        "-j",
-                        "DROP",
-                    ])?;
+                    run_iptables(&["-I", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"])?;
                 }
             }
         }
@@ -310,28 +255,10 @@ impl AsymmetricPartition {
         for target_ip in &self.target_ips {
             match self.direction {
                 PartitionDirection::OutboundOnly => {
-                    let _ = run_iptables(&[
-                        "-D",
-                        "FORWARD",
-                        "-s",
-                        &self.source_ip,
-                        "-d",
-                        target_ip,
-                        "-j",
-                        "DROP",
-                    ]);
+                    let _ = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]);
                 }
                 PartitionDirection::InboundOnly => {
-                    let _ = run_iptables(&[
-                        "-D",
-                        "FORWARD",
-                        "-s",
-                        target_ip,
-                        "-d",
-                        &self.source_ip,
-                        "-j",
-                        "DROP",
-                    ]);
+                    let _ = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]);
                 }
             }
         }
@@ -585,12 +512,7 @@ impl Drop for PacketLossInjection {
 fn run_iptables(args: &[&str]) -> Result<(), FaultError> {
     debug!(args = ?args, "Running iptables command");
 
-    let output = Command::new("iptables")
-        .args(args)
-        .output()
-        .context(IoSnafu {
-            operation: "iptables",
-        })?;
+    let output = Command::new("iptables").args(args).output().context(IoSnafu { operation: "iptables" })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -607,10 +529,7 @@ fn run_iptables(args: &[&str]) -> Result<(), FaultError> {
 fn run_tc(args: &[&str]) -> Result<(), FaultError> {
     debug!(args = ?args, "Running tc command");
 
-    let output = Command::new("tc")
-        .args(args)
-        .output()
-        .context(IoSnafu { operation: "tc" })?;
+    let output = Command::new("tc").args(args).output().context(IoSnafu { operation: "tc" })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -679,11 +598,7 @@ impl FaultScenario {
     }
 
     /// Add a network partition to the scenario.
-    pub fn with_partition(
-        mut self,
-        source_ip: &str,
-        target_ips: &[&str],
-    ) -> Result<Self, FaultError> {
+    pub fn with_partition(mut self, source_ip: &str, target_ips: &[&str]) -> Result<Self, FaultError> {
         let partition = NetworkPartition::create(source_ip, target_ips)?;
         self.partitions.push(partition);
         Ok(self)
@@ -702,23 +617,14 @@ impl FaultScenario {
     }
 
     /// Add a latency injection to the scenario.
-    pub fn with_latency(
-        mut self,
-        interface: &str,
-        latency_ms: u32,
-        jitter_ms: u32,
-    ) -> Result<Self, FaultError> {
+    pub fn with_latency(mut self, interface: &str, latency_ms: u32, jitter_ms: u32) -> Result<Self, FaultError> {
         let latency = LatencyInjection::create(interface, latency_ms, jitter_ms)?;
         self.latencies.push(latency);
         Ok(self)
     }
 
     /// Add a packet loss injection to the scenario.
-    pub fn with_packet_loss(
-        mut self,
-        interface: &str,
-        loss_percent: u8,
-    ) -> Result<Self, FaultError> {
+    pub fn with_packet_loss(mut self, interface: &str, loss_percent: u8) -> Result<Self, FaultError> {
         let loss = PacketLossInjection::create(interface, loss_percent)?;
         self.packet_losses.push(loss);
         Ok(self)
@@ -780,8 +686,7 @@ mod tests {
     #[test]
     #[ignore = "requires root privileges"]
     fn test_partition_lifecycle() {
-        let mut partition =
-            NetworkPartition::create("10.100.0.11", &["10.100.0.12", "10.100.0.13"]).unwrap();
+        let mut partition = NetworkPartition::create("10.100.0.11", &["10.100.0.12", "10.100.0.13"]).unwrap();
         assert!(partition.is_active());
         partition.heal().unwrap();
         assert!(!partition.is_active());

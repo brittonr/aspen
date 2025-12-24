@@ -18,7 +18,8 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -50,15 +51,9 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
 
-        router
-            .wait(0, timeout())
-            .state(ServerState::Leader, "node 0 is leader")
-            .await?;
+        router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
     }
 
     tracing::info!("--- write some log entries");
@@ -72,10 +67,7 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(3), "wrote 2 entries")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(3), "wrote 2 entries").await?;
     }
 
     tracing::info!("--- verify data is persisted");
@@ -94,9 +86,7 @@ async fn test_leader_restart_with_state_loss() -> Result<()> {
         // with no state has no data.
 
         // Create node 3 with fresh storage to simulate a "restarted" node
-        router
-            .new_raft_node_with_storage(3, new_log, new_sm)
-            .await?;
+        router.new_raft_node_with_storage(3, new_log, new_sm).await?;
 
         // Verify the fresh node has no data
         let val = router.read(3, "key1").await;
@@ -123,10 +113,7 @@ async fn test_follower_restart() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
     }
 
     tracing::info!("--- write data to cluster");
@@ -136,10 +123,7 @@ async fn test_follower_restart() -> Result<()> {
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(2), "data written")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(2), "data written").await?;
     }
 
     tracing::info!("--- verify data persisted");
@@ -152,18 +136,12 @@ async fn test_follower_restart() -> Result<()> {
     {
         // Get the existing storage
         let metrics = router.get_raft_handle(0)?.metrics().borrow().clone();
-        tracing::info!(
-            "node 0 before restart - state: {:?}, log index: {:?}",
-            metrics.state,
-            metrics.last_log_index
-        );
+        tracing::info!("node 0 before restart - state: {:?}, log index: {:?}", metrics.state, metrics.last_log_index);
 
         // In a real restart scenario, we'd preserve the storage.
         // For now, we verify that fresh storage means fresh state.
         let (fresh_log, fresh_sm) = router.new_store();
-        router
-            .new_raft_node_with_storage(1, fresh_log, fresh_sm)
-            .await?;
+        router.new_raft_node_with_storage(1, fresh_log, fresh_sm).await?;
 
         let val = router.read(1, "persistent").await;
         assert_eq!(val, None, "fresh node has no data until it joins cluster");

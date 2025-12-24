@@ -17,21 +17,28 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use async_trait::async_trait;
 use iroh_docs::Author;
 use iroh_docs::store::Store;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::api::{KeyValueStore, ScanRequest};
+use super::constants::BACKGROUND_SYNC_INTERVAL;
+use super::constants::EXPORT_BATCH_SIZE;
+use super::constants::MAX_DOC_KEY_SIZE;
+use super::constants::MAX_DOC_VALUE_SIZE;
+use crate::api::KeyValueStore;
+use crate::api::ScanRequest;
 use crate::blob::store::BlobStore;
-use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
-
-use super::constants::{
-    BACKGROUND_SYNC_INTERVAL, EXPORT_BATCH_SIZE, MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE,
-};
+use crate::raft::log_subscriber::KvOperation;
+use crate::raft::log_subscriber::LogEntryPayload;
 
 /// Maximum time to buffer entries before forcing a flush.
 /// Tiger Style: Bounded latency for export operations.
@@ -108,10 +115,7 @@ impl DocsExporter {
     ///
     /// - Entries are buffered until EXPORT_BATCH_SIZE is reached or BATCH_FLUSH_INTERVAL elapses
     /// - On shutdown, any remaining buffered entries are flushed
-    pub fn spawn(
-        self: Arc<Self>,
-        mut receiver: broadcast::Receiver<LogEntryPayload>,
-    ) -> CancellationToken {
+    pub fn spawn(self: Arc<Self>, mut receiver: broadcast::Receiver<LogEntryPayload>) -> CancellationToken {
         let cancel = self.cancel.clone();
         let exporter = self.clone();
 
@@ -206,10 +210,7 @@ impl DocsExporter {
         let cancel_clone = self.cancel.clone();
 
         tokio::spawn(async move {
-            info!(
-                interval_secs = BACKGROUND_SYNC_INTERVAL.as_secs(),
-                "background full-sync started"
-            );
+            info!(interval_secs = BACKGROUND_SYNC_INTERVAL.as_secs(), "background full-sync started");
 
             let mut sync_interval = tokio::time::interval(BACKGROUND_SYNC_INTERVAL);
             sync_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -273,8 +274,7 @@ impl DocsExporter {
                 // CAS delete - export the deletion if the operation succeeded
                 self.export_delete(key, payload.index).await?;
             }
-            KvOperation::Batch { operations }
-            | KvOperation::ConditionalBatch { operations, .. } => {
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
                 // Process each operation in the batch
                 for (is_set, key, value) in operations {
                     if *is_set {
@@ -292,9 +292,7 @@ impl DocsExporter {
                 // Skip non-KV operations
                 debug!(log_index = payload.index, "skipping non-KV entry");
             }
-            KvOperation::Transaction {
-                success, failure, ..
-            } => {
+            KvOperation::Transaction { success, failure, .. } => {
                 // Process all put/delete operations from both branches
                 // Note: Only one branch executes at runtime, but log subscriber
                 // doesn't track which succeeded, so we export both conservatively
@@ -342,11 +340,7 @@ impl DocsExporter {
                         is_delete: false,
                     });
                 } else {
-                    warn!(
-                        key_len = key.len(),
-                        value_len = value.len(),
-                        "entry too large for docs export, skipping"
-                    );
+                    warn!(key_len = key.len(), value_len = value.len(), "entry too large for docs export, skipping");
                 }
             }
             KvOperation::SetMulti { pairs }
@@ -396,8 +390,7 @@ impl DocsExporter {
                     is_delete: true,
                 });
             }
-            KvOperation::Batch { operations }
-            | KvOperation::ConditionalBatch { operations, .. } => {
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
                 // Process each operation in the batch
                 for (is_set, key, value) in operations {
                     if is_set {
@@ -424,9 +417,7 @@ impl DocsExporter {
             | KvOperation::LeaseKeepalive { .. } => {
                 // Skip non-KV operations
             }
-            KvOperation::Transaction {
-                success, failure, ..
-            } => {
+            KvOperation::Transaction { success, failure, .. } => {
                 // Process put/delete ops from transaction branches
                 for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
                     match op_type {
@@ -500,9 +491,7 @@ impl DocsExporter {
     /// Scans all keys in the KV store and exports them to docs.
     /// Used for initial population and periodic drift correction.
     pub async fn full_sync_from_kv<KV>(&self, kv_store: &KV) -> Result<u64>
-    where
-        KV: KeyValueStore,
-    {
+    where KV: KeyValueStore {
         info!("starting full sync from KV store");
 
         let mut exported = 0u64;
@@ -527,9 +516,7 @@ impl DocsExporter {
             let batch_entries: Vec<BatchEntry> = result
                 .entries
                 .iter()
-                .filter(|entry| {
-                    entry.key.len() <= MAX_DOC_KEY_SIZE && entry.value.len() <= MAX_DOC_VALUE_SIZE
-                })
+                .filter(|entry| entry.key.len() <= MAX_DOC_KEY_SIZE && entry.value.len() <= MAX_DOC_VALUE_SIZE)
                 .map(|entry| BatchEntry {
                     key: entry.key.as_bytes().to_vec(),
                     value: entry.value.as_bytes().to_vec(),
@@ -560,19 +547,11 @@ impl DocsExporter {
     async fn export_set(&self, key: &[u8], value: &[u8], log_index: u64) -> Result<()> {
         // Validate sizes
         if key.len() > MAX_DOC_KEY_SIZE {
-            warn!(
-                key_len = key.len(),
-                max = MAX_DOC_KEY_SIZE,
-                "key too large for docs export, skipping"
-            );
+            warn!(key_len = key.len(), max = MAX_DOC_KEY_SIZE, "key too large for docs export, skipping");
             return Ok(());
         }
         if value.len() > MAX_DOC_VALUE_SIZE {
-            warn!(
-                value_len = value.len(),
-                max = MAX_DOC_VALUE_SIZE,
-                "value too large for docs export, skipping"
-            );
+            warn!(value_len = value.len(), max = MAX_DOC_VALUE_SIZE, "value too large for docs export, skipping");
             return Ok(());
         }
 
@@ -664,16 +643,13 @@ impl DocsWriter for IrohDocsWriter {
         let mut store = self.store.lock().await;
 
         // Open the replica for writing
-        let mut replica = store
-            .open_replica(&self.namespace_id)
-            .context("failed to open replica")?;
+        let mut replica = store.open_replica(&self.namespace_id).context("failed to open replica")?;
 
         // hash_and_insert computes the BLAKE3 hash and inserts the entry
         // Note: This stores the entry metadata (hash, size, timestamp) in the replica,
         // but the actual content data needs to be stored separately in a blob store.
-        let _hash = replica
-            .hash_and_insert(&key, &self.author, &value)
-            .context("failed to insert entry into replica")?;
+        let _hash =
+            replica.hash_and_insert(&key, &self.author, &value).context("failed to insert entry into replica")?;
 
         debug!(namespace = %self.namespace_id, "entry inserted into docs");
         Ok(())
@@ -685,16 +661,13 @@ impl DocsWriter for IrohDocsWriter {
         let mut store = self.store.lock().await;
 
         // Open the replica for writing
-        let mut replica = store
-            .open_replica(&self.namespace_id)
-            .context("failed to open replica")?;
+        let mut replica = store.open_replica(&self.namespace_id).context("failed to open replica")?;
 
         // In iroh-docs, deletion is done by inserting an empty entry as a tombstone.
         // The delete_prefix method does this by inserting an empty entry at the key.
         // Note: delete_prefix signature is (prefix, author)
-        let _deleted_count = replica
-            .delete_prefix(&key, &self.author)
-            .context("failed to delete entry from replica")?;
+        let _deleted_count =
+            replica.delete_prefix(&key, &self.author).context("failed to delete entry from replica")?;
 
         debug!(namespace = %self.namespace_id, "entry deleted from docs");
         Ok(())
@@ -755,13 +728,7 @@ impl DocsWriter for SyncHandleDocsWriter {
         // Note: The actual content should be stored in iroh-blobs for P2P fetching.
         // For now, this stores the metadata (hash, len) which allows sync of entry info.
         self.sync_handle
-            .insert_local(
-                self.namespace_id,
-                author_id,
-                bytes::Bytes::from(key),
-                hash,
-                len,
-            )
+            .insert_local(self.namespace_id, author_id, bytes::Bytes::from(key), hash, len)
             .await
             .context("failed to insert entry via sync handle")?;
 
@@ -778,13 +745,7 @@ impl DocsWriter for SyncHandleDocsWriter {
         let author_id = self.author.id();
 
         self.sync_handle
-            .insert_local(
-                self.namespace_id,
-                author_id,
-                bytes::Bytes::from(key),
-                hash,
-                TOMBSTONE.len() as u64,
-            )
+            .insert_local(self.namespace_id, author_id, bytes::Bytes::from(key), hash, TOMBSTONE.len() as u64)
             .await
             .context("failed to delete entry via sync handle")?;
 
@@ -848,11 +809,7 @@ impl DocsWriter for BlobBackedDocsWriter {
     #[instrument(skip(self, value), fields(key_len = key.len(), value_len = value.len()))]
     async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
         // Store content in iroh-blobs first
-        let blob_result = self
-            .blob_store
-            .add_bytes(&value)
-            .await
-            .context("failed to store content in blob store")?;
+        let blob_result = self.blob_store.add_bytes(&value).await.context("failed to store content in blob store")?;
 
         let hash = blob_result.blob_ref.hash;
         let len = blob_result.blob_ref.size;
@@ -861,13 +818,7 @@ impl DocsWriter for BlobBackedDocsWriter {
         // Insert entry metadata via sync handle
         // Now the content is available for P2P fetching via iroh-blobs
         self.sync_handle
-            .insert_local(
-                self.namespace_id,
-                author_id,
-                bytes::Bytes::from(key),
-                hash,
-                len,
-            )
+            .insert_local(self.namespace_id, author_id, bytes::Bytes::from(key), hash, len)
             .await
             .context("failed to insert entry via sync handle")?;
 
@@ -886,23 +837,14 @@ impl DocsWriter for BlobBackedDocsWriter {
         const TOMBSTONE: &[u8] = b"\x00";
 
         // Store tombstone in blobs for consistency
-        let blob_result = self
-            .blob_store
-            .add_bytes(TOMBSTONE)
-            .await
-            .context("failed to store tombstone in blob store")?;
+        let blob_result =
+            self.blob_store.add_bytes(TOMBSTONE).await.context("failed to store tombstone in blob store")?;
 
         let hash = blob_result.blob_ref.hash;
         let author_id = self.author.id();
 
         self.sync_handle
-            .insert_local(
-                self.namespace_id,
-                author_id,
-                bytes::Bytes::from(key),
-                hash,
-                TOMBSTONE.len() as u64,
-            )
+            .insert_local(self.namespace_id, author_id, bytes::Bytes::from(key), hash, TOMBSTONE.len() as u64)
             .await
             .context("failed to delete entry via sync handle")?;
 
@@ -981,10 +923,7 @@ mod tests {
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
-        exporter
-            .export_set(b"key1", b"value1", 1)
-            .await
-            .expect("export should succeed");
+        exporter.export_set(b"key1", b"value1", 1).await.expect("export should succeed");
 
         assert_eq!(writer.get(b"key1").await, Some(b"value1".to_vec()));
     }
@@ -995,14 +934,8 @@ mod tests {
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
         // Set then delete
-        exporter
-            .export_set(b"key1", b"value1", 1)
-            .await
-            .expect("export should succeed");
-        exporter
-            .export_delete(b"key1", 2)
-            .await
-            .expect("delete should succeed");
+        exporter.export_set(b"key1", b"value1", 1).await.expect("export should succeed");
+        exporter.export_delete(b"key1", 2).await.expect("delete should succeed");
 
         // Tombstone = empty value
         assert_eq!(writer.get(b"key1").await, Some(vec![]));
@@ -1014,10 +947,7 @@ mod tests {
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
         let large_key = vec![0u8; MAX_DOC_KEY_SIZE + 1];
-        exporter
-            .export_set(&large_key, b"value", 1)
-            .await
-            .expect("should skip without error");
+        exporter.export_set(&large_key, b"value", 1).await.expect("should skip without error");
 
         assert_eq!(writer.len().await, 0);
     }
@@ -1028,20 +958,18 @@ mod tests {
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
 
         let large_value = vec![0u8; MAX_DOC_VALUE_SIZE + 1];
-        exporter
-            .export_set(b"key1", &large_value, 1)
-            .await
-            .expect("should skip without error");
+        exporter.export_set(b"key1", &large_value, 1).await.expect("should skip without error");
 
         assert_eq!(writer.len().await, 0);
     }
 
     #[tokio::test]
     async fn test_broadcast_receiver_integration() {
-        use crate::raft::log_subscriber::{
-            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
-        };
         use tokio::sync::broadcast;
+
+        use crate::raft::log_subscriber::KvOperation;
+        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use crate::raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
@@ -1077,10 +1005,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_broadcast_multi_operations() {
-        use crate::raft::log_subscriber::{
-            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
-        };
         use tokio::sync::broadcast;
+
+        use crate::raft::log_subscriber::KvOperation;
+        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use crate::raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
@@ -1110,9 +1039,7 @@ mod tests {
                 index: 2,
                 term: 1,
                 committed_at_ms: 12346,
-                operation: KvOperation::Delete {
-                    key: b"key1".to_vec(),
-                },
+                operation: KvOperation::Delete { key: b"key1".to_vec() },
             })
             .expect("send should succeed");
 
@@ -1128,10 +1055,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_broadcast_skips_noop_and_membership() {
-        use crate::raft::log_subscriber::{
-            KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload,
-        };
         use tokio::sync::broadcast;
+
+        use crate::raft::log_subscriber::KvOperation;
+        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use crate::raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));

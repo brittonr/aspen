@@ -57,4 +57,5 @@ mod stream;
 pub use error::SqlError;
 pub use executor::RedbSqlExecutor;
 pub use provider::RedbTableProvider;
-pub use schema::{KV_SCHEMA, kv_schema};
+pub use schema::KV_SCHEMA;
+pub use schema::kv_schema;

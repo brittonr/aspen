@@ -55,11 +55,7 @@ async fn test_tester_leader_crash_reelection() {
     // Check new leader elected
     let new_leader = t.check_one_leader().await;
     assert!(new_leader.is_some(), "No new leader after crash");
-    assert_ne!(
-        new_leader.unwrap(),
-        initial_leader,
-        "New leader should be different"
-    );
+    assert_ne!(new_leader.unwrap(), initial_leader, "New leader should be different");
 
     t.end();
 }
@@ -79,18 +75,14 @@ async fn test_tester_network_partition() {
     // Majority should still function
     madsim::time::sleep(Duration::from_secs(3)).await;
     let leader_after = t.check_one_leader().await;
-    assert!(
-        leader_after.is_some(),
-        "Majority partition should maintain leader"
-    );
+    assert!(leader_after.is_some(), "Majority partition should maintain leader");
 
     // Heal partition
     t.connect(2);
     madsim::time::sleep(Duration::from_secs(3)).await;
 
     // Verify no split brain
-    t.check_no_split_brain()
-        .expect("Split brain detected after partition healed");
+    t.check_no_split_brain().expect("Split brain detected after partition healed");
 
     t.end();
 }
@@ -105,9 +97,7 @@ async fn test_tester_write_operations() {
 
     // Perform writes
     for i in 0..10 {
-        t.write(format!("key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Write failed");
+        t.write(format!("key-{}", i), format!("value-{}", i)).await.expect("Write failed");
     }
 
     // Verify reads
@@ -144,8 +134,7 @@ async fn test_tester_unreliable_network() {
 
     // Verify no split brain
     madsim::time::sleep(Duration::from_secs(3)).await;
-    t.check_no_split_brain()
-        .expect("Split brain detected after unreliable period");
+    t.check_no_split_brain().expect("Split brain detected after unreliable period");
 
     t.end();
 }
@@ -182,10 +171,7 @@ async fn test_tester_5node_cluster() {
 
     // Should still have a leader
     let leader = t.check_one_leader().await;
-    assert!(
-        leader.is_some(),
-        "Should maintain leader with 3/5 nodes alive"
-    );
+    assert!(leader.is_some(), "Should maintain leader with 3/5 nodes alive");
 
     t.end();
 }
@@ -218,14 +204,10 @@ async fn test_tester_byzantine_vote_flip() {
 
     // Cluster should still elect a leader (Byzantine node is minority)
     let new_leader = t.check_one_leader().await;
-    assert!(
-        new_leader.is_some(),
-        "Cluster should maintain leader despite Byzantine node"
-    );
+    assert!(new_leader.is_some(), "Cluster should maintain leader despite Byzantine node");
 
     // Verify no split brain
-    t.check_no_split_brain()
-        .expect("Split brain detected with Byzantine node");
+    t.check_no_split_brain().expect("Split brain detected with Byzantine node");
 
     let artifact = t.end();
     // Note: The Byzantine injector counts corruptions at the injector level,
@@ -259,10 +241,7 @@ async fn test_tester_byzantine_term_increment() {
         // Writes may take longer or fail due to Byzantine interference
         let result = t.write(format!("key-{}", i), format!("value-{}", i)).await;
         if result.is_err() {
-            t.add_event(format!(
-                "write {} failed under Byzantine conditions (may be expected)",
-                i
-            ));
+            t.add_event(format!("write {} failed under Byzantine conditions (may be expected)", i));
         }
     }
 
@@ -270,8 +249,7 @@ async fn test_tester_byzantine_term_increment() {
     madsim::time::sleep(Duration::from_secs(5)).await;
 
     // Verify no split brain after Byzantine activity
-    t.check_no_split_brain()
-        .expect("Split brain detected during Byzantine term attack");
+    t.check_no_split_brain().expect("Split brain detected during Byzantine term attack");
 
     t.end();
 }
@@ -300,14 +278,9 @@ async fn test_tester_byzantine_duplicate() {
 
     // Verify data integrity
     let value = t.read("dup-key-5").await.expect("Read failed");
-    assert_eq!(
-        value,
-        Some("value-5".to_string()),
-        "Value should be correct despite duplicates"
-    );
+    assert_eq!(value, Some("value-5".to_string()), "Value should be correct despite duplicates");
 
-    t.check_no_split_brain()
-        .expect("Split brain after duplicates");
+    t.check_no_split_brain().expect("Split brain after duplicates");
 
     t.end();
 }
@@ -323,8 +296,9 @@ async fn test_tester_byzantine_duplicate() {
 #[madsim::test]
 #[ignore] // TODO: Enable when madsim supports process isolation for storage
 async fn test_tester_crash_recovery_persistence() {
-    use aspen::testing::TesterConfig;
     use std::path::PathBuf;
+
+    use aspen::testing::TesterConfig;
 
     // Create a temp directory for test storage
     let storage_dir = PathBuf::from("/tmp/aspen-test-crash-recovery");
@@ -333,9 +307,7 @@ async fn test_tester_crash_recovery_persistence() {
     let _ = std::fs::remove_dir_all(&storage_dir);
 
     // Create tester with persistent storage
-    let config = TesterConfig::new(3, "crash_recovery")
-        .with_persistent_storage(storage_dir.clone())
-        .with_seed(12345); // Fixed seed for reproducibility
+    let config = TesterConfig::new(3, "crash_recovery").with_persistent_storage(storage_dir.clone()).with_seed(12345); // Fixed seed for reproducibility
 
     let mut t = AspenRaftTester::with_config(config).await;
 
@@ -345,9 +317,7 @@ async fn test_tester_crash_recovery_persistence() {
 
     // Write some data
     for i in 0..10 {
-        t.write(format!("persist-key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Write should succeed");
+        t.write(format!("persist-key-{}", i), format!("value-{}", i)).await.expect("Write should succeed");
     }
 
     // Remember the leader
@@ -358,14 +328,8 @@ async fn test_tester_crash_recovery_persistence() {
 
     // Wait for new leader election
     madsim::time::sleep(Duration::from_secs(10)).await;
-    let new_leader = t
-        .check_one_leader()
-        .await
-        .expect("No new leader after crash");
-    assert_ne!(
-        new_leader, leader_before_crash,
-        "New leader should be different"
-    );
+    let new_leader = t.check_one_leader().await.expect("No new leader after crash");
+    assert_ne!(new_leader, leader_before_crash, "New leader should be different");
 
     // Write more data with crashed node
     for i in 10..15 {
@@ -382,8 +346,7 @@ async fn test_tester_crash_recovery_persistence() {
 
     // The restarted node should have caught up
     // We can verify this by checking that the cluster is healthy
-    t.check_no_split_brain()
-        .expect("No split brain after restart");
+    t.check_no_split_brain().expect("No split brain after restart");
 
     // Write more data to verify the restarted node participates
     for i in 15..20 {
@@ -405,15 +368,14 @@ async fn test_tester_crash_recovery_persistence() {
 #[madsim::test]
 #[ignore] // TODO: Enable when madsim supports process isolation for storage
 async fn test_tester_multiple_crash_recovery() {
-    use aspen::testing::TesterConfig;
     use std::path::PathBuf;
+
+    use aspen::testing::TesterConfig;
 
     let storage_dir = PathBuf::from("/tmp/aspen-test-multi-crash");
     let _ = std::fs::remove_dir_all(&storage_dir);
 
-    let config = TesterConfig::new(5, "multi_crash")
-        .with_persistent_storage(storage_dir.clone())
-        .with_seed(54321);
+    let config = TesterConfig::new(5, "multi_crash").with_persistent_storage(storage_dir.clone()).with_seed(54321);
 
     let mut t = AspenRaftTester::with_config(config).await;
 
@@ -423,9 +385,7 @@ async fn test_tester_multiple_crash_recovery() {
 
     // Write initial data
     for i in 0..5 {
-        t.write(format!("multi-key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Initial write failed");
+        t.write(format!("multi-key-{}", i), format!("value-{}", i)).await.expect("Initial write failed");
     }
 
     // Crash nodes 0 and 1 (still have quorum with 3, 4, 5)
@@ -435,9 +395,7 @@ async fn test_tester_multiple_crash_recovery() {
     madsim::time::sleep(Duration::from_secs(5)).await;
 
     // Should still have a leader with 3/5 nodes
-    t.check_one_leader()
-        .await
-        .expect("Lost quorum with 3/5 nodes");
+    t.check_one_leader().await.expect("Lost quorum with 3/5 nodes");
 
     // Continue writing
     for i in 5..10 {
@@ -455,14 +413,11 @@ async fn test_tester_multiple_crash_recovery() {
     madsim::time::sleep(Duration::from_secs(5)).await;
 
     // All nodes should be back
-    t.check_no_split_brain()
-        .expect("Split brain after multi-restart");
+    t.check_no_split_brain().expect("Split brain after multi-restart");
 
     // Final writes to verify full cluster operation
     for i in 10..15 {
-        t.write(format!("multi-key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Final write failed");
+        t.write(format!("multi-key-{}", i), format!("value-{}", i)).await.expect("Final write failed");
     }
 
     let _ = std::fs::remove_dir_all(&storage_dir);
@@ -493,9 +448,7 @@ async fn test_tester_add_learner() {
     // For now, we'll test with existing nodes by changing membership
 
     // Scale down to 2 voters first
-    t.change_membership(&[0, 1])
-        .await
-        .expect("Failed to scale down");
+    t.change_membership(&[0, 1]).await.expect("Failed to scale down");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
@@ -508,23 +461,15 @@ async fn test_tester_add_learner() {
     // Verify node 2 is now a learner
     let (voters, learners) = t.get_membership();
     assert_eq!(voters.len(), 2, "Should have 2 voters");
-    assert!(
-        learners.contains(&2),
-        "Node 2 should be a learner: {:?}",
-        learners
-    );
+    assert!(learners.contains(&2), "Node 2 should be a learner: {:?}", learners);
 
     // Write some data and verify learner replicates it
     for i in 0..5 {
-        t.write(format!("learner-key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Write should succeed");
+        t.write(format!("learner-key-{}", i), format!("value-{}", i)).await.expect("Write should succeed");
     }
 
     // Wait for log sync
-    t.wait_for_log_sync(10)
-        .await
-        .expect("Log sync should succeed");
+    t.wait_for_log_sync(10).await.expect("Log sync should succeed");
 
     t.end();
 }
@@ -542,16 +487,12 @@ async fn test_tester_promote_learner_to_voter() {
     t.check_one_leader().await.expect("No initial leader");
 
     // First, remove node 3 from voters to make it available as learner
-    t.change_membership(&[0, 1, 2])
-        .await
-        .expect("Failed to remove node 3 from voters");
+    t.change_membership(&[0, 1, 2]).await.expect("Failed to remove node 3 from voters");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
     // Add node 3 as a learner
-    t.add_learner(3)
-        .await
-        .expect("Failed to add node 3 as learner");
+    t.add_learner(3).await.expect("Failed to add node 3 as learner");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
@@ -561,9 +502,7 @@ async fn test_tester_promote_learner_to_voter() {
     assert!(learners.contains(&3), "Node 3 should be a learner");
 
     // Promote node 3 back to voter by changing membership
-    t.change_membership(&[0, 1, 2, 3])
-        .await
-        .expect("Failed to promote node 3 to voter");
+    t.change_membership(&[0, 1, 2, 3]).await.expect("Failed to promote node 3 to voter");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
@@ -577,8 +516,7 @@ async fn test_tester_promote_learner_to_voter() {
         .await
         .expect("Write should succeed after promotion");
 
-    t.check_no_split_brain()
-        .expect("No split brain after membership change");
+    t.check_no_split_brain().expect("No split brain after membership change");
 
     t.end();
 }
@@ -597,21 +535,15 @@ async fn test_tester_scale_down() {
     // Change membership to remove node 4
     // For a 5-node cluster initialized with nodes 0-4 as voters,
     // we reduce to 4 voters
-    t.change_membership(&[0, 1, 2, 3])
-        .await
-        .expect("Failed to scale down to 4 nodes");
+    t.change_membership(&[0, 1, 2, 3]).await.expect("Failed to scale down to 4 nodes");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
     // Verify cluster still has a leader
-    t.check_one_leader()
-        .await
-        .expect("Should have leader after scale down");
+    t.check_one_leader().await.expect("Should have leader after scale down");
 
     // Further scale down to 3 nodes (minimum for quorum)
-    t.change_membership(&[0, 1, 2])
-        .await
-        .expect("Failed to scale down to 3 nodes");
+    t.change_membership(&[0, 1, 2]).await.expect("Failed to scale down to 3 nodes");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
@@ -623,8 +555,7 @@ async fn test_tester_scale_down() {
         .await
         .expect("Write should succeed after scale down");
 
-    t.check_no_split_brain()
-        .expect("No split brain after scale down");
+    t.check_no_split_brain().expect("No split brain after scale down");
 
     t.end();
 }
@@ -642,9 +573,7 @@ async fn test_tester_membership_change_with_leader_crash() {
     let initial_leader = t.check_one_leader().await.expect("No initial leader");
 
     // First reduce membership to 3 nodes to test adding learners
-    t.change_membership(&[0, 1, 2])
-        .await
-        .expect("Failed to reduce membership");
+    t.change_membership(&[0, 1, 2]).await.expect("Failed to reduce membership");
 
     madsim::time::sleep(Duration::from_secs(3)).await;
 
@@ -661,11 +590,7 @@ async fn test_tester_membership_change_with_leader_crash() {
 
     let new_leader = t.check_one_leader().await;
     assert!(new_leader.is_some(), "Should elect new leader after crash");
-    assert_ne!(
-        new_leader.unwrap(),
-        initial_leader,
-        "New leader should be different"
-    );
+    assert_ne!(new_leader.unwrap(), initial_leader, "New leader should be different");
 
     // Membership operations should still work
     // Try to add another learner through new leader
@@ -677,8 +602,7 @@ async fn test_tester_membership_change_with_leader_crash() {
     }
 
     // Verify no split brain
-    t.check_no_split_brain()
-        .expect("No split brain after membership changes and crash");
+    t.check_no_split_brain().expect("No split brain after membership changes and crash");
 
     t.end();
 }
@@ -709,12 +633,7 @@ async fn test_tester_buggify_default() {
         madsim::time::sleep(Duration::from_secs(1)).await;
 
         // Try to maintain some operations
-        let _ = t
-            .write(
-                format!("buggify-key-{}", t.seed() % 1000),
-                "value".to_string(),
-            )
-            .await;
+        let _ = t.write(format!("buggify-key-{}", t.seed() % 1000), "value".to_string()).await;
     }
 
     // Disable BUGGIFY and let cluster stabilize
@@ -722,12 +641,9 @@ async fn test_tester_buggify_default() {
     madsim::time::sleep(Duration::from_secs(5)).await;
 
     // Verify cluster is still functional
-    t.check_one_leader()
-        .await
-        .expect("Should have leader after BUGGIFY");
+    t.check_one_leader().await.expect("Should have leader after BUGGIFY");
 
-    t.check_no_split_brain()
-        .expect("No split brain after BUGGIFY");
+    t.check_no_split_brain().expect("No split brain after BUGGIFY");
 
     // Write should still work
     t.write("post-buggify".to_string(), "value".to_string())
@@ -749,8 +665,9 @@ async fn test_tester_buggify_default() {
 /// This test uses higher fault probabilities to stress test the cluster.
 #[madsim::test]
 async fn test_tester_buggify_custom_probs() {
-    use aspen::testing::BuggifyFault;
     use std::collections::HashMap;
+
+    use aspen::testing::BuggifyFault;
 
     let mut t = AspenRaftTester::new(5, "tester_buggify_custom").await;
 
@@ -776,12 +693,9 @@ async fn test_tester_buggify_custom_probs() {
     madsim::time::sleep(Duration::from_secs(10)).await;
 
     // Verify recovery
-    t.check_one_leader()
-        .await
-        .expect("Should recover leader after aggressive BUGGIFY");
+    t.check_one_leader().await.expect("Should recover leader after aggressive BUGGIFY");
 
-    t.check_no_split_brain()
-        .expect("No split brain after recovery");
+    t.check_no_split_brain().expect("No split brain after recovery");
 
     t.end();
 }
@@ -791,8 +705,9 @@ async fn test_tester_buggify_custom_probs() {
 /// This test only enables specific fault types to test their individual impact.
 #[madsim::test]
 async fn test_tester_buggify_focused_faults() {
-    use aspen::testing::BuggifyFault;
     use std::collections::HashMap;
+
+    use aspen::testing::BuggifyFault;
 
     let mut t = AspenRaftTester::new(3, "tester_buggify_focused").await;
 
@@ -827,12 +742,9 @@ async fn test_tester_buggify_focused_faults() {
     t.add_event("Completed snapshot trigger testing".to_string());
 
     // Verify cluster health
-    t.check_one_leader()
-        .await
-        .expect("Should maintain leader with focused faults");
+    t.check_one_leader().await.expect("Should maintain leader with focused faults");
 
-    t.check_no_split_brain()
-        .expect("No split brain with focused faults");
+    t.check_no_split_brain().expect("No split brain with focused faults");
 
     t.end();
 }

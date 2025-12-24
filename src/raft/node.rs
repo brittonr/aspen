@@ -37,25 +37,54 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
-use openraft::{Raft, RaftMetrics, ReadPolicy};
+use openraft::Raft;
+use openraft::RaftMetrics;
+use openraft::ReadPolicy;
 use tokio::sync::Semaphore;
-use tracing::{error, info, instrument, warn};
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::raft::write_batcher::{BatchConfig, WriteBatcher};
-
-use crate::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
-    ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
-    KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadConsistency, ReadRequest,
-    ReadResult, ScanRequest, ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor,
-    SqlQueryRequest, SqlQueryResult, WriteRequest, WriteResult, sql_validation::validate_sql_query,
-    validate_sql_request, validate_write_command,
-};
+use crate::api::AddLearnerRequest;
+use crate::api::ChangeMembershipRequest;
+use crate::api::ClusterController;
+use crate::api::ClusterNode;
+use crate::api::ClusterState;
+use crate::api::ControlPlaneError;
+use crate::api::DEFAULT_SCAN_LIMIT;
+use crate::api::DeleteRequest;
+use crate::api::DeleteResult;
+use crate::api::InitRequest;
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::KeyValueWithRevision;
+use crate::api::MAX_SCAN_RESULTS;
+use crate::api::ReadConsistency;
+use crate::api::ReadRequest;
+use crate::api::ReadResult;
+use crate::api::ScanRequest;
+use crate::api::ScanResult;
+use crate::api::SqlConsistency;
+use crate::api::SqlQueryError;
+use crate::api::SqlQueryExecutor;
+use crate::api::SqlQueryRequest;
+use crate::api::SqlQueryResult;
+use crate::api::WriteRequest;
+use crate::api::WriteResult;
+use crate::api::sql_validation::validate_sql_query;
+use crate::api::validate_sql_request;
+use crate::api::validate_write_command;
 use crate::raft::StateMachineVariant;
-use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
+use crate::raft::types::AppTypeConfig;
+use crate::raft::types::NodeId;
+use crate::raft::types::RaftMemberInfo;
+use crate::raft::write_batcher::BatchConfig;
+use crate::raft::write_batcher::WriteBatcher;
 
 /// Maximum concurrent operations (prevents resource exhaustion).
 const MAX_CONCURRENT_OPS: usize = 1000;
@@ -99,11 +128,7 @@ pub struct RaftNode {
 
 impl RaftNode {
     /// Create a new Raft node without write batching.
-    pub fn new(
-        node_id: NodeId,
-        raft: Arc<Raft<AppTypeConfig>>,
-        state_machine: StateMachineVariant,
-    ) -> Self {
+    pub fn new(node_id: NodeId, raft: Arc<Raft<AppTypeConfig>>, state_machine: StateMachineVariant) -> Self {
         Self {
             raft,
             node_id,
@@ -197,13 +222,7 @@ impl RaftNode {
         // Slow path: check Raft membership and atomically set initialized
         // This handles nodes that join via replication rather than explicit init
         let metrics = self.raft.metrics().borrow().clone();
-        if metrics
-            .membership_config
-            .membership()
-            .nodes()
-            .next()
-            .is_some()
-        {
+        if metrics.membership_config.membership().nodes().next().is_some() {
             // Atomically transition from false to true (only one thread wins)
             // We don't care if we lose the race - another thread already set it
             let _ = self.initialized.compare_exchange(
@@ -229,8 +248,7 @@ impl RaftNode {
         let mut learners = Vec::new();
         let mut members = Vec::new();
 
-        let voter_ids: std::collections::HashSet<NodeId> =
-            membership.membership().voter_ids().collect();
+        let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
 
         for (node_id, member_info) in membership.membership().nodes() {
             let cluster_node = ClusterNode {
@@ -261,13 +279,9 @@ impl ClusterController for RaftNode {
     #[instrument(skip(self))]
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
         // Acquire permit to limit concurrency
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| ControlPlaneError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| ControlPlaneError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         if request.initial_members.is_empty() {
             return Err(ControlPlaneError::InvalidRequest {
@@ -278,30 +292,22 @@ impl ClusterController for RaftNode {
         // Build RaftMemberInfo map
         let mut nodes: BTreeMap<NodeId, RaftMemberInfo> = BTreeMap::new();
         for cluster_node in &request.initial_members {
-            let iroh_addr = cluster_node.iroh_addr.as_ref().ok_or_else(|| {
-                ControlPlaneError::InvalidRequest {
-                    reason: format!("iroh_addr must be set for node {}", cluster_node.id),
-                }
+            let iroh_addr = cluster_node.iroh_addr.as_ref().ok_or_else(|| ControlPlaneError::InvalidRequest {
+                reason: format!("iroh_addr must be set for node {}", cluster_node.id),
             })?;
-            nodes.insert(
-                cluster_node.id.into(),
-                RaftMemberInfo::new(iroh_addr.clone()),
-            );
+            nodes.insert(cluster_node.id.into(), RaftMemberInfo::new(iroh_addr.clone()));
         }
 
         info!("calling raft.initialize() with {} nodes", nodes.len());
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
-        tokio::time::timeout(
-            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
-            self.raft.initialize(nodes),
-        )
-        .await
-        .map_err(|_| ControlPlaneError::Timeout {
-            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
-        })?
-        .map_err(|err| ControlPlaneError::Failed {
-            reason: err.to_string(),
-        })?;
+        tokio::time::timeout(crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT, self.raft.initialize(nodes))
+            .await
+            .map_err(|_| ControlPlaneError::Timeout {
+                duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| ControlPlaneError::Failed {
+                reason: err.to_string(),
+            })?;
         info!("raft.initialize() completed successfully");
 
         self.initialized.store(true, Ordering::Release);
@@ -311,28 +317,17 @@ impl ClusterController for RaftNode {
     }
 
     #[instrument(skip(self))]
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| ControlPlaneError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+        let _permit = self.semaphore.acquire().await.map_err(|_| ControlPlaneError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized()?;
 
         let learner = request.learner;
-        let iroh_addr =
-            learner
-                .iroh_addr
-                .as_ref()
-                .ok_or_else(|| ControlPlaneError::InvalidRequest {
-                    reason: format!("iroh_addr must be set for node {}", learner.id),
-                })?;
+        let iroh_addr = learner.iroh_addr.as_ref().ok_or_else(|| ControlPlaneError::InvalidRequest {
+            reason: format!("iroh_addr must be set for node {}", learner.id),
+        })?;
 
         let node = RaftMemberInfo::new(iroh_addr.clone());
 
@@ -359,17 +354,10 @@ impl ClusterController for RaftNode {
     }
 
     #[instrument(skip(self))]
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| ControlPlaneError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError> {
+        let _permit = self.semaphore.acquire().await.map_err(|_| ControlPlaneError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized()?;
 
@@ -379,8 +367,7 @@ impl ClusterController for RaftNode {
             });
         }
 
-        let members: std::collections::BTreeSet<NodeId> =
-            request.members.iter().map(|&id| id.into()).collect();
+        let members: std::collections::BTreeSet<NodeId> = request.members.iter().map(|&id| id.into()).collect();
 
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
         tokio::time::timeout(
@@ -418,19 +405,13 @@ impl ClusterController for RaftNode {
     }
 
     #[instrument(skip(self))]
-    async fn trigger_snapshot(
-        &self,
-    ) -> Result<Option<openraft::LogId<AppTypeConfig>>, ControlPlaneError> {
+    async fn trigger_snapshot(&self) -> Result<Option<openraft::LogId<AppTypeConfig>>, ControlPlaneError> {
         self.ensure_initialized()?;
 
         // Trigger a snapshot (returns () on success)
-        self.raft
-            .trigger()
-            .snapshot()
-            .await
-            .map_err(|err| ControlPlaneError::Failed {
-                reason: err.to_string(),
-            })?;
+        self.raft.trigger().snapshot().await.map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
 
         // Get the current snapshot from metrics
         let metrics = self.raft.metrics().borrow().clone();
@@ -442,13 +423,9 @@ impl ClusterController for RaftNode {
 impl KeyValueStore for RaftNode {
     #[instrument(skip(self))]
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| KeyValueStoreError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| KeyValueStoreError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized_kv()?;
 
@@ -466,7 +443,8 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
-        use crate::api::{BatchCondition, BatchOperation};
+        use crate::api::BatchCondition;
+        use crate::api::BatchOperation;
         use crate::raft::types::AppRequest;
         let app_request = match &request.command {
             crate::api::WriteCommand::Set { key, value } => AppRequest::Set {
@@ -479,10 +457,9 @@ impl KeyValueStore for RaftNode {
                 ttl_seconds,
             } => {
                 // Convert TTL in seconds to absolute expiration timestamp in milliseconds
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
+                let now_ms =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as u64;
                 let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
                 AppRequest::SetWithTTL {
                     key: key.clone(),
@@ -490,14 +467,11 @@ impl KeyValueStore for RaftNode {
                     expires_at_ms,
                 }
             }
-            crate::api::WriteCommand::SetMulti { pairs } => AppRequest::SetMulti {
-                pairs: pairs.clone(),
-            },
+            crate::api::WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
             crate::api::WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
+                let now_ms =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                        as u64;
                 let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
                 AppRequest::SetMultiWithTTL {
                     pairs: pairs.clone(),
@@ -505,9 +479,7 @@ impl KeyValueStore for RaftNode {
                 }
             }
             crate::api::WriteCommand::Delete { key } => AppRequest::Delete { key: key.clone() },
-            crate::api::WriteCommand::DeleteMulti { keys } => {
-                AppRequest::DeleteMulti { keys: keys.clone() }
-            }
+            crate::api::WriteCommand::DeleteMulti { keys } => AppRequest::DeleteMulti { keys: keys.clone() },
             crate::api::WriteCommand::CompareAndSwap {
                 key,
                 expected,
@@ -517,12 +489,10 @@ impl KeyValueStore for RaftNode {
                 expected: expected.clone(),
                 new_value: new_value.clone(),
             },
-            crate::api::WriteCommand::CompareAndDelete { key, expected } => {
-                AppRequest::CompareAndDelete {
-                    key: key.clone(),
-                    expected: expected.clone(),
-                }
-            }
+            crate::api::WriteCommand::CompareAndDelete { key, expected } => AppRequest::CompareAndDelete {
+                key: key.clone(),
+                expected: expected.clone(),
+            },
             crate::api::WriteCommand::Batch { operations } => {
                 // Convert to compact tuple format: (is_set, key, value)
                 let ops: Vec<(bool, String, String)> = operations
@@ -534,18 +504,13 @@ impl KeyValueStore for RaftNode {
                     .collect();
                 AppRequest::Batch { operations: ops }
             }
-            crate::api::WriteCommand::ConditionalBatch {
-                conditions,
-                operations,
-            } => {
+            crate::api::WriteCommand::ConditionalBatch { conditions, operations } => {
                 // Convert conditions to compact tuple format: (type, key, expected)
                 // Types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
                 let conds: Vec<(u8, String, String)> = conditions
                     .iter()
                     .map(|c| match c {
-                        BatchCondition::ValueEquals { key, expected } => {
-                            (0, key.clone(), expected.clone())
-                        }
+                        BatchCondition::ValueEquals { key, expected } => (0, key.clone(), expected.clone()),
                         BatchCondition::KeyExists { key } => (1, key.clone(), String::new()),
                         BatchCondition::KeyNotExists { key } => (2, key.clone(), String::new()),
                     })
@@ -564,40 +529,29 @@ impl KeyValueStore for RaftNode {
                 }
             }
             // Lease operations
-            crate::api::WriteCommand::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => AppRequest::SetWithLease {
+            crate::api::WriteCommand::SetWithLease { key, value, lease_id } => AppRequest::SetWithLease {
                 key: key.clone(),
                 value: value.clone(),
                 lease_id: *lease_id,
             },
-            crate::api::WriteCommand::SetMultiWithLease { pairs, lease_id } => {
-                AppRequest::SetMultiWithLease {
-                    pairs: pairs.clone(),
-                    lease_id: *lease_id,
-                }
-            }
-            crate::api::WriteCommand::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => AppRequest::LeaseGrant {
+            crate::api::WriteCommand::SetMultiWithLease { pairs, lease_id } => AppRequest::SetMultiWithLease {
+                pairs: pairs.clone(),
+                lease_id: *lease_id,
+            },
+            crate::api::WriteCommand::LeaseGrant { lease_id, ttl_seconds } => AppRequest::LeaseGrant {
                 lease_id: *lease_id,
                 ttl_seconds: *ttl_seconds,
             },
-            crate::api::WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke {
-                lease_id: *lease_id,
-            },
-            crate::api::WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive {
-                lease_id: *lease_id,
-            },
+            crate::api::WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke { lease_id: *lease_id },
+            crate::api::WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive { lease_id: *lease_id },
             crate::api::WriteCommand::Transaction {
                 compare,
                 success,
                 failure,
             } => {
-                use crate::api::{CompareOp, CompareTarget, TxnOp};
+                use crate::api::CompareOp;
+                use crate::api::CompareTarget;
+                use crate::api::TxnOp;
 
                 // Convert compare conditions to compact format:
                 // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
@@ -629,9 +583,7 @@ impl KeyValueStore for RaftNode {
                             TxnOp::Put { key, value } => (0, key.clone(), value.clone()),
                             TxnOp::Delete { key } => (1, key.clone(), String::new()),
                             TxnOp::Get { key } => (2, key.clone(), String::new()),
-                            TxnOp::Range { prefix, limit } => {
-                                (3, prefix.clone(), limit.to_string())
-                            }
+                            TxnOp::Range { prefix, limit } => (3, prefix.clone(), limit.to_string()),
                         })
                         .collect()
                 };
@@ -642,17 +594,12 @@ impl KeyValueStore for RaftNode {
                     failure: convert_ops(failure),
                 }
             }
-            crate::api::WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
+            crate::api::WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 // Convert WriteOp to compact tuple format: (is_set, key, value)
                 let write_ops: Vec<(bool, String, String)> = write_set
                     .iter()
                     .map(|op| match op {
-                        crate::api::WriteOp::Set { key, value } => {
-                            (true, key.clone(), value.clone())
-                        }
+                        crate::api::WriteOp::Set { key, value } => (true, key.clone(), value.clone()),
                         crate::api::WriteOp::Delete { key } => (false, key.clone(), String::new()),
                     })
                     .collect();
@@ -682,11 +629,9 @@ impl KeyValueStore for RaftNode {
                 target_shard: *target_shard,
                 topology_version: *topology_version,
             },
-            crate::api::WriteCommand::TopologyUpdate { topology_data } => {
-                AppRequest::TopologyUpdate {
-                    topology_data: topology_data.clone(),
-                }
-            }
+            crate::api::WriteCommand::TopologyUpdate { topology_data } => AppRequest::TopologyUpdate {
+                topology_data: topology_data.clone(),
+            },
         };
 
         // Apply write through Raft consensus
@@ -738,13 +683,9 @@ impl KeyValueStore for RaftNode {
 
     #[instrument(skip(self))]
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| KeyValueStoreError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| KeyValueStoreError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized_kv()?;
 
@@ -760,35 +701,27 @@ impl KeyValueStore for RaftNode {
                 //
                 // This guarantees linearizability because any read after await_ready()
                 // sees all writes committed before get_read_linearizer() was called.
-                let linearizer = self
-                    .raft
-                    .get_read_linearizer(ReadPolicy::ReadIndex)
-                    .await
-                    .map_err(|err| {
-                        let leader_hint =
-                            self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                        KeyValueStoreError::NotLeader {
-                            leader: leader_hint,
-                            reason: err.to_string(),
-                        }
-                    })?;
-
-                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(
-                    crate::raft::constants::READ_INDEX_TIMEOUT,
-                    linearizer.await_ready(&self.raft),
-                )
-                .await
-                .map_err(|_| KeyValueStoreError::Timeout {
-                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
-                })?
-                .map_err(|err| {
+                let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|err| {
                     let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
                     KeyValueStoreError::NotLeader {
                         leader: leader_hint,
                         reason: err.to_string(),
                     }
                 })?;
+
+                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+                tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+                    .await
+                    .map_err(|_| KeyValueStoreError::Timeout {
+                        duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                    })?
+                    .map_err(|err| {
+                        let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                        KeyValueStoreError::NotLeader {
+                            leader: leader_hint,
+                            reason: err.to_string(),
+                        }
+                    })?;
             }
             ReadConsistency::Lease => {
                 // LeaseRead: Lower latency via leader lease (no quorum confirmation)
@@ -796,35 +729,27 @@ impl KeyValueStore for RaftNode {
                 // Uses the leader's lease to serve reads without contacting followers.
                 // Safe as long as clock drift is less than the lease duration.
                 // Falls back to ReadIndex if the lease has expired.
-                let linearizer = self
-                    .raft
-                    .get_read_linearizer(ReadPolicy::LeaseRead)
-                    .await
-                    .map_err(|err| {
-                        let leader_hint =
-                            self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                        KeyValueStoreError::NotLeader {
-                            leader: leader_hint,
-                            reason: err.to_string(),
-                        }
-                    })?;
-
-                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(
-                    crate::raft::constants::READ_INDEX_TIMEOUT,
-                    linearizer.await_ready(&self.raft),
-                )
-                .await
-                .map_err(|_| KeyValueStoreError::Timeout {
-                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
-                })?
-                .map_err(|err| {
+                let linearizer = self.raft.get_read_linearizer(ReadPolicy::LeaseRead).await.map_err(|err| {
                     let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
                     KeyValueStoreError::NotLeader {
                         leader: leader_hint,
                         reason: err.to_string(),
                     }
                 })?;
+
+                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+                tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+                    .await
+                    .map_err(|_| KeyValueStoreError::Timeout {
+                        duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                    })?
+                    .map_err(|err| {
+                        let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                        KeyValueStoreError::NotLeader {
+                            leader: leader_hint,
+                            reason: err.to_string(),
+                        }
+                    })?;
             }
             ReadConsistency::Stale => {
                 // Stale: Read directly from local state machine without consistency checks
@@ -873,13 +798,9 @@ impl KeyValueStore for RaftNode {
 
     #[instrument(skip(self))]
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| KeyValueStoreError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| KeyValueStoreError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized_kv()?;
 
@@ -907,21 +828,27 @@ impl KeyValueStore for RaftNode {
 
     #[instrument(skip(self))]
     async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| KeyValueStoreError::Failed {
-                reason: "semaphore closed".into(),
-            })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| KeyValueStoreError::Failed {
+            reason: "semaphore closed".into(),
+        })?;
 
         self.ensure_initialized_kv()?;
 
         // Use ReadIndex for linearizable scan (see read() for protocol details)
-        let linearizer = self
-            .raft
-            .get_read_linearizer(ReadPolicy::ReadIndex)
+        let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|err| {
+            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+            KeyValueStoreError::NotLeader {
+                leader: leader_hint,
+                reason: err.to_string(),
+            }
+        })?;
+
+        // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+        tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
             .await
+            .map_err(|_| KeyValueStoreError::Timeout {
+                duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+            })?
             .map_err(|err| {
                 let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
                 KeyValueStoreError::NotLeader {
@@ -930,29 +857,9 @@ impl KeyValueStore for RaftNode {
                 }
             })?;
 
-        // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-        tokio::time::timeout(
-            crate::raft::constants::READ_INDEX_TIMEOUT,
-            linearizer.await_ready(&self.raft),
-        )
-        .await
-        .map_err(|_| KeyValueStoreError::Timeout {
-            duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
-        })?
-        .map_err(|err| {
-            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-            KeyValueStoreError::NotLeader {
-                leader: leader_hint,
-                reason: err.to_string(),
-            }
-        })?;
-
         // Scan directly from state machine (linearizability guaranteed by ReadIndex above)
         // Apply default limit if not specified
-        let limit = _request
-            .limit
-            .unwrap_or(DEFAULT_SCAN_LIMIT)
-            .min(MAX_SCAN_RESULTS) as usize;
+        let limit = _request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
 
         match &self.state_machine {
             StateMachineVariant::InMemory(sm) => {
@@ -1004,15 +911,12 @@ impl KeyValueStore for RaftNode {
             StateMachineVariant::Sqlite(sm) => {
                 // SQLite scan with pagination - returns KeyValueWithRevision directly
                 let start_key = _request.continuation_token.as_deref();
-                let all_entries = sm
-                    .scan_with_revision(&_request.prefix, start_key, Some(limit + 1))
-                    .await;
+                let all_entries = sm.scan_with_revision(&_request.prefix, start_key, Some(limit + 1)).await;
 
                 match all_entries {
                     Ok(entries_full) => {
                         let is_truncated = entries_full.len() > limit;
-                        let entries: Vec<KeyValueWithRevision> =
-                            entries_full.into_iter().take(limit).collect();
+                        let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
 
                         let continuation_token = if is_truncated {
                             entries.last().map(|e| e.key.clone())
@@ -1038,8 +942,7 @@ impl KeyValueStore for RaftNode {
                 match sm.scan(&_request.prefix, start_key, Some(limit + 1)) {
                     Ok(entries_full) => {
                         let is_truncated = entries_full.len() > limit;
-                        let entries: Vec<KeyValueWithRevision> =
-                            entries_full.into_iter().take(limit).collect();
+                        let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
 
                         let continuation_token = if is_truncated {
                             entries.last().map(|e| e.key.clone())
@@ -1067,13 +970,9 @@ impl KeyValueStore for RaftNode {
 impl SqlQueryExecutor for RaftNode {
     #[instrument(skip(self))]
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
-        let _permit =
-            self.semaphore
-                .acquire()
-                .await
-                .map_err(|_| SqlQueryError::ExecutionFailed {
-                    reason: "semaphore closed".into(),
-                })?;
+        let _permit = self.semaphore.acquire().await.map_err(|_| SqlQueryError::ExecutionFailed {
+            reason: "semaphore closed".into(),
+        })?;
 
         // Validate request bounds (Tiger Style)
         validate_sql_request(&request)?;
@@ -1083,32 +982,21 @@ impl SqlQueryExecutor for RaftNode {
 
         // For linearizable consistency, use ReadIndex protocol
         if request.consistency == SqlConsistency::Linearizable {
-            let linearizer = self
-                .raft
-                .get_read_linearizer(ReadPolicy::ReadIndex)
-                .await
-                .map_err(|_err| {
-                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                    SqlQueryError::NotLeader {
-                        leader: leader_hint,
-                    }
-                })?;
+            let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|_err| {
+                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                SqlQueryError::NotLeader { leader: leader_hint }
+            })?;
 
             // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-            tokio::time::timeout(
-                crate::raft::constants::READ_INDEX_TIMEOUT,
-                linearizer.await_ready(&self.raft),
-            )
-            .await
-            .map_err(|_| SqlQueryError::Timeout {
-                duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
-            })?
-            .map_err(|_err| {
-                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                SqlQueryError::NotLeader {
-                    leader: leader_hint,
-                }
-            })?;
+            tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+                .await
+                .map_err(|_| SqlQueryError::Timeout {
+                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                })?
+                .map_err(|_err| {
+                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                    SqlQueryError::NotLeader { leader: leader_hint }
+                })?;
         }
 
         // Execute query on state machine
@@ -1121,27 +1009,13 @@ impl SqlQueryExecutor for RaftNode {
             }
             StateMachineVariant::Sqlite(sm) => {
                 // Execute SQL on SQLite state machine
-                sm.execute_sql(
-                    &request.query,
-                    &request.params,
-                    request.limit,
-                    request.timeout_ms,
-                )
+                sm.execute_sql(&request.query, &request.params, request.limit, request.timeout_ms)
             }
             StateMachineVariant::Redb(sm) => {
                 // Execute SQL on Redb state machine via DataFusion
                 // Use cached executor for ~400µs savings per query
-                let executor = self
-                    .sql_executor
-                    .get_or_init(|| crate::sql::RedbSqlExecutor::new(sm.db().clone()));
-                executor
-                    .execute(
-                        &request.query,
-                        &request.params,
-                        request.limit,
-                        request.timeout_ms,
-                    )
-                    .await
+                let executor = self.sql_executor.get_or_init(|| crate::sql::RedbSqlExecutor::new(sm.db().clone()));
+                executor.execute(&request.query, &request.params, request.limit, request.timeout_ms).await
             }
         }
     }
@@ -1212,16 +1086,9 @@ impl RaftNodeHealth {
         let state = borrowed.state;
         let is_shutdown = matches!(state, openraft::ServerState::Shutdown);
         let leader = borrowed.current_leader.map(|id| id.0);
-        let has_membership = borrowed
-            .membership_config
-            .membership()
-            .voter_ids()
-            .next()
-            .is_some();
+        let has_membership = borrowed.membership_config.membership().voter_ids().next().is_some();
 
-        let consecutive_failures = self
-            .consecutive_failures
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let consecutive_failures = self.consecutive_failures.load(std::sync::atomic::Ordering::Relaxed);
 
         HealthStatus {
             healthy: !is_shutdown && (has_membership || state == openraft::ServerState::Learner),
@@ -1235,8 +1102,7 @@ impl RaftNodeHealth {
 
     /// Reset the failure counter (call after recovery).
     pub fn reset_failures(&self) {
-        self.consecutive_failures
-            .store(0, std::sync::atomic::Ordering::Relaxed);
+        self.consecutive_failures.store(0, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Run periodic health monitoring with optional supervisor callback.
@@ -1244,9 +1110,7 @@ impl RaftNodeHealth {
     /// When the failure threshold is exceeded, the callback is invoked to
     /// allow the supervisor to take action (e.g., restart services).
     pub async fn monitor_with_callback<F>(&self, interval_secs: u64, mut on_failure: F)
-    where
-        F: FnMut(HealthStatus) + Send,
-    {
+    where F: FnMut(HealthStatus) + Send {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
 
         loop {
@@ -1255,10 +1119,7 @@ impl RaftNodeHealth {
             let status = self.status().await;
 
             if !status.healthy {
-                let failures = self
-                    .consecutive_failures
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    + 1;
+                let failures = self.consecutive_failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
 
                 warn!(
                     node_id = %self.node.node_id,
@@ -1278,9 +1139,7 @@ impl RaftNodeHealth {
                 }
             } else {
                 // Reset failure counter on successful check
-                let prev_failures = self
-                    .consecutive_failures
-                    .swap(0, std::sync::atomic::Ordering::Relaxed);
+                let prev_failures = self.consecutive_failures.swap(0, std::sync::atomic::Ordering::Relaxed);
                 if prev_failures > 0 {
                     info!(
                         node_id = %self.node.node_id,

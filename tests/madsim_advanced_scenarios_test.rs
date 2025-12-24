@@ -10,12 +10,18 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
+use aspen::raft::storage::InMemoryLogStore;
+use aspen::raft::storage::InMemoryStateMachine;
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -45,8 +51,7 @@ async fn create_raft_node(
 #[madsim::test]
 async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     let seed = 42_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_5node_concurrent_failures", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_5node_concurrent_failures", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -61,39 +66,19 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
 
     artifact = artifact.add_event("register: all 5 nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
     router
-        .register_node(
-            NodeId::from(4),
-            "127.0.0.1:26004".to_string(),
-            raft4.clone(),
-        )
+        .register_node(NodeId::from(4), "127.0.0.1:26004".to_string(), raft4.clone())
         .expect("failed to register node 4");
     router
-        .register_node(
-            NodeId::from(5),
-            "127.0.0.1:26005".to_string(),
-            raft5.clone(),
-        )
+        .register_node(NodeId::from(5), "127.0.0.1:26005".to_string(), raft5.clone())
         .expect("failed to register node 5");
 
     artifact = artifact.add_event("init: initialize 5-node cluster on node 1");
@@ -103,10 +88,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
     nodes.insert(NodeId::from(4), create_test_raft_member_info(4));
     nodes.insert(NodeId::from(5), create_test_raft_member_info(5));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -114,10 +96,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let initial_leader = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(format!(
-        "validation: initial leader is node {}",
-        initial_leader
-    ));
+    artifact = artifact.add_event(format!("validation: initial leader is node {}", initial_leader));
 
     artifact = artifact.add_event("write: first write before failures");
     let leader_raft = match initial_leader.0 {
@@ -139,17 +118,10 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
 
     artifact = artifact.add_event("failure: crash 2 follower nodes simultaneously");
     // Find two followers to crash (not the leader)
-    let followers: Vec<NodeId> = (1..=5)
-        .map(NodeId::from)
-        .filter(|id| *id != initial_leader)
-        .take(2)
-        .collect();
+    let followers: Vec<NodeId> = (1..=5).map(NodeId::from).filter(|id| *id != initial_leader).take(2).collect();
     router.mark_node_failed(followers[0], true);
     router.mark_node_failed(followers[1], true);
-    artifact = artifact.add_event(format!(
-        "failure: nodes {} and {} crashed",
-        followers[0], followers[1]
-    ));
+    artifact = artifact.add_event(format!("failure: nodes {} and {} crashed", followers[0], followers[1]));
 
     artifact = artifact.add_event("write: second write with 2 nodes down");
     leader_raft
@@ -166,10 +138,7 @@ async fn test_five_node_cluster_with_concurrent_failures_seed_42() {
     artifact = artifact.add_event("validation: majority maintains consensus");
     // Check that leader and at least one follower have replicated
     let leader_metrics = leader_raft.metrics().borrow().clone();
-    assert!(
-        leader_metrics.last_applied.is_some(),
-        "leader should have applied entries"
-    );
+    assert!(leader_metrics.last_applied.is_some(), "leader should have applied entries");
 
     artifact = artifact.add_event("validation: 5-node cluster operational with failures");
 
@@ -196,25 +165,13 @@ async fn test_rolling_failures_seed_123() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -222,10 +179,7 @@ async fn test_rolling_failures_seed_123() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -257,14 +211,10 @@ async fn test_rolling_failures_seed_123() {
     let metrics2 = raft2.metrics().borrow().clone();
     let metrics3 = raft3.metrics().borrow().clone();
 
-    let has_leader = metrics1.current_leader.is_some()
-        || metrics2.current_leader.is_some()
-        || metrics3.current_leader.is_some();
+    let has_leader =
+        metrics1.current_leader.is_some() || metrics2.current_leader.is_some() || metrics3.current_leader.is_some();
 
-    assert!(
-        has_leader,
-        "cluster should have leader after rolling failures"
-    );
+    assert!(has_leader, "cluster should have leader after rolling failures");
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -289,25 +239,13 @@ async fn test_asymmetric_partition_seed_456() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -315,10 +253,7 @@ async fn test_asymmetric_partition_seed_456() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -350,8 +285,7 @@ async fn test_asymmetric_partition_seed_456() {
             .await;
 
         if write_result.is_ok() {
-            artifact =
-                artifact.add_event("validation: write succeeded despite asymmetric partition");
+            artifact = artifact.add_event("validation: write succeeded despite asymmetric partition");
         } else {
             artifact = artifact.add_event("validation: write failed due to asymmetric partition");
         }
@@ -375,8 +309,7 @@ async fn test_asymmetric_partition_seed_456() {
 #[madsim::test]
 async fn test_concurrent_writes_complex_failures_seed_789() {
     let seed = 789_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_concurrent_writes_complex", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_concurrent_writes_complex", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -389,25 +322,13 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -415,10 +336,7 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -460,18 +378,9 @@ async fn test_concurrent_writes_complex_failures_seed_789() {
     let final_metrics2 = raft2.metrics().borrow().clone();
     let final_metrics3 = raft3.metrics().borrow().clone();
 
-    assert!(
-        final_metrics1.last_applied.is_some(),
-        "node 1 should have applied entries"
-    );
-    assert!(
-        final_metrics2.last_applied.is_some(),
-        "node 2 should have applied entries"
-    );
-    assert!(
-        final_metrics3.last_applied.is_some(),
-        "node 3 should have applied entries"
-    );
+    assert!(final_metrics1.last_applied.is_some(), "node 1 should have applied entries");
+    assert!(final_metrics2.last_applied.is_some(), "node 2 should have applied entries");
+    assert!(final_metrics3.last_applied.is_some(), "node 3 should have applied entries");
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {

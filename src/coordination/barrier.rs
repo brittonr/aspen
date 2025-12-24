@@ -12,11 +12,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 
 /// Barrier key prefix.
 const BARRIER_PREFIX: &str = "__barrier:";
@@ -202,12 +208,7 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
     /// Leave a barrier, waiting until all participants leave.
     ///
     /// Returns (remaining_count, phase) on success.
-    pub async fn leave(
-        &self,
-        name: &str,
-        participant_id: &str,
-        timeout: Option<Duration>,
-    ) -> Result<(u32, String)> {
+    pub async fn leave(&self, name: &str, participant_id: &str, timeout: Option<Duration>) -> Result<(u32, String)> {
         let key = format!("{}{}", BARRIER_PREFIX, name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
@@ -308,11 +309,9 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         let key = format!("{}{}", BARRIER_PREFIX, name);
 
         match self.read_state(&key).await? {
-            Some(state) => Ok((
-                state.participants.len() as u32,
-                state.required_count,
-                state.phase.as_str().to_string(),
-            )),
+            Some(state) => {
+                Ok((state.participants.len() as u32, state.required_count, state.phase.as_str().to_string()))
+            }
             None => Ok((0, 0, "none".to_string())),
         }
     }
@@ -346,19 +345,13 @@ mod tests {
         let manager = BarrierManager::new(store);
 
         // Enter with required_count = 1
-        let (count, phase) = manager
-            .enter("test", "p1", 1, Some(Duration::from_secs(1)))
-            .await
-            .unwrap();
+        let (count, phase) = manager.enter("test", "p1", 1, Some(Duration::from_secs(1))).await.unwrap();
 
         assert_eq!(count, 1);
         assert_eq!(phase, "ready");
 
         // Leave
-        let (remaining, phase) = manager
-            .leave("test", "p1", Some(Duration::from_secs(1)))
-            .await
-            .unwrap();
+        let (remaining, phase) = manager.leave("test", "p1", Some(Duration::from_secs(1))).await.unwrap();
 
         assert_eq!(remaining, 0);
         assert_eq!(phase, "completed");
@@ -376,10 +369,7 @@ mod tests {
         assert_eq!(phase, "none");
 
         // Create barrier
-        manager
-            .enter("test", "p1", 3, Some(Duration::from_millis(100)))
-            .await
-            .ok(); // Will timeout waiting for others
+        manager.enter("test", "p1", 3, Some(Duration::from_millis(100))).await.ok(); // Will timeout waiting for others
 
         let (count, required, phase) = manager.status("test").await.unwrap();
         assert_eq!(count, 1);

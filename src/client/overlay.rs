@@ -20,11 +20,13 @@ use std::sync::Arc;
 
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
 use super::cache::LocalCache;
 use super::constants::MAX_SUBSCRIPTIONS;
-use super::subscription::{AccessLevel, ClusterSubscription};
+use super::subscription::AccessLevel;
+use super::subscription::ClusterSubscription;
 
 /// Result of a read operation.
 #[derive(Debug, Clone)]
@@ -122,16 +124,11 @@ impl ClientOverlay {
     /// # Errors
     ///
     /// Returns `SubscriptionLimitExceeded` if the maximum subscription limit is reached.
-    pub async fn add_subscription(
-        &self,
-        subscription: ClusterSubscription,
-    ) -> Result<(), OverlayError> {
+    pub async fn add_subscription(&self, subscription: ClusterSubscription) -> Result<(), OverlayError> {
         let mut subs = self.subscriptions.write().await;
 
         if subs.len() >= MAX_SUBSCRIPTIONS {
-            return Err(OverlayError::SubscriptionLimitExceeded {
-                max: MAX_SUBSCRIPTIONS,
-            });
+            return Err(OverlayError::SubscriptionLimitExceeded { max: MAX_SUBSCRIPTIONS });
         }
 
         // Check for duplicate ID
@@ -154,10 +151,7 @@ impl ClientOverlay {
                 subscription.cache_config.ttl,
                 subscription.cache_config.max_entries,
             ));
-            self.caches
-                .write()
-                .await
-                .insert(subscription.id.clone(), cache);
+            self.caches.write().await.insert(subscription.id.clone(), cache);
         }
 
         Ok(())
@@ -257,10 +251,8 @@ impl ClientOverlay {
         let subs = self.subscriptions.read().await;
 
         // Find first write-capable subscription
-        let write_sub = subs
-            .iter()
-            .find(|s| s.access == AccessLevel::ReadWrite)
-            .ok_or(OverlayError::NoWriteSubscription)?;
+        let write_sub =
+            subs.iter().find(|s| s.access == AccessLevel::ReadWrite).ok_or(OverlayError::NoWriteSubscription)?;
 
         let sub_id = write_sub.id.clone();
 
@@ -333,18 +325,14 @@ impl ClientOverlay {
     /// Set the read handler for testing.
     #[cfg(test)]
     pub fn set_read_handler<F>(&mut self, handler: F)
-    where
-        F: Fn(&str, &str) -> Option<String> + Send + Sync + 'static,
-    {
+    where F: Fn(&str, &str) -> Option<String> + Send + Sync + 'static {
         self.read_handler = Some(Arc::new(handler));
     }
 
     /// Set the write handler for testing.
     #[cfg(test)]
     pub fn set_write_handler<F>(&mut self, handler: F)
-    where
-        F: Fn(&str, &str, &str) -> bool + Send + Sync + 'static,
-    {
+    where F: Fn(&str, &str, &str) -> bool + Send + Sync + 'static {
         self.write_handler = Some(Arc::new(handler));
     }
 }
@@ -357,9 +345,10 @@ impl Default for ClientOverlay {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
     use std::sync::Mutex;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_subscription_ordering() {
@@ -367,21 +356,15 @@ mod tests {
 
         // Add subscriptions out of order
         overlay
-            .add_subscription(
-                ClusterSubscription::new("sub-2", "Second", "cluster-b").with_priority(2),
-            )
+            .add_subscription(ClusterSubscription::new("sub-2", "Second", "cluster-b").with_priority(2))
             .await
             .unwrap();
         overlay
-            .add_subscription(
-                ClusterSubscription::new("sub-1", "First", "cluster-a").with_priority(1),
-            )
+            .add_subscription(ClusterSubscription::new("sub-1", "First", "cluster-a").with_priority(1))
             .await
             .unwrap();
         overlay
-            .add_subscription(
-                ClusterSubscription::new("sub-0", "Primary", "cluster-c").with_priority(0),
-            )
+            .add_subscription(ClusterSubscription::new("sub-0", "Primary", "cluster-c").with_priority(0))
             .await
             .unwrap();
 
@@ -419,15 +402,11 @@ mod tests {
         });
 
         overlay
-            .add_subscription(
-                ClusterSubscription::new("sub-1", "First", "cluster-a").with_priority(1),
-            )
+            .add_subscription(ClusterSubscription::new("sub-1", "First", "cluster-a").with_priority(1))
             .await
             .unwrap();
         overlay
-            .add_subscription(
-                ClusterSubscription::new("sub-2", "Second", "cluster-b").with_priority(2),
-            )
+            .add_subscription(ClusterSubscription::new("sub-2", "Second", "cluster-b").with_priority(2))
             .await
             .unwrap();
 
@@ -453,19 +432,13 @@ mod tests {
         let writes = Arc::new(Mutex::new(Vec::new()));
         let writes_clone = writes.clone();
         overlay.set_write_handler(move |sub_id, key, value| {
-            writes_clone.lock().unwrap().push((
-                sub_id.to_string(),
-                key.to_string(),
-                value.to_string(),
-            ));
+            writes_clone.lock().unwrap().push((sub_id.to_string(), key.to_string(), value.to_string()));
             true
         });
 
         // Add read-only and read-write subscriptions
         overlay
-            .add_subscription(
-                ClusterSubscription::new("readonly", "Read Only", "cluster-a").with_priority(0),
-            )
+            .add_subscription(ClusterSubscription::new("readonly", "Read Only", "cluster-a").with_priority(0))
             .await
             .unwrap();
         overlay
@@ -484,13 +457,6 @@ mod tests {
 
         let recorded = writes.lock().unwrap();
         assert_eq!(recorded.len(), 1);
-        assert_eq!(
-            recorded[0],
-            (
-                "readwrite".to_string(),
-                "key1".to_string(),
-                "value1".to_string()
-            )
-        );
+        assert_eq!(recorded[0], ("readwrite".to_string(), "key1".to_string(), "value1".to_string()));
     }
 }

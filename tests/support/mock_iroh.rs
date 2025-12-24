@@ -52,17 +52,18 @@
 use std::collections::HashMap;
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-use bytes::Bytes;
-use iroh::{EndpointId, SecretKey};
-use parking_lot::Mutex;
-use rand::RngCore;
-use tokio::sync::mpsc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 // Re-export ALPN constants from the main crate for test convenience
 // (avoids duplication of constant definitions)
 pub use aspen::{CLIENT_ALPN, RAFT_ALPN};
+use bytes::Bytes;
+use iroh::EndpointId;
+use iroh::SecretKey;
+use parking_lot::Mutex;
+use rand::RngCore;
+use tokio::sync::mpsc;
 
 /// Default channel capacity for streams.
 ///
@@ -85,10 +86,7 @@ impl std::fmt::Debug for MockIrohNetwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MockIrohNetwork")
             .field("endpoint_count", &self.inner.endpoints.lock().len())
-            .field(
-                "connection_id_counter",
-                &self.inner.connection_id_counter.load(Ordering::Relaxed),
-            )
+            .field("connection_id_counter", &self.inner.connection_id_counter.load(Ordering::Relaxed))
             .finish()
     }
 }
@@ -155,24 +153,17 @@ impl MockIrohNetwork {
     }
 
     /// Create a new mock endpoint with specific secret key and ALPNs.
-    pub fn create_endpoint_with_key_and_alpns(
-        &self,
-        secret_key: SecretKey,
-        alpns: Vec<Vec<u8>>,
-    ) -> MockEndpoint {
+    pub fn create_endpoint_with_key_and_alpns(&self, secret_key: SecretKey, alpns: Vec<Vec<u8>>) -> MockEndpoint {
         let endpoint_id = secret_key.public();
         let (incoming_tx, incoming_rx) = mpsc::channel(DEFAULT_STREAM_CAPACITY);
 
         {
             let mut endpoints = self.inner.endpoints.lock();
-            endpoints.insert(
-                endpoint_id,
-                EndpointEntry {
-                    secret_key: secret_key.clone(),
-                    incoming_tx,
-                    alpns,
-                },
-            );
+            endpoints.insert(endpoint_id, EndpointEntry {
+                secret_key: secret_key.clone(),
+                incoming_tx,
+                alpns,
+            });
         }
 
         MockEndpoint {
@@ -184,12 +175,7 @@ impl MockIrohNetwork {
     }
 
     /// Connect from one endpoint to another.
-    fn connect(
-        &self,
-        from: EndpointId,
-        to: EndpointId,
-        alpn: &[u8],
-    ) -> Result<MockConnection, MockConnectionError> {
+    fn connect(&self, from: EndpointId, to: EndpointId, alpn: &[u8]) -> Result<MockConnection, MockConnectionError> {
         // Check for network partition
         {
             let config = self.inner.failure_injection.lock();
@@ -204,9 +190,7 @@ impl MockIrohNetwork {
         // Look up target endpoint
         let incoming_tx = {
             let endpoints = self.inner.endpoints.lock();
-            let entry = endpoints
-                .get(&to)
-                .ok_or(MockConnectionError::EndpointNotFound)?;
+            let entry = endpoints.get(&to).ok_or(MockConnectionError::EndpointNotFound)?;
 
             // Check ALPN support
             if !entry.alpns.is_empty() && !entry.alpns.contains(&alpn.to_vec()) {
@@ -217,16 +201,11 @@ impl MockIrohNetwork {
         };
 
         // Generate connection ID
-        let connection_id = self
-            .inner
-            .connection_id_counter
-            .fetch_add(1, Ordering::Relaxed);
+        let connection_id = self.inner.connection_id_counter.fetch_add(1, Ordering::Relaxed);
 
         // Create bidirectional channels for the connection
-        let (initiator_to_acceptor_tx, initiator_to_acceptor_rx) =
-            mpsc::channel(DEFAULT_STREAM_CAPACITY);
-        let (acceptor_to_initiator_tx, acceptor_to_initiator_rx) =
-            mpsc::channel(DEFAULT_STREAM_CAPACITY);
+        let (initiator_to_acceptor_tx, initiator_to_acceptor_rx) = mpsc::channel(DEFAULT_STREAM_CAPACITY);
+        let (acceptor_to_initiator_tx, acceptor_to_initiator_rx) = mpsc::channel(DEFAULT_STREAM_CAPACITY);
 
         // Create connections for both sides
         let initiator_conn = MockConnection {
@@ -256,9 +235,7 @@ impl MockIrohNetwork {
         };
 
         // Send to acceptor's incoming queue
-        incoming_tx
-            .try_send(incoming)
-            .map_err(|_| MockConnectionError::EndpointBusy)?;
+        incoming_tx.try_send(incoming).map_err(|_| MockConnectionError::EndpointBusy)?;
 
         Ok(initiator_conn)
     }
@@ -380,11 +357,7 @@ impl MockEndpoint {
     /// # Arguments
     /// * `target` - The endpoint ID to connect to
     /// * `alpn` - The ALPN protocol to negotiate
-    pub async fn connect(
-        &self,
-        target: EndpointId,
-        alpn: &[u8],
-    ) -> Result<MockConnection, MockConnectionError> {
+    pub async fn connect(&self, target: EndpointId, alpn: &[u8]) -> Result<MockConnection, MockConnectionError> {
         self.network.connect(self.endpoint_id, target, alpn)
     }
 
@@ -534,10 +507,7 @@ impl MockConnection {
         }
 
         let mut rx = self.incoming_streams_rx.lock().await;
-        let pair = rx
-            .recv()
-            .await
-            .ok_or(MockConnectionError::ConnectionClosed)?;
+        let pair = rx.recv().await.ok_or(MockConnectionError::ConnectionClosed)?;
 
         let send_stream = MockSendStream {
             stream_id: pair.stream_id,
@@ -617,11 +587,7 @@ impl MockSendStream {
         if buf.len() > MAX_MOCK_MESSAGE_SIZE {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!(
-                    "message too large: {} bytes (max {})",
-                    buf.len(),
-                    MAX_MOCK_MESSAGE_SIZE
-                ),
+                format!("message too large: {} bytes (max {})", buf.len(), MAX_MOCK_MESSAGE_SIZE),
             ));
         }
 
@@ -636,10 +602,7 @@ impl MockSendStream {
     /// Dropping the sender signals EOF to the receiver.
     pub fn finish(&mut self) -> io::Result<()> {
         if self.tx.is_none() {
-            return Err(io::Error::new(
-                io::ErrorKind::BrokenPipe,
-                "stream already finished",
-            ));
+            return Err(io::Error::new(io::ErrorKind::BrokenPipe, "stream already finished"));
         }
         // Drop the sender to signal EOF to receiver
         self.tx = None;
@@ -688,12 +651,7 @@ impl MockRecvStream {
                     if self.buffer.len() + chunk.len() > limit {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,
-                            format!(
-                                "data exceeds limit: {} + {} > {}",
-                                self.buffer.len(),
-                                chunk.len(),
-                                limit
-                            ),
+                            format!("data exceeds limit: {} + {} > {}", self.buffer.len(), chunk.len(), limit),
                         ));
                     }
                     self.buffer.extend_from_slice(&chunk);
@@ -764,8 +722,7 @@ mod tests {
         let network = MockIrohNetwork::new();
 
         let ep1 = network.create_endpoint();
-        let ep2 = network
-            .create_endpoint_with_key_and_alpns(random_secret_key(), vec![RAFT_ALPN.to_vec()]);
+        let ep2 = network.create_endpoint_with_key_and_alpns(random_secret_key(), vec![RAFT_ALPN.to_vec()]);
 
         // Connect ep1 to ep2
         let conn1 = ep1.connect(ep2.id(), RAFT_ALPN).await.unwrap();
@@ -892,8 +849,7 @@ mod tests {
 
         let ep1 = network.create_endpoint();
         // ep2 only accepts RAFT_ALPN
-        let ep2 = network
-            .create_endpoint_with_key_and_alpns(random_secret_key(), vec![RAFT_ALPN.to_vec()]);
+        let ep2 = network.create_endpoint_with_key_and_alpns(random_secret_key(), vec![RAFT_ALPN.to_vec()]);
 
         // Try to connect with CLIENT_ALPN (not supported)
         let result = ep1.connect(ep2.id(), CLIENT_ALPN).await;

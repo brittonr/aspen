@@ -7,20 +7,38 @@
 
 mod support;
 
-use bolero::check;
-use support::bolero_generators::{
-    ClusterTicketString, EndpointIdString, ErrorCode, ErrorMessage, HexAddrString, MembershipList,
-    OptionalBinaryValue, OptionalErrorString, RaftStateString, StatusString, TopicIdString,
-    TuiBinaryData, TuiRpcKey,
-};
-
-use aspen::client_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, ClientRpcRequest, ClientRpcResponse,
-    ClusterStateResponse, ClusterTicketResponse, ErrorResponse, HealthResponse, InitResultResponse,
-    MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, NodeDescriptor, NodeInfoResponse,
-    RaftMetricsResponse, ReadResultResponse, SnapshotResultResponse, WriteResultResponse,
-};
+use aspen::client_rpc::AddLearnerResultResponse;
+use aspen::client_rpc::ChangeMembershipResultResponse;
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::ClusterStateResponse;
+use aspen::client_rpc::ClusterTicketResponse;
+use aspen::client_rpc::ErrorResponse;
+use aspen::client_rpc::HealthResponse;
+use aspen::client_rpc::InitResultResponse;
+use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
+use aspen::client_rpc::MAX_CLUSTER_NODES;
+use aspen::client_rpc::NodeDescriptor;
+use aspen::client_rpc::NodeInfoResponse;
+use aspen::client_rpc::RaftMetricsResponse;
+use aspen::client_rpc::ReadResultResponse;
+use aspen::client_rpc::SnapshotResultResponse;
+use aspen::client_rpc::WriteResultResponse;
 use aspen::protocol_handlers::CLIENT_ALPN;
+use bolero::check;
+use support::bolero_generators::ClusterTicketString;
+use support::bolero_generators::EndpointIdString;
+use support::bolero_generators::ErrorCode;
+use support::bolero_generators::ErrorMessage;
+use support::bolero_generators::HexAddrString;
+use support::bolero_generators::MembershipList;
+use support::bolero_generators::OptionalBinaryValue;
+use support::bolero_generators::OptionalErrorString;
+use support::bolero_generators::RaftStateString;
+use support::bolero_generators::StatusString;
+use support::bolero_generators::TopicIdString;
+use support::bolero_generators::TuiBinaryData;
+use support::bolero_generators::TuiRpcKey;
 
 // ============================================================================
 // TUI RPC Request serialization tests
@@ -86,8 +104,7 @@ fn test_client_read_key_postcard_roundtrip() {
     check!().with_type::<TuiRpcKey>().for_each(|key| {
         let request = ClientRpcRequest::ReadKey { key: key.0.clone() };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
             ClientRpcRequest::ReadKey { key: k } => assert_eq!(k, key.0),
             _ => panic!("Wrong variant"),
@@ -98,24 +115,21 @@ fn test_client_read_key_postcard_roundtrip() {
 /// WriteKey request serializes correctly.
 #[test]
 fn test_client_write_key_postcard_roundtrip() {
-    check!()
-        .with_type::<(TuiRpcKey, TuiBinaryData)>()
-        .for_each(|(key, value)| {
-            let request = ClientRpcRequest::WriteKey {
-                key: key.0.clone(),
-                value: value.0.clone(),
-            };
-            let serialized = postcard::to_stdvec(&request).expect("serialize");
-            let deserialized: ClientRpcRequest =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcRequest::WriteKey { key: k, value: v } => {
-                    assert_eq!(k, key.0);
-                    assert_eq!(v, value.0);
-                }
-                _ => panic!("Wrong variant"),
+    check!().with_type::<(TuiRpcKey, TuiBinaryData)>().for_each(|(key, value)| {
+        let request = ClientRpcRequest::WriteKey {
+            key: key.0.clone(),
+            value: value.0.clone(),
+        };
+        let serialized = postcard::to_stdvec(&request).expect("serialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcRequest::WriteKey { key: k, value: v } => {
+                assert_eq!(k, key.0);
+                assert_eq!(v, value.0);
             }
-        });
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// TriggerSnapshot request serializes correctly.
@@ -130,27 +144,21 @@ fn test_client_trigger_snapshot_postcard_roundtrip() {
 /// AddLearner request serializes correctly.
 #[test]
 fn test_client_add_learner_postcard_roundtrip() {
-    check!()
-        .with_type::<(u64, HexAddrString)>()
-        .for_each(|(node_id, addr)| {
-            let request = ClientRpcRequest::AddLearner {
-                node_id: *node_id,
-                addr: addr.0.clone(),
-            };
-            let serialized = postcard::to_stdvec(&request).expect("serialize");
-            let deserialized: ClientRpcRequest =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcRequest::AddLearner {
-                    node_id: n,
-                    addr: a,
-                } => {
-                    assert_eq!(n, *node_id);
-                    assert_eq!(a, addr.0);
-                }
-                _ => panic!("Wrong variant"),
+    check!().with_type::<(u64, HexAddrString)>().for_each(|(node_id, addr)| {
+        let request = ClientRpcRequest::AddLearner {
+            node_id: *node_id,
+            addr: addr.0.clone(),
+        };
+        let serialized = postcard::to_stdvec(&request).expect("serialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcRequest::AddLearner { node_id: n, addr: a } => {
+                assert_eq!(n, *node_id);
+                assert_eq!(a, addr.0);
             }
-        });
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// ChangeMembership request serializes correctly.
@@ -161,8 +169,7 @@ fn test_client_change_membership_postcard_roundtrip() {
             members: members.0.clone(),
         };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
             ClientRpcRequest::ChangeMembership { members: m } => {
                 assert_eq!(m, members.0);
@@ -197,9 +204,8 @@ fn test_client_get_cluster_state_postcard_roundtrip() {
 /// HealthResponse serializes correctly.
 #[test]
 fn test_health_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(StatusString, u64, Option<u64>, u64)>()
-        .for_each(|(status, node_id, raft_node_id, uptime_seconds)| {
+    check!().with_type::<(StatusString, u64, Option<u64>, u64)>().for_each(
+        |(status, node_id, raft_node_id, uptime_seconds)| {
             let response = ClientRpcResponse::Health(HealthResponse {
                 status: status.0.clone(),
                 node_id: *node_id,
@@ -207,8 +213,7 @@ fn test_health_response_postcard_roundtrip() {
                 uptime_seconds: *uptime_seconds,
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
+            let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
                 ClientRpcResponse::Health(h) => {
                     assert_eq!(h.status, status.0);
@@ -218,32 +223,17 @@ fn test_health_response_postcard_roundtrip() {
                 }
                 _ => panic!("Wrong variant"),
             }
-        });
+        },
+    );
 }
 
 /// RaftMetricsResponse serializes correctly.
 #[test]
 fn test_raft_metrics_response_postcard_roundtrip() {
     check!()
-        .with_type::<(
-            u64,
-            RaftStateString,
-            Option<u64>,
-            u64,
-            Option<u64>,
-            Option<u64>,
-            Option<u64>,
-        )>()
+        .with_type::<(u64, RaftStateString, Option<u64>, u64, Option<u64>, Option<u64>, Option<u64>)>()
         .for_each(
-            |(
-                node_id,
-                state,
-                current_leader,
-                current_term,
-                last_log_index,
-                last_applied_index,
-                snapshot_index,
-            )| {
+            |(node_id, state, current_leader, current_term, last_log_index, last_applied_index, snapshot_index)| {
                 let response = ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                     node_id: *node_id,
                     state: state.0.clone(),
@@ -254,8 +244,7 @@ fn test_raft_metrics_response_postcard_roundtrip() {
                     snapshot_index: *snapshot_index,
                 });
                 let serialized = postcard::to_stdvec(&response).expect("serialize");
-                let deserialized: ClientRpcResponse =
-                    postcard::from_bytes(&serialized).expect("deserialize");
+                let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
                 match deserialized {
                     ClientRpcResponse::RaftMetrics(m) => {
                         assert_eq!(m.node_id, *node_id);
@@ -275,8 +264,7 @@ fn test_leader_response_postcard_roundtrip() {
     check!().with_type::<Option<u64>>().for_each(|leader_id| {
         let response = ClientRpcResponse::Leader(*leader_id);
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
             ClientRpcResponse::Leader(l) => assert_eq!(l, *leader_id),
             _ => panic!("Wrong variant"),
@@ -287,36 +275,28 @@ fn test_leader_response_postcard_roundtrip() {
 /// NodeInfoResponse serializes correctly.
 #[test]
 fn test_node_info_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(u64, EndpointIdString)>()
-        .for_each(|(node_id, endpoint_addr)| {
-            let response = ClientRpcResponse::NodeInfo(NodeInfoResponse {
-                node_id: *node_id,
-                endpoint_addr: endpoint_addr.0.clone(),
-            });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::NodeInfo(n) => {
-                    assert_eq!(n.node_id, *node_id);
-                    assert_eq!(n.endpoint_addr, endpoint_addr.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(u64, EndpointIdString)>().for_each(|(node_id, endpoint_addr)| {
+        let response = ClientRpcResponse::NodeInfo(NodeInfoResponse {
+            node_id: *node_id,
+            endpoint_addr: endpoint_addr.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::NodeInfo(n) => {
+                assert_eq!(n.node_id, *node_id);
+                assert_eq!(n.endpoint_addr, endpoint_addr.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// ClusterTicketResponse serializes correctly.
 #[test]
 fn test_cluster_ticket_response_postcard_roundtrip() {
     check!()
-        .with_type::<(
-            ClusterTicketString,
-            TopicIdString,
-            TopicIdString,
-            EndpointIdString,
-        )>()
+        .with_type::<(ClusterTicketString, TopicIdString, TopicIdString, EndpointIdString)>()
         .for_each(|(ticket, topic_id, cluster_id, endpoint_id)| {
             let response = ClientRpcResponse::ClusterTicket(ClusterTicketResponse {
                 ticket: ticket.0.clone(),
@@ -326,8 +306,7 @@ fn test_cluster_ticket_response_postcard_roundtrip() {
                 bootstrap_peers: Some(1),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
+            let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
                 ClientRpcResponse::ClusterTicket(t) => {
                     assert_eq!(t.ticket, ticket.0);
@@ -343,24 +322,21 @@ fn test_cluster_ticket_response_postcard_roundtrip() {
 /// InitResultResponse serializes correctly.
 #[test]
 fn test_init_result_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(bool, OptionalErrorString)>()
-        .for_each(|(success, error)| {
-            let response = ClientRpcResponse::InitResult(InitResultResponse {
-                success: *success,
-                error: error.0.clone(),
-            });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::InitResult(r) => {
-                    assert_eq!(r.success, *success);
-                    assert_eq!(r.error, error.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(bool, OptionalErrorString)>().for_each(|(success, error)| {
+        let response = ClientRpcResponse::InitResult(InitResultResponse {
+            success: *success,
+            error: error.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::InitResult(r) => {
+                assert_eq!(r.success, *success);
+                assert_eq!(r.error, error.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// ReadResultResponse serializes correctly.
@@ -375,8 +351,7 @@ fn test_read_result_response_postcard_roundtrip() {
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
+            let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
                 ClientRpcResponse::ReadResult(r) => {
                     assert_eq!(r.value, value.0);
@@ -391,24 +366,21 @@ fn test_read_result_response_postcard_roundtrip() {
 /// WriteResultResponse serializes correctly.
 #[test]
 fn test_write_result_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(bool, OptionalErrorString)>()
-        .for_each(|(success, error)| {
-            let response = ClientRpcResponse::WriteResult(WriteResultResponse {
-                success: *success,
-                error: error.0.clone(),
-            });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::WriteResult(r) => {
-                    assert_eq!(r.success, *success);
-                    assert_eq!(r.error, error.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(bool, OptionalErrorString)>().for_each(|(success, error)| {
+        let response = ClientRpcResponse::WriteResult(WriteResultResponse {
+            success: *success,
+            error: error.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::WriteResult(r) => {
+                assert_eq!(r.success, *success);
+                assert_eq!(r.error, error.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// SnapshotResultResponse serializes correctly.
@@ -423,8 +395,7 @@ fn test_snapshot_result_response_postcard_roundtrip() {
                 error: error.0.clone(),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
+            let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
             match deserialized {
                 ClientRpcResponse::SnapshotResult(r) => {
                     assert_eq!(r.success, *success);
@@ -439,48 +410,41 @@ fn test_snapshot_result_response_postcard_roundtrip() {
 /// AddLearnerResultResponse serializes correctly.
 #[test]
 fn test_add_learner_result_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(bool, OptionalErrorString)>()
-        .for_each(|(success, error)| {
-            let response = ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
-                success: *success,
-                error: error.0.clone(),
-            });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::AddLearnerResult(r) => {
-                    assert_eq!(r.success, *success);
-                    assert_eq!(r.error, error.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(bool, OptionalErrorString)>().for_each(|(success, error)| {
+        let response = ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+            success: *success,
+            error: error.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::AddLearnerResult(r) => {
+                assert_eq!(r.success, *success);
+                assert_eq!(r.error, error.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// ChangeMembershipResultResponse serializes correctly.
 #[test]
 fn test_change_membership_result_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(bool, OptionalErrorString)>()
-        .for_each(|(success, error)| {
-            let response =
-                ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
-                    success: *success,
-                    error: error.0.clone(),
-                });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::ChangeMembershipResult(r) => {
-                    assert_eq!(r.success, *success);
-                    assert_eq!(r.error, error.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(bool, OptionalErrorString)>().for_each(|(success, error)| {
+        let response = ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+            success: *success,
+            error: error.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::ChangeMembershipResult(r) => {
+                assert_eq!(r.success, *success);
+                assert_eq!(r.error, error.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// Pong response serializes correctly.
@@ -495,41 +459,36 @@ fn test_pong_response_postcard_roundtrip() {
 /// ErrorResponse serializes correctly.
 #[test]
 fn test_error_response_postcard_roundtrip() {
-    check!()
-        .with_type::<(ErrorCode, ErrorMessage)>()
-        .for_each(|(code, message)| {
-            let response = ClientRpcResponse::Error(ErrorResponse {
-                code: code.0.clone(),
-                message: message.0.clone(),
-            });
-            let serialized = postcard::to_stdvec(&response).expect("serialize");
-            let deserialized: ClientRpcResponse =
-                postcard::from_bytes(&serialized).expect("deserialize");
-            match deserialized {
-                ClientRpcResponse::Error(e) => {
-                    assert_eq!(e.code, code.0);
-                    assert_eq!(e.message, message.0);
-                }
-                _ => panic!("Wrong variant"),
-            }
+    check!().with_type::<(ErrorCode, ErrorMessage)>().for_each(|(code, message)| {
+        let response = ClientRpcResponse::Error(ErrorResponse {
+            code: code.0.clone(),
+            message: message.0.clone(),
         });
+        let serialized = postcard::to_stdvec(&response).expect("serialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        match deserialized {
+            ClientRpcResponse::Error(e) => {
+                assert_eq!(e.code, code.0);
+                assert_eq!(e.message, message.0);
+            }
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 /// ClientRpcResponse::error helper works correctly.
 #[test]
 fn test_client_rpc_response_error_helper() {
-    check!()
-        .with_type::<(ErrorCode, ErrorMessage)>()
-        .for_each(|(code, message)| {
-            let response = ClientRpcResponse::error(code.0.clone(), message.0.clone());
-            match response {
-                ClientRpcResponse::Error(e) => {
-                    assert_eq!(e.code, code.0);
-                    assert_eq!(e.message, message.0);
-                }
-                _ => panic!("Wrong variant"),
+    check!().with_type::<(ErrorCode, ErrorMessage)>().for_each(|(code, message)| {
+        let response = ClientRpcResponse::error(code.0.clone(), message.0.clone());
+        match response {
+            ClientRpcResponse::Error(e) => {
+                assert_eq!(e.code, code.0);
+                assert_eq!(e.message, message.0);
             }
-        });
+            _ => panic!("Wrong variant"),
+        }
+    });
 }
 
 // ============================================================================
@@ -587,8 +546,7 @@ mod unit_tests {
         });
 
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcResponse::ClusterState(state) => {
@@ -662,9 +620,7 @@ mod unit_tests {
                 node_id: 42,
                 addr: "addr".to_string(),
             },
-            ClientRpcRequest::ChangeMembership {
-                members: vec![1, 2, 3],
-            },
+            ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] },
             ClientRpcRequest::Ping,
             ClientRpcRequest::GetClusterState,
         ];
@@ -672,11 +628,7 @@ mod unit_tests {
         for request in requests {
             let serialized = postcard::to_stdvec(&request);
             assert!(serialized.is_ok(), "Failed to serialize: {:?}", request);
-            assert!(
-                serialized.unwrap().len() < MAX_CLIENT_MESSAGE_SIZE,
-                "Message too large: {:?}",
-                request
-            );
+            assert!(serialized.unwrap().len() < MAX_CLIENT_MESSAGE_SIZE, "Message too large: {:?}", request);
         }
     }
 
@@ -774,8 +726,7 @@ mod unit_tests {
         let serialized = postcard::to_stdvec(&response).expect("serialize");
         assert!(serialized.len() < MAX_CLIENT_MESSAGE_SIZE);
 
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
         match deserialized {
             ClientRpcResponse::ClusterState(state) => {
                 assert_eq!(state.nodes.len(), MAX_CLUSTER_NODES);
@@ -793,8 +744,7 @@ mod unit_tests {
         });
 
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcResponse::ClusterState(state) => {
@@ -816,14 +766,10 @@ mod unit_tests {
             endpoint_addr: r#"{"id":"test_endpoint_id","addrs":[]}"#.to_string(),
         };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
-            ClientRpcRequest::AddPeer {
-                node_id,
-                endpoint_addr,
-            } => {
+            ClientRpcRequest::AddPeer { node_id, endpoint_addr } => {
                 assert_eq!(node_id, 42);
                 assert!(endpoint_addr.contains("test_endpoint_id"));
             }
@@ -835,8 +781,7 @@ mod unit_tests {
     fn test_get_cluster_ticket_combined_request_no_ids() {
         let request = ClientRpcRequest::GetClusterTicketCombined { endpoint_ids: None };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcRequest::GetClusterTicketCombined { endpoint_ids } => {
@@ -853,8 +798,7 @@ mod unit_tests {
             endpoint_ids: Some(ids.clone()),
         };
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcRequest::GetClusterTicketCombined { endpoint_ids } => {
@@ -873,8 +817,7 @@ mod unit_tests {
             error: None,
         });
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcResponse::AddPeerResult(r) => {
@@ -894,8 +837,7 @@ mod unit_tests {
             error: Some("invalid endpoint_addr format".to_string()),
         });
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcResponse::AddPeerResult(r) => {
@@ -916,8 +858,7 @@ mod unit_tests {
             bootstrap_peers: Some(5), // Multiple bootstrap peers
         });
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
 
         match deserialized {
             ClientRpcResponse::ClusterTicket(t) => {

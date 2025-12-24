@@ -49,21 +49,33 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use iroh::EndpointAddr;
-use iroh::endpoint::{Connection, RecvStream, SendStream};
-use tokio::sync::{Mutex as AsyncMutex, RwLock, Semaphore};
+use iroh::endpoint::Connection;
+use iroh::endpoint::RecvStream;
+use iroh::endpoint::SendStream;
+use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::constants::{
-    IROH_CONNECT_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_PEERS, MAX_STREAMS_PER_CONNECTION,
-};
-use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
+use crate::raft::constants::IROH_CONNECT_TIMEOUT;
+use crate::raft::constants::IROH_STREAM_OPEN_TIMEOUT;
+use crate::raft::constants::MAX_PEERS;
+use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::raft::node_failure_detection::ConnectionStatus;
+use crate::raft::node_failure_detection::NodeFailureDetector;
 use crate::raft::types::NodeId;
 
 /// Idle connection timeout before cleanup (60 seconds).
@@ -161,12 +173,7 @@ impl PeerConnection {
             .stream_semaphore
             .clone()
             .try_acquire_owned()
-            .map_err(|_| {
-                anyhow::anyhow!(
-                    "stream limit reached ({} streams in use)",
-                    MAX_STREAMS_PER_CONNECTION
-                )
-            })?;
+            .map_err(|_| anyhow::anyhow!("stream limit reached ({} streams in use)", MAX_STREAMS_PER_CONNECTION))?;
 
         // Track active streams
         let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed) + 1;
@@ -177,11 +184,10 @@ impl PeerConnection {
         );
 
         // Open bidirectional stream with timeout
-        let stream_result =
-            tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, self.connection.open_bi())
-                .await
-                .context("timeout opening stream")?
-                .context("failed to open stream");
+        let stream_result = tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, self.connection.open_bi())
+            .await
+            .context("timeout opening stream")?
+            .context("failed to open stream");
 
         // Handle stream open result
         match stream_result {
@@ -194,8 +200,7 @@ impl PeerConnection {
 
                 // Transition health state using pure function
                 let mut health = self.health.lock().await;
-                let new_health =
-                    transition_connection_health(*health, true, MAX_CONNECTION_RETRIES);
+                let new_health = transition_connection_health(*health, true, MAX_CONNECTION_RETRIES);
                 if *health != new_health {
                     debug!(node_id = %self.node_id, "connection health recovered");
                     *health = new_health;
@@ -227,8 +232,7 @@ impl PeerConnection {
                 // Update health status using pure state machine
                 let mut health = self.health.lock().await;
                 let old_health = *health;
-                let new_health =
-                    transition_connection_health(*health, false, MAX_CONNECTION_RETRIES);
+                let new_health = transition_connection_health(*health, false, MAX_CONNECTION_RETRIES);
                 *health = new_health;
 
                 // Log state transitions
@@ -331,10 +335,7 @@ impl RaftConnectionPool {
     /// Connections use `RAFT_ALPN` by default for backward compatibility.
     /// When `enable_raft_auth` is configured on the node, the server also
     /// accepts `RAFT_AUTH_ALPN` for authenticated connections.
-    pub fn new(
-        endpoint_manager: Arc<IrohEndpointManager>,
-        failure_detector: Arc<RwLock<NodeFailureDetector>>,
-    ) -> Self {
+    pub fn new(endpoint_manager: Arc<IrohEndpointManager>, failure_detector: Arc<RwLock<NodeFailureDetector>>) -> Self {
         Self {
             endpoint_manager,
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -347,11 +348,7 @@ impl RaftConnectionPool {
     ///
     /// Returns existing healthy connection if available, otherwise creates new one.
     /// Tiger Style: Lazy connection creation, bounded pool size.
-    pub async fn get_or_connect(
-        &self,
-        node_id: NodeId,
-        peer_addr: &EndpointAddr,
-    ) -> Result<Arc<PeerConnection>> {
+    pub async fn get_or_connect(&self, node_id: NodeId, peer_addr: &EndpointAddr) -> Result<Arc<PeerConnection>> {
         // Fast path: check for existing healthy connection
         {
             let connections = self.connections.read().await;
@@ -375,11 +372,7 @@ impl RaftConnectionPool {
     }
 
     /// Create a new connection to a peer.
-    async fn create_connection(
-        &self,
-        node_id: NodeId,
-        peer_addr: &EndpointAddr,
-    ) -> Result<Arc<PeerConnection>> {
+    async fn create_connection(&self, node_id: NodeId, peer_addr: &EndpointAddr) -> Result<Arc<PeerConnection>> {
         // Check pool size limit (Tiger Style: bounded resources)
         {
             let connections = self.connections.read().await;
@@ -409,9 +402,7 @@ impl RaftConnectionPool {
 
             let connect_result = tokio::time::timeout(
                 IROH_CONNECT_TIMEOUT,
-                self.endpoint_manager
-                    .endpoint()
-                    .connect(peer_addr.clone(), alpn),
+                self.endpoint_manager.endpoint().connect(peer_addr.clone(), alpn),
             )
             .await
             .context("timeout connecting to peer")?;
@@ -421,10 +412,7 @@ impl RaftConnectionPool {
                 Err(err) if attempts < MAX_CONNECTION_RETRIES => {
                     use crate::raft::pure::calculate_connection_retry_backoff;
 
-                    let backoff = calculate_connection_retry_backoff(
-                        attempts,
-                        CONNECTION_RETRY_BACKOFF_BASE_MS,
-                    );
+                    let backoff = calculate_connection_retry_backoff(attempts, CONNECTION_RETRY_BACKOFF_BASE_MS);
                     warn!(
                         %node_id,
                         attempt = attempts,
@@ -497,10 +485,7 @@ impl RaftConnectionPool {
                 // Tiger Style: Minimize lock hold time by avoiding awaits under lock
                 let candidates: Vec<(NodeId, Arc<PeerConnection>)> = {
                     let connections = pool.read().await;
-                    connections
-                        .iter()
-                        .map(|(id, conn)| (*id, Arc::clone(conn)))
-                        .collect()
+                    connections.iter().map(|(id, conn)| (*id, Arc::clone(conn))).collect()
                 };
 
                 // Phase 2: Check each connection WITHOUT holding the pool lock
@@ -545,10 +530,7 @@ impl RaftConnectionPool {
                         }
                     }
 
-                    debug!(
-                        pool_size = connections.len(),
-                        "connection pool cleanup complete"
-                    );
+                    debug!(pool_size = connections.len(), "connection pool cleanup complete");
                 }
             }
         });
@@ -570,10 +552,7 @@ impl RaftConnectionPool {
         let mut connections = self.connections.write().await;
         let count = connections.len();
         connections.clear();
-        debug!(
-            connections_closed = count,
-            "cleared connection pool during shutdown"
-        );
+        debug!(connections_closed = count, "cleared connection pool during shutdown");
     }
 
     /// Get metrics about the connection pool.
@@ -639,12 +618,9 @@ mod tests {
         let health = ConnectionHealth::Degraded {
             consecutive_failures: 2,
         };
-        assert!(matches!(
-            health,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 2
-            }
-        ));
+        assert!(matches!(health, ConnectionHealth::Degraded {
+            consecutive_failures: 2
+        }));
     }
 
     #[test]
@@ -683,18 +659,12 @@ mod tests {
     #[test]
     fn test_connection_health_eq_different_variants() {
         assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Failed);
-        assert_ne!(
-            ConnectionHealth::Healthy,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
-        assert_ne!(
-            ConnectionHealth::Failed,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
+        assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
+        assert_ne!(ConnectionHealth::Failed, ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
     }
 
     #[test]
@@ -832,24 +802,21 @@ mod tests {
     fn test_exponential_backoff_attempt_1() {
         // Formula: BASE * (1 << (attempts - 1))
         let attempts = 1;
-        let backoff =
-            Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
+        let backoff = Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
         assert_eq!(backoff, Duration::from_millis(100));
     }
 
     #[test]
     fn test_exponential_backoff_attempt_2() {
         let attempts = 2;
-        let backoff =
-            Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
+        let backoff = Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
         assert_eq!(backoff, Duration::from_millis(200));
     }
 
     #[test]
     fn test_exponential_backoff_attempt_3() {
         let attempts = 3;
-        let backoff =
-            Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
+        let backoff = Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
         assert_eq!(backoff, Duration::from_millis(400));
     }
 
@@ -857,8 +824,7 @@ mod tests {
     fn test_exponential_backoff_max_retries() {
         // At MAX_CONNECTION_RETRIES (3), backoff = 100 * (1 << 2) = 400ms
         let attempts = MAX_CONNECTION_RETRIES;
-        let backoff =
-            Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
+        let backoff = Duration::from_millis(CONNECTION_RETRY_BACKOFF_BASE_MS * (1 << (attempts - 1)));
         assert_eq!(backoff, Duration::from_millis(400));
     }
 

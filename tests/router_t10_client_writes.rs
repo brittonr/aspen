@@ -12,7 +12,8 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -44,15 +45,9 @@ async fn test_client_writes() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
 
-        router
-            .wait(0, timeout())
-            .state(ServerState::Leader, "node 0 is leader")
-            .await?;
+        router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
     }
 
     tracing::info!("--- write multiple entries");
@@ -60,17 +55,11 @@ async fn test_client_writes() -> Result<()> {
         for i in 0..10 {
             let key = format!("key{}", i);
             let value = format!("value{}", i);
-            router
-                .write(0, key, value)
-                .await
-                .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
+            router.write(0, key, value).await.map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
 
         // Wait for all writes to be applied
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(11), "10 writes applied")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(11), "10 writes applied").await?;
     }
 
     tracing::info!("--- verify all data persisted");
@@ -94,10 +83,7 @@ async fn test_client_writes() -> Result<()> {
             .await
             .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(13), "2 updates applied")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(13), "2 updates applied").await?;
     }
 
     tracing::info!("--- verify updates took effect");
@@ -133,10 +119,7 @@ async fn test_leader_write_path() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
     }
 
     tracing::info!("--- verify node 0 is leader");
@@ -182,10 +165,7 @@ async fn test_sequential_log_indices() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
     }
 
     tracing::info!("--- write and verify log indices increase");
@@ -206,12 +186,7 @@ async fn test_sequential_log_indices() -> Result<()> {
                 .await?;
 
             let metrics = router.get_raft_handle(0)?.metrics().borrow().clone();
-            assert_eq!(
-                metrics.last_log_index,
-                Some(expected_log_index),
-                "log index should be {}",
-                expected_log_index
-            );
+            assert_eq!(metrics.last_log_index, Some(expected_log_index), "log index should be {}", expected_log_index);
         }
     }
 

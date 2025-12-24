@@ -6,16 +6,15 @@
 //!
 //! # Design Goals
 //!
-//! 1. **Lexicographic ordering**: Packed bytes sort in the same order as the
-//!    original tuple elements, enabling efficient range scans.
+//! 1. **Lexicographic ordering**: Packed bytes sort in the same order as the original tuple
+//!    elements, enabling efficient range scans.
 //!
-//! 2. **Type-tagged encoding**: Each element is prefixed with a type code,
-//!    allowing heterogeneous tuples and unambiguous decoding.
+//! 2. **Type-tagged encoding**: Each element is prefixed with a type code, allowing heterogeneous
+//!    tuples and unambiguous decoding.
 //!
 //! 3. **Null-safe**: Embedded null bytes are escaped to preserve ordering.
 //!
-//! 4. **FoundationDB compatible**: Binary-compatible with FDB's tuple layer
-//!    for interoperability.
+//! 4. **FoundationDB compatible**: Binary-compatible with FDB's tuple layer for interoperability.
 //!
 //! # Type Codes (FoundationDB spec)
 //!
@@ -55,8 +54,10 @@
 //! assert_eq!(tuple, unpacked);
 //! ```
 
-use snafu::{ResultExt, Snafu};
 use std::cmp::Ordering;
+
+use snafu::ResultExt;
+use snafu::Snafu;
 
 // =============================================================================
 // Type Codes (FoundationDB Tuple Layer Specification)
@@ -390,9 +391,7 @@ pub struct Tuple {
 impl Tuple {
     /// Create a new empty tuple.
     pub fn new() -> Self {
-        Self {
-            elements: Vec::new(),
-        }
+        Self { elements: Vec::new() }
     }
 
     /// Create a tuple with pre-allocated capacity.
@@ -571,11 +570,7 @@ fn encode_int(n: i64, buf: &mut Vec<u8>) {
         // One's complement: flip all bits
         let complement = !abs;
         // We need to mask to the correct number of bytes
-        let mask = if size == 8 {
-            u64::MAX
-        } else {
-            (1u64 << (size * 8)) - 1
-        };
+        let mask = if size == 8 { u64::MAX } else { (1u64 << (size * 8)) - 1 };
         encode_uint_be(complement & mask, size, buf);
     }
 }
@@ -691,10 +686,7 @@ fn decode_element(data: &[u8], offset: usize) -> Result<(Element, usize), TupleE
 /// Decode bytes with null escaping (0x00, 0xFF -> 0x00).
 ///
 /// Returns the decoded bytes and the number of bytes consumed (including terminator).
-fn decode_bytes_with_null_escaping(
-    data: &[u8],
-    start: usize,
-) -> Result<(Vec<u8>, usize), TupleError> {
+fn decode_bytes_with_null_escaping(data: &[u8], start: usize) -> Result<(Vec<u8>, usize), TupleError> {
     let mut result = Vec::new();
     let mut i = start;
 
@@ -753,11 +745,7 @@ fn decode_int(data: &[u8], offset: usize) -> Result<(i64, usize), TupleError> {
 
         let complement = decode_uint_be(&data[offset + 1..offset + 1 + size]);
         // Undo one's complement
-        let mask = if size == 8 {
-            u64::MAX
-        } else {
-            (1u64 << (size * 8)) - 1
-        };
+        let mask = if size == 8 { u64::MAX } else { (1u64 << (size * 8)) - 1 };
         let abs = (!complement) & mask;
 
         if abs == 0 {
@@ -917,10 +905,7 @@ mod tests {
         assert!(packed.contains(&NULL_ESCAPE));
 
         let unpacked = Tuple::unpack(&packed).unwrap();
-        assert_eq!(
-            unpacked.get(0),
-            Some(&Element::String("foo\x00bar".to_string()))
-        );
+        assert_eq!(unpacked.get(0), Some(&Element::String("foo\x00bar".to_string())));
     }
 
     #[test]
@@ -950,12 +935,7 @@ mod tests {
             let t = Tuple::new().push(n);
             let packed = t.pack();
             let unpacked = Tuple::unpack(&packed).unwrap();
-            assert_eq!(
-                unpacked.get(0),
-                Some(&Element::Int(n)),
-                "failed for n={}",
-                n
-            );
+            assert_eq!(unpacked.get(0), Some(&Element::Int(n)), "failed for n={}", n);
         }
     }
 
@@ -965,12 +945,7 @@ mod tests {
             let t = Tuple::new().push(n);
             let packed = t.pack();
             let unpacked = Tuple::unpack(&packed).unwrap();
-            assert_eq!(
-                unpacked.get(0),
-                Some(&Element::Int(n)),
-                "failed for n={}",
-                n
-            );
+            assert_eq!(unpacked.get(0), Some(&Element::Int(n)), "failed for n={}", n);
         }
     }
 
@@ -978,36 +953,20 @@ mod tests {
     fn test_integer_ordering() {
         // Verify that packed integers sort correctly
         let values: Vec<i64> = vec![i64::MIN, -1000, -1, 0, 1, 1000, i64::MAX];
-        let packed: Vec<Vec<u8>> = values
-            .iter()
-            .map(|&n| Tuple::new().push(n).pack())
-            .collect();
+        let packed: Vec<Vec<u8>> = values.iter().map(|&n| Tuple::new().push(n).pack()).collect();
 
         for i in 1..packed.len() {
-            assert!(
-                packed[i - 1] < packed[i],
-                "ordering failed: {:?} should be < {:?}",
-                values[i - 1],
-                values[i]
-            );
+            assert!(packed[i - 1] < packed[i], "ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
         }
     }
 
     #[test]
     fn test_string_ordering() {
         let values = ["", "a", "aa", "ab", "b", "ba"];
-        let packed: Vec<Vec<u8>> = values
-            .iter()
-            .map(|s| Tuple::new().push(*s).pack())
-            .collect();
+        let packed: Vec<Vec<u8>> = values.iter().map(|s| Tuple::new().push(*s).pack()).collect();
 
         for i in 1..packed.len() {
-            assert!(
-                packed[i - 1] < packed[i],
-                "ordering failed: {:?} should be < {:?}",
-                values[i - 1],
-                values[i]
-            );
+            assert!(packed[i - 1] < packed[i], "ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
         }
     }
 
@@ -1077,11 +1036,7 @@ mod tests {
 
     #[test]
     fn test_composite_tuple() {
-        let t = Tuple::new()
-            .push("users")
-            .push(12345i64)
-            .push("profile")
-            .push(true);
+        let t = Tuple::new().push("users").push(12345i64).push("profile").push(true);
 
         let packed = t.pack();
         let unpacked = Tuple::unpack(&packed).unwrap();

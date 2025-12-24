@@ -35,11 +35,15 @@ mod revocation;
 mod token;
 mod verifier;
 
-pub use builder::{TokenBuilder, generate_root_token};
-pub use capability::{Capability, Operation};
+pub use builder::TokenBuilder;
+pub use builder::generate_root_token;
+pub use capability::Capability;
+pub use capability::Operation;
 pub use error::AuthError;
-pub use revocation::{KeyValueRevocationStore, RevocationStore};
-pub use token::{Audience, CapabilityToken};
+pub use revocation::KeyValueRevocationStore;
+pub use revocation::RevocationStore;
+pub use token::Audience;
+pub use token::CapabilityToken;
 pub use verifier::TokenVerifier;
 
 #[cfg(test)]

@@ -24,7 +24,9 @@ use std::time::Duration;
 
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
@@ -54,10 +56,7 @@ impl Default for TtlCleanupConfig {
 /// Background TTL cleanup task handle.
 ///
 /// Returns a CancellationToken that can be used to stop the task.
-pub fn spawn_ttl_cleanup_task(
-    state_machine: Arc<SqliteStateMachine>,
-    config: TtlCleanupConfig,
-) -> CancellationToken {
+pub fn spawn_ttl_cleanup_task(state_machine: Arc<SqliteStateMachine>, config: TtlCleanupConfig) -> CancellationToken {
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
 
@@ -160,10 +159,7 @@ async fn run_cleanup_iteration(state_machine: &SqliteStateMachine, config: &TtlC
 /// Background TTL cleanup task handle for Redb storage.
 ///
 /// Returns a CancellationToken that can be used to stop the task.
-pub fn spawn_redb_ttl_cleanup_task(
-    storage: Arc<SharedRedbStorage>,
-    config: TtlCleanupConfig,
-) -> CancellationToken {
+pub fn spawn_redb_ttl_cleanup_task(storage: Arc<SharedRedbStorage>, config: TtlCleanupConfig) -> CancellationToken {
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
 

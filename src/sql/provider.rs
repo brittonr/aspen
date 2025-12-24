@@ -4,25 +4,34 @@
 //! key-value store, enabling SQL queries against the KV data.
 
 use std::any::Any;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
+use std::fmt::{self};
 use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use datafusion::catalog::Session;
 use datafusion::common::Result;
-use datafusion::datasource::{TableProvider, TableType};
+use datafusion::datasource::TableProvider;
+use datafusion::datasource::TableType;
 use datafusion::execution::context::TaskContext;
-use datafusion::logical_expr::{Expr, Operator, TableProviderFilterPushDown};
+use datafusion::logical_expr::Expr;
+use datafusion::logical_expr::Operator;
+use datafusion::logical_expr::TableProviderFilterPushDown;
 use datafusion::physical_expr::EquivalenceProperties;
-use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
-use datafusion::physical_plan::{
-    DisplayAs, DisplayFormatType, ExecutionPlan, PlanProperties, SendableRecordBatchStream,
-};
+use datafusion::physical_plan::DisplayAs;
+use datafusion::physical_plan::DisplayFormatType;
+use datafusion::physical_plan::ExecutionPlan;
+use datafusion::physical_plan::PlanProperties;
+use datafusion::physical_plan::SendableRecordBatchStream;
+use datafusion::physical_plan::execution_plan::Boundedness;
+use datafusion::physical_plan::execution_plan::EmissionType;
 use redb::Database;
 
 use super::schema::KV_SCHEMA;
-use super::stream::{full_scan_stream, prefix_scan_stream, range_scan_stream};
+use super::stream::full_scan_stream;
+use super::stream::prefix_scan_stream;
+use super::stream::range_scan_stream;
 
 /// A TableProvider that reads from Redb KV storage.
 ///
@@ -43,9 +52,7 @@ pub struct RedbTableProvider {
 
 impl Debug for RedbTableProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RedbTableProvider")
-            .field("table", &"kv")
-            .finish()
+        f.debug_struct("RedbTableProvider").field("table", &"kv").finish()
     }
 }
 
@@ -70,10 +77,7 @@ impl TableProvider for RedbTableProvider {
         TableType::Base
     }
 
-    fn supports_filters_pushdown(
-        &self,
-        filters: &[&Expr],
-    ) -> Result<Vec<TableProviderFilterPushDown>> {
+    fn supports_filters_pushdown(&self, filters: &[&Expr]) -> Result<Vec<TableProviderFilterPushDown>> {
         // Analyze each filter to determine if we can push it down
         filters
             .iter()
@@ -97,12 +101,7 @@ impl TableProvider for RedbTableProvider {
         // Extract key range from filters
         let key_range = extract_key_range(filters);
 
-        Ok(Arc::new(RedbScanExec::new(
-            self.db.clone(),
-            projection.cloned(),
-            key_range,
-            limit,
-        )))
+        Ok(Arc::new(RedbScanExec::new(self.db.clone(), projection.cloned(), key_range, limit)))
     }
 }
 
@@ -127,18 +126,10 @@ fn can_pushdown_filter(expr: &Expr) -> bool {
             if is_key_column(&binary.left) {
                 matches!(
                     binary.op,
-                    Operator::Eq
-                        | Operator::Lt
-                        | Operator::LtEq
-                        | Operator::Gt
-                        | Operator::GtEq
-                        | Operator::LikeMatch
+                    Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq | Operator::LikeMatch
                 )
             } else if is_key_column(&binary.right) {
-                matches!(
-                    binary.op,
-                    Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq
-                )
+                matches!(binary.op, Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq)
             } else {
                 false
             }
@@ -305,12 +296,7 @@ pub struct RedbScanExec {
 
 impl RedbScanExec {
     /// Create a new scan execution plan.
-    pub fn new(
-        db: Arc<Database>,
-        projection: Option<Vec<usize>>,
-        key_range: KeyRange,
-        limit: Option<usize>,
-    ) -> Self {
+    pub fn new(db: Arc<Database>, projection: Option<Vec<usize>>, key_range: KeyRange, limit: Option<usize>) -> Self {
         // Compute the output schema based on projection.
         // For empty projection (e.g., COUNT(*)), we report an empty schema
         // but internally use a single column to count rows.
@@ -398,18 +384,11 @@ impl ExecutionPlan for RedbScanExec {
         vec![] // Leaf node
     }
 
-    fn with_new_children(
-        self: Arc<Self>,
-        _children: Vec<Arc<dyn ExecutionPlan>>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
+    fn with_new_children(self: Arc<Self>, _children: Vec<Arc<dyn ExecutionPlan>>) -> Result<Arc<dyn ExecutionPlan>> {
         Ok(self) // No children to replace
     }
 
-    fn execute(
-        &self,
-        _partition: usize,
-        _context: Arc<TaskContext>,
-    ) -> Result<SendableRecordBatchStream> {
+    fn execute(&self, _partition: usize, _context: Arc<TaskContext>) -> Result<SendableRecordBatchStream> {
         let stream = if let Some(exact) = &self.key_range.exact {
             // Exact key lookup - use range scan with tight bounds
             range_scan_stream(
@@ -434,13 +413,7 @@ impl ExecutionPlan for RedbScanExec {
             if start.is_empty() && end.is_empty() {
                 full_scan_stream(self.db.clone(), self.projection.clone(), self.limit)
             } else {
-                range_scan_stream(
-                    self.db.clone(),
-                    start,
-                    end,
-                    self.projection.clone(),
-                    self.limit,
-                )
+                range_scan_stream(self.db.clone(), start, end, self.projection.clone(), self.limit)
             }
         };
 
@@ -450,9 +423,10 @@ impl ExecutionPlan for RedbScanExec {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use datafusion::logical_expr::col;
     use datafusion::prelude::lit;
+
+    use super::*;
 
     #[test]
     fn extract_exact_key() {

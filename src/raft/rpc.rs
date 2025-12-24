@@ -19,11 +19,14 @@
 use irpc::channel::oneshot;
 use irpc::rpc_requests;
 use openraft::error::RaftError;
-use openraft::raft::{
-    AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
-};
+use openraft::raft::AppendEntriesRequest;
+use openraft::raft::AppendEntriesResponse;
+use openraft::raft::SnapshotResponse;
+use openraft::raft::VoteRequest;
+use openraft::raft::VoteResponse;
 use openraft::type_config::alias::VoteOf;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::raft::types::AppTypeConfig;
 
@@ -219,11 +222,7 @@ impl ShardedRaftRpcResponse {
     }
 
     /// Create a new sharded RPC response with timestamps.
-    pub fn with_timestamps(
-        shard_id: u32,
-        response: RaftRpcResponse,
-        timestamps: TimestampInfo,
-    ) -> Self {
+    pub fn with_timestamps(shard_id: u32, response: RaftRpcResponse, timestamps: TimestampInfo) -> Self {
         Self {
             shard_id,
             response,
@@ -286,9 +285,10 @@ pub fn try_decode_shard_prefix(bytes: &[u8]) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use openraft::Vote;
+
     use super::*;
     use crate::raft::types::NodeId;
-    use openraft::Vote;
 
     // =========================================================================
     // TimestampInfo Tests
@@ -483,8 +483,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
-        let deserialized: RaftRpcResponseWithTimestamps =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: RaftRpcResponseWithTimestamps = serde_json::from_str(&json).expect("deserialize");
 
         assert!(deserialized.timestamps.is_some());
         let ts = deserialized.timestamps.unwrap();
@@ -560,7 +559,9 @@ mod tests {
 
     #[test]
     fn test_snapshot_request_construction() {
-        use openraft::{Membership, SnapshotMeta, StoredMembership};
+        use openraft::Membership;
+        use openraft::SnapshotMeta;
+        use openraft::StoredMembership;
 
         let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![], []);
 
@@ -580,7 +581,9 @@ mod tests {
 
     #[test]
     fn test_snapshot_request_empty_data() {
-        use openraft::{Membership, SnapshotMeta, StoredMembership};
+        use openraft::Membership;
+        use openraft::SnapshotMeta;
+        use openraft::StoredMembership;
 
         let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![], []);
 
@@ -599,7 +602,9 @@ mod tests {
 
     #[test]
     fn test_snapshot_request_clone() {
-        use openraft::{Membership, SnapshotMeta, StoredMembership};
+        use openraft::Membership;
+        use openraft::SnapshotMeta;
+        use openraft::StoredMembership;
 
         let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![], []);
 
@@ -843,10 +848,7 @@ mod tests {
 
     #[test]
     fn test_sharded_response_debug() {
-        let response = ShardedRaftRpcResponse::new(
-            12,
-            RaftRpcResponse::AppendEntries(AppendEntriesResponse::Conflict),
-        );
+        let response = ShardedRaftRpcResponse::new(12, RaftRpcResponse::AppendEntries(AppendEntriesResponse::Conflict));
         let debug_str = format!("{:?}", response);
 
         assert!(debug_str.contains("ShardedRaftRpcResponse"));
@@ -869,8 +871,7 @@ mod tests {
         );
 
         let json = serde_json::to_string(&original).expect("serialize");
-        let deserialized: ShardedRaftRpcResponse =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: ShardedRaftRpcResponse = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(deserialized.shard_id, 42);
         assert!(deserialized.timestamps.is_some());

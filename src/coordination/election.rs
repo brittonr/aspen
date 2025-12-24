@@ -7,16 +7,21 @@
 //! - Graceful stepdown support
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::api::KeyValueStore;
 use crate::coordination::error::CoordinationError;
-use crate::coordination::lock::{DistributedLock, LockConfig, LockGuard};
+use crate::coordination::lock::DistributedLock;
+use crate::coordination::lock::LockConfig;
+use crate::coordination::lock::LockGuard;
 use crate::coordination::types::FencingToken;
 
 /// Configuration for leader election.
@@ -182,11 +187,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
     }
 
     /// Main election loop.
-    async fn election_loop(
-        self,
-        state_tx: watch::Sender<LeadershipState>,
-        running: Arc<AtomicBool>,
-    ) {
+    async fn election_loop(self, state_tx: watch::Sender<LeadershipState>, running: Arc<AtomicBool>) {
         while running.load(Ordering::SeqCst) {
             // Try to become leader
             let _ = state_tx.send(LeadershipState::Transitioning);
@@ -200,9 +201,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
                         "acquired leadership"
                     );
 
-                    let _ = state_tx.send(LeadershipState::Leader {
-                        fencing_token: token,
-                    });
+                    let _ = state_tx.send(LeadershipState::Leader { fencing_token: token });
 
                     // Maintain leadership through renewal
                     self.maintain_leadership(guard, &state_tx, &running).await;
@@ -242,8 +241,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
         state_tx: &watch::Sender<LeadershipState>,
         running: &Arc<AtomicBool>,
     ) {
-        let mut interval =
-            tokio::time::interval(Duration::from_millis(self.config.renew_interval_ms));
+        let mut interval = tokio::time::interval(Duration::from_millis(self.config.renew_interval_ms));
 
         loop {
             interval.tick().await;
@@ -360,24 +358,20 @@ impl Drop for ElectionHandle {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::api::inmemory::DeterministicKeyValueStore;
-    use std::time::Duration;
 
     #[tokio::test]
     async fn test_single_candidate_becomes_leader() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let election = LeaderElection::new(
-            store,
-            "test-election",
-            "candidate-1",
-            ElectionConfig {
-                lease_ttl_ms: 1000,
-                renew_interval_ms: 200,
-                retry_delay_ms: 100,
-                election_timeout_ms: 5000,
-            },
-        );
+        let election = LeaderElection::new(store, "test-election", "candidate-1", ElectionConfig {
+            lease_ttl_ms: 1000,
+            renew_interval_ms: 200,
+            retry_delay_ms: 100,
+            election_timeout_ms: 5000,
+        });
 
         let handle = election.start().await.unwrap();
 
@@ -401,12 +395,7 @@ mod tests {
             election_timeout_ms: 5000,
         };
 
-        let election1 = LeaderElection::new(
-            store.clone(),
-            "test-election",
-            "candidate-1",
-            config.clone(),
-        );
+        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", config.clone());
 
         let election2 = LeaderElection::new(store, "test-election", "candidate-2", config);
 
@@ -425,10 +414,7 @@ mod tests {
         assert!(found_leader, "At least one candidate should become leader");
 
         // Exactly one should be leader at any given time
-        let leader_count = [handle1.is_leader(), handle2.is_leader()]
-            .iter()
-            .filter(|&&x| x)
-            .count();
+        let leader_count = [handle1.is_leader(), handle2.is_leader()].iter().filter(|&&x| x).count();
         assert_eq!(leader_count, 1, "Exactly one candidate should be leader");
 
         handle1.stop().await;
@@ -439,17 +425,12 @@ mod tests {
     async fn test_stepdown_releases_leadership() {
         let store = Arc::new(DeterministicKeyValueStore::new());
 
-        let election1 = LeaderElection::new(
-            store.clone(),
-            "test-election",
-            "candidate-1",
-            ElectionConfig {
-                lease_ttl_ms: 1000,
-                renew_interval_ms: 200,
-                retry_delay_ms: 100,
-                election_timeout_ms: 5000,
-            },
-        );
+        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", ElectionConfig {
+            lease_ttl_ms: 1000,
+            renew_interval_ms: 200,
+            retry_delay_ms: 100,
+            election_timeout_ms: 5000,
+        });
 
         let handle1 = election1.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -477,12 +458,7 @@ mod tests {
         };
 
         // First election
-        let election1 = LeaderElection::new(
-            store.clone(),
-            "test-election",
-            "candidate-1",
-            config.clone(),
-        );
+        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", config.clone());
         let handle1 = election1.start().await.unwrap();
 
         // Wait for leadership with polling
@@ -526,17 +502,12 @@ mod tests {
     #[tokio::test]
     async fn test_leadership_state_subscription() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let election = LeaderElection::new(
-            store,
-            "test-election",
-            "candidate-1",
-            ElectionConfig {
-                lease_ttl_ms: 1000,
-                renew_interval_ms: 200,
-                retry_delay_ms: 100,
-                election_timeout_ms: 5000,
-            },
-        );
+        let election = LeaderElection::new(store, "test-election", "candidate-1", ElectionConfig {
+            lease_ttl_ms: 1000,
+            renew_interval_ms: 200,
+            retry_delay_ms: 100,
+            election_timeout_ms: 5000,
+        });
 
         let handle = election.start().await.unwrap();
         let mut rx = handle.subscribe();

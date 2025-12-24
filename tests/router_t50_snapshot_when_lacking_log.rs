@@ -13,7 +13,9 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState, SnapshotPolicy};
+use openraft::Config;
+use openraft::ServerState;
+use openraft::SnapshotPolicy;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -58,10 +60,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     }
 
     // Wait for leadership
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node-0 becomes leader")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node-0 becomes leader").await?;
 
     let mut log_index = 1u64; // Initialization log
 
@@ -77,10 +76,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     }
 
     // Wait for snapshot to be created
-    tracing::info!(
-        "--- section 3: wait for snapshot creation at log index {}",
-        log_index
-    );
+    tracing::info!("--- section 3: wait for snapshot creation at log index {}", log_index);
 
     let start = std::time::Instant::now();
     loop {
@@ -117,10 +113,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     }
 
     // Verify these entries are applied
-    router
-        .wait(0, timeout())
-        .applied_index(Some(log_index), "additional entries applied")
-        .await?;
+    router.wait(0, timeout()).applied_index(Some(log_index), "additional entries applied").await?;
 
     tracing::info!("--- section 5: add learner to receive snapshot");
 
@@ -130,10 +123,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     log_index += 1; // Add learner generates a log entry
 
     // Wait for learner to become ready
-    router
-        .wait(1, timeout())
-        .state(ServerState::Learner, "node-1 becomes learner")
-        .await?;
+    router.wait(1, timeout()).state(ServerState::Learner, "node-1 becomes learner").await?;
 
     tracing::info!("--- section 6: verify learner received snapshot");
 
@@ -163,25 +153,14 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
     }
 
     // Verify learner has caught up to latest log
-    router
-        .wait(1, timeout())
-        .applied_index(Some(log_index), "learner caught up to latest")
-        .await?;
+    router.wait(1, timeout()).applied_index(Some(log_index), "learner caught up to latest").await?;
 
     // Verify data integrity - learner should have all data from snapshot + new entries
     let val = router.read(1, "key0").await;
-    assert_eq!(
-        val,
-        Some("value0".to_string()),
-        "data from snapshot should be present"
-    );
+    assert_eq!(val, Some("value0".to_string()), "data from snapshot should be present");
 
     let val = router.read(1, "key_after_0").await;
-    assert_eq!(
-        val,
-        Some("value_after_0".to_string()),
-        "data after snapshot should be present"
-    );
+    assert_eq!(val, Some("value_after_0".to_string()), "data after snapshot should be present");
 
     Ok(())
 }

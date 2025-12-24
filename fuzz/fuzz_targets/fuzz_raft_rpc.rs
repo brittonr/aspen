@@ -11,10 +11,10 @@
 //! - Oversized payloads
 //! - Invalid UTF-8 in string fields
 
-use bolero::check;
-
 // Import the types we're fuzzing
-use aspen::fuzz_helpers::{RaftRpcProtocol, RaftRpcResponse};
+use aspen::fuzz_helpers::RaftRpcProtocol;
+use aspen::fuzz_helpers::RaftRpcResponse;
+use bolero::check;
 
 #[test]
 fn fuzz_raft_rpc() {

@@ -12,10 +12,10 @@
 //! - Invalid log indices
 //! - Corrupted entry payloads
 
-use bolero::check;
-
 // Import types used in log storage
-use aspen::fuzz_helpers::{AppRequest, AppResponse};
+use aspen::fuzz_helpers::AppRequest;
+use aspen::fuzz_helpers::AppResponse;
+use bolero::check;
 use openraft::Entry;
 
 // Type alias matching storage.rs
@@ -35,7 +35,6 @@ fn fuzz_log_entries() {
 
         // Also fuzz as raw openraft LogId for metadata corruption
         // LogId requires a full RaftTypeConfig, so we use AppTypeConfig
-        let _ =
-            bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::AppTypeConfig>>(data);
+        let _ = bincode::deserialize::<openraft::LogId<aspen::fuzz_helpers::AppTypeConfig>>(data);
     });
 }

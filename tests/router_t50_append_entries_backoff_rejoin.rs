@@ -12,7 +12,8 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -45,18 +46,10 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     tracing::info!("--- section 1: setup 3-node cluster");
 
     // Create cluster with nodes {0, 1, 2}
-    let log_index = router
-        .new_cluster(
-            BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)]),
-            BTreeSet::new(),
-        )
-        .await?;
+    let log_index = router.new_cluster(BTreeSet::from([NodeId(0), NodeId(1), NodeId(2)]), BTreeSet::new()).await?;
 
     // Verify initial leader
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node-0 is initial leader")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node-0 is initial leader").await?;
 
     tracing::info!("--- section 2: isolate node-0 from network");
 
@@ -81,16 +74,10 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     }
 
     // Wait for node-1 to become leader
-    router
-        .wait(1, timeout())
-        .state(ServerState::Leader, "node-1 becomes new leader")
-        .await?;
+    router.wait(1, timeout()).state(ServerState::Leader, "node-1 becomes new leader").await?;
 
     // Verify node-2 recognizes node-1 as leader
-    router
-        .wait(2, timeout())
-        .current_leader(NodeId(1), "node-2 sees node-1 as leader")
-        .await?;
+    router.wait(2, timeout()).current_leader(NodeId(1), "node-2 sees node-1 as leader").await?;
 
     tracing::info!("--- section 4: write entries while node-0 is partitioned");
 
@@ -106,10 +93,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     }
 
     // Verify entries are replicated to node-2
-    router
-        .wait(2, timeout())
-        .applied_index(Some(new_log_index), "node-2 replicated entries")
-        .await?;
+    router.wait(2, timeout()).applied_index(Some(new_log_index), "node-2 replicated entries").await?;
 
     tracing::info!("--- section 5: restore node-0 and verify catch-up");
 
@@ -126,10 +110,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
         .await?;
 
     // Verify node-0 recognizes node-1 as leader
-    router
-        .wait(0, timeout())
-        .current_leader(NodeId(1), "node-0 sees node-1 as leader")
-        .await?;
+    router.wait(0, timeout()).current_leader(NodeId(1), "node-0 sees node-1 as leader").await?;
 
     tracing::info!("--- section 6: verify data consistency");
 
@@ -140,13 +121,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
 
         for node_id in [NodeId(0), NodeId(1), NodeId(2)] {
             let val = router.read(node_id, &key).await;
-            assert_eq!(
-                val,
-                Some(expected_value.clone()),
-                "node {} should have correct value for {}",
-                node_id,
-                key
-            );
+            assert_eq!(val, Some(expected_value.clone()), "node {} should have correct value for {}", node_id, key);
         }
     }
 
@@ -156,10 +131,7 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
             .wait(node_id, timeout())
             .applied_index(
                 Some(new_log_index),
-                &format!(
-                    "node {} should have applied index {}",
-                    node_id, new_log_index
-                ),
+                &format!("node {} should have applied index {}", node_id, new_log_index),
             )
             .await?;
     }

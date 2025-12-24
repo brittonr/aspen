@@ -32,7 +32,11 @@
 //! 3. **Validation phase**: Server validates all versions still match
 //! 4. **Apply phase**: If valid, server atomically applies all writes
 
-use crate::api::{KeyValueStore, KeyValueStoreError, WriteCommand, WriteOp, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::WriteCommand;
+use crate::api::WriteOp;
+use crate::api::WriteRequest;
 
 /// Result of a transaction execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,10 +180,7 @@ impl TransactionBuilder {
     /// * `Ok(TransactionResult::Committed)` - Transaction succeeded
     /// * `Ok(TransactionResult::Conflict { .. })` - Version conflict detected
     /// * `Err(_)` - Other error (network, storage, etc.)
-    pub async fn execute<KV: KeyValueStore>(
-        self,
-        store: &KV,
-    ) -> Result<TransactionResult, KeyValueStoreError> {
+    pub async fn execute<KV: KeyValueStore>(self, store: &KV) -> Result<TransactionResult, KeyValueStoreError> {
         let request = WriteRequest {
             command: WriteCommand::OptimisticTransaction {
                 read_set: self.read_set,
@@ -218,11 +219,7 @@ mod tests {
 
     #[test]
     fn test_builder_fluent_api() {
-        let txn = TransactionBuilder::new()
-            .read("key1", 1)
-            .read("key2", 2)
-            .set("key1", "value1")
-            .delete("key3");
+        let txn = TransactionBuilder::new().read("key1", 1).read("key2", 2).set("key1", "value1").delete("key3");
 
         assert_eq!(txn.read_count(), 2);
         assert_eq!(txn.write_count(), 2);
@@ -234,10 +231,7 @@ mod tests {
         let writes = vec![("k1", "v1"), ("k2", "v2")];
         let deletes = vec!["k3", "k4"];
 
-        let txn = TransactionBuilder::new()
-            .read_many(reads)
-            .set_many(writes)
-            .delete_many(deletes);
+        let txn = TransactionBuilder::new().read_many(reads).set_many(writes).delete_many(deletes);
 
         assert_eq!(txn.read_count(), 3);
         assert_eq!(txn.write_count(), 4);
@@ -245,16 +239,11 @@ mod tests {
 
     #[test]
     fn test_build_command() {
-        let txn = TransactionBuilder::new()
-            .read("key1", 5)
-            .set("key1", "new_value");
+        let txn = TransactionBuilder::new().read("key1", 5).set("key1", "new_value");
 
         let cmd = txn.build();
         match cmd {
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 assert_eq!(read_set.len(), 1);
                 assert_eq!(read_set[0], ("key1".to_string(), 5));
                 assert_eq!(write_set.len(), 1);

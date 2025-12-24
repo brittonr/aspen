@@ -32,10 +32,13 @@
 //! 2. Which state transitions have occurred
 //! 3. Message types that triggered transitions
 
-use bolero::check;
-use bolero_generator::{Driver, TypeGenerator};
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use bolero::check;
+use bolero_generator::Driver;
+use bolero_generator::TypeGenerator;
 
 /// Raft node states (simplified model)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -78,11 +81,7 @@ enum RaftMessage {
         leader_commit: u64,
     },
     /// AppendEntries response
-    AppendEntriesResponse {
-        term: u64,
-        success: bool,
-        match_index: u64,
-    },
+    AppendEntriesResponse { term: u64, success: bool, match_index: u64 },
     /// Install snapshot from leader
     InstallSnapshot {
         term: u64,
@@ -170,10 +169,7 @@ impl ModelRaftNode {
     }
 
     /// Process a message and return state transition if any
-    fn process_message(
-        &mut self,
-        msg: &RaftMessage,
-    ) -> Option<(RaftState, RaftState, TransitionEvent)> {
+    fn process_message(&mut self, msg: &RaftMessage) -> Option<(RaftState, RaftState, TransitionEvent)> {
         let old_state = self.state;
 
         match msg {
@@ -204,19 +200,12 @@ impl ModelRaftNode {
                     self.voted_for = None;
                     if self.state == RaftState::Leader || self.state == RaftState::Candidate {
                         self.state = RaftState::Follower;
-                        return Some((
-                            old_state,
-                            self.state,
-                            TransitionEvent::DiscoveredHigherTerm,
-                        ));
+                        return Some((old_state, self.state, TransitionEvent::DiscoveredHigherTerm));
                     }
                 }
 
                 // Grant vote if we haven't voted and candidate's log is up-to-date
-                if *term >= self.current_term
-                    && self.voted_for.is_none()
-                    && *last_log_index >= self.log_index
-                {
+                if *term >= self.current_term && self.voted_for.is_none() && *last_log_index >= self.log_index {
                     self.voted_for = Some(*candidate_id);
                 }
             }
@@ -227,21 +216,13 @@ impl ModelRaftNode {
                     if self.state != RaftState::Follower {
                         self.state = RaftState::Follower;
                         self.voted_for = None;
-                        return Some((
-                            old_state,
-                            self.state,
-                            TransitionEvent::DiscoveredHigherTerm,
-                        ));
+                        return Some((old_state, self.state, TransitionEvent::DiscoveredHigherTerm));
                     }
                 }
 
-                if self.state == RaftState::Candidate
-                    && *vote_granted
-                    && *term == self.current_term
-                {
+                if self.state == RaftState::Candidate && *vote_granted && *term == self.current_term {
                     // Count vote (simplified - in reality we'd track voter IDs)
-                    self.votes_received
-                        .insert(self.votes_received.len() as u64 + 100);
+                    self.votes_received.insert(self.votes_received.len() as u64 + 100);
 
                     // Check if we have quorum
                     let quorum = (self.cluster_size / 2) + 1;
@@ -269,11 +250,7 @@ impl ModelRaftNode {
                     // Step down if we're not a follower
                     if self.state == RaftState::Candidate || self.state == RaftState::Leader {
                         self.state = RaftState::Follower;
-                        return Some((
-                            old_state,
-                            self.state,
-                            TransitionEvent::ReceivedAppendEntries,
-                        ));
+                        return Some((old_state, self.state, TransitionEvent::ReceivedAppendEntries));
                     }
 
                     // Update commit index
@@ -291,11 +268,7 @@ impl ModelRaftNode {
                     if self.state != RaftState::Follower {
                         self.state = RaftState::Follower;
                         self.voted_for = None;
-                        return Some((
-                            old_state,
-                            self.state,
-                            TransitionEvent::DiscoveredHigherTerm,
-                        ));
+                        return Some((old_state, self.state, TransitionEvent::DiscoveredHigherTerm));
                     }
                 }
             }
@@ -322,11 +295,7 @@ impl ModelRaftNode {
                     // Step down if not follower
                     if self.state == RaftState::Candidate || self.state == RaftState::Leader {
                         self.state = RaftState::Follower;
-                        return Some((
-                            old_state,
-                            self.state,
-                            TransitionEvent::ReceivedAppendEntries,
-                        ));
+                        return Some((old_state, self.state, TransitionEvent::ReceivedAppendEntries));
                     }
                 }
             }
@@ -377,9 +346,7 @@ impl TypeGenerator for ModelInput {
         }
 
         let promo_count = driver.produce::<usize>()? % 5;
-        let promotions: Vec<u8> = (0..promo_count)
-            .map(|_| driver.produce::<u8>())
-            .collect::<Option<Vec<u8>>>()?;
+        let promotions: Vec<u8> = (0..promo_count).map(|_| driver.produce::<u8>()).collect::<Option<Vec<u8>>>()?;
 
         Some(ModelInput {
             cluster_size,
@@ -408,17 +375,12 @@ fn fuzz_raft_model_guided() {
         }
 
         // Create cluster
-        let mut nodes: Vec<ModelRaftNode> = (0..cluster_size)
-            .map(|id| ModelRaftNode::new(id, cluster_size, false))
-            .collect();
+        let mut nodes: Vec<ModelRaftNode> =
+            (0..cluster_size).map(|id| ModelRaftNode::new(id, cluster_size, false)).collect();
 
         // Add learners
         for i in 0..learner_count.min(2) {
-            nodes.push(ModelRaftNode::new(
-                cluster_size + i as u64,
-                cluster_size,
-                true,
-            ));
+            nodes.push(ModelRaftNode::new(cluster_size + i as u64, cluster_size, true));
         }
 
         // Track coverage
@@ -469,20 +431,14 @@ fn fuzz_raft_model_guided() {
         // Verify invariants
 
         // Invariant 1: At most one leader per term
-        let mut leaders_per_term: std::collections::HashMap<u64, u64> =
-            std::collections::HashMap::new();
+        let mut leaders_per_term: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
         for node in &nodes {
             if node.state == RaftState::Leader {
                 *leaders_per_term.entry(node.current_term).or_insert(0) += 1;
             }
         }
         for (term, count) in &leaders_per_term {
-            assert!(
-                *count <= 1,
-                "Invariant violation: {} leaders in term {}",
-                count,
-                term
-            );
+            assert!(*count <= 1, "Invariant violation: {} leaders in term {}", count, term);
         }
 
         // Invariant 2: Nodes currently in Learner state should not become candidates or leaders

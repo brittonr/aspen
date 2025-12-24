@@ -41,15 +41,22 @@
 //! }
 //! ```
 
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
 
-use openraft::{LogId, Vote};
-use redb::{Database, ReadableTable, TableDefinition};
-use snafu::{ResultExt, Snafu};
+use openraft::LogId;
+use openraft::Vote;
+use redb::Database;
+use redb::ReadableTable;
+use redb::TableDefinition;
+use snafu::ResultExt;
+use snafu::Snafu;
 
 use crate::raft::storage::StoredSnapshot;
-use crate::raft::types::{AppTypeConfig, NodeId};
+use crate::raft::types::AppTypeConfig;
+use crate::raft::types::NodeId;
 
 /// Redb table definitions (must match storage.rs)
 const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
@@ -114,11 +121,7 @@ pub enum StorageValidationError {
     /// Raft requires a contiguous log from 0..N with no gaps. This error indicates
     /// entries were lost, likely due to corruption or incomplete write operations.
     /// Recovery requires restoring from snapshot or backup.
-    #[snafu(display(
-        "log entries are not monotonic: gap between index {} and {}",
-        prev,
-        current
-    ))]
+    #[snafu(display("log entries are not monotonic: gap between index {} and {}", prev, current))]
     LogNotMonotonic {
         /// The last valid log index before the gap.
         prev: u64,
@@ -130,10 +133,7 @@ pub enum StorageValidationError {
     ///
     /// This violates Raft invariants and indicates serious corruption.
     /// Recovery requires restoring from a known-good backup.
-    #[snafu(display(
-        "log entry has duplicate index {}: found multiple entries at same position",
-        index
-    ))]
+    #[snafu(display("log entry has duplicate index {}: found multiple entries at same position", index))]
     LogDuplicateIndex {
         /// The log index that appears multiple times.
         index: u64,
@@ -336,11 +336,7 @@ fn open_redb_database(path: &Path) -> Result<Database, StorageValidationError> {
 /// - Early termination on first gap detected
 fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
-    let table = read_txn
-        .open_table(RAFT_LOG_TABLE)
-        .context(OpenTableFailedSnafu {
-            table_name: "raft_log",
-        })?;
+    let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableFailedSnafu { table_name: "raft_log" })?;
 
     let mut prev_index: Option<u64> = None;
     let mut last_index: Option<u64> = None;
@@ -383,11 +379,9 @@ fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValida
 /// can exist when log entries have been purged (this is normal after compaction).
 fn validate_snapshot_metadata(db: &Database) -> Result<Option<u64>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
-    let table = read_txn
-        .open_table(SNAPSHOT_TABLE)
-        .context(OpenTableFailedSnafu {
-            table_name: "snapshots",
-        })?;
+    let table = read_txn.open_table(SNAPSHOT_TABLE).context(OpenTableFailedSnafu {
+        table_name: "snapshots",
+    })?;
 
     // Try to read the current snapshot
     let snapshot_bytes = match table.get("current").context(TableReadFailedSnafu)? {
@@ -396,10 +390,9 @@ fn validate_snapshot_metadata(db: &Database) -> Result<Option<u64>, StorageValid
     };
 
     // Deserialize snapshot metadata
-    let snapshot: StoredSnapshot =
-        bincode::deserialize(snapshot_bytes.value()).context(DeserializeFailedSnafu {
-            data_type: "snapshot metadata",
-        })?;
+    let snapshot: StoredSnapshot = bincode::deserialize(snapshot_bytes.value()).context(DeserializeFailedSnafu {
+        data_type: "snapshot metadata",
+    })?;
 
     // Extract last_log_id index from snapshot
     let snapshot_index = snapshot.meta.last_log_id.map(|log_id| log_id.index);
@@ -428,11 +421,9 @@ fn validate_snapshot_metadata(db: &Database) -> Result<Option<u64>, StorageValid
 /// - No vote is valid (returns None)
 fn validate_vote_state(db: &Database) -> Result<Option<u64>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
-    let table = read_txn
-        .open_table(RAFT_META_TABLE)
-        .context(OpenTableFailedSnafu {
-            table_name: "raft_meta",
-        })?;
+    let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableFailedSnafu {
+        table_name: "raft_meta",
+    })?;
 
     // Try to read vote state
     let vote_bytes = match table.get("vote").context(TableReadFailedSnafu)? {
@@ -441,10 +432,9 @@ fn validate_vote_state(db: &Database) -> Result<Option<u64>, StorageValidationEr
     };
 
     // Deserialize vote (using AppTypeConfig)
-    let vote: Vote<AppTypeConfig> =
-        bincode::deserialize(vote_bytes.value()).context(DeserializeFailedSnafu {
-            data_type: "vote state",
-        })?;
+    let vote: Vote<AppTypeConfig> = bincode::deserialize(vote_bytes.value()).context(DeserializeFailedSnafu {
+        data_type: "vote state",
+    })?;
 
     // Extract term from vote
     let term = vote.leader_id().term;
@@ -468,16 +458,11 @@ fn validate_vote_state(db: &Database) -> Result<Option<u64>, StorageValidationEr
 /// - Committed index must be <= last_log_index (if both exist)
 /// - Committed index must be deserializable if it exists
 /// - No committed index is valid (returns None)
-fn validate_committed_index(
-    db: &Database,
-    last_log_index: Option<u64>,
-) -> Result<Option<u64>, StorageValidationError> {
+fn validate_committed_index(db: &Database, last_log_index: Option<u64>) -> Result<Option<u64>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
-    let table = read_txn
-        .open_table(RAFT_META_TABLE)
-        .context(OpenTableFailedSnafu {
-            table_name: "raft_meta",
-        })?;
+    let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableFailedSnafu {
+        table_name: "raft_meta",
+    })?;
 
     // Try to read committed state
     let committed_bytes = match table.get("committed").context(TableReadFailedSnafu)? {
@@ -498,10 +483,7 @@ fn validate_committed_index(
         && committed_index > last_index
     {
         return Err(StorageValidationError::CommittedInconsistent {
-            reason: format!(
-                "committed index {} > last log index {}",
-                committed_index, last_index
-            ),
+            reason: format!("committed index {} > last log index {}", committed_index, last_index),
         });
     }
 
@@ -510,9 +492,10 @@ fn validate_committed_index(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use openraft::testing::log_id;
     use tempfile::TempDir;
+
+    use super::*;
 
     /// Helper: Creates a valid redb database for testing.
     fn create_test_db() -> (TempDir, PathBuf) {
@@ -523,8 +506,9 @@ mod tests {
 
     /// Helper: Creates a database with sequential log entries.
     fn create_db_with_log_entries(db_path: &Path, num_entries: u32) -> Database {
-        use crate::raft::types::AppRequest;
         use openraft::entry::RaftEntry;
+
+        use crate::raft::types::AppRequest;
 
         let db = Database::create(db_path).expect("failed to create db");
         let write_txn = db.begin_write().expect("failed to begin write");
@@ -533,23 +517,16 @@ mod tests {
             let _ = write_txn.open_table(SNAPSHOT_TABLE);
             let _ = write_txn.open_table(RAFT_META_TABLE);
 
-            let mut table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .expect("failed to open table");
+            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
 
             for i in 0..num_entries {
                 let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), i.into());
-                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                    log_id,
-                    AppRequest::Set {
-                        key: format!("key{}", i),
-                        value: format!("value{}", i),
-                    },
-                );
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(log_id, AppRequest::Set {
+                    key: format!("key{}", i),
+                    value: format!("value{}", i),
+                });
                 let serialized = bincode::serialize(&entry).expect("failed to serialize");
-                table
-                    .insert(u64::from(i), serialized.as_slice())
-                    .expect("failed to insert");
+                table.insert(u64::from(i), serialized.as_slice()).expect("failed to insert");
             }
         }
         write_txn.commit().expect("failed to commit");
@@ -596,9 +573,7 @@ mod tests {
         // Delete entry at index 2 to create a gap
         let write_txn = db.begin_write().expect("failed to begin write");
         {
-            let mut table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .expect("failed to open table");
+            let mut table = write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
             table.remove(2u64).expect("failed to remove");
         }
         write_txn.commit().expect("failed to commit");
@@ -641,15 +616,9 @@ mod tests {
         // Initialize tables but don't add any entries
         let write_txn = db.begin_write().expect("failed to begin write");
         {
-            write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .expect("failed to open table");
-            write_txn
-                .open_table(RAFT_META_TABLE)
-                .expect("failed to open table");
-            write_txn
-                .open_table(SNAPSHOT_TABLE)
-                .expect("failed to open table");
+            write_txn.open_table(RAFT_LOG_TABLE).expect("failed to open table");
+            write_txn.open_table(RAFT_META_TABLE).expect("failed to open table");
+            write_txn.open_table(SNAPSHOT_TABLE).expect("failed to open table");
         }
         write_txn.commit().expect("failed to commit");
         drop(db);

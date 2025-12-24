@@ -2,15 +2,20 @@
 //!
 //! Provides a fluent API for constructing tokens with proper signing.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use iroh::{PublicKey, SecretKey};
+use iroh::PublicKey;
+use iroh::SecretKey;
 use rand::RngCore;
 
 use crate::auth::capability::Capability;
 use crate::auth::error::AuthError;
-use crate::auth::token::{Audience, CapabilityToken};
-use crate::raft::constants::{MAX_CAPABILITIES_PER_TOKEN, MAX_DELEGATION_DEPTH};
+use crate::auth::token::Audience;
+use crate::auth::token::CapabilityToken;
+use crate::raft::constants::MAX_CAPABILITIES_PER_TOKEN;
+use crate::raft::constants::MAX_DELEGATION_DEPTH;
 
 /// Builder for creating capability tokens.
 ///
@@ -145,10 +150,7 @@ impl TokenBuilder {
             }
         }
 
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX epoch")
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before UNIX epoch").as_secs();
 
         // Create token without signature first
         let mut token = CapabilityToken {
@@ -207,14 +209,9 @@ impl TokenBuilder {
 /// let root_token = generate_root_token(&secret_key, Duration::from_secs(86400 * 365))?;
 /// println!("Root token: {}", root_token.to_base64()?);
 /// ```
-pub fn generate_root_token(
-    secret_key: &SecretKey,
-    lifetime: Duration,
-) -> Result<CapabilityToken, AuthError> {
+pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result<CapabilityToken, AuthError> {
     TokenBuilder::new(secret_key.clone())
-        .with_capability(Capability::Full {
-            prefix: String::new(),
-        })
+        .with_capability(Capability::Full { prefix: String::new() })
         .with_capability(Capability::ClusterAdmin)
         .with_capability(Capability::Delegate)
         .with_lifetime(lifetime)

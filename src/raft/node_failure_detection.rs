@@ -7,7 +7,8 @@
 //! Tiger Style: Fixed timeouts, bounded tracking (max 1000 nodes), explicit types.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use crate::raft::constants::MAX_UNREACHABLE_NODES;
 use crate::raft::types::NodeId;
@@ -173,11 +174,7 @@ impl NodeFailureDetector {
     /// | Connected | *             | Healthy     |
     /// | Disconnected | Connected  | ActorCrash  |
     /// | Disconnected | Disconnected | NodeCrash |
-    pub fn classify_failure(
-        &self,
-        raft_heartbeat: ConnectionStatus,
-        iroh_connection: ConnectionStatus,
-    ) -> FailureType {
+    pub fn classify_failure(&self, raft_heartbeat: ConnectionStatus, iroh_connection: ConnectionStatus) -> FailureType {
         // Delegate to extracted pure function
         crate::raft::pure::classify_node_failure(raft_heartbeat, iroh_connection)
     }
@@ -199,10 +196,7 @@ impl NodeFailureDetector {
     /// Returns Healthy if the node is not in the unreachable map.
     pub fn get_failure_type(&self, node_id: impl Into<NodeId>) -> FailureType {
         let node_id = node_id.into();
-        self.unreachable_nodes
-            .get(&node_id)
-            .map(|info| info.failure_type)
-            .unwrap_or(FailureType::Healthy)
+        self.unreachable_nodes.get(&node_id).map(|info| info.failure_type).unwrap_or(FailureType::Healthy)
     }
 
     /// Get unreachable duration for a node.
@@ -210,9 +204,7 @@ impl NodeFailureDetector {
     /// Returns None if the node is not currently unreachable.
     pub fn get_unreachable_duration(&self, node_id: impl Into<NodeId>) -> Option<Duration> {
         let node_id = node_id.into();
-        self.unreachable_nodes
-            .get(&node_id)
-            .map(|info| info.first_failed_at.elapsed())
+        self.unreachable_nodes.get(&node_id).map(|info| info.first_failed_at.elapsed())
     }
 
     /// Get count of currently unreachable nodes.
@@ -280,8 +272,7 @@ impl AlertManager {
         }
 
         // Clear alerts for recovered nodes
-        self.alerted_nodes
-            .retain(|node_id| detector.get_failure_type(*node_id) != FailureType::Healthy);
+        self.alerted_nodes.retain(|node_id| detector.get_failure_type(*node_id) != FailureType::Healthy);
     }
 
     /// Get count of currently active alerts.
@@ -340,10 +331,7 @@ mod tests {
 
         // Both disconnected → NodeCrash
         assert_eq!(
-            detector.classify_failure(
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Disconnected
-            ),
+            detector.classify_failure(ConnectionStatus::Disconnected, ConnectionStatus::Disconnected),
             FailureType::NodeCrash
         );
     }
@@ -358,11 +346,7 @@ mod tests {
         assert_eq!(detector.unreachable_count(), 0);
 
         // Simulate actor crash: Raft fails, Iroh OK
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Connected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Connected);
 
         // Should be classified as ActorCrash
         assert_eq!(detector.get_failure_type(node_id), FailureType::ActorCrash);
@@ -378,11 +362,7 @@ mod tests {
         let node_id = 99;
 
         // Simulate node crash: both fail
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
 
         // Should be classified as NodeCrash
         assert_eq!(detector.get_failure_type(node_id), FailureType::NodeCrash);
@@ -395,19 +375,11 @@ mod tests {
         let node_id = 7;
 
         // Node fails
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
         assert_eq!(detector.unreachable_count(), 1);
 
         // Node recovers
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Connected,
-            ConnectionStatus::Connected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Connected, ConnectionStatus::Connected);
 
         // Should be removed from tracking
         assert_eq!(detector.get_failure_type(node_id), FailureType::Healthy);
@@ -421,11 +393,7 @@ mod tests {
         let node_id: NodeId = 5.into();
 
         // Node fails
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
 
         // Initially no alerts (just failed)
         assert_eq!(detector.get_nodes_needing_attention().len(), 0);
@@ -447,11 +415,7 @@ mod tests {
 
         // Fill beyond max capacity
         for node_id in 0..MAX_UNREACHABLE_NODES + 10 {
-            detector.update_node_status(
-                node_id as u64,
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Disconnected,
-            );
+            detector.update_node_status(node_id as u64, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
         }
 
         // Should be capped at MAX_UNREACHABLE_NODES
@@ -464,11 +428,7 @@ mod tests {
         let node_id = 123;
 
         // Initial failure
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
 
         let initial_duration = detector.get_unreachable_duration(node_id).unwrap();
 
@@ -476,11 +436,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(50));
 
         // Update status (from NodeCrash to ActorCrash)
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Connected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Connected);
 
         // Duration should have increased, not reset
         let updated_duration = detector.get_unreachable_duration(node_id).unwrap();
@@ -497,11 +453,7 @@ mod tests {
         let node_id = 10;
 
         // Node fails
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
 
         // Wait for alert threshold
         std::thread::sleep(Duration::from_millis(100));
@@ -523,11 +475,7 @@ mod tests {
         let node_id = 20;
 
         // Node fails
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Disconnected,
-            ConnectionStatus::Disconnected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
 
         // Wait and fire alert
         std::thread::sleep(Duration::from_millis(100));
@@ -535,11 +483,7 @@ mod tests {
         assert_eq!(alert_mgr.active_alert_count(), 1);
 
         // Node recovers
-        detector.update_node_status(
-            node_id,
-            ConnectionStatus::Connected,
-            ConnectionStatus::Connected,
-        );
+        detector.update_node_status(node_id, ConnectionStatus::Connected, ConnectionStatus::Connected);
 
         // Alert should be cleared
         alert_mgr.check_and_alert(&detector);
@@ -553,11 +497,7 @@ mod tests {
 
         // Three nodes fail
         for node_id in [30, 31, 32] {
-            detector.update_node_status(
-                node_id,
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Disconnected,
-            );
+            detector.update_node_status(node_id, ConnectionStatus::Disconnected, ConnectionStatus::Disconnected);
         }
 
         // Wait for alert threshold

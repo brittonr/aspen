@@ -24,7 +24,9 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState, SnapshotPolicy};
+use openraft::Config;
+use openraft::ServerState;
+use openraft::SnapshotPolicy;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -63,17 +65,11 @@ async fn test_build_snapshot() -> Result<()> {
     nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
     node0.initialize(nodes).await?;
 
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node 0 is leader")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
 
     let mut log_index = 1; // Initialization log at index 1
 
-    tracing::info!(
-        "--- writing entries to trigger snapshot (threshold={})",
-        snapshot_threshold
-    );
+    tracing::info!("--- writing entries to trigger snapshot (threshold={})", snapshot_threshold);
     {
         // Write enough entries to reach the snapshot threshold
         // We need to write (snapshot_threshold - 1 - log_index) more entries
@@ -91,10 +87,7 @@ async fn test_build_snapshot() -> Result<()> {
         tracing::info!(log_index, "--- log_index after writes: {}", log_index);
 
         // Wait for all writes to be applied
-        router
-            .wait(0, timeout())
-            .applied_index(Some(log_index), "writes applied")
-            .await?;
+        router.wait(0, timeout()).applied_index(Some(log_index), "writes applied").await?;
 
         // Wait for snapshot to be created by polling metrics
         let start = std::time::Instant::now();
@@ -113,16 +106,10 @@ async fn test_build_snapshot() -> Result<()> {
     tracing::info!("--- verifying snapshot was created");
     {
         let metrics = node0.metrics().borrow().clone();
-        assert!(
-            metrics.snapshot.is_some(),
-            "snapshot should exist after threshold"
-        );
+        assert!(metrics.snapshot.is_some(), "snapshot should exist after threshold");
 
         if let Some(snapshot_log_id) = metrics.snapshot {
-            assert_eq!(
-                snapshot_log_id.index, log_index,
-                "snapshot should include all logs up to threshold"
-            );
+            assert_eq!(snapshot_log_id.index, log_index, "snapshot should include all logs up to threshold");
         }
     }
 
@@ -133,11 +120,7 @@ async fn test_build_snapshot() -> Result<()> {
         assert_eq!(val0, Some("value0".to_string()), "key0 should be persisted");
 
         let val10 = router.read(0, "key10").await;
-        assert_eq!(
-            val10,
-            Some("value10".to_string()),
-            "key10 should be persisted"
-        );
+        assert_eq!(val10, Some("value10".to_string()), "key10 should be persisted");
     }
 
     Ok(())
@@ -167,10 +150,7 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
     nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
     node0.initialize(nodes).await?;
 
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node 0 is leader")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
 
     tracing::info!("--- writing entries below threshold");
     {
@@ -191,10 +171,7 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
         // Snapshot should NOT be created yet
         let metrics = node0.metrics().borrow().clone();
         if let Some(snapshot_log_id) = metrics.snapshot {
-            assert!(
-                snapshot_log_id.index < 5,
-                "snapshot should not be created before threshold"
-            );
+            assert!(snapshot_log_id.index < 5, "snapshot should not be created before threshold");
         }
     }
 
@@ -208,10 +185,7 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("write failed: {}", e))?;
         }
 
-        router
-            .wait(0, timeout())
-            .applied_index(Some(10), "writes applied to threshold")
-            .await?;
+        router.wait(0, timeout()).applied_index(Some(10), "writes applied to threshold").await?;
 
         // Now snapshot should be created - poll metrics
         let start = std::time::Instant::now();
@@ -227,10 +201,7 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
         }
 
         let metrics = node0.metrics().borrow().clone();
-        assert!(
-            metrics.snapshot.is_some(),
-            "snapshot should exist after reaching threshold"
-        );
+        assert!(metrics.snapshot.is_some(), "snapshot should exist after reaching threshold");
     }
 
     Ok(())

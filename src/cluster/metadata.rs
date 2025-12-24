@@ -52,11 +52,16 @@
 //! println!("Node {} at {}", node.node_id, node.raft_addr);
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use redb::{Database, ReadableTable, TableDefinition};
-use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use redb::Database;
+use redb::ReadableTable;
+use redb::TableDefinition;
+use serde::Deserialize;
+use serde::Serialize;
+use snafu::ResultExt;
+use snafu::Snafu;
 
 /// Table definition for node metadata.
 /// Key: node_id (u64), Value: serialized NodeMetadata (bincode)
@@ -126,9 +131,7 @@ impl MetadataStore {
         // Initialize the table
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;
         {
-            write_txn
-                .open_table(NODE_METADATA_TABLE)
-                .context(OpenTableSnafu)?;
+            write_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -139,14 +142,10 @@ impl MetadataStore {
     pub fn register_node(&self, metadata: NodeMetadata) -> Result<(), MetadataError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
-                .open_table(NODE_METADATA_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut table = write_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
 
             let serialized = bincode::serialize(&metadata).context(SerializeSnafu)?;
-            table
-                .insert(metadata.node_id, serialized.as_slice())
-                .context(InsertSnafu)?;
+            table.insert(metadata.node_id, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -158,15 +157,12 @@ impl MetadataStore {
     /// Returns `None` if the node is not registered.
     pub fn get_node(&self, node_id: u64) -> Result<Option<NodeMetadata>, MetadataError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(NODE_METADATA_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
 
         let result = match table.get(node_id).context(GetSnafu)? {
             Some(value) => {
                 let bytes = value.value();
-                let metadata: NodeMetadata =
-                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                let metadata: NodeMetadata = bincode::deserialize(bytes).context(DeserializeSnafu)?;
                 Some(metadata)
             }
             None => None,
@@ -178,9 +174,7 @@ impl MetadataStore {
     /// List all registered nodes.
     pub fn list_nodes(&self) -> Result<Vec<NodeMetadata>, MetadataError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(NODE_METADATA_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
 
         let mut nodes = Vec::new();
         let range = table.range::<u64>(..).context(RangeSnafu)?;
@@ -201,21 +195,15 @@ impl MetadataStore {
     pub fn update_status(&self, node_id: u64, status: NodeStatus) -> Result<(), MetadataError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
-                .open_table(NODE_METADATA_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut table = write_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
 
             // Read existing metadata
             let metadata_bytes = {
-                let existing = table
-                    .get(node_id)
-                    .context(GetSnafu)?
-                    .ok_or(MetadataError::NodeNotFound { node_id })?;
+                let existing = table.get(node_id).context(GetSnafu)?.ok_or(MetadataError::NodeNotFound { node_id })?;
                 existing.value().to_vec()
             };
 
-            let mut metadata: NodeMetadata =
-                bincode::deserialize(&metadata_bytes).context(DeserializeSnafu)?;
+            let mut metadata: NodeMetadata = bincode::deserialize(&metadata_bytes).context(DeserializeSnafu)?;
 
             // Update status and timestamp
             metadata.status = status;
@@ -223,9 +211,7 @@ impl MetadataStore {
 
             // Write back
             let serialized = bincode::serialize(&metadata).context(SerializeSnafu)?;
-            table
-                .insert(node_id, serialized.as_slice())
-                .context(InsertSnafu)?;
+            table.insert(node_id, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -236,9 +222,7 @@ impl MetadataStore {
     pub fn remove_node(&self, node_id: u64) -> Result<(), MetadataError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
-                .open_table(NODE_METADATA_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut table = write_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
             table.remove(node_id).context(RemoveSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -434,8 +418,9 @@ pub enum MetadataError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_register_and_get_node() {
@@ -522,10 +507,7 @@ mod tests {
 
         let result = store.update_status(999, NodeStatus::Online);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            MetadataError::NodeNotFound { node_id: 999 }
-        ));
+        assert!(matches!(result.unwrap_err(), MetadataError::NodeNotFound { node_id: 999 }));
     }
 
     #[test]

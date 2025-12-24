@@ -46,7 +46,8 @@
 //! assert!(verify_entry_hash(&GENESIS_HASH, 1, 1, &entry_bytes, &hash1));
 //! ```
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Blake3 hash (32 bytes / 256 bits).
 ///
@@ -83,12 +84,7 @@ pub const GENESIS_HASH: ChainHash = [0u8; 32];
 /// - Deterministic: same inputs always produce same hash
 /// - No allocations after initial hasher creation
 /// - Fixed output size (32 bytes)
-pub fn compute_entry_hash(
-    prev_hash: &ChainHash,
-    log_index: u64,
-    term: u64,
-    entry_bytes: &[u8],
-) -> ChainHash {
+pub fn compute_entry_hash(prev_hash: &ChainHash, log_index: u64, term: u64, entry_bytes: &[u8]) -> ChainHash {
     let mut hasher = blake3::Hasher::new();
 
     // Include previous hash (chain linkage)
@@ -143,10 +139,7 @@ pub fn verify_entry_hash(
 /// - XOR accumulation prevents branch prediction leakage
 #[inline]
 fn constant_time_compare(a: &ChainHash, b: &ChainHash) -> bool {
-    a.iter()
-        .zip(b.iter())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
+    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// Cached chain tip state for efficient appends.
@@ -233,8 +226,7 @@ impl SnapshotIntegrity {
         let data_hash = *blake3::hash(data).as_bytes();
         let meta_hash = *blake3::hash(meta_bytes).as_bytes();
 
-        constant_time_compare(&self.data_hash, &data_hash)
-            && constant_time_compare(&self.meta_hash, &meta_hash)
+        constant_time_compare(&self.data_hash, &data_hash) && constant_time_compare(&self.meta_hash, &meta_hash)
     }
 
     /// Get the combined hash as a hex string for logging.
@@ -292,7 +284,8 @@ pub fn hash_from_hex(hex_str: &str) -> Option<ChainHash> {
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::raft::constants::{CHAIN_VERIFY_BATCH_SIZE, CHAIN_VERIFY_INTERVAL_SECS};
+use crate::raft::constants::CHAIN_VERIFY_BATCH_SIZE;
+use crate::raft::constants::CHAIN_VERIFY_INTERVAL_SECS;
 use crate::raft::storage::RedbLogStore;
 
 /// Background chain verification task.
@@ -326,11 +319,7 @@ impl ChainVerifier {
     /// Create a chain verifier with custom settings.
     ///
     /// Useful for testing with shorter intervals.
-    pub fn with_settings(
-        log_store: Arc<RedbLogStore>,
-        interval: Duration,
-        batch_size: u32,
-    ) -> Self {
+    pub fn with_settings(log_store: Arc<RedbLogStore>, interval: Duration, batch_size: u32) -> Self {
         Self {
             log_store,
             interval,
@@ -388,29 +377,16 @@ impl ChainVerifier {
             if verification_index > last_index || verification_index < first_index {
                 verification_index = first_index;
                 pass_count += 1;
-                tracing::debug!(
-                    pass = pass_count,
-                    first_index,
-                    last_index,
-                    "starting new verification pass"
-                );
+                tracing::debug!(pass = pass_count, first_index, last_index, "starting new verification pass");
             }
 
             // Verify batch
-            match self
-                .log_store
-                .verify_chain_batch(verification_index, self.batch_size)
-            {
+            match self.log_store.verify_chain_batch(verification_index, self.batch_size) {
                 Ok(verified) => {
                     if verified > 0 {
                         total_verified += verified;
                         verification_index += verified;
-                        tracing::debug!(
-                            verified,
-                            total_verified,
-                            next_index = verification_index,
-                            "batch verified"
-                        );
+                        tracing::debug!(verified, total_verified, next_index = verification_index, "batch verified");
                     }
                 }
                 Err(e) => {
@@ -446,16 +422,10 @@ impl ChainVerifier {
         let mut current_index = first_index;
         let mut total_verified: u64 = 0;
 
-        tracing::info!(
-            first_index,
-            last_index,
-            "performing full chain verification"
-        );
+        tracing::info!(first_index, last_index, "performing full chain verification");
 
         while current_index <= last_index {
-            let verified = self
-                .log_store
-                .verify_chain_batch(current_index, self.batch_size)?;
+            let verified = self.log_store.verify_chain_batch(current_index, self.batch_size)?;
             if verified == 0 {
                 break;
             }
@@ -505,10 +475,7 @@ mod tests {
         let hash1 = compute_entry_hash(&prev_hash, 1, 1, b"entry 1");
         let hash2 = compute_entry_hash(&prev_hash, 1, 1, b"entry 2");
 
-        assert_ne!(
-            hash1, hash2,
-            "different data should produce different hashes"
-        );
+        assert_ne!(hash1, hash2, "different data should produce different hashes");
     }
 
     #[test]
@@ -533,13 +500,7 @@ mod tests {
         let hash1 = compute_entry_hash(&GENESIS_HASH, 1, 1, b"original data");
 
         // Verify corruption is detected
-        assert!(!verify_entry_hash(
-            &GENESIS_HASH,
-            1,
-            1,
-            b"corrupted data",
-            &hash1
-        ));
+        assert!(!verify_entry_hash(&GENESIS_HASH, 1, 1, b"corrupted data", &hash1));
     }
 
     #[test]
@@ -550,10 +511,7 @@ mod tests {
         let hash1 = compute_entry_hash(&prev_hash, 1, 1, data);
         let hash2 = compute_entry_hash(&prev_hash, 2, 1, data);
 
-        assert_ne!(
-            hash1, hash2,
-            "different indices should produce different hashes"
-        );
+        assert_ne!(hash1, hash2, "different indices should produce different hashes");
     }
 
     #[test]
@@ -564,10 +522,7 @@ mod tests {
         let hash1 = compute_entry_hash(&prev_hash, 1, 1, data);
         let hash2 = compute_entry_hash(&prev_hash, 1, 2, data);
 
-        assert_ne!(
-            hash1, hash2,
-            "different terms should produce different hashes"
-        );
+        assert_ne!(hash1, hash2, "different terms should produce different hashes");
     }
 
     #[test]
@@ -578,10 +533,7 @@ mod tests {
         let different_prev = [1u8; 32];
         let hash2 = compute_entry_hash(&different_prev, 1, 1, data);
 
-        assert_ne!(
-            hash1, hash2,
-            "different prev_hash should produce different hashes"
-        );
+        assert_ne!(hash1, hash2, "different prev_hash should produce different hashes");
     }
 
     #[test]

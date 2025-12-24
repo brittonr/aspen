@@ -3,9 +3,13 @@
 //! Defines the schema for the virtual `kv` table that exposes Redb
 //! key-value data to DataFusion SQL queries.
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+use std::sync::LazyLock;
 
-use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::datatypes::DataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::Schema;
+use arrow::datatypes::SchemaRef;
 
 /// Arrow schema for the `kv` table.
 ///
@@ -96,10 +100,7 @@ mod tests {
         assert_eq!(schema.field(columns::KEY).name(), "key");
         assert_eq!(schema.field(columns::VALUE).name(), "value");
         assert_eq!(schema.field(columns::VERSION).name(), "version");
-        assert_eq!(
-            schema.field(columns::CREATE_REVISION).name(),
-            "create_revision"
-        );
+        assert_eq!(schema.field(columns::CREATE_REVISION).name(), "create_revision");
         assert_eq!(schema.field(columns::MOD_REVISION).name(), "mod_revision");
         assert_eq!(schema.field(columns::EXPIRES_AT_MS).name(), "expires_at_ms");
         assert_eq!(schema.field(columns::LEASE_ID).name(), "lease_id");

@@ -68,8 +68,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use serde::Deserialize;
+use serde::Serialize;
+use snafu::ResultExt;
+use snafu::Snafu;
 
 use crate::raft::constants::DEFAULT_READ_POOL_SIZE;
 use crate::raft::storage::StorageBackend;
@@ -650,8 +652,7 @@ impl NodeConfig {
         Self {
             node_id: parse_env("ASPEN_NODE_ID").unwrap_or(0),
             data_dir: parse_env("ASPEN_DATA_DIR"),
-            storage_backend: parse_env("ASPEN_STORAGE_BACKEND")
-                .unwrap_or_else(StorageBackend::default),
+            storage_backend: parse_env("ASPEN_STORAGE_BACKEND").unwrap_or_else(StorageBackend::default),
             redb_log_path: parse_env("ASPEN_REDB_LOG_PATH"),
             redb_sm_path: parse_env("ASPEN_REDB_SM_PATH"),
             sqlite_log_path: parse_env("ASPEN_SQLITE_LOG_PATH"),
@@ -659,8 +660,7 @@ impl NodeConfig {
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
             http_addr: parse_env("ASPEN_HTTP_ADDR").unwrap_or_else(default_http_addr),
-            control_backend: parse_env("ASPEN_CONTROL_BACKEND")
-                .unwrap_or(ControlBackend::default()),
+            control_backend: parse_env("ASPEN_CONTROL_BACKEND").unwrap_or(ControlBackend::default()),
             heartbeat_interval_ms: parse_env("ASPEN_HEARTBEAT_INTERVAL_MS")
                 .unwrap_or_else(default_heartbeat_interval_ms),
             election_timeout_min_ms: parse_env("ASPEN_ELECTION_TIMEOUT_MIN_MS")
@@ -669,11 +669,9 @@ impl NodeConfig {
                 .unwrap_or_else(default_election_timeout_max_ms),
             iroh: IrohConfig {
                 secret_key: parse_env("ASPEN_IROH_SECRET_KEY"),
-                enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP")
-                    .unwrap_or_else(default_enable_gossip),
+                enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP").unwrap_or_else(default_enable_gossip),
                 gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
-                enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS")
-                    .unwrap_or_else(default_enable_mdns),
+                enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS").unwrap_or_else(default_enable_mdns),
                 enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
                 dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
@@ -683,22 +681,18 @@ impl NodeConfig {
                 enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
                 enable_background_sync: parse_env("ASPEN_DOCS_ENABLE_BACKGROUND_SYNC")
                     .unwrap_or_else(default_enable_background_sync),
-                background_sync_interval_secs: parse_env(
-                    "ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS",
-                )
-                .unwrap_or_else(default_background_sync_interval_secs),
+                background_sync_interval_secs: parse_env("ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS")
+                    .unwrap_or_else(default_background_sync_interval_secs),
                 in_memory: parse_env("ASPEN_DOCS_IN_MEMORY").unwrap_or(false),
                 namespace_secret: parse_env("ASPEN_DOCS_NAMESPACE_SECRET"),
                 author_secret: parse_env("ASPEN_DOCS_AUTHOR_SECRET"),
             },
             blobs: BlobConfig {
                 enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or(false),
-                auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD")
-                    .unwrap_or_else(default_auto_offload),
+                auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD").unwrap_or_else(default_auto_offload),
                 offload_threshold_bytes: parse_env("ASPEN_BLOBS_OFFLOAD_THRESHOLD_BYTES")
                     .unwrap_or_else(default_offload_threshold_bytes),
-                gc_interval_secs: parse_env("ASPEN_BLOBS_GC_INTERVAL_SECS")
-                    .unwrap_or_else(default_gc_interval_secs),
+                gc_interval_secs: parse_env("ASPEN_BLOBS_GC_INTERVAL_SECS").unwrap_or_else(default_gc_interval_secs),
                 gc_grace_period_secs: parse_env("ASPEN_BLOBS_GC_GRACE_PERIOD_SECS")
                     .unwrap_or_else(default_gc_grace_period_secs),
             },
@@ -710,13 +704,11 @@ impl NodeConfig {
                     .unwrap_or_else(default_max_peer_subscriptions),
                 reconnect_interval_secs: parse_env("ASPEN_PEER_SYNC_RECONNECT_INTERVAL_SECS")
                     .unwrap_or_else(default_peer_reconnect_interval_secs),
-                max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS")
-                    .unwrap_or(0),
+                max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS").unwrap_or(0),
             },
             sharding: ShardingConfig {
                 enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
-                num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS")
-                    .unwrap_or_else(default_num_shards),
+                num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS").unwrap_or_else(default_num_shards),
                 local_shards: parse_env_vec("ASPEN_SHARDING_LOCAL_SHARDS")
                     .into_iter()
                     .filter_map(|s| s.parse().ok())
@@ -886,40 +878,30 @@ impl NodeConfig {
     ///
     /// Returns `ConfigError` if configuration is invalid.
     pub fn validate(&self) -> Result<(), ConfigError> {
-        use crate::cluster::validation::{
-            check_disk_usage, check_http_port, check_raft_timing_sanity, validate_cookie,
-            validate_cookie_safety, validate_node_id, validate_raft_timings, validate_secret_key,
-        };
         use tracing::warn;
 
-        // Validate core fields using extracted pure functions
-        validate_node_id(self.node_id).map_err(|e| ConfigError::Validation {
-            message: e.to_string(),
-        })?;
+        use crate::cluster::validation::check_disk_usage;
+        use crate::cluster::validation::check_http_port;
+        use crate::cluster::validation::check_raft_timing_sanity;
+        use crate::cluster::validation::validate_cookie;
+        use crate::cluster::validation::validate_cookie_safety;
+        use crate::cluster::validation::validate_node_id;
+        use crate::cluster::validation::validate_raft_timings;
+        use crate::cluster::validation::validate_secret_key;
 
-        validate_cookie(&self.cookie).map_err(|e| ConfigError::Validation {
-            message: e.to_string(),
-        })?;
+        // Validate core fields using extracted pure functions
+        validate_node_id(self.node_id).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
+
+        validate_cookie(&self.cookie).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
 
         // Reject unsafe default cookie (security-critical: prevents shared gossip topics)
-        validate_cookie_safety(&self.cookie).map_err(|e| ConfigError::Validation {
-            message: e.to_string(),
-        })?;
+        validate_cookie_safety(&self.cookie).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
 
-        validate_raft_timings(
-            self.heartbeat_interval_ms,
-            self.election_timeout_min_ms,
-            self.election_timeout_max_ms,
-        )
-        .map_err(|e| ConfigError::Validation {
-            message: e.to_string(),
-        })?;
+        validate_raft_timings(self.heartbeat_interval_ms, self.election_timeout_min_ms, self.election_timeout_max_ms)
+            .map_err(|e| ConfigError::Validation { message: e.to_string() })?;
 
-        validate_secret_key(self.iroh.secret_key.as_deref()).map_err(|e| {
-            ConfigError::Validation {
-                message: e.to_string(),
-            }
-        })?;
+        validate_secret_key(self.iroh.secret_key.as_deref())
+            .map_err(|e| ConfigError::Validation { message: e.to_string() })?;
 
         // Log sanity warnings using extracted pure function
         for warning in check_raft_timing_sanity(
@@ -936,10 +918,7 @@ impl NodeConfig {
         {
             if !parent.exists() {
                 return Err(ConfigError::Validation {
-                    message: format!(
-                        "data_dir parent directory does not exist: {}",
-                        parent.display()
-                    ),
+                    message: format!("data_dir parent directory does not exist: {}", parent.display()),
                 });
             }
 
@@ -1002,11 +981,7 @@ impl NodeConfig {
                 // Warn if path exists but is a directory (should be a file)
                 if path.exists() && path.is_dir() {
                     return Err(ConfigError::Validation {
-                        message: format!(
-                            "{} path {} exists but is a directory, expected a file",
-                            name,
-                            path.display()
-                        ),
+                        message: format!("{} path {} exists but is a directory, expected a file", name, path.display()),
                     });
                 }
             }
@@ -1019,7 +994,8 @@ impl NodeConfig {
 
         // Sharding configuration validation
         if self.sharding.enabled {
-            use crate::sharding::{MAX_SHARDS, MIN_SHARDS};
+            use crate::sharding::MAX_SHARDS;
+            use crate::sharding::MIN_SHARDS;
 
             // Validate num_shards is within bounds
             if self.sharding.num_shards < MIN_SHARDS || self.sharding.num_shards > MAX_SHARDS {
@@ -1049,9 +1025,7 @@ impl NodeConfig {
 
     /// Get the data directory, using the default if not specified.
     pub fn data_dir(&self) -> PathBuf {
-        self.data_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from(format!("./data/node-{}", self.node_id)))
+        self.data_dir.clone().unwrap_or_else(|| PathBuf::from(format!("./data/node-{}", self.node_id)))
     }
 }
 
@@ -1071,10 +1045,7 @@ fn default_cookie() -> String {
 
 fn default_http_addr() -> SocketAddr {
     // Tiger Style: Compile-time constant instead of runtime parsing
-    SocketAddr::new(
-        std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-        8080,
-    )
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080)
 }
 
 fn default_heartbeat_interval_ms() -> u64 {
@@ -1244,10 +1215,7 @@ mod tests {
         assert_eq!(base.iroh.gossip_ticket, Some("test-ticket".into()));
         assert_eq!(base.peers, vec!["peer1"]);
         // InMemory (non-default) should override Sqlite (default)
-        assert_eq!(
-            base.storage_backend,
-            crate::raft::storage::StorageBackend::InMemory
-        );
+        assert_eq!(base.storage_backend, crate::raft::storage::StorageBackend::InMemory);
     }
 
     #[test]
@@ -1263,8 +1231,8 @@ mod tests {
 
         // Override config uses DEFAULT values - should NOT override base
         let override_config = NodeConfig {
-            node_id: 0,                                 // Default: 0 doesn't override
-            control_backend: ControlBackend::RaftActor, // Default: should NOT override
+            node_id: 0,                                                    // Default: 0 doesn't override
+            control_backend: ControlBackend::RaftActor,                    // Default: should NOT override
             storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default: should NOT override
             ..Default::default()
         };
@@ -1274,9 +1242,6 @@ mod tests {
         // Original non-default values should be preserved (not clobbered by defaults)
         assert_eq!(base.node_id, 1); // Preserved (0 is "unset")
         assert_eq!(base.control_backend, ControlBackend::Deterministic); // Preserved
-        assert_eq!(
-            base.storage_backend,
-            crate::raft::storage::StorageBackend::InMemory
-        ); // Preserved
+        assert_eq!(base.storage_backend, crate::raft::storage::StorageBackend::InMemory); // Preserved
     }
 }

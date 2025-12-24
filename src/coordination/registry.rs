@@ -41,16 +41,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 use crate::coordination::types::now_unix_ms;
-use crate::raft::constants::{
-    DEFAULT_SERVICE_TTL_MS, MAX_SERVICE_DISCOVERY_RESULTS, MAX_SERVICE_TTL_MS,
-    SERVICE_CLEANUP_BATCH,
-};
+use crate::raft::constants::DEFAULT_SERVICE_TTL_MS;
+use crate::raft::constants::MAX_SERVICE_DISCOVERY_RESULTS;
+use crate::raft::constants::MAX_SERVICE_TTL_MS;
+use crate::raft::constants::SERVICE_CLEANUP_BATCH;
 
 /// Service registry key prefix.
 const SERVICE_PREFIX: &str = "__service:";
@@ -211,10 +217,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         options: RegisterOptions,
     ) -> Result<(u64, u64)> {
         let now = now_unix_ms();
-        let ttl_ms = options
-            .ttl_ms
-            .unwrap_or(DEFAULT_SERVICE_TTL_MS)
-            .min(MAX_SERVICE_TTL_MS);
+        let ttl_ms = options.ttl_ms.unwrap_or(DEFAULT_SERVICE_TTL_MS).min(MAX_SERVICE_TTL_MS);
         let deadline_ms = if options.lease_id.is_some() {
             // Lease-based: no TTL deadline, lease handles expiration
             0
@@ -266,10 +269,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
             match self.store.write(WriteRequest { command }).await {
                 Ok(_) => {
-                    debug!(
-                        service_name,
-                        instance_id, fencing_token, deadline_ms, "instance registered"
-                    );
+                    debug!(service_name, instance_id, fencing_token, deadline_ms, "instance registered");
                     return Ok((fencing_token, deadline_ms));
                 }
                 Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
@@ -284,12 +284,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     /// Deregister a service instance.
     ///
     /// Returns true if instance was found and removed.
-    pub async fn deregister(
-        &self,
-        service_name: &str,
-        instance_id: &str,
-        fencing_token: u64,
-    ) -> Result<bool> {
+    pub async fn deregister(&self, service_name: &str, instance_id: &str, fencing_token: u64) -> Result<bool> {
         let key = Self::instance_key(service_name, instance_id);
 
         loop {
@@ -299,11 +294,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 None => return Ok(false),
                 Some(inst) => {
                     if inst.fencing_token != fencing_token {
-                        bail!(
-                            "fencing token mismatch: expected {}, got {}",
-                            inst.fencing_token,
-                            fencing_token
-                        );
+                        bail!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token);
                     }
 
                     let old_json = serde_json::to_string(&inst)?;
@@ -338,19 +329,12 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     /// Discover all instances of a service.
     ///
     /// Automatically cleans up expired instances during discovery.
-    pub async fn discover(
-        &self,
-        service_name: &str,
-        filter: DiscoveryFilter,
-    ) -> Result<Vec<ServiceInstance>> {
+    pub async fn discover(&self, service_name: &str, filter: DiscoveryFilter) -> Result<Vec<ServiceInstance>> {
         // Cleanup expired instances first
         let _ = self.cleanup_expired(service_name).await;
 
         let prefix = format!("{}{}:", SERVICE_PREFIX, service_name);
-        let limit = filter
-            .limit
-            .unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS)
-            .min(MAX_SERVICE_DISCOVERY_RESULTS);
+        let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&prefix, limit).await?;
         let mut instances = Vec::new();
@@ -369,12 +353,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                     continue;
                 }
 
-                if !filter.tags.is_empty()
-                    && !filter
-                        .tags
-                        .iter()
-                        .all(|t| instance.metadata.tags.contains(t))
-                {
+                if !filter.tags.is_empty() && !filter.tags.iter().all(|t| instance.metadata.tags.contains(t)) {
                     continue;
                 }
 
@@ -424,11 +403,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     }
 
     /// Get a specific service instance.
-    pub async fn get_instance(
-        &self,
-        service_name: &str,
-        instance_id: &str,
-    ) -> Result<Option<ServiceInstance>> {
+    pub async fn get_instance(&self, service_name: &str, instance_id: &str) -> Result<Option<ServiceInstance>> {
         let key = Self::instance_key(service_name, instance_id);
 
         if let Some(instance) = self.read_json::<ServiceInstance>(&key).await? {
@@ -466,11 +441,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 None => bail!("instance not found: {}:{}", service_name, instance_id),
                 Some(mut inst) => {
                     if inst.fencing_token != fencing_token {
-                        bail!(
-                            "fencing token mismatch: expected {}, got {}",
-                            inst.fencing_token,
-                            fencing_token
-                        );
+                        bail!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token);
                     }
 
                     let old_json = serde_json::to_string(&inst)?;
@@ -496,12 +467,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                         .await
                     {
                         Ok(_) => {
-                            debug!(
-                                service_name,
-                                instance_id,
-                                new_deadline = inst.deadline_ms,
-                                "heartbeat sent"
-                            );
+                            debug!(service_name, instance_id, new_deadline = inst.deadline_ms, "heartbeat sent");
                             return Ok((inst.deadline_ms, inst.health_status));
                         }
                         Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
@@ -529,11 +495,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 None => bail!("instance not found: {}:{}", service_name, instance_id),
                 Some(mut inst) => {
                     if inst.fencing_token != fencing_token {
-                        bail!(
-                            "fencing token mismatch: expected {}, got {}",
-                            inst.fencing_token,
-                            fencing_token
-                        );
+                        bail!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token);
                     }
 
                     let old_json = serde_json::to_string(&inst)?;
@@ -552,12 +514,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                         .await
                     {
                         Ok(_) => {
-                            debug!(
-                                service_name,
-                                instance_id,
-                                status = status.as_str(),
-                                "health status updated"
-                            );
+                            debug!(service_name, instance_id, status = status.as_str(), "health status updated");
                             return Ok(());
                         }
                         Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
@@ -585,11 +542,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 None => bail!("instance not found: {}:{}", service_name, instance_id),
                 Some(mut inst) => {
                     if inst.fencing_token != fencing_token {
-                        bail!(
-                            "fencing token mismatch: expected {}, got {}",
-                            inst.fencing_token,
-                            fencing_token
-                        );
+                        bail!("fencing token mismatch: expected {}, got {}", inst.fencing_token, fencing_token);
                     }
 
                     let old_json = serde_json::to_string(&inst)?;
@@ -690,9 +643,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     async fn delete_key(&self, key: &str) -> Result<()> {
         self.store
             .write(WriteRequest {
-                command: WriteCommand::Delete {
-                    key: key.to_string(),
-                },
+                command: WriteCommand::Delete { key: key.to_string() },
             })
             .await
             .map_err(|e| anyhow::anyhow!("failed to delete {}: {}", key, e))?;
@@ -729,10 +680,7 @@ mod tests {
         assert!(deadline > 0);
 
         // Discover the instance
-        let instances = registry
-            .discover("test-service", DiscoveryFilter::default())
-            .await
-            .unwrap();
+        let instances = registry.discover("test-service", DiscoveryFilter::default()).await.unwrap();
 
         assert_eq!(instances.len(), 1);
         assert_eq!(instances[0].instance_id, "instance-1");
@@ -757,17 +705,11 @@ mod tests {
             .unwrap();
 
         // Deregister
-        let removed = registry
-            .deregister("test-service", "instance-1", token)
-            .await
-            .unwrap();
+        let removed = registry.deregister("test-service", "instance-1", token).await.unwrap();
         assert!(removed);
 
         // Should not be discoverable
-        let instances = registry
-            .discover("test-service", DiscoveryFilter::default())
-            .await
-            .unwrap();
+        let instances = registry.discover("test-service", DiscoveryFilter::default()).await.unwrap();
         assert!(instances.is_empty());
     }
 
@@ -794,10 +736,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Send heartbeat
-        let (new_deadline, status) = registry
-            .heartbeat("test-service", "instance-1", token)
-            .await
-            .unwrap();
+        let (new_deadline, status) = registry.heartbeat("test-service", "instance-1", token).await.unwrap();
 
         assert!(new_deadline > initial_deadline);
         assert_eq!(status, HealthStatus::Healthy);
@@ -820,17 +759,10 @@ mod tests {
             .unwrap();
 
         // Update health to unhealthy
-        registry
-            .update_health("test-service", "instance-1", token, HealthStatus::Unhealthy)
-            .await
-            .unwrap();
+        registry.update_health("test-service", "instance-1", token, HealthStatus::Unhealthy).await.unwrap();
 
         // Check instance
-        let instance = registry
-            .get_instance("test-service", "instance-1")
-            .await
-            .unwrap()
-            .unwrap();
+        let instance = registry.get_instance("test-service", "instance-1").await.unwrap().unwrap();
         assert_eq!(instance.health_status, HealthStatus::Unhealthy);
     }
 
@@ -863,32 +795,18 @@ mod tests {
             .await
             .unwrap();
 
-        registry
-            .update_health(
-                "test-service",
-                "instance-2",
-                token2,
-                HealthStatus::Unhealthy,
-            )
-            .await
-            .unwrap();
+        registry.update_health("test-service", "instance-2", token2, HealthStatus::Unhealthy).await.unwrap();
 
         // Discover all - should get both
-        let all = registry
-            .discover("test-service", DiscoveryFilter::default())
-            .await
-            .unwrap();
+        let all = registry.discover("test-service", DiscoveryFilter::default()).await.unwrap();
         assert_eq!(all.len(), 2);
 
         // Discover healthy only - should get one
         let healthy = registry
-            .discover(
-                "test-service",
-                DiscoveryFilter {
-                    healthy_only: true,
-                    ..Default::default()
-                },
-            )
+            .discover("test-service", DiscoveryFilter {
+                healthy_only: true,
+                ..Default::default()
+            })
             .await
             .unwrap();
         assert_eq!(healthy.len(), 1);
@@ -931,13 +849,10 @@ mod tests {
 
         // Filter by tag
         let filtered = registry
-            .discover(
-                "test-service",
-                DiscoveryFilter {
-                    tags: vec!["region:us-east".to_string()],
-                    ..Default::default()
-                },
-            )
+            .discover("test-service", DiscoveryFilter {
+                tags: vec!["region:us-east".to_string()],
+                ..Default::default()
+            })
             .await
             .unwrap();
         assert_eq!(filtered.len(), 1);
@@ -975,16 +890,12 @@ mod tests {
         assert_eq!(token2, token1 + 1);
 
         // Old token should fail
-        let result = registry
-            .heartbeat("test-service", "instance-1", token1)
-            .await;
+        let result = registry.heartbeat("test-service", "instance-1", token1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("fencing token"));
 
         // New token should work
-        let result = registry
-            .heartbeat("test-service", "instance-1", token2)
-            .await;
+        let result = registry.heartbeat("test-service", "instance-1", token2).await;
         assert!(result.is_ok());
     }
 
@@ -1008,10 +919,7 @@ mod tests {
         }
 
         // Discover all
-        let instances = registry
-            .discover("test-service", DiscoveryFilter::default())
-            .await
-            .unwrap();
+        let instances = registry.discover("test-service", DiscoveryFilter::default()).await.unwrap();
         assert_eq!(instances.len(), 5);
     }
 
@@ -1083,26 +991,17 @@ mod tests {
 
         // Update metadata
         registry
-            .update_metadata(
-                "test-service",
-                "instance-1",
-                token,
-                ServiceInstanceMetadata {
-                    version: "2.0.0".to_string(),
-                    weight: 200,
-                    tags: vec!["updated".to_string()],
-                    ..Default::default()
-                },
-            )
+            .update_metadata("test-service", "instance-1", token, ServiceInstanceMetadata {
+                version: "2.0.0".to_string(),
+                weight: 200,
+                tags: vec!["updated".to_string()],
+                ..Default::default()
+            })
             .await
             .unwrap();
 
         // Verify update
-        let instance = registry
-            .get_instance("test-service", "instance-1")
-            .await
-            .unwrap()
-            .unwrap();
+        let instance = registry.get_instance("test-service", "instance-1").await.unwrap().unwrap();
         assert_eq!(instance.metadata.version, "2.0.0");
         assert_eq!(instance.metadata.weight, 200);
         assert!(instance.metadata.tags.contains(&"updated".to_string()));

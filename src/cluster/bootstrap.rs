@@ -31,35 +31,53 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Result, ensure};
+use anyhow::Result;
+use anyhow::ensure;
 use iroh::EndpointAddr;
 use iroh_gossip::proto::TopicId;
-use openraft::{Config as RaftConfig, Raft};
+use openraft::Config as RaftConfig;
+use openraft::Raft;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::auth::CapabilityToken;
 use crate::blob::IrohBlobStore;
+use crate::cluster::IrohEndpointConfig;
+use crate::cluster::IrohEndpointManager;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::gossip_discovery::GossipPeerDiscovery;
-use crate::cluster::metadata::{MetadataStore, NodeStatus};
+use crate::cluster::metadata::MetadataStore;
+use crate::cluster::metadata::NodeStatus;
 use crate::cluster::ticket::AspenClusterTicket;
-use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::protocol_handlers::ShardedRaftProtocolHandler;
 use crate::raft::StateMachineVariant;
-use crate::raft::lease_cleanup::{LeaseCleanupConfig, spawn_lease_cleanup_task};
-use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
+use crate::raft::lease_cleanup::LeaseCleanupConfig;
+use crate::raft::lease_cleanup::spawn_lease_cleanup_task;
+use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+use crate::raft::log_subscriber::LogEntryPayload;
 use crate::raft::network::IrpcRaftNetworkFactory;
-use crate::raft::node::{RaftNode, RaftNodeHealth};
+use crate::raft::node::RaftNode;
+use crate::raft::node::RaftNodeHealth;
 use crate::raft::server::RaftRpcServer;
-use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
+use crate::raft::storage::InMemoryLogStore;
+use crate::raft::storage::InMemoryStateMachine;
+use crate::raft::storage::RedbLogStore;
+use crate::raft::storage::StorageBackend;
 use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
-use crate::raft::ttl_cleanup::{TtlCleanupConfig, spawn_redb_ttl_cleanup_task, spawn_ttl_cleanup_task};
+use crate::raft::ttl_cleanup::TtlCleanupConfig;
+use crate::raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
+use crate::raft::ttl_cleanup::spawn_ttl_cleanup_task;
 use crate::raft::types::NodeId;
-use crate::sharding::{ShardConfig, ShardId, ShardStoragePaths, ShardedKeyValueStore, encode_shard_node_id};
+use crate::sharding::ShardConfig;
+use crate::sharding::ShardId;
+use crate::sharding::ShardStoragePaths;
+use crate::sharding::ShardedKeyValueStore;
+use crate::sharding::encode_shard_node_id;
 
 /// Handle to a running cluster node.
 ///
@@ -761,7 +779,8 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
     // Initialize peer sync if enabled (using shard 0 for now)
     let peer_manager = if config.peer_sync.enabled {
         if let Some(shard_0) = shard_nodes.get(&0) {
-            use crate::docs::{DocsImporter, PeerManager};
+            use crate::docs::DocsImporter;
+            use crate::docs::PeerManager;
 
             let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone()));
             let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
@@ -1291,7 +1310,8 @@ fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Op
         return None;
     }
 
-    use crate::docs::{DocsImporter, PeerManager};
+    use crate::docs::DocsImporter;
+    use crate::docs::PeerManager;
 
     let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone()));
     let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
@@ -1373,9 +1393,11 @@ async fn initialize_docs_export(
         return Ok((None, None));
     };
 
-    use crate::docs::{
-        BlobBackedDocsWriter, DocsExporter, DocsSyncResources, SyncHandleDocsWriter, init_docs_resources,
-    };
+    use crate::docs::BlobBackedDocsWriter;
+    use crate::docs::DocsExporter;
+    use crate::docs::DocsSyncResources;
+    use crate::docs::SyncHandleDocsWriter;
+    use crate::docs::init_docs_resources;
 
     let resources = match init_docs_resources(
         data_dir,

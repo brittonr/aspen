@@ -5,7 +5,8 @@
 /// conflicting logs and installs the snapshot. This ensures state consistency when
 /// a node falls behind and needs snapshot recovery.
 ///
-/// Original: openraft/openraft/src/engine/handler/following_handler/install_snapshot_test.rs::test_install_snapshot_conflict
+/// Original: openraft/openraft/src/engine/handler/following_handler/install_snapshot_test.
+/// rs::test_install_snapshot_conflict
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +15,9 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState, SnapshotPolicy};
+use openraft::Config;
+use openraft::ServerState;
+use openraft::SnapshotPolicy;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -67,48 +70,29 @@ async fn test_install_snapshot_conflict() -> Result<()> {
         n0.initialize(nodes).await?;
     }
 
-    router
-        .wait(NodeId(0), timeout())
-        .state(ServerState::Leader, "node-0 becomes leader")
-        .await?;
+    router.wait(NodeId(0), timeout()).state(ServerState::Leader, "node-0 becomes leader").await?;
 
     // Add nodes 1 and 2 as learners
     router.add_learner(NodeId(0), NodeId(1)).await?;
     router.add_learner(NodeId(0), NodeId(2)).await?;
 
-    router
-        .wait(NodeId(1), timeout())
-        .state(ServerState::Learner, "node-1 becomes learner")
-        .await?;
+    router.wait(NodeId(1), timeout()).state(ServerState::Learner, "node-1 becomes learner").await?;
 
-    router
-        .wait(NodeId(2), timeout())
-        .state(ServerState::Learner, "node-2 becomes learner")
-        .await?;
+    router.wait(NodeId(2), timeout()).state(ServerState::Learner, "node-2 becomes learner").await?;
 
     // Change membership to make it a full cluster
-    let voters: std::collections::BTreeSet<NodeId> =
-        [NodeId(0), NodeId(1), NodeId(2)].into_iter().collect();
+    let voters: std::collections::BTreeSet<NodeId> = [NodeId(0), NodeId(1), NodeId(2)].into_iter().collect();
     let n0 = router.get_raft_handle(NodeId(0))?;
     n0.change_membership(voters, false).await?;
 
     // Wait for all nodes to apply the membership change
     let mut log_index = 1u64 + 2 + 2; // init + 2 add_learner + 2 change_membership
 
-    router
-        .wait(0, timeout())
-        .applied_index(Some(log_index), "node-0 applied membership")
-        .await?;
+    router.wait(0, timeout()).applied_index(Some(log_index), "node-0 applied membership").await?;
 
-    router
-        .wait(1, timeout())
-        .applied_index(Some(log_index), "node-1 applied membership")
-        .await?;
+    router.wait(1, timeout()).applied_index(Some(log_index), "node-1 applied membership").await?;
 
-    router
-        .wait(2, timeout())
-        .applied_index(Some(log_index), "node-2 applied membership")
-        .await?;
+    router.wait(2, timeout()).applied_index(Some(log_index), "node-2 applied membership").await?;
 
     tracing::info!("--- section 2: write initial entries to all nodes");
 
@@ -122,20 +106,11 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     }
 
     // Ensure all nodes have these entries
-    router
-        .wait(0, timeout())
-        .applied_index(Some(log_index), "node-0 applied initial entries")
-        .await?;
+    router.wait(0, timeout()).applied_index(Some(log_index), "node-0 applied initial entries").await?;
 
-    router
-        .wait(1, timeout())
-        .applied_index(Some(log_index), "node-1 applied initial entries")
-        .await?;
+    router.wait(1, timeout()).applied_index(Some(log_index), "node-1 applied initial entries").await?;
 
-    router
-        .wait(2, timeout())
-        .applied_index(Some(log_index), "node-2 applied initial entries")
-        .await?;
+    router.wait(2, timeout()).applied_index(Some(log_index), "node-2 applied initial entries").await?;
 
     tracing::info!("--- section 3: partition node 2 from the cluster");
 
@@ -161,11 +136,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
         let metrics = n0.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
-            tracing::info!(
-                "snapshot created at index {}, current log index {}",
-                snapshot.index,
-                log_index
-            );
+            tracing::info!("snapshot created at index {}, current log index {}", snapshot.index, log_index);
             break;
         }
 
@@ -177,15 +148,9 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     }
 
     // Verify nodes 0 and 1 are up to date
-    router
-        .wait(0, timeout())
-        .applied_index(Some(log_index), "node-0 applied all entries")
-        .await?;
+    router.wait(0, timeout()).applied_index(Some(log_index), "node-0 applied all entries").await?;
 
-    router
-        .wait(1, timeout())
-        .applied_index(Some(log_index), "node-1 applied all entries")
-        .await?;
+    router.wait(1, timeout()).applied_index(Some(log_index), "node-1 applied all entries").await?;
 
     tracing::info!("--- section 6: heal partition and wait for snapshot replication");
 
@@ -200,11 +165,7 @@ async fn test_install_snapshot_conflict() -> Result<()> {
         let metrics = n2.metrics().borrow().clone();
 
         if let Some(snapshot) = metrics.snapshot {
-            tracing::info!(
-                "node-2 received snapshot at index {}, expected around {}",
-                snapshot.index,
-                log_index
-            );
+            tracing::info!("node-2 received snapshot at index {}, expected around {}", snapshot.index, log_index);
 
             // The snapshot should be at or near the leader's snapshot point
             // Snapshot is created at last_committed_index when threshold is reached,
@@ -235,28 +196,17 @@ async fn test_install_snapshot_conflict() -> Result<()> {
     tracing::info!("--- section 7: verify node 2 caught up to current log");
 
     // Wait for node 2 to catch up to the latest log index
-    router
-        .wait(2, timeout())
-        .applied_index(Some(log_index), "node-2 caught up after snapshot")
-        .await?;
+    router.wait(2, timeout()).applied_index(Some(log_index), "node-2 caught up after snapshot").await?;
 
     tracing::info!("--- section 8: verify data consistency across all nodes");
 
     // Verify data from before partition (should be in snapshot)
     let val = router.read(2, "initial_key0").await;
-    assert_eq!(
-        val,
-        Some("value0".to_string()),
-        "node-2 should have initial data from snapshot"
-    );
+    assert_eq!(val, Some("value0".to_string()), "node-2 should have initial data from snapshot");
 
     // Verify data from after partition (should be replicated after snapshot)
     let val = router.read(2, "majority_key0").await;
-    assert_eq!(
-        val,
-        Some("value0".to_string()),
-        "node-2 should have majority data after catching up"
-    );
+    assert_eq!(val, Some("value0".to_string()), "node-2 should have majority data after catching up");
 
     // Cross-check: verify all nodes have the same state
     let val_n0 = router.read(0, "majority_key5").await;
@@ -303,10 +253,7 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
         n0.initialize(nodes).await?;
     }
 
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node-0 becomes leader")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node-0 becomes leader").await?;
 
     let mut log_index = 1u64;
 
@@ -349,10 +296,7 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
         log_index += 1;
     }
 
-    router
-        .wait(0, timeout())
-        .applied_index(Some(log_index), "all entries applied")
-        .await?;
+    router.wait(0, timeout()).applied_index(Some(log_index), "all entries applied").await?;
 
     tracing::info!("--- add learner that will receive snapshot");
 
@@ -360,32 +304,18 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
     router.add_learner(0, 1).await?;
     log_index += 1;
 
-    router
-        .wait(1, timeout())
-        .state(ServerState::Learner, "node-1 becomes learner")
-        .await?;
+    router.wait(1, timeout()).state(ServerState::Learner, "node-1 becomes learner").await?;
 
     // Wait for learner to catch up
-    router
-        .wait(1, timeout())
-        .applied_index(Some(log_index), "node-1 caught up")
-        .await?;
+    router.wait(1, timeout()).applied_index(Some(log_index), "node-1 caught up").await?;
 
     // Verify learner has the snapshot
     let val = router.read(1, "key0").await;
-    assert_eq!(
-        val,
-        Some("value0".to_string()),
-        "learner should have snapshot data"
-    );
+    assert_eq!(val, Some("value0".to_string()), "learner should have snapshot data");
 
     // Verify learner has post-snapshot data
     let val = router.read(1, "after_key0").await;
-    assert_eq!(
-        val,
-        Some("value0".to_string()),
-        "learner should have post-snapshot data"
-    );
+    assert_eq!(val, Some("value0".to_string()), "learner should have post-snapshot data");
 
     Ok(())
 }

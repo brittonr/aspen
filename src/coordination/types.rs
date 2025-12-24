@@ -1,8 +1,10 @@
 //! Shared types for coordination primitives.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Lock entry stored in the KV store.
 ///
@@ -117,10 +119,7 @@ impl BucketState {
 
 /// Get current Unix timestamp in milliseconds.
 pub fn now_unix_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time before Unix epoch")
-        .as_millis() as u64
+    SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before Unix epoch").as_millis() as u64
 }
 
 #[cfg(test)]

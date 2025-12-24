@@ -15,18 +15,31 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 use crate::coordination::sequence::SequenceGenerator;
 use crate::coordination::types::now_unix_ms;
-use crate::raft::constants::{
-    CAS_RETRY_INITIAL_BACKOFF_MS, CAS_RETRY_MAX_BACKOFF_MS, DEFAULT_QUEUE_DEDUP_TTL_MS, DEFAULT_QUEUE_POLL_INTERVAL_MS,
-    DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS, MAX_CAS_RETRIES, MAX_QUEUE_BATCH_SIZE, MAX_QUEUE_CLEANUP_BATCH,
-    MAX_QUEUE_ITEM_SIZE, MAX_QUEUE_ITEM_TTL_MS, MAX_QUEUE_POLL_INTERVAL_MS, MAX_QUEUE_VISIBILITY_TIMEOUT_MS,
-};
+use crate::raft::constants::CAS_RETRY_INITIAL_BACKOFF_MS;
+use crate::raft::constants::CAS_RETRY_MAX_BACKOFF_MS;
+use crate::raft::constants::DEFAULT_QUEUE_DEDUP_TTL_MS;
+use crate::raft::constants::DEFAULT_QUEUE_POLL_INTERVAL_MS;
+use crate::raft::constants::DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS;
+use crate::raft::constants::MAX_CAS_RETRIES;
+use crate::raft::constants::MAX_QUEUE_BATCH_SIZE;
+use crate::raft::constants::MAX_QUEUE_CLEANUP_BATCH;
+use crate::raft::constants::MAX_QUEUE_ITEM_SIZE;
+use crate::raft::constants::MAX_QUEUE_ITEM_TTL_MS;
+use crate::raft::constants::MAX_QUEUE_POLL_INTERVAL_MS;
+use crate::raft::constants::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
 
 /// Queue key prefix.
 const QUEUE_PREFIX: &str = "__queue:";
@@ -1056,9 +1069,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Update queue stats atomically.
     async fn update_queue_stats<F>(&self, name: &str, update_fn: F) -> Result<()>
-    where
-        F: Fn(&mut QueueStats),
-    {
+    where F: Fn(&mut QueueStats) {
         let queue_key = format!("{}{}", QUEUE_PREFIX, name);
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
@@ -1217,13 +1228,10 @@ mod tests {
 
         // Create queue with max 2 delivery attempts
         manager
-            .create(
-                "test",
-                QueueConfig {
-                    max_delivery_attempts: Some(2),
-                    ..Default::default()
-                },
-            )
+            .create("test", QueueConfig {
+                max_delivery_attempts: Some(2),
+                ..Default::default()
+            })
             .await
             .unwrap();
 

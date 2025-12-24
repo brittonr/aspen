@@ -1,10 +1,12 @@
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
-
-use openraft::{Config, ServerState};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use openraft::Config;
+use openraft::ServerState;
 
 #[tokio::test]
 async fn test_network_partition_during_normal_operation() {
@@ -51,9 +53,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "leader elected")
         .await?;
-    let leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no leader elected"))?;
+    let leader = router.leader().ok_or_else(|| anyhow::anyhow!("no leader elected"))?;
     events.push(format!("leader-elected: node {}", leader));
 
     // Perform some writes to establish baseline
@@ -90,16 +90,11 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .wait(0, Some(Duration::from_millis(2000)))
         .current_leader(leader, "majority partition maintains leader")
         .await?;
-    let majority_leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("majority partition lost leadership"))?;
+    let majority_leader = router.leader().ok_or_else(|| anyhow::anyhow!("majority partition lost leadership"))?;
 
     // Verify majority leader is in majority partition
     if majority_leader == NodeId(3) || majority_leader == NodeId(4) {
-        anyhow::bail!(
-            "leader should be in majority partition (0,1,2), got node {}",
-            majority_leader
-        );
+        anyhow::bail!("leader should be in majority partition (0,1,2), got node {}", majority_leader);
     }
     events.push(format!("majority-leader-stable: node {}", majority_leader));
 
@@ -129,10 +124,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .wait(majority_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(partition_index), "partition writes committed")
         .await?;
-    events.push(format!(
-        "partition-writes-committed: 5 writes at index {}",
-        partition_index
-    ));
+    events.push(format!("partition-writes-committed: 5 writes at index {}", partition_index));
 
     // Heal the partition by recovering minority nodes
     router.recover_node(3);
@@ -166,10 +158,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
             .applied_index(Some(final_index), "all nodes synchronized")
             .await?;
     }
-    events.push(format!(
-        "cluster-reconverged: all nodes at log index {}",
-        final_index
-    ));
+    events.push(format!("cluster-reconverged: all nodes at log index {}", final_index));
 
     // Verify all writes are present on all nodes (consistency check)
     for node_id in 0..5 {
@@ -186,13 +175,7 @@ async fn run_partition_test(events: &mut Vec<String>) -> anyhow::Result<()> {
                     // Expected value found
                 }
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} has wrong value: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} has wrong value: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => {
                     anyhow::bail!("node {} missing key {}", node_id, key);

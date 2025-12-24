@@ -29,11 +29,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 use crate::coordination::types::now_unix_ms;
 
 /// RWLock key prefix.
@@ -155,17 +161,12 @@ impl RWLockState {
 
     /// Check if this holder already has a read lock.
     pub fn has_read_lock(&self, holder_id: &str) -> bool {
-        self.readers
-            .iter()
-            .any(|r| r.holder_id == holder_id && !r.is_expired())
+        self.readers.iter().any(|r| r.holder_id == holder_id && !r.is_expired())
     }
 
     /// Check if this holder has the write lock.
     pub fn has_write_lock(&self, holder_id: &str) -> bool {
-        self.writer
-            .as_ref()
-            .map(|w| w.holder_id == holder_id && !w.is_expired())
-            .unwrap_or(false)
+        self.writer.as_ref().map(|w| w.holder_id == holder_id && !w.is_expired()).unwrap_or(false)
     }
 
     /// Get the number of active (non-expired) readers.
@@ -218,12 +219,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Try to acquire a read lock without blocking.
     ///
     /// Returns Some((fencing_token, deadline_ms, reader_count)) on success, None if blocked.
-    pub async fn try_acquire_read(
-        &self,
-        name: &str,
-        holder_id: &str,
-        ttl_ms: u64,
-    ) -> Result<Option<(u64, u64, u32)>> {
+    pub async fn try_acquire_read(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64, u32)>> {
         let key = format!("{}{}", RWLOCK_PREFIX, name);
 
         loop {
@@ -280,11 +276,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         let mut new_state = state.clone();
                         let now = now_unix_ms();
                         let deadline = now + ttl_ms;
-                        if let Some(reader) = new_state
-                            .readers
-                            .iter_mut()
-                            .find(|r| r.holder_id == holder_id)
-                        {
+                        if let Some(reader) = new_state.readers.iter_mut().find(|r| r.holder_id == holder_id) {
                             reader.deadline_ms = deadline;
                         }
 
@@ -383,9 +375,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         self.increment_pending_writers(&key, name).await?;
 
         // Try to acquire, cleaning up on failure
-        let result = self
-            .acquire_write_inner(&key, name, holder_id, ttl_ms, deadline)
-            .await;
+        let result = self.acquire_write_inner(&key, name, holder_id, ttl_ms, deadline).await;
 
         // Decrement pending writers if we failed
         if result.is_err() {
@@ -411,10 +401,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                 bail!("write lock acquire timeout");
             }
 
-            match self
-                .try_acquire_write_inner(key, name, holder_id, ttl_ms)
-                .await?
-            {
+            match self.try_acquire_write_inner(key, name, holder_id, ttl_ms).await? {
                 Some(result) => return Ok(result),
                 None => {
                     // Wait and retry
@@ -427,15 +414,9 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Try to acquire a write lock without blocking.
     ///
     /// Returns Some((fencing_token, deadline_ms)) on success, None if blocked.
-    pub async fn try_acquire_write(
-        &self,
-        name: &str,
-        holder_id: &str,
-        ttl_ms: u64,
-    ) -> Result<Option<(u64, u64)>> {
+    pub async fn try_acquire_write(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64)>> {
         let key = format!("{}{}", RWLOCK_PREFIX, name);
-        self.try_acquire_write_inner(&key, name, holder_id, ttl_ms)
-            .await
+        self.try_acquire_write_inner(&key, name, holder_id, ttl_ms).await
     }
 
     async fn try_acquire_write_inner(
@@ -481,12 +462,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         .await
                     {
                         Ok(_) => {
-                            debug!(
-                                name,
-                                holder_id,
-                                fencing_token = new_token,
-                                "write lock created"
-                            );
+                            debug!(name, holder_id, fencing_token = new_token, "write lock created");
                             return Ok(Some((new_token, lock_deadline)));
                         }
                         Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
@@ -576,12 +552,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         .await
                     {
                         Ok(_) => {
-                            debug!(
-                                name,
-                                holder_id,
-                                fencing_token = new_token,
-                                "write lock acquired"
-                            );
+                            debug!(name, holder_id, fencing_token = new_token, "write lock acquired");
                             return Ok(Some((new_token, lock_deadline)));
                         }
                         Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
@@ -653,12 +624,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     }
 
     /// Release a write lock.
-    pub async fn release_write(
-        &self,
-        name: &str,
-        holder_id: &str,
-        fencing_token: u64,
-    ) -> Result<()> {
+    pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
         let key = format!("{}{}", RWLOCK_PREFIX, name);
 
         loop {
@@ -799,12 +765,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                 state.cleanup_expired_writer();
                 let reader_count = state.active_reader_count();
                 let writer_holder = state.writer.as_ref().map(|w| w.holder_id.clone());
-                Ok((
-                    state.mode.as_str().to_string(),
-                    reader_count,
-                    writer_holder,
-                    state.fencing_token,
-                ))
+                Ok((state.mode.as_str().to_string(), reader_count, writer_holder, state.fencing_token))
             }
             None => Ok(("free".to_string(), 0, None, 0)),
         }
@@ -923,11 +884,7 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // Acquire read lock
-        let (token, deadline, count) = manager
-            .try_acquire_read("test", "reader1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (token, deadline, count) = manager.try_acquire_read("test", "reader1", 60000).await.unwrap().unwrap();
 
         assert_eq!(token, 0); // No writes yet
         assert!(deadline > 0);
@@ -949,20 +906,13 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // Acquire write lock
-        let (token, deadline) = manager
-            .try_acquire_write("test", "writer1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (token, deadline) = manager.try_acquire_write("test", "writer1", 60000).await.unwrap().unwrap();
 
         assert_eq!(token, 1); // First write
         assert!(deadline > 0);
 
         // Release
-        manager
-            .release_write("test", "writer1", token)
-            .await
-            .unwrap();
+        manager.release_write("test", "writer1", token).await.unwrap();
 
         // Check status
         let (mode, _, _, _) = manager.status("test").await.unwrap();
@@ -975,27 +925,15 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // First reader
-        let (_, _, count1) = manager
-            .try_acquire_read("test", "reader1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (_, _, count1) = manager.try_acquire_read("test", "reader1", 60000).await.unwrap().unwrap();
         assert_eq!(count1, 1);
 
         // Second reader (should succeed)
-        let (_, _, count2) = manager
-            .try_acquire_read("test", "reader2", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (_, _, count2) = manager.try_acquire_read("test", "reader2", 60000).await.unwrap().unwrap();
         assert_eq!(count2, 2);
 
         // Third reader
-        let (_, _, count3) = manager
-            .try_acquire_read("test", "reader3", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (_, _, count3) = manager.try_acquire_read("test", "reader3", 60000).await.unwrap().unwrap();
         assert_eq!(count3, 3);
 
         // Check status
@@ -1010,30 +948,17 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // Acquire write lock
-        let (token, _) = manager
-            .try_acquire_write("test", "writer1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (token, _) = manager.try_acquire_write("test", "writer1", 60000).await.unwrap().unwrap();
 
         // Try to acquire read (should fail)
-        let result = manager
-            .try_acquire_read("test", "reader1", 60000)
-            .await
-            .unwrap();
+        let result = manager.try_acquire_read("test", "reader1", 60000).await.unwrap();
         assert!(result.is_none());
 
         // Release write lock
-        manager
-            .release_write("test", "writer1", token)
-            .await
-            .unwrap();
+        manager.release_write("test", "writer1", token).await.unwrap();
 
         // Now read should succeed
-        let result = manager
-            .try_acquire_read("test", "reader1", 60000)
-            .await
-            .unwrap();
+        let result = manager.try_acquire_read("test", "reader1", 60000).await.unwrap();
         assert!(result.is_some());
     }
 
@@ -1043,22 +968,11 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // Acquire read locks
-        manager
-            .try_acquire_read("test", "reader1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
-        manager
-            .try_acquire_read("test", "reader2", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        manager.try_acquire_read("test", "reader1", 60000).await.unwrap().unwrap();
+        manager.try_acquire_read("test", "reader2", 60000).await.unwrap().unwrap();
 
         // Try to acquire write (should fail)
-        let result = manager
-            .try_acquire_write("test", "writer1", 60000)
-            .await
-            .unwrap();
+        let result = manager.try_acquire_write("test", "writer1", 60000).await.unwrap();
         assert!(result.is_none());
 
         // Release all readers
@@ -1066,10 +980,7 @@ mod tests {
         manager.release_read("test", "reader2").await.unwrap();
 
         // Now write should succeed
-        let result = manager
-            .try_acquire_write("test", "writer1", 60000)
-            .await
-            .unwrap();
+        let result = manager.try_acquire_write("test", "writer1", 60000).await.unwrap();
         assert!(result.is_some());
     }
 
@@ -1079,17 +990,10 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // Acquire write lock
-        let (token, _) = manager
-            .try_acquire_write("test", "holder1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (token, _) = manager.try_acquire_write("test", "holder1", 60000).await.unwrap().unwrap();
 
         // Downgrade to read
-        let (new_token, _, count) = manager
-            .downgrade("test", "holder1", token, 60000)
-            .await
-            .unwrap();
+        let (new_token, _, count) = manager.downgrade("test", "holder1", token, 60000).await.unwrap();
 
         assert_eq!(new_token, token); // Token preserved
         assert_eq!(count, 1);
@@ -1107,22 +1011,11 @@ mod tests {
         let manager = RWLockManager::new(store);
 
         // First write
-        let (token1, _) = manager
-            .try_acquire_write("test", "writer1", 60000)
-            .await
-            .unwrap()
-            .unwrap();
-        manager
-            .release_write("test", "writer1", token1)
-            .await
-            .unwrap();
+        let (token1, _) = manager.try_acquire_write("test", "writer1", 60000).await.unwrap().unwrap();
+        manager.release_write("test", "writer1", token1).await.unwrap();
 
         // Second write
-        let (token2, _) = manager
-            .try_acquire_write("test", "writer2", 60000)
-            .await
-            .unwrap()
-            .unwrap();
+        let (token2, _) = manager.try_acquire_write("test", "writer2", 60000).await.unwrap().unwrap();
 
         assert!(token2 > token1, "fencing token should increment");
     }

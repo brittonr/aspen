@@ -1,3 +1,8 @@
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 /// Chaos Engineering Test: Membership Change During Leader Crash
 ///
 /// This test validates Raft's most dangerous operation: membership changes during failures.
@@ -15,10 +20,8 @@ use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use openraft::Config;
+use openraft::ServerState;
 
 #[tokio::test]
 async fn test_membership_change_leader_crash_joint_consensus() {
@@ -73,9 +76,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
         .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
-    let initial_leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no initial leader"))?;
+    let initial_leader = router.leader().ok_or_else(|| anyhow::anyhow!("no initial leader"))?;
     events.push(format!("initial-leader: node {}", initial_leader));
 
     // Perform baseline writes before membership change
@@ -103,10 +104,8 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Add learners via the leader
     let raft = router.get_raft_handle(initial_leader)?;
-    raft.add_learner(NodeId(3), create_test_raft_member_info(3), true)
-        .await?;
-    raft.add_learner(NodeId(4), create_test_raft_member_info(4), true)
-        .await?;
+    raft.add_learner(NodeId(3), create_test_raft_member_info(3), true).await?;
+    raft.add_learner(NodeId(4), create_test_raft_member_info(4), true).await?;
     events.push("learners-added: nodes 3, 4".into());
 
     // Wait for learners to catch up (2 add_learner ops = index 6)
@@ -126,26 +125,20 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
 
     // Start the membership change in the background
     let raft_handle = router.get_raft_handle(initial_leader)?;
-    let membership_future =
-        tokio::spawn(async move { raft_handle.change_membership(new_members, false).await });
+    let membership_future = tokio::spawn(async move { raft_handle.change_membership(new_members, false).await });
     events.push("membership-change-started: adding nodes 3,4 as voters".into());
 
     // CRITICAL: Crash the leader during joint consensus phase
     // Tiger Style: Fixed delay of 100ms to hit joint consensus
     tokio::time::sleep(Duration::from_millis(100)).await;
     router.fail_node(initial_leader);
-    events.push(format!(
-        "leader-crashed-during-joint-consensus: node {}",
-        initial_leader
-    ));
+    events.push(format!("leader-crashed-during-joint-consensus: node {}", initial_leader));
 
     // Wait for new leader election (should happen despite joint consensus)
     // Election timeout max is 3000ms, so wait longer to ensure election completes
     tokio::time::sleep(Duration::from_millis(10000)).await;
 
-    let new_leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no new leader after crash"))?;
+    let new_leader = router.leader().ok_or_else(|| anyhow::anyhow!("no new leader after crash"))?;
 
     if new_leader == initial_leader {
         anyhow::bail!("leader should have changed after crash");
@@ -164,10 +157,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
     let current_membership = {
         let raft = router.get_raft_handle(new_leader)?;
         let metrics = raft.metrics().borrow().clone();
-        metrics
-            .membership_config
-            .voter_ids()
-            .collect::<BTreeSet<_>>()
+        metrics.membership_config.voter_ids().collect::<BTreeSet<_>>()
     };
 
     if current_membership.len() == 3 {
@@ -200,26 +190,15 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
     for node_id in 0..5 {
         let raft = router.get_raft_handle(node_id)?;
         let metrics = raft.metrics().borrow().clone();
-        let voters = metrics
-            .membership_config
-            .voter_ids()
-            .collect::<BTreeSet<_>>();
+        let voters = metrics.membership_config.voter_ids().collect::<BTreeSet<_>>();
 
         if voters.len() != 5 {
-            anyhow::bail!(
-                "node {} has wrong voter count: {} (expected 5)",
-                node_id,
-                voters.len()
-            );
+            anyhow::bail!("node {} has wrong voter count: {} (expected 5)", node_id, voters.len());
         }
 
         for expected_voter in 0..5 {
             if !voters.contains(&NodeId(expected_voter)) {
-                anyhow::bail!(
-                    "node {} missing voter {} in configuration",
-                    node_id,
-                    expected_voter
-                );
+                anyhow::bail!("node {} missing voter {} in configuration", node_id, expected_voter);
             }
         }
     }
@@ -250,13 +229,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
@@ -269,13 +242,7 @@ async fn run_membership_change_crash_test(events: &mut Vec<String>) -> anyhow::R
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
             }

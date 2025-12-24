@@ -11,9 +11,11 @@
 //! - Messages just under/at/over size limits
 //! - Invalid message types
 
+use aspen::fuzz_helpers::RaftRpcProtocol;
+use aspen::fuzz_helpers::RaftRpcResponse;
+use aspen::fuzz_helpers::TuiRpcRequest;
+use aspen::fuzz_helpers::TuiRpcResponse;
 use bolero::check;
-
-use aspen::fuzz_helpers::{RaftRpcProtocol, RaftRpcResponse, TuiRpcRequest, TuiRpcResponse};
 
 // Tiger Style: Constants from protocol_handlers.rs
 const MAX_RPC_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10 MB

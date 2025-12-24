@@ -4,14 +4,19 @@
 //! Full gossip discovery is not yet implemented in the simplified bootstrap,
 //! so this test focuses on configuration and ticket serialization.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Result;
-use aspen::api::{
-    ClusterController, ClusterNode, InitRequest, ReadRequest, WriteCommand, WriteRequest,
-};
+use aspen::api::ClusterController;
+use aspen::api::ClusterNode;
+use aspen::api::InitRequest;
+use aspen::api::ReadRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
 use aspen::cluster::ticket::AspenClusterTicket;
-use aspen::node::{NodeBuilder, NodeId};
+use aspen::node::NodeBuilder;
+use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
 use iroh_gossip::proto::TopicId;
 use tempfile::TempDir;
@@ -49,10 +54,7 @@ async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<a
 ///
 /// Polls `get_leader()` until the same leader is returned for at least
 /// `stability_window` duration, or until `timeout` is exceeded.
-async fn wait_for_leader<C: ClusterController + ?Sized>(
-    controller: &C,
-    timeout: Duration,
-) -> Result<u64> {
+async fn wait_for_leader<C: ClusterController + ?Sized>(controller: &C, timeout: Duration) -> Result<u64> {
     let start = Instant::now();
     let stability_window = Duration::from_millis(500);
     let mut last_leader: Option<u64> = None;
@@ -81,9 +83,7 @@ async fn wait_for_leader<C: ClusterController + ?Sized>(
 /// Test basic cluster formation with gossip configuration.
 #[tokio::test]
 async fn test_cluster_formation_with_gossip_config() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info").try_init();
 
     let temp_dir = TempDir::new()?;
 
@@ -155,9 +155,7 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
     sleep(Duration::from_secs(3)).await;
 
     // Verify data on leader node only (ReadIndex on followers is timing-sensitive)
-    let value1 = kv_store1
-        .read(ReadRequest::new("test-key".to_string()))
-        .await?;
+    let value1 = kv_store1.read(ReadRequest::new("test-key".to_string())).await?;
     assert_eq!(value1.kv.unwrap().value, "test-value");
     info!("Leader read verified");
 
@@ -175,9 +173,7 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
 /// Test gossip ticket serialization and deserialization.
 #[tokio::test]
 async fn test_gossip_ticket_handling() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info").try_init();
 
     // Derive topic ID from cluster cookie
     let topic_hash = blake3::hash(TEST_CLUSTER_COOKIE.as_bytes());
@@ -188,8 +184,7 @@ async fn test_gossip_ticket_handling() -> Result<()> {
     let endpoint_id = secret_key.public();
 
     // Create and serialize a ticket
-    let ticket =
-        AspenClusterTicket::with_bootstrap(topic_id, TEST_CLUSTER_COOKIE.into(), endpoint_id);
+    let ticket = AspenClusterTicket::with_bootstrap(topic_id, TEST_CLUSTER_COOKIE.into(), endpoint_id);
     let ticket_str = ticket.serialize();
 
     info!("Created gossip ticket: {}", ticket_str);
@@ -210,9 +205,7 @@ async fn test_gossip_ticket_handling() -> Result<()> {
 /// Test multi-node cluster without gossip discovery.
 #[tokio::test]
 async fn test_multi_node_cluster_manual_config() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info").try_init();
 
     let temp_dir = TempDir::new()?;
     let num_nodes = 5;
@@ -263,9 +256,7 @@ async fn test_multi_node_cluster_manual_config() -> Result<()> {
     sleep(Duration::from_secs(3)).await;
 
     // Verify data on leader node only (ReadIndex on followers is timing-sensitive)
-    let value = kv_store
-        .read(ReadRequest::new("multi-node-key".to_string()))
-        .await?;
+    let value = kv_store.read(ReadRequest::new("multi-node-key".to_string())).await?;
     assert_eq!(value.kv.unwrap().value, "multi-node-value");
 
     info!("Data replicated successfully to all {} nodes", num_nodes);

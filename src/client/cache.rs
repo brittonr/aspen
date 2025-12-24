@@ -4,7 +4,8 @@
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 /// A cached entry with TTL tracking.
 #[derive(Debug, Clone)]
@@ -51,11 +52,7 @@ pub struct LocalCache {
 
 impl LocalCache {
     /// Create a new local cache.
-    pub fn new(
-        subscription_id: impl Into<String>,
-        default_ttl: Duration,
-        max_entries: usize,
-    ) -> Self {
+    pub fn new(subscription_id: impl Into<String>, default_ttl: Duration, max_entries: usize) -> Self {
         Self {
             entries: RwLock::new(HashMap::new()),
             default_ttl,
@@ -160,10 +157,7 @@ impl LocalCache {
     /// Evict the least recently used entry.
     fn evict_lru(&self, entries: &mut HashMap<String, CacheEntry>) {
         // Find the oldest entry
-        let oldest = entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(k, _)| k.clone());
+        let oldest = entries.iter().min_by_key(|(_, entry)| entry.last_access).map(|(k, _)| k.clone());
 
         if let Some(key) = oldest {
             entries.remove(&key);

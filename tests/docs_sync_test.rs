@@ -6,14 +6,17 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use aspen::docs::DocsWriter; // Import trait for set_entry/delete_entry methods
+use aspen::docs::exporter::DocsExporter;
+use aspen::docs::exporter::IrohDocsWriter;
+use aspen::raft::log_subscriber::KvOperation;
+use aspen::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+use aspen::raft::log_subscriber::LogEntryPayload;
+use iroh_docs::Author;
+use iroh_docs::NamespaceSecret;
 use iroh_docs::store::Store;
-use iroh_docs::{Author, NamespaceSecret};
 use tempfile::TempDir;
 use tokio::sync::broadcast;
-
-use aspen::docs::DocsWriter; // Import trait for set_entry/delete_entry methods
-use aspen::docs::exporter::{DocsExporter, IrohDocsWriter};
-use aspen::raft::log_subscriber::{KvOperation, LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 
 /// Test that entries exported to iroh-docs store can be read back.
 #[tokio::test]
@@ -33,12 +36,8 @@ async fn test_iroh_docs_writer_integration() -> Result<()> {
     let writer = Arc::new(IrohDocsWriter::new(store, namespace_id, author.clone()));
 
     // Write some entries
-    writer
-        .set_entry(b"key1".to_vec(), b"value1".to_vec())
-        .await?;
-    writer
-        .set_entry(b"key2".to_vec(), b"value2".to_vec())
-        .await?;
+    writer.set_entry(b"key1".to_vec(), b"value1".to_vec()).await?;
+    writer.set_entry(b"key2".to_vec(), b"value2".to_vec()).await?;
 
     // Delete an entry
     writer.delete_entry(b"key1".to_vec()).await?;
@@ -134,12 +133,8 @@ async fn test_persistent_store_survives_restart() -> Result<()> {
 
         let writer = Arc::new(IrohDocsWriter::new(store, namespace_id, author.clone()));
 
-        writer
-            .set_entry(b"persistent/key1".to_vec(), b"value1".to_vec())
-            .await?;
-        writer
-            .set_entry(b"persistent/key2".to_vec(), b"value2".to_vec())
-            .await?;
+        writer.set_entry(b"persistent/key1".to_vec(), b"value1".to_vec()).await?;
+        writer.set_entry(b"persistent/key2".to_vec(), b"value2".to_vec()).await?;
     }
 
     // Second session: verify store can be reopened and replica exists
@@ -196,15 +191,9 @@ async fn test_init_docs_resources_in_memory() -> Result<()> {
     assert!(resources.docs_dir.is_none()); // In-memory has no docs_dir
 
     // Create writer and verify it works
-    let writer = Arc::new(IrohDocsWriter::new(
-        resources.store,
-        resources.namespace_id,
-        resources.author,
-    ));
+    let writer = Arc::new(IrohDocsWriter::new(resources.store, resources.namespace_id, resources.author));
 
-    writer
-        .set_entry(b"test".to_vec(), b"value".to_vec())
-        .await?;
+    writer.set_entry(b"test".to_vec(), b"value".to_vec()).await?;
 
     Ok(())
 }

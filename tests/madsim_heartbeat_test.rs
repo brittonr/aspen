@@ -10,12 +10,17 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
-use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
+use aspen::raft::storage::InMemoryLogStore;
+use aspen::raft::storage::InMemoryStateMachine;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -50,7 +55,7 @@ async fn test_enable_heartbeat_seed_3001() {
     let config = Arc::new(
         Config {
             enable_heartbeat: false,
-            heartbeat_interval: 100, // 100ms heartbeat interval when enabled
+            heartbeat_interval: 100,   // 100ms heartbeat interval when enabled
             election_timeout_min: 500, // Must be > heartbeat_interval
             election_timeout_max: 1000,
             ..Default::default()
@@ -64,63 +69,23 @@ async fn test_enable_heartbeat_seed_3001() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 4 raft nodes (3 voters + 1 learner)");
-    let raft0 = create_raft_node(
-        NodeId::from(0),
-        router.clone(),
-        injector.clone(),
-        config.clone(),
-    )
-    .await;
-    let raft1 = create_raft_node(
-        NodeId::from(1),
-        router.clone(),
-        injector.clone(),
-        config.clone(),
-    )
-    .await;
-    let raft2 = create_raft_node(
-        NodeId::from(2),
-        router.clone(),
-        injector.clone(),
-        config.clone(),
-    )
-    .await;
-    let raft3 = create_raft_node(
-        NodeId::from(3),
-        router.clone(),
-        injector.clone(),
-        config.clone(),
-    )
-    .await;
+    let raft0 = create_raft_node(NodeId::from(0), router.clone(), injector.clone(), config.clone()).await;
+    let raft1 = create_raft_node(NodeId::from(1), router.clone(), injector.clone(), config.clone()).await;
+    let raft2 = create_raft_node(NodeId::from(2), router.clone(), injector.clone(), config.clone()).await;
+    let raft3 = create_raft_node(NodeId::from(3), router.clone(), injector.clone(), config.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(0),
-            "127.0.0.1:28000".to_string(),
-            raft0.clone(),
-        )
+        .register_node(NodeId::from(0), "127.0.0.1:28000".to_string(), raft0.clone())
         .expect("failed to register node 0");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:28001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:28001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:28002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:28002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:28003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:28003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize cluster with 3 voters on node 0");
@@ -128,10 +93,7 @@ async fn test_enable_heartbeat_seed_3001() {
     voters.insert(NodeId::from(0), create_test_raft_member_info(0));
     voters.insert(NodeId::from(1), create_test_raft_member_info(1));
     voters.insert(NodeId::from(2), create_test_raft_member_info(2));
-    raft0
-        .initialize(voters)
-        .await
-        .expect("failed to initialize cluster");
+    raft0.initialize(voters).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election (2s)");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
@@ -167,16 +129,10 @@ async fn test_enable_heartbeat_seed_3001() {
     madsim::time::sleep(std::time::Duration::from_millis(1000)).await;
 
     let log_index_before = leader_raft.metrics().borrow().last_log_index;
-    artifact = artifact.add_event(format!(
-        "metrics: log_index={:?} before enabling heartbeat",
-        log_index_before
-    ));
+    artifact = artifact.add_event(format!("metrics: log_index={:?} before enabling heartbeat", log_index_before));
 
     // Enable heartbeat dynamically on the leader
-    artifact = artifact.add_event(format!(
-        "config: enable heartbeat on leader (node {})",
-        leader_id
-    ));
+    artifact = artifact.add_event(format!("config: enable heartbeat on leader (node {})", leader_id));
     leader_raft.runtime_config().heartbeat(true);
 
     // Verify heartbeats are propagated over 3 cycles
@@ -199,18 +155,10 @@ async fn test_enable_heartbeat_seed_3001() {
             ));
 
             // Verify node has applied initial logs
-            assert!(
-                metrics.last_applied.is_some(),
-                "node {} should have applied entries from heartbeat",
-                node_id
-            );
+            assert!(metrics.last_applied.is_some(), "node {} should have applied entries from heartbeat", node_id);
 
             // Verify leader is still known
-            assert!(
-                metrics.current_leader.is_some(),
-                "node {} should know current leader",
-                node_id
-            );
+            assert!(metrics.current_leader.is_some(), "node {} should know current leader", node_id);
         }
     }
 
@@ -223,16 +171,10 @@ async fn test_enable_heartbeat_seed_3001() {
     // Log index should not grow significantly (heartbeats don't add new log entries in OpenRaft v2)
     // It may increase slightly due to blank leader entries, but shouldn't grow by much
     let log_growth = log_index_after.unwrap_or(0) - log_index_before.unwrap_or(0);
-    artifact = artifact.add_event(format!(
-        "validation: log growth = {} (heartbeats should not create many entries)",
-        log_growth
-    ));
+    artifact = artifact
+        .add_event(format!("validation: log growth = {} (heartbeats should not create many entries)", log_growth));
 
-    assert!(
-        log_growth <= 3,
-        "log should not grow significantly from heartbeats alone, growth={}",
-        log_growth
-    );
+    assert!(log_growth <= 3, "log should not grow significantly from heartbeats alone, growth={}", log_growth);
 
     artifact = artifact.add_event("success: heartbeat mechanism working correctly");
 

@@ -3,10 +3,12 @@
 //! Client tickets contain bootstrap information and access control
 //! for connecting to an Aspen cluster.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use iroh::EndpointAddr;
 use iroh_tickets::Ticket;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::subscription::AccessLevel;
 
@@ -78,10 +80,7 @@ impl AspenClientTicket {
         if self.expires_at_secs == 0 {
             return false;
         }
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         now >= self.expires_at_secs
     }
 
@@ -111,8 +110,10 @@ impl Ticket for AspenClientTicket {
 
 #[cfg(test)]
 mod tests {
+    use iroh::EndpointId;
+    use iroh::SecretKey;
+
     use super::*;
-    use iroh::{EndpointId, SecretKey};
 
     #[test]
     fn test_ticket_roundtrip() {

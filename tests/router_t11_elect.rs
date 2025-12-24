@@ -12,9 +12,13 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
-use openraft::storage::{RaftLogStorage, RaftLogStorageExt};
-use openraft::testing::{blank_ent, membership_ent};
-use openraft::{Config, ServerState, Vote};
+use openraft::Config;
+use openraft::ServerState;
+use openraft::Vote;
+use openraft::storage::RaftLogStorage;
+use openraft::storage::RaftLogStorageExt;
+use openraft::testing::blank_ent;
+use openraft::testing::membership_ent;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -53,12 +57,7 @@ async fn test_elect_compare_last_log() -> Result<()> {
         // This gives node 0 a more recent term than node 1
         sto0.blocking_append([
             blank_ent(0, NodeId::from(0), 0),
-            membership_ent(
-                2,
-                NodeId::from(0),
-                1,
-                vec![BTreeSet::from([NodeId::from(0), NodeId::from(1)])],
-            ),
+            membership_ent(2, NodeId::from(0), 1, vec![BTreeSet::from([NodeId::from(0), NodeId::from(1)])]),
         ])
         .await?;
     }
@@ -71,12 +70,7 @@ async fn test_elect_compare_last_log() -> Result<()> {
         // Node 1 has MORE entries but OLDER term in last entry
         sto1.blocking_append([
             blank_ent(0, NodeId::from(0), 0),
-            membership_ent(
-                1,
-                NodeId::from(0),
-                1,
-                vec![BTreeSet::from([NodeId::from(0), NodeId::from(1)])],
-            ),
+            membership_ent(1, NodeId::from(0), 1, vec![BTreeSet::from([NodeId::from(0), NodeId::from(1)])]),
             blank_ent(1, NodeId::from(0), 2),
         ])
         .await?;
@@ -89,24 +83,14 @@ async fn test_elect_compare_last_log() -> Result<()> {
     router.new_raft_node_with_storage(1, sto1, sm1).await?;
 
     // Node 0 should become leader because its last log entry has higher term
-    router
-        .wait(0, timeout())
-        .state(ServerState::Leader, "node 0 should win election")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Leader, "node 0 should win election").await?;
 
     // Verify node 1 is follower
-    router
-        .wait(1, timeout())
-        .state(ServerState::Follower, "node 1 should be follower")
-        .await?;
+    router.wait(1, timeout()).state(ServerState::Follower, "node 1 should be follower").await?;
 
     // Verify leader is node 0
     let leader_id = router.leader();
-    assert_eq!(
-        leader_id,
-        Some(NodeId::from(0)),
-        "node 0 should be leader (higher term in last log)"
-    );
+    assert_eq!(leader_id, Some(NodeId::from(0)), "node 0 should be leader (higher term in last log)");
 
     Ok(())
 }

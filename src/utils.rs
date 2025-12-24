@@ -118,8 +118,9 @@ pub fn ensure_disk_space_available(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_usage_percent_calculation() {
@@ -149,18 +150,9 @@ mod tests {
 
         let disk_space = result.unwrap();
         assert!(disk_space.total_bytes > 0, "total bytes should be positive");
-        assert!(
-            disk_space.available_bytes <= disk_space.total_bytes,
-            "available should be <= total"
-        );
-        assert!(
-            disk_space.used_bytes <= disk_space.total_bytes,
-            "used should be <= total"
-        );
-        assert!(
-            disk_space.usage_percent <= 100,
-            "usage percent should be <= 100"
-        );
+        assert!(disk_space.available_bytes <= disk_space.total_bytes, "available should be <= total");
+        assert!(disk_space.used_bytes <= disk_space.total_bytes, "used should be <= total");
+        assert!(disk_space.usage_percent <= 100, "usage percent should be <= 100");
     }
 
     #[test]

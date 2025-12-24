@@ -31,8 +31,11 @@
 
 use std::process::Command;
 
-use snafu::{ResultExt, Snafu};
-use tracing::{debug, info, warn};
+use snafu::ResultExt;
+use snafu::Snafu;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 /// Network bridge for connecting VMs.
 #[derive(Debug)]
@@ -276,12 +279,9 @@ fn run_ip_command(args: &[&str]) -> Result<(), NetworkError> {
 
 /// Enable IP forwarding via sysctl.
 fn enable_ip_forwarding() -> Result<(), NetworkError> {
-    let output = Command::new("sysctl")
-        .args(["-w", "net.ipv4.ip_forward=1"])
-        .output()
-        .context(IoSnafu {
-            operation: "sysctl ip_forward",
-        })?;
+    let output = Command::new("sysctl").args(["-w", "net.ipv4.ip_forward=1"]).output().context(IoSnafu {
+        operation: "sysctl ip_forward",
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

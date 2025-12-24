@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
-
-use openraft::{Config, ServerState};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use openraft::Config;
+use openraft::ServerState;
 
 #[tokio::test]
 async fn test_leader_crash_triggers_election() {
@@ -15,8 +17,9 @@ async fn test_leader_crash_triggers_election() {
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let artifact = match &result {
-        Ok(()) => SimulationArtifact::new("chaos_leader_crash", seed, events, String::new())
-            .with_duration_ms(duration_ms),
+        Ok(()) => {
+            SimulationArtifact::new("chaos_leader_crash", seed, events, String::new()).with_duration_ms(duration_ms)
+        }
         Err(e) => SimulationArtifact::new("chaos_leader_crash", seed, events, String::new())
             .with_failure(e.to_string())
             .with_duration_ms(duration_ms),
@@ -57,9 +60,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
-    let initial_leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no initial leader elected"))?;
+    let initial_leader = router.leader().ok_or_else(|| anyhow::anyhow!("no initial leader elected"))?;
     events.push(format!("initial-leader: node {}", initial_leader));
 
     // Perform baseline writes
@@ -73,7 +74,8 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         events.push(format!("baseline-write: {}={}", key, value));
     }
 
-    // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index 4)
+    // Wait for baseline writes to be committed (log index starts at 1 after init, so 3 writes = index
+    // 4)
     router
         .wait(initial_leader, Some(Duration::from_millis(1000)))
         .applied_index(Some(4), "baseline writes committed")
@@ -99,17 +101,11 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
         }
     }
 
-    let new_leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no new leader elected after crash"))?;
+    let new_leader = router.leader().ok_or_else(|| anyhow::anyhow!("no new leader elected after crash"))?;
 
     // Verify new leader is different from crashed leader
     if new_leader == initial_leader {
-        anyhow::bail!(
-            "new leader {} should be different from crashed leader {}",
-            new_leader,
-            initial_leader
-        );
+        anyhow::bail!("new leader {} should be different from crashed leader {}", new_leader, initial_leader);
     }
     events.push(format!("new-leader-elected: node {}", new_leader));
 
@@ -153,13 +149,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
@@ -172,13 +162,7 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
             }

@@ -21,13 +21,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::RwLock;
-use tokio::time::{MissedTickBehavior, interval};
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use super::metrics::{METRICS_CHECK_INTERVAL, ShardMetricsCollector};
+use super::metrics::METRICS_CHECK_INTERVAL;
+use super::metrics::ShardMetricsCollector;
 use super::router::ShardId;
-use super::topology::{DEFAULT_MERGE_MAX_COMBINED_BYTES, ShardState, ShardTopology};
+use super::topology::DEFAULT_MERGE_MAX_COMBINED_BYTES;
+use super::topology::ShardState;
+use super::topology::ShardTopology;
 use crate::api::ClusterController;
 
 /// Configuration for the shard automation manager.
@@ -139,10 +145,7 @@ impl ShardAutomationManager {
 
         // Check for shards that should be split
         let shards_to_split = self.metrics.shards_to_split();
-        for shard_id in shards_to_split
-            .into_iter()
-            .take(self.config.max_concurrent_splits)
-        {
+        for shard_id in shards_to_split.into_iter().take(self.config.max_concurrent_splits) {
             if let Err(e) = self.trigger_split(shard_id).await {
                 warn!(shard_id, error = %e, "Failed to trigger split");
             }
@@ -178,9 +181,7 @@ impl ShardAutomationManager {
         let topology = self.topology.read().await;
 
         // Verify shard is still in splittable state
-        let shard = topology
-            .get_shard(shard_id)
-            .ok_or_else(|| anyhow::anyhow!("shard {} not found", shard_id))?;
+        let shard = topology.get_shard(shard_id).ok_or_else(|| anyhow::anyhow!("shard {} not found", shard_id))?;
 
         if !matches!(shard.state, ShardState::Active) {
             debug!(shard_id, state = ?shard.state, "Shard not in active state, skipping split");
@@ -214,19 +215,12 @@ impl ShardAutomationManager {
 
         // Apply the split to the topology
         let mut topology = self.topology.write().await;
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let timestamp =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
         topology.apply_split(shard_id, split_key, new_shard_id, timestamp)?;
 
-        info!(
-            shard_id,
-            new_shard_id,
-            new_version = topology.version,
-            "Split completed"
-        );
+        info!(shard_id, new_shard_id, new_version = topology.version, "Split completed");
 
         Ok(())
     }
@@ -235,14 +229,8 @@ impl ShardAutomationManager {
     ///
     /// Currently uses a simple approach of finding the midpoint of the key range.
     /// Future improvements could analyze actual key distribution.
-    async fn calculate_split_key(
-        &self,
-        shard_id: ShardId,
-        topology: &ShardTopology,
-    ) -> anyhow::Result<String> {
-        let shard = topology
-            .get_shard(shard_id)
-            .ok_or_else(|| anyhow::anyhow!("shard {} not found", shard_id))?;
+    async fn calculate_split_key(&self, shard_id: ShardId, topology: &ShardTopology) -> anyhow::Result<String> {
+        let shard = topology.get_shard(shard_id).ok_or_else(|| anyhow::anyhow!("shard {} not found", shard_id))?;
 
         let start = &shard.key_range.start_key;
         let end = &shard.key_range.end_key;
@@ -262,11 +250,7 @@ impl ShardAutomationManager {
             format!("{}8", start)
         } else {
             // [start, end) - find common prefix and split there
-            let common_len = start
-                .chars()
-                .zip(end.chars())
-                .take_while(|(a, b)| a == b)
-                .count();
+            let common_len = start.chars().zip(end.chars()).take_while(|(a, b)| a == b).count();
 
             if common_len < start.len() && common_len < end.len() {
                 // Find midpoint between differing chars
@@ -320,8 +304,7 @@ impl ShardAutomationManager {
                 }
 
                 // Check both are active
-                if !matches!(source_info.state, ShardState::Active)
-                    || !matches!(target_info.state, ShardState::Active)
+                if !matches!(source_info.state, ShardState::Active) || !matches!(target_info.state, ShardState::Active)
                 {
                     continue;
                 }
@@ -350,19 +333,12 @@ impl ShardAutomationManager {
         info!(source, target, "Triggering automatic shard merge");
 
         let mut topology = self.topology.write().await;
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let timestamp =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
         topology.apply_merge(source, target, timestamp)?;
 
-        info!(
-            source,
-            target,
-            new_version = topology.version,
-            "Merge completed"
-        );
+        info!(source, target, new_version = topology.version, "Merge completed");
 
         Ok(())
     }
@@ -409,10 +385,7 @@ mod tests {
         // Create topology with single shard covering full range
         let topology = ShardTopology::new(1, 1000);
 
-        let split_key = manager
-            .calculate_split_key(0, &topology)
-            .await
-            .expect("should calculate split key");
+        let split_key = manager.calculate_split_key(0, &topology).await.expect("should calculate split key");
 
         assert!(!split_key.is_empty(), "split key should not be empty");
     }

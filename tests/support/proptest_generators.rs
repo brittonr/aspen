@@ -10,14 +10,16 @@
 
 #![allow(dead_code)] // Many generators not yet used across all test files
 
-use proptest::prelude::*;
-
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+// Re-export constants for boundary testing
+pub use aspen::raft::constants::MAX_KEY_SIZE;
+pub use aspen::raft::constants::MAX_SETMULTI_KEYS;
+pub use aspen::raft::constants::MAX_VALUE_SIZE;
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use openraft::LogId;
 use openraft::testing::log_id;
-
-// Re-export constants for boundary testing
-pub use aspen::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
+use proptest::prelude::*;
 
 // ============================================================================
 // Core Key-Value Generators
@@ -46,20 +48,11 @@ pub fn arbitrary_key_value() -> impl Strategy<Value = (String, String)> {
 pub fn arbitrary_key_value_with_edge_cases() -> impl Strategy<Value = (String, String)> {
     prop_oneof![
         // Normal case (70% weight)
-        (
-            "[a-z][a-z0-9_]{0,19}",
-            prop::string::string_regex("[a-zA-Z0-9 ]{1,100}").unwrap(),
-        ),
+        ("[a-z][a-z0-9_]{0,19}", prop::string::string_regex("[a-zA-Z0-9 ]{1,100}").unwrap(),),
         // Special characters in values
-        (
-            "[a-z]{1,10}",
-            prop::string::string_regex("[!@#$%^&*()\\-_=+\\[\\]{};:'\",.<>?/]{1,50}").unwrap(),
-        ),
+        ("[a-z]{1,10}", prop::string::string_regex("[!@#$%^&*()\\-_=+\\[\\]{};:'\",.<>?/]{1,50}").unwrap(),),
         // Whitespace variations
-        (
-            "[a-z]{1,10}",
-            prop::string::string_regex("[ \t]{1,20}").unwrap(),
-        ),
+        ("[a-z]{1,10}", prop::string::string_regex("[ \t]{1,20}").unwrap(),),
         // Longer keys (near boundary)
         ("[a-z][a-z0-9_]{50,100}", "[a-zA-Z0-9]{1,50}",),
     ]
@@ -110,8 +103,7 @@ pub fn arbitrary_app_request() -> impl Strategy<Value = AppRequest> {
         // Set operation (25%)
         arbitrary_key_value().prop_map(|(key, value)| AppRequest::Set { key, value }),
         // SetMulti operation (25%)
-        prop::collection::vec(arbitrary_key_value(), 1..20)
-            .prop_map(|pairs| AppRequest::SetMulti { pairs }),
+        prop::collection::vec(arbitrary_key_value(), 1..20).prop_map(|pairs| AppRequest::SetMulti { pairs }),
         // Delete operation (25%)
         "[a-z][a-z0-9_]{0,19}".prop_map(|key| AppRequest::Delete { key }),
         // DeleteMulti operation (25%)
@@ -132,8 +124,7 @@ pub fn arbitrary_delete_request() -> impl Strategy<Value = AppRequest> {
 
 /// Generator for SetMulti operations with configurable size.
 pub fn arbitrary_setmulti_request(max_pairs: usize) -> impl Strategy<Value = AppRequest> {
-    prop::collection::vec(arbitrary_key_value(), 1..max_pairs)
-        .prop_map(|pairs| AppRequest::SetMulti { pairs })
+    prop::collection::vec(arbitrary_key_value(), 1..max_pairs).prop_map(|pairs| AppRequest::SetMulti { pairs })
 }
 
 /// Generator for DeleteMulti operations with configurable size.
@@ -188,10 +179,7 @@ pub fn oversized_value() -> impl Strategy<Value = String> {
 ///
 /// Use for testing rejection of oversized batches.
 pub fn oversized_setmulti() -> impl Strategy<Value = Vec<(String, String)>> {
-    prop::collection::vec(
-        arbitrary_key_value(),
-        (MAX_SETMULTI_KEYS as usize + 1)..(MAX_SETMULTI_KEYS as usize + 50),
-    )
+    prop::collection::vec(arbitrary_key_value(), (MAX_SETMULTI_KEYS as usize + 1)..(MAX_SETMULTI_KEYS as usize + 50))
 }
 
 /// Generator for SetMulti at exactly the limit.
@@ -248,13 +236,8 @@ pub fn invalid_node_id_string() -> impl Strategy<Value = String> {
 /// Generator for a sequence of log entries to append.
 ///
 /// Returns (start_index, entries) where entries are contiguous from start_index.
-pub fn arbitrary_log_append_sequence(
-    max_entries: usize,
-) -> impl Strategy<Value = (u64, Vec<AppRequest>)> {
-    (
-        1u64..100u64,
-        prop::collection::vec(arbitrary_app_request(), 1..max_entries),
-    )
+pub fn arbitrary_log_append_sequence(max_entries: usize) -> impl Strategy<Value = (u64, Vec<AppRequest>)> {
+    (1u64..100u64, prop::collection::vec(arbitrary_app_request(), 1..max_entries))
 }
 
 /// Generator for Raft vote tuples (term, voted_for).
@@ -332,8 +315,7 @@ pub fn arbitrary_operation_sequence(max_ops: usize) -> impl Strategy<Value = Vec
             arbitrary_key_value().prop_map(|(k, v)| TestOperation::Write(k, v)),
             "[a-z][a-z0-9_]{0,19}".prop_map(TestOperation::Read),
             "[a-z][a-z0-9_]{0,19}".prop_map(TestOperation::Delete),
-            ("[a-z]{1,5}", 1u32..100u32)
-                .prop_map(|(prefix, limit)| TestOperation::Scan(prefix, limit)),
+            ("[a-z]{1,5}", 1u32..100u32).prop_map(|(prefix, limit)| TestOperation::Scan(prefix, limit)),
         ],
         1..max_ops,
     )
@@ -349,12 +331,7 @@ pub fn arbitrary_operation_sequence(max_ops: usize) -> impl Strategy<Value = Vec
 pub fn arbitrary_timestamp_ms() -> impl Strategy<Value = u64> {
     prop_oneof![
         // Recent (within last hour)
-        Just(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64
-        ),
+        Just(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64),
         // Older timestamps
         (1_700_000_000_000u64..1_800_000_000_000u64),
         // Zero (edge case)
@@ -405,22 +382,12 @@ pub fn arbitrary_membership() -> impl Strategy<Value = (Vec<NodeId>, Vec<NodeId>
 
 /// Create a sequence of Set entries for testing.
 pub fn create_set_entries(count: usize, start_index: u64) -> Vec<(String, String, u64)> {
-    (0..count)
-        .map(|i| {
-            (
-                format!("key_{}", i),
-                format!("value_{}", i),
-                start_index + i as u64,
-            )
-        })
-        .collect()
+    (0..count).map(|i| (format!("key_{}", i), format!("value_{}", i), start_index + i as u64)).collect()
 }
 
 /// Create a sequence of Delete entries for testing.
 pub fn create_delete_entries(count: usize, start_index: u64) -> Vec<(String, u64)> {
-    (0..count)
-        .map(|i| (format!("key_{}", i), start_index + i as u64))
-        .collect()
+    (0..count).map(|i| (format!("key_{}", i), start_index + i as u64)).collect()
 }
 
 #[cfg(test)]

@@ -35,30 +35,49 @@
 //! # References
 //!
 //! - [MadRaft Tester](https://github.com/madsim-rs/MadRaft) - Similar abstraction pattern
-//! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY inspiration
+//! - [FoundationDB Testing](https://apple.github.io/foundationdb/testing.html) - BUGGIFY
+//!   inspiration
 //! - [RisingWave DST](https://www.risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Result;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
-use crate::api::{SqlConsistency, SqlQueryError, SqlQueryRequest, SqlQueryResult};
+use crate::api::SqlConsistency;
+use crate::api::SqlQueryError;
+use crate::api::SqlQueryRequest;
+use crate::api::SqlQueryResult;
 use crate::raft::StateMachineVariant;
-use crate::raft::madsim_network::{
-    ByzantineCorruptionMode, ByzantineFailureInjector, FailureInjector, MadsimNetworkFactory,
-    MadsimRaftRouter,
-};
+use crate::raft::madsim_network::ByzantineCorruptionMode;
+use crate::raft::madsim_network::ByzantineFailureInjector;
+use crate::raft::madsim_network::FailureInjector;
+use crate::raft::madsim_network::MadsimNetworkFactory;
+use crate::raft::madsim_network::MadsimRaftRouter;
 use crate::raft::node::RaftNode;
-use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
+use crate::raft::storage::InMemoryLogStore;
+use crate::raft::storage::InMemoryStateMachine;
+use crate::raft::storage::RedbLogStore;
+use crate::raft::storage::StorageBackend;
 use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
-use crate::raft::types::{AppRequest, AppTypeConfig, NodeId, RaftMemberInfo};
-use crate::simulation::{SimulationArtifact, SimulationArtifactBuilder};
+use crate::raft::types::AppRequest;
+use crate::raft::types::AppTypeConfig;
+use crate::raft::types::NodeId;
+use crate::raft::types::RaftMemberInfo;
+use crate::simulation::SimulationArtifact;
+use crate::simulation::SimulationArtifactBuilder;
 use crate::testing::create_test_raft_member_info;
 
 /// Helper to create a fresh artifact builder for std::mem::replace
@@ -123,12 +142,7 @@ impl TesterConfig {
     }
 
     /// Configure Raft timeouts.
-    pub fn with_timeouts(
-        mut self,
-        heartbeat_ms: u64,
-        election_min_ms: u64,
-        election_max_ms: u64,
-    ) -> Self {
+    pub fn with_timeouts(mut self, heartbeat_ms: u64, election_min_ms: u64, election_max_ms: u64) -> Self {
         self.heartbeat_interval_ms = heartbeat_ms;
         self.election_timeout_min_ms = election_min_ms;
         self.election_timeout_max_ms = election_max_ms;
@@ -652,11 +666,7 @@ impl AspenRaftTester {
             std::env::var("MADSIM_TEST_SEED")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .or_else(|| {
-                    std::env::var("ASPEN_TEST_SEED")
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                })
+                .or_else(|| std::env::var("ASPEN_TEST_SEED").ok().and_then(|s| s.parse().ok()))
                 .unwrap_or_else(|| {
                     // Deterministic seed from test name
                     let mut hasher = std::hash::DefaultHasher::new();
@@ -665,20 +675,11 @@ impl AspenRaftTester {
                 })
         });
 
-        eprintln!(
-            "Starting test '{}' with seed {} ({} nodes)",
-            config.test_name, seed, config.node_count
-        );
-        eprintln!(
-            "To reproduce: MADSIM_TEST_SEED={} cargo nextest run {}",
-            seed, config.test_name
-        );
+        eprintln!("Starting test '{}' with seed {} ({} nodes)", config.test_name, seed, config.node_count);
+        eprintln!("To reproduce: MADSIM_TEST_SEED={} cargo nextest run {}", seed, config.test_name);
 
         let mut artifact = SimulationArtifactBuilder::new(&config.test_name, seed).start();
-        artifact = artifact.add_event(format!(
-            "create: {} nodes with seed {}",
-            config.node_count, seed
-        ));
+        artifact = artifact.add_event(format!("create: {} nodes with seed {}", config.node_count, seed));
 
         let router = Arc::new(MadsimRaftRouter::new());
         let injector = Arc::new(FailureInjector::new());
@@ -703,18 +704,12 @@ impl AspenRaftTester {
                     let log_store = InMemoryLogStore::default();
                     let state_machine = InMemoryStateMachine::new();
 
-                    let network_factory =
-                        MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
+                    let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
-                    let raft = Raft::new(
-                        node_id,
-                        raft_config.clone(),
-                        network_factory,
-                        log_store,
-                        state_machine.clone(),
-                    )
-                    .await
-                    .expect("failed to create raft instance");
+                    let raft =
+                        Raft::new(node_id, raft_config.clone(), network_factory, log_store, state_machine.clone())
+                            .await
+                            .expect("failed to create raft instance");
 
                     TestNode::InMemory {
                         raft,
@@ -723,83 +718,58 @@ impl AspenRaftTester {
                     }
                 }
                 StorageBackend::Sqlite => {
-                    let storage_dir = config
-                        .storage_dir
-                        .as_ref()
-                        .expect("storage_dir must be set for Sqlite backend");
+                    let storage_dir = config.storage_dir.as_ref().expect("storage_dir must be set for Sqlite backend");
 
                     // Create unique paths for this node
                     let node_dir = storage_dir.join(format!("node-{}", i));
-                    std::fs::create_dir_all(&node_dir)
-                        .expect("failed to create node storage directory");
+                    std::fs::create_dir_all(&node_dir).expect("failed to create node storage directory");
 
                     let log_path = node_dir.join("raft-log.redb");
                     let state_path = node_dir.join("state-machine.db");
 
-                    let log_store = RedbLogStore::new(&log_path)
-                        .expect("failed to create persistent log store");
-                    let state_machine = SqliteStateMachine::new(&state_path)
-                        .expect("failed to create persistent state machine");
+                    let log_store = RedbLogStore::new(&log_path).expect("failed to create persistent log store");
+                    let state_machine =
+                        SqliteStateMachine::new(&state_path).expect("failed to create persistent state machine");
 
-                    let network_factory =
-                        MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
+                    let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
-                    let raft = Raft::new(
-                        node_id,
-                        raft_config.clone(),
-                        network_factory,
-                        log_store,
-                        state_machine.clone(),
-                    )
-                    .await
-                    .expect("failed to create raft instance");
+                    let raft =
+                        Raft::new(node_id, raft_config.clone(), network_factory, log_store, state_machine.clone())
+                            .await
+                            .expect("failed to create raft instance");
 
                     TestNode::Persistent {
                         raft,
                         state_machine,
                         connected: AtomicBool::new(true),
-                        storage_paths: NodeStoragePaths {
-                            log_path,
-                            state_path,
-                        },
+                        storage_paths: NodeStoragePaths { log_path, state_path },
                     }
                 }
                 StorageBackend::Redb => {
                     // Use real Redb storage for SQL testing with single-fsync architecture.
                     // SharedRedbStorage implements both RaftLogStorage AND RaftStateMachine.
-                    let storage_dir = config
-                        .storage_dir
-                        .as_ref()
-                        .expect("storage_dir must be set for Redb backend");
+                    let storage_dir = config.storage_dir.as_ref().expect("storage_dir must be set for Redb backend");
 
                     // Create unique paths for this node
                     let node_dir = storage_dir.join(format!("node-{}", i));
-                    std::fs::create_dir_all(&node_dir)
-                        .expect("failed to create node storage directory");
+                    std::fs::create_dir_all(&node_dir).expect("failed to create node storage directory");
 
                     let db_path = node_dir.join("shared.redb");
 
                     // SharedRedbStorage is the single-fsync backend - it implements
                     // BOTH log storage AND state machine in a single struct.
                     // SharedRedbStorage derives Clone (uses Arc internally for database).
-                    let storage =
-                        SharedRedbStorage::new(&db_path).expect("failed to create Redb storage");
+                    let storage = SharedRedbStorage::new(&db_path).expect("failed to create Redb storage");
 
-                    let network_factory =
-                        MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
+                    let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
                     // Pass clones of SharedRedbStorage for BOTH log_store and state_machine.
                     // SharedRedbStorage is Clone (internally Arc-wrapped), so this is cheap.
                     // This is what enables single-fsync writes.
-                    let raft = Raft::new(
-                        node_id,
-                        raft_config.clone(),
-                        network_factory,
-                        storage.clone(),
-                        storage.clone(),
-                    )
-                    .await
-                    .expect("failed to create raft instance");
+                    let raft =
+                        Raft::new(node_id, raft_config.clone(), network_factory, storage.clone(), storage.clone())
+                            .await
+                            .expect("failed to create raft instance");
 
                     // Wrap storage in Arc for StateMachineVariant and storage in TestNode
                     let storage = Arc::new(storage);
@@ -822,11 +792,7 @@ impl AspenRaftTester {
             };
 
             router
-                .register_node(
-                    node_id,
-                    format!("127.0.0.1:{}", 26000 + i),
-                    node.raft().clone(),
-                )
+                .register_node(node_id, format!("127.0.0.1:{}", 26000 + i), node.raft().clone())
                 .expect("failed to register node");
 
             nodes.push(node);
@@ -842,11 +808,7 @@ impl AspenRaftTester {
             })
             .collect();
 
-        nodes[0]
-            .raft()
-            .initialize(initial_members)
-            .await
-            .expect("failed to initialize cluster");
+        nodes[0].raft().initialize(initial_members).await.expect("failed to initialize cluster");
 
         artifact = artifact.add_event("init: cluster initialized");
 
@@ -955,8 +917,8 @@ impl AspenRaftTester {
                 .add_event("network: set unreliable (10% loss, 1-27ms delay)");
         } else {
             self.injector.clear_all();
-            self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-                .add_event("network: set reliable");
+            self.artifact =
+                std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event("network: set reliable");
         }
     }
 
@@ -973,9 +935,8 @@ impl AspenRaftTester {
                 }
             }
         }
-        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(
-            format!("network: set packet loss rate to {:.1}%", rate * 100.0),
-        );
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("network: set packet loss rate to {:.1}%", rate * 100.0));
     }
 
     /// Configure range-based network delay for all node pairs.
@@ -987,8 +948,7 @@ impl AspenRaftTester {
                 if i != j {
                     let from = NodeId::from(i as u64 + 1);
                     let to = NodeId::from(j as u64 + 1);
-                    self.injector
-                        .set_network_delay_range(from, to, min_ms, max_ms);
+                    self.injector.set_network_delay_range(from, to, min_ms, max_ms);
                 }
             }
         }
@@ -1076,11 +1036,7 @@ impl AspenRaftTester {
     /// ```
     pub fn set_cluster_clock_drifts(&mut self, drifts: &[(usize, i64)]) {
         for &(node_idx, drift_ms) in drifts {
-            assert!(
-                node_idx < self.nodes.len(),
-                "Invalid node index: {}",
-                node_idx
-            );
+            assert!(node_idx < self.nodes.len(), "Invalid node index: {}", node_idx);
             let node_id = NodeId::from(node_idx as u64 + 1);
             self.injector.set_clock_drift(node_id, drift_ms);
         }
@@ -1096,8 +1052,8 @@ impl AspenRaftTester {
             self.injector.clear_clock_drift(node_id);
         }
 
-        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-            .add_event("drift: cleared all node drifts");
+        self.artifact =
+            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event("drift: cleared all node drifts");
     }
 
     /// Get the configured clock drift for a node.
@@ -1123,12 +1079,7 @@ impl AspenRaftTester {
     /// // Make node 4 flip 30% of vote responses
     /// tester.enable_byzantine_mode(4, ByzantineCorruptionMode::FlipVote, 0.3);
     /// ```
-    pub fn enable_byzantine_mode(
-        &mut self,
-        node_idx: usize,
-        mode: ByzantineCorruptionMode,
-        probability: f64,
-    ) {
+    pub fn enable_byzantine_mode(&mut self, node_idx: usize, mode: ByzantineCorruptionMode, probability: f64) {
         assert!(node_idx < self.nodes.len(), "Invalid node index");
         let node_id = NodeId::from(node_idx as u64 + 1);
 
@@ -1136,18 +1087,16 @@ impl AspenRaftTester {
         for j in 0..self.nodes.len() {
             if node_idx != j {
                 let target_id = NodeId::from(j as u64 + 1);
-                self.byzantine_injector
-                    .set_byzantine_mode(node_id, target_id, mode, probability);
+                self.byzantine_injector.set_byzantine_mode(node_id, target_id, mode, probability);
             }
         }
 
-        self.artifact =
-            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
-                "byzantine: node {} enabled {:?} with probability {:.1}%",
-                node_idx,
-                mode,
-                probability * 100.0
-            ));
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
+            "byzantine: node {} enabled {:?} with probability {:.1}%",
+            node_idx,
+            mode,
+            probability * 100.0
+        ));
     }
 
     /// Disable all Byzantine behavior for a node.
@@ -1182,8 +1131,8 @@ impl AspenRaftTester {
         }
 
         self.metrics.node_crashes += 1;
-        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-            .add_event(format!("crash: node {}", i));
+        self.artifact =
+            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!("crash: node {}", i));
     }
 
     /// Restart a crashed node.
@@ -1208,23 +1157,15 @@ impl AspenRaftTester {
             };
             let raft_config = Arc::new(raft_config.validate().expect("invalid raft config"));
 
-            let log_store = RedbLogStore::new(&storage_paths.log_path)
-                .expect("failed to reopen persistent log store");
-            let state_machine = SqliteStateMachine::new(&storage_paths.state_path)
-                .expect("failed to reopen persistent state machine");
+            let log_store = RedbLogStore::new(&storage_paths.log_path).expect("failed to reopen persistent log store");
+            let state_machine =
+                SqliteStateMachine::new(&storage_paths.state_path).expect("failed to reopen persistent state machine");
 
-            let network_factory =
-                MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
+            let network_factory = MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
 
-            let raft = Raft::new(
-                node_id,
-                raft_config,
-                network_factory,
-                log_store,
-                state_machine.clone(),
-            )
-            .await
-            .expect("failed to recreate raft instance");
+            let raft = Raft::new(node_id, raft_config, network_factory, log_store, state_machine.clone())
+                .await
+                .expect("failed to recreate raft instance");
 
             // Re-register with router
             self.router
@@ -1262,8 +1203,7 @@ impl AspenRaftTester {
         while retries > 0 {
             // Random backoff using madsim's deterministic random
             let backoff = LEADER_CHECK_BACKOFF_MIN_MS
-                + (madsim::rand::random::<u64>()
-                    % (LEADER_CHECK_BACKOFF_MAX_MS - LEADER_CHECK_BACKOFF_MIN_MS));
+                + (madsim::rand::random::<u64>() % (LEADER_CHECK_BACKOFF_MAX_MS - LEADER_CHECK_BACKOFF_MIN_MS));
             madsim::time::sleep(Duration::from_millis(backoff)).await;
 
             // Look for a leader that all connected nodes agree on
@@ -1297,10 +1237,7 @@ impl AspenRaftTester {
                 let metrics = self.nodes[idx].raft().metrics().borrow().clone();
                 self.metrics.elections += 1;
                 self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-                    .add_event(format!(
-                        "leader: node {} (id={}) elected for term {}",
-                        idx, id, metrics.current_term
-                    ));
+                    .add_event(format!("leader: node {} (id={}) elected for term {}", idx, id, metrics.current_term));
                 return Some(idx);
             }
 
@@ -1328,12 +1265,7 @@ impl AspenRaftTester {
 
         for (term, leaders) in leaders_per_term {
             if leaders.len() > 1 {
-                anyhow::bail!(
-                    "Split brain detected: term {} has {} leaders: {:?}",
-                    term,
-                    leaders.len(),
-                    leaders
-                );
+                anyhow::bail!("Split brain detected: term {} has {} leaders: {:?}", term, leaders.len(), leaders);
             }
         }
 
@@ -1354,10 +1286,8 @@ impl AspenRaftTester {
 
     /// Perform a write operation through the leader.
     pub async fn write(&mut self, key: String, value: String) -> Result<()> {
-        let leader_idx = self
-            .check_one_leader()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("No leader available for write"))?;
+        let leader_idx =
+            self.check_one_leader().await.ok_or_else(|| anyhow::anyhow!("No leader available for write"))?;
 
         self.nodes[leader_idx]
             .raft()
@@ -1378,10 +1308,8 @@ impl AspenRaftTester {
     /// Reads directly from the state machine (bypassing Raft read API).
     /// Works for in-memory, persistent (SQLite), and Redb nodes.
     pub async fn read(&mut self, key: &str) -> Result<Option<String>> {
-        let leader_idx = self
-            .check_one_leader()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("No leader available for read"))?;
+        let leader_idx =
+            self.check_one_leader().await.ok_or_else(|| anyhow::anyhow!("No leader available for read"))?;
 
         // Read depends on the node type
         let value = match &self.nodes[leader_idx] {
@@ -1392,10 +1320,7 @@ impl AspenRaftTester {
             }
             TestNode::Redb { storage, .. } => {
                 // SharedRedbStorage.get returns Result<Option<KvEntry>, SharedStorageError>
-                storage
-                    .get(key)
-                    .map(|opt| opt.map(|e| e.value))
-                    .unwrap_or(None)
+                storage.get(key).map(|opt| opt.map(|e| e.value)).unwrap_or(None)
             }
         };
         Ok(value)
@@ -1422,8 +1347,7 @@ impl AspenRaftTester {
     /// assert_eq!(result.row_count, 10);
     /// ```
     pub async fn execute_sql(&mut self, query: &str) -> Result<SqlQueryResult> {
-        self.execute_sql_with_consistency(query, SqlConsistency::Linearizable)
-            .await
+        self.execute_sql_with_consistency(query, SqlConsistency::Linearizable).await
     }
 
     /// Execute a SQL query with specific consistency level.
@@ -1451,13 +1375,10 @@ impl AspenRaftTester {
         query: &str,
         consistency: SqlConsistency,
     ) -> Result<SqlQueryResult> {
-        let leader_idx = self
-            .check_one_leader()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("No leader available for SQL query"))?;
+        let leader_idx =
+            self.check_one_leader().await.ok_or_else(|| anyhow::anyhow!("No leader available for SQL query"))?;
 
-        self.execute_sql_on_node(leader_idx, query, consistency)
-            .await
+        self.execute_sql_on_node(leader_idx, query, consistency).await
     }
 
     /// Execute a SQL query on a specific node.
@@ -1482,9 +1403,9 @@ impl AspenRaftTester {
     ) -> Result<SqlQueryResult> {
         assert!(node_idx < self.nodes.len(), "Invalid node index");
 
-        let raft_node = self.nodes[node_idx].raft_node().ok_or_else(|| {
-            anyhow::anyhow!("SQL not supported on this node type (use Redb backend)")
-        })?;
+        let raft_node = self.nodes[node_idx]
+            .raft_node()
+            .ok_or_else(|| anyhow::anyhow!("SQL not supported on this node type (use Redb backend)"))?;
 
         let request = SqlQueryRequest {
             query: query.to_string(),
@@ -1522,12 +1443,11 @@ impl AspenRaftTester {
             }
         })?;
 
-        self.artifact =
-            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
-                "sql: query='{}' returned {} rows",
-                query.chars().take(50).collect::<String>(),
-                result.row_count
-            ));
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
+            "sql: query='{}' returned {} rows",
+            query.chars().take(50).collect::<String>(),
+            result.row_count
+        ));
 
         Ok(result)
     }
@@ -1597,10 +1517,7 @@ impl AspenRaftTester {
             .await
             .ok_or_else(|| anyhow::anyhow!("No leader available for change_membership"))?;
 
-        let members: BTreeSet<NodeId> = voter_indices
-            .iter()
-            .map(|&i| NodeId::from(i as u64 + 1))
-            .collect();
+        let members: BTreeSet<NodeId> = voter_indices.iter().map(|&i| NodeId::from(i as u64 + 1)).collect();
 
         self.nodes[leader_idx]
             .raft()
@@ -1624,14 +1541,8 @@ impl AspenRaftTester {
             if node.connected().load(Ordering::Relaxed) {
                 let metrics = node.raft().metrics().borrow().clone();
                 let membership = metrics.membership_config.membership();
-                let voters: Vec<usize> = membership
-                    .voter_ids()
-                    .map(|id| (id.0 - 1) as usize)
-                    .collect();
-                let learners: Vec<usize> = membership
-                    .learner_ids()
-                    .map(|id| (id.0 - 1) as usize)
-                    .collect();
+                let voters: Vec<usize> = membership.voter_ids().map(|id| (id.0 - 1) as usize).collect();
+                let learners: Vec<usize> = membership.learner_ids().map(|id| (id.0 - 1) as usize).collect();
                 return (voters, learners);
             }
         }
@@ -1670,10 +1581,7 @@ impl AspenRaftTester {
             madsim::time::sleep(Duration::from_millis(100)).await;
         }
 
-        anyhow::bail!(
-            "Timeout waiting for log sync after {} seconds",
-            timeout_secs
-        )
+        anyhow::bail!("Timeout waiting for log sync after {} seconds", timeout_secs)
     }
 
     // =========================================================================
@@ -1704,8 +1612,7 @@ impl AspenRaftTester {
     /// Disable BUGGIFY fault injection.
     pub fn disable_buggify(&mut self) {
         self.buggify.disable();
-        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-            .add_event("buggify: disabled");
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event("buggify: disabled");
     }
 
     /// Apply BUGGIFY faults if they should trigger.
@@ -1759,11 +1666,7 @@ impl AspenRaftTester {
             for i in 0..self.nodes.len() {
                 for j in 0..self.nodes.len() {
                     if i != j {
-                        self.injector.set_packet_loss_rate(
-                            NodeId::from(i as u64 + 1),
-                            NodeId::from(j as u64 + 1),
-                            0.0,
-                        );
+                        self.injector.set_packet_loss_rate(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), 0.0);
                     }
                 }
             }
@@ -1811,10 +1714,7 @@ impl AspenRaftTester {
                 0.5,
             );
 
-            self.add_event(format!(
-                "buggify: enabled {:?} corruption on link {}->{}",
-                mode, src, dst
-            ));
+            self.add_event(format!("buggify: enabled {:?} corruption on link {}->{}", mode, src, dst));
             self.metrics.buggify_triggers += 1;
         }
 
@@ -1837,20 +1737,14 @@ impl AspenRaftTester {
                 .unwrap_or(0);
 
             self.disconnect(leader_idx);
-            self.add_event(format!(
-                "buggify: partitioned leader {} to force re-election",
-                leader_idx
-            ));
+            self.add_event(format!("buggify: partitioned leader {} to force re-election", leader_idx));
             self.metrics.buggify_triggers += 1;
 
             // Restore after election timeout - reduced from 5s to 2s for faster tests
             // This is still longer than election_timeout_max (3s) so elections can complete
             madsim::time::sleep(Duration::from_secs(2)).await;
             self.connect(leader_idx);
-            self.add_event(format!(
-                "buggify: restored node {} connectivity",
-                leader_idx
-            ));
+            self.add_event(format!("buggify: restored node {} connectivity", leader_idx));
         }
 
         // Network partition
@@ -1859,10 +1753,7 @@ impl AspenRaftTester {
             for i in 0..mid {
                 self.disconnect(i);
             }
-            self.add_event(format!(
-                "buggify: created network partition (nodes 0-{} isolated)",
-                mid - 1
-            ));
+            self.add_event(format!("buggify: created network partition (nodes 0-{} isolated)", mid - 1));
             self.metrics.buggify_triggers += 1;
 
             // Heal after some time - reduced from 10s to 3s for faster tests
@@ -1917,10 +1808,7 @@ impl AspenRaftTester {
             madsim::time::sleep(Duration::from_secs(1)).await;
         }
 
-        self.add_event(format!(
-            "buggify: completed {} seconds of fault injection",
-            duration.as_secs()
-        ));
+        self.add_event(format!("buggify: completed {} seconds of fault injection", duration.as_secs()));
     }
 
     // =========================================================================
@@ -1929,27 +1817,20 @@ impl AspenRaftTester {
 
     /// Add a custom event to the artifact trace.
     pub fn add_event(&mut self, event: impl Into<String>) {
-        self.artifact =
-            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(event);
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(event);
     }
 
     /// Delete a key from the key-value store.
     pub async fn delete(&mut self, key: String) -> Result<()> {
-        let leader_idx = self
-            .check_one_leader()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("No leader available"))?;
+        let leader_idx = self.check_one_leader().await.ok_or_else(|| anyhow::anyhow!("No leader available"))?;
 
         let req = AppRequest::Delete { key: key.clone() };
 
         let res = self.nodes[leader_idx].raft().client_write(req).await?;
 
         // Track event
-        self.artifact =
-            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
-                "Delete key '{}' via node {} (response: {:?})",
-                key, leader_idx, res.data
-            ));
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("Delete key '{}' via node {} (response: {:?})", key, leader_idx, res.data));
 
         Ok(())
     }
@@ -1960,11 +1841,7 @@ impl AspenRaftTester {
             return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
         }
 
-        self.nodes[node_id as usize]
-            .raft()
-            .trigger()
-            .elect()
-            .await?;
+        self.nodes[node_id as usize].raft().trigger().elect().await?;
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
             .add_event(format!("Triggered election on node {}", node_id));
@@ -1981,11 +1858,7 @@ impl AspenRaftTester {
             return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
         }
 
-        self.nodes[node_id as usize]
-            .raft()
-            .trigger()
-            .snapshot()
-            .await?;
+        self.nodes[node_id as usize].raft().trigger().snapshot().await?;
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
             .add_event(format!("Triggered snapshot on node {}", node_id));
@@ -1998,13 +1871,7 @@ impl AspenRaftTester {
         if node_id >= self.nodes.len() as u64 {
             return None;
         }
-        Some(
-            self.nodes[node_id as usize]
-                .raft()
-                .metrics()
-                .borrow()
-                .clone(),
-        )
+        Some(self.nodes[node_id as usize].raft().metrics().borrow().clone())
     }
 
     /// End the test and return the simulation artifact.
@@ -2094,26 +1961,17 @@ impl AspenRaftTester {
             if self.liveness_state.first_election_time.is_none() {
                 self.liveness_state.first_election_time = Some(now);
                 self.metrics.liveness.first_election_ms = elapsed_from_start;
-                self.add_event(format!(
-                    "liveness: first leader elected at {}ms",
-                    elapsed_from_start
-                ));
+                self.add_event(format!("liveness: first leader elected at {}ms", elapsed_from_start));
             }
 
             // If we were leaderless, record recovery time
             if let Some(leaderless_start) = self.liveness_state.leaderless_since {
                 let recovery_time = now.duration_since(leaderless_start).as_millis() as u64;
                 self.metrics.liveness.leaderless_duration_ms += recovery_time;
-                self.metrics.liveness.max_leader_recovery_ms = self
-                    .metrics
-                    .liveness
-                    .max_leader_recovery_ms
-                    .max(recovery_time);
+                self.metrics.liveness.max_leader_recovery_ms =
+                    self.metrics.liveness.max_leader_recovery_ms.max(recovery_time);
                 self.liveness_state.leaderless_since = None;
-                self.add_event(format!(
-                    "liveness: leader recovered after {}ms",
-                    recovery_time
-                ));
+                self.add_event(format!("liveness: leader recovered after {}ms", recovery_time));
             }
 
             self.liveness_state.last_leader_time = Some(now);
@@ -2127,14 +1985,11 @@ impl AspenRaftTester {
             }
 
             // Check for violations based on mode
-            let leaderless_duration = self
-                .liveness_state
-                .leaderless_since
-                .map(|t| now.duration_since(t).as_millis() as u64)
-                .unwrap_or(0);
+            let leaderless_duration =
+                self.liveness_state.leaderless_since.map(|t| now.duration_since(t).as_millis() as u64).unwrap_or(0);
 
             let violation_threshold = match self.liveness_config.mode {
-                LivenessMode::Disabled => u64::MAX, // Never violate
+                LivenessMode::Disabled => u64::MAX,                                 // Never violate
                 LivenessMode::Strict => self.liveness_config.check_interval_ms * 2, // Very short
                 LivenessMode::Eventual => self.liveness_config.recovery_timeout_ms,
                 LivenessMode::CustomTimeout(ms) => ms,
@@ -2150,10 +2005,7 @@ impl AspenRaftTester {
                         leaderless_duration, violation_threshold
                     ),
                 });
-                self.add_event(format!(
-                    "liveness: VIOLATION - leaderless for {}ms",
-                    leaderless_duration
-                ));
+                self.add_event(format!("liveness: VIOLATION - leaderless for {}ms", leaderless_duration));
                 false
             } else {
                 self.metrics.liveness.liveness_checks_passed += 1;
@@ -2188,11 +2040,7 @@ impl AspenRaftTester {
     ///
     /// assert!(report.passed, "Liveness test failed: {}", report.summary);
     /// ```
-    pub async fn run_with_liveness<F, Fut>(
-        &mut self,
-        duration: Duration,
-        test_fn: F,
-    ) -> LivenessReport
+    pub async fn run_with_liveness<F, Fut>(&mut self, duration: Duration, test_fn: F) -> LivenessReport
     where
         F: FnOnce(&mut Self) -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
@@ -2278,10 +2126,7 @@ impl AspenRaftTester {
         } else {
             let violation_count = self.liveness_state.violations.len();
             let test_error = test_result.as_ref().err().map(|e| e.to_string());
-            format!(
-                "Liveness test FAILED: {} violations, test error: {:?}",
-                violation_count, test_error
-            )
+            format!("Liveness test FAILED: {} violations, test error: {:?}", violation_count, test_error)
         };
 
         self.add_event(format!("liveness: {}", summary));
@@ -2355,12 +2200,10 @@ impl AspenRaftTester {
         }
 
         // Collect final metrics as JSON
-        let metrics_json =
-            serde_json::to_string_pretty(&self.metrics).unwrap_or_else(|_| "{}".to_string());
+        let metrics_json = serde_json::to_string_pretty(&self.metrics).unwrap_or_else(|_| "{}".to_string());
 
-        let artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-            .with_metrics(metrics_json)
-            .build();
+        let artifact =
+            std::mem::replace(&mut self.artifact, empty_artifact_builder()).with_metrics(metrics_json).build();
 
         eprintln!(
             "Test '{}' finished in {:.2}s with {} nodes ({} byzantine corruptions, {} BUGGIFY triggers)",

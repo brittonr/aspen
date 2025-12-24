@@ -18,10 +18,12 @@
 //! - Fixed cluster sizes (3-5 nodes)
 //! - Deterministic execution via madsim
 
-use aspen::testing::{AspenRaftTester, BuggifyFault};
-use proptest::prelude::*;
 use std::collections::HashMap;
 use std::time::Duration;
+
+use aspen::testing::AspenRaftTester;
+use aspen::testing::BuggifyFault;
+use proptest::prelude::*;
 
 /// Tiger Style: Maximum operations per scenario
 const MAX_OPS_PER_SCENARIO: usize = 50;
@@ -128,33 +130,28 @@ fn arb_scenario() -> impl Strategy<Value = FuzzScenario> {
         faults_count,  // faults count for sizing
         any::<bool>(), // enable_buggify
     )
-        .prop_flat_map(
-            |(seed, node_count, ops_count, faults_count, enable_buggify)| {
-                (
-                    Just(seed),
-                    Just(node_count),
-                    prop::collection::vec(arb_operation(node_count), ops_count),
-                    prop::collection::vec(arb_fault(ops_count), faults_count),
-                    Just(enable_buggify),
-                )
-            },
-        )
-        .prop_map(
-            |(seed, node_count, operations, faults, enable_buggify)| FuzzScenario {
-                seed,
-                node_count,
-                operations,
-                faults,
-                enable_buggify,
-            },
-        )
+        .prop_flat_map(|(seed, node_count, ops_count, faults_count, enable_buggify)| {
+            (
+                Just(seed),
+                Just(node_count),
+                prop::collection::vec(arb_operation(node_count), ops_count),
+                prop::collection::vec(arb_fault(ops_count), faults_count),
+                Just(enable_buggify),
+            )
+        })
+        .prop_map(|(seed, node_count, operations, faults, enable_buggify)| FuzzScenario {
+            seed,
+            node_count,
+            operations,
+            faults,
+            enable_buggify,
+        })
 }
 
 /// Execute a scenario and verify invariants
 async fn execute_scenario(scenario: &FuzzScenario) -> Result<(), String> {
     let test_name = format!("fuzz_scenario_{}", scenario.seed);
-    let mut tester =
-        AspenRaftTester::new_with_seed(scenario.node_count, &test_name, scenario.seed).await;
+    let mut tester = AspenRaftTester::new_with_seed(scenario.node_count, &test_name, scenario.seed).await;
 
     if scenario.enable_buggify {
         tester.enable_buggify(None);
@@ -380,10 +377,7 @@ async fn test_regression_seeds() {
         };
 
         if let Err(e) = execute_scenario(&scenario).await {
-            panic!(
-                "Regression test '{}' (seed {}) failed: {}",
-                description, seed, e
-            );
+            panic!("Regression test '{}' (seed {}) failed: {}", description, seed, e);
         }
 
         eprintln!("Regression test '{}' passed", description);

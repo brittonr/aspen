@@ -10,13 +10,18 @@
 mod support;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use aspen::raft::log_subscriber::{
-    EndOfStreamReason, KvOperation, LOG_SUBSCRIBE_PROTOCOL_VERSION, LogEntryMessage,
-    LogEntryPayload, MAX_LOG_ENTRY_MESSAGE_SIZE, SubscribeRejectReason, SubscribeRequest,
-    SubscribeResponse,
-};
+use aspen::raft::log_subscriber::EndOfStreamReason;
+use aspen::raft::log_subscriber::KvOperation;
+use aspen::raft::log_subscriber::LOG_SUBSCRIBE_PROTOCOL_VERSION;
+use aspen::raft::log_subscriber::LogEntryMessage;
+use aspen::raft::log_subscriber::LogEntryPayload;
+use aspen::raft::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
+use aspen::raft::log_subscriber::SubscribeRejectReason;
+use aspen::raft::log_subscriber::SubscribeRequest;
+use aspen::raft::log_subscriber::SubscribeResponse;
 use tokio::sync::broadcast;
 
 // ============================================================================
@@ -30,10 +35,7 @@ fn test_subscribe_request_from_index_roundtrip() {
     let deserialized: SubscribeRequest = postcard::from_bytes(&bytes).expect("deserialize");
     assert_eq!(deserialized.start_index, 100);
     assert!(deserialized.key_prefix.is_empty());
-    assert_eq!(
-        deserialized.protocol_version,
-        LOG_SUBSCRIBE_PROTOCOL_VERSION
-    );
+    assert_eq!(deserialized.protocol_version, LOG_SUBSCRIBE_PROTOCOL_VERSION);
 }
 
 #[test]
@@ -63,10 +65,7 @@ fn test_subscribe_response_accepted_roundtrip() {
     let bytes = postcard::to_stdvec(&response).expect("serialize");
     let deserialized: SubscribeResponse = postcard::from_bytes(&bytes).expect("deserialize");
     match deserialized {
-        SubscribeResponse::Accepted {
-            current_index,
-            node_id,
-        } => {
+        SubscribeResponse::Accepted { current_index, node_id } => {
             assert_eq!(current_index, 42);
             assert_eq!(node_id, 1);
         }
@@ -478,10 +477,7 @@ async fn test_broadcast_channel_lagged() {
 
     // First recv should return Lagged error
     let result = rx.recv().await;
-    assert!(matches!(
-        result,
-        Err(broadcast::error::RecvError::Lagged(_))
-    ));
+    assert!(matches!(result, Err(broadcast::error::RecvError::Lagged(_))));
 }
 
 // ============================================================================
@@ -541,41 +537,17 @@ fn test_subscribe_request_size() {
 
 #[test]
 fn test_subscribe_reject_reason_display() {
-    assert_eq!(
-        SubscribeRejectReason::TooManySubscribers.to_string(),
-        "too many subscribers"
-    );
-    assert_eq!(
-        SubscribeRejectReason::IndexNotAvailable.to_string(),
-        "requested index not available"
-    );
-    assert_eq!(
-        SubscribeRejectReason::UnsupportedVersion.to_string(),
-        "protocol version not supported"
-    );
-    assert_eq!(
-        SubscribeRejectReason::NotReady.to_string(),
-        "server not ready"
-    );
-    assert_eq!(
-        SubscribeRejectReason::InternalError.to_string(),
-        "internal error"
-    );
+    assert_eq!(SubscribeRejectReason::TooManySubscribers.to_string(), "too many subscribers");
+    assert_eq!(SubscribeRejectReason::IndexNotAvailable.to_string(), "requested index not available");
+    assert_eq!(SubscribeRejectReason::UnsupportedVersion.to_string(), "protocol version not supported");
+    assert_eq!(SubscribeRejectReason::NotReady.to_string(), "server not ready");
+    assert_eq!(SubscribeRejectReason::InternalError.to_string(), "internal error");
 }
 
 #[test]
 fn test_end_of_stream_reason_display() {
-    assert_eq!(
-        EndOfStreamReason::ServerShutdown.to_string(),
-        "server shutdown"
-    );
-    assert_eq!(
-        EndOfStreamReason::ClientDisconnect.to_string(),
-        "client disconnect"
-    );
+    assert_eq!(EndOfStreamReason::ServerShutdown.to_string(), "server shutdown");
+    assert_eq!(EndOfStreamReason::ClientDisconnect.to_string(), "client disconnect");
     assert_eq!(EndOfStreamReason::Lagged.to_string(), "subscriber lagged");
-    assert_eq!(
-        EndOfStreamReason::InternalError.to_string(),
-        "internal error"
-    );
+    assert_eq!(EndOfStreamReason::InternalError.to_string(), "internal error");
 }

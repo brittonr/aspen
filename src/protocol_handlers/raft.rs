@@ -8,18 +8,25 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
 use openraft::Raft;
 use tokio::sync::Semaphore;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::raft::constants::{
-    MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
-};
-use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
+use crate::raft::constants::MAX_CONCURRENT_CONNECTIONS;
+use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::raft::rpc::RaftRpcProtocol;
+use crate::raft::rpc::RaftRpcResponse;
 use crate::raft::types::AppTypeConfig;
 
 /// Protocol handler for Raft RPC over Iroh.
@@ -64,9 +71,7 @@ impl ProtocolHandler for RaftProtocolHandler {
                     "Raft connection limit reached ({}), rejecting connection from {}",
                     MAX_CONCURRENT_CONNECTIONS, remote_node_id
                 );
-                return Err(AcceptError::from_err(std::io::Error::other(
-                    "connection limit reached",
-                )));
+                return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
             }
         };
 
@@ -92,10 +97,7 @@ impl ProtocolHandler for RaftProtocolHandler {
 ///
 /// Tiger Style: Bounded stream count per connection.
 #[instrument(skip(connection, raft_core))]
-async fn handle_raft_connection(
-    connection: Connection,
-    raft_core: Raft<AppTypeConfig>,
-) -> anyhow::Result<()> {
+async fn handle_raft_connection(connection: Connection, raft_core: Raft<AppTypeConfig>) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
     // Tiger Style: Fixed limit on concurrent streams per connection
@@ -152,14 +154,10 @@ async fn handle_raft_rpc_stream(
     use anyhow::Context;
 
     // Read the RPC message with size limit
-    let buffer = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .context("failed to read RPC message")?;
+    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
 
     // Deserialize the RPC request
-    let request: RaftRpcProtocol =
-        postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
+    let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
     debug!(request_type = ?request, "received Raft RPC request");
 
@@ -200,17 +198,11 @@ async fn handle_raft_rpc_stream(
     };
 
     // Serialize and send response
-    let response_bytes =
-        postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize RPC response")?;
 
-    debug!(
-        response_size = response_bytes.len(),
-        "sending Raft RPC response"
-    );
+    debug!(response_size = response_bytes.len(), "sending Raft RPC response");
 
-    send.write_all(&response_bytes)
-        .await
-        .context("failed to write RPC response")?;
+    send.write_all(&response_bytes).await.context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
 
     debug!("Raft RPC response sent successfully");

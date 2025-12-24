@@ -10,8 +10,10 @@
 //! - `PrefixFilter`: Only sync keys matching specified prefixes
 //! - `PrefixExclude`: Sync all keys EXCEPT those matching specified prefixes
 
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::constants::DEFAULT_CACHE_TTL;
 
@@ -72,12 +74,8 @@ impl SubscriptionFilter {
     pub fn should_include(&self, key: &str) -> bool {
         match self {
             SubscriptionFilter::FullReplication => true,
-            SubscriptionFilter::PrefixFilter(prefixes) => {
-                prefixes.iter().any(|prefix| key.starts_with(prefix))
-            }
-            SubscriptionFilter::PrefixExclude(prefixes) => {
-                !prefixes.iter().any(|prefix| key.starts_with(prefix))
-            }
+            SubscriptionFilter::PrefixFilter(prefixes) => prefixes.iter().any(|prefix| key.starts_with(prefix)),
+            SubscriptionFilter::PrefixExclude(prefixes) => !prefixes.iter().any(|prefix| key.starts_with(prefix)),
         }
     }
 
@@ -121,11 +119,7 @@ pub struct ClusterSubscription {
 
 impl ClusterSubscription {
     /// Create a new subscription with default settings.
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        cluster_id: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, cluster_id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             name: name.into(),

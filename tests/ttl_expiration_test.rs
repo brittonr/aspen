@@ -15,7 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use futures::stream;
 use openraft::entry::RaftEntry;
 use openraft::storage::RaftStateMachine;
@@ -32,17 +34,11 @@ fn create_temp_sm() -> (Arc<SqliteStateMachine>, TempDir) {
 
 /// Helper to get current time in milliseconds.
 fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 /// Helper to create a log entry for applying to state machine.
-fn make_entry(
-    index: u64,
-    request: AppRequest,
-) -> <AppTypeConfig as openraft::RaftTypeConfig>::Entry {
+fn make_entry(index: u64, request: AppRequest) -> <AppTypeConfig as openraft::RaftTypeConfig>::Entry {
     <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId::from(1), index),
         request,
@@ -50,13 +46,8 @@ fn make_entry(
 }
 
 /// Helper to apply a single entry to the state machine.
-async fn apply_entry(
-    sm: &mut Arc<SqliteStateMachine>,
-    entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry,
-) {
-    let entries = Box::pin(stream::once(
-        async move { Ok::<_, io::Error>((entry, None)) },
-    ));
+async fn apply_entry(sm: &mut Arc<SqliteStateMachine>, entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry) {
+    let entries = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
     sm.apply(entries).await.expect("should apply");
 }
 
@@ -70,14 +61,11 @@ async fn test_get_filters_expired_keys() {
 
     // Set a key that expires in 1 second
     let expires_at = now_ms() + 1000;
-    let entry = make_entry(
-        1,
-        AppRequest::SetWithTTL {
-            key: "expiring_key".to_string(),
-            value: "some_value".to_string(),
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry = make_entry(1, AppRequest::SetWithTTL {
+        key: "expiring_key".to_string(),
+        value: "some_value".to_string(),
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry).await;
 
     // Key should be visible before expiration
@@ -97,13 +85,10 @@ async fn test_set_without_ttl_never_expires() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Set a key without TTL
-    let entry = make_entry(
-        1,
-        AppRequest::Set {
-            key: "permanent_key".to_string(),
-            value: "permanent_value".to_string(),
-        },
-    );
+    let entry = make_entry(1, AppRequest::Set {
+        key: "permanent_key".to_string(),
+        value: "permanent_value".to_string(),
+    });
     apply_entry(&mut sm, entry).await;
 
     // Key should be visible
@@ -123,33 +108,24 @@ async fn test_scan_filters_expired_keys() {
     let now = now_ms();
 
     // Set some keys: some expired, some not
-    let entry1 = make_entry(
-        1,
-        AppRequest::Set {
-            key: "prefix:permanent".to_string(),
-            value: "val1".to_string(),
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::Set {
+        key: "prefix:permanent".to_string(),
+        value: "val1".to_string(),
+    });
     apply_entry(&mut sm, entry1).await;
 
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithTTL {
-            key: "prefix:expiring_soon".to_string(),
-            value: "val2".to_string(),
-            expires_at_ms: now + 100, // expires in 100ms
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithTTL {
+        key: "prefix:expiring_soon".to_string(),
+        value: "val2".to_string(),
+        expires_at_ms: now + 100, // expires in 100ms
+    });
     apply_entry(&mut sm, entry2).await;
 
-    let entry3 = make_entry(
-        3,
-        AppRequest::SetWithTTL {
-            key: "prefix:expiring_later".to_string(),
-            value: "val3".to_string(),
-            expires_at_ms: now + 10000, // expires in 10 seconds
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::SetWithTTL {
+        key: "prefix:expiring_later".to_string(),
+        value: "val3".to_string(),
+        expires_at_ms: now + 10000, // expires in 10 seconds
+    });
     apply_entry(&mut sm, entry3).await;
 
     // All keys should be visible immediately
@@ -180,43 +156,31 @@ async fn test_delete_expired_keys_removes_expired_entries() {
     let now = now_ms();
 
     // Set some keys with short TTL
-    let entry1 = make_entry(
-        1,
-        AppRequest::SetWithTTL {
-            key: "expired1".to_string(),
-            value: "val1".to_string(),
-            expires_at_ms: now - 1000, // already expired
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::SetWithTTL {
+        key: "expired1".to_string(),
+        value: "val1".to_string(),
+        expires_at_ms: now - 1000, // already expired
+    });
     apply_entry(&mut sm, entry1).await;
 
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithTTL {
-            key: "expired2".to_string(),
-            value: "val2".to_string(),
-            expires_at_ms: now - 500, // already expired
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithTTL {
+        key: "expired2".to_string(),
+        value: "val2".to_string(),
+        expires_at_ms: now - 500, // already expired
+    });
     apply_entry(&mut sm, entry2).await;
 
-    let entry3 = make_entry(
-        3,
-        AppRequest::Set {
-            key: "permanent".to_string(),
-            value: "val3".to_string(),
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::Set {
+        key: "permanent".to_string(),
+        value: "val3".to_string(),
+    });
     apply_entry(&mut sm, entry3).await;
 
-    let entry4 = make_entry(
-        4,
-        AppRequest::SetWithTTL {
-            key: "future".to_string(),
-            value: "val4".to_string(),
-            expires_at_ms: now + 60000, // expires in 1 minute
-        },
-    );
+    let entry4 = make_entry(4, AppRequest::SetWithTTL {
+        key: "future".to_string(),
+        value: "val4".to_string(),
+        expires_at_ms: now + 60000, // expires in 1 minute
+    });
     apply_entry(&mut sm, entry4).await;
 
     // Verify expired count
@@ -229,10 +193,7 @@ async fn test_delete_expired_keys_removes_expired_entries() {
 
     // Verify cleanup worked
     let expired_count = sm.count_expired_keys().expect("should count expired");
-    assert_eq!(
-        expired_count, 0,
-        "should have no expired keys after cleanup"
-    );
+    assert_eq!(expired_count, 0, "should have no expired keys after cleanup");
 
     // Non-expired keys should still exist
     assert!(sm.get("permanent").await.expect("should get").is_some());
@@ -247,14 +208,11 @@ async fn test_delete_expired_keys_respects_batch_limit() {
 
     // Create many expired keys
     for i in 0..50u64 {
-        let entry = make_entry(
-            i + 1,
-            AppRequest::SetWithTTL {
-                key: format!("expired_{}", i),
-                value: format!("val_{}", i),
-                expires_at_ms: now - 1000, // already expired
-            },
-        );
+        let entry = make_entry(i + 1, AppRequest::SetWithTTL {
+            key: format!("expired_{}", i),
+            value: format!("val_{}", i),
+            expires_at_ms: now - 1000, // already expired
+        });
         apply_entry(&mut sm, entry).await;
     }
 
@@ -275,10 +233,7 @@ async fn test_delete_expired_keys_respects_batch_limit() {
     }
 
     let remaining = sm.count_expired_keys().expect("should count expired");
-    assert_eq!(
-        remaining, 0,
-        "should have no expired keys after full cleanup"
-    );
+    assert_eq!(remaining, 0, "should have no expired keys after full cleanup");
 }
 
 // ============================================================================
@@ -292,52 +247,37 @@ async fn test_count_keys_with_ttl() {
     let now = now_ms();
 
     // Set a mix of keys with and without TTL
-    let entry1 = make_entry(
-        1,
-        AppRequest::Set {
-            key: "permanent1".to_string(),
-            value: "val1".to_string(),
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::Set {
+        key: "permanent1".to_string(),
+        value: "val1".to_string(),
+    });
     apply_entry(&mut sm, entry1).await;
 
-    let entry2 = make_entry(
-        2,
-        AppRequest::Set {
-            key: "permanent2".to_string(),
-            value: "val2".to_string(),
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::Set {
+        key: "permanent2".to_string(),
+        value: "val2".to_string(),
+    });
     apply_entry(&mut sm, entry2).await;
 
-    let entry3 = make_entry(
-        3,
-        AppRequest::SetWithTTL {
-            key: "ttl1".to_string(),
-            value: "val3".to_string(),
-            expires_at_ms: now + 60000,
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::SetWithTTL {
+        key: "ttl1".to_string(),
+        value: "val3".to_string(),
+        expires_at_ms: now + 60000,
+    });
     apply_entry(&mut sm, entry3).await;
 
-    let entry4 = make_entry(
-        4,
-        AppRequest::SetWithTTL {
-            key: "ttl2".to_string(),
-            value: "val4".to_string(),
-            expires_at_ms: now + 60000,
-        },
-    );
+    let entry4 = make_entry(4, AppRequest::SetWithTTL {
+        key: "ttl2".to_string(),
+        value: "val4".to_string(),
+        expires_at_ms: now + 60000,
+    });
     apply_entry(&mut sm, entry4).await;
 
-    let entry5 = make_entry(
-        5,
-        AppRequest::SetWithTTL {
-            key: "ttl3".to_string(),
-            value: "val5".to_string(),
-            expires_at_ms: now + 60000,
-        },
-    );
+    let entry5 = make_entry(5, AppRequest::SetWithTTL {
+        key: "ttl3".to_string(),
+        value: "val5".to_string(),
+        expires_at_ms: now + 60000,
+    });
     apply_entry(&mut sm, entry5).await;
 
     let ttl_count = sm.count_keys_with_ttl().expect("should count TTL keys");
@@ -354,17 +294,14 @@ async fn test_set_multi_with_ttl() {
 
     let expires_at = now_ms() + 500; // expires in 500ms
 
-    let entry = make_entry(
-        1,
-        AppRequest::SetMultiWithTTL {
-            pairs: vec![
-                ("batch:key1".to_string(), "val1".to_string()),
-                ("batch:key2".to_string(), "val2".to_string()),
-                ("batch:key3".to_string(), "val3".to_string()),
-            ],
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry = make_entry(1, AppRequest::SetMultiWithTTL {
+        pairs: vec![
+            ("batch:key1".to_string(), "val1".to_string()),
+            ("batch:key2".to_string(), "val2".to_string()),
+            ("batch:key3".to_string(), "val3".to_string()),
+        ],
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry).await;
 
     // All keys should be visible
@@ -399,14 +336,11 @@ async fn test_ttl_at_exact_boundary() {
 
     // Set a key that expires at exactly now + 200ms
     let expires_at = now_ms() + 200;
-    let entry = make_entry(
-        1,
-        AppRequest::SetWithTTL {
-            key: "boundary".to_string(),
-            value: "test".to_string(),
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry = make_entry(1, AppRequest::SetWithTTL {
+        key: "boundary".to_string(),
+        value: "test".to_string(),
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry).await;
 
     // Should be visible now
@@ -426,24 +360,18 @@ async fn test_overwrite_ttl_key_with_no_ttl() {
     let expires_at = now_ms() + 100; // expires soon
 
     // Set key with TTL
-    let entry1 = make_entry(
-        1,
-        AppRequest::SetWithTTL {
-            key: "key".to_string(),
-            value: "ttl_value".to_string(),
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::SetWithTTL {
+        key: "key".to_string(),
+        value: "ttl_value".to_string(),
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Overwrite with no TTL (should clear expiration)
-    let entry2 = make_entry(
-        2,
-        AppRequest::Set {
-            key: "key".to_string(),
-            value: "permanent_value".to_string(),
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::Set {
+        key: "key".to_string(),
+        value: "permanent_value".to_string(),
+    });
     apply_entry(&mut sm, entry2).await;
 
     // Wait past original expiration
@@ -459,25 +387,19 @@ async fn test_overwrite_no_ttl_key_with_ttl() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Set key without TTL
-    let entry1 = make_entry(
-        1,
-        AppRequest::Set {
-            key: "key".to_string(),
-            value: "permanent".to_string(),
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::Set {
+        key: "key".to_string(),
+        value: "permanent".to_string(),
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Overwrite with TTL
     let expires_at = now_ms() + 100;
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithTTL {
-            key: "key".to_string(),
-            value: "expiring".to_string(),
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithTTL {
+        key: "key".to_string(),
+        value: "expiring".to_string(),
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry2).await;
 
     // Wait past expiration
@@ -511,14 +433,11 @@ async fn test_very_long_ttl() {
     let one_year_ms = 365 * 24 * 60 * 60 * 1000u64;
     let expires_at = now_ms() + one_year_ms;
 
-    let entry = make_entry(
-        1,
-        AppRequest::SetWithTTL {
-            key: "long_ttl".to_string(),
-            value: "test".to_string(),
-            expires_at_ms: expires_at,
-        },
-    );
+    let entry = make_entry(1, AppRequest::SetWithTTL {
+        key: "long_ttl".to_string(),
+        value: "test".to_string(),
+        expires_at_ms: expires_at,
+    });
     apply_entry(&mut sm, entry).await;
 
     // Key should be visible

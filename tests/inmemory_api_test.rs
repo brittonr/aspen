@@ -7,15 +7,28 @@
 
 mod support;
 
+use aspen::api::AddLearnerRequest;
+use aspen::api::ChangeMembershipRequest;
+use aspen::api::ClusterController;
+use aspen::api::ClusterNode;
+use aspen::api::ControlPlaneError;
+use aspen::api::DEFAULT_SCAN_LIMIT;
+use aspen::api::DeleteRequest;
+use aspen::api::DeterministicClusterController;
+use aspen::api::DeterministicKeyValueStore;
+use aspen::api::InitRequest;
+use aspen::api::KeyValueStore;
+use aspen::api::KeyValueStoreError;
+use aspen::api::MAX_SCAN_RESULTS;
+use aspen::api::ReadRequest;
+use aspen::api::ScanRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
 use bolero::check;
-use support::bolero_generators::{ScanKeyCount, ScanPrefixWithColon, ValidApiKey, ValidApiValue};
-
-use aspen::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ControlPlaneError,
-    DEFAULT_SCAN_LIMIT, DeleteRequest, DeterministicClusterController, DeterministicKeyValueStore,
-    InitRequest, KeyValueStore, KeyValueStoreError, MAX_SCAN_RESULTS, ReadRequest, ScanRequest,
-    WriteCommand, WriteRequest,
-};
+use support::bolero_generators::ScanKeyCount;
+use support::bolero_generators::ScanPrefixWithColon;
+use support::bolero_generators::ValidApiKey;
+use support::bolero_generators::ValidApiValue;
 
 // DeterministicClusterController tests
 
@@ -69,12 +82,7 @@ async fn test_cluster_controller_init_with_multiple_members() {
         ClusterNode::new(2, "node2", None),
         ClusterNode::new(3, "node3", None),
     ];
-    let result = controller
-        .init(InitRequest {
-            initial_members: nodes,
-        })
-        .await
-        .unwrap();
+    let result = controller.init(InitRequest { initial_members: nodes }).await.unwrap();
 
     assert_eq!(result.nodes.len(), 3);
     assert_eq!(result.members, vec![1, 2, 3]);
@@ -113,10 +121,7 @@ async fn test_cluster_controller_add_multiple_learners() {
     // Add learners without init (valid for deterministic controller)
     for i in 0..5 {
         let learner = ClusterNode::new(100 + i, format!("learner{}", i), None);
-        controller
-            .add_learner(AddLearnerRequest { learner })
-            .await
-            .unwrap();
+        controller.add_learner(AddLearnerRequest { learner }).await.unwrap();
     }
 
     let state = controller.current_state().await.unwrap();
@@ -126,9 +131,7 @@ async fn test_cluster_controller_add_multiple_learners() {
 #[tokio::test]
 async fn test_cluster_controller_change_membership_with_empty_fails() {
     let controller = DeterministicClusterController::new();
-    let result = controller
-        .change_membership(ChangeMembershipRequest { members: vec![] })
-        .await;
+    let result = controller.change_membership(ChangeMembershipRequest { members: vec![] }).await;
 
     match result {
         Err(ControlPlaneError::InvalidRequest { reason }) => {
@@ -143,15 +146,8 @@ async fn test_cluster_controller_change_membership_updates_members() {
     let controller = DeterministicClusterController::new();
 
     // Initialize with 3 members
-    let nodes: Vec<ClusterNode> = (1..=3)
-        .map(|i| ClusterNode::new(i, format!("node{}", i), None))
-        .collect();
-    controller
-        .init(InitRequest {
-            initial_members: nodes,
-        })
-        .await
-        .unwrap();
+    let nodes: Vec<ClusterNode> = (1..=3).map(|i| ClusterNode::new(i, format!("node{}", i), None)).collect();
+    controller.init(InitRequest { initial_members: nodes }).await.unwrap();
 
     // Change to new membership
     let result = controller
@@ -216,9 +212,7 @@ async fn test_cluster_controller_current_state_returns_latest() {
 #[tokio::test]
 async fn test_kv_store_new_is_empty() {
     let store = DeterministicKeyValueStore::new();
-    let result = store
-        .read(ReadRequest::new("nonexistent".to_string()))
-        .await;
+    let result = store.read(ReadRequest::new("nonexistent".to_string())).await;
 
     match result {
         Err(KeyValueStoreError::NotFound { key }) => {
@@ -244,10 +238,7 @@ async fn test_kv_store_set_and_read() {
         .unwrap();
 
     // Read
-    let result = store
-        .read(ReadRequest::new("key1".to_string()))
-        .await
-        .unwrap();
+    let result = store.read(ReadRequest::new("key1".to_string())).await.unwrap();
 
     let kv = result.kv.unwrap();
     assert_eq!(kv.key, "key1");
@@ -280,10 +271,7 @@ async fn test_kv_store_set_overwrites() {
         .await
         .unwrap();
 
-    let result = store
-        .read(ReadRequest::new("key1".to_string()))
-        .await
-        .unwrap();
+    let result = store.read(ReadRequest::new("key1".to_string())).await.unwrap();
 
     assert_eq!(result.kv.unwrap().value, "updated");
 }
@@ -307,10 +295,7 @@ async fn test_kv_store_set_multi() {
 
     // Verify all keys exist
     for i in 1..=3 {
-        let result = store
-            .read(ReadRequest::new(format!("key{}", i)))
-            .await
-            .unwrap();
+        let result = store.read(ReadRequest::new(format!("key{}", i))).await.unwrap();
         assert_eq!(result.kv.unwrap().value, format!("value{}", i));
     }
 }
@@ -779,9 +764,7 @@ async fn test_kv_store_rejects_oversized_value() {
 async fn test_kv_store_rejects_oversized_batch() {
     let store = DeterministicKeyValueStore::new();
 
-    let pairs: Vec<(String, String)> = (0..101)
-        .map(|i| (format!("key{}", i), format!("value{}", i)))
-        .collect();
+    let pairs: Vec<(String, String)> = (0..101).map(|i| (format!("key{}", i), format!("value{}", i))).collect();
 
     let result = store
         .write(WriteRequest {
@@ -800,27 +783,25 @@ async fn test_kv_store_rejects_oversized_batch() {
 /// Random write/read operations should be consistent.
 #[test]
 fn test_kv_store_write_read_consistency() {
-    check!()
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let store = DeterministicKeyValueStore::new();
+    check!().with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
 
-                store
-                    .write(WriteRequest {
-                        command: WriteCommand::Set {
-                            key: key.0.clone(),
-                            value: value.0.clone(),
-                        },
-                    })
-                    .await
-                    .unwrap();
+            store
+                .write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: key.0.clone(),
+                        value: value.0.clone(),
+                    },
+                })
+                .await
+                .unwrap();
 
-                let result = store.read(ReadRequest::new(key.0.clone())).await.unwrap();
-                assert_eq!(result.kv.unwrap().value, value.0);
-            });
+            let result = store.read(ReadRequest::new(key.0.clone())).await.unwrap();
+            assert_eq!(result.kv.unwrap().value, value.0);
         });
+    });
 }
 
 /// Delete should be idempotent.
@@ -832,17 +813,11 @@ fn test_kv_store_delete_idempotent() {
             let store = DeterministicKeyValueStore::new();
 
             // Delete non-existent key (first time)
-            let result1 = store
-                .delete(DeleteRequest { key: key.0.clone() })
-                .await
-                .unwrap();
+            let result1 = store.delete(DeleteRequest { key: key.0.clone() }).await.unwrap();
             assert!(!result1.deleted);
 
             // Delete again (second time)
-            let result2 = store
-                .delete(DeleteRequest { key: key.0.clone() })
-                .await
-                .unwrap();
+            let result2 = store.delete(DeleteRequest { key: key.0.clone() }).await.unwrap();
             assert!(!result2.deleted);
         });
     });
@@ -851,52 +826,50 @@ fn test_kv_store_delete_idempotent() {
 /// Scan with various prefixes should only return matching keys.
 #[test]
 fn test_kv_store_scan_prefix_filtering() {
-    check!()
-        .with_type::<(ScanPrefixWithColon, ScanKeyCount)>()
-        .for_each(|(prefix, num_keys)| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let store = DeterministicKeyValueStore::new();
+    check!().with_type::<(ScanPrefixWithColon, ScanKeyCount)>().for_each(|(prefix, num_keys)| {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
 
-                // Write keys with the prefix
-                for i in 0..num_keys.0 {
-                    store
-                        .write(WriteRequest {
-                            command: WriteCommand::Set {
-                                key: format!("{}{}", prefix.0, i),
-                                value: format!("v{}", i),
-                            },
-                        })
-                        .await
-                        .unwrap();
-                }
-
-                // Write keys with different prefix
-                for i in 0..5 {
-                    store
-                        .write(WriteRequest {
-                            command: WriteCommand::Set {
-                                key: format!("other:{}", i),
-                                value: format!("other{}", i),
-                            },
-                        })
-                        .await
-                        .unwrap();
-                }
-
-                let result = store
-                    .scan(ScanRequest {
-                        prefix: prefix.0.clone(),
-                        limit: None,
-                        continuation_token: None,
+            // Write keys with the prefix
+            for i in 0..num_keys.0 {
+                store
+                    .write(WriteRequest {
+                        command: WriteCommand::Set {
+                            key: format!("{}{}", prefix.0, i),
+                            value: format!("v{}", i),
+                        },
                     })
                     .await
                     .unwrap();
+            }
 
-                assert_eq!(result.count as usize, num_keys.0);
-                for entry in &result.entries {
-                    assert!(entry.key.starts_with(&prefix.0));
-                }
-            });
+            // Write keys with different prefix
+            for i in 0..5 {
+                store
+                    .write(WriteRequest {
+                        command: WriteCommand::Set {
+                            key: format!("other:{}", i),
+                            value: format!("other{}", i),
+                        },
+                    })
+                    .await
+                    .unwrap();
+            }
+
+            let result = store
+                .scan(ScanRequest {
+                    prefix: prefix.0.clone(),
+                    limit: None,
+                    continuation_token: None,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(result.count as usize, num_keys.0);
+            for entry in &result.entries {
+                assert!(entry.key.starts_with(&prefix.0));
+            }
         });
+    });
 }

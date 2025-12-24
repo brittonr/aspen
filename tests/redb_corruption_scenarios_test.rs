@@ -8,19 +8,32 @@
 ///
 /// These tests use regular tokio runtime (not madsim) since we're testing
 /// storage layer validation, not distributed behavior.
-use std::path::{Path, PathBuf};
+use std::path::Path;
+/// Redb log storage corruption scenario tests (non-madsim).
+///
+/// This test suite validates storage corruption detection and fail-fast behavior:
+/// - Log index gap detection after corruption
+/// - Vote metadata corruption detection
+/// - Validation module catches storage inconsistencies
+/// - Clear operator error messages for recovery
+///
+/// These tests use regular tokio runtime (not madsim) since we're testing
+/// storage layer validation, not distributed behavior.
+use std::path::PathBuf;
 
 use aspen::raft::storage::RedbLogStore;
-use aspen::raft::storage_validation::{StorageValidationError, validate_raft_storage};
+use aspen::raft::storage_validation::StorageValidationError;
+use aspen::raft::storage_validation::validate_raft_storage;
+use aspen::raft::types::AppTypeConfig;
 use aspen::raft::types::NodeId;
 use openraft::RaftLogReader;
 use openraft::entry::RaftEntry;
-use openraft::storage::{IOFlushed, RaftLogStorage};
+use openraft::storage::IOFlushed;
+use openraft::storage::RaftLogStorage;
 use openraft::testing::log_id;
-use redb::{Database, TableDefinition};
+use redb::Database;
+use redb::TableDefinition;
 use tempfile::TempDir;
-
-use aspen::raft::types::AppTypeConfig;
 
 /// Redb table definitions (must match storage.rs)
 const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
@@ -84,22 +97,12 @@ async fn test_redb_log_gap_detection() {
                 },
             );
 
-            log_store
-                .append([entry], IOFlushed::noop())
-                .await
-                .expect("failed to append entry");
+            log_store.append([entry], IOFlushed::noop()).await.expect("failed to append entry");
         }
 
         // Verify 50 entries written
-        let log_state = log_store
-            .get_log_state()
-            .await
-            .expect("failed to get log state");
-        assert_eq!(
-            log_state.last_log_id.unwrap().index,
-            49,
-            "last log index should be 49"
-        );
+        let log_state = log_store.get_log_state().await.expect("failed to get log state");
+        assert_eq!(log_state.last_log_id.unwrap().index, 49, "last log index should be 49");
 
         // Drop log store to close database
         drop(log_store);
@@ -114,31 +117,20 @@ async fn test_redb_log_gap_detection() {
     match validation_result {
         Err(StorageValidationError::LogNotMonotonic { prev, current }) => {
             // The gap should be between index 19 and 25 (we deleted 20-24)
-            assert!(
-                prev < current,
-                "prev index {} should be less than current index {}",
-                prev,
-                current
-            );
+            assert!(prev < current, "prev index {} should be less than current index {}", prev, current);
             assert!(
                 current - prev > 1,
                 "gap should be detected (indices not consecutive): prev={}, current={}",
                 prev,
                 current
             );
-            println!(
-                "SUCCESS: Detected log gap between index {} and {}",
-                prev, current
-            );
+            println!("SUCCESS: Detected log gap between index {} and {}", prev, current);
         }
         Err(e) => {
             panic!("expected LogNotMonotonic error, got: {:?}", e);
         }
         Ok(report) => {
-            panic!(
-                "validation should have failed with LogNotMonotonic error, got success: {:?}",
-                report
-            );
+            panic!("validation should have failed with LogNotMonotonic error, got success: {:?}", report);
         }
     }
 }
@@ -158,10 +150,7 @@ async fn test_redb_vote_corruption_detection() {
 
         // Save a vote
         let vote = openraft::Vote::new(5, NodeId::from(1));
-        log_store
-            .save_vote(&vote)
-            .await
-            .expect("failed to save vote");
+        log_store.save_vote(&vote).await.expect("failed to save vote");
 
         // Verify vote saved
         let read_vote = log_store.read_vote().await.expect("failed to read vote");
@@ -183,9 +172,7 @@ async fn test_redb_vote_corruption_detection() {
 
             // Write random garbage to vote key
             let random_bytes: Vec<u8> = (0..32).map(|_| rand::random::<u8>()).collect();
-            meta_table
-                .insert("vote", random_bytes.as_slice())
-                .expect("failed to insert corrupted vote");
+            meta_table.insert("vote", random_bytes.as_slice()).expect("failed to insert corrupted vote");
         }
 
         write_txn.commit().expect("failed to commit");
@@ -202,16 +189,10 @@ async fn test_redb_vote_corruption_detection() {
             println!("SUCCESS: Detected vote inconsistency: {}", reason);
         }
         Err(e) => {
-            panic!(
-                "expected Deserialize or VoteInconsistent error, got: {:?}",
-                e
-            );
+            panic!("expected Deserialize or VoteInconsistent error, got: {:?}", e);
         }
         Ok(report) => {
-            panic!(
-                "validation should have failed with corruption error, got success: {:?}",
-                report
-            );
+            panic!("validation should have failed with corruption error, got success: {:?}", report);
         }
     }
 }
@@ -239,10 +220,7 @@ async fn test_redb_prevents_restart_with_corrupted_log() {
                 },
             );
 
-            log_store
-                .append([entry], IOFlushed::noop())
-                .await
-                .expect("failed to append entry");
+            log_store.append([entry], IOFlushed::noop()).await.expect("failed to append entry");
         }
 
         drop(log_store);
@@ -254,17 +232,11 @@ async fn test_redb_prevents_restart_with_corrupted_log() {
     // Phase 3: Validation should catch corruption before allowing restart
     let validation_result = validate_raft_storage(1, &log_path);
 
-    assert!(
-        validation_result.is_err(),
-        "validation should fail on corrupted database"
-    );
+    assert!(validation_result.is_err(), "validation should fail on corrupted database");
 
     match validation_result {
         Err(StorageValidationError::LogNotMonotonic { prev, current }) => {
-            println!(
-                "SUCCESS: Prevented restart with corrupted log (gap: {} -> {})",
-                prev, current
-            );
+            println!("SUCCESS: Prevented restart with corrupted log (gap: {} -> {})", prev, current);
         }
         Err(e) => {
             println!("SUCCESS: Prevented restart with error: {:?}", e);

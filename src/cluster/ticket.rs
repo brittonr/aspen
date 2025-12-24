@@ -25,13 +25,19 @@
 //! ```
 
 use std::collections::BTreeSet;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use anyhow::{Context, Result};
-use iroh::{EndpointId, PublicKey, SecretKey, Signature};
+use anyhow::Context;
+use anyhow::Result;
+use iroh::EndpointId;
+use iroh::PublicKey;
+use iroh::SecretKey;
+use iroh::Signature;
 use iroh_gossip::proto::TopicId;
 use iroh_tickets::Ticket;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Aspen cluster ticket for gossip-based peer discovery.
 ///
@@ -70,11 +76,7 @@ impl AspenClusterTicket {
     }
 
     /// Create a ticket with a single bootstrap peer.
-    pub fn with_bootstrap(
-        topic_id: TopicId,
-        cluster_id: String,
-        bootstrap_peer: EndpointId,
-    ) -> Self {
+    pub fn with_bootstrap(topic_id: TopicId, cluster_id: String, bootstrap_peer: EndpointId) -> Self {
         let mut ticket = Self::new(topic_id, cluster_id);
         ticket.bootstrap.insert(bootstrap_peer);
         ticket
@@ -87,10 +89,7 @@ impl AspenClusterTicket {
     /// Tiger Style: Fail fast on limit violation.
     pub fn add_bootstrap(&mut self, peer: EndpointId) -> Result<()> {
         if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS as usize {
-            anyhow::bail!(
-                "cannot add more than {} bootstrap peers to ticket",
-                Self::MAX_BOOTSTRAP_PEERS
-            );
+            anyhow::bail!("cannot add more than {} bootstrap peers to ticket", Self::MAX_BOOTSTRAP_PEERS);
         }
         self.bootstrap.insert(peer);
         Ok(())
@@ -231,15 +230,8 @@ impl SignedAspenClusterTicket {
     /// * `ticket` - The unsigned cluster ticket payload
     /// * `secret_key` - The signer's Iroh secret key
     /// * `validity_secs` - How long the ticket is valid (in seconds)
-    pub fn sign_with_validity(
-        ticket: AspenClusterTicket,
-        secret_key: &SecretKey,
-        validity_secs: u64,
-    ) -> Result<Self> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .context("system time before Unix epoch")?
-            .as_secs();
+    pub fn sign_with_validity(ticket: AspenClusterTicket, secret_key: &SecretKey, validity_secs: u64) -> Result<Self> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before Unix epoch")?.as_secs();
 
         // Generate random nonce for replay prevention
         let mut nonce = [0u8; 16];
@@ -323,11 +315,7 @@ impl SignedAspenClusterTicket {
     pub fn verify_with_error(&self) -> Result<&AspenClusterTicket> {
         // Reject unknown future versions
         if self.version > SIGNED_TICKET_VERSION {
-            anyhow::bail!(
-                "unsupported ticket version {} (max supported: {})",
-                self.version,
-                SIGNED_TICKET_VERSION
-            );
+            anyhow::bail!("unsupported ticket version {} (max supported: {})", self.version, SIGNED_TICKET_VERSION);
         }
 
         // Build the payload for signature verification
@@ -341,14 +329,10 @@ impl SignedAspenClusterTicket {
         };
 
         // Serialize payload to canonical bytes
-        let payload_bytes = payload
-            .to_bytes()
-            .context("failed to serialize ticket payload for verification")?;
+        let payload_bytes = payload.to_bytes().context("failed to serialize ticket payload for verification")?;
 
         // Verify Ed25519 signature
-        self.issuer
-            .verify(&payload_bytes, &self.signature)
-            .context("signature verification failed")?;
+        self.issuer.verify(&payload_bytes, &self.signature).context("signature verification failed")?;
 
         // Verify timestamps
         self.verify_timestamps()?;
@@ -358,10 +342,7 @@ impl SignedAspenClusterTicket {
 
     /// Check if the timestamp is valid (not expired, not in future).
     fn is_timestamp_valid(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
         // Check not issued in the future (with clock skew tolerance)
         if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
@@ -378,10 +359,7 @@ impl SignedAspenClusterTicket {
 
     /// Verify timestamps with detailed error messages.
     fn verify_timestamps(&self) -> Result<()> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .context("system time before Unix epoch")?
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before Unix epoch")?.as_secs();
 
         // Check not issued in the future (with clock skew tolerance)
         if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
@@ -428,10 +406,7 @@ impl SignedAspenClusterTicket {
 
     /// Returns whether the ticket has expired.
     pub fn is_expired(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         self.expires_at_secs < now
     }
 }
@@ -529,10 +504,7 @@ mod tests {
             ticket.add_bootstrap(peer).unwrap();
         }
 
-        assert_eq!(
-            ticket.bootstrap.len(),
-            AspenClusterTicket::MAX_BOOTSTRAP_PEERS as usize
-        );
+        assert_eq!(ticket.bootstrap.len(), AspenClusterTicket::MAX_BOOTSTRAP_PEERS as usize);
 
         // Adding one more should fail
         let extra_peer = create_test_endpoint_id(255);
@@ -681,8 +653,7 @@ mod tests {
         let ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
 
         // Create a ticket that's already expired by tampering with timestamps
-        let mut signed =
-            SignedAspenClusterTicket::sign_with_validity(ticket, &secret_key, 3600).unwrap();
+        let mut signed = SignedAspenClusterTicket::sign_with_validity(ticket, &secret_key, 3600).unwrap();
 
         // Set expires_at to the past (1 hour ago)
         signed.expires_at_secs = signed.issued_at_secs.saturating_sub(3600);
@@ -779,12 +750,7 @@ mod tests {
 
         // Create ticket with 1 hour validity
         let one_hour_secs = 3600;
-        let signed = SignedAspenClusterTicket::sign_with_validity(
-            ticket.clone(),
-            &secret_key,
-            one_hour_secs,
-        )
-        .unwrap();
+        let signed = SignedAspenClusterTicket::sign_with_validity(ticket.clone(), &secret_key, one_hour_secs).unwrap();
 
         // Should not be expired
         assert!(!signed.is_expired());

@@ -24,7 +24,9 @@ use std::time::Duration;
 
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::raft::storage_sqlite::SqliteStateMachine;
 

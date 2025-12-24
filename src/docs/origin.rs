@@ -16,7 +16,8 @@
 //! - Priority 0: Local cluster (highest priority)
 //! - Priority 1+: Remote clusters (lower priority, higher number)
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Prefix for origin metadata keys in the KV store.
 pub const ORIGIN_KEY_PREFIX: &str = "__aspen_origin:";
@@ -141,10 +142,7 @@ mod tests {
     #[test]
     fn test_parse_key() {
         assert_eq!(KeyOrigin::parse_key("__aspen_origin:foo"), Some("foo"));
-        assert_eq!(
-            KeyOrigin::parse_key("__aspen_origin:bar/baz"),
-            Some("bar/baz")
-        );
+        assert_eq!(KeyOrigin::parse_key("__aspen_origin:bar/baz"), Some("bar/baz"));
         assert_eq!(KeyOrigin::parse_key("other:foo"), None);
     }
 

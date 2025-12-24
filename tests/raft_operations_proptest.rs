@@ -15,9 +15,11 @@ use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use bolero::check;
-use openraft::{Config, ServerState};
-
-use support::bolero_generators::{KeyValuePair, ValidKey, ValidValue};
+use openraft::Config;
+use openraft::ServerState;
+use support::bolero_generators::KeyValuePair;
+use support::bolero_generators::ValidKey;
+use support::bolero_generators::ValidValue;
 
 // Helper to initialize a single-node cluster
 async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
@@ -50,13 +52,7 @@ async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
 fn test_writes_preserve_insertion_order() {
     check!()
         .with_iterations(20)
-        .with_type::<(
-            KeyValuePair,
-            KeyValuePair,
-            KeyValuePair,
-            KeyValuePair,
-            KeyValuePair,
-        )>()
+        .with_type::<(KeyValuePair, KeyValuePair, KeyValuePair, KeyValuePair, KeyValuePair)>()
         .for_each(|writes| {
             let writes = vec![
                 (writes.0.key.0.clone(), writes.0.value.0.clone()),
@@ -69,16 +65,11 @@ fn test_writes_preserve_insertion_order() {
             // Property: Sequential writes should be retrievable in the same order
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                let router = init_single_node_cluster()
-                    .await
-                    .expect("Failed to init cluster");
+                let router = init_single_node_cluster().await.expect("Failed to init cluster");
 
                 // Perform all writes
                 for (key, value) in &writes {
-                    router
-                        .write(NodeId(0), key.clone(), value.clone())
-                        .await
-                        .expect("write failed");
+                    router.write(NodeId(0), key.clone(), value.clone()).await.expect("write failed");
                 }
 
                 // Wait for all writes to be applied
@@ -90,8 +81,7 @@ fn test_writes_preserve_insertion_order() {
                     .expect("Failed to wait for writes");
 
                 // Build expected state (last value wins for duplicate keys)
-                let mut expected: std::collections::HashMap<String, String> =
-                    std::collections::HashMap::new();
+                let mut expected: std::collections::HashMap<String, String> = std::collections::HashMap::new();
                 for (key, value) in &writes {
                     expected.insert(key.clone(), value.clone());
                 }
@@ -99,12 +89,7 @@ fn test_writes_preserve_insertion_order() {
                 // Verify all writes are present
                 for (key, expected_value) in &expected {
                     let stored = router.read(NodeId(0), key).await;
-                    assert_eq!(
-                        stored,
-                        Some(expected_value.clone()),
-                        "Key {} not found or wrong value",
-                        key
-                    );
+                    assert_eq!(stored, Some(expected_value.clone()), "Key {} not found or wrong value", key);
                 }
             });
         });
@@ -113,84 +98,60 @@ fn test_writes_preserve_insertion_order() {
 // Test 2: Log Index Monotonicity
 #[test]
 fn test_log_indices_monotonic() {
-    check!()
-        .with_iterations(20)
-        .with_type::<u8>()
-        .for_each(|num_writes| {
-            let num_writes = 1 + (*num_writes as usize % 14); // 1..15
+    check!().with_iterations(20).with_type::<u8>().for_each(|num_writes| {
+        let num_writes = 1 + (*num_writes as usize % 14); // 1..15
 
-            // Property: After N writes, the applied index should be N + 1 (including init)
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let router = init_single_node_cluster()
+        // Property: After N writes, the applied index should be N + 1 (including init)
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let router = init_single_node_cluster().await.expect("Failed to init cluster");
+
+            for i in 0..num_writes {
+                let key = format!("key_{}", i);
+                let value = format!("value_{}", i);
+
+                router.write(NodeId(0), key, value).await.expect("write failed");
+
+                // Wait for this specific write to be applied
+                let expected_index = (i + 2) as u64; // +1 for init, +1 for this write
+                router
+                    .wait(NodeId(0), Some(Duration::from_millis(1000)))
+                    .applied_index(Some(expected_index), "write applied")
                     .await
-                    .expect("Failed to init cluster");
-
-                for i in 0..num_writes {
-                    let key = format!("key_{}", i);
-                    let value = format!("value_{}", i);
-
-                    router
-                        .write(NodeId(0), key, value)
-                        .await
-                        .expect("write failed");
-
-                    // Wait for this specific write to be applied
-                    let expected_index = (i + 2) as u64; // +1 for init, +1 for this write
-                    router
-                        .wait(NodeId(0), Some(Duration::from_millis(1000)))
-                        .applied_index(Some(expected_index), "write applied")
-                        .await
-                        .expect("Failed to wait for write");
-                }
-            });
+                    .expect("Failed to wait for write");
+            }
         });
+    });
 }
 
 // Test 3: Leader Election Stability
 #[test]
 fn test_single_leader_stability() {
-    check!()
-        .with_iterations(10)
-        .with_type::<u8>()
-        .for_each(|num_writes| {
-            let num_writes = 1 + (*num_writes as usize % 9); // 1..10
+    check!().with_iterations(10).with_type::<u8>().for_each(|num_writes| {
+        let num_writes = 1 + (*num_writes as usize % 9); // 1..10
 
-            // Property: In a stable single-node cluster, node 0 should remain leader
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let router = init_single_node_cluster()
-                    .await
-                    .expect("Failed to init cluster");
+        // Property: In a stable single-node cluster, node 0 should remain leader
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let router = init_single_node_cluster().await.expect("Failed to init cluster");
 
-                // Verify leader at start
-                let initial_leader = router.leader();
-                assert_eq!(
-                    initial_leader,
-                    Some(NodeId(0)),
-                    "Initial leader should be node 0"
-                );
+            // Verify leader at start
+            let initial_leader = router.leader();
+            assert_eq!(initial_leader, Some(NodeId(0)), "Initial leader should be node 0");
 
-                // Perform writes
-                for i in 0..num_writes {
-                    let key = format!("stable_key_{}", i);
-                    let value = format!("stable_value_{}", i);
+            // Perform writes
+            for i in 0..num_writes {
+                let key = format!("stable_key_{}", i);
+                let value = format!("stable_value_{}", i);
 
-                    router
-                        .write(NodeId(0), key, value)
-                        .await
-                        .expect("write failed");
+                router.write(NodeId(0), key, value).await.expect("write failed");
 
-                    // Leader should remain node 0
-                    let current_leader = router.leader();
-                    assert_eq!(
-                        current_leader,
-                        Some(NodeId(0)),
-                        "Leader changed during stable operation"
-                    );
-                }
-            });
+                // Leader should remain node 0
+                let current_leader = router.leader();
+                assert_eq!(current_leader, Some(NodeId(0)), "Leader changed during stable operation");
+            }
         });
+    });
 }
 
 // Test 4: Write Idempotency (Same Key Multiple Times)
@@ -205,16 +166,11 @@ fn test_write_idempotency() {
             // Property: Writing to the same key multiple times should result in the last value
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
-                let router = init_single_node_cluster()
-                    .await
-                    .expect("Failed to init cluster");
+                let router = init_single_node_cluster().await.expect("Failed to init cluster");
 
                 // Write the same key with different values
                 for value in &values {
-                    router
-                        .write(0, key.0.clone(), value.clone())
-                        .await
-                        .expect("write failed");
+                    router.write(0, key.0.clone(), value.clone()).await.expect("write failed");
                 }
 
                 // Wait for all writes to complete
@@ -228,11 +184,7 @@ fn test_write_idempotency() {
                 // Should have the last value
                 let stored = router.read(0, &key.0).await;
                 let expected_value = values.last().unwrap();
-                assert_eq!(
-                    stored,
-                    Some(expected_value.clone()),
-                    "Should have last written value"
-                );
+                assert_eq!(stored, Some(expected_value.clone()), "Should have last written value");
             });
         });
 }
@@ -246,43 +198,27 @@ fn test_write_idempotency() {
 // Test 5: Large Value Handling
 #[test]
 fn test_large_value_writes() {
-    check!()
-        .with_iterations(10)
-        .with_type::<(ValidKey, u16)>()
-        .for_each(|(key, value_size)| {
-            let value_size = 1000 + (*value_size as usize % 4000); // 1000..5000
+    check!().with_iterations(10).with_type::<(ValidKey, u16)>().for_each(|(key, value_size)| {
+        let value_size = 1000 + (*value_size as usize % 4000); // 1000..5000
 
-            // Property: Raft should handle moderately large values correctly
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let router = init_single_node_cluster()
-                    .await
-                    .expect("Failed to init cluster");
+        // Property: Raft should handle moderately large values correctly
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let router = init_single_node_cluster().await.expect("Failed to init cluster");
 
-                let large_value = "x".repeat(value_size);
+            let large_value = "x".repeat(value_size);
 
-                router
-                    .write(0, key.0.clone(), large_value.clone())
-                    .await
-                    .expect("large value write failed");
+            router.write(0, key.0.clone(), large_value.clone()).await.expect("large value write failed");
 
-                router
-                    .wait(0, Some(Duration::from_millis(3000)))
-                    .applied_index(Some(2), "large value write applied")
-                    .await
-                    .expect("Failed to wait for write");
+            router
+                .wait(0, Some(Duration::from_millis(3000)))
+                .applied_index(Some(2), "large value write applied")
+                .await
+                .expect("Failed to wait for write");
 
-                let stored = router.read(0, &key.0).await;
-                assert_eq!(
-                    stored.clone(),
-                    Some(large_value.clone()),
-                    "Large value mismatch"
-                );
-                assert_eq!(
-                    stored.unwrap().len(),
-                    value_size,
-                    "Large value size mismatch"
-                );
-            });
+            let stored = router.read(0, &key.0).await;
+            assert_eq!(stored.clone(), Some(large_value.clone()), "Large value mismatch");
+            assert_eq!(stored.unwrap().len(), value_size, "Large value size mismatch");
         });
+    });
 }

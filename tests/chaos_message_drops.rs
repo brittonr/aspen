@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 /// Chaos Engineering Test: Random Message Drops
 ///
 /// This test simulates packet loss in the network to validate Raft's retry mechanisms.
@@ -16,10 +20,8 @@
 /// this by rapidly failing/recovering nodes to create intermittent connectivity.
 use aspen::simulation::SimulationArtifact;
 use aspen::testing::AspenRouter;
-
-use openraft::{Config, ServerState};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use openraft::Config;
+use openraft::ServerState;
 
 #[tokio::test]
 async fn test_message_drops_append_entries() {
@@ -31,8 +33,9 @@ async fn test_message_drops_append_entries() {
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let artifact = match &result {
-        Ok(()) => SimulationArtifact::new("chaos_message_drops", seed, events, String::new())
-            .with_duration_ms(duration_ms),
+        Ok(()) => {
+            SimulationArtifact::new("chaos_message_drops", seed, events, String::new()).with_duration_ms(duration_ms)
+        }
         Err(e) => SimulationArtifact::new("chaos_message_drops", seed, events, String::new())
             .with_failure(e.to_string())
             .with_duration_ms(duration_ms),
@@ -65,9 +68,7 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
         .wait(0, Some(Duration::from_millis(2000)))
         .state(ServerState::Leader, "initial leader elected")
         .await?;
-    let leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no initial leader"))?;
+    let leader = router.leader().ok_or_else(|| anyhow::anyhow!("no initial leader"))?;
     events.push(format!("initial-leader: node {}", leader));
 
     // Baseline: writes with no message drops
@@ -155,10 +156,7 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
                 )
             })?;
     }
-    events.push(format!(
-        "all-nodes-converged: index {} despite message drops",
-        final_index
-    ));
+    events.push(format!("all-nodes-converged: index {} despite message drops", final_index));
 
     // Verify data consistency across all nodes
     for node_id in 0..5 {
@@ -169,13 +167,7 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {}", node_id, key),
             }
@@ -188,13 +180,7 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {} after drops", node_id, key),
             }
@@ -207,13 +193,7 @@ async fn run_message_drops_test(events: &mut Vec<String>) -> anyhow::Result<()> 
             match router.read(node_id, &key).await {
                 Some(value) if value == expected => {}
                 Some(value) => {
-                    anyhow::bail!(
-                        "node {} key {} wrong: got {}, expected {}",
-                        node_id,
-                        key,
-                        value,
-                        expected
-                    );
+                    anyhow::bail!("node {} key {} wrong: got {}, expected {}", node_id, key, value, expected);
                 }
                 None => anyhow::bail!("node {} missing key {} after heavy drops", node_id, key),
             }

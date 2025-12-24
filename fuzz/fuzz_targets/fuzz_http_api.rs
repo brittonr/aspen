@@ -11,13 +11,15 @@
 //! - Oversized keys/values (should be rejected by validation)
 //! - Special characters in keys
 
-use bolero::check;
-
 // Import API request types
-use aspen::fuzz_helpers::{
-    AddLearnerRequest, ChangeMembershipRequest, DeleteRequest, InitRequest, ReadRequest,
-    ScanRequest, WriteRequest,
-};
+use aspen::fuzz_helpers::AddLearnerRequest;
+use aspen::fuzz_helpers::ChangeMembershipRequest;
+use aspen::fuzz_helpers::DeleteRequest;
+use aspen::fuzz_helpers::InitRequest;
+use aspen::fuzz_helpers::ReadRequest;
+use aspen::fuzz_helpers::ScanRequest;
+use aspen::fuzz_helpers::WriteRequest;
+use bolero::check;
 
 #[test]
 fn fuzz_http_api() {

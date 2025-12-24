@@ -24,11 +24,14 @@
 //! - Constant-time comparison prevents timing attacks
 //! - Explicit timeout on challenge validity
 
-use hmac::{Hmac, Mac};
-use rand::RngCore;
-use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use std::time::Duration;
+
+use hmac::Hmac;
+use hmac::Mac;
+use rand::RngCore;
+use serde::Deserialize;
+use serde::Serialize;
+use sha2::Sha256;
 
 /// Type alias for HMAC-SHA256.
 type HmacSha256 = Hmac<Sha256>;
@@ -176,11 +179,7 @@ impl AuthContext {
     /// # Returns
     ///
     /// AuthResponse containing the HMAC and client information.
-    pub fn compute_response(
-        &self,
-        challenge: &AuthChallenge,
-        client_endpoint_id: &[u8; 32],
-    ) -> AuthResponse {
+    pub fn compute_response(&self, challenge: &AuthChallenge, client_endpoint_id: &[u8; 32]) -> AuthResponse {
         let mut client_nonce = [0u8; AUTH_NONCE_SIZE];
         rand::rng().fill_bytes(&mut client_nonce);
 
@@ -208,11 +207,7 @@ impl AuthContext {
     /// # Returns
     ///
     /// AuthResult indicating success or reason for failure.
-    pub fn verify_response(
-        &self,
-        challenge: &AuthChallenge,
-        response: &AuthResponse,
-    ) -> AuthResult {
+    pub fn verify_response(&self, challenge: &AuthChallenge, response: &AuthResponse) -> AuthResult {
         // Check timestamp freshness
         let now = current_time_ms();
         let age_ms = now.saturating_sub(challenge.timestamp_ms);
@@ -226,11 +221,7 @@ impl AuthContext {
         }
 
         // Compute expected HMAC
-        let expected = self.compute_hmac(
-            &challenge.nonce,
-            challenge.timestamp_ms,
-            &response.client_endpoint_id,
-        );
+        let expected = self.compute_hmac(&challenge.nonce, challenge.timestamp_ms, &response.client_endpoint_id);
 
         // Constant-time comparison
         if constant_time_compare(&expected, &response.hmac) {
@@ -249,8 +240,7 @@ impl AuthContext {
         timestamp_ms: u64,
         client_id: &[u8; 32],
     ) -> [u8; AUTH_HMAC_SIZE] {
-        let mut mac = HmacSha256::new_from_slice(&self.key)
-            .expect("HMAC key size is always valid (32 bytes)");
+        let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC key size is always valid (32 bytes)");
 
         // Feed data in deterministic order
         mac.update(nonce);
@@ -267,9 +257,7 @@ impl AuthContext {
 impl std::fmt::Debug for AuthContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Don't expose the key in debug output
-        f.debug_struct("AuthContext")
-            .field("key", &"[REDACTED]")
-            .finish()
+        f.debug_struct("AuthContext").field("key", &"[REDACTED]").finish()
     }
 }
 
@@ -297,10 +285,7 @@ fn current_time_ms() -> u64 {
 /// - XOR accumulation prevents branch prediction leakage
 #[inline]
 fn constant_time_compare(a: &[u8; AUTH_HMAC_SIZE], b: &[u8; AUTH_HMAC_SIZE]) -> bool {
-    a.iter()
-        .zip(b.iter())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
+    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 // ============================================================================

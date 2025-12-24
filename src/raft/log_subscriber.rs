@@ -26,8 +26,10 @@
 //! - Explicit subscription limits (max subscribers, buffer size)
 //! - Clear protocol versioning for forward compatibility
 
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 // ============================================================================
 // Constants
@@ -88,11 +90,7 @@ pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
     /// # Returns
     /// * `Ok(entries)` - Vector of log entries in the range
     /// * `Err(error)` - If reading fails
-    async fn read_entries(
-        &self,
-        start_index: u64,
-        end_index: u64,
-    ) -> Result<Vec<LogEntryPayload>, std::io::Error>;
+    async fn read_entries(&self, start_index: u64, end_index: u64) -> Result<Vec<LogEntryPayload>, std::io::Error>;
 
     /// Get the earliest available log index (after compaction).
     ///
@@ -389,12 +387,9 @@ impl KvOperation {
             | KvOperation::CompareAndDelete { key, .. } => key.starts_with(prefix),
             KvOperation::SetMulti { pairs }
             | KvOperation::SetMultiWithTTL { pairs, .. }
-            | KvOperation::SetMultiWithLease { pairs, .. } => {
-                pairs.iter().any(|(k, _)| k.starts_with(prefix))
-            }
+            | KvOperation::SetMultiWithLease { pairs, .. } => pairs.iter().any(|(k, _)| k.starts_with(prefix)),
             KvOperation::DeleteMulti { keys } => keys.iter().any(|k| k.starts_with(prefix)),
-            KvOperation::Batch { operations }
-            | KvOperation::ConditionalBatch { operations, .. } => {
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
                 operations.iter().any(|(_, k, _)| k.starts_with(prefix))
             }
             KvOperation::Noop
@@ -405,9 +400,7 @@ impl KvOperation {
                 // Always include control/lease operations
                 true
             }
-            KvOperation::Transaction {
-                success, failure, ..
-            } => {
+            KvOperation::Transaction { success, failure, .. } => {
                 // Check if any operation in success or failure branches affects the prefix
                 let check_ops = |ops: &[(u8, Vec<u8>, Vec<u8>)]| {
                     ops.iter().any(|(op_type, key, _)| {
@@ -436,12 +429,9 @@ impl KvOperation {
             | KvOperation::CompareAndDelete { key, .. } => Some(key),
             KvOperation::SetMulti { pairs }
             | KvOperation::SetMultiWithTTL { pairs, .. }
-            | KvOperation::SetMultiWithLease { pairs, .. } => {
-                pairs.first().map(|(k, _)| k.as_slice())
-            }
+            | KvOperation::SetMultiWithLease { pairs, .. } => pairs.first().map(|(k, _)| k.as_slice()),
             KvOperation::DeleteMulti { keys } => keys.first().map(|k| k.as_slice()),
-            KvOperation::Batch { operations }
-            | KvOperation::ConditionalBatch { operations, .. } => {
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
                 operations.first().map(|(_, k, _)| k.as_slice())
             }
             KvOperation::Noop
@@ -473,21 +463,16 @@ impl KvOperation {
             | KvOperation::SetMultiWithTTL { pairs, .. }
             | KvOperation::SetMultiWithLease { pairs, .. } => pairs.len(),
             KvOperation::DeleteMulti { keys } => keys.len(),
-            KvOperation::Batch { operations }
-            | KvOperation::ConditionalBatch { operations, .. } => operations.len(),
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => operations.len(),
             KvOperation::Noop
             | KvOperation::MembershipChange { .. }
             | KvOperation::LeaseGrant { .. }
             | KvOperation::LeaseRevoke { .. }
             | KvOperation::LeaseKeepalive { .. } => 0,
-            KvOperation::Transaction {
-                success, failure, ..
-            } => {
+            KvOperation::Transaction { success, failure, .. } => {
                 // Count put/delete operations in both branches (get/range don't modify keys)
                 let count_mods = |ops: &[(u8, Vec<u8>, Vec<u8>)]| {
-                    ops.iter()
-                        .filter(|(op_type, _, _)| *op_type == 0 || *op_type == 1)
-                        .count()
+                    ops.iter().filter(|(op_type, _, _)| *op_type == 0 || *op_type == 1).count()
                 };
                 count_mods(success) + count_mods(failure)
             }
@@ -514,24 +499,13 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                 expires_at_ms,
             },
             AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
-                pairs: pairs
-                    .into_iter()
-                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
-                    .collect(),
+                pairs: pairs.into_iter().map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect(),
             },
-            AppRequest::SetMultiWithTTL {
-                pairs,
-                expires_at_ms,
-            } => KvOperation::SetMultiWithTTL {
-                pairs: pairs
-                    .into_iter()
-                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
-                    .collect(),
+            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => KvOperation::SetMultiWithTTL {
+                pairs: pairs.into_iter().map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect(),
                 expires_at_ms,
             },
-            AppRequest::Delete { key } => KvOperation::Delete {
-                key: key.into_bytes(),
-            },
+            AppRequest::Delete { key } => KvOperation::Delete { key: key.into_bytes() },
             AppRequest::DeleteMulti { keys } => KvOperation::DeleteMulti {
                 keys: keys.into_iter().map(String::into_bytes).collect(),
             },
@@ -554,44 +528,26 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                     .map(|(is_set, key, value)| (is_set, key.into_bytes(), value.into_bytes()))
                     .collect(),
             },
-            AppRequest::ConditionalBatch {
-                conditions,
-                operations,
-            } => KvOperation::ConditionalBatch {
+            AppRequest::ConditionalBatch { conditions, operations } => KvOperation::ConditionalBatch {
                 conditions: conditions
                     .into_iter()
-                    .map(|(cond_type, key, expected)| {
-                        (cond_type, key.into_bytes(), expected.into_bytes())
-                    })
+                    .map(|(cond_type, key, expected)| (cond_type, key.into_bytes(), expected.into_bytes()))
                     .collect(),
                 operations: operations
                     .into_iter()
                     .map(|(is_set, key, value)| (is_set, key.into_bytes(), value.into_bytes()))
                     .collect(),
             },
-            AppRequest::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => KvOperation::SetWithLease {
+            AppRequest::SetWithLease { key, value, lease_id } => KvOperation::SetWithLease {
                 key: key.into_bytes(),
                 value: value.into_bytes(),
                 lease_id,
             },
             AppRequest::SetMultiWithLease { pairs, lease_id } => KvOperation::SetMultiWithLease {
-                pairs: pairs
-                    .into_iter()
-                    .map(|(k, v)| (k.into_bytes(), v.into_bytes()))
-                    .collect(),
+                pairs: pairs.into_iter().map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect(),
                 lease_id,
             },
-            AppRequest::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => KvOperation::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            },
+            AppRequest::LeaseGrant { lease_id, ttl_seconds } => KvOperation::LeaseGrant { lease_id, ttl_seconds },
             AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke { lease_id },
             AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive { lease_id },
             AppRequest::Transaction {
@@ -600,36 +556,19 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
                 failure,
             } => {
                 // Convert String-based tuples to Vec<u8>-based tuples
-                let cmp = compare
-                    .into_iter()
-                    .map(|(t, o, k, v)| (t, o, k.into_bytes(), v.into_bytes()))
-                    .collect();
-                let succ = success
-                    .into_iter()
-                    .map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes()))
-                    .collect();
-                let fail = failure
-                    .into_iter()
-                    .map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes()))
-                    .collect();
+                let cmp = compare.into_iter().map(|(t, o, k, v)| (t, o, k.into_bytes(), v.into_bytes())).collect();
+                let succ = success.into_iter().map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes())).collect();
+                let fail = failure.into_iter().map(|(t, k, v)| (t, k.into_bytes(), v.into_bytes())).collect();
                 KvOperation::Transaction {
                     compare: cmp,
                     success: succ,
                     failure: fail,
                 }
             }
-            AppRequest::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
-                let reads = read_set
-                    .into_iter()
-                    .map(|(k, v)| (k.into_bytes(), v))
-                    .collect();
-                let writes = write_set
-                    .into_iter()
-                    .map(|(is_set, k, v)| (is_set, k.into_bytes(), v.into_bytes()))
-                    .collect();
+            AppRequest::OptimisticTransaction { read_set, write_set } => {
+                let reads = read_set.into_iter().map(|(k, v)| (k.into_bytes(), v)).collect();
+                let writes =
+                    write_set.into_iter().map(|(is_set, k, v)| (is_set, k.into_bytes(), v.into_bytes())).collect();
                 KvOperation::OptimisticTransaction {
                     read_set: reads,
                     write_set: writes,
@@ -637,9 +576,9 @@ impl From<crate::raft::types::AppRequest> for KvOperation {
             }
             // Shard topology operations are converted to Noop for log subscribers
             // (subscribers don't need to track topology changes)
-            AppRequest::ShardSplit { .. }
-            | AppRequest::ShardMerge { .. }
-            | AppRequest::TopologyUpdate { .. } => KvOperation::Noop,
+            AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+                KvOperation::Noop
+            }
         }
     }
 }
@@ -667,12 +606,7 @@ pub struct SubscriberState {
 
 impl SubscriberState {
     /// Create new subscriber state.
-    pub fn new(
-        id: u64,
-        client_endpoint_id: [u8; 32],
-        key_prefix: Vec<u8>,
-        start_index: u64,
-    ) -> Self {
+    pub fn new(id: u64, client_endpoint_id: [u8; 32], key_prefix: Vec<u8>, start_index: u64) -> Self {
         Self {
             id,
             client_endpoint_id,
@@ -771,9 +705,7 @@ mod tests {
         };
         assert_eq!(set_op.primary_key(), Some(b"key1".as_slice()));
 
-        let delete_op = KvOperation::Delete {
-            key: b"key2".to_vec(),
-        };
+        let delete_op = KvOperation::Delete { key: b"key2".to_vec() };
         assert_eq!(delete_op.primary_key(), Some(b"key2".as_slice()));
 
         assert_eq!(KvOperation::Noop.primary_key(), None);
@@ -839,22 +771,13 @@ mod tests {
 
     #[test]
     fn test_subscribe_reject_reason_display() {
-        assert_eq!(
-            SubscribeRejectReason::TooManySubscribers.to_string(),
-            "too many subscribers"
-        );
-        assert_eq!(
-            SubscribeRejectReason::IndexNotAvailable.to_string(),
-            "requested index not available"
-        );
+        assert_eq!(SubscribeRejectReason::TooManySubscribers.to_string(), "too many subscribers");
+        assert_eq!(SubscribeRejectReason::IndexNotAvailable.to_string(), "requested index not available");
     }
 
     #[test]
     fn test_end_of_stream_reason_display() {
-        assert_eq!(
-            EndOfStreamReason::ServerShutdown.to_string(),
-            "server shutdown"
-        );
+        assert_eq!(EndOfStreamReason::ServerShutdown.to_string(), "server shutdown");
         assert_eq!(EndOfStreamReason::Lagged.to_string(), "subscriber lagged");
     }
 }

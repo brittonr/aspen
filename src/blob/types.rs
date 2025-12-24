@@ -2,8 +2,10 @@
 //!
 //! Defines the core data structures for blob storage and references.
 
-use iroh_blobs::{BlobFormat, Hash};
-use serde::{Deserialize, Serialize};
+use iroh_blobs::BlobFormat;
+use iroh_blobs::Hash;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::constants::BLOB_REF_PREFIX;
 

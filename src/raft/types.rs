@@ -30,7 +30,8 @@ use std::str::FromStr;
 
 use iroh::EndpointAddr;
 use openraft::declare_raft_types;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Type-safe node identifier for Raft cluster nodes.
 ///
@@ -56,7 +57,17 @@ use serde::{Deserialize, Serialize};
 /// let raw: u64 = node_id.into();
 /// ```
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize
 )]
 pub struct NodeId(pub u64);
 
@@ -125,7 +136,8 @@ impl Default for RaftMemberInfo {
     /// that require nodes to implement `Default`. In production, use `RaftMemberInfo::new()`
     /// or `create_test_raft_member_info()` to create nodes with proper endpoint addresses.
     fn default() -> Self {
-        use iroh::{EndpointId, SecretKey};
+        use iroh::EndpointId;
+        use iroh::SecretKey;
 
         let seed = [0u8; 32];
         let secret_key = SecretKey::from(seed);
@@ -152,7 +164,8 @@ impl fmt::Display for RaftMemberInfo {
 ///
 /// - **Basic KV**: Set, SetMulti, Delete, DeleteMulti
 /// - **TTL-based expiration**: SetWithTTL, SetMultiWithTTL
-/// - **Lease-based expiration**: SetWithLease, SetMultiWithLease, LeaseGrant, LeaseRevoke, LeaseKeepalive
+/// - **Lease-based expiration**: SetWithLease, SetMultiWithLease, LeaseGrant, LeaseRevoke,
+///   LeaseKeepalive
 /// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
 /// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
 ///
@@ -342,20 +355,10 @@ impl fmt::Display for AppRequest {
                 value,
                 expires_at_ms,
             } => {
-                write!(
-                    f,
-                    "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}"
-                )
+                write!(f, "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}")
             }
-            AppRequest::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => {
-                write!(
-                    f,
-                    "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}"
-                )
+            AppRequest::SetWithLease { key, value, lease_id } => {
+                write!(f, "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}")
             }
             AppRequest::SetMulti { pairs } => {
                 write!(f, "SetMulti {{ pairs: [")?;
@@ -367,22 +370,11 @@ impl fmt::Display for AppRequest {
                 }
                 write!(f, "] }}")
             }
-            AppRequest::SetMultiWithTTL {
-                pairs,
-                expires_at_ms,
-            } => {
-                write!(
-                    f,
-                    "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}",
-                    pairs.len()
-                )
+            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
+                write!(f, "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}", pairs.len())
             }
             AppRequest::SetMultiWithLease { pairs, lease_id } => {
-                write!(
-                    f,
-                    "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}",
-                    pairs.len()
-                )
+                write!(f, "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}", pairs.len())
             }
             AppRequest::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
             AppRequest::DeleteMulti { keys } => {
@@ -400,10 +392,7 @@ impl fmt::Display for AppRequest {
                 expected,
                 new_value,
             } => {
-                write!(
-                    f,
-                    "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}"
-                )
+                write!(f, "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}")
             }
             AppRequest::CompareAndDelete { key, expected } => {
                 write!(f, "CompareAndDelete {{ key: {key}, expected: {expected} }}")
@@ -411,25 +400,11 @@ impl fmt::Display for AppRequest {
             AppRequest::Batch { operations } => {
                 write!(f, "Batch {{ operations: {} }}", operations.len())
             }
-            AppRequest::ConditionalBatch {
-                conditions,
-                operations,
-            } => {
-                write!(
-                    f,
-                    "ConditionalBatch {{ conditions: {}, operations: {} }}",
-                    conditions.len(),
-                    operations.len()
-                )
+            AppRequest::ConditionalBatch { conditions, operations } => {
+                write!(f, "ConditionalBatch {{ conditions: {}, operations: {} }}", conditions.len(), operations.len())
             }
-            AppRequest::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => {
-                write!(
-                    f,
-                    "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}"
-                )
+            AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
+                write!(f, "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}")
             }
             AppRequest::LeaseRevoke { lease_id } => {
                 write!(f, "LeaseRevoke {{ lease_id: {lease_id} }}")
@@ -450,16 +425,8 @@ impl fmt::Display for AppRequest {
                     failure.len()
                 )
             }
-            AppRequest::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
-                write!(
-                    f,
-                    "OptimisticTransaction {{ read_set: {}, write_set: {} }}",
-                    read_set.len(),
-                    write_set.len()
-                )
+            AppRequest::OptimisticTransaction { read_set, write_set } => {
+                write!(f, "OptimisticTransaction {{ read_set: {}, write_set: {} }}", read_set.len(), write_set.len())
             }
             AppRequest::ShardSplit {
                 source_shard,
@@ -498,7 +465,8 @@ impl fmt::Display for AppRequest {
 ///
 /// - **Read operations**: `value` contains the retrieved value
 /// - **Delete operations**: `deleted` indicates whether a key was actually removed
-/// - **CAS operations**: `cas_succeeded` indicates success/failure, `value` contains current value on failure
+/// - **CAS operations**: `cas_succeeded` indicates success/failure, `value` contains current value
+///   on failure
 /// - **Batch operations**: `batch_applied` contains count of applied operations
 /// - **Lease operations**: `lease_id`, `ttl_seconds`, `keys_deleted` for lease management
 /// - **Transactions**: `succeeded`, `txn_results`, `header_revision` for transaction results
@@ -736,9 +704,7 @@ mod tests {
 
     #[test]
     fn test_app_request_delete_display() {
-        let req = AppRequest::Delete {
-            key: "foo".to_string(),
-        };
+        let req = AppRequest::Delete { key: "foo".to_string() };
         assert_eq!(format!("{}", req), "Delete { key: foo }");
     }
 
@@ -765,10 +731,7 @@ mod tests {
                 ("c".to_string(), "3".to_string()),
             ],
         };
-        assert_eq!(
-            format!("{}", req),
-            "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }"
-        );
+        assert_eq!(format!("{}", req), "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }");
     }
 
     #[test]
@@ -793,9 +756,7 @@ mod tests {
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
-        assert!(
-            matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value")
-        );
+        assert!(matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value"));
     }
 
     #[test]
@@ -940,7 +901,9 @@ mod tests {
 
     #[test]
     fn test_raft_member_info_new() {
-        use iroh::{EndpointAddr, EndpointId, SecretKey};
+        use iroh::EndpointAddr;
+        use iroh::EndpointId;
+        use iroh::SecretKey;
 
         let seed = [1u8; 32];
         let secret_key = SecretKey::from(seed);

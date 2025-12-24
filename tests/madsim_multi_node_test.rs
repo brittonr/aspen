@@ -16,12 +16,18 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
+use aspen::raft::storage::InMemoryLogStore;
+use aspen::raft::storage::InMemoryStateMachine;
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -64,25 +70,13 @@ async fn test_three_node_cluster_seed_42() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -90,10 +84,7 @@ async fn test_three_node_cluster_seed_42() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leader election");
     // Wait for leader election to complete
@@ -105,18 +96,9 @@ async fn test_three_node_cluster_seed_42() {
     let metrics3 = raft3.metrics().borrow().clone();
 
     // All nodes should agree on who the leader is
-    assert!(
-        metrics1.current_leader.is_some(),
-        "node 1 should see a leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics2.current_leader,
-        "nodes 1 and 2 disagree on leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics3.current_leader,
-        "nodes 1 and 3 disagree on leader"
-    );
+    assert!(metrics1.current_leader.is_some(), "node 1 should see a leader");
+    assert_eq!(metrics1.current_leader, metrics2.current_leader, "nodes 1 and 2 disagree on leader");
+    assert_eq!(metrics1.current_leader, metrics3.current_leader, "nodes 1 and 3 disagree on leader");
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
@@ -146,18 +128,9 @@ async fn test_three_node_cluster_seed_42() {
     let final_metrics3 = raft3.metrics().borrow().clone();
 
     // All nodes should have replicated the log entry
-    assert!(
-        final_metrics1.last_applied.is_some(),
-        "node 1 should have applied entries"
-    );
-    assert!(
-        final_metrics2.last_applied.is_some(),
-        "node 2 should have applied entries"
-    );
-    assert!(
-        final_metrics3.last_applied.is_some(),
-        "node 3 should have applied entries"
-    );
+    assert!(final_metrics1.last_applied.is_some(), "node 1 should have applied entries");
+    assert!(final_metrics2.last_applied.is_some(), "node 2 should have applied entries");
+    assert!(final_metrics3.last_applied.is_some(), "node 3 should have applied entries");
 
     artifact = artifact.add_event("validation: 3-node cluster operational");
 
@@ -184,25 +157,13 @@ async fn test_three_node_cluster_seed_123() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -210,10 +171,7 @@ async fn test_three_node_cluster_seed_123() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -223,18 +181,9 @@ async fn test_three_node_cluster_seed_123() {
     let metrics2 = raft2.metrics().borrow().clone();
     let metrics3 = raft3.metrics().borrow().clone();
 
-    assert!(
-        metrics1.current_leader.is_some(),
-        "node 1 should see a leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics2.current_leader,
-        "nodes 1 and 2 disagree on leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics3.current_leader,
-        "nodes 1 and 3 disagree on leader"
-    );
+    assert!(metrics1.current_leader.is_some(), "node 1 should see a leader");
+    assert_eq!(metrics1.current_leader, metrics2.current_leader, "nodes 1 and 2 disagree on leader");
+    assert_eq!(metrics1.current_leader, metrics3.current_leader, "nodes 1 and 3 disagree on leader");
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
@@ -263,18 +212,9 @@ async fn test_three_node_cluster_seed_123() {
     let final_metrics2 = raft2.metrics().borrow().clone();
     let final_metrics3 = raft3.metrics().borrow().clone();
 
-    assert!(
-        final_metrics1.last_applied.is_some(),
-        "node 1 should have applied entries"
-    );
-    assert!(
-        final_metrics2.last_applied.is_some(),
-        "node 2 should have applied entries"
-    );
-    assert!(
-        final_metrics3.last_applied.is_some(),
-        "node 3 should have applied entries"
-    );
+    assert!(final_metrics1.last_applied.is_some(), "node 1 should have applied entries");
+    assert!(final_metrics2.last_applied.is_some(), "node 2 should have applied entries");
+    assert!(final_metrics3.last_applied.is_some(), "node 3 should have applied entries");
 
     artifact = artifact.add_event("validation: 3-node cluster operational");
 
@@ -301,25 +241,13 @@ async fn test_three_node_cluster_seed_456() {
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -327,10 +255,7 @@ async fn test_three_node_cluster_seed_456() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -340,18 +265,9 @@ async fn test_three_node_cluster_seed_456() {
     let metrics2 = raft2.metrics().borrow().clone();
     let metrics3 = raft3.metrics().borrow().clone();
 
-    assert!(
-        metrics1.current_leader.is_some(),
-        "node 1 should see a leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics2.current_leader,
-        "nodes 1 and 2 disagree on leader"
-    );
-    assert_eq!(
-        metrics1.current_leader, metrics3.current_leader,
-        "nodes 1 and 3 disagree on leader"
-    );
+    assert!(metrics1.current_leader.is_some(), "node 1 should see a leader");
+    assert_eq!(metrics1.current_leader, metrics2.current_leader, "nodes 1 and 2 disagree on leader");
+    assert_eq!(metrics1.current_leader, metrics3.current_leader, "nodes 1 and 3 disagree on leader");
 
     let leader_id = metrics1.current_leader.expect("no leader elected");
     artifact = artifact.add_event(format!("validation: leader is node {}", leader_id));
@@ -380,18 +296,9 @@ async fn test_three_node_cluster_seed_456() {
     let final_metrics2 = raft2.metrics().borrow().clone();
     let final_metrics3 = raft3.metrics().borrow().clone();
 
-    assert!(
-        final_metrics1.last_applied.is_some(),
-        "node 1 should have applied entries"
-    );
-    assert!(
-        final_metrics2.last_applied.is_some(),
-        "node 2 should have applied entries"
-    );
-    assert!(
-        final_metrics3.last_applied.is_some(),
-        "node 3 should have applied entries"
-    );
+    assert!(final_metrics1.last_applied.is_some(), "node 1 should have applied entries");
+    assert!(final_metrics2.last_applied.is_some(), "node 2 should have applied entries");
+    assert!(final_metrics3.last_applied.is_some(), "node 3 should have applied entries");
 
     artifact = artifact.add_event("validation: 3-node cluster operational");
 

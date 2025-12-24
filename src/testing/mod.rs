@@ -68,24 +68,46 @@ pub mod network_utils;
 #[cfg(any(test, feature = "testing"))]
 pub mod vm_manager;
 
-pub use madsim_tester::{
-    AspenRaftTester, BuggifyConfig, BuggifyFault, LivenessConfig, LivenessMetrics, LivenessMode,
-    LivenessReport, LivenessViolation, SimulationMetrics, TesterConfig, ViolationType,
-};
+// Re-export VM testing types when available
+#[cfg(any(test, feature = "testing"))]
+pub use fault_injection::FaultScenario;
+#[cfg(any(test, feature = "testing"))]
+pub use fault_injection::LatencyInjection;
+#[cfg(any(test, feature = "testing"))]
+pub use fault_injection::NetworkPartition;
+#[cfg(any(test, feature = "testing"))]
+pub use fault_injection::PacketLossInjection;
+pub use madsim_tester::AspenRaftTester;
+pub use madsim_tester::BuggifyConfig;
+pub use madsim_tester::BuggifyFault;
+pub use madsim_tester::LivenessConfig;
+pub use madsim_tester::LivenessMetrics;
+pub use madsim_tester::LivenessMode;
+pub use madsim_tester::LivenessReport;
+pub use madsim_tester::LivenessViolation;
+pub use madsim_tester::SimulationMetrics;
+pub use madsim_tester::TesterConfig;
+pub use madsim_tester::ViolationType;
+#[cfg(any(test, feature = "testing"))]
+pub use network_utils::NetworkBridge;
+#[cfg(any(test, feature = "testing"))]
+pub use network_utils::TapDevice;
 pub use router::AspenRouter;
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::ManagedVm;
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::NetworkConfig;
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::VmConfig;
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::VmManager;
+#[cfg(any(test, feature = "testing"))]
+pub use vm_manager::VmState;
 
 // Re-export Byzantine types for testing
 pub use crate::raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
-
-// Re-export VM testing types when available
-#[cfg(any(test, feature = "testing"))]
-pub use fault_injection::{FaultScenario, LatencyInjection, NetworkPartition, PacketLossInjection};
-#[cfg(any(test, feature = "testing"))]
-pub use network_utils::{NetworkBridge, TapDevice};
-#[cfg(any(test, feature = "testing"))]
-pub use vm_manager::{ManagedVm, NetworkConfig, VmConfig, VmManager, VmState};
-
-use crate::raft::types::{NodeId, RaftMemberInfo};
+use crate::raft::types::NodeId;
+use crate::raft::types::RaftMemberInfo;
 
 /// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///
@@ -104,7 +126,9 @@ use crate::raft::types::{NodeId, RaftMemberInfo};
 /// raft.initialize(nodes).await?;
 /// ```
 pub fn create_test_raft_member_info(node_id: impl Into<NodeId>) -> RaftMemberInfo {
-    use iroh::{EndpointAddr, EndpointId, SecretKey};
+    use iroh::EndpointAddr;
+    use iroh::EndpointId;
+    use iroh::SecretKey;
 
     let node_id = node_id.into();
     // Generate a deterministic secret key from the node ID

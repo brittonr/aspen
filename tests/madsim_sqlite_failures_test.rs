@@ -10,13 +10,18 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
 use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance with SQLite backend for madsim failure testing.
 ///
@@ -37,12 +42,8 @@ async fn create_raft_node_sqlite(
 
     // Use tempdir for isolated storage per test run
     let temp_base = tempfile::TempDir::new().expect("failed to create temp dir");
-    let log_path = temp_base
-        .path()
-        .join(format!("{}-node-{}-log.redb", test_name, node_id));
-    let sm_path = temp_base
-        .path()
-        .join(format!("{}-node-{}-sm.db", test_name, node_id));
+    let log_path = temp_base.path().join(format!("{}-node-{}-log.redb", test_name, node_id));
+    let sm_path = temp_base.path().join(format!("{}-node-{}-sm.db", test_name, node_id));
 
     let log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
     let state_machine = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
@@ -73,49 +74,22 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 = create_raft_node_sqlite(
-        NodeId::from(1),
-        "leader_crash_seed_42",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft2 = create_raft_node_sqlite(
-        NodeId::from(2),
-        "leader_crash_seed_42",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft3 = create_raft_node_sqlite(
-        NodeId::from(3),
-        "leader_crash_seed_42",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
+    let raft1 =
+        create_raft_node_sqlite(NodeId::from(1), "leader_crash_seed_42", router.clone(), injector.clone()).await;
+    let raft2 =
+        create_raft_node_sqlite(NodeId::from(2), "leader_crash_seed_42", router.clone(), injector.clone()).await;
+    let raft3 =
+        create_raft_node_sqlite(NodeId::from(3), "leader_crash_seed_42", router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -123,10 +97,7 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -134,10 +105,7 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let initial_leader = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(format!(
-        "validation: initial leader is node {} with SQLite",
-        initial_leader
-    ));
+    artifact = artifact.add_event(format!("validation: initial leader is node {} with SQLite", initial_leader));
 
     artifact = artifact.add_event("write: submit write before leader crash");
     let leader_raft = match initial_leader.0 {
@@ -180,16 +148,10 @@ async fn test_sqlite_leader_crash_recovery_seed_42() {
     }
 
     assert!(new_leader.is_some(), "no new leader elected after crash");
-    assert_ne!(
-        new_leader.unwrap(),
-        initial_leader,
-        "new leader should be different from crashed leader"
-    );
+    assert_ne!(new_leader.unwrap(), initial_leader, "new leader should be different from crashed leader");
 
-    artifact = artifact.add_event(format!(
-        "validation: new leader is node {} after crash with SQLite",
-        new_leader.unwrap()
-    ));
+    artifact =
+        artifact.add_event(format!("validation: new leader is node {} after crash with SQLite", new_leader.unwrap()));
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -213,49 +175,19 @@ async fn test_sqlite_network_partition_seed_123() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 = create_raft_node_sqlite(
-        NodeId::from(1),
-        "partition_seed_123",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft2 = create_raft_node_sqlite(
-        NodeId::from(2),
-        "partition_seed_123",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft3 = create_raft_node_sqlite(
-        NodeId::from(3),
-        "partition_seed_123",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
+    let raft1 = create_raft_node_sqlite(NodeId::from(1), "partition_seed_123", router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_sqlite(NodeId::from(2), "partition_seed_123", router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_sqlite(NodeId::from(3), "partition_seed_123", router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -263,20 +195,14 @@ async fn test_sqlite_network_partition_seed_123() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
 
     artifact = artifact.add_event("metrics: verify initial consensus");
     let metrics1 = raft1.metrics().borrow().clone();
-    assert!(
-        metrics1.current_leader.is_some(),
-        "no leader before partition"
-    );
+    assert!(metrics1.current_leader.is_some(), "no leader before partition");
 
     artifact = artifact.add_event("failure: partition node 3 from nodes 1 and 2");
     // Partition: node 3 cannot communicate with nodes 1 and 2
@@ -310,10 +236,7 @@ async fn test_sqlite_network_partition_seed_123() {
     let metrics1_after = raft1.metrics().borrow().clone();
     let metrics2_after = raft2.metrics().borrow().clone();
 
-    assert!(
-        metrics1_after.current_leader.is_some(),
-        "majority partition should maintain leader"
-    );
+    assert!(metrics1_after.current_leader.is_some(), "majority partition should maintain leader");
     assert_eq!(
         metrics1_after.current_leader, metrics2_after.current_leader,
         "majority partition nodes should agree on leader"
@@ -341,49 +264,19 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 = create_raft_node_sqlite(
-        NodeId(1),
-        "follower_crash_seed_456",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft2 = create_raft_node_sqlite(
-        NodeId(2),
-        "follower_crash_seed_456",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft3 = create_raft_node_sqlite(
-        NodeId(3),
-        "follower_crash_seed_456",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
+    let raft1 = create_raft_node_sqlite(NodeId(1), "follower_crash_seed_456", router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_sqlite(NodeId(2), "follower_crash_seed_456", router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_sqlite(NodeId(3), "follower_crash_seed_456", router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -391,10 +284,7 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -441,8 +331,7 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     artifact = artifact.add_event("wait: for replication");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
-    artifact =
-        artifact.add_event("validation: writes succeeded with SQLite despite follower crash");
+    artifact = artifact.add_event("validation: writes succeeded with SQLite despite follower crash");
     // Check that the leader and remaining follower have both entries
     let remaining_follower_id = if follower_id == NodeId::from(1) {
         if leader_id == NodeId::from(2) {
@@ -465,14 +354,8 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
     let leader_metrics = leader_raft.metrics().borrow().clone();
     let follower_metrics = remaining_follower.metrics().borrow().clone();
 
-    assert!(
-        leader_metrics.last_applied.is_some(),
-        "leader should have applied writes"
-    );
-    assert!(
-        follower_metrics.last_applied.is_some(),
-        "remaining follower should have applied writes"
-    );
+    assert!(leader_metrics.last_applied.is_some(), "leader should have applied writes");
+    assert!(follower_metrics.last_applied.is_some(), "remaining follower should have applied writes");
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -489,57 +372,29 @@ async fn test_sqlite_follower_crash_recovery_seed_456() {
 #[madsim::test]
 async fn test_sqlite_concurrent_writes_seed_789() {
     let seed = 789_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_sqlite_concurrent_writes", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_sqlite_concurrent_writes", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
     let injector = Arc::new(FailureInjector::new());
 
     artifact = artifact.add_event("create: 3 raft nodes with SQLite backend");
-    let raft1 = create_raft_node_sqlite(
-        NodeId(1),
-        "concurrent_writes_seed_789",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft2 = create_raft_node_sqlite(
-        NodeId(2),
-        "concurrent_writes_seed_789",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
-    let raft3 = create_raft_node_sqlite(
-        NodeId(3),
-        "concurrent_writes_seed_789",
-        router.clone(),
-        injector.clone(),
-    )
-    .await;
+    let raft1 =
+        create_raft_node_sqlite(NodeId(1), "concurrent_writes_seed_789", router.clone(), injector.clone()).await;
+    let raft2 =
+        create_raft_node_sqlite(NodeId(2), "concurrent_writes_seed_789", router.clone(), injector.clone()).await;
+    let raft3 =
+        create_raft_node_sqlite(NodeId(3), "concurrent_writes_seed_789", router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -547,10 +402,7 @@ async fn test_sqlite_concurrent_writes_seed_789() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -612,20 +464,11 @@ async fn test_sqlite_concurrent_writes_seed_789() {
     let leader_metrics = leader_raft.metrics().borrow().clone();
     let follower_metrics = remaining_follower.metrics().borrow().clone();
 
-    assert!(
-        leader_metrics.last_applied.is_some(),
-        "leader should have applied concurrent writes"
-    );
-    assert!(
-        follower_metrics.last_applied.is_some(),
-        "remaining follower should have applied concurrent writes"
-    );
+    assert!(leader_metrics.last_applied.is_some(), "leader should have applied concurrent writes");
+    assert!(follower_metrics.last_applied.is_some(), "remaining follower should have applied concurrent writes");
 
     // Verify that all writes were applied (1 + 4 concurrent = 5 total)
-    assert!(
-        leader_metrics.last_applied.unwrap().index >= 5,
-        "leader should have applied at least 5 log entries"
-    );
+    assert!(leader_metrics.last_applied.unwrap().index >= 5, "leader should have applied at least 5 log entries");
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {

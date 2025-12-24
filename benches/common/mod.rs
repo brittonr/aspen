@@ -8,13 +8,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use openraft::{Config, ServerState};
-use tempfile::TempDir;
-
 use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{NodeId, RaftMemberInfo};
-use aspen::testing::{AspenRouter, create_test_raft_member_info};
+use aspen::raft::types::NodeId;
+use aspen::raft::types::RaftMemberInfo;
+use aspen::testing::AspenRouter;
+use aspen::testing::create_test_raft_member_info;
+use openraft::Config;
+use openraft::ServerState;
+use tempfile::TempDir;
 
 /// Default timeout for cluster operations.
 pub fn default_timeout() -> Option<Duration> {
@@ -45,10 +47,7 @@ pub async fn setup_single_node_cluster() -> Result<(AspenRouter, NodeId)> {
     node.initialize(members).await?;
 
     // Wait for leader election
-    router
-        .wait(0, default_timeout())
-        .state(ServerState::Leader, "node 0 is leader")
-        .await?;
+    router.wait(0, default_timeout()).state(ServerState::Leader, "node 0 is leader").await?;
 
     Ok((router, NodeId::from(0)))
 }
@@ -86,10 +85,7 @@ pub async fn setup_three_node_cluster() -> Result<(AspenRouter, NodeId)> {
     node0.initialize(members).await?;
 
     // Wait for leader election
-    router
-        .wait(0, default_timeout())
-        .state(ServerState::Leader, "leader elected")
-        .await?;
+    router.wait(0, default_timeout()).state(ServerState::Leader, "leader elected").await?;
 
     Ok((router, NodeId::from(0)))
 }
@@ -109,10 +105,7 @@ pub async fn populate_test_data(router: &AspenRouter, node_id: NodeId, count: us
         for i in batch_start..batch_end {
             let key = format!("key-{:06}", i);
             let value = format!("value-{:06}", i);
-            router
-                .write(node_id, key, value)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            router.write(node_id, key, value).await.map_err(|e| anyhow::anyhow!("{}", e))?;
         }
     }
 
@@ -178,11 +171,7 @@ pub enum Operation {
 ///
 /// Tiger Style: bounded size, pre-allocated capacity.
 #[allow(dead_code)]
-pub fn generate_workload(
-    pattern: WorkloadPattern,
-    count: usize,
-    key_space: usize,
-) -> Vec<Operation> {
+pub fn generate_workload(pattern: WorkloadPattern, count: usize, key_space: usize) -> Vec<Operation> {
     let (read_pct, _write_pct) = pattern.ratios();
     let mut ops = Vec::with_capacity(count);
 
@@ -234,9 +223,7 @@ pub fn setup_sqlite_state_machine() -> Result<(Arc<SqliteStateMachine>, TempDir)
 ///
 /// Tiger Style: Explicit pool size parameter.
 #[allow(dead_code)]
-pub fn setup_sqlite_state_machine_with_pool(
-    pool_size: u32,
-) -> Result<(Arc<SqliteStateMachine>, TempDir)> {
+pub fn setup_sqlite_state_machine_with_pool(pool_size: u32) -> Result<(Arc<SqliteStateMachine>, TempDir)> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("state-machine.db");
     let sm = SqliteStateMachine::with_pool_size(&db_path, pool_size)?;
@@ -277,10 +264,13 @@ pub const VALUE_SIZE_LARGE: usize = 65536;
 // Production Node Setup Helpers (Real Storage + Networking)
 // ====================================================================================
 
-use aspen::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
-};
-use aspen::node::{Node, NodeBuilder};
+use aspen::api::AddLearnerRequest;
+use aspen::api::ChangeMembershipRequest;
+use aspen::api::ClusterController;
+use aspen::api::ClusterNode;
+use aspen::api::InitRequest;
+use aspen::node::Node;
+use aspen::node::NodeBuilder;
 use aspen::raft::storage::StorageBackend;
 
 /// Setup a single production node with SQLite storage for realistic benchmarking.
@@ -470,20 +460,13 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .await?;
 
     // Promote learners to voters
-    raft1
-        .change_membership(ChangeMembershipRequest {
-            members: vec![1, 2, 3],
-        })
-        .await?;
+    raft1.change_membership(ChangeMembershipRequest { members: vec![1, 2, 3] }).await?;
 
     // Wait for membership change to propagate to all nodes
     raft1
         .raft()
         .wait(Some(Duration::from_secs(10)))
-        .voter_ids(
-            [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
-            "all nodes are voters",
-        )
+        .voter_ids([NodeId::from(1), NodeId::from(2), NodeId::from(3)], "all nodes are voters")
         .await?;
 
     Ok(vec![node1, node2, node3])
@@ -590,20 +573,13 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .await?;
 
     // Promote learners to voters
-    raft1
-        .change_membership(ChangeMembershipRequest {
-            members: vec![1, 2, 3],
-        })
-        .await?;
+    raft1.change_membership(ChangeMembershipRequest { members: vec![1, 2, 3] }).await?;
 
     // Wait for membership change to propagate to all nodes
     raft1
         .raft()
         .wait(Some(Duration::from_secs(10)))
-        .voter_ids(
-            [NodeId::from(1), NodeId::from(2), NodeId::from(3)],
-            "all nodes are voters",
-        )
+        .voter_ids([NodeId::from(1), NodeId::from(2), NodeId::from(3)], "all nodes are voters")
         .await?;
 
     Ok(vec![node1, node2, node3])

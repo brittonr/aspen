@@ -48,10 +48,7 @@ pub fn sanitize_error_for_client(err: &anyhow::Error) -> String {
         return "operation timed out".to_string();
     }
 
-    if err_string.contains("connection")
-        || err_string.contains("network")
-        || err_string.contains("unreachable")
-    {
+    if err_string.contains("connection") || err_string.contains("network") || err_string.contains("unreachable") {
         return "network error".to_string();
     }
 
@@ -175,19 +172,13 @@ pub fn sanitize_kv_error(err: &crate::api::KeyValueStoreError) -> String {
             topology_version,
             ..
         } => {
-            format!(
-                "key moved to shard {}; update topology (version {})",
-                new_shard_id, topology_version
-            )
+            format!("key moved to shard {}; update topology (version {})", new_shard_id, topology_version)
         }
         KeyValueStoreError::ShardNotReady { shard_id, state } => {
             format!("shard {} is {}; retry later", shard_id, state)
         }
         KeyValueStoreError::TopologyVersionMismatch { expected, actual } => {
-            format!(
-                "topology version mismatch: expected {}, got {}",
-                expected, actual
-            )
+            format!("topology version mismatch: expected {}, got {}", expected, actual)
         }
     }
 }

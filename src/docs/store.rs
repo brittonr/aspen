@@ -19,21 +19,32 @@
 //! - Fail-fast on file I/O errors
 //! - Fixed 32-byte secrets (64 hex characters)
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
-use iroh::{Endpoint, EndpointAddr};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
+use iroh_docs::Author;
+use iroh_docs::NamespaceId;
+use iroh_docs::NamespaceSecret;
 use iroh_docs::actor::SyncHandle;
-use iroh_docs::net::{self, AcceptOutcome, ConnectError, SyncFinished};
+use iroh_docs::net::AcceptOutcome;
+use iroh_docs::net::ConnectError;
+use iroh_docs::net::SyncFinished;
+use iroh_docs::net::{self};
 use iroh_docs::store::Store;
-use iroh_docs::{Author, NamespaceId, NamespaceSecret};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use super::constants::MAX_DOCS_CONNECTIONS;
 use crate::blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
@@ -161,11 +172,7 @@ impl DocsSyncResources {
     /// # Returns
     /// * `Ok(SyncFinished)` - Sync completed successfully with details
     /// * `Err(ConnectError)` - Connection or sync protocol failed
-    pub async fn sync_with_peer(
-        &self,
-        endpoint: &Endpoint,
-        peer: EndpointAddr,
-    ) -> Result<SyncFinished, ConnectError> {
+    pub async fn sync_with_peer(&self, endpoint: &Endpoint, peer: EndpointAddr) -> Result<SyncFinished, ConnectError> {
         debug!(
             peer = %peer.id.fmt_short(),
             namespace = %self.namespace_id,
@@ -595,9 +602,7 @@ impl DocsSyncService {
     /// # Arguments
     /// * `peer_provider` - A function that returns the current list of peers to sync with
     pub fn spawn<F>(self: Arc<Self>, peer_provider: F) -> CancellationToken
-    where
-        F: Fn() -> Vec<EndpointAddr> + Send + Sync + 'static,
-    {
+    where F: Fn() -> Vec<EndpointAddr> + Send + Sync + 'static {
         let cancel = self.cancel.clone();
         let service = self.clone();
 
@@ -608,8 +613,7 @@ impl DocsSyncService {
                 "docs sync service started"
             );
 
-            let mut interval =
-                tokio::time::interval(Duration::from_secs(BACKGROUND_SYNC_INTERVAL_SECS));
+            let mut interval = tokio::time::interval(Duration::from_secs(BACKGROUND_SYNC_INTERVAL_SECS));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
@@ -722,10 +726,7 @@ impl DocsProtocolHandler {
 
 #[allow(refining_impl_trait)]
 impl ProtocolHandler for DocsProtocolHandler {
-    fn accept(
-        &self,
-        connection: Connection,
-    ) -> impl std::future::Future<Output = Result<(), AcceptError>> + Send + '_ {
+    fn accept(&self, connection: Connection) -> impl std::future::Future<Output = Result<(), AcceptError>> + Send + '_ {
         let sync_handle = self.sync_handle.clone();
         let namespace_id = self.namespace_id;
         let semaphore = self.connection_semaphore.clone();
@@ -742,9 +743,7 @@ impl ProtocolHandler for DocsProtocolHandler {
                         max = MAX_DOCS_CONNECTIONS,
                         "docs sync connection limit reached, rejecting"
                     );
-                    return Err(AcceptError::from_err(std::io::Error::other(
-                        "connection limit reached",
-                    )));
+                    return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
                 }
             };
 
@@ -806,9 +805,7 @@ impl ProtocolHandler for DocsProtocolHandler {
                         error = %err,
                         "docs sync failed"
                     );
-                    Err(AcceptError::from_err(std::io::Error::other(
-                        err.to_string(),
-                    )))
+                    Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
                 }
             }
         }
@@ -886,9 +883,7 @@ fn init_in_memory_resources(
     };
 
     // Create replica for the namespace
-    store
-        .new_replica(namespace_secret)
-        .context("failed to create replica")?;
+    store.new_replica(namespace_secret).context("failed to create replica")?;
 
     info!(
         namespace_id = %namespace_id,
@@ -916,17 +911,12 @@ fn init_persistent_resources(
 
     // Create persistent store with path to the database file
     let db_path = docs_dir.join(STORE_DB_FILE);
-    let mut store = Store::persistent(&db_path).with_context(|| {
-        format!(
-            "failed to create persistent iroh-docs store at {}",
-            db_path.display()
-        )
-    })?;
+    let mut store = Store::persistent(&db_path)
+        .with_context(|| format!("failed to create persistent iroh-docs store at {}", db_path.display()))?;
 
     // Load or create namespace secret
     let namespace_secret_path = docs_dir.join(NAMESPACE_SECRET_FILE);
-    let namespace_secret =
-        load_or_create_namespace_secret(&namespace_secret_path, namespace_secret_hex)?;
+    let namespace_secret = load_or_create_namespace_secret(&namespace_secret_path, namespace_secret_hex)?;
     let namespace_id = namespace_secret.id();
 
     // Load or create author secret
@@ -935,9 +925,7 @@ fn init_persistent_resources(
 
     // Check if replica already exists, create if not
     if store.open_replica(&namespace_id).is_err() {
-        store
-            .new_replica(namespace_secret)
-            .context("failed to create replica")?;
+        store.new_replica(namespace_secret).context("failed to create replica")?;
         debug!(namespace_id = %namespace_id, "created new replica");
     } else {
         debug!(namespace_id = %namespace_id, "opened existing replica");
@@ -964,10 +952,7 @@ fn init_persistent_resources(
 /// 1. Config value (hex string) if provided
 /// 2. Existing file if present
 /// 3. Generate new and persist
-fn load_or_create_namespace_secret(
-    path: &Path,
-    config_hex: Option<&str>,
-) -> Result<NamespaceSecret> {
+fn load_or_create_namespace_secret(path: &Path, config_hex: Option<&str>) -> Result<NamespaceSecret> {
     // Priority 1: Config value
     if let Some(hex) = config_hex {
         let secret = parse_namespace_secret(hex)?;
@@ -987,8 +972,7 @@ fn load_or_create_namespace_secret(
     // Priority 3: Generate new
     let secret = NamespaceSecret::new(&mut rand::rng());
     let hex = hex::encode(secret.to_bytes());
-    std::fs::write(path, &hex)
-        .with_context(|| format!("failed to write namespace secret to {}", path.display()))?;
+    std::fs::write(path, &hex).with_context(|| format!("failed to write namespace secret to {}", path.display()))?;
     info!(path = %path.display(), "generated and persisted new namespace secret");
     Ok(secret)
 }
@@ -1019,8 +1003,7 @@ fn load_or_create_author(path: &Path, config_hex: Option<&str>) -> Result<Author
     // Priority 3: Generate new
     let author = Author::new(&mut rand::rng());
     let hex = hex::encode(author.to_bytes());
-    std::fs::write(path, &hex)
-        .with_context(|| format!("failed to write author secret to {}", path.display()))?;
+    std::fs::write(path, &hex).with_context(|| format!("failed to write author secret to {}", path.display()))?;
     info!(path = %path.display(), "generated and persisted new author");
     Ok(author)
 }
@@ -1029,14 +1012,9 @@ fn load_or_create_author(path: &Path, config_hex: Option<&str>) -> Result<Author
 fn parse_namespace_secret(hex_str: &str) -> Result<NamespaceSecret> {
     let bytes = hex::decode(hex_str).context("invalid namespace secret hex")?;
     if bytes.len() != 32 {
-        anyhow::bail!(
-            "invalid namespace secret length: expected 32 bytes, got {}",
-            bytes.len()
-        );
+        anyhow::bail!("invalid namespace secret length: expected 32 bytes, got {}", bytes.len());
     }
-    let array: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("invalid length"))?;
+    let array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid length"))?;
     Ok(NamespaceSecret::from_bytes(&array))
 }
 
@@ -1044,21 +1022,17 @@ fn parse_namespace_secret(hex_str: &str) -> Result<NamespaceSecret> {
 fn parse_author_secret(hex_str: &str) -> Result<Author> {
     let bytes = hex::decode(hex_str).context("invalid author secret hex")?;
     if bytes.len() != 32 {
-        anyhow::bail!(
-            "invalid author secret length: expected 32 bytes, got {}",
-            bytes.len()
-        );
+        anyhow::bail!("invalid author secret length: expected 32 bytes, got {}", bytes.len());
     }
-    let array: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("invalid length"))?;
+    let array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid length"))?;
     Ok(Author::from_bytes(&array))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_init_in_memory_resources() {

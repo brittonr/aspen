@@ -20,7 +20,9 @@
 //! - No dynamic allocation
 //! - Explicit bounds checking
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 /// Jump consistent hash implementation.
 ///
@@ -90,9 +92,7 @@ impl JumpHash {
             // Linear congruential generator for deterministic random sequence
             key = key.wrapping_mul(2862933555777941757).wrapping_add(1);
             // Use upper bits of key for floating point calculation
-            j = ((b.wrapping_add(1) as f64)
-                * (((1_i64) << 31) as f64 / ((key >> 33).wrapping_add(1) as f64)))
-                as i64;
+            j = ((b.wrapping_add(1) as f64) * (((1_i64) << 31) as f64 / ((key >> 33).wrapping_add(1) as f64))) as i64;
         }
 
         b as u32
@@ -139,12 +139,7 @@ mod tests {
             for i in 0..1000 {
                 let key = format!("key_{}", i);
                 let bucket = JumpHash::hash(&key, num_buckets);
-                assert!(
-                    bucket < num_buckets,
-                    "bucket {} >= num_buckets {}",
-                    bucket,
-                    num_buckets
-                );
+                assert!(bucket < num_buckets, "bucket {} >= num_buckets {}", bucket, num_buckets);
             }
         }
     }

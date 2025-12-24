@@ -43,7 +43,10 @@ use aspen::testing::AspenRouter;
 use openraft::Config;
 
 mod soak;
-use soak::{SoakMetricsCollector, SoakTestConfig, Workload, WorkloadOp};
+use soak::SoakMetricsCollector;
+use soak::SoakTestConfig;
+use soak::Workload;
+use soak::WorkloadOp;
 
 /// Deterministic latency values for madsim simulation (in microseconds)
 const SIMULATED_WRITE_LATENCY_US: u64 = 5000; // 5ms - typical Raft write latency
@@ -84,16 +87,12 @@ async fn run_soak_workload(
     metrics: &SoakMetricsCollector,
     _config: &SoakTestConfig,
 ) -> anyhow::Result<()> {
-    let leader = router
-        .leader()
-        .ok_or_else(|| anyhow::anyhow!("no leader found"))?;
+    let leader = router.leader().ok_or_else(|| anyhow::anyhow!("no leader found"))?;
 
     let mut key_values: HashMap<String, String> = HashMap::new();
 
     for i in 0..workload.len() {
-        let (op_type, key_id) = workload
-            .get(i)
-            .ok_or_else(|| anyhow::anyhow!("workload index {} out of bounds", i))?;
+        let (op_type, key_id) = workload.get(i).ok_or_else(|| anyhow::anyhow!("workload index {} out of bounds", i))?;
 
         let key = format!("soak-key-{}", key_id);
 
@@ -179,11 +178,7 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
     let (router, _initial_log_index) = init_soak_cluster().await?;
 
     // Generate deterministic workload
-    let workload = Workload::generate(
-        config.max_total_operations,
-        config.read_percentage,
-        config.key_space_size,
-    );
+    let workload = Workload::generate(config.max_total_operations, config.read_percentage, config.key_space_size);
 
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
@@ -200,18 +195,9 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
     println!("Writes failed:      {}", final_metrics.writes_failed);
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Reads failed:       {}", final_metrics.reads_failed);
-    println!(
-        "Success rate:       {:.2}%",
-        final_metrics.success_rate_percent()
-    );
-    println!(
-        "Avg write latency:  {:.2}ms",
-        final_metrics.avg_write_latency_ms()
-    );
-    println!(
-        "Avg read latency:   {:.2}ms",
-        final_metrics.avg_read_latency_ms()
-    );
+    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!("Avg write latency:  {:.2}ms", final_metrics.avg_write_latency_ms());
+    println!("Avg read latency:   {:.2}ms", final_metrics.avg_read_latency_ms());
     println!(
         "Throughput:         {:.2} ops/sec",
         final_metrics.total_operations() as f64 / duration.as_secs_f64()
@@ -224,18 +210,11 @@ async fn test_soak_sustained_write_1000_ops() -> anyhow::Result<()> {
         final_metrics.success_rate_percent()
     );
 
-    assert_eq!(
-        final_metrics.total_operations(),
-        config.max_total_operations,
-        "should complete all operations"
-    );
+    assert_eq!(final_metrics.total_operations(), config.max_total_operations, "should complete all operations");
 
     // Persist test artifact
     let result = soak::SoakTestResult {
-        config_summary: format!(
-            "1000 ops, {}% reads, {} key space",
-            config.read_percentage, config.key_space_size
-        ),
+        config_summary: format!("1000 ops, {}% reads, {} key space", config.read_percentage, config.key_space_size),
         total_duration_seconds: duration.as_secs_f64(),
         final_metrics,
         checkpoints: vec![], // No checkpoints for short test
@@ -282,11 +261,7 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
     let (router, _initial_log_index) = init_soak_cluster().await?;
 
     // Generate deterministic workload
-    let workload = Workload::generate(
-        config.max_total_operations,
-        config.read_percentage,
-        config.key_space_size,
-    );
+    let workload = Workload::generate(config.max_total_operations, config.read_percentage, config.key_space_size);
 
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
@@ -303,18 +278,9 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
     println!("Writes failed:      {}", final_metrics.writes_failed);
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Reads failed:       {}", final_metrics.reads_failed);
-    println!(
-        "Success rate:       {:.2}%",
-        final_metrics.success_rate_percent()
-    );
-    println!(
-        "Avg write latency:  {:.2}ms",
-        final_metrics.avg_write_latency_ms()
-    );
-    println!(
-        "Avg read latency:   {:.2}ms",
-        final_metrics.avg_read_latency_ms()
-    );
+    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!("Avg write latency:  {:.2}ms", final_metrics.avg_write_latency_ms());
+    println!("Avg read latency:   {:.2}ms", final_metrics.avg_read_latency_ms());
     println!(
         "Throughput:         {:.2} ops/sec",
         final_metrics.total_operations() as f64 / duration.as_secs_f64()
@@ -322,30 +288,12 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
 
     // Print latency distribution
     println!("\nWrite latency distribution:");
-    println!(
-        "  < 1ms:      {}",
-        final_metrics.write_latency_buckets_us[0]
-    );
-    println!(
-        "  1-10ms:     {}",
-        final_metrics.write_latency_buckets_us[1]
-    );
-    println!(
-        "  10-100ms:   {}",
-        final_metrics.write_latency_buckets_us[2]
-    );
-    println!(
-        "  100ms-1s:   {}",
-        final_metrics.write_latency_buckets_us[3]
-    );
-    println!(
-        "  1s-10s:     {}",
-        final_metrics.write_latency_buckets_us[4]
-    );
-    println!(
-        "  10s+:       {}",
-        final_metrics.write_latency_buckets_us[5]
-    );
+    println!("  < 1ms:      {}", final_metrics.write_latency_buckets_us[0]);
+    println!("  1-10ms:     {}", final_metrics.write_latency_buckets_us[1]);
+    println!("  10-100ms:   {}", final_metrics.write_latency_buckets_us[2]);
+    println!("  100ms-1s:   {}", final_metrics.write_latency_buckets_us[3]);
+    println!("  1s-10s:     {}", final_metrics.write_latency_buckets_us[4]);
+    println!("  10s+:       {}", final_metrics.write_latency_buckets_us[5]);
 
     // Assertions
     assert!(
@@ -354,18 +302,13 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
         final_metrics.success_rate_percent()
     );
 
-    assert_eq!(
-        final_metrics.total_operations(),
-        config.max_total_operations,
-        "should complete all operations"
-    );
+    assert_eq!(final_metrics.total_operations(), config.max_total_operations, "should complete all operations");
 
     // Verify most operations complete with low latency (< 100ms)
     let low_latency_count = final_metrics.write_latency_buckets_us[0]
         + final_metrics.write_latency_buckets_us[1]
         + final_metrics.write_latency_buckets_us[2];
-    let low_latency_percentage =
-        (low_latency_count as f64 / final_metrics.writes_successful as f64) * 100.0;
+    let low_latency_percentage = (low_latency_count as f64 / final_metrics.writes_successful as f64) * 100.0;
 
     assert!(
         low_latency_percentage >= 80.0,
@@ -375,10 +318,7 @@ async fn test_soak_sustained_write_50k_ops() -> anyhow::Result<()> {
 
     // Persist test artifact
     let result = soak::SoakTestResult {
-        config_summary: format!(
-            "50k ops, {}% reads, {} key space",
-            config.read_percentage, config.key_space_size
-        ),
+        config_summary: format!("50k ops, {}% reads, {} key space", config.read_percentage, config.key_space_size),
         total_duration_seconds: duration.as_secs_f64(),
         final_metrics,
         checkpoints: vec![], // Future: collect periodic checkpoints
@@ -416,11 +356,7 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     let (router, _initial_log_index) = init_soak_cluster().await?;
 
     // Generate read-heavy workload
-    let workload = Workload::generate(
-        config.max_total_operations,
-        config.read_percentage,
-        config.key_space_size,
-    );
+    let workload = Workload::generate(config.max_total_operations, config.read_percentage, config.key_space_size);
 
     // Execute workload
     run_soak_workload(&router, &workload, &metrics, &config).await?;
@@ -433,14 +369,8 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     println!("Duration:           {:.2}s", duration.as_secs_f64());
     println!("Reads successful:   {}", final_metrics.reads_successful);
     println!("Writes successful:  {}", final_metrics.writes_successful);
-    println!(
-        "Success rate:       {:.2}%",
-        final_metrics.success_rate_percent()
-    );
-    println!(
-        "Avg read latency:   {:.2}ms",
-        final_metrics.avg_read_latency_ms()
-    );
+    println!("Success rate:       {:.2}%", final_metrics.success_rate_percent());
+    println!("Avg read latency:   {:.2}ms", final_metrics.avg_read_latency_ms());
 
     // Assertions
     assert!(
@@ -450,13 +380,8 @@ async fn test_soak_read_heavy_workload() -> anyhow::Result<()> {
     );
 
     // Verify read:write ratio is approximately 90:10
-    let read_ratio =
-        (final_metrics.reads_successful as f64 / final_metrics.total_operations() as f64) * 100.0;
-    assert!(
-        (85.0..=95.0).contains(&read_ratio),
-        "read ratio should be ~90%, got {:.2}%",
-        read_ratio
-    );
+    let read_ratio = (final_metrics.reads_successful as f64 / final_metrics.total_operations() as f64) * 100.0;
+    assert!((85.0..=95.0).contains(&read_ratio), "read ratio should be ~90%, got {:.2}%", read_ratio);
 
     // Persist test artifact
     let result = soak::SoakTestResult {

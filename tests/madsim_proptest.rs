@@ -1,11 +1,18 @@
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::time::Duration;
+
 /// Property-based testing for AspenRaftTester using proptest and madsim.
 ///
 /// This module combines proptest's property generation with madsim's deterministic
 /// simulation to thoroughly test Raft invariants under various conditions.
-use aspen::testing::{AspenRaftTester, BuggifyFault};
+use aspen::testing::AspenRaftTester;
+/// Property-based testing for AspenRaftTester using proptest and madsim.
+///
+/// This module combines proptest's property generation with madsim's deterministic
+/// simulation to thoroughly test Raft invariants under various conditions.
+use aspen::testing::BuggifyFault;
 use proptest::prelude::*;
-use std::collections::{BTreeSet, HashMap};
-use std::time::Duration;
 
 /// Operation that can be performed on the Raft cluster
 #[derive(Debug, Clone)]
@@ -85,16 +92,13 @@ struct TestConfig {
 
 /// Generate test configurations
 fn arb_test_config() -> impl Strategy<Value = TestConfig> {
-    (
-        prop::collection::vec(arb_operation(7), 10..50),
-        0u64..1000000,
-        prop::bool::ANY,
-    )
-        .prop_map(|(operations, seed, enable_buggify)| TestConfig {
+    (prop::collection::vec(arb_operation(7), 10..50), 0u64..1000000, prop::bool::ANY).prop_map(
+        |(operations, seed, enable_buggify)| TestConfig {
             operations,
             seed,
             enable_buggify,
-        })
+        },
+    )
 }
 
 /// Test linearizability: All reads must see the last written value
@@ -102,12 +106,8 @@ fn arb_test_config() -> impl Strategy<Value = TestConfig> {
 async fn test_proptest_linearizability() {
     // Run seeds 0-4 (~7-9s each, ~40s total)
     for seed in 0..5 {
-        let mut tester = AspenRaftTester::new_with_seed(
-            3,
-            &format!("proptest_linearizability_{}", seed),
-            seed * 12345,
-        )
-        .await;
+        let mut tester =
+            AspenRaftTester::new_with_seed(3, &format!("proptest_linearizability_{}", seed), seed * 12345).await;
 
         // Enable BUGGIFY for some runs
         if seed % 2 == 0 {
@@ -160,12 +160,8 @@ async fn test_proptest_linearizability() {
 #[madsim::test]
 async fn test_proptest_leader_safety() {
     for seed in 0..4 {
-        let mut tester = AspenRaftTester::new_with_seed(
-            3,
-            &format!("proptest_leader_safety_{}", seed),
-            seed * 54321,
-        )
-        .await;
+        let mut tester =
+            AspenRaftTester::new_with_seed(3, &format!("proptest_leader_safety_{}", seed), seed * 54321).await;
 
         if seed % 3 == 0 {
             tester.enable_buggify(None);
@@ -186,9 +182,7 @@ async fn test_proptest_leader_safety() {
 
             // Apply faults less frequently to avoid race conditions
             if seed % 3 == 0 && i % 5 == 2 {
-                tester
-                    .apply_single_fault(BuggifyFault::ElectionTimeout)
-                    .await;
+                tester.apply_single_fault(BuggifyFault::ElectionTimeout).await;
             }
 
             // Let things settle longer to avoid race conditions
@@ -230,12 +224,8 @@ async fn test_proptest_leader_safety() {
 #[madsim::test]
 async fn test_proptest_log_matching() {
     for seed in 0..5 {
-        let mut tester = AspenRaftTester::new_with_seed(
-            3,
-            &format!("proptest_log_matching_{}", seed),
-            seed * 99999,
-        )
-        .await;
+        let mut tester =
+            AspenRaftTester::new_with_seed(3, &format!("proptest_log_matching_{}", seed), seed * 99999).await;
 
         // Perform writes to build up the log
         for i in 0..10 {
@@ -303,12 +293,8 @@ async fn test_proptest_log_matching() {
 #[madsim::test]
 async fn test_proptest_membership_safety() {
     for seed in 0..5 {
-        let mut tester = AspenRaftTester::new_with_seed(
-            3,
-            &format!("proptest_membership_safety_{}", seed),
-            seed * 11111,
-        )
-        .await;
+        let mut tester =
+            AspenRaftTester::new_with_seed(3, &format!("proptest_membership_safety_{}", seed), seed * 11111).await;
 
         // Track membership changes
         let mut membership_history = Vec::new();
@@ -324,8 +310,7 @@ async fn test_proptest_membership_safety() {
                         && leader_idx != target_node
                     {
                         let _ = tester.add_learner(target_node).await;
-                        membership_history
-                            .push(format!("Converted node {} to learner", target_node));
+                        membership_history.push(format!("Converted node {} to learner", target_node));
                     }
                 }
                 1 => {
@@ -350,8 +335,7 @@ async fn test_proptest_membership_safety() {
                         && let Some(node_to_remove) = voters.iter().max()
                     {
                         let node_id = *node_to_remove;
-                        let new_voters: Vec<usize> =
-                            voters.iter().filter(|&&v| v != node_id).copied().collect();
+                        let new_voters: Vec<usize> = voters.iter().filter(|&&v| v != node_id).copied().collect();
                         let _ = tester.change_membership(&new_voters).await;
                         membership_history.push(format!("Removed node {}", node_id));
                     }
@@ -398,12 +382,8 @@ async fn test_proptest_fault_recovery() {
     // - Non-blocking leader check in fault injection
     // Seeds 0, 1, 2 (66666) all now complete successfully
     for seed in 0..3 {
-        let mut tester = AspenRaftTester::new_with_seed(
-            3,
-            &format!("proptest_fault_recovery_{}", seed),
-            seed * 33333,
-        )
-        .await;
+        let mut tester =
+            AspenRaftTester::new_with_seed(3, &format!("proptest_fault_recovery_{}", seed), seed * 33333).await;
 
         // Always enable BUGGIFY for fault recovery tests
         tester.enable_buggify(None);
@@ -418,16 +398,8 @@ async fn test_proptest_fault_recovery() {
                 0 => tester.apply_single_fault(BuggifyFault::NetworkDelay).await,
                 1 => tester.apply_single_fault(BuggifyFault::NetworkDrop).await,
                 2 => tester.apply_single_fault(BuggifyFault::SlowDisk).await,
-                3 => {
-                    tester
-                        .apply_single_fault(BuggifyFault::MessageCorruption)
-                        .await
-                }
-                4 => {
-                    tester
-                        .apply_single_fault(BuggifyFault::ElectionTimeout)
-                        .await
-                }
+                3 => tester.apply_single_fault(BuggifyFault::MessageCorruption).await,
+                4 => tester.apply_single_fault(BuggifyFault::ElectionTimeout).await,
                 _ => {}
             }
 
@@ -495,25 +467,16 @@ fn test_strategy_generation() {
         .run(&arb_operation(7), |op| {
             match op {
                 RaftOperation::AddLearner { node_id } => {
-                    prop_assert!(
-                        (3..7).contains(&node_id),
-                        "Invalid learner node_id: {}",
-                        node_id
-                    );
+                    prop_assert!((3..7).contains(&node_id), "Invalid learner node_id: {}", node_id);
                 }
-                RaftOperation::PromoteToVoter { node_id }
-                | RaftOperation::RemoveNode { node_id } => {
+                RaftOperation::PromoteToVoter { node_id } | RaftOperation::RemoveNode { node_id } => {
                     prop_assert!(node_id < 7, "Invalid node_id: {}", node_id);
                 }
                 RaftOperation::TriggerElection { node_id } => {
                     prop_assert!(node_id < 3, "Invalid election node_id: {}", node_id);
                 }
                 RaftOperation::Sleep { millis } => {
-                    prop_assert!(
-                        (10..1000).contains(&millis),
-                        "Invalid sleep duration: {}",
-                        millis
-                    );
+                    prop_assert!((10..1000).contains(&millis), "Invalid sleep duration: {}", millis);
                 }
                 _ => {} // Other operations are always valid
             }
@@ -524,10 +487,7 @@ fn test_strategy_generation() {
     // Test config generation
     runner
         .run(&arb_test_config(), |config| {
-            prop_assert!(
-                !config.operations.is_empty(),
-                "Generated empty operations list"
-            );
+            prop_assert!(!config.operations.is_empty(), "Generated empty operations list");
             prop_assert!(
                 config.operations.len() >= 10 && config.operations.len() <= 50,
                 "Invalid operations count: {}",

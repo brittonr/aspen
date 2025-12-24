@@ -56,4 +56,6 @@ mod subspace;
 mod tuple;
 
 pub use subspace::Subspace;
-pub use tuple::{Element, Tuple, TupleError};
+pub use tuple::Element;
+pub use tuple::Tuple;
+pub use tuple::TupleError;

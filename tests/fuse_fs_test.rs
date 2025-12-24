@@ -78,11 +78,7 @@ mod fuse_integration {
     /// Test key to path conversion logic.
     #[test]
     fn test_key_to_path_conversion() {
-        let test_cases = vec![
-            ("myapp/config/db", "myapp/config/db"),
-            ("simple", "simple"),
-            ("", ""),
-        ];
+        let test_cases = vec![("myapp/config/db", "myapp/config/db"), ("simple", "simple"), ("", "")];
 
         for (input, expected) in test_cases {
             let result = if input.is_empty() {
@@ -159,13 +155,7 @@ mod fuse_integration {
     /// Test inode hashing produces different results for different paths.
     #[test]
     fn test_inode_hashing_uniqueness() {
-        let paths = vec![
-            "path/a",
-            "path/b",
-            "path/c",
-            "different/path",
-            "another/one",
-        ];
+        let paths = vec!["path/a", "path/b", "path/c", "different/path", "another/one"];
 
         let mut inodes: std::collections::HashSet<u64> = std::collections::HashSet::new();
 
@@ -276,7 +266,9 @@ mod tiger_style {
 
 /// Tests for FUSE attribute generation.
 mod attributes {
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::Duration;
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
 
     /// Root inode number (always 1 per FUSE convention).
     const ROOT_INODE: u64 = 1;

@@ -11,8 +11,9 @@
 //! - Invalid key/value types
 //! - Deeply nested structures
 
-use bolero::check;
 use std::collections::BTreeMap;
+
+use bolero::check;
 
 #[test]
 fn fuzz_snapshot_json() {

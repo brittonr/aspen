@@ -4,7 +4,8 @@
 //! and graceful shutdown functionality.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use aspen::raft::supervisor::Supervisor;
@@ -72,16 +73,8 @@ async fn test_task_execution() {
         .expect("supervisor task should not panic");
 
     // Verify task was executed
-    assert_eq!(
-        executed.load(Ordering::Relaxed),
-        1,
-        "task should execute once"
-    );
-    assert_eq!(
-        supervisor.restart_count(),
-        0,
-        "no restarts for successful task"
-    );
+    assert_eq!(executed.load(Ordering::Relaxed), 1, "task should execute once");
+    assert_eq!(supervisor.restart_count(), 0, "no restarts for successful task");
 }
 
 /// Test that supervisor respects MAX_RESTARTS limit via should_restart() logic.
@@ -108,11 +101,7 @@ async fn test_circuit_breaker_after_max_restarts() {
     );
 
     // Verify restart count
-    assert_eq!(
-        supervisor.restart_count(),
-        3,
-        "should have recorded exactly 3 restarts"
-    );
+    assert_eq!(supervisor.restart_count(), 3, "should have recorded exactly 3 restarts");
 }
 
 /// Test that stop() immediately stops the supervisor.
@@ -239,10 +228,7 @@ async fn test_should_attempt_recovery_respects_limit() {
 
     supervisor.record_health_failure("failure 3").await;
     // After 3 failures (MAX_RESTARTS), should_attempt_recovery returns false
-    assert!(
-        !supervisor.should_attempt_recovery().await,
-        "should not allow recovery after MAX_RESTARTS failures"
-    );
+    assert!(!supervisor.should_attempt_recovery().await, "should not allow recovery after MAX_RESTARTS failures");
 }
 
 /// Test that restart times outside the window are pruned.

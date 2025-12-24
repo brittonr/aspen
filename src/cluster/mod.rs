@@ -3,7 +3,8 @@
 //! This module provides the infrastructure for distributed cluster coordination,
 //! including:
 //!
-//! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal (exclusive inter-node transport)
+//! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal (exclusive
+//!   inter-node transport)
 //! - **Gossip-based Peer Discovery**: Automatic node discovery via iroh-gossip (default)
 //! - **Cluster Tickets**: Compact bootstrap information for joining clusters
 //! - **Manual Peer Configuration**: Explicit peer list as fallback when gossip is disabled
@@ -79,10 +80,15 @@ use std::fmt;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use iroh::Endpoint as IrohEndpoint;
+use iroh::EndpointAddr;
+use iroh::RelayMode;
+use iroh::SecretKey;
 use iroh::protocol::Router;
-use iroh::{Endpoint as IrohEndpoint, EndpointAddr, RelayMode, SecretKey};
-use iroh_gossip::net::{GOSSIP_ALPN, Gossip};
+use iroh_gossip::net::GOSSIP_ALPN;
+use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
 
 pub mod bootstrap;
@@ -306,12 +312,7 @@ impl IrohEndpointManager {
 
             // Optionally bind IPv6 for dual-stack
             if config.enable_ipv6 {
-                let bind_addr_v6 = std::net::SocketAddrV6::new(
-                    std::net::Ipv6Addr::UNSPECIFIED,
-                    config.bind_port,
-                    0,
-                    0,
-                );
+                let bind_addr_v6 = std::net::SocketAddrV6::new(std::net::Ipv6Addr::UNSPECIFIED, config.bind_port, 0, 0);
                 builder = builder.bind_addr_v6(bind_addr_v6);
                 tracing::info!(port = config.bind_port, "bound IPv6 address (dual-stack)");
             }
@@ -350,10 +351,7 @@ impl IrohEndpointManager {
             builder = builder.discovery(dns_discovery_builder);
             tracing::info!(
                 "DNS discovery enabled with URL: {}",
-                config
-                    .dns_discovery_url
-                    .as_deref()
-                    .unwrap_or("n0 DNS service (iroh.link)")
+                config.dns_discovery_url.as_deref().unwrap_or("n0 DNS service (iroh.link)")
             );
         }
 
@@ -364,10 +362,7 @@ impl IrohEndpointManager {
             tracing::info!("Pkarr publisher enabled with n0 Pkarr service");
         }
 
-        let endpoint = builder
-            .bind()
-            .await
-            .context("failed to bind Iroh endpoint")?;
+        let endpoint = builder.bind().await.context("failed to bind Iroh endpoint")?;
 
         // Extract node address for discovery (synchronous in 0.95.1)
         let node_addr = endpoint.addr();
@@ -438,7 +433,8 @@ impl IrohEndpointManager {
         R: iroh::protocol::ProtocolHandler,
         T: iroh::protocol::ProtocolHandler,
     {
-        use crate::protocol_handlers::{CLIENT_ALPN, RAFT_ALPN};
+        use crate::protocol_handlers::CLIENT_ALPN;
+        use crate::protocol_handlers::RAFT_ALPN;
 
         let mut builder = Router::builder(self.endpoint.clone());
 
@@ -493,9 +489,10 @@ impl IrohEndpointManager {
         L: iroh::protocol::ProtocolHandler,
         C: iroh::protocol::ProtocolHandler,
     {
-        use crate::protocol_handlers::{
-            CLIENT_ALPN, LOG_SUBSCRIBER_ALPN, RAFT_ALPN, RAFT_AUTH_ALPN,
-        };
+        use crate::protocol_handlers::CLIENT_ALPN;
+        use crate::protocol_handlers::LOG_SUBSCRIBER_ALPN;
+        use crate::protocol_handlers::RAFT_ALPN;
+        use crate::protocol_handlers::RAFT_AUTH_ALPN;
 
         let mut builder = Router::builder(self.endpoint.clone());
 
@@ -566,9 +563,10 @@ impl IrohEndpointManager {
         C: iroh::protocol::ProtocolHandler,
         B: iroh::protocol::ProtocolHandler,
     {
-        use crate::protocol_handlers::{
-            CLIENT_ALPN, LOG_SUBSCRIBER_ALPN, RAFT_ALPN, RAFT_AUTH_ALPN,
-        };
+        use crate::protocol_handlers::CLIENT_ALPN;
+        use crate::protocol_handlers::LOG_SUBSCRIBER_ALPN;
+        use crate::protocol_handlers::RAFT_ALPN;
+        use crate::protocol_handlers::RAFT_AUTH_ALPN;
 
         let mut builder = Router::builder(self.endpoint.clone());
 
@@ -650,10 +648,7 @@ impl IrohEndpointManager {
     pub async fn shutdown(&self) -> Result<()> {
         // Shutdown the Router first (this stops accepting new connections)
         if let Some(router) = &self.router {
-            router
-                .shutdown()
-                .await
-                .context("failed to shutdown Iroh Router")?;
+            router.shutdown().await.context("failed to shutdown Iroh Router")?;
             tracing::info!("Iroh Router shutdown complete");
         }
 

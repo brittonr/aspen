@@ -15,7 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use futures::stream;
 use openraft::entry::RaftEntry;
 use openraft::storage::RaftStateMachine;
@@ -33,17 +35,11 @@ fn create_temp_sm() -> (Arc<SqliteStateMachine>, TempDir) {
 /// Helper to get current time in milliseconds.
 #[allow(dead_code)]
 fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 /// Helper to create a log entry for applying to state machine.
-fn make_entry(
-    index: u64,
-    request: AppRequest,
-) -> <AppTypeConfig as openraft::RaftTypeConfig>::Entry {
+fn make_entry(index: u64, request: AppRequest) -> <AppTypeConfig as openraft::RaftTypeConfig>::Entry {
     <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId::from(1), index),
         request,
@@ -51,13 +47,8 @@ fn make_entry(
 }
 
 /// Helper to apply a single entry to the state machine.
-async fn apply_entry(
-    sm: &mut Arc<SqliteStateMachine>,
-    entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry,
-) {
-    let entries = Box::pin(stream::once(
-        async move { Ok::<_, io::Error>((entry, None)) },
-    ));
+async fn apply_entry(sm: &mut Arc<SqliteStateMachine>, entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry) {
+    let entries = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
     sm.apply(entries).await.expect("should apply");
 }
 
@@ -69,13 +60,10 @@ async fn apply_entry(
 async fn test_lease_grant_creates_lease() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
-    let entry = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 12345,
-            ttl_seconds: 60,
-        },
-    );
+    let entry = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 12345,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry).await;
 
     // Verify lease was created
@@ -85,10 +73,7 @@ async fn test_lease_grant_creates_lease() {
     let (granted_ttl, remaining_ttl) = lease.unwrap();
     assert_eq!(granted_ttl, 60, "granted TTL should be 60 seconds");
     assert!(remaining_ttl > 0, "remaining TTL should be positive");
-    assert!(
-        remaining_ttl <= 60,
-        "remaining TTL should not exceed granted"
-    );
+    assert!(remaining_ttl <= 60, "remaining TTL should not exceed granted");
 }
 
 #[tokio::test]
@@ -96,13 +81,10 @@ async fn test_lease_grant_with_zero_id_generates_id() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant with lease_id = 0 should generate a new ID
-    let entry = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 0,
-            ttl_seconds: 30,
-        },
-    );
+    let entry = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 0,
+        ttl_seconds: 30,
+    });
     apply_entry(&mut sm, entry).await;
 
     // List leases to find the generated ID
@@ -120,13 +102,10 @@ async fn test_lease_list_returns_all_leases() {
 
     // Create multiple leases
     for i in 1..=5 {
-        let entry = make_entry(
-            i,
-            AppRequest::LeaseGrant {
-                lease_id: i * 100,
-                ttl_seconds: (i * 10) as u32,
-            },
-        );
+        let entry = make_entry(i, AppRequest::LeaseGrant {
+            lease_id: i * 100,
+            ttl_seconds: (i * 10) as u32,
+        });
         apply_entry(&mut sm, entry).await;
     }
 
@@ -135,9 +114,7 @@ async fn test_lease_list_returns_all_leases() {
 
     // Verify each lease
     for i in 1..=5u64 {
-        let found = leases
-            .iter()
-            .any(|(id, ttl, _)| *id == i * 100 && *ttl == (i * 10) as u32);
+        let found = leases.iter().any(|(id, ttl, _)| *id == i * 100 && *ttl == (i * 10) as u32);
         assert!(found, "lease {} should exist with correct TTL", i * 100);
     }
 }
@@ -151,34 +128,25 @@ async fn test_lease_grant_and_attach_keys() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant a lease
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 1000,
-            ttl_seconds: 60,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 1000,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Attach keys to the lease
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithLease {
-            key: "key1".to_string(),
-            value: "value1".to_string(),
-            lease_id: 1000,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithLease {
+        key: "key1".to_string(),
+        value: "value1".to_string(),
+        lease_id: 1000,
+    });
     apply_entry(&mut sm, entry2).await;
 
-    let entry3 = make_entry(
-        3,
-        AppRequest::SetWithLease {
-            key: "key2".to_string(),
-            value: "value2".to_string(),
-            lease_id: 1000,
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::SetWithLease {
+        key: "key2".to_string(),
+        value: "value2".to_string(),
+        lease_id: 1000,
+    });
     apply_entry(&mut sm, entry3).await;
 
     // Verify keys exist
@@ -200,27 +168,21 @@ async fn test_set_multi_with_lease() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant a lease
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 2000,
-            ttl_seconds: 60,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 2000,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Attach multiple keys at once
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetMultiWithLease {
-            pairs: vec![
-                ("batch:a".to_string(), "val_a".to_string()),
-                ("batch:b".to_string(), "val_b".to_string()),
-                ("batch:c".to_string(), "val_c".to_string()),
-            ],
-            lease_id: 2000,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetMultiWithLease {
+        pairs: vec![
+            ("batch:a".to_string(), "val_a".to_string()),
+            ("batch:b".to_string(), "val_b".to_string()),
+            ("batch:c".to_string(), "val_c".to_string()),
+        ],
+        lease_id: 2000,
+    });
     apply_entry(&mut sm, entry2).await;
 
     // Verify all keys exist
@@ -244,33 +206,24 @@ async fn test_lease_revoke_deletes_attached_keys() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant lease and attach keys
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 3000,
-            ttl_seconds: 60,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 3000,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry1).await;
 
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithLease {
-            key: "revoke:key1".to_string(),
-            value: "value1".to_string(),
-            lease_id: 3000,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithLease {
+        key: "revoke:key1".to_string(),
+        value: "value1".to_string(),
+        lease_id: 3000,
+    });
     apply_entry(&mut sm, entry2).await;
 
-    let entry3 = make_entry(
-        3,
-        AppRequest::SetWithLease {
-            key: "revoke:key2".to_string(),
-            value: "value2".to_string(),
-            lease_id: 3000,
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::SetWithLease {
+        key: "revoke:key2".to_string(),
+        value: "value2".to_string(),
+        lease_id: 3000,
+    });
     apply_entry(&mut sm, entry3).await;
 
     // Verify keys exist before revoke
@@ -282,14 +235,8 @@ async fn test_lease_revoke_deletes_attached_keys() {
     apply_entry(&mut sm, entry4).await;
 
     // Verify keys are deleted
-    assert!(
-        sm.get("revoke:key1").await.unwrap().is_none(),
-        "key1 should be deleted after revoke"
-    );
-    assert!(
-        sm.get("revoke:key2").await.unwrap().is_none(),
-        "key2 should be deleted after revoke"
-    );
+    assert!(sm.get("revoke:key1").await.unwrap().is_none(), "key1 should be deleted after revoke");
+    assert!(sm.get("revoke:key2").await.unwrap().is_none(), "key2 should be deleted after revoke");
 
     // Verify lease no longer exists
     let lease = sm.get_lease(3000).expect("should query lease");
@@ -315,13 +262,10 @@ async fn test_lease_keepalive_extends_ttl() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant lease with short TTL
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 4000,
-            ttl_seconds: 5, // 5 second TTL
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 4000,
+        ttl_seconds: 5, // 5 second TTL
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Wait a bit
@@ -364,24 +308,18 @@ async fn test_lease_expiration_marks_keys_for_cleanup() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant lease with very short TTL (1 second)
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 5000,
-            ttl_seconds: 1,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 5000,
+        ttl_seconds: 1,
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Attach a key
-    let entry2 = make_entry(
-        2,
-        AppRequest::SetWithLease {
-            key: "expiring:key".to_string(),
-            value: "will_expire".to_string(),
-            lease_id: 5000,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::SetWithLease {
+        key: "expiring:key".to_string(),
+        value: "will_expire".to_string(),
+        lease_id: 5000,
+    });
     apply_entry(&mut sm, entry2).await;
 
     // Key should exist before expiration
@@ -395,9 +333,7 @@ async fn test_lease_expiration_marks_keys_for_cleanup() {
     assert!(expired_count >= 1, "should have at least 1 expired lease");
 
     // Run cleanup
-    let deleted = sm
-        .delete_expired_leases(100)
-        .expect("should delete expired");
+    let deleted = sm.delete_expired_leases(100).expect("should delete expired");
     assert!(deleted >= 1, "should delete at least 1 expired lease");
 
     // Key should be deleted after cleanup
@@ -413,42 +349,30 @@ async fn test_active_vs_expired_lease_counts() {
 
     // Create some leases: 2 active (long TTL), 2 expired (short TTL + wait)
     // Active lease 1
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 6001,
-            ttl_seconds: 3600, // 1 hour
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 6001,
+        ttl_seconds: 3600, // 1 hour
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Active lease 2
-    let entry2 = make_entry(
-        2,
-        AppRequest::LeaseGrant {
-            lease_id: 6002,
-            ttl_seconds: 3600,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::LeaseGrant {
+        lease_id: 6002,
+        ttl_seconds: 3600,
+    });
     apply_entry(&mut sm, entry2).await;
 
     // For expired leases, we need to use very short TTL and wait
-    let entry3 = make_entry(
-        3,
-        AppRequest::LeaseGrant {
-            lease_id: 6003,
-            ttl_seconds: 1, // 1 second
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::LeaseGrant {
+        lease_id: 6003,
+        ttl_seconds: 1, // 1 second
+    });
     apply_entry(&mut sm, entry3).await;
 
-    let entry4 = make_entry(
-        4,
-        AppRequest::LeaseGrant {
-            lease_id: 6004,
-            ttl_seconds: 1, // 1 second
-        },
-    );
+    let entry4 = make_entry(4, AppRequest::LeaseGrant {
+        lease_id: 6004,
+        ttl_seconds: 1, // 1 second
+    });
     apply_entry(&mut sm, entry4).await;
 
     // Wait for short-TTL leases to expire
@@ -470,13 +394,10 @@ async fn test_lease_time_to_live_query() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant lease
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 7000,
-            ttl_seconds: 120, // 2 minutes
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 7000,
+        ttl_seconds: 120, // 2 minutes
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Query TTL
@@ -493,24 +414,18 @@ async fn test_lease_time_to_live_with_keys() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Grant lease and attach keys
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 8000,
-            ttl_seconds: 60,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 8000,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry1).await;
 
     for i in 1..=3 {
-        let entry = make_entry(
-            i + 1,
-            AppRequest::SetWithLease {
-                key: format!("ttl:key{}", i),
-                value: format!("value{}", i),
-                lease_id: 8000,
-            },
-        );
+        let entry = make_entry(i + 1, AppRequest::SetWithLease {
+            key: format!("ttl:key{}", i),
+            value: format!("value{}", i),
+            lease_id: 8000,
+        });
         apply_entry(&mut sm, entry).await;
     }
 
@@ -531,23 +446,17 @@ async fn test_key_without_lease_not_affected_by_lease_operations() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Create a key WITHOUT a lease
-    let entry1 = make_entry(
-        1,
-        AppRequest::Set {
-            key: "permanent".to_string(),
-            value: "stays_forever".to_string(),
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::Set {
+        key: "permanent".to_string(),
+        value: "stays_forever".to_string(),
+    });
     apply_entry(&mut sm, entry1).await;
 
     // Create and revoke a lease
-    let entry2 = make_entry(
-        2,
-        AppRequest::LeaseGrant {
-            lease_id: 9000,
-            ttl_seconds: 60,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::LeaseGrant {
+        lease_id: 9000,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry2).await;
 
     let entry3 = make_entry(3, AppRequest::LeaseRevoke { lease_id: 9000 });
@@ -563,44 +472,32 @@ async fn test_overwrite_leased_key_with_different_lease() {
     let (mut sm, _temp_dir) = create_temp_sm();
 
     // Create two leases
-    let entry1 = make_entry(
-        1,
-        AppRequest::LeaseGrant {
-            lease_id: 10001,
-            ttl_seconds: 60,
-        },
-    );
+    let entry1 = make_entry(1, AppRequest::LeaseGrant {
+        lease_id: 10001,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry1).await;
 
-    let entry2 = make_entry(
-        2,
-        AppRequest::LeaseGrant {
-            lease_id: 10002,
-            ttl_seconds: 60,
-        },
-    );
+    let entry2 = make_entry(2, AppRequest::LeaseGrant {
+        lease_id: 10002,
+        ttl_seconds: 60,
+    });
     apply_entry(&mut sm, entry2).await;
 
     // Attach key to first lease
-    let entry3 = make_entry(
-        3,
-        AppRequest::SetWithLease {
-            key: "shared".to_string(),
-            value: "lease1_value".to_string(),
-            lease_id: 10001,
-        },
-    );
+    let entry3 = make_entry(3, AppRequest::SetWithLease {
+        key: "shared".to_string(),
+        value: "lease1_value".to_string(),
+        lease_id: 10001,
+    });
     apply_entry(&mut sm, entry3).await;
 
     // Overwrite with second lease
-    let entry4 = make_entry(
-        4,
-        AppRequest::SetWithLease {
-            key: "shared".to_string(),
-            value: "lease2_value".to_string(),
-            lease_id: 10002,
-        },
-    );
+    let entry4 = make_entry(4, AppRequest::SetWithLease {
+        key: "shared".to_string(),
+        value: "lease2_value".to_string(),
+        lease_id: 10002,
+    });
     apply_entry(&mut sm, entry4).await;
 
     // Key should have new value
@@ -611,14 +508,8 @@ async fn test_overwrite_leased_key_with_different_lease() {
     let keys1 = sm.get_lease_keys(10001).expect("should get keys");
     let keys2 = sm.get_lease_keys(10002).expect("should get keys");
 
-    assert!(
-        !keys1.contains(&"shared".to_string()),
-        "key should not be in first lease"
-    );
-    assert!(
-        keys2.contains(&"shared".to_string()),
-        "key should be in second lease"
-    );
+    assert!(!keys1.contains(&"shared".to_string()), "key should not be in first lease");
+    assert!(keys2.contains(&"shared".to_string()), "key should be in second lease");
 }
 
 #[tokio::test]
@@ -627,13 +518,10 @@ async fn test_delete_expired_leases_batch_limit() {
 
     // Create many leases with very short TTL
     for i in 1..=25u64 {
-        let entry = make_entry(
-            i,
-            AppRequest::LeaseGrant {
-                lease_id: 11000 + i,
-                ttl_seconds: 1,
-            },
-        );
+        let entry = make_entry(i, AppRequest::LeaseGrant {
+            lease_id: 11000 + i,
+            ttl_seconds: 1,
+        });
         apply_entry(&mut sm, entry).await;
     }
 

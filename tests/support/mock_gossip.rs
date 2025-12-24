@@ -28,9 +28,11 @@
 //! ```
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use bytes::Bytes;
 use iroh_gossip::proto::TopicId;
 use tokio::sync::broadcast;
@@ -125,10 +127,7 @@ impl MockGossipHandle {
     /// Tiger Style: Fail fast if channel is full.
     pub async fn broadcast(&self, data: Vec<u8>) -> Result<usize> {
         let bytes = Bytes::from(data);
-        let receiver_count = self
-            .sender
-            .send(bytes)
-            .context("failed to broadcast message (channel full or closed)")?;
+        let receiver_count = self.sender.send(bytes).context("failed to broadcast message (channel full or closed)")?;
         Ok(receiver_count)
     }
 

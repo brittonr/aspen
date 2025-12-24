@@ -12,17 +12,36 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
-use super::{
-    AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController, ClusterState,
-    ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError,
-    KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanRequest, ScanResult, WriteCommand, WriteOp,
-    WriteRequest, WriteResult, validate_write_command,
-};
+use super::AddLearnerRequest;
+use super::BatchCondition;
+use super::BatchOperation;
+use super::ChangeMembershipRequest;
+use super::ClusterController;
+use super::ClusterState;
+use super::ControlPlaneError;
+use super::DEFAULT_SCAN_LIMIT;
+use super::DeleteRequest;
+use super::DeleteResult;
+use super::InitRequest;
+use super::KeyValueStore;
+use super::KeyValueStoreError;
+use super::KeyValueWithRevision;
+use super::MAX_SCAN_RESULTS;
+use super::ReadRequest;
+use super::ReadResult;
+use super::ScanRequest;
+use super::ScanResult;
+use super::WriteCommand;
+use super::WriteOp;
+use super::WriteRequest;
+use super::WriteResult;
+use super::validate_write_command;
 
 /// Value with version tracking for OCC support.
 #[derive(Clone, Debug)]
@@ -199,15 +218,12 @@ impl DeterministicKeyValueStore {
             Some(v) => (v.version + 1, v.create_revision),
             None => (1, revision),
         };
-        inner.insert(
-            key,
-            VersionedValue {
-                value,
-                version: new_version,
-                create_revision: create_rev,
-                mod_revision: revision,
-            },
-        );
+        inner.insert(key, VersionedValue {
+            value,
+            version: new_version,
+            create_revision: create_rev,
+            mod_revision: revision,
+        });
     }
 
     /// Evaluates all comparison predicates for a Transaction operation.
@@ -217,7 +233,8 @@ impl DeterministicKeyValueStore {
         inner: &HashMap<String, VersionedValue>,
         comparisons: &[super::TxnCompare],
     ) -> bool {
-        use super::{CompareOp, CompareTarget};
+        use super::CompareOp;
+        use super::CompareTarget;
 
         for cmp in comparisons {
             let current_versioned = inner.get(&cmp.key);

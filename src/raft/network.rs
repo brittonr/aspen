@@ -59,36 +59,57 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::sync::Arc;
 
 use anyhow::Context;
-use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
-use openraft::network::{RPCOption, RaftNetworkFactory, v2::RaftNetworkV2};
-use openraft::raft::{
-    AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
-};
+use openraft::OptionalSend;
+use openraft::Snapshot;
+use openraft::StorageError;
+use openraft::error::NetworkError;
+use openraft::error::RPCError;
+use openraft::error::ReplicationClosed;
+use openraft::error::StreamingError;
+use openraft::error::Unreachable;
+use openraft::network::RPCOption;
+use openraft::network::RaftNetworkFactory;
+use openraft::network::v2::RaftNetworkV2;
+use openraft::raft::AppendEntriesRequest;
+use openraft::raft::AppendEntriesResponse;
+use openraft::raft::SnapshotResponse;
+use openraft::raft::VoteRequest;
+use openraft::raft::VoteResponse;
 use openraft::type_config::alias::VoteOf;
-use openraft::{OptionalSend, Snapshot, StorageError};
 use tokio::io::AsyncReadExt;
 use tokio::select;
-use tracing::{error, info, warn};
+use tokio::sync::RwLock;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::clock_drift_detection::{ClockDriftDetector, current_time_ms};
+use crate::raft::clock_drift_detection::ClockDriftDetector;
+use crate::raft::clock_drift_detection::current_time_ms;
 use crate::raft::connection_pool::RaftConnectionPool;
-use crate::raft::constants::{
-    FAILURE_DETECTOR_CHANNEL_CAPACITY, IROH_READ_TIMEOUT, MAX_PEERS, MAX_RPC_MESSAGE_SIZE,
-    MAX_SNAPSHOT_SIZE,
-};
-use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
-use crate::raft::rpc::{
-    RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps,
-    RaftSnapshotRequest, RaftVoteRequest, SHARD_PREFIX_SIZE, encode_shard_prefix,
-    try_decode_shard_prefix,
-};
-use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
+use crate::raft::constants::FAILURE_DETECTOR_CHANNEL_CAPACITY;
+use crate::raft::constants::IROH_READ_TIMEOUT;
+use crate::raft::constants::MAX_PEERS;
+use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::raft::constants::MAX_SNAPSHOT_SIZE;
+use crate::raft::node_failure_detection::ConnectionStatus;
+use crate::raft::node_failure_detection::NodeFailureDetector;
+use crate::raft::rpc::RaftAppendEntriesRequest;
+use crate::raft::rpc::RaftRpcProtocol;
+use crate::raft::rpc::RaftRpcResponse;
+use crate::raft::rpc::RaftRpcResponseWithTimestamps;
+use crate::raft::rpc::RaftSnapshotRequest;
+use crate::raft::rpc::RaftVoteRequest;
+use crate::raft::rpc::SHARD_PREFIX_SIZE;
+use crate::raft::rpc::encode_shard_prefix;
+use crate::raft::rpc::try_decode_shard_prefix;
+use crate::raft::types::AppTypeConfig;
+use crate::raft::types::NodeId;
+use crate::raft::types::RaftMemberInfo;
 use crate::sharding::router::ShardId;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Update message for the failure detector.
 ///
@@ -159,16 +180,11 @@ impl IrpcRaftNetworkFactory {
     /// Iroh's native NodeId verification. The client side (this factory) does
     /// not need to perform any authentication - it simply connects and the
     /// server validates the NodeId against the TrustedPeersRegistry.
-    pub fn new(
-        endpoint_manager: Arc<IrohEndpointManager>,
-        peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
-    ) -> Self {
+    pub fn new(endpoint_manager: Arc<IrohEndpointManager>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
-        let connection_pool = Arc::new(RaftConnectionPool::new(
-            Arc::clone(&endpoint_manager),
-            Arc::clone(&failure_detector),
-        ));
+        let connection_pool =
+            Arc::new(RaftConnectionPool::new(Arc::clone(&endpoint_manager), Arc::clone(&failure_detector)));
 
         // Start the background cleanup task for idle connections
         let pool_clone = Arc::clone(&connection_pool);
@@ -389,10 +405,7 @@ impl IrpcRaftNetwork {
     ///
     /// Updates failure detector and drift detector based on RPC success/failure.
     async fn send_rpc(&self, request: RaftRpcProtocol) -> anyhow::Result<RaftRpcResponse> {
-        let peer_addr = self
-            .peer_addr
-            .as_ref()
-            .context("peer address not found in peer map")?;
+        let peer_addr = self.peer_addr.as_ref().context("peer address not found in peer map")?;
 
         // Get or create connection from pool
         //
@@ -452,8 +465,7 @@ impl IrpcRaftNetwork {
         let client_send_ms = current_time_ms();
 
         // Serialize the request
-        let serialized =
-            postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
+        let serialized = postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
 
         // If sharded mode, prepend shard ID prefix
         let message = if let Some(shard_id) = self.shard_id {
@@ -466,26 +478,15 @@ impl IrpcRaftNetwork {
         };
 
         // Send the request
-        stream_handle
-            .send
-            .write_all(&message)
-            .await
-            .context("failed to write RPC request to stream")?;
-        stream_handle
-            .send
-            .finish()
-            .context("failed to finish send stream")?;
+        stream_handle.send.write_all(&message).await.context("failed to write RPC request to stream")?;
+        stream_handle.send.finish().context("failed to finish send stream")?;
 
         // Read response (with size and time limits)
-        let response_buf = tokio::time::timeout(
-            IROH_READ_TIMEOUT,
-            stream_handle
-                .recv
-                .read_to_end(MAX_RPC_MESSAGE_SIZE as usize),
-        )
-        .await
-        .context("timeout reading RPC response")?
-        .context("failed to read RPC response")?;
+        let response_buf =
+            tokio::time::timeout(IROH_READ_TIMEOUT, stream_handle.recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize))
+                .await
+                .context("timeout reading RPC response")?
+                .context("failed to read RPC response")?;
 
         // Record client receive time (t4) for clock drift detection
         let client_recv_ms = current_time_ms();
@@ -521,34 +522,33 @@ impl IrpcRaftNetwork {
 
         // Try to deserialize as response with timestamps first (new format)
         // Fall back to legacy format for backward compatibility
-        let response: RaftRpcResponse = if let Ok(response_with_ts) =
-            postcard::from_bytes::<RaftRpcResponseWithTimestamps>(response_bytes)
-        {
-            // Update clock drift detector if timestamps are present
-            if let Some(timestamps) = response_with_ts.timestamps {
-                self.drift_detector.write().await.record_observation(
-                    self.target,
-                    client_send_ms,
-                    timestamps.server_recv_ms,
-                    timestamps.server_send_ms,
-                    client_recv_ms,
-                );
-            }
-            response_with_ts.inner
-        } else {
-            // Fall back to legacy format (no timestamps)
-            postcard::from_bytes::<RaftRpcResponse>(response_bytes)
-                .map_err(|e| {
-                    error!(
-                        error = %e,
-                        bytes_len = response_bytes.len(),
-                        first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
-                        "failed to deserialize RPC response"
+        let response: RaftRpcResponse =
+            if let Ok(response_with_ts) = postcard::from_bytes::<RaftRpcResponseWithTimestamps>(response_bytes) {
+                // Update clock drift detector if timestamps are present
+                if let Some(timestamps) = response_with_ts.timestamps {
+                    self.drift_detector.write().await.record_observation(
+                        self.target,
+                        client_send_ms,
+                        timestamps.server_recv_ms,
+                        timestamps.server_send_ms,
+                        client_recv_ms,
                     );
-                    e
-                })
-                .context("failed to deserialize RPC response")?
-        };
+                }
+                response_with_ts.inner
+            } else {
+                // Fall back to legacy format (no timestamps)
+                postcard::from_bytes::<RaftRpcResponse>(response_bytes)
+                    .map_err(|e| {
+                        error!(
+                            error = %e,
+                            bytes_len = response_bytes.len(),
+                            first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
+                            "failed to deserialize RPC response"
+                        );
+                        e
+                    })
+                    .context("failed to deserialize RPC response")?
+            };
 
         // Update failure detector: RPC succeeded with both connection and Raft working
         self.failure_detector.write().await.update_node_status(
@@ -570,25 +570,17 @@ impl IrpcRaftNetwork {
         // Connection pool errors suggest connection is down
         // Stream errors suggest connection is up but Raft is down
         // Other errors (serialization, timeout) suggest both might be up but RPC failed
-        let (raft_status, iroh_status) = if err.to_string().contains("connection pool")
-            || err.to_string().contains("peer address not found")
-        {
-            (
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Disconnected,
-            )
-        } else if err.to_string().contains("stream") {
-            (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
-        } else {
-            // Timeout or other RPC-level error - assume connection is ok but Raft is having issues
-            (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
-        };
+        let (raft_status, iroh_status) =
+            if err.to_string().contains("connection pool") || err.to_string().contains("peer address not found") {
+                (ConnectionStatus::Disconnected, ConnectionStatus::Disconnected)
+            } else if err.to_string().contains("stream") {
+                (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
+            } else {
+                // Timeout or other RPC-level error - assume connection is ok but Raft is having issues
+                (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
+            };
 
-        self.failure_detector.write().await.update_node_status(
-            self.target,
-            raft_status,
-            iroh_status,
-        );
+        self.failure_detector.write().await.update_node_status(self.target, raft_status, iroh_status);
     }
 }
 
@@ -610,9 +602,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                 warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
                 self.update_failure_on_rpc_error(&err).await;
                 let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(
-                    &std::io::Error::other(err_str),
-                )));
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
             }
         };
 
@@ -642,9 +632,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                 warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
                 self.update_failure_on_rpc_error(&err).await;
                 let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(
-                    &std::io::Error::other(err_str),
-                )));
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
             }
         };
 
@@ -674,10 +662,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         let mut buffer = [0u8; 8192]; // 8KB chunks
         loop {
             let bytes_read = snapshot_reader.read(&mut buffer).await.map_err(|err| {
-                StreamingError::StorageError(StorageError::read_snapshot(
-                    Some(snapshot.meta.signature()),
-                    &err,
-                ))
+                StreamingError::StorageError(StorageError::read_snapshot(Some(snapshot.meta.signature()), &err))
             })?;
 
             if bytes_read == 0 {
@@ -690,10 +675,7 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                     Some(snapshot.meta.signature()),
                     &std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
-                        format!(
-                            "snapshot exceeds maximum size of {} bytes",
-                            MAX_SNAPSHOT_SIZE
-                        ),
+                        format!("snapshot exceeds maximum size of {} bytes", MAX_SNAPSHOT_SIZE),
                     ),
                 )));
             }
@@ -733,16 +715,12 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
         match response {
             RaftRpcResponse::InstallSnapshot(result) => {
                 // Handle remote RaftError as StorageError since snapshot installation failed
-                result.map_err(|raft_err| {
-                    StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err))
-                })
+                result.map_err(|raft_err| StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err)))
             }
-            _ => Err(StreamingError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "unexpected response type for install_snapshot",
-                ),
-            ))),
+            _ => Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unexpected response type for install_snapshot",
+            )))),
         }
     }
 }

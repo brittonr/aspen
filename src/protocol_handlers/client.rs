@@ -3,49 +3,104 @@
 //! Handles client RPC connections over Iroh with the `aspen-client` ALPN.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
 use tokio::sync::Semaphore;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore, ReadRequest,
-    WriteRequest, validate_client_key,
-};
+use super::constants::MAX_CLIENT_CONNECTIONS;
+use super::constants::MAX_CLIENT_STREAMS_PER_CONNECTION;
+use super::error_sanitization::sanitize_blob_error;
+use super::error_sanitization::sanitize_control_error;
+use super::error_sanitization::sanitize_error_for_client;
+use super::error_sanitization::sanitize_kv_error;
+use crate::api::AddLearnerRequest;
+use crate::api::ChangeMembershipRequest;
+use crate::api::ClusterController;
+use crate::api::InitRequest;
+use crate::api::KeyValueStore;
+use crate::api::ReadRequest;
+use crate::api::WriteRequest;
+use crate::api::validate_client_key;
 use crate::auth::TokenVerifier;
 use crate::blob::IrohBlobStore;
-use crate::client_rpc::{
-    AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse, BatchReadResultResponse,
-    BatchWriteResultResponse, BlobListEntry as RpcBlobListEntry, ChangeMembershipResultResponse,
-    CheckpointWalResultResponse, ClientRpcRequest, ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse,
-    ClusterStateResponse, ClusterTicketResponse, ConditionalBatchWriteResultResponse, CounterResultResponse,
-    DeleteResultResponse, DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
-    GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse, LeaseGrantResultResponse,
-    LeaseInfo, LeaseKeepaliveResultResponse, LeaseListResultResponse, LeaseRevokeResultResponse,
-    LeaseTimeToLiveResultResponse, ListBlobsResultResponse, LockResultResponse, MAX_CLIENT_MESSAGE_SIZE,
-    MAX_CLUSTER_NODES, MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
-    ProtectBlobResultResponse, RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse, ScanEntry,
-    ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse, SnapshotResultResponse, SqlResultResponse,
-    UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse, WatchCancelResultResponse,
-    WatchCreateResultResponse, WatchStatusResultResponse, WriteResultResponse,
-};
+use crate::client_rpc::AddBlobResultResponse;
+use crate::client_rpc::AddLearnerResultResponse;
+use crate::client_rpc::AddPeerResultResponse;
+use crate::client_rpc::BatchReadResultResponse;
+use crate::client_rpc::BatchWriteResultResponse;
+use crate::client_rpc::BlobListEntry as RpcBlobListEntry;
+use crate::client_rpc::ChangeMembershipResultResponse;
+use crate::client_rpc::CheckpointWalResultResponse;
+use crate::client_rpc::ClientRpcRequest;
+use crate::client_rpc::ClientRpcResponse;
+use crate::client_rpc::ClientTicketResponse as ClientTicketRpcResponse;
+use crate::client_rpc::ClusterStateResponse;
+use crate::client_rpc::ClusterTicketResponse;
+use crate::client_rpc::ConditionalBatchWriteResultResponse;
+use crate::client_rpc::CounterResultResponse;
+use crate::client_rpc::DeleteResultResponse;
+use crate::client_rpc::DocsTicketResponse as DocsTicketRpcResponse;
+use crate::client_rpc::GetBlobResultResponse;
+use crate::client_rpc::GetBlobTicketResultResponse;
+use crate::client_rpc::HasBlobResultResponse;
+use crate::client_rpc::HealthResponse;
+use crate::client_rpc::InitResultResponse;
+use crate::client_rpc::LeaseGrantResultResponse;
+use crate::client_rpc::LeaseInfo;
+use crate::client_rpc::LeaseKeepaliveResultResponse;
+use crate::client_rpc::LeaseListResultResponse;
+use crate::client_rpc::LeaseRevokeResultResponse;
+use crate::client_rpc::LeaseTimeToLiveResultResponse;
+use crate::client_rpc::ListBlobsResultResponse;
+use crate::client_rpc::LockResultResponse;
+use crate::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
+use crate::client_rpc::MAX_CLUSTER_NODES;
+use crate::client_rpc::MetricsResponse;
+use crate::client_rpc::NodeDescriptor;
+use crate::client_rpc::NodeInfoResponse;
+use crate::client_rpc::PromoteLearnerResultResponse;
+use crate::client_rpc::ProtectBlobResultResponse;
+use crate::client_rpc::RaftMetricsResponse;
+use crate::client_rpc::RateLimiterResultResponse;
+use crate::client_rpc::ReadResultResponse;
+use crate::client_rpc::ScanEntry;
+use crate::client_rpc::ScanResultResponse;
+use crate::client_rpc::SequenceResultResponse;
+use crate::client_rpc::SignedCounterResultResponse;
+use crate::client_rpc::SnapshotResultResponse;
+use crate::client_rpc::SqlResultResponse;
+use crate::client_rpc::UnprotectBlobResultResponse;
+use crate::client_rpc::VaultKeysResponse;
+use crate::client_rpc::VaultListResponse;
+use crate::client_rpc::WatchCancelResultResponse;
+use crate::client_rpc::WatchCreateResultResponse;
+use crate::client_rpc::WatchStatusResultResponse;
+use crate::client_rpc::WriteResultResponse;
 use crate::cluster::IrohEndpointManager;
-use crate::coordination::{
-    AtomicCounter, CounterConfig, DistributedLock, DistributedRateLimiter, LockConfig, RateLimiterConfig,
-    SequenceConfig, SequenceGenerator, SignedAtomicCounter,
-};
-use crate::raft::constants::{
-    CLIENT_RPC_BURST, CLIENT_RPC_RATE_LIMIT_PREFIX, CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_REQUEST_COUNTER,
-    CLIENT_RPC_REQUEST_ID_SEQUENCE,
-};
-
-use super::constants::{MAX_CLIENT_CONNECTIONS, MAX_CLIENT_STREAMS_PER_CONNECTION};
-use super::error_sanitization::{
-    sanitize_blob_error, sanitize_control_error, sanitize_error_for_client, sanitize_kv_error,
-};
+use crate::coordination::AtomicCounter;
+use crate::coordination::CounterConfig;
+use crate::coordination::DistributedLock;
+use crate::coordination::DistributedRateLimiter;
+use crate::coordination::LockConfig;
+use crate::coordination::RateLimiterConfig;
+use crate::coordination::SequenceConfig;
+use crate::coordination::SequenceGenerator;
+use crate::coordination::SignedAtomicCounter;
+use crate::raft::constants::CLIENT_RPC_BURST;
+use crate::raft::constants::CLIENT_RPC_RATE_LIMIT_PREFIX;
+use crate::raft::constants::CLIENT_RPC_RATE_PER_SECOND;
+use crate::raft::constants::CLIENT_RPC_REQUEST_COUNTER;
+use crate::raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
 
 // ============================================================================
 // Client Protocol Handler
@@ -421,8 +476,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetClusterTicket => {
-            use crate::cluster::ticket::AspenClusterTicket;
             use iroh_gossip::proto::TopicId;
+
+            use crate::cluster::ticket::AspenClusterTicket;
 
             let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
             let topic_id = TopicId::from_bytes(*hash.as_bytes());
@@ -628,9 +684,11 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::AddLearner { node_id, addr } => {
-            use crate::api::ClusterNode;
-            use iroh::EndpointAddr;
             use std::str::FromStr;
+
+            use iroh::EndpointAddr;
+
+            use crate::api::ClusterNode;
 
             // Parse the address as either JSON EndpointAddr or bare EndpointId
             let iroh_addr = if addr.starts_with('{') {
@@ -1032,8 +1090,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetClusterTicketCombined { endpoint_ids } => {
-            use crate::cluster::ticket::AspenClusterTicket;
             use iroh_gossip::proto::TopicId;
+
+            use crate::cluster::ticket::AspenClusterTicket;
 
             let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
             let topic_id = TopicId::from_bytes(*hash.as_bytes());
@@ -1233,8 +1292,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetBlob { hash } => {
-            use crate::blob::BlobStore;
             use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
                 return Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
@@ -1281,8 +1341,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::HasBlob { hash } => {
-            use crate::blob::BlobStore;
             use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
                 return Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
@@ -1316,8 +1377,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetBlobTicket { hash } => {
-            use crate::blob::BlobStore;
             use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
                 return Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
@@ -1412,8 +1474,9 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ProtectBlob { hash, tag } => {
-            use crate::blob::BlobStore;
             use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
                 return Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
@@ -1560,7 +1623,8 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ListPeerClusters => {
-            use crate::client_rpc::{ListPeerClustersResultResponse, PeerClusterInfo};
+            use crate::client_rpc::ListPeerClustersResultResponse;
+            use crate::client_rpc::PeerClusterInfo;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
                 return Ok(ClientRpcResponse::ListPeerClustersResult(ListPeerClustersResultResponse {
@@ -1816,7 +1880,10 @@ async fn process_client_request(
             limit,
             timeout_ms,
         } => {
-            use crate::api::{SqlConsistency, SqlQueryExecutor, SqlQueryRequest, SqlValue};
+            use crate::api::SqlConsistency;
+            use crate::api::SqlQueryExecutor;
+            use crate::api::SqlQueryRequest;
+            use crate::api::SqlValue;
 
             // Parse consistency level
             let consistency = match consistency.to_lowercase().as_str() {
@@ -2721,7 +2788,8 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::BatchWrite { operations } => {
-            use crate::api::{BatchOperation, WriteCommand};
+            use crate::api::BatchOperation;
+            use crate::api::WriteCommand;
             use crate::client_rpc::BatchWriteOperation;
 
             // Validate all keys
@@ -2770,8 +2838,11 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
-            use crate::api::{BatchCondition as ApiBatchCondition, BatchOperation, WriteCommand};
-            use crate::client_rpc::{BatchCondition, BatchWriteOperation};
+            use crate::api::BatchCondition as ApiBatchCondition;
+            use crate::api::BatchOperation;
+            use crate::api::WriteCommand;
+            use crate::client_rpc::BatchCondition;
+            use crate::client_rpc::BatchWriteOperation;
 
             // Validate all keys in conditions
             for cond in &conditions {
@@ -3638,7 +3709,8 @@ async fn process_client_request(
             max_delivery_attempts,
         } => {
             use crate::client_rpc::QueueCreateResultResponse;
-            use crate::coordination::{QueueConfig, QueueManager};
+            use crate::coordination::QueueConfig;
+            use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
             let config = QueueConfig {
@@ -3689,7 +3761,8 @@ async fn process_client_request(
             deduplication_id,
         } => {
             use crate::client_rpc::QueueEnqueueResultResponse;
-            use crate::coordination::{EnqueueOptions, QueueManager};
+            use crate::coordination::EnqueueOptions;
+            use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
             let options = EnqueueOptions {
@@ -3714,20 +3787,18 @@ async fn process_client_request(
 
         ClientRpcRequest::QueueEnqueueBatch { queue_name, items } => {
             use crate::client_rpc::QueueEnqueueBatchResultResponse;
-            use crate::coordination::{EnqueueOptions, QueueManager};
+            use crate::coordination::EnqueueOptions;
+            use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
             let batch: Vec<(Vec<u8>, EnqueueOptions)> = items
                 .into_iter()
                 .map(|item| {
-                    (
-                        item.payload,
-                        EnqueueOptions {
-                            ttl_ms: item.ttl_ms,
-                            message_group_id: item.message_group_id,
-                            deduplication_id: item.deduplication_id,
-                        },
-                    )
+                    (item.payload, EnqueueOptions {
+                        ttl_ms: item.ttl_ms,
+                        message_group_id: item.message_group_id,
+                        deduplication_id: item.deduplication_id,
+                    })
                 })
                 .collect();
 
@@ -3751,7 +3822,8 @@ async fn process_client_request(
             max_items,
             visibility_timeout_ms,
         } => {
-            use crate::client_rpc::{QueueDequeueResultResponse, QueueDequeuedItemResponse};
+            use crate::client_rpc::QueueDequeueResultResponse;
+            use crate::client_rpc::QueueDequeuedItemResponse;
             use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
@@ -3790,7 +3862,8 @@ async fn process_client_request(
             visibility_timeout_ms,
             wait_timeout_ms,
         } => {
-            use crate::client_rpc::{QueueDequeueResultResponse, QueueDequeuedItemResponse};
+            use crate::client_rpc::QueueDequeueResultResponse;
+            use crate::client_rpc::QueueDequeuedItemResponse;
             use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
@@ -3826,7 +3899,8 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::QueuePeek { queue_name, max_items } => {
-            use crate::client_rpc::{QueueItemResponse, QueuePeekResultResponse};
+            use crate::client_rpc::QueueItemResponse;
+            use crate::client_rpc::QueuePeekResultResponse;
             use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
@@ -3958,7 +4032,8 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::QueueGetDLQ { queue_name, max_items } => {
-            use crate::client_rpc::{QueueDLQItemResponse, QueueGetDLQResultResponse};
+            use crate::client_rpc::QueueDLQItemResponse;
+            use crate::client_rpc::QueueGetDLQResultResponse;
             use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
@@ -4023,9 +4098,13 @@ async fn process_client_request(
             ttl_ms,
             lease_id,
         } => {
-            use crate::client_rpc::ServiceRegisterResultResponse;
-            use crate::coordination::{HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry};
             use std::collections::HashMap;
+
+            use crate::client_rpc::ServiceRegisterResultResponse;
+            use crate::coordination::HealthStatus;
+            use crate::coordination::RegisterOptions;
+            use crate::coordination::ServiceInstanceMetadata;
+            use crate::coordination::ServiceRegistry;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
@@ -4097,8 +4176,10 @@ async fn process_client_request(
             version_prefix,
             limit,
         } => {
-            use crate::client_rpc::{ServiceDiscoverResultResponse, ServiceInstanceResponse};
-            use crate::coordination::{DiscoveryFilter, ServiceRegistry};
+            use crate::client_rpc::ServiceDiscoverResultResponse;
+            use crate::client_rpc::ServiceInstanceResponse;
+            use crate::coordination::DiscoveryFilter;
+            use crate::coordination::ServiceRegistry;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
@@ -4182,7 +4263,8 @@ async fn process_client_request(
             service_name,
             instance_id,
         } => {
-            use crate::client_rpc::{ServiceGetInstanceResultResponse, ServiceInstanceResponse};
+            use crate::client_rpc::ServiceGetInstanceResultResponse;
+            use crate::client_rpc::ServiceInstanceResponse;
             use crate::coordination::ServiceRegistry;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
@@ -4270,7 +4352,8 @@ async fn process_client_request(
             status,
         } => {
             use crate::client_rpc::ServiceUpdateHealthResultResponse;
-            use crate::coordination::{HealthStatus, ServiceRegistry};
+            use crate::coordination::HealthStatus;
+            use crate::coordination::ServiceRegistry;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
@@ -4301,9 +4384,10 @@ async fn process_client_request(
             weight,
             custom_metadata,
         } => {
+            use std::collections::HashMap;
+
             use crate::client_rpc::ServiceUpdateMetadataResultResponse;
             use crate::coordination::ServiceRegistry;
-            use std::collections::HashMap;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 

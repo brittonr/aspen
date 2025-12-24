@@ -73,23 +73,67 @@ pub mod transaction;
 pub mod watch;
 
 pub use cache::LocalCache;
-pub use constants::{
-    CONNECTION_TIMEOUT, DEFAULT_CACHE_TTL, HEARTBEAT_INTERVAL, MAX_CACHE_TTL, MAX_RECONNECT_DELAY,
-    MAX_SUBSCRIPTIONS, MAX_TOTAL_CACHE_ENTRIES, RECONNECT_DELAY,
-};
-pub use coordination::{
-    BarrierClient, BarrierEnterResult, BarrierLeaveResult, BarrierStatusResult, CoordinationRpc,
-    CounterClient, LeaseClient, LeaseGrantResult, LeaseInfoLocal, LeaseKeepaliveHandle,
-    LeaseKeepaliveResult, LeaseRevokeResult, LeaseTimeToLiveResult, LockClient, QueueClient,
-    QueueCreateConfig, QueueDLQItemInfo, QueueDequeuedItem, QueueEnqueueBatchItem,
-    QueueEnqueueOptions, QueuePeekedItem, QueueStatusInfo, RWLockClient, RWLockReadResult,
-    RWLockStatusResult, RWLockWriteResult, RateLimitResult, RateLimiterClient, RemoteLockGuard,
-    SemaphoreAcquireResult, SemaphoreClient, SemaphoreStatusResult, SequenceClient, ServiceClient,
-    ServiceDiscoveryFilter, ServiceHeartbeatHandle, ServiceInstanceInfo, ServiceMetadataUpdate,
-    ServiceRegisterOptions, ServiceRegistration, SignedCounterClient,
-};
-pub use overlay::{ClientOverlay, OverlayError, ReadResult, WriteResult};
-pub use subscription::{AccessLevel, CacheConfig, ClusterSubscription, SubscriptionFilter};
-pub use ticket::{AspenClientTicket, CLIENT_TICKET_PREFIX};
-pub use transaction::{TransactionBuilder, TransactionResult};
-pub use watch::{WatchEvent, WatchSession, WatchSubscription};
+pub use constants::CONNECTION_TIMEOUT;
+pub use constants::DEFAULT_CACHE_TTL;
+pub use constants::HEARTBEAT_INTERVAL;
+pub use constants::MAX_CACHE_TTL;
+pub use constants::MAX_RECONNECT_DELAY;
+pub use constants::MAX_SUBSCRIPTIONS;
+pub use constants::MAX_TOTAL_CACHE_ENTRIES;
+pub use constants::RECONNECT_DELAY;
+pub use coordination::BarrierClient;
+pub use coordination::BarrierEnterResult;
+pub use coordination::BarrierLeaveResult;
+pub use coordination::BarrierStatusResult;
+pub use coordination::CoordinationRpc;
+pub use coordination::CounterClient;
+pub use coordination::LeaseClient;
+pub use coordination::LeaseGrantResult;
+pub use coordination::LeaseInfoLocal;
+pub use coordination::LeaseKeepaliveHandle;
+pub use coordination::LeaseKeepaliveResult;
+pub use coordination::LeaseRevokeResult;
+pub use coordination::LeaseTimeToLiveResult;
+pub use coordination::LockClient;
+pub use coordination::QueueClient;
+pub use coordination::QueueCreateConfig;
+pub use coordination::QueueDLQItemInfo;
+pub use coordination::QueueDequeuedItem;
+pub use coordination::QueueEnqueueBatchItem;
+pub use coordination::QueueEnqueueOptions;
+pub use coordination::QueuePeekedItem;
+pub use coordination::QueueStatusInfo;
+pub use coordination::RWLockClient;
+pub use coordination::RWLockReadResult;
+pub use coordination::RWLockStatusResult;
+pub use coordination::RWLockWriteResult;
+pub use coordination::RateLimitResult;
+pub use coordination::RateLimiterClient;
+pub use coordination::RemoteLockGuard;
+pub use coordination::SemaphoreAcquireResult;
+pub use coordination::SemaphoreClient;
+pub use coordination::SemaphoreStatusResult;
+pub use coordination::SequenceClient;
+pub use coordination::ServiceClient;
+pub use coordination::ServiceDiscoveryFilter;
+pub use coordination::ServiceHeartbeatHandle;
+pub use coordination::ServiceInstanceInfo;
+pub use coordination::ServiceMetadataUpdate;
+pub use coordination::ServiceRegisterOptions;
+pub use coordination::ServiceRegistration;
+pub use coordination::SignedCounterClient;
+pub use overlay::ClientOverlay;
+pub use overlay::OverlayError;
+pub use overlay::ReadResult;
+pub use overlay::WriteResult;
+pub use subscription::AccessLevel;
+pub use subscription::CacheConfig;
+pub use subscription::ClusterSubscription;
+pub use subscription::SubscriptionFilter;
+pub use ticket::AspenClientTicket;
+pub use ticket::CLIENT_TICKET_PREFIX;
+pub use transaction::TransactionBuilder;
+pub use transaction::TransactionResult;
+pub use watch::WatchEvent;
+pub use watch::WatchSession;
+pub use watch::WatchSubscription;

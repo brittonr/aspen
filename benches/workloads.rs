@@ -9,13 +9,19 @@
 
 mod common;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-
-use common::{
-    Operation, WorkloadPattern, generate_workload, populate_test_data, setup_single_node_cluster,
-};
+use common::Operation;
+use common::WorkloadPattern;
+use common::generate_workload;
+use common::populate_test_data;
+use common::setup_single_node_cluster;
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
 
 /// Number of operations per workload benchmark iteration.
 const WORKLOAD_OPS: usize = 1_000;
@@ -27,17 +33,12 @@ const KEY_SPACE: usize = 10_000;
 ///
 /// Simulates photo tagging, user profile reads, and similar read-dominated patterns.
 fn bench_workload_read_heavy(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup cluster and pre-populate data
     let (router, leader) = rt.block_on(async {
         let (router, leader) = setup_single_node_cluster().await.unwrap();
-        populate_test_data(&router, leader, KEY_SPACE)
-            .await
-            .unwrap();
+        populate_test_data(&router, leader, KEY_SPACE).await.unwrap();
         (router, leader)
     });
 
@@ -60,10 +61,7 @@ fn bench_workload_read_heavy(c: &mut Criterion) {
                         router.read(leader, key).await;
                     }
                     Operation::Write { key, value } => {
-                        router
-                            .write(leader, key.clone(), value.clone())
-                            .await
-                            .unwrap();
+                        router.write(leader, key.clone(), value.clone()).await.unwrap();
                     }
                 }
             }
@@ -77,17 +75,12 @@ fn bench_workload_read_heavy(c: &mut Criterion) {
 ///
 /// Simulates log ingestion, event streaming, and write-dominated patterns.
 fn bench_workload_write_heavy(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup cluster and pre-populate data
     let (router, leader) = rt.block_on(async {
         let (router, leader) = setup_single_node_cluster().await.unwrap();
-        populate_test_data(&router, leader, KEY_SPACE)
-            .await
-            .unwrap();
+        populate_test_data(&router, leader, KEY_SPACE).await.unwrap();
         (router, leader)
     });
 
@@ -110,10 +103,7 @@ fn bench_workload_write_heavy(c: &mut Criterion) {
                         router.read(leader, key).await;
                     }
                     Operation::Write { key, value } => {
-                        router
-                            .write(leader, key.clone(), value.clone())
-                            .await
-                            .unwrap();
+                        router.write(leader, key.clone(), value.clone()).await.unwrap();
                     }
                 }
             }
@@ -127,17 +117,12 @@ fn bench_workload_write_heavy(c: &mut Criterion) {
 ///
 /// Simulates session stores, shopping carts, and balanced read/write patterns.
 fn bench_workload_mixed(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup cluster and pre-populate data
     let (router, leader) = rt.block_on(async {
         let (router, leader) = setup_single_node_cluster().await.unwrap();
-        populate_test_data(&router, leader, KEY_SPACE)
-            .await
-            .unwrap();
+        populate_test_data(&router, leader, KEY_SPACE).await.unwrap();
         (router, leader)
     });
 
@@ -160,10 +145,7 @@ fn bench_workload_mixed(c: &mut Criterion) {
                         router.read(leader, key).await;
                     }
                     Operation::Write { key, value } => {
-                        router
-                            .write(leader, key.clone(), value.clone())
-                            .await
-                            .unwrap();
+                        router.write(leader, key.clone(), value.clone()).await.unwrap();
                     }
                 }
             }
@@ -177,17 +159,12 @@ fn bench_workload_mixed(c: &mut Criterion) {
 ///
 /// Runs a full workload batch to measure sustained throughput.
 fn bench_workload_batch(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup cluster and pre-populate data
     let (router, leader) = rt.block_on(async {
         let (router, leader) = setup_single_node_cluster().await.unwrap();
-        populate_test_data(&router, leader, KEY_SPACE)
-            .await
-            .unwrap();
+        populate_test_data(&router, leader, KEY_SPACE).await.unwrap();
         (router, leader)
     });
 

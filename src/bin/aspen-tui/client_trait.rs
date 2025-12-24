@@ -5,7 +5,9 @@ use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
 
-use crate::types::{ClusterMetrics, NodeInfo, NodeStatus};
+use crate::types::ClusterMetrics;
+use crate::types::NodeInfo;
+use crate::types::NodeStatus;
 
 /// Trait for Aspen cluster clients.
 ///
@@ -166,11 +168,8 @@ impl ClusterClient for ClientImpl {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 let metrics = client.get_raft_metrics().await.ok();
 
-                let is_leader = metrics
-                    .as_ref()
-                    .and_then(|m| m.current_leader)
-                    .map(|l| l == info.node_id)
-                    .unwrap_or(false);
+                let is_leader =
+                    metrics.as_ref().and_then(|m| m.current_leader).map(|l| l == info.node_id).unwrap_or(false);
 
                 Ok(NodeInfo {
                     node_id: info.node_id,
@@ -187,11 +186,8 @@ impl ClusterClient for ClientImpl {
                 let health = client.get_health().await.map_err(anyhow_to_eyre)?;
                 let metrics = client.get_raft_metrics().await.ok();
 
-                let is_leader = metrics
-                    .as_ref()
-                    .and_then(|m| m.current_leader)
-                    .map(|l| l == info.node_id)
-                    .unwrap_or(false);
+                let is_leader =
+                    metrics.as_ref().and_then(|m| m.current_leader).map(|l| l == info.node_id).unwrap_or(false);
 
                 Ok(NodeInfo {
                     node_id: info.node_id,
@@ -222,11 +218,7 @@ impl ClusterClient for ClientImpl {
             Self::MultiNode(client) => {
                 let metrics = client.get_raft_metrics().await.map_err(anyhow_to_eyre)?;
                 // Use discover_peers to get actual node count
-                let node_count = client
-                    .discover_peers()
-                    .await
-                    .map(|peers| peers.len())
-                    .unwrap_or(1);
+                let node_count = client.discover_peers().await.map(|peers| peers.len()).unwrap_or(1);
                 Ok(ClusterMetrics {
                     leader: metrics.current_leader,
                     term: metrics.current_term,
@@ -284,10 +276,7 @@ impl ClusterClient for ClientImpl {
     async fn add_learner(&self, node_id: u64, addr: String) -> Result<()> {
         match self {
             Self::Iroh(client) => {
-                let result = client
-                    .add_learner(node_id, addr)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.add_learner(node_id, addr).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to add learner: {}", error));
@@ -298,10 +287,7 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::MultiNode(client) => {
-                let result = client
-                    .add_learner(node_id, addr)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.add_learner(node_id, addr).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to add learner: {}", error));
@@ -318,10 +304,7 @@ impl ClusterClient for ClientImpl {
     async fn change_membership(&self, members: Vec<u64>) -> Result<()> {
         match self {
             Self::Iroh(client) => {
-                let result = client
-                    .change_membership(members)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.change_membership(members).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to change membership: {}", error));
@@ -332,10 +315,7 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::MultiNode(client) => {
-                let result = client
-                    .change_membership(members)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.change_membership(members).await.map_err(anyhow_to_eyre)?;
                 if !result.success {
                     if let Some(error) = result.error {
                         return Err(eyre!("Failed to change membership: {}", error));
@@ -429,14 +409,10 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 // Scan for all vault: prefixed keys
-                let result = client
-                    .scan_keys("vault:".to_string(), Some(1000), None)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.scan_keys("vault:".to_string(), Some(1000), None).await.map_err(anyhow_to_eyre)?;
 
                 // Group by vault name
-                let mut vault_counts: std::collections::HashMap<String, u64> =
-                    std::collections::HashMap::new();
+                let mut vault_counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
                 for entry in result.entries {
                     // Key format: vault:<vault-name>:<key>
                     if let Some(rest) = entry.key.strip_prefix("vault:") {
@@ -446,19 +422,12 @@ impl ClusterClient for ClientImpl {
                     }
                 }
 
-                Ok(vault_counts
-                    .into_iter()
-                    .map(|(name, key_count)| VaultSummary { name, key_count })
-                    .collect())
+                Ok(vault_counts.into_iter().map(|(name, key_count)| VaultSummary { name, key_count }).collect())
             }
             Self::MultiNode(client) => {
-                let result = client
-                    .scan_keys("vault:".to_string(), Some(1000), None)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.scan_keys("vault:".to_string(), Some(1000), None).await.map_err(anyhow_to_eyre)?;
 
-                let mut vault_counts: std::collections::HashMap<String, u64> =
-                    std::collections::HashMap::new();
+                let mut vault_counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
                 for entry in result.entries {
                     if let Some(rest) = entry.key.strip_prefix("vault:") {
                         if let Some(vault_name) = rest.split(':').next() {
@@ -467,10 +436,7 @@ impl ClusterClient for ClientImpl {
                     }
                 }
 
-                Ok(vault_counts
-                    .into_iter()
-                    .map(|(name, key_count)| VaultSummary { name, key_count })
-                    .collect())
+                Ok(vault_counts.into_iter().map(|(name, key_count)| VaultSummary { name, key_count }).collect())
             }
             Self::Disconnected(client) => client.list_vaults().await,
         }
@@ -480,10 +446,7 @@ impl ClusterClient for ClientImpl {
         match self {
             Self::Iroh(client) => {
                 let prefix = format!("vault:{}:", vault);
-                let result = client
-                    .scan_keys(prefix.clone(), Some(1000), None)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.scan_keys(prefix.clone(), Some(1000), None).await.map_err(anyhow_to_eyre)?;
 
                 Ok(result
                     .entries
@@ -499,10 +462,7 @@ impl ClusterClient for ClientImpl {
             }
             Self::MultiNode(client) => {
                 let prefix = format!("vault:{}:", vault);
-                let result = client
-                    .scan_keys(prefix.clone(), Some(1000), None)
-                    .await
-                    .map_err(anyhow_to_eyre)?;
+                let result = client.scan_keys(prefix.clone(), Some(1000), None).await.map_err(anyhow_to_eyre)?;
 
                 Ok(result
                     .entries

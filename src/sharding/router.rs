@@ -14,10 +14,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
+use super::MAX_SHARDS;
+use super::MIN_SHARDS;
 use super::consistent_hash::JumpHash;
-use super::{MAX_SHARDS, MIN_SHARDS};
 
 /// Unique identifier for a shard.
 ///
@@ -76,11 +78,7 @@ pub struct ShardRange {
 
 impl ShardRange {
     /// Create a new shard range.
-    pub fn new(
-        shard_id: ShardId,
-        start_key: impl Into<String>,
-        end_key: impl Into<String>,
-    ) -> Self {
+    pub fn new(shard_id: ShardId, start_key: impl Into<String>, end_key: impl Into<String>) -> Self {
         Self {
             shard_id,
             start_key: start_key.into(),
@@ -265,12 +263,7 @@ mod tests {
 
         // Each shard should have roughly 25% of keys
         for (i, &count) in counts.iter().enumerate() {
-            assert!(
-                count > 2000 && count < 3000,
-                "Shard {} has {} keys, expected ~2500",
-                i,
-                count
-            );
+            assert!(count > 2000 && count < 3000, "Shard {} has {} keys, expected ~2500", i, count);
         }
     }
 

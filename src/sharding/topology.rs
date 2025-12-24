@@ -28,7 +28,8 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::MAX_SHARDS;
 use super::router::ShardId;
@@ -199,18 +200,12 @@ impl ShardState {
 
     /// Check if the shard can serve reads.
     pub fn can_read(&self) -> bool {
-        matches!(
-            self,
-            ShardState::Active | ShardState::Splitting { .. } | ShardState::Merging { .. }
-        )
+        matches!(self, ShardState::Active | ShardState::Splitting { .. } | ShardState::Merging { .. })
     }
 
     /// Check if the shard is in a transitional state.
     pub fn is_transitioning(&self) -> bool {
-        matches!(
-            self,
-            ShardState::Splitting { .. } | ShardState::Merging { .. }
-        )
+        matches!(self, ShardState::Splitting { .. } | ShardState::Merging { .. })
     }
 }
 
@@ -249,12 +244,7 @@ impl ShardMetrics {
     }
 
     /// Check if this shard should be split based on thresholds.
-    pub fn should_split(
-        &self,
-        size_threshold: u64,
-        qps_threshold: u32,
-        current_time_ms: u64,
-    ) -> bool {
+    pub fn should_split(&self, size_threshold: u64, qps_threshold: u32, current_time_ms: u64) -> bool {
         self.size_bytes > size_threshold || self.qps(current_time_ms) > qps_threshold
     }
 
@@ -429,10 +419,7 @@ impl ShardTopology {
     /// Uses BTreeMap range lookup for O(log n) routing.
     pub fn get_shard_for_key(&self, key: &str) -> Option<ShardId> {
         // Find the range whose start_key is <= key
-        self.ranges
-            .range(..=key.to_string())
-            .next_back()
-            .map(|(_, &shard_id)| shard_id)
+        self.ranges.range(..=key.to_string()).next_back().map(|(_, &shard_id)| shard_id)
     }
 
     /// Get shard info by ID.
@@ -447,11 +434,7 @@ impl ShardTopology {
 
     /// Get all active shard IDs.
     pub fn active_shard_ids(&self) -> Vec<ShardId> {
-        self.shards
-            .values()
-            .filter(|s| matches!(s.state, ShardState::Active))
-            .map(|s| s.shard_id)
-            .collect()
+        self.shards.values().filter(|s| matches!(s.state, ShardState::Active)).map(|s| s.shard_id).collect()
     }
 
     /// Get total number of shards (including non-active).
@@ -476,12 +459,9 @@ impl ShardTopology {
         timestamp: u64,
     ) -> Result<(), TopologyError> {
         // Validate source shard exists and is active
-        let source = self
-            .shards
-            .get(&source_shard_id)
-            .ok_or(TopologyError::ShardNotFound {
-                shard_id: source_shard_id,
-            })?;
+        let source = self.shards.get(&source_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: source_shard_id,
+        })?;
 
         if !matches!(source.state, ShardState::Active) {
             return Err(TopologyError::InvalidState {
@@ -501,38 +481,27 @@ impl ShardTopology {
 
         // Validate new shard ID doesn't exist
         if self.shards.contains_key(&new_shard_id) {
-            return Err(TopologyError::ShardAlreadyExists {
-                shard_id: new_shard_id,
-            });
+            return Err(TopologyError::ShardAlreadyExists { shard_id: new_shard_id });
         }
 
         // Perform the split
         let source = self.shards.get_mut(&source_shard_id).unwrap();
         let (left_range, right_range) =
-            source
-                .key_range
-                .split_at(&split_key)
-                .ok_or(TopologyError::InvalidSplitKey {
-                    key: split_key.clone(),
-                    range: source.key_range.clone(),
-                })?;
+            source.key_range.split_at(&split_key).ok_or(TopologyError::InvalidSplitKey {
+                key: split_key.clone(),
+                range: source.key_range.clone(),
+            })?;
 
         // Update source shard with left range
         let source_members = source.members.clone();
         source.key_range = left_range;
 
         // Create new shard with right range
-        let new_shard = ShardInfo::from_split(
-            new_shard_id,
-            right_range.clone(),
-            source_shard_id,
-            source_members,
-            timestamp,
-        );
+        let new_shard =
+            ShardInfo::from_split(new_shard_id, right_range.clone(), source_shard_id, source_members, timestamp);
 
         // Update range index
-        self.ranges
-            .insert(right_range.start_key.clone(), new_shard_id);
+        self.ranges.insert(right_range.start_key.clone(), new_shard_id);
 
         // Insert new shard
         self.shards.insert(new_shard_id, new_shard);
@@ -554,12 +523,9 @@ impl ShardTopology {
         timestamp: u64,
     ) -> Result<(), TopologyError> {
         // Validate both shards exist and are active
-        let source = self
-            .shards
-            .get(&source_shard_id)
-            .ok_or(TopologyError::ShardNotFound {
-                shard_id: source_shard_id,
-            })?;
+        let source = self.shards.get(&source_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: source_shard_id,
+        })?;
 
         if !matches!(source.state, ShardState::Active) {
             return Err(TopologyError::InvalidState {
@@ -569,12 +535,9 @@ impl ShardTopology {
             });
         }
 
-        let target = self
-            .shards
-            .get(&target_shard_id)
-            .ok_or(TopologyError::ShardNotFound {
-                shard_id: target_shard_id,
-            })?;
+        let target = self.shards.get(&target_shard_id).ok_or(TopologyError::ShardNotFound {
+            shard_id: target_shard_id,
+        })?;
 
         if !matches!(target.state, ShardState::Active) {
             return Err(TopologyError::InvalidState {
@@ -595,13 +558,10 @@ impl ShardTopology {
         // Compute merged range
         let source_range = source.key_range.clone();
         let target_range = target.key_range.clone();
-        let merged_range =
-            source_range
-                .merge_with(&target_range)
-                .ok_or(TopologyError::RangesNotAdjacent {
-                    source: source_range.clone(),
-                    target: target_range.clone(),
-                })?;
+        let merged_range = source_range.merge_with(&target_range).ok_or(TopologyError::RangesNotAdjacent {
+            source: source_range.clone(),
+            target: target_range.clone(),
+        })?;
 
         // Update target shard with merged range
         let target = self.shards.get_mut(&target_shard_id).unwrap();
@@ -637,8 +597,7 @@ impl ShardTopology {
             .iter()
             .filter_map(|(&id, info)| {
                 if let ShardState::Tombstone { tombstoned_at, .. } = info.state
-                    && current_timestamp.saturating_sub(tombstoned_at)
-                        > SHARD_TOMBSTONE_GRACE_PERIOD_SECS
+                    && current_timestamp.saturating_sub(tombstoned_at) > SHARD_TOMBSTONE_GRACE_PERIOD_SECS
                 {
                     return Some(id);
                 }
@@ -723,18 +682,10 @@ impl std::fmt::Display for TopologyError {
                 expected,
                 actual,
             } => {
-                write!(
-                    f,
-                    "shard {} in invalid state: expected {}, got {}",
-                    shard_id, expected, actual
-                )
+                write!(f, "shard {} in invalid state: expected {}, got {}", shard_id, expected, actual)
             }
             TopologyError::InvalidSplitKey { key, range } => {
-                write!(
-                    f,
-                    "split key '{}' not in range [{}, {})",
-                    key, range.start_key, range.end_key
-                )
+                write!(f, "split key '{}' not in range [{}, {})", key, range.start_key, range.end_key)
             }
             TopologyError::RangesNotAdjacent { source, target } => {
                 write!(
@@ -744,11 +695,7 @@ impl std::fmt::Display for TopologyError {
                 )
             }
             TopologyError::VersionMismatch { expected, actual } => {
-                write!(
-                    f,
-                    "topology version mismatch: expected {}, got {}",
-                    expected, actual
-                )
+                write!(f, "topology version mismatch: expected {}, got {}", expected, actual)
             }
         }
     }
@@ -838,13 +785,7 @@ impl TopologyAnnouncement {
     pub const PROTOCOL_VERSION: u8 = 1;
 
     /// Create a new topology announcement.
-    pub fn new(
-        node_id: u64,
-        topology_version: u64,
-        topology_hash: u64,
-        term: u64,
-        timestamp_micros: u64,
-    ) -> Self {
+    pub fn new(node_id: u64, topology_version: u64, topology_hash: u64, term: u64, timestamp_micros: u64) -> Self {
         Self {
             version: Self::PROTOCOL_VERSION,
             node_id,
@@ -989,13 +930,10 @@ mod tests {
 
         // Shard 1 is now tombstone
         let shard1 = topology.get_shard(1).unwrap();
-        assert!(matches!(
-            shard1.state,
-            ShardState::Tombstone {
-                successor_shard_id: Some(0),
-                ..
-            }
-        ));
+        assert!(matches!(shard1.state, ShardState::Tombstone {
+            successor_shard_id: Some(0),
+            ..
+        }));
 
         // Shard 0 owns everything again
         assert_eq!(topology.get_shard_for_key("a"), Some(0));

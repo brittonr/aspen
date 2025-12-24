@@ -35,26 +35,28 @@
 
 mod common;
 
-use aspen::api::{
-    ReadRequest, SqlConsistency, SqlQueryExecutor, SqlQueryRequest, WriteCommand, WriteRequest,
-};
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
+use aspen::api::ReadRequest;
+use aspen::api::SqlConsistency;
+use aspen::api::SqlQueryExecutor;
+use aspen::api::SqlQueryRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
 use tempfile::TempDir;
 
 /// Benchmark single-node write with production storage (SQLite + fsync).
 fn bench_prod_write_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
-    let node = rt.block_on(async {
-        common::setup_production_single_node(&temp_dir)
-            .await
-            .expect("setup single node")
-    });
+    let node = rt.block_on(async { common::setup_production_single_node(&temp_dir).await.expect("setup single node") });
 
     let counter = AtomicU64::new(0);
     let mut group = c.benchmark_group("prod_write");
@@ -87,16 +89,11 @@ fn bench_prod_write_single(c: &mut Criterion) {
 
 /// Benchmark single-node read with production storage (SQLite + ReadIndex).
 fn bench_prod_read_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        let node = common::setup_production_single_node(&temp_dir)
-            .await
-            .expect("setup single node");
+        let node = common::setup_production_single_node(&temp_dir).await.expect("setup single node");
 
         // Pre-populate with 1000 keys
         let kv = node.kv_store();
@@ -138,17 +135,11 @@ fn bench_prod_read_single(c: &mut Criterion) {
 
 /// Benchmark 3-node write with real Iroh networking (quorum replication).
 fn bench_prod_write_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
-    let nodes = rt.block_on(async {
-        common::setup_production_three_node(&temp_dir)
-            .await
-            .expect("setup 3-node cluster")
-    });
+    let nodes =
+        rt.block_on(async { common::setup_production_three_node(&temp_dir).await.expect("setup 3-node cluster") });
 
     // Use node[0] as the leader for writes
     let leader = &nodes[0];
@@ -185,16 +176,11 @@ fn bench_prod_write_3node(c: &mut Criterion) {
 
 /// Benchmark 3-node read with real Iroh networking (ReadIndex over network).
 fn bench_prod_read_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node(&temp_dir)
-            .await
-            .expect("setup 3-node cluster");
+        let nodes = common::setup_production_three_node(&temp_dir).await.expect("setup 3-node cluster");
 
         // Pre-populate with 1000 keys through leader
         let kv = nodes[0].kv_store();
@@ -255,16 +241,11 @@ fn bench_prod_read_3node(c: &mut Criterion) {
 /// operations into a single transaction with one fsync, expected to
 /// reduce latency from ~9ms (SQLite) to ~2-3ms.
 fn bench_redb_write_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        common::setup_production_single_node_redb(&temp_dir)
-            .await
-            .expect("setup single node with redb")
+        common::setup_production_single_node_redb(&temp_dir).await.expect("setup single node with redb")
     });
 
     let counter = AtomicU64::new(0);
@@ -298,16 +279,11 @@ fn bench_redb_write_single(c: &mut Criterion) {
 
 /// Benchmark single-node read with Redb single-fsync storage.
 fn bench_redb_read_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        let node = common::setup_production_single_node_redb(&temp_dir)
-            .await
-            .expect("setup single node with redb");
+        let node = common::setup_production_single_node_redb(&temp_dir).await.expect("setup single node with redb");
 
         // Pre-populate with 1000 keys
         let kv = node.kv_store();
@@ -351,16 +327,11 @@ fn bench_redb_read_single(c: &mut Criterion) {
 /// connections, using SharedRedbStorage's single-fsync architecture.
 /// Expected to significantly outperform SQLite-based cluster (~5-8ms vs ~19ms).
 fn bench_redb_write_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster")
+        common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster")
     });
 
     let leader = &nodes[0];
@@ -401,16 +372,11 @@ fn bench_redb_write_3node(c: &mut Criterion) {
 /// This measures read latency from a 3-node cluster with pre-populated data.
 /// Reads go through the leader with ReadIndex linearizability.
 fn bench_redb_read_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate with 1000 keys through leader
         let kv = nodes[0].kv_store();
@@ -476,16 +442,11 @@ fn bench_redb_read_3node(c: &mut Criterion) {
 /// - Uses ReadIndex for linearizable consistency
 /// - DataFusion executes against Redb storage
 fn bench_sql_select_all_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate with 1000 keys through leader
         let kv = nodes[0].kv_store();
@@ -550,16 +511,11 @@ fn bench_sql_select_all_3node(c: &mut Criterion) {
 ///
 /// Tests filter pushdown performance for exact key matching.
 fn bench_sql_point_lookup_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate with 10000 keys
         let kv = nodes[0].kv_store();
@@ -628,16 +584,11 @@ fn bench_sql_point_lookup_3node(c: &mut Criterion) {
 ///
 /// Tests filter pushdown for prefix matching.
 fn bench_sql_prefix_scan_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate: 10 prefixes x 100 keys = 1000 total
         let kv = nodes[0].kv_store();
@@ -704,16 +655,11 @@ fn bench_sql_prefix_scan_3node(c: &mut Criterion) {
 ///
 /// Tests aggregation performance on replicated data.
 fn bench_sql_count_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate with 5000 keys
         let kv = nodes[0].kv_store();
@@ -778,16 +724,11 @@ fn bench_sql_count_3node(c: &mut Criterion) {
 ///
 /// Compares Linearizable vs Stale consistency overhead.
 fn bench_sql_stale_vs_linearizable_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let nodes = rt.block_on(async {
-        let nodes = common::setup_production_three_node_redb(&temp_dir)
-            .await
-            .expect("setup 3-node redb cluster");
+        let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
         // Pre-populate with 1000 keys
         let kv = nodes[0].kv_store();
@@ -868,19 +809,14 @@ fn bench_sql_stale_vs_linearizable_3node(c: &mut Criterion) {
 
 /// Benchmark SQL query with varying data sizes.
 fn bench_sql_data_sizes_3node(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("sql_3node_sizes");
 
     for size in [100, 500, 1000, 2000] {
         let temp_dir = TempDir::new().expect("temp dir");
         let nodes = rt.block_on(async {
-            let nodes = common::setup_production_three_node_redb(&temp_dir)
-                .await
-                .expect("setup 3-node redb cluster");
+            let nodes = common::setup_production_three_node_redb(&temp_dir).await.expect("setup 3-node redb cluster");
 
             // Pre-populate with `size` keys
             let kv = nodes[0].kv_store();

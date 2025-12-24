@@ -6,11 +6,16 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-use aspen::api::{
-    ChangeMembershipRequest, ClusterNode, DeleteRequest, InitRequest, ReadRequest, ScanRequest,
-    WriteCommand, WriteRequest,
-};
-use aspen::client_rpc::{ClientRpcRequest, ClientRpcResponse};
+use aspen::api::ChangeMembershipRequest;
+use aspen::api::ClusterNode;
+use aspen::api::DeleteRequest;
+use aspen::api::InitRequest;
+use aspen::api::ReadRequest;
+use aspen::api::ScanRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh_gossip::proto::TopicId;
 
@@ -48,27 +53,16 @@ fn generate_client_rpc_corpus(corpus_dir: &Path) {
         ("get_node_info", ClientRpcRequest::GetNodeInfo),
         ("get_cluster_ticket", ClientRpcRequest::GetClusterTicket),
         ("init_cluster", ClientRpcRequest::InitCluster),
-        (
-            "read_key",
-            ClientRpcRequest::ReadKey {
-                key: "test_key".to_string(),
-            },
-        ),
-        (
-            "write_key",
-            ClientRpcRequest::WriteKey {
-                key: "test_key".to_string(),
-                value: b"test_value".to_vec(),
-            },
-        ),
+        ("read_key", ClientRpcRequest::ReadKey {
+            key: "test_key".to_string(),
+        }),
+        ("write_key", ClientRpcRequest::WriteKey {
+            key: "test_key".to_string(),
+            value: b"test_value".to_vec(),
+        }),
         ("trigger_snapshot", ClientRpcRequest::TriggerSnapshot),
         ("add_learner", ClientRpcRequest::AddLearner { node_id: 2 }),
-        (
-            "change_membership",
-            ClientRpcRequest::ChangeMembership {
-                members: vec![1, 2, 3],
-            },
-        ),
+        ("change_membership", ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] }),
         ("ping", ClientRpcRequest::Ping),
         ("get_cluster_state", ClientRpcRequest::GetClusterState),
     ];
@@ -117,16 +111,8 @@ fn generate_raft_rpc_corpus(corpus_dir: &Path) {
         ("pattern_2", vec![1, 0, 0, 0]),
         ("pattern_3", vec![0, 1, 0, 0]),
         // Longer patterns for message structures
-        (
-            "longer_1",
-            vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-        ),
-        (
-            "longer_2",
-            vec![
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            ],
-        ),
+        ("longer_1", vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+        ("longer_2", vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
     ];
 
     for (name, bytes) in test_patterns {
@@ -161,10 +147,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
         ),
         (
             "change_membership",
-            serde_json::to_string(&ChangeMembershipRequest {
-                members: vec![1, 2, 3],
-            })
-            .unwrap(),
+            serde_json::to_string(&ChangeMembershipRequest { members: vec![1, 2, 3] }).unwrap(),
         ),
         (
             "write_request_set",
@@ -185,10 +168,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
             })
             .unwrap(),
         ),
-        (
-            "read_request",
-            serde_json::to_string(&ReadRequest::new("test".to_string())).unwrap(),
-        ),
+        ("read_request", serde_json::to_string(&ReadRequest::new("test".to_string())).unwrap()),
         (
             "delete_request",
             serde_json::to_string(&DeleteRequest {
@@ -256,11 +236,7 @@ secret_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
 
     // Hex keys
-    fs::write(
-        dir.join("hex_valid"),
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    )
-    .unwrap();
+    fs::write(dir.join("hex_valid"), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").unwrap();
     fs::write(dir.join("hex_short"), "0123456789abcdef").unwrap();
     fs::write(dir.join("hex_empty"), "").unwrap();
 }
@@ -328,16 +304,7 @@ fn generate_clock_drift_corpus(corpus_dir: &Path) {
 
     write_timestamps("normal", [1000, 1001, 1002, 1003, 0]);
     write_timestamps("zero", [0, 0, 0, 0, 0]);
-    write_timestamps(
-        "large",
-        [
-            u64::MAX / 2,
-            u64::MAX / 2 + 1,
-            u64::MAX / 2 + 2,
-            u64::MAX / 2 + 3,
-            0,
-        ],
-    );
+    write_timestamps("large", [u64::MAX / 2, u64::MAX / 2 + 1, u64::MAX / 2 + 2, u64::MAX / 2 + 3, 0]);
 
     println!("Created clock drift corpus");
 }
@@ -425,29 +392,17 @@ fn generate_snapshot_json_corpus(corpus_dir: &Path) {
 
     // Valid JSON BTreeMap structures
     let empty_map: BTreeMap<String, String> = BTreeMap::new();
-    fs::write(
-        dir.join("empty_map"),
-        serde_json::to_vec(&empty_map).unwrap(),
-    )
-    .unwrap();
+    fs::write(dir.join("empty_map"), serde_json::to_vec(&empty_map).unwrap()).unwrap();
 
     let single_key = BTreeMap::from([("key".to_string(), "value".to_string())]);
-    fs::write(
-        dir.join("single_key"),
-        serde_json::to_vec(&single_key).unwrap(),
-    )
-    .unwrap();
+    fs::write(dir.join("single_key"), serde_json::to_vec(&single_key).unwrap()).unwrap();
 
     let multiple_keys = BTreeMap::from([
         ("key1".to_string(), "value1".to_string()),
         ("key2".to_string(), "value2".to_string()),
         ("key3".to_string(), "value3".to_string()),
     ]);
-    fs::write(
-        dir.join("multiple_keys"),
-        serde_json::to_vec(&multiple_keys).unwrap(),
-    )
-    .unwrap();
+    fs::write(dir.join("multiple_keys"), serde_json::to_vec(&multiple_keys).unwrap()).unwrap();
 
     // Edge cases for JSON parsing
     let edge_cases: Vec<(&str, &str)> = vec![
@@ -494,10 +449,7 @@ fn generate_log_entries_corpus(corpus_dir: &Path) {
         ("u64_one", vec![1, 0, 0, 0, 0, 0, 0, 0]),
         ("u64_max", vec![0xff; 8]),
         // Multiple u64s (typical log entry header)
-        (
-            "log_entry_header",
-            vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        ),
+        ("log_entry_header", vec![1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]),
         // Truncated patterns
         ("truncated_1", vec![0]),
         ("truncated_4", vec![0, 0, 0, 0]),
@@ -526,30 +478,21 @@ fn generate_gossip_corpus(corpus_dir: &Path) {
 
     // Valid announcements
     let announcements: Vec<(&str, FuzzPeerAnnouncement)> = vec![
-        (
-            "valid_node_1",
-            FuzzPeerAnnouncement {
-                node_id: 1,
-                endpoint_addr_bytes: vec![127, 0, 0, 1, 0x15, 0xb3], // 127.0.0.1:5555
-                timestamp_micros: 1700000000000000,
-            },
-        ),
-        (
-            "valid_node_max",
-            FuzzPeerAnnouncement {
-                node_id: u64::MAX,
-                endpoint_addr_bytes: vec![0, 0, 0, 0, 0, 0],
-                timestamp_micros: 0,
-            },
-        ),
-        (
-            "empty_addr",
-            FuzzPeerAnnouncement {
-                node_id: 1,
-                endpoint_addr_bytes: vec![],
-                timestamp_micros: 1000,
-            },
-        ),
+        ("valid_node_1", FuzzPeerAnnouncement {
+            node_id: 1,
+            endpoint_addr_bytes: vec![127, 0, 0, 1, 0x15, 0xb3], // 127.0.0.1:5555
+            timestamp_micros: 1700000000000000,
+        }),
+        ("valid_node_max", FuzzPeerAnnouncement {
+            node_id: u64::MAX,
+            endpoint_addr_bytes: vec![0, 0, 0, 0, 0, 0],
+            timestamp_micros: 0,
+        }),
+        ("empty_addr", FuzzPeerAnnouncement {
+            node_id: 1,
+            endpoint_addr_bytes: vec![],
+            timestamp_micros: 1000,
+        }),
     ];
 
     for (name, announcement) in announcements {
@@ -585,32 +528,23 @@ fn generate_differential_corpus(corpus_dir: &Path) {
         // Empty operation sequence
         ("empty", vec![0, 0, 0, 0]),
         // Single Set operation (enum variant 0)
-        (
-            "single_set",
-            vec![
-                1, 0, 0, 0, // 1 operation
-                0, // Set variant
-                4, // key length
-                b't', b'e', b's', b't', // "test"
-                5, 0, 0, 0, // value length
-                b'v', b'a', b'l', b'u', b'e', // "value"
-            ],
-        ),
+        ("single_set", vec![
+            1, 0, 0, 0, // 1 operation
+            0, // Set variant
+            4, // key length
+            b't', b'e', b's', b't', // "test"
+            5, 0, 0, 0, // value length
+            b'v', b'a', b'l', b'u', b'e', // "value"
+        ]),
         // Single Delete operation (enum variant 1)
-        (
-            "single_delete",
-            vec![
-                1, 0, 0, 0, // 1 operation
-                1, // Delete variant
-                4, // key length
-                b't', b'e', b's', b't', // "test"
-            ],
-        ),
+        ("single_delete", vec![
+            1, 0, 0, 0, // 1 operation
+            1, // Delete variant
+            4, // key length
+            b't', b'e', b's', b't', // "test"
+        ]),
         // Multiple operations
-        (
-            "multi_ops",
-            vec![3, 0, 0, 0, 0, 2, b'a', b'b', 2, 0, 0, 0, b'c', b'd'],
-        ),
+        ("multi_ops", vec![3, 0, 0, 0, 0, 2, b'a', b'b', 2, 0, 0, 0, b'c', b'd']),
     ];
 
     for (name, bytes) in patterns {
@@ -630,12 +564,9 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
         ("client_get_health", ClientRpcRequest::GetHealth),
         ("client_get_leader", ClientRpcRequest::GetLeader),
         ("client_init_cluster", ClientRpcRequest::InitCluster),
-        (
-            "client_read_key",
-            ClientRpcRequest::ReadKey {
-                key: "test".to_string(),
-            },
-        ),
+        ("client_read_key", ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }),
     ];
 
     for (name, req) in client_requests {
@@ -647,10 +578,7 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
 
     let client_responses: Vec<(&str, ClientRpcResponse)> = vec![
         ("client_resp_pong", ClientRpcResponse::Pong),
-        (
-            "client_resp_leader_some",
-            ClientRpcResponse::Leader(Some(1)),
-        ),
+        ("client_resp_leader_some", ClientRpcResponse::Leader(Some(1))),
         ("client_resp_leader_none", ClientRpcResponse::Leader(None)),
     ];
 

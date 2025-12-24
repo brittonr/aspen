@@ -7,15 +7,21 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use color_eyre::Result;
-use tracing::{info, warn};
+use tracing::info;
+use tracing::warn;
 
-use crate::client_trait::{ClientImpl, ClusterClient};
+use crate::client_trait::ClientImpl;
+use crate::client_trait::ClusterClient;
 use crate::event::Event;
-use crate::iroh_client::{MultiNodeClient, parse_cluster_ticket};
-use crate::types::{ClusterMetrics, NodeInfo, NodeStatus};
+use crate::iroh_client::MultiNodeClient;
+use crate::iroh_client::parse_cluster_ticket;
+use crate::types::ClusterMetrics;
+use crate::types::NodeInfo;
+use crate::types::NodeStatus;
 
 /// Maximum input buffer size (8KB).
 /// Tiger Style: Prevents memory issues from large paste operations.

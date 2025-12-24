@@ -27,13 +27,26 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
-use crate::api::{
-    DeleteRequest, DeleteResult, KeyValueStore, KeyValueStoreError, ReadRequest, ReadResult,
-    ScanRequest, ScanResult, WriteCommand, WriteRequest, WriteResult,
-};
-use crate::blob::{BLOB_THRESHOLD, BlobRef, BlobStore, BlobStoreError, IrohBlobStore, is_blob_ref};
+use crate::api::DeleteRequest;
+use crate::api::DeleteResult;
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::ReadResult;
+use crate::api::ScanRequest;
+use crate::api::ScanResult;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
+use crate::api::WriteResult;
+use crate::blob::BLOB_THRESHOLD;
+use crate::blob::BlobRef;
+use crate::blob::BlobStore;
+use crate::blob::BlobStoreError;
+use crate::blob::IrohBlobStore;
+use crate::blob::is_blob_ref;
 
 /// Wrapper around KeyValueStore that offloads large values to blob storage.
 ///
@@ -229,9 +242,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
 
                     processed_pairs.push((key, final_value));
                 }
-                WriteCommand::SetMulti {
-                    pairs: processed_pairs,
-                }
+                WriteCommand::SetMulti { pairs: processed_pairs }
             }
             WriteCommand::Delete { key } => {
                 // Unprotect blob before delete
@@ -264,19 +275,13 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 expected,
                 new_value,
             },
-            WriteCommand::CompareAndDelete { key, expected } => {
-                WriteCommand::CompareAndDelete { key, expected }
-            }
+            WriteCommand::CompareAndDelete { key, expected } => WriteCommand::CompareAndDelete { key, expected },
             // Batch operations pass through directly without blob offloading.
             // Batches are typically used for transactional operations that don't need offloading.
             WriteCommand::Batch { operations } => WriteCommand::Batch { operations },
-            WriteCommand::ConditionalBatch {
-                conditions,
-                operations,
-            } => WriteCommand::ConditionalBatch {
-                conditions,
-                operations,
-            },
+            WriteCommand::ConditionalBatch { conditions, operations } => {
+                WriteCommand::ConditionalBatch { conditions, operations }
+            }
             // TTL operations pass through - no blob offloading for TTL values
             WriteCommand::SetWithTTL {
                 key,
@@ -291,25 +296,9 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 WriteCommand::SetMultiWithTTL { pairs, ttl_seconds }
             }
             // Lease operations pass through - no blob offloading
-            WriteCommand::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => WriteCommand::SetWithLease {
-                key,
-                value,
-                lease_id,
-            },
-            WriteCommand::SetMultiWithLease { pairs, lease_id } => {
-                WriteCommand::SetMultiWithLease { pairs, lease_id }
-            }
-            WriteCommand::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => WriteCommand::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            },
+            WriteCommand::SetWithLease { key, value, lease_id } => WriteCommand::SetWithLease { key, value, lease_id },
+            WriteCommand::SetMultiWithLease { pairs, lease_id } => WriteCommand::SetMultiWithLease { pairs, lease_id },
+            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => WriteCommand::LeaseGrant { lease_id, ttl_seconds },
             WriteCommand::LeaseRevoke { lease_id } => WriteCommand::LeaseRevoke { lease_id },
             WriteCommand::LeaseKeepalive { lease_id } => WriteCommand::LeaseKeepalive { lease_id },
             // Transaction operations pass through directly (blob processing not supported in transactions)
@@ -323,13 +312,9 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 failure,
             },
             // OptimisticTransaction operations pass through directly
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            },
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
+                WriteCommand::OptimisticTransaction { read_set, write_set }
+            }
             // Shard topology operations pass through directly (control plane operations)
             WriteCommand::ShardSplit {
                 source_shard,
@@ -351,9 +336,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
                 target_shard,
                 topology_version,
             },
-            WriteCommand::TopologyUpdate { topology_data } => {
-                WriteCommand::TopologyUpdate { topology_data }
-            }
+            WriteCommand::TopologyUpdate { topology_data } => WriteCommand::TopologyUpdate { topology_data },
         };
 
         // Write to underlying KV

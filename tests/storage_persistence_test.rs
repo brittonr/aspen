@@ -8,11 +8,15 @@ use std::path::PathBuf;
 
 use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use futures::stream;
 use openraft::RaftLogReader;
 use openraft::entry::RaftEntry;
-use openraft::storage::{IOFlushed, RaftLogStorage, RaftStateMachine};
+use openraft::storage::IOFlushed;
+use openraft::storage::RaftLogStorage;
+use openraft::storage::RaftStateMachine;
 use openraft::testing::log_id;
 use tempfile::TempDir;
 
@@ -55,32 +59,21 @@ async fn test_redb_log_entries_persist_across_close_reopen() {
 
         let entries: Vec<_> = (1..=10u64)
             .map(|i| {
-                make_entry(
-                    1,
-                    1,
-                    i,
-                    AppRequest::Set {
-                        key: format!("key{}", i),
-                        value: format!("value{}", i),
-                    },
-                )
+                make_entry(1, 1, i, AppRequest::Set {
+                    key: format!("key{}", i),
+                    value: format!("value{}", i),
+                })
             })
             .collect();
 
-        store
-            .append(entries, IOFlushed::noop())
-            .await
-            .expect("Should append");
+        store.append(entries, IOFlushed::noop()).await.expect("Should append");
     }
 
     // Reopen and verify
     {
         let mut store = RedbLogStore::new(&path).expect("Should reopen store");
 
-        let entries = store
-            .try_get_log_entries(1u64..)
-            .await
-            .expect("Should read");
+        let entries = store.try_get_log_entries(1u64..).await.expect("Should read");
         assert_eq!(entries.len(), 10, "All 10 entries should persist");
 
         for (i, entry) in entries.iter().enumerate() {
@@ -118,10 +111,7 @@ async fn test_redb_committed_persists_across_close_reopen() {
     {
         let mut store = RedbLogStore::new(&path).expect("Should create store");
         let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 42);
-        store
-            .save_committed(Some(log_id))
-            .await
-            .expect("Should save committed");
+        store.save_committed(Some(log_id)).await.expect("Should save committed");
     }
 
     // Reopen and verify
@@ -145,28 +135,17 @@ async fn test_redb_purge_persists_across_close_reopen() {
         // Append entries 1-10
         let entries: Vec<_> = (1..=10u64)
             .map(|i| {
-                make_entry(
-                    1,
-                    1,
-                    i,
-                    AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: "v".to_string(),
-                    },
-                )
+                make_entry(1, 1, i, AppRequest::Set {
+                    key: format!("k{}", i),
+                    value: "v".to_string(),
+                })
             })
             .collect();
 
-        store
-            .append(entries, IOFlushed::noop())
-            .await
-            .expect("Should append");
+        store.append(entries, IOFlushed::noop()).await.expect("Should append");
 
         // Purge entries up to index 5
-        store
-            .purge(log_id::<AppTypeConfig>(1, NodeId::from(1), 5))
-            .await
-            .expect("Should purge");
+        store.purge(log_id::<AppTypeConfig>(1, NodeId::from(1), 5)).await.expect("Should purge");
     }
 
     // Reopen and verify
@@ -178,10 +157,7 @@ async fn test_redb_purge_persists_across_close_reopen() {
         assert_eq!(purged.index(), 5, "Purge point should persist");
 
         // Entries 6-10 should still exist
-        let entries = store
-            .try_get_log_entries(6u64..)
-            .await
-            .expect("Should read");
+        let entries = store.try_get_log_entries(6u64..).await.expect("Should read");
         assert_eq!(entries.len(), 5, "Entries after purge should persist");
     }
 }
@@ -198,28 +174,17 @@ async fn test_redb_truncate_then_append_persists() {
         // Append entries 1-10
         let entries: Vec<_> = (1..=10u64)
             .map(|i| {
-                make_entry(
-                    1,
-                    1,
-                    i,
-                    AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: "original".to_string(),
-                    },
-                )
+                make_entry(1, 1, i, AppRequest::Set {
+                    key: format!("k{}", i),
+                    value: "original".to_string(),
+                })
             })
             .collect();
 
-        store
-            .append(entries, IOFlushed::noop())
-            .await
-            .expect("Should append");
+        store.append(entries, IOFlushed::noop()).await.expect("Should append");
 
         // Truncate from index 6
-        store
-            .truncate(log_id::<AppTypeConfig>(1, NodeId::from(1), 6))
-            .await
-            .expect("Should truncate");
+        store.truncate(log_id::<AppTypeConfig>(1, NodeId::from(1), 6)).await.expect("Should truncate");
 
         // Append new entries 6-8 with different values
         let new_entries: Vec<_> = (6..=8u64)
@@ -236,10 +201,7 @@ async fn test_redb_truncate_then_append_persists() {
             })
             .collect();
 
-        store
-            .append(new_entries, IOFlushed::noop())
-            .await
-            .expect("Should append new");
+        store.append(new_entries, IOFlushed::noop()).await.expect("Should append new");
     }
 
     // Reopen and verify
@@ -251,10 +213,7 @@ async fn test_redb_truncate_then_append_persists() {
         assert_eq!(last_id.index(), 8, "Should have entries 1-5 + 6-8");
 
         // Should have 8 entries total
-        let entries = store
-            .try_get_log_entries(1u64..)
-            .await
-            .expect("Should read");
+        let entries = store.try_get_log_entries(1u64..).await.expect("Should read");
         assert_eq!(entries.len(), 8);
     }
 }
@@ -269,21 +228,13 @@ async fn test_redb_multiple_sessions_incremental_append() {
         let mut store = RedbLogStore::new(&path).expect("Should create store");
         let entries: Vec<_> = (1..=3u64)
             .map(|i| {
-                make_entry(
-                    1,
-                    1,
-                    i,
-                    AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: "s1".to_string(),
-                    },
-                )
+                make_entry(1, 1, i, AppRequest::Set {
+                    key: format!("k{}", i),
+                    value: "s1".to_string(),
+                })
             })
             .collect();
-        store
-            .append(entries, IOFlushed::noop())
-            .await
-            .expect("Should append");
+        store.append(entries, IOFlushed::noop()).await.expect("Should append");
     }
 
     // Session 2: append entries 4-6
@@ -291,38 +242,24 @@ async fn test_redb_multiple_sessions_incremental_append() {
         let mut store = RedbLogStore::new(&path).expect("Should reopen store");
 
         // Verify existing
-        let existing = store
-            .try_get_log_entries(1u64..)
-            .await
-            .expect("Should read");
+        let existing = store.try_get_log_entries(1u64..).await.expect("Should read");
         assert_eq!(existing.len(), 3);
 
         let entries: Vec<_> = (4..=6u64)
             .map(|i| {
-                make_entry(
-                    1,
-                    1,
-                    i,
-                    AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: "s2".to_string(),
-                    },
-                )
+                make_entry(1, 1, i, AppRequest::Set {
+                    key: format!("k{}", i),
+                    value: "s2".to_string(),
+                })
             })
             .collect();
-        store
-            .append(entries, IOFlushed::noop())
-            .await
-            .expect("Should append");
+        store.append(entries, IOFlushed::noop()).await.expect("Should append");
     }
 
     // Session 3: verify all entries
     {
         let mut store = RedbLogStore::new(&path).expect("Should reopen store");
-        let entries = store
-            .try_get_log_entries(1u64..)
-            .await
-            .expect("Should read");
+        let entries = store.try_get_log_entries(1u64..).await.expect("Should read");
         assert_eq!(entries.len(), 6, "Should have entries from both sessions");
     }
 }
@@ -340,15 +277,10 @@ async fn test_sqlite_data_persists_across_close_reopen() {
     {
         let mut sm = SqliteStateMachine::new(&path).expect("Should create");
 
-        let entry = make_entry(
-            1,
-            1,
-            1,
-            AppRequest::Set {
-                key: "persist_key".to_string(),
-                value: "persist_value".to_string(),
-            },
-        );
+        let entry = make_entry(1, 1, 1, AppRequest::Set {
+            key: "persist_key".to_string(),
+            value: "persist_value".to_string(),
+        });
 
         let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
         sm.apply(entries).await.expect("Should apply");
@@ -374,28 +306,18 @@ async fn test_sqlite_multiple_operations_persist() {
 
         // Set multiple keys
         for i in 0..10 {
-            let entry = make_entry(
-                1,
-                1,
-                i,
-                AppRequest::Set {
-                    key: format!("key{}", i),
-                    value: format!("value{}", i),
-                },
-            );
+            let entry = make_entry(1, 1, i, AppRequest::Set {
+                key: format!("key{}", i),
+                value: format!("value{}", i),
+            });
             let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
             sm.apply(entries).await.expect("Should apply");
         }
 
         // Delete some keys
-        let delete_entry = make_entry(
-            1,
-            1,
-            10,
-            AppRequest::DeleteMulti {
-                keys: vec!["key2".to_string(), "key4".to_string()],
-            },
-        );
+        let delete_entry = make_entry(1, 1, 10, AppRequest::DeleteMulti {
+            keys: vec!["key2".to_string(), "key4".to_string()],
+        });
         let entries = Box::pin(stream::once(async move { Ok((delete_entry, None)) }));
         sm.apply(entries).await.expect("Should apply delete");
     }
@@ -424,18 +346,13 @@ async fn test_sqlite_setmulti_persists() {
     {
         let mut sm = SqliteStateMachine::new(&path).expect("Should create");
 
-        let entry = make_entry(
-            1,
-            1,
-            1,
-            AppRequest::SetMulti {
-                pairs: vec![
-                    ("batch_a".to_string(), "val_a".to_string()),
-                    ("batch_b".to_string(), "val_b".to_string()),
-                    ("batch_c".to_string(), "val_c".to_string()),
-                ],
-            },
-        );
+        let entry = make_entry(1, 1, 1, AppRequest::SetMulti {
+            pairs: vec![
+                ("batch_a".to_string(), "val_a".to_string()),
+                ("batch_b".to_string(), "val_b".to_string()),
+                ("batch_c".to_string(), "val_c".to_string()),
+            ],
+        });
         let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
         sm.apply(entries).await.expect("Should apply");
     }
@@ -460,29 +377,19 @@ async fn test_sqlite_scan_after_reopen() {
         let mut sm = SqliteStateMachine::new(&path).expect("Should create");
 
         for i in 0..5 {
-            let entry = make_entry(
-                1,
-                1,
-                i,
-                AppRequest::Set {
-                    key: format!("prefix_{}", i),
-                    value: format!("value_{}", i),
-                },
-            );
+            let entry = make_entry(1, 1, i, AppRequest::Set {
+                key: format!("prefix_{}", i),
+                value: format!("value_{}", i),
+            });
             let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
             sm.apply(entries).await.expect("Should apply");
         }
 
         // Add some keys without the prefix
-        let entry = make_entry(
-            1,
-            1,
-            5,
-            AppRequest::Set {
-                key: "other_key".to_string(),
-                value: "other_value".to_string(),
-            },
-        );
+        let entry = make_entry(1, 1, 5, AppRequest::Set {
+            key: "other_key".to_string(),
+            value: "other_value".to_string(),
+        });
         let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
         sm.apply(entries).await.expect("Should apply");
     }
@@ -491,10 +398,7 @@ async fn test_sqlite_scan_after_reopen() {
     {
         let sm = SqliteStateMachine::new(&path).expect("Should reopen");
 
-        let results = sm
-            .scan("prefix_", None, Some(100))
-            .await
-            .expect("Should scan");
+        let results = sm.scan("prefix_", None, Some(100)).await.expect("Should scan");
         assert_eq!(results.len(), 5, "Should find 5 keys with prefix");
 
         for (key, _) in &results {
@@ -512,15 +416,10 @@ async fn test_sqlite_overwrite_value_persists() {
     {
         let mut sm = SqliteStateMachine::new(&path).expect("Should create");
 
-        let entry = make_entry(
-            1,
-            1,
-            1,
-            AppRequest::Set {
-                key: "overwrite_key".to_string(),
-                value: "initial".to_string(),
-            },
-        );
+        let entry = make_entry(1, 1, 1, AppRequest::Set {
+            key: "overwrite_key".to_string(),
+            value: "initial".to_string(),
+        });
         let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
         sm.apply(entries).await.expect("Should apply");
     }
@@ -530,20 +429,12 @@ async fn test_sqlite_overwrite_value_persists() {
         let mut sm = SqliteStateMachine::new(&path).expect("Should reopen");
 
         // Verify initial value
-        assert_eq!(
-            sm.get("overwrite_key").await.unwrap(),
-            Some("initial".to_string())
-        );
+        assert_eq!(sm.get("overwrite_key").await.unwrap(), Some("initial".to_string()));
 
-        let entry = make_entry(
-            1,
-            1,
-            2,
-            AppRequest::Set {
-                key: "overwrite_key".to_string(),
-                value: "updated".to_string(),
-            },
-        );
+        let entry = make_entry(1, 1, 2, AppRequest::Set {
+            key: "overwrite_key".to_string(),
+            value: "updated".to_string(),
+        });
         let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
         sm.apply(entries).await.expect("Should apply");
     }
@@ -551,10 +442,7 @@ async fn test_sqlite_overwrite_value_persists() {
     // Verify updated value persists
     {
         let sm = SqliteStateMachine::new(&path).expect("Should reopen again");
-        assert_eq!(
-            sm.get("overwrite_key").await.unwrap(),
-            Some("updated".to_string())
-        );
+        assert_eq!(sm.get("overwrite_key").await.unwrap(), Some("updated".to_string()));
     }
 }
 
@@ -564,10 +452,7 @@ async fn test_sqlite_empty_database_get_returns_none() {
     let path = create_sqlite_path(&temp_dir, "empty_get");
 
     let sm = SqliteStateMachine::new(&path).expect("Should create");
-    let value = sm
-        .get("nonexistent")
-        .await
-        .expect("Should get without error");
+    let value = sm.get("nonexistent").await.expect("Should get without error");
     assert!(value.is_none());
 }
 
@@ -581,15 +466,10 @@ async fn test_sqlite_validation_after_reopen() {
         let mut sm = SqliteStateMachine::new(&path).expect("Should create");
 
         for i in 0..5 {
-            let entry = make_entry(
-                1,
-                1,
-                i,
-                AppRequest::Set {
-                    key: format!("k{}", i),
-                    value: format!("v{}", i),
-                },
-            );
+            let entry = make_entry(1, 1, i, AppRequest::Set {
+                key: format!("k{}", i),
+                value: format!("v{}", i),
+            });
             let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
             sm.apply(entries).await.expect("Should apply");
         }

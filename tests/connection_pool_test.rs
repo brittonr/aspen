@@ -4,11 +4,13 @@
 //! Note: Full RaftConnectionPool testing requires Iroh endpoint mocking which is
 //! tested via integration tests.
 
-use aspen::raft::connection_pool::{
-    CONNECTION_IDLE_TIMEOUT, CONNECTION_RETRY_BACKOFF_BASE_MS, ConnectionHealth,
-    ConnectionPoolMetrics, MAX_CONNECTION_RETRIES,
-};
 use std::time::Duration;
+
+use aspen::raft::connection_pool::CONNECTION_IDLE_TIMEOUT;
+use aspen::raft::connection_pool::CONNECTION_RETRY_BACKOFF_BASE_MS;
+use aspen::raft::connection_pool::ConnectionHealth;
+use aspen::raft::connection_pool::ConnectionPoolMetrics;
+use aspen::raft::connection_pool::MAX_CONNECTION_RETRIES;
 
 /// Test ConnectionHealth enum variants and equality.
 #[test]
@@ -173,10 +175,7 @@ fn test_connection_pool_metrics_edge_cases() {
         failed_connections: 0,
         total_active_streams: 500,
     };
-    assert_eq!(
-        all_healthy.healthy_connections,
-        all_healthy.total_connections
-    );
+    assert_eq!(all_healthy.healthy_connections, all_healthy.total_connections);
 
     // All failed
     let all_failed = ConnectionPoolMetrics {
@@ -214,10 +213,7 @@ fn test_health_state_machine_validity() {
         let degraded = ConnectionHealth::Degraded {
             consecutive_failures: i,
         };
-        if let ConnectionHealth::Degraded {
-            consecutive_failures,
-        } = degraded
-        {
+        if let ConnectionHealth::Degraded { consecutive_failures } = degraded {
             assert_eq!(consecutive_failures, i);
         }
     }
@@ -232,10 +228,7 @@ fn test_max_retries_bounds_degraded_state() {
     };
 
     // Verify at_limit is just before transitioning to Failed
-    if let ConnectionHealth::Degraded {
-        consecutive_failures,
-    } = at_limit
-    {
+    if let ConnectionHealth::Degraded { consecutive_failures } = at_limit {
         assert_eq!(consecutive_failures, MAX_CONNECTION_RETRIES);
         // Next failure would transition to Failed
         assert!(consecutive_failures >= MAX_CONNECTION_RETRIES);

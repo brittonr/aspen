@@ -12,15 +12,15 @@
 //! - Tiger Style bounds are enforced (MAX_KEY_SIZE, MAX_VALUE_SIZE)
 //! - Operations are deterministic
 
-use bolero::check;
-use bolero_generator::{Driver, TypeGenerator};
 use std::collections::HashMap;
 
 // Import the real DeterministicKeyValueStore for comparison
 use aspen::fuzz_helpers::{
-    DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand,
-    WriteRequest,
+    DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest,
 };
+use bolero::check;
+use bolero_generator::Driver;
+use bolero_generator::TypeGenerator;
 
 /// Tiger Style: Resource bounds from constants.rs
 const MAX_KEY_SIZE: usize = 1024; // 1 KB
@@ -147,9 +147,7 @@ struct OpSequence {
 impl TypeGenerator for OpSequence {
     fn generate<D: Driver>(driver: &mut D) -> Option<Self> {
         let ops_count = driver.produce::<usize>()? % 20;
-        let ops: Vec<KvOp> = (0..ops_count)
-            .map(|_| KvOp::generate(driver))
-            .collect::<Option<Vec<KvOp>>>()?;
+        let ops: Vec<KvOp> = (0..ops_count).map(|_| KvOp::generate(driver)).collect::<Option<Vec<KvOp>>>()?;
 
         Some(OpSequence { ops })
     }
@@ -230,26 +228,16 @@ fn fuzz_differential() {
                             // Compare results
                             match (ref_value, store_result) {
                                 (Some(expected), Ok(result)) => {
-                                    assert_eq!(
-                                        expected, result.value,
-                                        "Read value mismatch for key '{}'",
-                                        key
-                                    );
+                                    assert_eq!(expected, result.value, "Read value mismatch for key '{}'", key);
                                 }
                                 (None, Err(KeyValueStoreError::NotFound { .. })) => {
                                     // Both agree key doesn't exist - good
                                 }
                                 (Some(_), Err(e)) => {
-                                    panic!(
-                                        "Reference has key but store returned error: {:?}",
-                                        e
-                                    );
+                                    panic!("Reference has key but store returned error: {:?}", e);
                                 }
                                 (None, Ok(result)) => {
-                                    panic!(
-                                        "Reference missing key but store returned value: {:?}",
-                                        result
-                                    );
+                                    panic!("Reference missing key but store returned value: {:?}", result);
                                 }
                                 (None, Err(_)) => {
                                     // Both agree key doesn't exist (other error types)
@@ -265,9 +253,7 @@ fn fuzz_differential() {
                         }
 
                         // All pairs must be valid for batch to succeed
-                        let all_valid = pairs
-                            .iter()
-                            .all(|(k, v)| is_valid_key(k) && is_valid_value(v));
+                        let all_valid = pairs.iter().all(|(k, v)| is_valid_key(k) && is_valid_value(v));
 
                         if all_valid && !pairs.is_empty() {
                             // Apply to reference
@@ -277,9 +263,7 @@ fn fuzz_differential() {
 
                             // Apply to real store
                             let request = WriteRequest {
-                                command: WriteCommand::SetMulti {
-                                    pairs: pairs.clone(),
-                                },
+                                command: WriteCommand::SetMulti { pairs: pairs.clone() },
                             };
                             let result = store.write(request).await;
                             assert!(result.is_ok(), "SetMulti should succeed for valid input");
@@ -314,15 +298,8 @@ fn fuzz_differential() {
             // Final verification: check all keys in reference exist in store
             for (key, expected_value) in &reference {
                 let request = ReadRequest { key: key.clone() };
-                let result = store
-                    .read(request)
-                    .await
-                    .expect("Key from reference should exist in store");
-                assert_eq!(
-                    expected_value, &result.value,
-                    "Final state mismatch for key '{}'",
-                    key
-                );
+                let result = store.read(request).await.expect("Key from reference should exist in store");
+                assert_eq!(expected_value, &result.value, "Final state mismatch for key '{}'", key);
             }
         });
     });

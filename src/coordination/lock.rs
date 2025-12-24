@@ -6,14 +6,24 @@
 //! - Exponential backoff with jitter to prevent thundering herd
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use rand::Rng;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
-use crate::coordination::error::{CoordinationError, LockHeldSnafu, LockLostSnafu, TimeoutSnafu};
-use crate::coordination::types::{FencingToken, LockEntry};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
+use crate::coordination::error::CoordinationError;
+use crate::coordination::error::LockHeldSnafu;
+use crate::coordination::error::LockLostSnafu;
+use crate::coordination::error::TimeoutSnafu;
+use crate::coordination::types::FencingToken;
+use crate::coordination::types::LockEntry;
 
 /// Configuration for distributed lock.
 #[derive(Debug, Clone)]
@@ -58,12 +68,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// * `key` - The lock key (should be unique per resource)
     /// * `holder_id` - Unique identifier for this lock holder
     /// * `config` - Lock configuration
-    pub fn new(
-        store: Arc<S>,
-        key: impl Into<String>,
-        holder_id: impl Into<String>,
-        config: LockConfig,
-    ) -> Self {
+    pub fn new(store: Arc<S>, key: impl Into<String>, holder_id: impl Into<String>, config: LockConfig) -> Self {
         Self {
             store,
             key: key.into(),
@@ -83,10 +88,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
         loop {
             match self.try_acquire().await {
                 Ok(guard) => return Ok(guard),
-                Err(CoordinationError::LockHeld {
-                    holder,
-                    deadline_ms,
-                }) => {
+                Err(CoordinationError::LockHeld { holder, deadline_ms }) => {
                     if Instant::now() >= deadline {
                         return TimeoutSnafu {
                             operation: format!("lock acquisition for '{}'", self.key),
@@ -220,11 +222,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
         match current {
             Some(entry) if entry.fencing_token == guard.fencing_token.value() => {
                 // We still hold it, extend TTL
-                let renewed = LockEntry::new(
-                    self.holder_id.clone(),
-                    entry.fencing_token,
-                    self.config.ttl_ms,
-                );
+                let renewed = LockEntry::new(self.holder_id.clone(), entry.fencing_token, self.config.ttl_ms);
                 let new_json = serde_json::to_string(&renewed)?;
 
                 match self
@@ -272,11 +270,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                let entry: LockEntry =
-                    serde_json::from_str(&value).map_err(|_| CoordinationError::CorruptedData {
-                        key: self.key.clone(),
-                        reason: "invalid JSON".to_string(),
-                    })?;
+                let entry: LockEntry = serde_json::from_str(&value).map_err(|_| CoordinationError::CorruptedData {
+                    key: self.key.clone(),
+                    reason: "invalid JSON".to_string(),
+                })?;
                 Ok(Some(entry))
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
@@ -419,12 +416,7 @@ mod tests {
     async fn test_lock_contention() {
         let store = Arc::new(DeterministicKeyValueStore::new());
 
-        let lock1 = DistributedLock::new(
-            store.clone(),
-            "test_lock",
-            "holder_1",
-            LockConfig::default(),
-        );
+        let lock1 = DistributedLock::new(store.clone(), "test_lock", "holder_1", LockConfig::default());
         let lock2 = DistributedLock::new(store, "test_lock", "holder_2", LockConfig::default());
 
         let _guard1 = lock1.try_acquire().await.unwrap();

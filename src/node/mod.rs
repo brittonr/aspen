@@ -60,18 +60,18 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use iroh::EndpointAddr;
-
-pub use self::types::NodeId;
-
 use iroh::protocol::Router;
 use tokio_util::sync::CancellationToken;
 
-use crate::api::{ClusterController, KeyValueStore};
-use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
+pub use self::types::NodeId;
+use crate::api::ClusterController;
+use crate::api::KeyValueStore;
+use crate::cluster::bootstrap::NodeHandle;
+use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
-use crate::protocol_handlers::{
-    AuthenticatedRaftProtocolHandler, RaftProtocolHandler, TrustedPeersRegistry,
-};
+use crate::protocol_handlers::AuthenticatedRaftProtocolHandler;
+use crate::protocol_handlers::RaftProtocolHandler;
+use crate::protocol_handlers::TrustedPeersRegistry;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -241,9 +241,7 @@ impl NodeBuilder {
         use anyhow::Context;
 
         // Validate configuration before expensive bootstrap
-        self.config
-            .validate()
-            .context("configuration validation failed")?;
+        self.config.validate().context("configuration validation failed")?;
 
         let handle = bootstrap_node(self.config).await?;
         Ok(Node {
@@ -334,7 +332,8 @@ impl Node {
     /// node.spawn_router();
     /// ```
     pub fn spawn_router(&mut self) {
-        use crate::protocol_handlers::{RAFT_ALPN, RAFT_AUTH_ALPN};
+        use crate::protocol_handlers::RAFT_ALPN;
+        use crate::protocol_handlers::RAFT_AUTH_ALPN;
 
         let raft_core = self.handle.raft_node.raft().as_ref().clone();
         let raft_handler = RaftProtocolHandler::new(raft_core.clone());
@@ -358,10 +357,7 @@ impl Node {
             // Spawn the membership watcher to keep TrustedPeersRegistry in sync with Raft membership.
             // The watcher monitors Raft metrics for membership changes and updates the registry
             // with PublicKeys from RaftMemberInfo.iroh_addr.id.
-            let watcher_cancel = spawn_membership_watcher(
-                self.handle.raft_node.raft().clone(),
-                trusted_peers.clone(),
-            );
+            let watcher_cancel = spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
             let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core, trusted_peers);

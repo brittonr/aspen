@@ -47,23 +47,33 @@
 
 use async_trait::async_trait;
 use iroh::EndpointAddr;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use thiserror::Error;
 
 pub mod inmemory;
 pub mod pure;
 pub mod sql_validation;
 pub mod vault;
-pub use inmemory::{DeterministicClusterController, DeterministicKeyValueStore};
-pub use vault::{SYSTEM_PREFIX, VaultError, is_system_key, validate_client_key};
-
-use crate::raft::constants::{
-    DEFAULT_SQL_RESULT_ROWS, DEFAULT_SQL_TIMEOUT_MS, MAX_KEY_SIZE, MAX_SETMULTI_KEYS,
-    MAX_SQL_PARAMS, MAX_SQL_QUERY_SIZE, MAX_SQL_RESULT_ROWS, MAX_SQL_TIMEOUT_MS, MAX_VALUE_SIZE,
-};
+pub use inmemory::DeterministicClusterController;
+pub use inmemory::DeterministicKeyValueStore;
 // Re-export OpenRaft types for observability
 pub use openraft::ServerState;
 pub use openraft::metrics::RaftMetrics;
+pub use vault::SYSTEM_PREFIX;
+pub use vault::VaultError;
+pub use vault::is_system_key;
+pub use vault::validate_client_key;
+
+use crate::raft::constants::DEFAULT_SQL_RESULT_ROWS;
+use crate::raft::constants::DEFAULT_SQL_TIMEOUT_MS;
+use crate::raft::constants::MAX_KEY_SIZE;
+use crate::raft::constants::MAX_SETMULTI_KEYS;
+use crate::raft::constants::MAX_SQL_PARAMS;
+use crate::raft::constants::MAX_SQL_QUERY_SIZE;
+use crate::raft::constants::MAX_SQL_RESULT_ROWS;
+use crate::raft::constants::MAX_SQL_TIMEOUT_MS;
+use crate::raft::constants::MAX_VALUE_SIZE;
 
 /// Describes a node participating in the control-plane cluster.
 ///
@@ -243,10 +253,7 @@ pub trait ClusterController: Send + Sync {
     /// - `NotInitialized`: Cluster has not been initialized
     /// - `InvalidRequest`: Invalid node configuration
     /// - `Failed`: Not leader or Raft operation failed
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError>;
 
     /// Change the set of voting members in the cluster.
     ///
@@ -259,10 +266,7 @@ pub trait ClusterController: Send + Sync {
     /// - `NotInitialized`: Cluster has not been initialized
     /// - `InvalidRequest`: Invalid member set (empty, non-existent nodes)
     /// - `Failed`: Not leader, quorum unavailable, or Raft error
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError>;
 
     /// Get the current cluster topology and membership state.
     ///
@@ -286,9 +290,7 @@ pub trait ClusterController: Send + Sync {
     ///
     /// This method provides raw OpenRaft metrics. For a simplified JSON format,
     /// use the HTTP `/raft-metrics` endpoint.
-    async fn get_metrics(
-        &self,
-    ) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
+    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
 
     /// Trigger a snapshot to be taken immediately.
     ///
@@ -319,17 +321,11 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).init(request).await
     }
 
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
         (**self).add_learner(request).await
     }
 
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError> {
         (**self).change_membership(request).await
     }
 
@@ -337,9 +333,7 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).current_state().await
     }
 
-    async fn get_metrics(
-        &self,
-    ) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
         (**self).get_metrics().await
     }
 
@@ -1294,10 +1288,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                 }
             }
         }
-        WriteCommand::ConditionalBatch {
-            conditions,
-            operations,
-        } => {
+        WriteCommand::ConditionalBatch { conditions, operations } => {
             // Check total size of conditions + operations
             let total_size = conditions.len() + operations.len();
             if total_size > MAX_SETMULTI_KEYS as usize {
@@ -1410,15 +1401,10 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                 check_value(value)?;
             }
         }
-        WriteCommand::LeaseGrant { .. }
-        | WriteCommand::LeaseRevoke { .. }
-        | WriteCommand::LeaseKeepalive { .. } => {
+        WriteCommand::LeaseGrant { .. } | WriteCommand::LeaseRevoke { .. } | WriteCommand::LeaseKeepalive { .. } => {
             // No key/value validation needed for lease operations
         }
-        WriteCommand::OptimisticTransaction {
-            read_set,
-            write_set,
-        } => {
+        WriteCommand::OptimisticTransaction { read_set, write_set } => {
             // Tiger Style: Validate batch sizes
             if read_set.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
@@ -1500,10 +1486,10 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
 
 /// Consistency level for SQL read queries.
 ///
-/// - `Linearizable`: Query sees all prior writes (uses Raft ReadIndex protocol).
-///   This is the safe default but has higher latency due to leader confirmation.
-/// - `Stale`: Fast local read without consistency guarantee.
-///   May return stale data if the node is behind the leader.
+/// - `Linearizable`: Query sees all prior writes (uses Raft ReadIndex protocol). This is the safe
+///   default but has higher latency due to leader confirmation.
+/// - `Stale`: Fast local read without consistency guarantee. May return stale data if the node is
+///   behind the leader.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum SqlConsistency {
     /// Linearizable consistency via Raft ReadIndex protocol.
@@ -1664,10 +1650,7 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
         && limit > MAX_SQL_RESULT_ROWS
     {
         return Err(SqlQueryError::QueryNotAllowed {
-            reason: format!(
-                "limit {} exceeds maximum of {} rows",
-                limit, MAX_SQL_RESULT_ROWS
-            ),
+            reason: format!("limit {} exceeds maximum of {} rows", limit, MAX_SQL_RESULT_ROWS),
         });
     }
 
@@ -1676,10 +1659,7 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
         && timeout > MAX_SQL_TIMEOUT_MS
     {
         return Err(SqlQueryError::QueryNotAllowed {
-            reason: format!(
-                "timeout {}ms exceeds maximum of {}ms",
-                timeout, MAX_SQL_TIMEOUT_MS
-            ),
+            reason: format!("timeout {}ms exceeds maximum of {}ms", timeout, MAX_SQL_TIMEOUT_MS),
         });
     }
 
@@ -1688,16 +1668,12 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
 
 /// Get effective limit, applying defaults and bounds.
 pub fn effective_sql_limit(request_limit: Option<u32>) -> u32 {
-    request_limit
-        .unwrap_or(DEFAULT_SQL_RESULT_ROWS)
-        .min(MAX_SQL_RESULT_ROWS)
+    request_limit.unwrap_or(DEFAULT_SQL_RESULT_ROWS).min(MAX_SQL_RESULT_ROWS)
 }
 
 /// Get effective timeout in milliseconds, applying defaults and bounds.
 pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
-    request_timeout
-        .unwrap_or(DEFAULT_SQL_TIMEOUT_MS)
-        .min(MAX_SQL_TIMEOUT_MS)
+    request_timeout.unwrap_or(DEFAULT_SQL_TIMEOUT_MS).min(MAX_SQL_TIMEOUT_MS)
 }
 
 /// SQL query executor interface.
@@ -1718,10 +1694,10 @@ pub trait SqlQueryExecutor: Send + Sync {
     ///
     /// # Consistency
     ///
-    /// - `Linearizable`: Uses Raft ReadIndex to ensure the read sees all
-    ///   committed writes. Higher latency but consistent.
-    /// - `Stale`: Executes directly on local state machine. Fast but may
-    ///   return stale data if this node is behind the leader.
+    /// - `Linearizable`: Uses Raft ReadIndex to ensure the read sees all committed writes. Higher
+    ///   latency but consistent.
+    /// - `Stale`: Executes directly on local state machine. Fast but may return stale data if this
+    ///   node is behind the leader.
     ///
     /// # Errors
     ///
@@ -1754,10 +1730,7 @@ mod validation_tests {
             key: "".into(),
             value: "v".into(),
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
@@ -1776,10 +1749,7 @@ mod validation_tests {
             key: big_key,
             value: "v".into(),
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::KeyTooLarge { .. })
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::KeyTooLarge { .. })));
     }
 
     #[test]
@@ -1789,22 +1759,14 @@ mod validation_tests {
             key: "k".into(),
             value: big_value,
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::ValueTooLarge { .. })
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::ValueTooLarge { .. })));
     }
 
     #[test]
     fn batch_too_large_rejected() {
-        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS + 1)
-            .map(|i| (format!("k{}", i), "v".into()))
-            .collect();
+        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS + 1).map(|i| (format!("k{}", i), "v".into())).collect();
         let cmd = WriteCommand::SetMulti { pairs };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::BatchTooLarge { .. })
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
     }
 
     #[test]
@@ -1817,21 +1779,14 @@ mod validation_tests {
                 value: "v".into(),
             })
             .collect();
-        let success: Vec<_> = (0..51)
-            .map(|i| TxnOp::Get {
-                key: format!("k{}", i),
-            })
-            .collect();
+        let success: Vec<_> = (0..51).map(|i| TxnOp::Get { key: format!("k{}", i) }).collect();
         let cmd = WriteCommand::Transaction {
             compare,
             success,
             failure: vec![],
         };
         // Total = 50 + 51 = 101 > MAX_SETMULTI_KEYS (100)
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::BatchTooLarge { .. })
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
     }
 
     #[test]
@@ -1839,10 +1794,7 @@ mod validation_tests {
         let cmd = WriteCommand::SetMulti {
             pairs: vec![("".into(), "v".into())],
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
@@ -1857,30 +1809,19 @@ mod validation_tests {
             success: vec![],
             failure: vec![],
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
     fn empty_key_in_delete_rejected() {
         let cmd = WriteCommand::Delete { key: "".into() };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
     fn empty_key_in_deletemulti_rejected() {
-        let cmd = WriteCommand::DeleteMulti {
-            keys: vec!["".into()],
-        };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        let cmd = WriteCommand::DeleteMulti { keys: vec!["".into()] };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
@@ -1890,37 +1831,26 @@ mod validation_tests {
             expected: None,
             new_value: "v".into(),
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]
     fn boundary_key_size_accepted() {
         let key = "x".repeat(MAX_KEY_SIZE as usize);
-        let cmd = WriteCommand::Set {
-            key,
-            value: "v".into(),
-        };
+        let cmd = WriteCommand::Set { key, value: "v".into() };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn boundary_value_size_accepted() {
         let value = "x".repeat(MAX_VALUE_SIZE as usize);
-        let cmd = WriteCommand::Set {
-            key: "k".into(),
-            value,
-        };
+        let cmd = WriteCommand::Set { key: "k".into(), value };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn boundary_batch_size_accepted() {
-        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS)
-            .map(|i| (format!("k{}", i), "v".into()))
-            .collect();
+        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), "v".into())).collect();
         let cmd = WriteCommand::SetMulti { pairs };
         assert!(validate_write_command(&cmd).is_ok());
     }

@@ -7,22 +7,41 @@
 
 use std::collections::BTreeSet;
 use std::ffi::CStr;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use fuse_backend_rs::abi::fuse_abi::{CreateIn, stat64};
-use fuse_backend_rs::api::filesystem::{
-    Context, DirEntry, Entry, FileSystem, FsOptions, OpenOptions, SetattrValid, ZeroCopyReader,
-    ZeroCopyWriter,
-};
+use fuse_backend_rs::abi::fuse_abi::CreateIn;
+use fuse_backend_rs::abi::fuse_abi::stat64;
+use fuse_backend_rs::api::filesystem::Context;
+use fuse_backend_rs::api::filesystem::DirEntry;
+use fuse_backend_rs::api::filesystem::Entry;
+use fuse_backend_rs::api::filesystem::FileSystem;
+use fuse_backend_rs::api::filesystem::FsOptions;
+use fuse_backend_rs::api::filesystem::OpenOptions;
+use fuse_backend_rs::api::filesystem::SetattrValid;
+use fuse_backend_rs::api::filesystem::ZeroCopyReader;
+use fuse_backend_rs::api::filesystem::ZeroCopyWriter;
 use tracing::debug;
 
 use crate::client::SharedClient;
-use crate::constants::{
-    ATTR_TTL, BLOCK_SIZE, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, DEFAULT_SYMLINK_MODE, ENTRY_TTL,
-    MAX_KEY_SIZE, MAX_READDIR_ENTRIES, MAX_VALUE_SIZE, MAX_XATTR_NAME_SIZE, MAX_XATTR_VALUE_SIZE,
-    MAX_XATTRS_PER_FILE, ROOT_INODE, SYMLINK_SUFFIX, XATTR_PREFIX,
-};
-use crate::inode::{EntryType, InodeManager};
+use crate::constants::ATTR_TTL;
+use crate::constants::BLOCK_SIZE;
+use crate::constants::DEFAULT_DIR_MODE;
+use crate::constants::DEFAULT_FILE_MODE;
+use crate::constants::DEFAULT_SYMLINK_MODE;
+use crate::constants::ENTRY_TTL;
+use crate::constants::MAX_KEY_SIZE;
+use crate::constants::MAX_READDIR_ENTRIES;
+use crate::constants::MAX_VALUE_SIZE;
+use crate::constants::MAX_XATTR_NAME_SIZE;
+use crate::constants::MAX_XATTR_VALUE_SIZE;
+use crate::constants::MAX_XATTRS_PER_FILE;
+use crate::constants::ROOT_INODE;
+use crate::constants::SYMLINK_SUFFIX;
+use crate::constants::XATTR_PREFIX;
+use crate::inode::EntryType;
+use crate::inode::InodeManager;
 
 /// Aspen FUSE filesystem.
 ///
@@ -71,18 +90,12 @@ impl AspenFs {
     /// Convert a KV key to a filesystem path.
     #[allow(dead_code)]
     fn key_to_path(key: &str) -> String {
-        if key.is_empty() {
-            String::new()
-        } else {
-            key.to_string()
-        }
+        if key.is_empty() { String::new() } else { key.to_string() }
     }
 
     /// Build a stat64 structure for a file or directory.
     fn make_attr(&self, inode: u64, entry_type: EntryType, size: u64) -> stat64 {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
         let sec = now.as_secs() as i64;
         let nsec = now.subsec_nanos() as i64;
 
@@ -140,24 +153,16 @@ impl AspenFs {
 
         debug!(key, "reading key from Aspen");
 
-        client
-            .read_key(key)
-            .map_err(|e| std::io::Error::other(e.to_string()))
+        client.read_key(key).map_err(|e| std::io::Error::other(e.to_string()))
     }
 
     /// Write a key to the KV store.
     fn kv_write(&self, key: &str, value: &[u8]) -> std::io::Result<()> {
         if key.len() > MAX_KEY_SIZE {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "key too large",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "key too large"));
         }
         if value.len() > MAX_VALUE_SIZE {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "value too large",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "value too large"));
         }
 
         let Some(ref client) = self.client else {
@@ -167,9 +172,7 @@ impl AspenFs {
 
         debug!(key, value_len = value.len(), "writing key to Aspen");
 
-        client
-            .write_key(key, value)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        client.write_key(key, value).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         Ok(())
     }
@@ -183,9 +186,7 @@ impl AspenFs {
 
         debug!(key, "deleting key from Aspen");
 
-        client
-            .delete_key(key)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        client.delete_key(key).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         Ok(())
     }
@@ -199,9 +200,8 @@ impl AspenFs {
 
         debug!(prefix, "scanning keys from Aspen");
 
-        let entries = client
-            .scan_keys(prefix, MAX_READDIR_ENTRIES)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let entries =
+            client.scan_keys(prefix, MAX_READDIR_ENTRIES).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         Ok(entries.into_iter().map(|(k, _)| k).collect())
     }
@@ -244,9 +244,8 @@ impl FileSystem for AspenFs {
     }
 
     fn lookup(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<Entry> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -279,26 +278,16 @@ impl FileSystem for AspenFs {
             EntryType::Symlink => {
                 let key = Self::path_to_key(&child_path);
                 let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
-                self.kv_read(&symlink_key)?
-                    .map(|v| v.len() as u64)
-                    .unwrap_or(0)
+                self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
         };
 
         Ok(self.make_entry(inode, entry_type, size))
     }
 
-    fn getattr(
-        &self,
-        _ctx: &Context,
-        inode: u64,
-        _handle: Option<u64>,
-    ) -> std::io::Result<(stat64, Duration)> {
+    fn getattr(&self, _ctx: &Context, inode: u64, _handle: Option<u64>) -> std::io::Result<(stat64, Duration)> {
         if inode == ROOT_INODE {
-            return Ok((
-                self.make_attr(ROOT_INODE, EntryType::Directory, 0),
-                ATTR_TTL,
-            ));
+            return Ok((self.make_attr(ROOT_INODE, EntryType::Directory, 0), ATTR_TTL));
         }
 
         let entry = self
@@ -315,9 +304,7 @@ impl FileSystem for AspenFs {
             EntryType::Symlink => {
                 let key = Self::path_to_key(&entry.path);
                 let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
-                self.kv_read(&symlink_key)?
-                    .map(|v| v.len() as u64)
-                    .unwrap_or(0)
+                self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
         };
 
@@ -337,12 +324,7 @@ impl FileSystem for AspenFs {
         self.getattr(_ctx, inode, None)
     }
 
-    fn opendir(
-        &self,
-        _ctx: &Context,
-        inode: u64,
-        _flags: u32,
-    ) -> std::io::Result<(Option<u64>, OpenOptions)> {
+    fn opendir(&self, _ctx: &Context, inode: u64, _flags: u32) -> std::io::Result<(Option<u64>, OpenOptions)> {
         // Verify it's a directory
         if inode == ROOT_INODE {
             return Ok((None, OpenOptions::empty()));
@@ -354,10 +336,7 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type != EntryType::Directory {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotADirectory,
-                "not a directory",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotADirectory, "not a directory"));
         }
 
         Ok((None, OpenOptions::empty()))
@@ -376,9 +355,10 @@ impl FileSystem for AspenFs {
         let dir_path = if inode == ROOT_INODE {
             String::new()
         } else {
-            let entry = self.inodes.get_path(inode).ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found")
-            })?;
+            let entry = self
+                .inodes
+                .get_path(inode)
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
             entry.path.clone()
         };
 
@@ -498,10 +478,7 @@ impl FileSystem for AspenFs {
     ) -> std::io::Result<(Option<u64>, OpenOptions, Option<u32>)> {
         // Verify file exists
         if inode == ROOT_INODE {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::IsADirectory,
-                "is a directory",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::IsADirectory, "is a directory"));
         }
 
         let entry = self
@@ -510,10 +487,7 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type == EntryType::Directory {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::IsADirectory,
-                "is a directory",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::IsADirectory, "is a directory"));
         }
 
         // No handle needed for stateless operations
@@ -615,9 +589,8 @@ impl FileSystem for AspenFs {
         name: &CStr,
         _args: CreateIn,
     ) -> std::io::Result<(Entry, Option<u64>, OpenOptions, Option<u32>)> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -645,9 +618,8 @@ impl FileSystem for AspenFs {
     }
 
     fn unlink(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -673,17 +645,9 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn mkdir(
-        &self,
-        _ctx: &Context,
-        parent: u64,
-        name: &CStr,
-        _mode: u32,
-        _umask: u32,
-    ) -> std::io::Result<Entry> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+    fn mkdir(&self, _ctx: &Context, parent: u64, name: &CStr, _mode: u32, _umask: u32) -> std::io::Result<Entry> {
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -706,9 +670,8 @@ impl FileSystem for AspenFs {
     }
 
     fn rmdir(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -727,10 +690,7 @@ impl FileSystem for AspenFs {
         let prefix = format!("{}/", dir_path);
         let children = self.kv_scan(&prefix)?;
         if !children.is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::DirectoryNotEmpty,
-                "directory not empty",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "directory not empty"));
         }
 
         // Remove from inode cache
@@ -739,24 +699,12 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn fsync(
-        &self,
-        _ctx: &Context,
-        _inode: u64,
-        _datasync: bool,
-        _handle: u64,
-    ) -> std::io::Result<()> {
+    fn fsync(&self, _ctx: &Context, _inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
         // Writes are already synchronous through Raft consensus
         Ok(())
     }
 
-    fn flush(
-        &self,
-        _ctx: &Context,
-        _inode: u64,
-        _handle: u64,
-        _lock_owner: u64,
-    ) -> std::io::Result<()> {
+    fn flush(&self, _ctx: &Context, _inode: u64, _handle: u64, _lock_owner: u64) -> std::io::Result<()> {
         // No buffering, nothing to flush
         Ok(())
     }
@@ -778,14 +726,16 @@ impl FileSystem for AspenFs {
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get old parent path
-        let old_parent = self.inodes.get_path(olddir).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "old parent not found")
-        })?;
+        let old_parent = self
+            .inodes
+            .get_path(olddir)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "old parent not found"))?;
 
         // Get new parent path
-        let new_parent = self.inodes.get_path(newdir).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "new parent not found")
-        })?;
+        let new_parent = self
+            .inodes
+            .get_path(newdir)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "new parent not found"))?;
 
         // Build old path
         let old_path = if old_parent.path.is_empty() {
@@ -869,19 +819,12 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn symlink(
-        &self,
-        _ctx: &Context,
-        linkname: &CStr,
-        parent: u64,
-        name: &CStr,
-    ) -> std::io::Result<Entry> {
+    fn symlink(&self, _ctx: &Context, linkname: &CStr, parent: u64, name: &CStr) -> std::io::Result<Entry> {
         let link_target = linkname
             .to_str()
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid target"))?;
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Get parent path
         let parent_entry = self
@@ -919,10 +862,7 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type != EntryType::Symlink {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "not a symlink",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a symlink"));
         }
 
         let key = Self::path_to_key(&entry.path);
@@ -930,9 +870,8 @@ impl FileSystem for AspenFs {
 
         debug!(key, "readlink");
 
-        self.kv_read(&symlink_key)?.ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "symlink target not found")
-        })
+        self.kv_read(&symlink_key)?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "symlink target not found"))
     }
 
     fn statfs(&self, _ctx: &Context, _inode: u64) -> std::io::Result<libc::statvfs64> {
@@ -961,10 +900,7 @@ impl FileSystem for AspenFs {
 
         let entry = self.inodes.get_path(inode);
         if entry.is_none() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "inode not found",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"));
         }
 
         // For now, we allow all access (no permission enforcement)
@@ -975,32 +911,18 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn setxattr(
-        &self,
-        _ctx: &Context,
-        inode: u64,
-        name: &CStr,
-        value: &[u8],
-        flags: u32,
-    ) -> std::io::Result<()> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+    fn setxattr(&self, _ctx: &Context, inode: u64, name: &CStr, value: &[u8], flags: u32) -> std::io::Result<()> {
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         // Validate name length
         if name_str.len() > MAX_XATTR_NAME_SIZE {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "xattr name too long",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "xattr name too long"));
         }
 
         // Validate value size
         if value.len() > MAX_XATTR_VALUE_SIZE {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "xattr value too large",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "xattr value too large"));
         }
 
         let entry = self
@@ -1017,17 +939,11 @@ impl FileSystem for AspenFs {
         let exists = self.kv_read(&xattr_key)?.is_some();
 
         if flags & libc::XATTR_CREATE as u32 != 0 && exists {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                "xattr already exists",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "xattr already exists"));
         }
 
         if flags & libc::XATTR_REPLACE as u32 != 0 && !exists {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "xattr not found",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "xattr not found"));
         }
 
         // Check xattr count limit
@@ -1035,10 +951,7 @@ impl FileSystem for AspenFs {
             let prefix = format!("{}{}", key, XATTR_PREFIX);
             let xattrs = self.kv_scan(&prefix)?;
             if xattrs.len() >= MAX_XATTRS_PER_FILE {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::OutOfMemory,
-                    "too many xattrs",
-                ));
+                return Err(std::io::Error::new(std::io::ErrorKind::OutOfMemory, "too many xattrs"));
             }
         }
 
@@ -1055,9 +968,8 @@ impl FileSystem for AspenFs {
     ) -> std::io::Result<fuse_backend_rs::api::filesystem::GetxattrReply> {
         use fuse_backend_rs::api::filesystem::GetxattrReply;
 
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         let entry = self
             .inodes
@@ -1077,10 +989,7 @@ impl FileSystem for AspenFs {
             // Size query only
             Ok(GetxattrReply::Count(value.len() as u32))
         } else if size < value.len() as u32 {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "buffer too small",
-            ))
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "buffer too small"))
         } else {
             Ok(GetxattrReply::Value(value))
         }
@@ -1121,19 +1030,15 @@ impl FileSystem for AspenFs {
             // Size query only
             Ok(ListxattrReply::Count(result.len() as u32))
         } else if size < result.len() as u32 {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "buffer too small",
-            ))
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "buffer too small"))
         } else {
             Ok(ListxattrReply::Names(result))
         }
     }
 
     fn removexattr(&self, _ctx: &Context, inode: u64, name: &CStr) -> std::io::Result<()> {
-        let name_str = name
-            .to_str()
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
+        let name_str =
+            name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
         let entry = self
             .inodes
@@ -1147,34 +1052,19 @@ impl FileSystem for AspenFs {
 
         // Check if exists
         if self.kv_read(&xattr_key)?.is_none() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "xattr not found",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "xattr not found"));
         }
 
         self.kv_delete(&xattr_key)?;
         Ok(())
     }
 
-    fn releasedir(
-        &self,
-        _ctx: &Context,
-        _inode: u64,
-        _flags: u32,
-        _handle: u64,
-    ) -> std::io::Result<()> {
+    fn releasedir(&self, _ctx: &Context, _inode: u64, _flags: u32, _handle: u64) -> std::io::Result<()> {
         // Nothing to release for stateless directory operations
         Ok(())
     }
 
-    fn fsyncdir(
-        &self,
-        _ctx: &Context,
-        _inode: u64,
-        _datasync: bool,
-        _handle: u64,
-    ) -> std::io::Result<()> {
+    fn fsyncdir(&self, _ctx: &Context, _inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
         // Writes are already synchronous through Raft consensus
         Ok(())
     }
@@ -1182,8 +1072,9 @@ impl FileSystem for AspenFs {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::ffi::CString;
+
+    use super::*;
 
     /// Create a mock Context for testing.
     fn mock_context() -> Context {

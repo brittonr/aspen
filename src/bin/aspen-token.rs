@@ -4,17 +4,25 @@
 //! capability tokens for the Aspen distributed system.
 
 use std::fs;
-use std::io::{self, Write};
+use std::io::Write;
+use std::io::{self};
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use iroh::{PublicKey, SecretKey};
-
-use aspen::auth::{
-    Audience, Capability, CapabilityToken, TokenBuilder, TokenVerifier, generate_root_token,
-};
+use anyhow::Context;
+use anyhow::Result;
+use aspen::auth::Audience;
+use aspen::auth::Capability;
+use aspen::auth::CapabilityToken;
+use aspen::auth::TokenBuilder;
+use aspen::auth::TokenVerifier;
+use aspen::auth::generate_root_token;
+use clap::Parser;
+use clap::Subcommand;
+use iroh::PublicKey;
+use iroh::SecretKey;
 
 /// CLI tool for managing Aspen capability tokens.
 #[derive(Parser, Debug)]
@@ -58,7 +66,8 @@ enum Commands {
         parent_key: String,
 
         /// Capability to grant (repeatable).
-        /// Format: read:prefix, write:prefix, delete:prefix, full:prefix, watch:prefix, cluster-admin, delegate
+        /// Format: read:prefix, write:prefix, delete:prefix, full:prefix, watch:prefix,
+        /// cluster-admin, delegate
         #[arg(long, value_name = "CAP")]
         capability: Vec<String>,
 
@@ -120,10 +129,7 @@ fn main() -> Result<()> {
             output.as_deref(),
             cli.json,
         ),
-        Commands::Verify {
-            token,
-            trusted_root,
-        } => verify_cmd(&token, &trusted_root, cli.json),
+        Commands::Verify { token, trusted_root } => verify_cmd(&token, &trusted_root, cli.json),
         Commands::Inspect { token } => inspect_cmd(&token, cli.json),
     }
 }
@@ -141,8 +147,7 @@ fn generate_root_cmd(
     };
 
     let lifetime = parse_duration(lifetime_str)?;
-    let token =
-        generate_root_token(&secret_key, lifetime).context("failed to generate root token")?;
+    let token = generate_root_token(&secret_key, lifetime).context("failed to generate root token")?;
 
     let token_b64 = token.to_base64().context("failed to encode token")?;
 
@@ -186,8 +191,7 @@ fn delegate_cmd(
     output_path: Option<&std::path::Path>,
     json: bool,
 ) -> Result<()> {
-    let parent_token =
-        CapabilityToken::from_base64(parent_token_b64).context("failed to decode parent token")?;
+    let parent_token = CapabilityToken::from_base64(parent_token_b64).context("failed to decode parent token")?;
     let issuer_key = parse_secret_key(parent_key_hex)?;
     let lifetime = parse_duration(lifetime_str)?;
 
@@ -260,10 +264,7 @@ fn verify_cmd(token_b64: &str, trusted_roots: &[String], json: bool) -> Result<(
 
     let verification_result = verifier.verify(&token, None);
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system time before UNIX epoch")?
-        .as_secs();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before UNIX epoch")?.as_secs();
 
     let is_valid = verification_result.is_ok();
     let error_msg = verification_result.err().map(|e| e.to_string());
@@ -340,10 +341,7 @@ fn verify_cmd(token_b64: &str, trusted_roots: &[String], json: bool) -> Result<(
 fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
     let token = CapabilityToken::from_base64(token_b64).context("failed to decode token")?;
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system time before UNIX epoch")?
-        .as_secs();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before UNIX epoch")?.as_secs();
 
     let output = if json {
         serde_json::json!({
@@ -390,9 +388,7 @@ fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
             token.expires_at,
             token.expires_at < now,
             token.nonce.map_or("None".to_string(), hex::encode),
-            token
-                .proof
-                .map_or("None (root token)".to_string(), hex::encode),
+            token.proof.map_or("None (root token)".to_string(), hex::encode),
             hex::encode(token.signature)
         )
     };
@@ -418,9 +414,7 @@ fn parse_duration(s: &str) -> Result<Duration> {
     let value_str = &s[..unit_pos];
     let unit = &s[unit_pos..];
 
-    let value: u64 = value_str
-        .parse()
-        .context("duration value must be a positive integer")?;
+    let value: u64 = value_str.parse().context("duration value must be a positive integer")?;
 
     let seconds = match unit {
         "s" | "sec" | "secs" => value,
@@ -532,7 +526,8 @@ fn format_audience(aud: &Audience) -> String {
 
 /// Format a Unix timestamp as ISO 8601.
 fn format_timestamp(unix_secs: u64) -> String {
-    use chrono::{DateTime, Utc};
+    use chrono::DateTime;
+    use chrono::Utc;
     let dt = DateTime::<Utc>::from_timestamp(unix_secs as i64, 0)
         .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch timestamp"));
     dt.to_rfc3339()
@@ -543,12 +538,8 @@ fn write_output(content: &str, path: Option<&std::path::Path>) -> Result<()> {
     if let Some(p) = path {
         fs::write(p, content).context("failed to write output file")?;
     } else {
-        io::stdout()
-            .write_all(content.as_bytes())
-            .context("failed to write to stdout")?;
-        io::stdout()
-            .write_all(b"\n")
-            .context("failed to write newline to stdout")?;
+        io::stdout().write_all(content.as_bytes()).context("failed to write to stdout")?;
+        io::stdout().write_all(b"\n").context("failed to write newline to stdout")?;
     }
     Ok(())
 }

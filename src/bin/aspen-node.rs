@@ -60,23 +60,33 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
-use aspen::api::{
-    ClusterController, DeterministicClusterController, DeterministicKeyValueStore, KeyValueStore,
-};
+use anyhow::Context;
+use anyhow::Result;
+use aspen::api::ClusterController;
+use aspen::api::DeterministicClusterController;
+use aspen::api::DeterministicKeyValueStore;
+use aspen::api::KeyValueStore;
 use aspen::auth::TokenVerifier;
-use aspen::cluster::bootstrap::{
-    NodeHandle, ShardedNodeHandle, bootstrap_node, bootstrap_sharded_node, load_config,
-};
-use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
-use aspen::protocol_handlers::{
-    ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
-    LogSubscriberProtocolHandler, RAFT_SHARDED_ALPN, RaftProtocolHandler,
-};
+use aspen::cluster::bootstrap::NodeHandle;
+use aspen::cluster::bootstrap::ShardedNodeHandle;
+use aspen::cluster::bootstrap::bootstrap_node;
+use aspen::cluster::bootstrap::bootstrap_sharded_node;
+use aspen::cluster::bootstrap::load_config;
+use aspen::cluster::config::ControlBackend;
+use aspen::cluster::config::IrohConfig;
+use aspen::cluster::config::NodeConfig;
+use aspen::protocol_handlers::ClientProtocolContext;
+use aspen::protocol_handlers::ClientProtocolHandler;
+use aspen::protocol_handlers::LOG_SUBSCRIBER_ALPN;
+use aspen::protocol_handlers::LogSubscriberProtocolHandler;
+use aspen::protocol_handlers::RAFT_SHARDED_ALPN;
+use aspen::protocol_handlers::RaftProtocolHandler;
 use clap::Parser;
 use iroh::PublicKey;
 use tokio::signal;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -222,27 +232,21 @@ type KeyValueStoreHandle = Arc<dyn KeyValueStore>;
 /// Tiger Style: Focused initialization function.
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .compact()
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).with_target(false).compact().init();
 }
 
 /// Build cluster configuration from CLI arguments.
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
 fn build_cluster_config(args: &Args) -> NodeConfig {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
 
     let mut config = NodeConfig::from_env();
     config.node_id = args.node_id.unwrap_or(0);
     config.data_dir = args.data_dir.clone();
-    config.storage_backend = args
-        .storage_backend
-        .as_deref()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_default();
+    config.storage_backend = args.storage_backend.as_deref().and_then(|s| s.parse().ok()).unwrap_or_default();
     config.redb_log_path = args.redb_log_path.clone();
     config.redb_sm_path = args.redb_sm_path.clone();
     config.sqlite_log_path = None;
@@ -274,15 +278,9 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 /// Returns tuple of (controller, kv_store).
 ///
 /// Tiger Style: Single responsibility for controller initialization logic.
-fn setup_controllers(
-    config: &NodeConfig,
-    handle: &NodeHandle,
-) -> (ClusterControllerHandle, KeyValueStoreHandle) {
+fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (ClusterControllerHandle, KeyValueStoreHandle) {
     match config.control_backend {
-        ControlBackend::Deterministic => (
-            DeterministicClusterController::new(),
-            DeterministicKeyValueStore::new(),
-        ),
+        ControlBackend::Deterministic => (DeterministicClusterController::new(), DeterministicKeyValueStore::new()),
         ControlBackend::RaftActor => {
             // Use RaftNode directly as both controller and KV store
             let raft_node = handle.raft_node.clone();
@@ -330,9 +328,7 @@ impl NodeMode {
         }
     }
 
-    fn log_broadcast(
-        &self,
-    ) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
+    fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
         match self {
             NodeMode::Single(h) => h.log_broadcast.as_ref(),
             NodeMode::Sharded(h) => h.log_broadcast.as_ref(),
@@ -368,21 +364,16 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node based on sharding configuration
-    let (node_mode, controller, kv_store, primary_raft_node, network_factory) = if config
-        .sharding
-        .enabled
-    {
+    let (node_mode, controller, kv_store, primary_raft_node, network_factory) = if config.sharding.enabled {
         // Sharded mode: multiple Raft instances
         let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
 
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
             let secret_key = sharded_handle.base.iroh_manager.endpoint().secret_key();
-            let token = aspen::auth::generate_root_token(
-                secret_key,
-                std::time::Duration::from_secs(365 * 24 * 60 * 60),
-            )
-            .context("failed to generate root token")?;
+            let token =
+                aspen::auth::generate_root_token(secret_key, std::time::Duration::from_secs(365 * 24 * 60 * 60))
+                    .context("failed to generate root token")?;
 
             let token_base64 = token.to_base64().context("failed to encode root token")?;
             std::fs::write(token_path, &token_base64)
@@ -412,13 +403,7 @@ async fn main() -> Result<()> {
             "sharded node bootstrap complete"
         );
 
-        (
-            NodeMode::Sharded(sharded_handle),
-            controller,
-            kv_store,
-            primary_shard,
-            network_factory,
-        )
+        (NodeMode::Sharded(sharded_handle), controller, kv_store, primary_shard, network_factory)
     } else {
         // Non-sharded mode: single Raft instance
         let mut handle = bootstrap_node(config.clone()).await?;
@@ -426,11 +411,9 @@ async fn main() -> Result<()> {
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
             let secret_key = handle.iroh_manager.endpoint().secret_key();
-            let token = aspen::auth::generate_root_token(
-                secret_key,
-                std::time::Duration::from_secs(365 * 24 * 60 * 60),
-            )
-            .context("failed to generate root token")?;
+            let token =
+                aspen::auth::generate_root_token(secret_key, std::time::Duration::from_secs(365 * 24 * 60 * 60))
+                    .context("failed to generate root token")?;
 
             let token_base64 = token.to_base64().context("failed to encode root token")?;
             std::fs::write(token_path, &token_base64)
@@ -448,13 +431,7 @@ async fn main() -> Result<()> {
         let primary_raft_node = handle.raft_node.clone();
         let network_factory = handle.network_factory.clone();
 
-        (
-            NodeMode::Single(handle),
-            controller,
-            kv_store,
-            primary_raft_node,
-            network_factory,
-        )
+        (NodeMode::Single(handle), controller, kv_store, primary_raft_node, network_factory)
     };
 
     // Create token verifier if authentication is enabled
@@ -470,8 +447,7 @@ async fn main() -> Result<()> {
             );
         } else {
             for key_hex in &args.trusted_root_key {
-                let key_bytes =
-                    hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
+                let key_bytes = hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
                 let key = PublicKey::try_from(key_bytes.as_slice())
                     .context("Invalid Ed25519 public key in --trusted-root-key")?;
                 verifier = verifier.with_trusted_root(key);
@@ -482,9 +458,7 @@ async fn main() -> Result<()> {
         if args.require_token_auth {
             info!("Token auth enabled with strict mode (requests without tokens will be rejected)");
         } else {
-            warn!(
-                "Token auth enabled in migration mode (requests without tokens will be allowed with warnings)"
-            );
+            warn!("Token auth enabled in migration mode (requests without tokens will be allowed with warnings)");
         }
 
         Some(Arc::new(verifier))
@@ -514,7 +488,8 @@ async fn main() -> Result<()> {
 
     // Spawn the Router with all protocol handlers
     let router = {
-        use aspen::protocol_handlers::{CLIENT_ALPN, RAFT_ALPN};
+        use aspen::protocol_handlers::CLIENT_ALPN;
+        use aspen::protocol_handlers::RAFT_ALPN;
         use iroh::protocol::Router;
         use iroh_gossip::ALPN as GOSSIP_ALPN;
 
@@ -524,8 +499,7 @@ async fn main() -> Result<()> {
         match &node_mode {
             NodeMode::Single(handle) => {
                 // Legacy mode: single Raft handler
-                let raft_handler =
-                    RaftProtocolHandler::new(handle.raft_node.raft().as_ref().clone());
+                let raft_handler = RaftProtocolHandler::new(handle.raft_node.raft().as_ref().clone());
                 builder = builder.accept(RAFT_ALPN, raft_handler);
             }
             NodeMode::Sharded(handle) => {

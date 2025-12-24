@@ -14,10 +14,15 @@
 
 mod support;
 
-use aspen::client_rpc::{ClientRpcRequest, ClientRpcResponse, MAX_CLIENT_MESSAGE_SIZE};
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
 use aspen::raft::constants::MAX_RPC_MESSAGE_SIZE;
-use aspen::raft::rpc::{RaftRpcProtocol, RaftVoteRequest};
-use support::mock_iroh::{CLIENT_ALPN, MockIrohNetwork, RAFT_ALPN};
+use aspen::raft::rpc::RaftRpcProtocol;
+use aspen::raft::rpc::RaftVoteRequest;
+use support::mock_iroh::CLIENT_ALPN;
+use support::mock_iroh::MockIrohNetwork;
+use support::mock_iroh::RAFT_ALPN;
 
 /// Test that Raft RPC vote request serialization roundtrips correctly.
 #[tokio::test]
@@ -38,14 +43,10 @@ async fn test_raft_vote_rpc_serialization() {
     let bytes = postcard::to_stdvec(&rpc).expect("failed to serialize vote request");
 
     // Verify size is within limits
-    assert!(
-        bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize,
-        "serialized vote request exceeds MAX_RPC_MESSAGE_SIZE"
-    );
+    assert!(bytes.len() <= MAX_RPC_MESSAGE_SIZE as usize, "serialized vote request exceeds MAX_RPC_MESSAGE_SIZE");
 
     // Deserialize back
-    let deserialized: RaftRpcProtocol =
-        postcard::from_bytes(&bytes).expect("failed to deserialize vote request");
+    let deserialized: RaftRpcProtocol = postcard::from_bytes(&bytes).expect("failed to deserialize vote request");
 
     match deserialized {
         RaftRpcProtocol::Vote(_req) => {
@@ -80,27 +81,18 @@ async fn test_tui_rpc_serialization() {
             node_id: 42,
             addr: "test-addr".to_string(),
         },
-        ClientRpcRequest::ChangeMembership {
-            members: vec![1, 2, 3],
-        },
+        ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] },
     ];
 
     for request in requests {
         let bytes = postcard::to_stdvec(&request).expect("failed to serialize TUI request");
 
-        assert!(
-            bytes.len() <= MAX_CLIENT_MESSAGE_SIZE,
-            "serialized TUI request exceeds MAX_CLIENT_MESSAGE_SIZE"
-        );
+        assert!(bytes.len() <= MAX_CLIENT_MESSAGE_SIZE, "serialized TUI request exceeds MAX_CLIENT_MESSAGE_SIZE");
 
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&bytes).expect("failed to deserialize TUI request");
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&bytes).expect("failed to deserialize TUI request");
 
         // Verify discriminants match (basic roundtrip check)
-        assert_eq!(
-            std::mem::discriminant(&request),
-            std::mem::discriminant(&deserialized)
-        );
+        assert_eq!(std::mem::discriminant(&request), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -181,13 +173,9 @@ async fn test_client_response_serialization() {
     for response in responses {
         let bytes = postcard::to_stdvec(&response).expect("failed to serialize TUI response");
 
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&bytes).expect("failed to deserialize TUI response");
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&bytes).expect("failed to deserialize TUI response");
 
-        assert_eq!(
-            std::mem::discriminant(&response),
-            std::mem::discriminant(&deserialized)
-        );
+        assert_eq!(std::mem::discriminant(&response), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -217,10 +205,7 @@ async fn test_mock_rpc_pattern() {
     // Server side: accept stream and read request
     let (mut server_send, mut server_recv) = server_conn.accept_bi().await.unwrap();
 
-    let received_bytes = server_recv
-        .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
-        .await
-        .unwrap();
+    let received_bytes = server_recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.unwrap();
     let received_request: ClientRpcRequest = postcard::from_bytes(&received_bytes).unwrap();
 
     assert!(matches!(received_request, ClientRpcRequest::Ping));
@@ -233,8 +218,7 @@ async fn test_mock_rpc_pattern() {
 
     // Client receives response
     let response_received_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.unwrap();
-    let received_response: ClientRpcResponse =
-        postcard::from_bytes(&response_received_bytes).unwrap();
+    let received_response: ClientRpcResponse = postcard::from_bytes(&response_received_bytes).unwrap();
 
     assert!(matches!(received_response, ClientRpcResponse::Pong));
 }
@@ -263,10 +247,7 @@ async fn test_alpn_routing() {
     let network = MockIrohNetwork::new();
 
     // Server only accepts RAFT_ALPN
-    let server = network.create_endpoint_with_key_and_alpns(
-        iroh::SecretKey::from([1u8; 32]),
-        vec![RAFT_ALPN.to_vec()],
-    );
+    let server = network.create_endpoint_with_key_and_alpns(iroh::SecretKey::from([1u8; 32]), vec![RAFT_ALPN.to_vec()]);
 
     let client = network.create_endpoint();
 

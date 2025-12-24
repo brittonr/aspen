@@ -11,13 +11,18 @@
 //! - Audience validation
 //! - Operation authorization
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use aspen::auth::{
-    Audience, AuthError, Capability, CapabilityToken, Operation, TokenBuilder, TokenVerifier,
-    generate_root_token,
-};
+use aspen::auth::Audience;
+use aspen::auth::AuthError;
+use aspen::auth::Capability;
+use aspen::auth::CapabilityToken;
+use aspen::auth::Operation;
+use aspen::auth::TokenBuilder;
+use aspen::auth::TokenVerifier;
+use aspen::auth::generate_root_token;
 use iroh::SecretKey;
 
 /// Counter for generating unique secret keys.
@@ -53,8 +58,7 @@ async fn test_root_token_grants_full_access() {
     let lifetime = Duration::from_secs(3600);
 
     // Generate root token
-    let root_token =
-        generate_root_token(&secret_key, lifetime).expect("should generate root token");
+    let root_token = generate_root_token(&secret_key, lifetime).expect("should generate root token");
 
     // Verify token structure
     assert_eq!(root_token.issuer, secret_key.public());
@@ -64,9 +68,7 @@ async fn test_root_token_grants_full_access() {
 
     // Verify capabilities
     assert!(
-        root_token.capabilities.contains(&Capability::Full {
-            prefix: String::new()
-        }),
+        root_token.capabilities.contains(&Capability::Full { prefix: String::new() }),
         "root token should have Full capability"
     );
     assert!(
@@ -82,19 +84,11 @@ async fn test_root_token_grants_full_access() {
     let verifier = TokenVerifier::new().with_trusted_root(secret_key.public());
 
     // Verify token passes verification
-    verifier
-        .verify(&root_token, None)
-        .expect("root token should verify");
+    verifier.verify(&root_token, None).expect("root token should verify");
 
     // Test authorization for all operation types
     verifier
-        .authorize(
-            &root_token,
-            &Operation::Read {
-                key: "any:key".into(),
-            },
-            None,
-        )
+        .authorize(&root_token, &Operation::Read { key: "any:key".into() }, None)
         .expect("root token should authorize reads");
 
     verifier
@@ -109,13 +103,7 @@ async fn test_root_token_grants_full_access() {
         .expect("root token should authorize writes");
 
     verifier
-        .authorize(
-            &root_token,
-            &Operation::Delete {
-                key: "any:key".into(),
-            },
-            None,
-        )
+        .authorize(&root_token, &Operation::Delete { key: "any:key".into() }, None)
         .expect("root token should authorize deletes");
 
     verifier
@@ -206,15 +194,8 @@ async fn test_delegated_token_respects_attenuation() {
         .expect("should build delegated token");
 
     // Verify delegation chain
-    assert!(
-        delegated_token.proof.is_some(),
-        "delegated token should have proof of parent"
-    );
-    assert_eq!(
-        delegated_token.proof.unwrap(),
-        root_token.hash(),
-        "proof should match parent hash"
-    );
+    assert!(delegated_token.proof.is_some(), "delegated token should have proof of parent");
+    assert_eq!(delegated_token.proof.unwrap(), root_token.hash(), "proof should match parent hash");
 
     let verifier = TokenVerifier::new();
 
@@ -251,10 +232,7 @@ async fn test_delegated_token_respects_attenuation() {
         },
         None,
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "delegated token should not authorize write"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "delegated token should not authorize write");
 
     // Delegated token cannot delete
     let result = verifier.authorize(
@@ -264,10 +242,7 @@ async fn test_delegated_token_respects_attenuation() {
         },
         None,
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "delegated token should not authorize delete"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "delegated token should not authorize delete");
 }
 
 /// Verify that capability escalation is prevented during delegation.
@@ -312,10 +287,7 @@ async fn test_delegation_prevents_escalation() {
         })
         .build();
 
-    assert!(
-        matches!(result, Err(AuthError::CapabilityEscalation { .. })),
-        "should not allow prefix widening"
-    );
+    assert!(matches!(result, Err(AuthError::CapabilityEscalation { .. })), "should not allow prefix widening");
 
     // Attempt to add ClusterAdmin without having it (should fail)
     let result = TokenBuilder::new(child_key)
@@ -381,9 +353,7 @@ async fn test_expired_token_rejected() {
     let verifier = TokenVerifier::new();
 
     // Token should verify initially
-    verifier
-        .verify(&token, None)
-        .expect("fresh token should verify");
+    verifier.verify(&token, None).expect("fresh token should verify");
 
     // Create an expired token by building one with modified timestamps
     // We simulate this by using the verifier with a very tight clock skew tolerance
@@ -405,10 +375,7 @@ async fn test_expired_token_rejected() {
     // This will fail signature verification because we modified the token
     // without re-signing. The verifier checks signature first.
     let result = verifier.verify(&expired_token, None);
-    assert!(
-        result.is_err(),
-        "modified token should fail verification (signature mismatch)"
-    );
+    assert!(result.is_err(), "modified token should fail verification (signature mismatch)");
 }
 
 // ============================================================================
@@ -430,19 +397,11 @@ async fn test_revoked_token_rejected() {
     let verifier = TokenVerifier::new();
 
     // Token should verify initially
-    verifier
-        .verify(&token, None)
-        .expect("token should verify before revocation");
+    verifier.verify(&token, None).expect("token should verify before revocation");
 
     // Should also authorize operations
     verifier
-        .authorize(
-            &token,
-            &Operation::Read {
-                key: "test:key".into(),
-            },
-            None,
-        )
+        .authorize(&token, &Operation::Read { key: "test:key".into() }, None)
         .expect("token should authorize before revocation");
 
     // Revoke the token
@@ -453,23 +412,11 @@ async fn test_revoked_token_rejected() {
 
     // Token should fail verification after revocation
     let result = verifier.verify(&token, None);
-    assert!(
-        matches!(result, Err(AuthError::TokenRevoked)),
-        "revoked token should fail with TokenRevoked error"
-    );
+    assert!(matches!(result, Err(AuthError::TokenRevoked)), "revoked token should fail with TokenRevoked error");
 
     // Authorization should also fail
-    let result = verifier.authorize(
-        &token,
-        &Operation::Read {
-            key: "test:key".into(),
-        },
-        None,
-    );
-    assert!(
-        matches!(result, Err(AuthError::TokenRevoked)),
-        "authorization with revoked token should fail"
-    );
+    let result = verifier.authorize(&token, &Operation::Read { key: "test:key".into() }, None);
+    assert!(matches!(result, Err(AuthError::TokenRevoked)), "authorization with revoked token should fail");
 
     // Revoke by hash directly
     let token2 = TokenBuilder::new(test_secret_key())
@@ -492,9 +439,7 @@ async fn test_revoked_token_rejected() {
     assert!(!verifier.is_revoked(&hash).unwrap());
 
     // Token should verify again after clearing revocations
-    verifier
-        .verify(&token, None)
-        .expect("token should verify after clearing revocations");
+    verifier.verify(&token, None).expect("token should verify after clearing revocations");
 }
 
 // ============================================================================
@@ -525,24 +470,14 @@ async fn test_wrong_audience_rejected() {
     let verifier = TokenVerifier::new();
 
     // Correct presenter should pass
-    verifier
-        .verify(&token, Some(&intended_audience.public()))
-        .expect("correct presenter should verify");
+    verifier.verify(&token, Some(&intended_audience.public())).expect("correct presenter should verify");
 
     // Wrong presenter should fail
     let result = verifier.verify(&token, Some(&wrong_presenter.public()));
     match result {
         Err(AuthError::WrongAudience { expected, actual }) => {
-            assert_eq!(
-                expected,
-                intended_audience.public().to_string(),
-                "error should contain expected audience"
-            );
-            assert_eq!(
-                actual,
-                wrong_presenter.public().to_string(),
-                "error should contain actual presenter"
-            );
+            assert_eq!(expected, intended_audience.public().to_string(), "error should contain expected audience");
+            assert_eq!(actual, wrong_presenter.public().to_string(), "error should contain actual presenter");
         }
         other => panic!("expected WrongAudience error, got {:?}", other),
     }
@@ -568,17 +503,12 @@ async fn test_bearer_token_accepts_any_presenter() {
         .build()
         .expect("should build token");
 
-    assert!(
-        matches!(token.audience, Audience::Bearer),
-        "default audience should be Bearer"
-    );
+    assert!(matches!(token.audience, Audience::Bearer), "default audience should be Bearer");
 
     let verifier = TokenVerifier::new();
 
     // Bearer token should work without presenter
-    verifier
-        .verify(&token, None)
-        .expect("bearer token should verify without presenter");
+    verifier.verify(&token, None).expect("bearer token should verify without presenter");
 
     // Bearer token should also work with any presenter
     verifier
@@ -631,9 +561,7 @@ async fn test_token_encoding_roundtrip() {
 
     // Decoded token should still verify
     let verifier = TokenVerifier::new().with_trusted_root(secret_key.public());
-    verifier
-        .verify(&decoded_b64, Some(&audience_key))
-        .expect("decoded token should verify");
+    verifier.verify(&decoded_b64, Some(&audience_key)).expect("decoded token should verify");
 }
 
 // ============================================================================
@@ -660,9 +588,7 @@ async fn test_untrusted_root_rejected() {
     let verifier = TokenVerifier::new().with_trusted_root(trusted_key.public());
 
     // Trusted token should verify
-    verifier
-        .verify(&trusted_token, None)
-        .expect("trusted token should verify");
+    verifier.verify(&trusted_token, None).expect("trusted token should verify");
 
     // Untrusted token should fail (treated as InvalidSignature)
     let result = verifier.verify(&untrusted_token, None);
@@ -744,10 +670,7 @@ async fn test_multi_level_delegation_chain() {
         },
         Some(&client_key.public()),
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "client should not access private prefix"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "client should not access private prefix");
 
     // Client token cannot write
     let result = verifier.authorize(
@@ -758,10 +681,7 @@ async fn test_multi_level_delegation_chain() {
         },
         Some(&client_key.public()),
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "client should not write"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "client should not write");
 }
 
 // ============================================================================
@@ -776,9 +696,7 @@ async fn test_capability_operation_authorization() {
 
     // Test Read capability
     let read_token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Read {
-            prefix: "data:".into(),
-        })
+        .with_capability(Capability::Read { prefix: "data:".into() })
         .build()
         .expect("should build read token");
 
@@ -807,9 +725,7 @@ async fn test_capability_operation_authorization() {
 
     // Test Write capability
     let write_token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Write {
-            prefix: "data:".into(),
-        })
+        .with_capability(Capability::Write { prefix: "data:".into() })
         .build()
         .expect("should build write token");
 
@@ -838,9 +754,7 @@ async fn test_capability_operation_authorization() {
 
     // Test Delete capability
     let delete_token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Delete {
-            prefix: "data:".into(),
-        })
+        .with_capability(Capability::Delete { prefix: "data:".into() })
         .build()
         .expect("should build delete token");
 
@@ -868,9 +782,7 @@ async fn test_capability_operation_authorization() {
 
     // Test Watch capability
     let watch_token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Watch {
-            prefix: "data:".into(),
-        })
+        .with_capability(Capability::Watch { prefix: "data:".into() })
         .build()
         .expect("should build watch token");
 
@@ -912,17 +824,7 @@ async fn test_capability_operation_authorization() {
         )
         .expect("ClusterAdmin should authorize ClusterAdmin");
 
-    assert!(
-        verifier
-            .authorize(
-                &admin_token,
-                &Operation::Read {
-                    key: "any:key".into()
-                },
-                None
-            )
-            .is_err()
-    );
+    assert!(verifier.authorize(&admin_token, &Operation::Read { key: "any:key".into() }, None).is_err());
 }
 
 // ============================================================================
@@ -995,10 +897,7 @@ async fn test_full_capability_authorizes_all_data_operations() {
         },
         None,
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "Full should not authorize ClusterAdmin"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "Full should not authorize ClusterAdmin");
 
     // Full should NOT authorize outside prefix
     let result = verifier.authorize(
@@ -1008,10 +907,7 @@ async fn test_full_capability_authorizes_all_data_operations() {
         },
         None,
     );
-    assert!(
-        matches!(result, Err(AuthError::Unauthorized { .. })),
-        "Full should not authorize outside prefix"
-    );
+    assert!(matches!(result, Err(AuthError::Unauthorized { .. })), "Full should not authorize outside prefix");
 }
 
 // ============================================================================
@@ -1061,19 +957,10 @@ async fn test_token_validity_window() {
     assert_eq!(actual_lifetime, lifetime.as_secs());
 
     // Token should be valid now (issued_at should be recent)
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("time")
-        .as_secs();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("time").as_secs();
 
-    assert!(
-        token.issued_at <= now,
-        "issued_at should be at or before now"
-    );
-    assert!(
-        now - token.issued_at < 5,
-        "issued_at should be within last 5 seconds"
-    );
+    assert!(token.issued_at <= now, "issued_at should be at or before now");
+    assert!(now - token.issued_at < 5, "issued_at should be within last 5 seconds");
     assert!(token.expires_at > now, "token should not be expired");
 }
 
@@ -1094,21 +981,15 @@ async fn test_clock_skew_tolerance() {
 
     // Default tolerance (60 seconds) should accept
     let default_verifier = TokenVerifier::new();
-    default_verifier
-        .verify(&token, None)
-        .expect("default tolerance should accept");
+    default_verifier.verify(&token, None).expect("default tolerance should accept");
 
     // Custom tolerance should work
     let custom_verifier = TokenVerifier::new().with_clock_skew_tolerance(120);
-    custom_verifier
-        .verify(&token, None)
-        .expect("custom tolerance should accept");
+    custom_verifier.verify(&token, None).expect("custom tolerance should accept");
 
     // Zero tolerance should still accept recently-created token
     let strict_verifier = TokenVerifier::new().with_clock_skew_tolerance(0);
-    strict_verifier
-        .verify(&token, None)
-        .expect("zero tolerance should accept fresh token");
+    strict_verifier.verify(&token, None).expect("zero tolerance should accept fresh token");
 }
 
 // ============================================================================
@@ -1146,9 +1027,7 @@ async fn test_too_many_capabilities_rejected() {
 /// Verify Operation Display formatting for logging.
 #[tokio::test]
 async fn test_operation_display() {
-    let read = Operation::Read {
-        key: "test:key".into(),
-    };
+    let read = Operation::Read { key: "test:key".into() };
     assert_eq!(format!("{}", read), "Read(test:key)");
 
     let write = Operation::Write {
@@ -1157,9 +1036,7 @@ async fn test_operation_display() {
     };
     assert_eq!(format!("{}", write), "Write(test:key)");
 
-    let delete = Operation::Delete {
-        key: "test:key".into(),
-    };
+    let delete = Operation::Delete { key: "test:key".into() };
     assert_eq!(format!("{}", delete), "Delete(test:key)");
 
     let watch = Operation::Watch {
@@ -1181,9 +1058,7 @@ async fn test_operation_display() {
 #[tokio::test]
 async fn test_verifier_debug_safe() {
     let key = test_secret_key();
-    let verifier = TokenVerifier::new()
-        .with_trusted_root(key.public())
-        .with_clock_skew_tolerance(120);
+    let verifier = TokenVerifier::new().with_trusted_root(key.public()).with_clock_skew_tolerance(120);
 
     let debug = format!("{:?}", verifier);
     assert!(debug.contains("TokenVerifier"));
@@ -1204,9 +1079,7 @@ async fn test_prefix_matching_edge_cases() {
 
     // Empty prefix should match everything
     let root_token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Read {
-            prefix: String::new(),
-        })
+        .with_capability(Capability::Read { prefix: String::new() })
         .build()
         .expect("should build token");
 

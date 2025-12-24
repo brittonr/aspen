@@ -13,9 +13,8 @@
 //! - Invalid EndpointAddr structure
 //! - Truncated messages
 
-use bolero::check;
-
 use aspen::fuzz_helpers::NodeId;
+use bolero::check;
 
 // Simplified gossip message structure for fuzzing
 // Matches PeerAnnouncement in gossip_discovery.rs

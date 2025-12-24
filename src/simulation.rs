@@ -6,11 +6,15 @@
 
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use anyhow::Context;
+use anyhow::Result;
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Complete snapshot of a simulation run, including seed, events, and metrics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,20 +59,10 @@ impl fmt::Display for SimulationStatus {
 
 impl SimulationArtifact {
     /// Create a new simulation artifact with the given parameters.
-    pub fn new(
-        test_name: impl Into<String>,
-        seed: u64,
-        events: Vec<String>,
-        metrics: String,
-    ) -> Self {
+    pub fn new(test_name: impl Into<String>, seed: u64, events: Vec<String>, metrics: String) -> Self {
         let test_name_str = test_name.into();
         let timestamp = Utc::now();
-        let run_id = format!(
-            "{}-seed{}-{}",
-            test_name_str,
-            seed,
-            timestamp.format("%Y%m%d-%H%M%S")
-        );
+        let run_id = format!("{}-seed{}-{}", test_name_str, seed, timestamp.format("%Y%m%d-%H%M%S"));
         Self {
             run_id,
             timestamp,
@@ -103,8 +97,7 @@ impl SimulationArtifact {
         fs::create_dir_all(base_dir).context("failed to create simulation artifacts directory")?;
 
         let file_path = base_dir.join(format!("{}.json", self.run_id));
-        let json = serde_json::to_string_pretty(self)
-            .context("failed to serialize simulation artifact")?;
+        let json = serde_json::to_string_pretty(self).context("failed to serialize simulation artifact")?;
 
         fs::write(&file_path, json).context("failed to write simulation artifact")?;
 
@@ -113,8 +106,7 @@ impl SimulationArtifact {
 
     /// Load a simulation artifact from a JSON file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let contents =
-            fs::read_to_string(path.as_ref()).context("failed to read simulation artifact")?;
+        let contents = fs::read_to_string(path.as_ref()).context("failed to read simulation artifact")?;
         serde_json::from_str(&contents).context("failed to deserialize simulation artifact")
     }
 }
@@ -156,7 +148,8 @@ impl SimulationArtifactBuilder {
     /// - Reproducible failures: "MADSIM_TEST_SEED=42 cargo nextest run test_name"
     /// - Consistent default behavior based on test name
     pub fn new_with_auto_seed(test_name: impl Into<String>) -> (Self, u64) {
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hash;
+        use std::hash::Hasher;
 
         let test_name = test_name.into();
 
@@ -164,11 +157,7 @@ impl SimulationArtifactBuilder {
         let seed = std::env::var("MADSIM_TEST_SEED")
             .ok()
             .and_then(|s| s.parse().ok())
-            .or_else(|| {
-                std::env::var("ASPEN_TEST_SEED")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-            })
+            .or_else(|| std::env::var("ASPEN_TEST_SEED").ok().and_then(|s| s.parse().ok()))
             .unwrap_or_else(|| {
                 // Deterministic seed from test name
                 let mut hasher = std::hash::DefaultHasher::new();
@@ -177,10 +166,7 @@ impl SimulationArtifactBuilder {
             });
 
         eprintln!("Test '{}' using seed: {}", test_name, seed);
-        eprintln!(
-            "To reproduce: MADSIM_TEST_SEED={} cargo nextest run {}",
-            seed, test_name
-        );
+        eprintln!("To reproduce: MADSIM_TEST_SEED={} cargo nextest run {}", seed, test_name);
 
         (Self::new(test_name, seed), seed)
     }
@@ -219,12 +205,7 @@ impl SimulationArtifactBuilder {
     /// Build the final artifact.
     pub fn build(self) -> SimulationArtifact {
         let timestamp = self.start_time.unwrap_or_else(Utc::now);
-        let run_id = format!(
-            "{}-seed{}-{}",
-            self.test_name,
-            self.seed,
-            timestamp.format("%Y%m%d-%H%M%S")
-        );
+        let run_id = format!("{}-seed{}-{}", self.test_name, self.seed, timestamp.format("%Y%m%d-%H%M%S"));
 
         let duration_ms = if let Some(start) = self.start_time {
             let elapsed = Utc::now().signed_duration_since(start);
@@ -269,9 +250,7 @@ mod tests {
 
     #[test]
     fn artifact_builder_handles_failure() {
-        let artifact = SimulationArtifactBuilder::new("test_simulation", 42)
-            .fail("something went wrong")
-            .build();
+        let artifact = SimulationArtifactBuilder::new("test_simulation", 42).fail("something went wrong").build();
 
         assert_eq!(artifact.status, SimulationStatus::Failed);
         assert_eq!(artifact.error, Some("something went wrong".to_string()));
@@ -279,12 +258,8 @@ mod tests {
 
     #[test]
     fn artifact_roundtrip_json() {
-        let original = SimulationArtifact::new(
-            "test_simulation",
-            42,
-            vec!["event1".into(), "event2".into()],
-            "metrics".into(),
-        );
+        let original =
+            SimulationArtifact::new("test_simulation", 42, vec!["event1".into(), "event2".into()], "metrics".into());
 
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: SimulationArtifact = serde_json::from_str(&json).expect("deserialize");

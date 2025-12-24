@@ -12,10 +12,10 @@
 //! - Invalid UTF-8 in string fields
 //! - Boundary conditions for node IDs
 
-use bolero::check;
-
 // Import the types we're fuzzing
-use aspen::fuzz_helpers::{ClientRpcRequest, ClientRpcResponse};
+use aspen::fuzz_helpers::ClientRpcRequest;
+use aspen::fuzz_helpers::ClientRpcResponse;
+use bolero::check;
 
 // Tiger Style: Bounded message size
 const MAX_CLIENT_MESSAGE_SIZE: usize = 1024 * 1024;

@@ -3,7 +3,8 @@
 //! Capabilities represent what operations a token holder can perform.
 //! They follow the principle of least privilege with prefix-based scoping.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// What operations a token holder can perform.
 ///
@@ -58,16 +59,12 @@ impl Capability {
             (Capability::Full { prefix }, Operation::Read { key }) => key.starts_with(prefix),
             (Capability::Full { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
             (Capability::Full { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
-            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => {
-                key_prefix.starts_with(prefix)
-            }
+            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
             // Specific capabilities
             (Capability::Read { prefix }, Operation::Read { key }) => key.starts_with(prefix),
             (Capability::Write { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
             (Capability::Delete { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
-            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => {
-                key_prefix.starts_with(prefix)
-            }
+            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
             // ClusterAdmin operations
             (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => true,
             // No match
@@ -84,34 +81,16 @@ impl Capability {
     pub fn contains(&self, other: &Capability) -> bool {
         match (self, other) {
             // Full contains Read, Write, Delete, Watch for same or narrower prefix
-            (Capability::Full { prefix: p1 }, Capability::Read { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Full { prefix: p1 }, Capability::Write { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Full { prefix: p1 }, Capability::Delete { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Full { prefix: p1 }, Capability::Watch { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Full { prefix: p1 }, Capability::Full { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
+            (Capability::Full { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Full { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Full { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Full { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Full { prefix: p1 }, Capability::Full { prefix: p2 }) => p2.starts_with(p1),
             // Same type with narrower prefix
-            (Capability::Read { prefix: p1 }, Capability::Read { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Write { prefix: p1 }, Capability::Write { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Delete { prefix: p1 }, Capability::Delete { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::Watch { prefix: p1 }, Capability::Watch { prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
+            (Capability::Read { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Write { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Delete { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
+            (Capability::Watch { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
             // ClusterAdmin only contains itself
             (Capability::ClusterAdmin, Capability::ClusterAdmin) => true,
             // Delegate only contains itself

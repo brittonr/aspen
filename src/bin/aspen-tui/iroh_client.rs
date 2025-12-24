@@ -6,19 +6,36 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use aspen::CLIENT_ALPN;
-use aspen::client_rpc::{
-    AddLearnerResultResponse, ChangeMembershipResultResponse, CheckpointWalResultResponse,
-    ClientRpcRequest, ClientRpcResponse, ClusterStateResponse, ClusterTicketResponse,
-    DeleteResultResponse, HealthResponse, InitResultResponse, MAX_CLIENT_MESSAGE_SIZE,
-    MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
-    RaftMetricsResponse, ReadResultResponse, ScanResultResponse, SnapshotResultResponse,
-    WriteResultResponse,
-};
-use iroh::{Endpoint, EndpointAddr, SecretKey};
+use aspen::client_rpc::AddLearnerResultResponse;
+use aspen::client_rpc::ChangeMembershipResultResponse;
+use aspen::client_rpc::CheckpointWalResultResponse;
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::ClusterStateResponse;
+use aspen::client_rpc::ClusterTicketResponse;
+use aspen::client_rpc::DeleteResultResponse;
+use aspen::client_rpc::HealthResponse;
+use aspen::client_rpc::InitResultResponse;
+use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
+use aspen::client_rpc::MetricsResponse;
+use aspen::client_rpc::NodeDescriptor;
+use aspen::client_rpc::NodeInfoResponse;
+use aspen::client_rpc::PromoteLearnerResultResponse;
+use aspen::client_rpc::RaftMetricsResponse;
+use aspen::client_rpc::ReadResultResponse;
+use aspen::client_rpc::ScanResultResponse;
+use aspen::client_rpc::SnapshotResultResponse;
+use aspen::client_rpc::WriteResultResponse;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
+use iroh::SecretKey;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 /// Timeout for individual RPC calls.
 /// Reduced for TUI to keep UI responsive during network issues.
@@ -99,31 +116,19 @@ impl IrohClient {
         );
 
         // Connect to the target node
-        let connection = self
-            .endpoint
-            .connect(target_addr, CLIENT_ALPN)
-            .await
-            .context("failed to connect to node")?;
+        let connection = self.endpoint.connect(target_addr, CLIENT_ALPN).await.context("failed to connect to node")?;
 
         // Open a bidirectional stream for the RPC
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .context("failed to open stream")?;
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
         // Serialize and send the request
         let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes)
-            .await
-            .context("failed to send request")?;
+        send.write_all(&request_bytes).await.context("failed to send request")?;
         send.finish().context("failed to finish send stream")?;
 
         // Read the response
-        let response_bytes = recv
-            .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
-            .await
-            .context("failed to read response")?;
+        let response_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")?;
 
         // Deserialize the response
         let response: ClientRpcResponse =
@@ -184,9 +189,7 @@ impl IrohClient {
 
     /// Get health status from the node.
     pub async fn get_health(&self) -> Result<HealthResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetHealth)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetHealth).await?;
 
         match response {
             ClientRpcResponse::Health(health) => Ok(health),
@@ -196,9 +199,7 @@ impl IrohClient {
 
     /// Get Raft metrics from the node.
     pub async fn get_raft_metrics(&self) -> Result<RaftMetricsResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetRaftMetrics)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetRaftMetrics).await?;
 
         match response {
             ClientRpcResponse::RaftMetrics(metrics) => Ok(metrics),
@@ -208,9 +209,7 @@ impl IrohClient {
 
     /// Get the current leader node ID.
     pub async fn get_leader(&self) -> Result<Option<u64>> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetLeader)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetLeader).await?;
 
         match response {
             ClientRpcResponse::Leader(leader) => Ok(leader),
@@ -220,9 +219,7 @@ impl IrohClient {
 
     /// Get node information.
     pub async fn get_node_info(&self) -> Result<NodeInfoResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetNodeInfo)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetNodeInfo).await?;
 
         match response {
             ClientRpcResponse::NodeInfo(info) => Ok(info),
@@ -232,9 +229,7 @@ impl IrohClient {
 
     /// Get cluster ticket for joining.
     pub async fn get_cluster_ticket(&self) -> Result<ClusterTicketResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetClusterTicket)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetClusterTicket).await?;
 
         match response {
             ClientRpcResponse::ClusterTicket(ticket) => Ok(ticket),
@@ -244,9 +239,7 @@ impl IrohClient {
 
     /// Initialize a new cluster.
     pub async fn init_cluster(&self) -> Result<InitResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::InitCluster)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::InitCluster).await?;
 
         match response {
             ClientRpcResponse::InitResult(result) => Ok(result),
@@ -256,9 +249,7 @@ impl IrohClient {
 
     /// Read a key from the key-value store.
     pub async fn read_key(&self, key: String) -> Result<ReadResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::ReadKey { key })
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::ReadKey { key }).await?;
 
         match response {
             ClientRpcResponse::ReadResult(result) => Ok(result),
@@ -268,9 +259,7 @@ impl IrohClient {
 
     /// Write a key-value pair to the store.
     pub async fn write_key(&self, key: String, value: Vec<u8>) -> Result<WriteResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::WriteKey { key, value })
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::WriteKey { key, value }).await?;
 
         match response {
             ClientRpcResponse::WriteResult(result) => Ok(result),
@@ -280,9 +269,7 @@ impl IrohClient {
 
     /// Trigger a Raft snapshot.
     pub async fn trigger_snapshot(&self) -> Result<SnapshotResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::TriggerSnapshot)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::TriggerSnapshot).await?;
 
         match response {
             ClientRpcResponse::SnapshotResult(result) => Ok(result),
@@ -291,14 +278,8 @@ impl IrohClient {
     }
 
     /// Add a learner node to the cluster.
-    pub async fn add_learner(
-        &self,
-        node_id: u64,
-        addr: String,
-    ) -> Result<AddLearnerResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::AddLearner { node_id, addr })
-            .await?;
+    pub async fn add_learner(&self, node_id: u64, addr: String) -> Result<AddLearnerResultResponse> {
+        let response = self.send_rpc_with_retry(ClientRpcRequest::AddLearner { node_id, addr }).await?;
 
         match response {
             ClientRpcResponse::AddLearnerResult(result) => Ok(result),
@@ -307,13 +288,8 @@ impl IrohClient {
     }
 
     /// Change cluster membership.
-    pub async fn change_membership(
-        &self,
-        members: Vec<u64>,
-    ) -> Result<ChangeMembershipResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::ChangeMembership { members })
-            .await?;
+    pub async fn change_membership(&self, members: Vec<u64>) -> Result<ChangeMembershipResultResponse> {
+        let response = self.send_rpc_with_retry(ClientRpcRequest::ChangeMembership { members }).await?;
 
         match response {
             ClientRpcResponse::ChangeMembershipResult(result) => Ok(result),
@@ -333,9 +309,7 @@ impl IrohClient {
 
     /// Get cluster state with all known nodes.
     pub async fn get_cluster_state(&self) -> Result<ClusterStateResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetClusterState)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetClusterState).await?;
 
         match response {
             ClientRpcResponse::ClusterState(state) => Ok(state),
@@ -345,9 +319,7 @@ impl IrohClient {
 
     /// Delete a key from the key-value store.
     pub async fn delete_key(&self, key: String) -> Result<DeleteResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::DeleteKey { key })
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::DeleteKey { key }).await?;
 
         match response {
             ClientRpcResponse::DeleteResult(result) => Ok(result),
@@ -378,9 +350,7 @@ impl IrohClient {
 
     /// Get Prometheus-format metrics from the node.
     pub async fn get_metrics(&self) -> Result<MetricsResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::GetMetrics)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::GetMetrics).await?;
 
         match response {
             ClientRpcResponse::Metrics(metrics) => Ok(metrics),
@@ -411,9 +381,7 @@ impl IrohClient {
 
     /// Force a SQLite WAL checkpoint.
     pub async fn checkpoint_wal(&self) -> Result<CheckpointWalResultResponse> {
-        let response = self
-            .send_rpc_with_retry(ClientRpcRequest::CheckpointWal)
-            .await?;
+        let response = self.send_rpc_with_retry(ClientRpcRequest::CheckpointWal).await?;
 
         match response {
             ClientRpcResponse::CheckpointWalResult(result) => Ok(result),
@@ -438,11 +406,7 @@ pub fn parse_cluster_ticket(ticket: &str) -> Result<Vec<EndpointAddr>> {
     let ticket = AspenClusterTicket::deserialize(ticket)?;
 
     // Extract ALL bootstrap peer endpoint IDs
-    let endpoints: Vec<EndpointAddr> = ticket
-        .bootstrap
-        .iter()
-        .map(|peer_id| EndpointAddr::new(*peer_id))
-        .collect();
+    let endpoints: Vec<EndpointAddr> = ticket.bootstrap.iter().map(|peer_id| EndpointAddr::new(*peer_id)).collect();
 
     if endpoints.is_empty() {
         anyhow::bail!("no bootstrap peers in ticket");
@@ -512,10 +476,7 @@ impl MultiNodeClient {
         let bind_timeout = Duration::from_secs(10);
         let endpoint = tokio::time::timeout(
             bind_timeout,
-            Endpoint::builder()
-                .secret_key(secret_key)
-                .alpns(vec![CLIENT_ALPN.to_vec()])
-                .bind(),
+            Endpoint::builder().secret_key(secret_key).alpns(vec![CLIENT_ALPN.to_vec()]).bind(),
         )
         .await
         .context("timeout waiting for Iroh endpoint to bind")?
@@ -538,11 +499,7 @@ impl MultiNodeClient {
     }
 
     /// Send an RPC request to a specific node address.
-    async fn send_rpc_to(
-        &self,
-        target: &EndpointAddr,
-        request: ClientRpcRequest,
-    ) -> Result<ClientRpcResponse> {
+    async fn send_rpc_to(&self, target: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         debug!(
             target_node_id = %target.id,
             request_type = ?request,
@@ -550,31 +507,20 @@ impl MultiNodeClient {
         );
 
         // Connect to the target node
-        let connection = self
-            .endpoint
-            .connect(target.clone(), CLIENT_ALPN)
-            .await
-            .context("failed to connect to node")?;
+        let connection =
+            self.endpoint.connect(target.clone(), CLIENT_ALPN).await.context("failed to connect to node")?;
 
         // Open a bidirectional stream for the RPC
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .context("failed to open stream")?;
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
         // Serialize and send the request
         let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes)
-            .await
-            .context("failed to send request")?;
+        send.write_all(&request_bytes).await.context("failed to send request")?;
         send.finish().context("failed to finish send stream")?;
 
         // Read the response
-        let response_bytes = recv
-            .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
-            .await
-            .context("failed to read response")?;
+        let response_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")?;
 
         // Deserialize the response
         let response: ClientRpcResponse =
@@ -594,9 +540,7 @@ impl MultiNodeClient {
         let mut retries = 0;
 
         loop {
-            match tokio::time::timeout(RPC_TIMEOUT, self.send_rpc_to(&target, request.clone()))
-                .await
-            {
+            match tokio::time::timeout(RPC_TIMEOUT, self.send_rpc_to(&target, request.clone())).await {
                 Ok(Ok(response)) => return Ok(response),
                 Ok(Err(err)) => {
                     warn!(
@@ -631,9 +575,7 @@ impl MultiNodeClient {
     ///
     /// Updates internal node tracking with discovered peers.
     pub async fn discover_peers(&self) -> Result<Vec<NodeDescriptor>> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::GetClusterState)
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::GetClusterState).await?;
 
         match response {
             ClientRpcResponse::ClusterState(state) => {
@@ -680,24 +622,17 @@ impl MultiNodeClient {
 
         // Tiger Style: Bounded node count
         if nodes.len() >= MAX_TRACKED_NODES && !nodes.contains_key(&node_id) {
-            warn!(
-                node_id,
-                max_nodes = MAX_TRACKED_NODES,
-                "node limit reached, not adding new node"
-            );
+            warn!(node_id, max_nodes = MAX_TRACKED_NODES, "node limit reached, not adding new node");
             return;
         }
 
-        nodes.insert(
+        nodes.insert(node_id, NodeConnection {
             node_id,
-            NodeConnection {
-                node_id,
-                endpoint_addr,
-                is_reachable: false,
-                is_leader: false,
-                is_voter: false,
-            },
-        );
+            endpoint_addr,
+            is_reachable: false,
+            is_leader: false,
+            is_voter: false,
+        });
 
         info!(node_id, "added node to tracking");
     }
@@ -757,9 +692,7 @@ impl MultiNodeClient {
 
     /// Get Raft metrics from the primary target.
     pub async fn get_raft_metrics(&self) -> Result<RaftMetricsResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::GetRaftMetrics)
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::GetRaftMetrics).await?;
 
         match response {
             ClientRpcResponse::RaftMetrics(metrics) => Ok(metrics),
@@ -779,9 +712,7 @@ impl MultiNodeClient {
 
     /// Read a key from the cluster.
     pub async fn read_key(&self, key: String) -> Result<ReadResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::ReadKey { key })
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::ReadKey { key }).await?;
 
         match response {
             ClientRpcResponse::ReadResult(result) => Ok(result),
@@ -791,9 +722,7 @@ impl MultiNodeClient {
 
     /// Write a key-value pair to the cluster.
     pub async fn write_key(&self, key: String, value: Vec<u8>) -> Result<WriteResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::WriteKey { key, value })
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::WriteKey { key, value }).await?;
 
         match response {
             ClientRpcResponse::WriteResult(result) => Ok(result),
@@ -803,9 +732,7 @@ impl MultiNodeClient {
 
     /// Trigger a Raft snapshot.
     pub async fn trigger_snapshot(&self) -> Result<SnapshotResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::TriggerSnapshot)
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::TriggerSnapshot).await?;
 
         match response {
             ClientRpcResponse::SnapshotResult(result) => Ok(result),
@@ -814,14 +741,8 @@ impl MultiNodeClient {
     }
 
     /// Add a learner node to the cluster.
-    pub async fn add_learner(
-        &self,
-        node_id: u64,
-        addr: String,
-    ) -> Result<AddLearnerResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::AddLearner { node_id, addr })
-            .await?;
+    pub async fn add_learner(&self, node_id: u64, addr: String) -> Result<AddLearnerResultResponse> {
+        let response = self.send_rpc_primary(ClientRpcRequest::AddLearner { node_id, addr }).await?;
 
         match response {
             ClientRpcResponse::AddLearnerResult(result) => Ok(result),
@@ -830,13 +751,8 @@ impl MultiNodeClient {
     }
 
     /// Change cluster membership.
-    pub async fn change_membership(
-        &self,
-        members: Vec<u64>,
-    ) -> Result<ChangeMembershipResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::ChangeMembership { members })
-            .await?;
+    pub async fn change_membership(&self, members: Vec<u64>) -> Result<ChangeMembershipResultResponse> {
+        let response = self.send_rpc_primary(ClientRpcRequest::ChangeMembership { members }).await?;
 
         match response {
             ClientRpcResponse::ChangeMembershipResult(result) => Ok(result),
@@ -846,9 +762,7 @@ impl MultiNodeClient {
 
     /// Delete a key from the cluster.
     pub async fn delete_key(&self, key: String) -> Result<DeleteResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::DeleteKey { key })
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::DeleteKey { key }).await?;
 
         match response {
             ClientRpcResponse::DeleteResult(result) => Ok(result),
@@ -910,9 +824,7 @@ impl MultiNodeClient {
 
     /// Force a SQLite WAL checkpoint.
     pub async fn checkpoint_wal(&self) -> Result<CheckpointWalResultResponse> {
-        let response = self
-            .send_rpc_primary(ClientRpcRequest::CheckpointWal)
-            .await?;
+        let response = self.send_rpc_primary(ClientRpcRequest::CheckpointWal).await?;
 
         match response {
             ClientRpcResponse::CheckpointWalResult(result) => Ok(result),

@@ -4,7 +4,8 @@
 //! the issuer's public key and current time.
 
 use iroh::PublicKey;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::auth::capability::Capability;
 use crate::auth::error::AuthError;
@@ -66,8 +67,7 @@ impl CapabilityToken {
     ///
     /// Uses postcard for compact binary serialization.
     pub fn encode(&self) -> Result<Vec<u8>, AuthError> {
-        let bytes =
-            postcard::to_allocvec(self).map_err(|e| AuthError::EncodingError(e.to_string()))?;
+        let bytes = postcard::to_allocvec(self).map_err(|e| AuthError::EncodingError(e.to_string()))?;
         if bytes.len() > MAX_TOKEN_SIZE as usize {
             return Err(AuthError::TokenTooLarge {
                 size: bytes.len(),
@@ -116,7 +116,10 @@ impl CapabilityToken {
 /// Serde helper for PublicKey.
 mod public_key_serde {
     use iroh::PublicKey;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::Serialize;
+    use serde::Serializer;
 
     pub fn serialize<S: Serializer>(key: &PublicKey, s: S) -> Result<S::Ok, S::Error> {
         key.as_bytes().serialize(s)
@@ -130,7 +133,9 @@ mod public_key_serde {
 
 /// Serde helper for Ed25519 signatures (64 bytes).
 mod signature_serde {
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::Deserialize;
+    use serde::Deserializer;
+    use serde::Serializer;
 
     pub fn serialize<S: Serializer>(sig: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
         s.serialize_bytes(sig)
@@ -139,10 +144,7 @@ mod signature_serde {
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
         if bytes.len() != 64 {
-            return Err(serde::de::Error::custom(format!(
-                "expected 64 bytes, got {}",
-                bytes.len()
-            )));
+            return Err(serde::de::Error::custom(format!("expected 64 bytes, got {}", bytes.len())));
         }
         let mut sig = [0u8; 64];
         sig.copy_from_slice(&bytes);

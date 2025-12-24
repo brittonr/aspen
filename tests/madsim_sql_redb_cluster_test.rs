@@ -27,7 +27,8 @@
 use std::time::Duration;
 
 use aspen::api::SqlConsistency;
-use aspen::testing::madsim_tester::{AspenRaftTester, TesterConfig};
+use aspen::testing::madsim_tester::AspenRaftTester;
+use aspen::testing::madsim_tester::TesterConfig;
 
 // ============================================================================
 // Basic Replication Tests
@@ -47,19 +48,14 @@ async fn test_sql_basic_select_after_replication() {
 
     // Write data through Raft consensus
     for i in 0..10 {
-        t.write(format!("user:{}", i), format!("User{}", i))
-            .await
-            .expect("write failed");
+        t.write(format!("user:{}", i), format!("User{}", i)).await.expect("write failed");
     }
 
     // Wait for replication
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // SQL query through leader
-    let result = t
-        .execute_sql("SELECT * FROM kv WHERE key LIKE 'user:%'")
-        .await
-        .expect("SQL query failed");
+    let result = t.execute_sql("SELECT * FROM kv WHERE key LIKE 'user:%'").await.expect("SQL query failed");
 
     assert_eq!(result.row_count, 10, "Expected 10 rows");
     assert!(!result.is_truncated, "Result should not be truncated");
@@ -80,18 +76,13 @@ async fn test_sql_count_aggregation() {
 
     // Write 25 entries
     for i in 0..25 {
-        t.write(format!("item:{:03}", i), format!("value{}", i))
-            .await
-            .expect("write failed");
+        t.write(format!("item:{:03}", i), format!("value{}", i)).await.expect("write failed");
     }
 
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // COUNT(*) aggregation
-    let result = t
-        .execute_sql("SELECT COUNT(*) as cnt FROM kv")
-        .await
-        .expect("SQL query failed");
+    let result = t.execute_sql("SELECT COUNT(*) as cnt FROM kv").await.expect("SQL query failed");
 
     assert_eq!(result.row_count, 1, "COUNT should return 1 row");
     // The count should be in the first column of the first row
@@ -112,21 +103,11 @@ async fn test_sql_filter_pushdown_prefix() {
     t.check_one_leader().await.expect("No leader elected");
 
     // Write data with different prefixes
-    t.write("config:timeout".into(), "30".into())
-        .await
-        .expect("write failed");
-    t.write("config:retries".into(), "3".into())
-        .await
-        .expect("write failed");
-    t.write("user:1".into(), "Alice".into())
-        .await
-        .expect("write failed");
-    t.write("user:2".into(), "Bob".into())
-        .await
-        .expect("write failed");
-    t.write("data:record:1".into(), "rec1".into())
-        .await
-        .expect("write failed");
+    t.write("config:timeout".into(), "30".into()).await.expect("write failed");
+    t.write("config:retries".into(), "3".into()).await.expect("write failed");
+    t.write("user:1".into(), "Alice".into()).await.expect("write failed");
+    t.write("user:2".into(), "Bob".into()).await.expect("write failed");
+    t.write("data:record:1".into(), "rec1".into()).await.expect("write failed");
 
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
@@ -156,17 +137,12 @@ async fn test_sql_linearizable_on_leader() {
     let leader = t.check_one_leader().await.expect("No leader elected");
 
     // Write data
-    t.write("key1".into(), "value1".into())
-        .await
-        .expect("write failed");
+    t.write("key1".into(), "value1".into()).await.expect("write failed");
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // Linearizable query (default)
     let result = t
-        .execute_sql_with_consistency(
-            "SELECT * FROM kv WHERE key = 'key1'",
-            SqlConsistency::Linearizable,
-        )
+        .execute_sql_with_consistency("SELECT * FROM kv WHERE key = 'key1'", SqlConsistency::Linearizable)
         .await
         .expect("Linearizable query should succeed on leader");
 
@@ -187,9 +163,7 @@ async fn test_sql_stale_on_follower() {
     let leader = t.check_one_leader().await.expect("No leader elected");
 
     // Write data
-    t.write("stale-key".into(), "stale-value".into())
-        .await
-        .expect("write failed");
+    t.write("stale-key".into(), "stale-value".into()).await.expect("write failed");
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // Find a follower
@@ -202,10 +176,7 @@ async fn test_sql_stale_on_follower() {
         .expect("Stale query on follower should succeed");
 
     assert_eq!(result.row_count, 1, "Follower should have replicated data");
-    eprintln!(
-        "Follower {} served stale query successfully with {} rows",
-        follower, result.row_count
-    );
+    eprintln!("Follower {} served stale query successfully with {} rows", follower, result.row_count);
 
     t.end();
 }
@@ -227,9 +198,7 @@ async fn test_sql_after_leader_crash() {
     eprintln!("Initial leader: {}", old_leader);
 
     // Write data through initial leader
-    t.write("crash-test-key".into(), "crash-test-value".into())
-        .await
-        .expect("write failed");
+    t.write("crash-test-key".into(), "crash-test-value".into()).await.expect("write failed");
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // Crash the leader
@@ -265,18 +234,14 @@ async fn test_sql_after_partition_heal() {
     t.check_one_leader().await.expect("No leader elected");
 
     // Write initial data
-    t.write("pre-partition".into(), "value1".into())
-        .await
-        .expect("write failed");
+    t.write("pre-partition".into(), "value1".into()).await.expect("write failed");
 
     // Partition node 2 (not the typical leader)
     t.disconnect(2);
     eprintln!("Partitioned node 2");
 
     // Write more data (should succeed with 2/3 quorum)
-    t.write("during-partition".into(), "value2".into())
-        .await
-        .expect("write during partition failed");
+    t.write("during-partition".into(), "value2".into()).await.expect("write during partition failed");
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
     // Heal partition
@@ -354,15 +319,9 @@ async fn test_sql_order_by() {
     t.check_one_leader().await.expect("No leader elected");
 
     // Write data in non-sorted order
-    t.write("z:last".into(), "3".into())
-        .await
-        .expect("write failed");
-    t.write("a:first".into(), "1".into())
-        .await
-        .expect("write failed");
-    t.write("m:middle".into(), "2".into())
-        .await
-        .expect("write failed");
+    t.write("z:last".into(), "3".into()).await.expect("write failed");
+    t.write("a:first".into(), "1".into()).await.expect("write failed");
+    t.write("m:middle".into(), "2".into()).await.expect("write failed");
 
     t.wait_for_log_sync(5).await.expect("log sync failed");
 
@@ -390,9 +349,7 @@ async fn test_sql_limit() {
 
     // Write 20 entries
     for i in 0..20 {
-        t.write(format!("limit:{:02}", i), format!("val{}", i))
-            .await
-            .expect("write failed");
+        t.write(format!("limit:{:02}", i), format!("val{}", i)).await.expect("write failed");
     }
 
     t.wait_for_log_sync(5).await.expect("log sync failed");

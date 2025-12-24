@@ -28,16 +28,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::api::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
-use crate::client::{ClusterSubscription, SubscriptionFilter};
-
-use super::constants::{MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE};
+use super::constants::MAX_DOC_KEY_SIZE;
+use super::constants::MAX_DOC_VALUE_SIZE;
 use super::origin::KeyOrigin;
+use crate::api::KeyValueStore;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
+use crate::client::ClusterSubscription;
+use crate::client::SubscriptionFilter;
 
 /// Maximum number of peer subscriptions allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -137,10 +144,7 @@ impl DocsImporter {
         let mut subs = self.subscriptions.write().await;
 
         if subs.len() >= MAX_PEER_SUBSCRIPTIONS {
-            anyhow::bail!(
-                "max peer subscriptions ({}) exceeded",
-                MAX_PEER_SUBSCRIPTIONS
-            );
+            anyhow::bail!("max peer subscriptions ({}) exceeded", MAX_PEER_SUBSCRIPTIONS);
         }
 
         if subs.contains_key(&subscription.cluster_id) {
@@ -154,10 +158,7 @@ impl DocsImporter {
             "adding peer subscription"
         );
 
-        subs.insert(
-            subscription.cluster_id.clone(),
-            PeerSubscription::new(subscription),
-        );
+        subs.insert(subscription.cluster_id.clone(), PeerSubscription::new(subscription));
 
         Ok(())
     }
@@ -263,19 +264,11 @@ impl DocsImporter {
     ) -> Result<ImportResult> {
         // Validate sizes
         if key.len() > MAX_DOC_KEY_SIZE {
-            warn!(
-                key_len = key.len(),
-                max = MAX_DOC_KEY_SIZE,
-                "key too large for import, skipping"
-            );
+            warn!(key_len = key.len(), max = MAX_DOC_KEY_SIZE, "key too large for import, skipping");
             return Ok(ImportResult::Skipped("key too large"));
         }
         if value.len() > MAX_DOC_VALUE_SIZE {
-            warn!(
-                value_len = value.len(),
-                max = MAX_DOC_VALUE_SIZE,
-                "value too large for import, skipping"
-            );
+            warn!(value_len = value.len(), max = MAX_DOC_VALUE_SIZE, "value too large for import, skipping");
             return Ok(ImportResult::Skipped("value too large"));
         }
 
@@ -310,11 +303,7 @@ impl DocsImporter {
         let origin_key = KeyOrigin::storage_key(&key_str);
 
         // Read existing origin to check priority
-        let existing_origin = match self
-            .kv_store
-            .read(ReadRequest::new(origin_key.clone()))
-            .await
-        {
+        let existing_origin = match self.kv_store.read(ReadRequest::new(origin_key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 KeyOrigin::from_bytes(value.as_bytes())
@@ -433,7 +422,8 @@ pub enum ImportResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::{DeterministicKeyValueStore, KeyValueStoreError};
+    use crate::api::DeterministicKeyValueStore;
+    use crate::api::KeyValueStoreError;
 
     fn create_test_importer() -> DocsImporter {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
@@ -524,10 +514,7 @@ mod tests {
         let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a").with_priority(5);
         importer.add_subscription(sub).await.unwrap();
 
-        let result = importer
-            .process_remote_entry("cluster-a", b"test-key", b"test-value")
-            .await
-            .unwrap();
+        let result = importer.process_remote_entry("cluster-a", b"test-key", b"test-value").await.unwrap();
 
         assert_eq!(result, ImportResult::Imported);
 
@@ -549,26 +536,18 @@ mod tests {
         let importer = DocsImporter::new("local-cluster", kv_store.clone());
 
         // Add two subscriptions with different priorities
-        let sub_high =
-            ClusterSubscription::new("sub-1", "High Priority", "cluster-high").with_priority(1); // Higher priority (lower number)
-        let sub_low =
-            ClusterSubscription::new("sub-2", "Low Priority", "cluster-low").with_priority(10); // Lower priority (higher number)
+        let sub_high = ClusterSubscription::new("sub-1", "High Priority", "cluster-high").with_priority(1); // Higher priority (lower number)
+        let sub_low = ClusterSubscription::new("sub-2", "Low Priority", "cluster-low").with_priority(10); // Lower priority (higher number)
 
         importer.add_subscription(sub_high).await.unwrap();
         importer.add_subscription(sub_low).await.unwrap();
 
         // First import from low priority cluster
-        let result1 = importer
-            .process_remote_entry("cluster-low", b"key", b"low-value")
-            .await
-            .unwrap();
+        let result1 = importer.process_remote_entry("cluster-low", b"key", b"low-value").await.unwrap();
         assert_eq!(result1, ImportResult::Imported);
 
         // Then try to import from high priority cluster - should succeed
-        let result2 = importer
-            .process_remote_entry("cluster-high", b"key", b"high-value")
-            .await
-            .unwrap();
+        let result2 = importer.process_remote_entry("cluster-high", b"key", b"high-value").await.unwrap();
         assert_eq!(result2, ImportResult::Imported);
 
         // Verify high priority value won
@@ -576,10 +555,7 @@ mod tests {
         assert_eq!(value, Some("high-value".to_string()));
 
         // Now try to import again from low priority - should be skipped
-        let result3 = importer
-            .process_remote_entry("cluster-low", b"key", b"new-low-value")
-            .await
-            .unwrap();
+        let result3 = importer.process_remote_entry("cluster-low", b"key", b"new-low-value").await.unwrap();
         assert!(matches!(result3, ImportResult::PrioritySkipped { .. }));
 
         // Value should still be high priority
@@ -597,25 +573,16 @@ mod tests {
         importer.add_subscription(sub).await.unwrap();
 
         // Should be filtered
-        let result1 = importer
-            .process_remote_entry("cluster-a", b"blocked/key", b"value")
-            .await
-            .unwrap();
+        let result1 = importer.process_remote_entry("cluster-a", b"blocked/key", b"value").await.unwrap();
         assert_eq!(result1, ImportResult::Filtered);
 
         // Should be imported
-        let result2 = importer
-            .process_remote_entry("cluster-a", b"allowed/key", b"value")
-            .await
-            .unwrap();
+        let result2 = importer.process_remote_entry("cluster-a", b"allowed/key", b"value").await.unwrap();
         assert_eq!(result2, ImportResult::Imported);
 
         // Verify only allowed key exists
         assert!(read_value(&kv_store, "blocked/key").await.is_none());
-        assert_eq!(
-            read_value(&kv_store, "allowed/key").await,
-            Some("value".to_string())
-        );
+        assert_eq!(read_value(&kv_store, "allowed/key").await, Some("value".to_string()));
     }
 
     #[tokio::test]
@@ -626,10 +593,7 @@ mod tests {
         let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a").with_enabled(false);
         importer.add_subscription(sub).await.unwrap();
 
-        let result = importer
-            .process_remote_entry("cluster-a", b"key", b"value")
-            .await
-            .unwrap();
+        let result = importer.process_remote_entry("cluster-a", b"key", b"value").await.unwrap();
 
         assert_eq!(result, ImportResult::Skipped("subscription disabled"));
         assert!(read_value(&kv_store, "key").await.is_none());

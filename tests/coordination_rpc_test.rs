@@ -6,14 +6,21 @@
 use std::sync::Arc;
 
 use aspen::api::inmemory::DeterministicKeyValueStore;
-use aspen::client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, CounterResultResponse, LockResultResponse,
-    RateLimiterResultResponse, SequenceResultResponse, SignedCounterResultResponse,
-};
-use aspen::coordination::{
-    AtomicCounter, CounterConfig, DistributedLock, DistributedRateLimiter, LockConfig,
-    RateLimiterConfig, SequenceConfig, SequenceGenerator,
-};
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::CounterResultResponse;
+use aspen::client_rpc::LockResultResponse;
+use aspen::client_rpc::RateLimiterResultResponse;
+use aspen::client_rpc::SequenceResultResponse;
+use aspen::client_rpc::SignedCounterResultResponse;
+use aspen::coordination::AtomicCounter;
+use aspen::coordination::CounterConfig;
+use aspen::coordination::DistributedLock;
+use aspen::coordination::DistributedRateLimiter;
+use aspen::coordination::LockConfig;
+use aspen::coordination::RateLimiterConfig;
+use aspen::coordination::SequenceConfig;
+use aspen::coordination::SequenceGenerator;
 
 // ============================================================================
 // Coordination RPC Request Serialization Tests
@@ -55,11 +62,7 @@ fn test_lock_try_acquire_request_roundtrip() {
     let serialized = postcard::to_stdvec(&request).expect("serialize");
     let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
-        ClientRpcRequest::LockTryAcquire {
-            key,
-            holder_id,
-            ttl_ms,
-        } => {
+        ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
             assert_eq!(key, "test_lock");
             assert_eq!(holder_id, "client_1");
             assert_eq!(ttl_ms, 30000);
@@ -124,12 +127,8 @@ fn test_counter_operations_roundtrip() {
 
     for request in requests {
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&request),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&request), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -150,12 +149,8 @@ fn test_sequence_operations_roundtrip() {
 
     for request in requests {
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&request),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&request), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -189,12 +184,8 @@ fn test_rate_limiter_operations_roundtrip() {
 
     for request in requests {
         let serialized = postcard::to_stdvec(&request).expect("serialize");
-        let deserialized: ClientRpcRequest =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&request),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&request), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -223,12 +214,8 @@ fn test_lock_result_response_roundtrip() {
 
     for response in responses {
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&response),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&response), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -249,12 +236,8 @@ fn test_counter_result_response_roundtrip() {
 
     for response in responses {
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&response),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&response), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -275,12 +258,8 @@ fn test_signed_counter_result_response_roundtrip() {
 
     for response in responses {
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&response),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&response), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -321,12 +300,8 @@ fn test_rate_limiter_result_response_roundtrip() {
 
     for response in responses {
         let serialized = postcard::to_stdvec(&response).expect("serialize");
-        let deserialized: ClientRpcResponse =
-            postcard::from_bytes(&serialized).expect("deserialize");
-        assert_eq!(
-            std::mem::discriminant(&response),
-            std::mem::discriminant(&deserialized)
-        );
+        let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
+        assert_eq!(std::mem::discriminant(&response), std::mem::discriminant(&deserialized));
     }
 }
 
@@ -369,10 +344,7 @@ async fn test_rate_limiter_returns_retry_after() {
     // Next acquire should fail with retry_after
     let err = limiter.try_acquire().await.unwrap_err();
     assert!(err.retry_after_ms > 0, "Should have retry_after_ms");
-    assert!(
-        err.retry_after_ms <= 1000,
-        "retry_after_ms should be <= 1 second"
-    );
+    assert!(err.retry_after_ms <= 1000, "retry_after_ms should be <= 1 second");
 }
 
 #[tokio::test]
@@ -435,21 +407,11 @@ async fn test_lock_contention() {
     let store = Arc::new(DeterministicKeyValueStore::new());
 
     // First holder acquires
-    let lock1 = DistributedLock::new(
-        store.clone(),
-        "test_lock",
-        "holder_1",
-        LockConfig::default(),
-    );
+    let lock1 = DistributedLock::new(store.clone(), "test_lock", "holder_1", LockConfig::default());
     let _guard1 = lock1.try_acquire().await.unwrap();
 
     // Second holder should fail
-    let lock2 = DistributedLock::new(
-        store.clone(),
-        "test_lock",
-        "holder_2",
-        LockConfig::default(),
-    );
+    let lock2 = DistributedLock::new(store.clone(), "test_lock", "holder_2", LockConfig::default());
     let result = lock2.try_acquire().await;
     assert!(result.is_err(), "Second holder should fail to acquire");
 }
@@ -458,9 +420,12 @@ async fn test_lock_contention() {
 // Batch Operation Tests (In-Memory Store)
 // ============================================================================
 
-use aspen::api::{
-    BatchCondition, BatchOperation, KeyValueStore, ReadRequest, WriteCommand, WriteRequest,
-};
+use aspen::api::BatchCondition;
+use aspen::api::BatchOperation;
+use aspen::api::KeyValueStore;
+use aspen::api::ReadRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
 
 #[tokio::test]
 async fn test_batch_write_set_operations() {
@@ -490,22 +455,13 @@ async fn test_batch_write_set_operations() {
     assert_eq!(result.batch_applied, Some(3));
 
     // Verify all keys were set
-    let r1 = store
-        .read(ReadRequest::new("key1".to_string()))
-        .await
-        .unwrap();
+    let r1 = store.read(ReadRequest::new("key1".to_string())).await.unwrap();
     assert_eq!(r1.kv.unwrap().value, "value1");
 
-    let r2 = store
-        .read(ReadRequest::new("key2".to_string()))
-        .await
-        .unwrap();
+    let r2 = store.read(ReadRequest::new("key2".to_string())).await.unwrap();
     assert_eq!(r2.kv.unwrap().value, "value2");
 
-    let r3 = store
-        .read(ReadRequest::new("key3".to_string()))
-        .await
-        .unwrap();
+    let r3 = store.read(ReadRequest::new("key3".to_string())).await.unwrap();
     assert_eq!(r3.kv.unwrap().value, "value3");
 }
 
@@ -543,10 +499,7 @@ async fn test_batch_write_mixed_operations() {
     assert_eq!(result.batch_applied, Some(2));
 
     // Verify new key exists
-    let r1 = store
-        .read(ReadRequest::new("new_key".to_string()))
-        .await
-        .unwrap();
+    let r1 = store.read(ReadRequest::new("new_key".to_string())).await.unwrap();
     assert_eq!(r1.kv.unwrap().value, "new_value");
 
     // Verify deleted key is gone
@@ -594,16 +547,10 @@ async fn test_conditional_batch_success() {
     assert_eq!(result.batch_applied, Some(2));
 
     // Verify updates
-    let version = store
-        .read(ReadRequest::new("version".to_string()))
-        .await
-        .unwrap();
+    let version = store.read(ReadRequest::new("version".to_string())).await.unwrap();
     assert_eq!(version.kv.unwrap().value, "2");
 
-    let data = store
-        .read(ReadRequest::new("data".to_string()))
-        .await
-        .unwrap();
+    let data = store.read(ReadRequest::new("data".to_string())).await.unwrap();
     assert_eq!(data.kv.unwrap().value, "updated");
 }
 
@@ -643,10 +590,7 @@ async fn test_conditional_batch_failure() {
 
     // Verify data was NOT written
     let data_result = store.read(ReadRequest::new("data".to_string())).await;
-    assert!(
-        data_result.is_err(),
-        "Data should not be written on failed condition"
-    );
+    assert!(data_result.is_err(), "Data should not be written on failed condition");
 }
 
 #[tokio::test]
@@ -680,10 +624,7 @@ async fn test_conditional_batch_key_exists() {
     let result = store.write(request).await.unwrap();
     assert_eq!(result.conditions_met, Some(true));
 
-    let existing = store
-        .read(ReadRequest::new("existing".to_string()))
-        .await
-        .unwrap();
+    let existing = store.read(ReadRequest::new("existing".to_string())).await.unwrap();
     assert_eq!(existing.kv.unwrap().value, "updated");
 }
 
@@ -707,10 +648,7 @@ async fn test_conditional_batch_key_not_exists() {
     let result = store.write(request).await.unwrap();
     assert_eq!(result.conditions_met, Some(true));
 
-    let new_key = store
-        .read(ReadRequest::new("new_key".to_string()))
-        .await
-        .unwrap();
+    let new_key = store.read(ReadRequest::new("new_key".to_string())).await.unwrap();
     assert_eq!(new_key.kv.unwrap().value, "created");
 
     // Try again - should fail because key now exists
@@ -730,10 +668,7 @@ async fn test_conditional_batch_key_not_exists() {
     assert_eq!(result2.conditions_met, Some(false));
 
     // Value should still be "created"
-    let new_key_after = store
-        .read(ReadRequest::new("new_key".to_string()))
-        .await
-        .unwrap();
+    let new_key_after = store.read(ReadRequest::new("new_key".to_string())).await.unwrap();
     assert_eq!(new_key_after.kv.unwrap().value, "created");
 }
 
@@ -779,10 +714,7 @@ async fn test_conditional_batch_multiple_conditions() {
     let result = store.write(request).await.unwrap();
     assert_eq!(result.conditions_met, Some(true));
 
-    let result_val = store
-        .read(ReadRequest::new("result".to_string()))
-        .await
-        .unwrap();
+    let result_val = store.read(ReadRequest::new("result".to_string())).await.unwrap();
     assert_eq!(result_val.kv.unwrap().value, "all_conditions_passed");
 }
 
@@ -790,10 +722,11 @@ async fn test_conditional_batch_multiple_conditions() {
 // Batch RPC Serialization Tests
 // ============================================================================
 
-use aspen::client_rpc::{
-    BatchCondition as RpcBatchCondition, BatchReadResultResponse, BatchWriteOperation,
-    BatchWriteResultResponse, ConditionalBatchWriteResultResponse,
-};
+use aspen::client_rpc::BatchCondition as RpcBatchCondition;
+use aspen::client_rpc::BatchReadResultResponse;
+use aspen::client_rpc::BatchWriteOperation;
+use aspen::client_rpc::BatchWriteResultResponse;
+use aspen::client_rpc::ConditionalBatchWriteResultResponse;
 
 #[test]
 fn test_batch_read_request_roundtrip() {
@@ -860,9 +793,7 @@ fn test_conditional_batch_write_request_roundtrip() {
             RpcBatchCondition::KeyExists {
                 key: "exists".to_string(),
             },
-            RpcBatchCondition::KeyNotExists {
-                key: "new".to_string(),
-            },
+            RpcBatchCondition::KeyNotExists { key: "new".to_string() },
         ],
         operations: vec![BatchWriteOperation::Set {
             key: "data".to_string(),
@@ -872,10 +803,7 @@ fn test_conditional_batch_write_request_roundtrip() {
     let serialized = postcard::to_stdvec(&request).expect("serialize");
     let deserialized: ClientRpcRequest = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
-        ClientRpcRequest::ConditionalBatchWrite {
-            conditions,
-            operations,
-        } => {
+        ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
             assert_eq!(conditions.len(), 3);
             assert_eq!(operations.len(), 1);
         }
@@ -887,11 +815,7 @@ fn test_conditional_batch_write_request_roundtrip() {
 fn test_batch_read_result_response_roundtrip() {
     let response = ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
         success: true,
-        values: Some(vec![
-            Some(b"value1".to_vec()),
-            None,
-            Some(b"value3".to_vec()),
-        ]),
+        values: Some(vec![Some(b"value1".to_vec()), None, Some(b"value3".to_vec())]),
         error: None,
     });
     let serialized = postcard::to_stdvec(&response).expect("serialize");
@@ -930,15 +854,14 @@ fn test_batch_write_result_response_roundtrip() {
 #[test]
 fn test_conditional_batch_write_result_response_roundtrip() {
     // Test success case
-    let response =
-        ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-            success: true,
-            conditions_met: true,
-            operations_applied: Some(3),
-            failed_condition_index: None,
-            failed_condition_reason: None,
-            error: None,
-        });
+    let response = ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+        success: true,
+        conditions_met: true,
+        operations_applied: Some(3),
+        failed_condition_index: None,
+        failed_condition_reason: None,
+        error: None,
+    });
     let serialized = postcard::to_stdvec(&response).expect("serialize");
     let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
     match deserialized {
@@ -951,27 +874,22 @@ fn test_conditional_batch_write_result_response_roundtrip() {
     }
 
     // Test failure case
-    let response_fail =
-        ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
-            success: false,
-            conditions_met: false,
-            operations_applied: None,
-            failed_condition_index: Some(1),
-            failed_condition_reason: Some("value mismatch".to_string()),
-            error: None,
-        });
+    let response_fail = ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+        success: false,
+        conditions_met: false,
+        operations_applied: None,
+        failed_condition_index: Some(1),
+        failed_condition_reason: Some("value mismatch".to_string()),
+        error: None,
+    });
     let serialized_fail = postcard::to_stdvec(&response_fail).expect("serialize");
-    let deserialized_fail: ClientRpcResponse =
-        postcard::from_bytes(&serialized_fail).expect("deserialize");
+    let deserialized_fail: ClientRpcResponse = postcard::from_bytes(&serialized_fail).expect("deserialize");
     match deserialized_fail {
         ClientRpcResponse::ConditionalBatchWriteResult(result) => {
             assert!(!result.success);
             assert!(!result.conditions_met);
             assert_eq!(result.failed_condition_index, Some(1));
-            assert_eq!(
-                result.failed_condition_reason,
-                Some("value mismatch".to_string())
-            );
+            assert_eq!(result.failed_condition_reason, Some("value mismatch".to_string()));
         }
         _ => panic!("Wrong variant"),
     }

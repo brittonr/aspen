@@ -8,15 +8,25 @@
 
 use std::time::Duration;
 
-use aspen::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ControlPlaneError,
-    DeleteRequest, InitRequest, KeyValueStore, KeyValueStoreError, ReadRequest, ScanRequest,
-    WriteCommand, WriteRequest,
-};
-use aspen::node::{NodeBuilder, NodeId};
+use aspen::api::AddLearnerRequest;
+use aspen::api::ChangeMembershipRequest;
+use aspen::api::ClusterController;
+use aspen::api::ClusterNode;
+use aspen::api::ControlPlaneError;
+use aspen::api::DeleteRequest;
+use aspen::api::InitRequest;
+use aspen::api::KeyValueStore;
+use aspen::api::KeyValueStoreError;
+use aspen::api::ReadRequest;
+use aspen::api::ScanRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use aspen::node::NodeBuilder;
+use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
 use tempfile::TempDir;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
+use tokio::time::timeout;
 
 /// Test timeout for all operations.
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -63,10 +73,7 @@ async fn test_init_empty_members_fails() {
     };
 
     let result = raft_node.init(init_request).await;
-    assert!(matches!(
-        result,
-        Err(ControlPlaneError::InvalidRequest { .. })
-    ));
+    assert!(matches!(result, Err(ControlPlaneError::InvalidRequest { .. })));
 
     node.shutdown().await.unwrap();
 }
@@ -84,9 +91,7 @@ async fn test_init_single_node_success() {
         initial_members: vec![ClusterNode::with_iroh_addr(101, endpoint_addr)],
     };
 
-    let result = timeout(TEST_TIMEOUT, raft_node.init(init_request))
-        .await
-        .unwrap();
+    let result = timeout(TEST_TIMEOUT, raft_node.init(init_request)).await.unwrap();
     assert!(result.is_ok(), "init failed: {:?}", result);
 
     let state = result.unwrap();
@@ -105,10 +110,7 @@ async fn test_current_state_after_init() {
     init_single_node(&node).await.unwrap();
 
     let raft_node = node.raft_node();
-    let state = timeout(TEST_TIMEOUT, raft_node.current_state())
-        .await
-        .unwrap()
-        .unwrap();
+    let state = timeout(TEST_TIMEOUT, raft_node.current_state()).await.unwrap().unwrap();
 
     assert_eq!(state.members, vec![102]);
     assert_eq!(state.nodes.len(), 1);
@@ -142,10 +144,7 @@ async fn test_get_leader_after_init() {
     sleep(Duration::from_millis(500)).await;
 
     let raft_node = node.raft_node();
-    let leader = timeout(TEST_TIMEOUT, raft_node.get_leader())
-        .await
-        .unwrap()
-        .unwrap();
+    let leader = timeout(TEST_TIMEOUT, raft_node.get_leader()).await.unwrap().unwrap();
 
     // In a single-node cluster, the node should be the leader
     assert_eq!(leader, Some(104));
@@ -164,20 +163,13 @@ async fn test_get_metrics_returns_valid_data() {
     sleep(Duration::from_millis(500)).await;
 
     let raft_node = node.raft_node();
-    let metrics = timeout(TEST_TIMEOUT, raft_node.get_metrics())
-        .await
-        .unwrap()
-        .unwrap();
+    let metrics = timeout(TEST_TIMEOUT, raft_node.get_metrics()).await.unwrap().unwrap();
 
     // Check basic metrics properties
     assert_eq!(metrics.id.0, 105);
     assert!(metrics.current_term > 0);
     // The node should be leader in single-node cluster
-    assert!(
-        metrics.state.is_leader(),
-        "expected leader state, got {:?}",
-        metrics.state
-    );
+    assert!(metrics.state.is_leader(), "expected leader state, got {:?}", metrics.state);
 
     node.shutdown().await.unwrap();
 }
@@ -229,10 +221,7 @@ async fn test_change_membership_empty_members_fails() {
     let request = ChangeMembershipRequest { members: vec![] };
 
     let result = raft_node.change_membership(request).await;
-    assert!(matches!(
-        result,
-        Err(ControlPlaneError::InvalidRequest { .. })
-    ));
+    assert!(matches!(result, Err(ControlPlaneError::InvalidRequest { .. })));
 
     node.shutdown().await.unwrap();
 }
@@ -281,17 +270,13 @@ async fn test_write_read_cycle() {
         },
     };
 
-    let write_result = timeout(TEST_TIMEOUT, raft_node.write(write_request))
-        .await
-        .unwrap();
+    let write_result = timeout(TEST_TIMEOUT, raft_node.write(write_request)).await.unwrap();
     assert!(write_result.is_ok(), "write failed: {:?}", write_result);
 
     // Read the key back
     let read_request = ReadRequest::new("mykey".to_string());
 
-    let read_result = timeout(TEST_TIMEOUT, raft_node.read(read_request))
-        .await
-        .unwrap();
+    let read_result = timeout(TEST_TIMEOUT, raft_node.read(read_request)).await.unwrap();
     assert!(read_result.is_ok(), "read failed: {:?}", read_result);
 
     let result = read_result.unwrap();
@@ -350,9 +335,7 @@ async fn test_delete_existing_key() {
     let delete_request = DeleteRequest {
         key: "to_delete".to_string(),
     };
-    let delete_result = timeout(TEST_TIMEOUT, raft_node.delete(delete_request))
-        .await
-        .unwrap();
+    let delete_result = timeout(TEST_TIMEOUT, raft_node.delete(delete_request)).await.unwrap();
     assert!(delete_result.is_ok(), "delete failed: {:?}", delete_result);
 
     let result = delete_result.unwrap();
@@ -362,10 +345,7 @@ async fn test_delete_existing_key() {
     // Verify key is gone
     let read_request = ReadRequest::new("to_delete".to_string());
     let read_result = raft_node.read(read_request).await;
-    assert!(matches!(
-        read_result,
-        Err(KeyValueStoreError::NotFound { .. })
-    ));
+    assert!(matches!(read_result, Err(KeyValueStoreError::NotFound { .. })));
 
     node.shutdown().await.unwrap();
 }
@@ -393,9 +373,7 @@ async fn test_set_multi_writes_multiple_keys() {
         },
     };
 
-    let write_result = timeout(TEST_TIMEOUT, raft_node.write(write_request))
-        .await
-        .unwrap();
+    let write_result = timeout(TEST_TIMEOUT, raft_node.write(write_request)).await.unwrap();
     assert!(write_result.is_ok(), "write failed: {:?}", write_result);
 
     // Verify all keys were written
@@ -440,9 +418,7 @@ async fn test_scan_with_prefix() {
         continuation_token: None,
     };
 
-    let scan_result = timeout(TEST_TIMEOUT, raft_node.scan(scan_request))
-        .await
-        .unwrap();
+    let scan_result = timeout(TEST_TIMEOUT, raft_node.scan(scan_request)).await.unwrap();
     assert!(scan_result.is_ok(), "scan failed: {:?}", scan_result);
 
     let result = scan_result.unwrap();
@@ -472,9 +448,7 @@ async fn test_scan_pagination() {
     // Write 5 keys
     let write_request = WriteRequest {
         command: WriteCommand::SetMulti {
-            pairs: (1..=5)
-                .map(|i| (format!("item/{:02}", i), format!("data{}", i)))
-                .collect(),
+            pairs: (1..=5).map(|i| (format!("item/{:02}", i), format!("data{}", i))).collect(),
         },
     };
     raft_node.write(write_request).await.unwrap();
@@ -539,10 +513,7 @@ async fn test_overwrite_existing_key() {
     raft_node.write(write1).await.unwrap();
 
     // Verify initial value
-    let read1 = raft_node
-        .read(ReadRequest::new("key".to_string()))
-        .await
-        .unwrap();
+    let read1 = raft_node.read(ReadRequest::new("key".to_string())).await.unwrap();
     assert_eq!(read1.kv.unwrap().value, "value1");
 
     // Overwrite with new value
@@ -555,10 +526,7 @@ async fn test_overwrite_existing_key() {
     raft_node.write(write2).await.unwrap();
 
     // Verify new value
-    let read2 = raft_node
-        .read(ReadRequest::new("key".to_string()))
-        .await
-        .unwrap();
+    let read2 = raft_node.read(ReadRequest::new("key".to_string())).await.unwrap();
     assert_eq!(read2.kv.unwrap().value, "value2");
 
     node.shutdown().await.unwrap();
@@ -609,11 +577,7 @@ async fn test_health_status_reflects_state() {
     let status = health_monitor.status().await;
 
     // Single-node cluster should be leader
-    assert!(
-        status.state.is_leader(),
-        "expected leader state, got {:?}",
-        status.state
-    );
+    assert!(status.state.is_leader(), "expected leader state, got {:?}", status.state);
     assert_eq!(status.leader, Some(301));
     assert_eq!(status.consecutive_failures, 0);
 

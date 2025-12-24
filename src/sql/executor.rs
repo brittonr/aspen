@@ -5,31 +5,34 @@
 //!
 //! ## Performance Optimizations
 //!
-//! 1. **SessionContext Caching**: The DataFusion `SessionContext` is cached and
-//!    reused across queries, avoiding the ~400µs overhead of creating a new
-//!    context per query. The `RedbTableProvider` is registered once at
-//!    construction time.
+//! 1. **SessionContext Caching**: The DataFusion `SessionContext` is cached and reused across
+//!    queries, avoiding the ~400µs overhead of creating a new context per query. The
+//!    `RedbTableProvider` is registered once at construction time.
 //!
-//! 2. **Simple Query Bypass**: Common query patterns are detected via regex and
-//!    executed directly against Redb, bypassing DataFusion entirely:
+//! 2. **Simple Query Bypass**: Common query patterns are detected via regex and executed directly
+//!    against Redb, bypassing DataFusion entirely:
 //!    - Point lookups: `SELECT * FROM kv WHERE key = 'literal'`
 //!    - Prefix scans: `SELECT * FROM kv WHERE key LIKE 'prefix%'`
 //!    - Count queries: `SELECT COUNT(*) FROM kv`
 //!
 //!    This optimization reduces point lookup latency from ~300µs to ~10µs.
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use datafusion::prelude::*;
-use redb::{Database, ReadableTable};
+use redb::Database;
+use redb::ReadableTable;
 use regex::Regex;
 
 use super::provider::RedbTableProvider;
-use crate::api::{
-    SqlColumnInfo, SqlQueryError, SqlQueryResult, SqlValue, effective_sql_limit,
-    effective_sql_timeout_ms,
-};
+use crate::api::SqlColumnInfo;
+use crate::api::SqlQueryError;
+use crate::api::SqlQueryResult;
+use crate::api::SqlValue;
+use crate::api::effective_sql_limit;
+use crate::api::effective_sql_timeout_ms;
 use crate::raft::storage_shared::SM_KV_TABLE;
 
 /// Regex for point lookup: SELECT * FROM kv WHERE key = 'literal'
@@ -42,16 +45,13 @@ static POINT_LOOKUP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 /// Regex for prefix scan: SELECT * FROM kv WHERE key LIKE 'prefix%'
 /// Captures the prefix (without the trailing %)
 static PREFIX_SCAN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r#"(?i)^\s*SELECT\s+\*\s+FROM\s+kv\s+WHERE\s+key\s+LIKE\s+(?:'([^']*?)%'|"([^"]*?)%")\s*$"#,
-    )
-    .expect("invalid prefix scan regex")
+    Regex::new(r#"(?i)^\s*SELECT\s+\*\s+FROM\s+kv\s+WHERE\s+key\s+LIKE\s+(?:'([^']*?)%'|"([^"]*?)%")\s*$"#)
+        .expect("invalid prefix scan regex")
 });
 
 /// Regex for count all: SELECT COUNT(*) FROM kv
 static COUNT_ALL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)^\s*SELECT\s+COUNT\s*\(\s*\*\s*\)\s+FROM\s+kv\s*$"#)
-        .expect("invalid count regex")
+    Regex::new(r#"(?i)^\s*SELECT\s+COUNT\s*\(\s*\*\s*\)\s+FROM\s+kv\s*$"#).expect("invalid count regex")
 });
 
 /// SQL query executor for Redb storage.
@@ -64,12 +64,12 @@ static COUNT_ALL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 ///
 /// The executor implements two levels of optimization:
 ///
-/// 1. **Simple Query Bypass**: Point lookups, prefix scans, and COUNT(*) queries
-///    are detected via regex and executed directly against Redb, bypassing
-///    DataFusion entirely. This reduces latency from ~300µs to ~10µs.
+/// 1. **Simple Query Bypass**: Point lookups, prefix scans, and COUNT(*) queries are detected via
+///    regex and executed directly against Redb, bypassing DataFusion entirely. This reduces latency
+///    from ~300µs to ~10µs.
 ///
-/// 2. **SessionContext Caching**: For complex queries that do go through
-///    DataFusion, the `SessionContext` is cached and reused, eliminating:
+/// 2. **SessionContext Caching**: For complex queries that do go through DataFusion, the
+///    `SessionContext` is cached and reused, eliminating:
 ///    - Creating a new SessionContext (~200µs)
 ///    - Registering the TableProvider (~100µs)
 ///    - DataFusion optimizer initialization (~100µs)
@@ -118,17 +118,14 @@ impl RedbSqlExecutor {
         // - Single partition (Redb is single-threaded for reads)
         // - 8192 batch size (good balance for streaming)
         // - Statistics collection disabled (we don't need it for simple KV queries)
-        let config = SessionConfig::new()
-            .with_target_partitions(1)
-            .with_batch_size(8192)
-            .with_information_schema(false);
+        let config =
+            SessionConfig::new().with_target_partitions(1).with_batch_size(8192).with_information_schema(false);
 
         let ctx = SessionContext::new_with_config(config);
 
         // Register the KV table ONCE at construction time
         let provider = RedbTableProvider::new(db.clone());
-        ctx.register_table("kv", Arc::new(provider))
-            .expect("failed to register kv table");
+        ctx.register_table("kv", Arc::new(provider)).expect("failed to register kv table");
 
         Self { db, ctx }
     }
@@ -138,8 +135,8 @@ impl RedbSqlExecutor {
     /// # Arguments
     ///
     /// * `query` - SQL query string (SELECT only)
-    /// * `params` - Query parameters for binding (currently unused, DataFusion
-    ///   doesn't support parameterized queries directly)
+    /// * `params` - Query parameters for binding (currently unused, DataFusion doesn't support
+    ///   parameterized queries directly)
     /// * `limit` - Maximum rows to return (bounded by MAX_SQL_RESULT_ROWS)
     /// * `timeout_ms` - Query timeout in milliseconds
     ///
@@ -169,8 +166,7 @@ impl RedbSqlExecutor {
         }
 
         // Fall back to DataFusion for complex queries
-        self.execute_with_datafusion(query, effective_limit, effective_timeout, start)
-            .await
+        self.execute_with_datafusion(query, effective_limit, effective_timeout, start).await
     }
 
     /// Try to execute a query via fast path (direct Redb access).
@@ -186,21 +182,13 @@ impl RedbSqlExecutor {
         // Try point lookup: SELECT * FROM kv WHERE key = 'literal'
         if let Some(captures) = POINT_LOOKUP_REGEX.captures(query) {
             // Group 1 is single quotes, group 2 is double quotes
-            let key = captures
-                .get(1)
-                .or_else(|| captures.get(2))
-                .map(|m| m.as_str())
-                .unwrap_or("");
+            let key = captures.get(1).or_else(|| captures.get(2)).map(|m| m.as_str()).unwrap_or("");
             return Ok(Some(self.execute_point_lookup(key, start)?));
         }
 
         // Try prefix scan: SELECT * FROM kv WHERE key LIKE 'prefix%'
         if let Some(captures) = PREFIX_SCAN_REGEX.captures(query) {
-            let prefix = captures
-                .get(1)
-                .or_else(|| captures.get(2))
-                .map(|m| m.as_str())
-                .unwrap_or("");
+            let prefix = captures.get(1).or_else(|| captures.get(2)).map(|m| m.as_str()).unwrap_or("");
             return Ok(Some(self.execute_prefix_scan(prefix, limit, start)?));
         }
 
@@ -214,35 +202,23 @@ impl RedbSqlExecutor {
     }
 
     /// Execute a point lookup directly against Redb.
-    fn execute_point_lookup(
-        &self,
-        key: &str,
-        start: Instant,
-    ) -> Result<SqlQueryResult, SqlQueryError> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to begin read transaction: {}", e),
-            })?;
+    fn execute_point_lookup(&self, key: &str, start: Instant) -> Result<SqlQueryResult, SqlQueryError> {
+        let read_txn = self.db.begin_read().map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to begin read transaction: {}", e),
+        })?;
 
-        let table =
-            read_txn
-                .open_table(SM_KV_TABLE)
-                .map_err(|e| SqlQueryError::ExecutionFailed {
-                    reason: format!("failed to open table: {}", e),
-                })?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to open table: {}", e),
+        })?;
 
-        let entry = table
-            .get(key.as_bytes())
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to get key: {}", e),
-            })?;
+        let entry = table.get(key.as_bytes()).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to get key: {}", e),
+        })?;
 
         let rows = match entry {
             Some(value) => {
-                let kv: crate::raft::storage_shared::KvEntry = bincode::deserialize(value.value())
-                    .map_err(|e| SqlQueryError::ExecutionFailed {
+                let kv: crate::raft::storage_shared::KvEntry =
+                    bincode::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to deserialize entry: {}", e),
                     })?;
 
@@ -274,25 +250,14 @@ impl RedbSqlExecutor {
     }
 
     /// Execute a prefix scan directly against Redb.
-    fn execute_prefix_scan(
-        &self,
-        prefix: &str,
-        limit: usize,
-        start: Instant,
-    ) -> Result<SqlQueryResult, SqlQueryError> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to begin read transaction: {}", e),
-            })?;
+    fn execute_prefix_scan(&self, prefix: &str, limit: usize, start: Instant) -> Result<SqlQueryResult, SqlQueryError> {
+        let read_txn = self.db.begin_read().map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to begin read transaction: {}", e),
+        })?;
 
-        let table =
-            read_txn
-                .open_table(SM_KV_TABLE)
-                .map_err(|e| SqlQueryError::ExecutionFailed {
-                    reason: format!("failed to open table: {}", e),
-                })?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to open table: {}", e),
+        })?;
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -326,11 +291,10 @@ impl RedbSqlExecutor {
                 Err(_) => continue,
             };
 
-            let kv: crate::raft::storage_shared::KvEntry =
-                match bincode::deserialize(value_guard.value()) {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
+            let kv: crate::raft::storage_shared::KvEntry = match bincode::deserialize(value_guard.value()) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
 
             // Check expiration
             if let Some(expires_at) = kv.expires_at_ms
@@ -358,19 +322,13 @@ impl RedbSqlExecutor {
 
     /// Execute COUNT(*) directly against Redb.
     fn execute_count_all(&self, start: Instant) -> Result<SqlQueryResult, SqlQueryError> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to begin read transaction: {}", e),
-            })?;
+        let read_txn = self.db.begin_read().map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to begin read transaction: {}", e),
+        })?;
 
-        let table =
-            read_txn
-                .open_table(SM_KV_TABLE)
-                .map_err(|e| SqlQueryError::ExecutionFailed {
-                    reason: format!("failed to open table: {}", e),
-                })?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to open table: {}", e),
+        })?;
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -386,11 +344,10 @@ impl RedbSqlExecutor {
                 reason: format!("failed to read entry: {}", e),
             })?;
 
-            let kv: crate::raft::storage_shared::KvEntry =
-                match bincode::deserialize(value_guard.value()) {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
+            let kv: crate::raft::storage_shared::KvEntry = match bincode::deserialize(value_guard.value()) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
 
             // Check expiration
             if let Some(expires_at) = kv.expires_at_ms
@@ -414,23 +371,15 @@ impl RedbSqlExecutor {
     }
 
     /// Convert a KvEntry to a SQL row (all 7 columns).
-    fn kv_entry_to_row(
-        &self,
-        key: &str,
-        kv: &crate::raft::storage_shared::KvEntry,
-    ) -> Vec<SqlValue> {
+    fn kv_entry_to_row(&self, key: &str, kv: &crate::raft::storage_shared::KvEntry) -> Vec<SqlValue> {
         vec![
             SqlValue::Text(key.to_string()),
             SqlValue::Text(kv.value.clone()),
             SqlValue::Integer(kv.version),
             SqlValue::Integer(kv.create_revision),
             SqlValue::Integer(kv.mod_revision),
-            kv.expires_at_ms
-                .map(|v| SqlValue::Integer(v as i64))
-                .unwrap_or(SqlValue::Null),
-            kv.lease_id
-                .map(|v| SqlValue::Integer(v as i64))
-                .unwrap_or(SqlValue::Null),
+            kv.expires_at_ms.map(|v| SqlValue::Integer(v as i64)).unwrap_or(SqlValue::Null),
+            kv.lease_id.map(|v| SqlValue::Integer(v as i64)).unwrap_or(SqlValue::Null),
         ]
     }
 
@@ -470,49 +419,34 @@ impl RedbSqlExecutor {
         start: Instant,
     ) -> Result<SqlQueryResult, SqlQueryError> {
         // Execute the query with timeout
-        let df = tokio::time::timeout(
-            std::time::Duration::from_millis(effective_timeout as u64),
-            self.ctx.sql(query),
-        )
-        .await
-        .map_err(|_| SqlQueryError::Timeout {
-            duration_ms: effective_timeout as u64,
-        })?
-        .map_err(|e| SqlQueryError::SyntaxError {
-            message: e.to_string(),
-        })?;
+        let df = tokio::time::timeout(std::time::Duration::from_millis(effective_timeout as u64), self.ctx.sql(query))
+            .await
+            .map_err(|_| SqlQueryError::Timeout {
+                duration_ms: effective_timeout as u64,
+            })?
+            .map_err(|e| SqlQueryError::SyntaxError { message: e.to_string() })?;
 
         // Apply limit and collect results
-        let df =
-            df.limit(0, Some(effective_limit + 1))
-                .map_err(|e| SqlQueryError::ExecutionFailed {
-                    reason: format!("failed to apply limit: {}", e),
-                })?;
+        let df = df.limit(0, Some(effective_limit + 1)).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to apply limit: {}", e),
+        })?;
 
         // Get schema before collecting
         let schema = df.schema().clone();
 
         // Collect results with timeout
-        let batches = tokio::time::timeout(
-            std::time::Duration::from_millis(effective_timeout as u64),
-            df.collect(),
-        )
-        .await
-        .map_err(|_| SqlQueryError::Timeout {
-            duration_ms: effective_timeout as u64,
-        })?
-        .map_err(|e| SqlQueryError::ExecutionFailed {
-            reason: format!("query execution failed: {}", e),
-        })?;
+        let batches = tokio::time::timeout(std::time::Duration::from_millis(effective_timeout as u64), df.collect())
+            .await
+            .map_err(|_| SqlQueryError::Timeout {
+                duration_ms: effective_timeout as u64,
+            })?
+            .map_err(|e| SqlQueryError::ExecutionFailed {
+                reason: format!("query execution failed: {}", e),
+            })?;
 
         // Convert Arrow schema to column info
-        let columns: Vec<SqlColumnInfo> = schema
-            .fields()
-            .iter()
-            .map(|f| SqlColumnInfo {
-                name: f.name().clone(),
-            })
-            .collect();
+        let columns: Vec<SqlColumnInfo> =
+            schema.fields().iter().map(|f| SqlColumnInfo { name: f.name().clone() }).collect();
 
         // Convert RecordBatches to rows
         let mut rows: Vec<Vec<SqlValue>> = Vec::new();
@@ -551,10 +485,7 @@ impl RedbSqlExecutor {
 }
 
 /// Convert an Arrow array value at a given index to SqlValue.
-fn arrow_value_to_sql_value(
-    array: &arrow::array::ArrayRef,
-    index: usize,
-) -> Result<SqlValue, SqlQueryError> {
+fn arrow_value_to_sql_value(array: &arrow::array::ArrayRef, index: usize) -> Result<SqlValue, SqlQueryError> {
     use arrow::array::*;
     use arrow::datatypes::DataType;
 
@@ -567,146 +498,108 @@ fn arrow_value_to_sql_value(
         DataType::Null => Ok(SqlValue::Null),
 
         DataType::Boolean => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<BooleanArray>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast boolean array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<BooleanArray>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast boolean array".into(),
+            })?;
             Ok(SqlValue::Integer(if arr.value(index) { 1 } else { 0 }))
         }
 
         DataType::Int8 => {
-            let arr = array.as_any().downcast_ref::<Int8Array>().ok_or_else(|| {
-                SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast int8 array".into(),
-                }
+            let arr = array.as_any().downcast_ref::<Int8Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast int8 array".into(),
             })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::Int16 => {
-            let arr = array.as_any().downcast_ref::<Int16Array>().ok_or_else(|| {
-                SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast int16 array".into(),
-                }
+            let arr = array.as_any().downcast_ref::<Int16Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast int16 array".into(),
             })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::Int32 => {
-            let arr = array.as_any().downcast_ref::<Int32Array>().ok_or_else(|| {
-                SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast int32 array".into(),
-                }
+            let arr = array.as_any().downcast_ref::<Int32Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast int32 array".into(),
             })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::Int64 => {
-            let arr = array.as_any().downcast_ref::<Int64Array>().ok_or_else(|| {
-                SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast int64 array".into(),
-                }
+            let arr = array.as_any().downcast_ref::<Int64Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast int64 array".into(),
             })?;
             Ok(SqlValue::Integer(arr.value(index)))
         }
 
         DataType::UInt8 => {
-            let arr = array.as_any().downcast_ref::<UInt8Array>().ok_or_else(|| {
-                SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast uint8 array".into(),
-                }
+            let arr = array.as_any().downcast_ref::<UInt8Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast uint8 array".into(),
             })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::UInt16 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<UInt16Array>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast uint16 array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<UInt16Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast uint16 array".into(),
+            })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::UInt32 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<UInt32Array>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast uint32 array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<UInt32Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast uint32 array".into(),
+            })?;
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::UInt64 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast uint64 array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<UInt64Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast uint64 array".into(),
+            })?;
             // Note: This may lose precision for very large values
             Ok(SqlValue::Integer(arr.value(index) as i64))
         }
 
         DataType::Float32 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<Float32Array>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast float32 array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<Float32Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast float32 array".into(),
+            })?;
             Ok(SqlValue::Real(arr.value(index) as f64))
         }
 
         DataType::Float64 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<Float64Array>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast float64 array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<Float64Array>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast float64 array".into(),
+            })?;
             Ok(SqlValue::Real(arr.value(index)))
         }
 
         DataType::Utf8 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<StringArray>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast string array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<StringArray>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast string array".into(),
+            })?;
             Ok(SqlValue::Text(arr.value(index).to_string()))
         }
 
         DataType::LargeUtf8 => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<LargeStringArray>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
+            let arr =
+                array.as_any().downcast_ref::<LargeStringArray>().ok_or_else(|| SqlQueryError::ExecutionFailed {
                     reason: "failed to downcast large string array".into(),
                 })?;
             Ok(SqlValue::Text(arr.value(index).to_string()))
         }
 
         DataType::Binary => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<BinaryArray>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
-                    reason: "failed to downcast binary array".into(),
-                })?;
+            let arr = array.as_any().downcast_ref::<BinaryArray>().ok_or_else(|| SqlQueryError::ExecutionFailed {
+                reason: "failed to downcast binary array".into(),
+            })?;
             Ok(SqlValue::Blob(arr.value(index).to_vec()))
         }
 
         DataType::LargeBinary => {
-            let arr = array
-                .as_any()
-                .downcast_ref::<LargeBinaryArray>()
-                .ok_or_else(|| SqlQueryError::ExecutionFailed {
+            let arr =
+                array.as_any().downcast_ref::<LargeBinaryArray>().ok_or_else(|| SqlQueryError::ExecutionFailed {
                     reason: "failed to downcast large binary array".into(),
                 })?;
             Ok(SqlValue::Blob(arr.value(index).to_vec()))
@@ -729,8 +622,10 @@ fn arrow_value_to_sql_value(
 
 #[cfg(test)]
 mod tests {
+    use arrow::array::Int64Array;
+    use arrow::array::StringArray;
+
     use super::*;
-    use arrow::array::{Int64Array, StringArray};
 
     #[test]
     fn convert_string_value() {

@@ -2,11 +2,11 @@
 //!
 //! This test suite validates the single-fsync architecture's crash recovery guarantees:
 //!
-//! 1. **Atomicity**: If a crash occurs during a bundled transaction (log + state),
-//!    either both are visible after recovery, or neither is.
+//! 1. **Atomicity**: If a crash occurs during a bundled transaction (log + state), either both are
+//!    visible after recovery, or neither is.
 //!
-//! 2. **Durability**: If a transaction commits (fsync completes), the data survives
-//!    any subsequent crash, even if the client response was not delivered.
+//! 2. **Durability**: If a transaction commits (fsync completes), the data survives any subsequent
+//!    crash, even if the client response was not delivered.
 //!
 //! # Architecture Context
 //!
@@ -25,15 +25,14 @@
 //!
 //! # Test Scenarios
 //!
-//! 1. `test_crash_during_bundled_transaction`: Crash between log insert and state
-//!    apply within the same transaction. Since Redb transactions are atomic, this
-//!    should be all-or-nothing.
+//! 1. `test_crash_during_bundled_transaction`: Crash between log insert and state apply within the
+//!    same transaction. Since Redb transactions are atomic, this should be all-or-nothing.
 //!
-//! 2. `test_crash_after_commit_before_response`: Crash after fsync but before
-//!    client response. The entry should be durable.
+//! 2. `test_crash_after_commit_before_response`: Crash after fsync but before client response. The
+//!    entry should be durable.
 //!
-//! 3. `test_crash_recovery_chain_hash_integrity`: Verify chain hash integrity
-//!    is preserved across crashes.
+//! 3. `test_crash_recovery_chain_hash_integrity`: Verify chain hash integrity is preserved across
+//!    crashes.
 //!
 //! # References
 //!
@@ -45,12 +44,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
 use aspen::raft::storage_shared::SharedRedbStorage;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to write with retry (handles ForwardToLeader during election stabilization).
 async fn write_with_retry(
@@ -70,10 +74,7 @@ async fn write_with_retry(
             Ok(_) => return Ok(()),
             Err(e) => {
                 if attempt + 1 == max_retries {
-                    return Err(format!(
-                        "write failed after {} attempts: {}",
-                        max_retries, e
-                    ));
+                    return Err(format!("write failed after {} attempts: {}", max_retries, e));
                 }
                 // Wait before retry
                 madsim::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -86,9 +87,7 @@ async fn write_with_retry(
 /// Helper to create persistent storage paths for a test node.
 fn create_storage_paths(test_name: &str, node_id: NodeId) -> (PathBuf, tempfile::TempDir) {
     let temp_dir = tempfile::TempDir::new().expect("failed to create temp dir");
-    let db_path = temp_dir
-        .path()
-        .join(format!("{}-node-{}.redb", test_name, node_id));
+    let db_path = temp_dir.path().join(format!("{}-node-{}.redb", test_name, node_id));
     (db_path, temp_dir)
 }
 
@@ -128,8 +127,7 @@ async fn create_raft_node_shared_redb(
 #[madsim::test]
 async fn test_crash_during_bundled_transaction_seed_100() {
     let seed = 100_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_redb_crash_bundled_txn", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_redb_crash_bundled_txn", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -142,37 +140,19 @@ async fn test_crash_during_bundled_transaction_seed_100() {
     let (path2, _temp2) = create_storage_paths("crash_bundled_txn", NodeId::from(2));
     let (path3, _temp3) = create_storage_paths("crash_bundled_txn", NodeId::from(3));
 
-    let raft1 =
-        create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone())
-            .await;
-    let raft2 =
-        create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone())
-            .await;
-    let raft3 =
-        create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone())
-            .await;
+    let raft1 = create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -180,10 +160,7 @@ async fn test_crash_during_bundled_transaction_seed_100() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -191,10 +168,7 @@ async fn test_crash_during_bundled_transaction_seed_100() {
     artifact = artifact.add_event("metrics: identify initial leader");
     let metrics1 = raft1.metrics().borrow().clone();
     let leader_id = metrics1.current_leader.expect("no initial leader");
-    artifact = artifact.add_event(format!(
-        "validation: initial leader is node {} with SharedRedbStorage",
-        leader_id
-    ));
+    artifact = artifact.add_event(format!("validation: initial leader is node {} with SharedRedbStorage", leader_id));
 
     let leader_raft = match leader_id.0 {
         1 => &raft1,
@@ -221,10 +195,7 @@ async fn test_crash_during_bundled_transaction_seed_100() {
     // Record state before crash
     let metrics_before = leader_raft.metrics().borrow().clone();
     let log_index_before = metrics_before.last_applied.map(|l| l.index).unwrap_or(0);
-    artifact = artifact.add_event(format!(
-        "state: log_index_before_crash = {}",
-        log_index_before
-    ));
+    artifact = artifact.add_event(format!("state: log_index_before_crash = {}", log_index_before));
 
     // Write one more entry, then immediately crash the leader
     artifact = artifact.add_event("write: submit write then crash leader");
@@ -270,24 +241,15 @@ async fn test_crash_during_bundled_transaction_seed_100() {
 
     assert!(new_leader.is_some(), "no new leader elected after crash");
     let (new_leader_id, new_leader_raft) = new_leader.unwrap();
-    assert_ne!(
-        new_leader_id, leader_id,
-        "new leader should be different from crashed leader"
-    );
+    assert_ne!(new_leader_id, leader_id, "new leader should be different from crashed leader");
 
-    artifact = artifact.add_event(format!(
-        "validation: new leader is node {} after crash",
-        new_leader_id
-    ));
+    artifact = artifact.add_event(format!("validation: new leader is node {} after crash", new_leader_id));
 
     // Verify atomicity: check state on new leader
     // The bundled transaction means either both log and state are visible, or neither
     let metrics_after = new_leader_raft.metrics().borrow().clone();
     let log_index_after = metrics_after.last_applied.map(|l| l.index).unwrap_or(0);
-    artifact = artifact.add_event(format!(
-        "state: log_index_after_recovery = {}",
-        log_index_after
-    ));
+    artifact = artifact.add_event(format!("state: log_index_after_recovery = {}", log_index_after));
 
     // The atomicity guarantee: if the write succeeded, the log index should be higher
     // If the write failed, the log index should be the same as before
@@ -332,8 +294,7 @@ async fn test_crash_during_bundled_transaction_seed_100() {
 #[madsim::test]
 async fn test_crash_after_commit_before_response_seed_200() {
     let seed = 200_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_redb_crash_after_commit", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_redb_crash_after_commit", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -346,37 +307,19 @@ async fn test_crash_after_commit_before_response_seed_200() {
     let (path2, _temp2) = create_storage_paths("crash_after_commit", NodeId::from(2));
     let (path3, _temp3) = create_storage_paths("crash_after_commit", NodeId::from(3));
 
-    let raft1 =
-        create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone())
-            .await;
-    let raft2 =
-        create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone())
-            .await;
-    let raft3 =
-        create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone())
-            .await;
+    let raft1 = create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster on node 1");
@@ -384,10 +327,7 @@ async fn test_crash_after_commit_before_response_seed_200() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -423,10 +363,7 @@ async fn test_crash_after_commit_before_response_seed_200() {
     artifact = artifact.add_event(format!("state: committed_index = {}", committed_index));
 
     // Now crash the leader - simulating crash after commit but before any further ops
-    artifact = artifact.add_event(format!(
-        "failure: crash node {} (leader) after commit",
-        leader_id
-    ));
+    artifact = artifact.add_event(format!("failure: crash node {} (leader) after commit", leader_id));
     router.mark_node_failed(leader_id, true);
     let _ = leader_raft.shutdown().await;
 
@@ -476,7 +413,8 @@ async fn test_crash_after_commit_before_response_seed_200() {
     artifact = artifact.add_event("wait: for cluster stabilization after election");
     madsim::time::sleep(std::time::Duration::from_millis(3000)).await;
 
-    // Write another entry to verify cluster is fully operational (with retry for election stabilization)
+    // Write another entry to verify cluster is fully operational (with retry for election
+    // stabilization)
     artifact = artifact.add_event("write: verify cluster operational");
     write_with_retry(new_leader, "post-recovery-key", "post-recovery-value", 5)
         .await
@@ -509,37 +447,19 @@ async fn test_crash_recovery_chain_hash_integrity_seed_300() {
     let (path2, _temp2) = create_storage_paths("crash_chain_hash", NodeId::from(2));
     let (path3, _temp3) = create_storage_paths("crash_chain_hash", NodeId::from(3));
 
-    let raft1 =
-        create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone())
-            .await;
-    let raft2 =
-        create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone())
-            .await;
-    let raft3 =
-        create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone())
-            .await;
+    let raft1 = create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
 
     artifact = artifact.add_event("init: initialize 3-node cluster");
@@ -547,10 +467,7 @@ async fn test_crash_recovery_chain_hash_integrity_seed_300() {
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
     nodes.insert(NodeId::from(2), create_test_raft_member_info(2));
     nodes.insert(NodeId::from(3), create_test_raft_member_info(3));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -583,10 +500,8 @@ async fn test_crash_recovery_chain_hash_integrity_seed_300() {
     // Record state before crash
     let metrics_before = leader_raft.metrics().borrow().clone();
     let log_index_before = metrics_before.last_applied.map(|l| l.index).unwrap_or(0);
-    artifact = artifact.add_event(format!(
-        "state: log_index_before_crash = {} (10 writes + membership)",
-        log_index_before
-    ));
+    artifact =
+        artifact.add_event(format!("state: log_index_before_crash = {} (10 writes + membership)", log_index_before));
 
     // Crash the leader
     artifact = artifact.add_event(format!("failure: crash node {} (leader)", leader_id));
@@ -623,14 +538,9 @@ async fn test_crash_recovery_chain_hash_integrity_seed_300() {
     // If the chain hash is corrupted, appends would fail
     artifact = artifact.add_event("write: verify chain integrity by appending more entries");
     for i in 11..=15 {
-        write_with_retry(
-            new_leader,
-            &format!("chain-key-{}", i),
-            &format!("chain-value-{}", i),
-            5,
-        )
-        .await
-        .expect("post-crash chain write should succeed - chain integrity maintained");
+        write_with_retry(new_leader, &format!("chain-key-{}", i), &format!("chain-value-{}", i), 5)
+            .await
+            .expect("post-crash chain write should succeed - chain integrity maintained");
     }
 
     artifact = artifact.add_event("wait: for post-crash replication");
@@ -639,10 +549,7 @@ async fn test_crash_recovery_chain_hash_integrity_seed_300() {
     // Verify final state
     let metrics_after = new_leader.metrics().borrow().clone();
     let log_index_after = metrics_after.last_applied.map(|l| l.index).unwrap_or(0);
-    artifact = artifact.add_event(format!(
-        "state: log_index_after_recovery = {}",
-        log_index_after
-    ));
+    artifact = artifact.add_event(format!("state: log_index_after_recovery = {}", log_index_after));
 
     // Should have all entries: 10 original + 5 post-crash
     assert!(
@@ -681,57 +588,27 @@ async fn test_multiple_crash_recovery_cycles_seed_400() {
     let (path4, _temp4) = create_storage_paths("multi_crash", NodeId::from(4));
     let (path5, _temp5) = create_storage_paths("multi_crash", NodeId::from(5));
 
-    let raft1 =
-        create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone())
-            .await;
-    let raft2 =
-        create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone())
-            .await;
-    let raft3 =
-        create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone())
-            .await;
-    let raft4 =
-        create_raft_node_shared_redb(NodeId::from(4), &path4, router.clone(), injector.clone())
-            .await;
-    let raft5 =
-        create_raft_node_shared_redb(NodeId::from(5), &path5, router.clone(), injector.clone())
-            .await;
+    let raft1 = create_raft_node_shared_redb(NodeId::from(1), &path1, router.clone(), injector.clone()).await;
+    let raft2 = create_raft_node_shared_redb(NodeId::from(2), &path2, router.clone(), injector.clone()).await;
+    let raft3 = create_raft_node_shared_redb(NodeId::from(3), &path3, router.clone(), injector.clone()).await;
+    let raft4 = create_raft_node_shared_redb(NodeId::from(4), &path4, router.clone(), injector.clone()).await;
+    let raft5 = create_raft_node_shared_redb(NodeId::from(5), &path5, router.clone(), injector.clone()).await;
 
     artifact = artifact.add_event("register: all nodes with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
     router
-        .register_node(
-            NodeId::from(2),
-            "127.0.0.1:26002".to_string(),
-            raft2.clone(),
-        )
+        .register_node(NodeId::from(2), "127.0.0.1:26002".to_string(), raft2.clone())
         .expect("failed to register node 2");
     router
-        .register_node(
-            NodeId::from(3),
-            "127.0.0.1:26003".to_string(),
-            raft3.clone(),
-        )
+        .register_node(NodeId::from(3), "127.0.0.1:26003".to_string(), raft3.clone())
         .expect("failed to register node 3");
     router
-        .register_node(
-            NodeId::from(4),
-            "127.0.0.1:26004".to_string(),
-            raft4.clone(),
-        )
+        .register_node(NodeId::from(4), "127.0.0.1:26004".to_string(), raft4.clone())
         .expect("failed to register node 4");
     router
-        .register_node(
-            NodeId::from(5),
-            "127.0.0.1:26005".to_string(),
-            raft5.clone(),
-        )
+        .register_node(NodeId::from(5), "127.0.0.1:26005".to_string(), raft5.clone())
         .expect("failed to register node 5");
 
     artifact = artifact.add_event("init: initialize 5-node cluster");
@@ -739,10 +616,7 @@ async fn test_multiple_crash_recovery_cycles_seed_400() {
     for i in 1u64..=5 {
         nodes.insert(NodeId::from(i), create_test_raft_member_info(i));
     }
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for initial leader election");
     madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
@@ -813,19 +687,12 @@ async fn test_multiple_crash_recovery_cycles_seed_400() {
                 && new_leader != leader
             {
                 new_leader_found = true;
-                artifact = artifact.add_event(format!(
-                    "cycle {}: new leader is node {}",
-                    cycle, new_leader
-                ));
+                artifact = artifact.add_event(format!("cycle {}: new leader is node {}", cycle, new_leader));
                 break;
             }
         }
 
-        assert!(
-            new_leader_found,
-            "cycle {}: no new leader elected after crash",
-            cycle
-        );
+        assert!(new_leader_found, "cycle {}: no new leader elected after crash", cycle);
     }
 
     // Verify final state - cluster should still be operational
@@ -859,9 +726,8 @@ async fn test_multiple_crash_recovery_cycles_seed_400() {
     }
 
     if !write_succeeded {
-        artifact = artifact.add_event(
-            "warning: could not write after crash cycles - cluster may need more recovery time",
-        );
+        artifact =
+            artifact.add_event("warning: could not write after crash cycles - cluster may need more recovery time");
     }
 
     let artifact = artifact.build();

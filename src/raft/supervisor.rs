@@ -14,12 +14,17 @@
 //!   - Health failure recording
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 /// Maximum restarts before giving up.
 const MAX_RESTARTS: u32 = 3;
@@ -28,11 +33,7 @@ const MAX_RESTARTS: u32 = 3;
 const RESTART_WINDOW: Duration = Duration::from_secs(600);
 
 /// Backoff durations for restarts.
-const BACKOFF_DURATIONS: [Duration; 3] = [
-    Duration::from_secs(1),
-    Duration::from_secs(5),
-    Duration::from_secs(10),
-];
+const BACKOFF_DURATIONS: [Duration; 3] = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
 
 /// Supervisor for async tasks.
 ///

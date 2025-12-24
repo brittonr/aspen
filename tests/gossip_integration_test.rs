@@ -11,7 +11,9 @@ mod support;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::cluster::config::{ControlBackend, IrohConfig, NodeConfig};
+use aspen::cluster::config::ControlBackend;
+use aspen::cluster::config::IrohConfig;
+use aspen::cluster::config::NodeConfig;
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
@@ -153,10 +155,7 @@ async fn test_mock_gossip_peer_announcement() -> Result<()> {
     handle1.broadcast(bytes).await?;
 
     // Node 2 should receive the announcement
-    let received = timeout(Duration::from_secs(1), handle2.receive())
-        .await?
-        .unwrap()
-        .unwrap();
+    let received = timeout(Duration::from_secs(1), handle2.receive()).await?.unwrap().unwrap();
 
     let parsed: PeerAnnouncement = postcard::from_bytes(&received)?;
     assert_eq!(parsed.node_id, 1);

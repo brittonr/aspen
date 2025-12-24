@@ -38,12 +38,15 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::raft::constants::{
-    CLOCK_DRIFT_ALERT_THRESHOLD_MS, CLOCK_DRIFT_WARNING_THRESHOLD_MS, DRIFT_EWMA_ALPHA,
-    MAX_DRIFT_OBSERVATIONS, MIN_DRIFT_OBSERVATIONS,
-};
+use crate::raft::constants::CLOCK_DRIFT_ALERT_THRESHOLD_MS;
+use crate::raft::constants::CLOCK_DRIFT_WARNING_THRESHOLD_MS;
+use crate::raft::constants::DRIFT_EWMA_ALPHA;
+use crate::raft::constants::MAX_DRIFT_OBSERVATIONS;
+use crate::raft::constants::MIN_DRIFT_OBSERVATIONS;
 use crate::raft::types::NodeId;
 
 /// Severity level of detected clock drift.
@@ -82,8 +85,7 @@ impl DriftObservation {
     fn new(offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) -> Self {
         use crate::raft::pure::classify_drift_severity;
 
-        let severity =
-            classify_drift_severity(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
+        let severity = classify_drift_severity(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
         Self {
             last_offset_ms: offset_ms,
             ewma_offset_ms: offset_ms as f64,
@@ -95,18 +97,15 @@ impl DriftObservation {
 
     /// Update observation with new measurement using EWMA.
     fn update(&mut self, offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) {
-        use crate::raft::pure::{classify_drift_severity, compute_ewma};
+        use crate::raft::pure::classify_drift_severity;
+        use crate::raft::pure::compute_ewma;
 
         self.last_offset_ms = offset_ms;
         // EWMA: new_avg = alpha * new_value + (1 - alpha) * old_avg
         self.ewma_offset_ms = compute_ewma(offset_ms as f64, self.ewma_offset_ms, DRIFT_EWMA_ALPHA);
         self.observation_count = self.observation_count.saturating_add(1);
         self.last_observed_at = Instant::now();
-        self.severity = classify_drift_severity(
-            self.ewma_offset_ms,
-            warning_threshold_ms,
-            alert_threshold_ms,
-        );
+        self.severity = classify_drift_severity(self.ewma_offset_ms, warning_threshold_ms, alert_threshold_ms);
     }
 }
 
@@ -183,17 +182,11 @@ impl ClockDriftDetector {
         use crate::raft::pure::calculate_ntp_clock_offset;
 
         // Calculate clock offset and RTT using NTP formula (extracted pure function)
-        let (offset_ms, rtt_ms) = calculate_ntp_clock_offset(
-            client_send_ms,
-            server_recv_ms,
-            server_send_ms,
-            client_recv_ms,
-        );
+        let (offset_ms, rtt_ms) =
+            calculate_ntp_clock_offset(client_send_ms, server_recv_ms, server_send_ms, client_recv_ms);
 
         // Tiger Style: Bounded storage
-        if self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize
-            && !self.observations.contains_key(&node_id)
-        {
+        if self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize && !self.observations.contains_key(&node_id) {
             // Remove oldest observation to make room
             if let Some(oldest_id) = self.find_oldest_observation() {
                 self.observations.remove(&oldest_id);
@@ -203,26 +196,17 @@ impl ClockDriftDetector {
         let prev_severity = self.observations.get(&node_id).map(|o| o.severity);
 
         // Update or insert observation, capturing new severity for logging
-        let (new_severity, obs_count, ewma_offset) =
-            if let Some(obs) = self.observations.get_mut(&node_id) {
-                obs.update(
-                    offset_ms,
-                    self.warning_threshold_ms,
-                    self.alert_threshold_ms,
-                );
-                (obs.severity, obs.observation_count, obs.ewma_offset_ms)
-            } else {
-                let obs = DriftObservation::new(
-                    offset_ms,
-                    self.warning_threshold_ms,
-                    self.alert_threshold_ms,
-                );
-                let severity = obs.severity;
-                let count = obs.observation_count;
-                let ewma = obs.ewma_offset_ms;
-                self.observations.insert(node_id, obs);
-                (severity, count, ewma)
-            };
+        let (new_severity, obs_count, ewma_offset) = if let Some(obs) = self.observations.get_mut(&node_id) {
+            obs.update(offset_ms, self.warning_threshold_ms, self.alert_threshold_ms);
+            (obs.severity, obs.observation_count, obs.ewma_offset_ms)
+        } else {
+            let obs = DriftObservation::new(offset_ms, self.warning_threshold_ms, self.alert_threshold_ms);
+            let severity = obs.severity;
+            let count = obs.observation_count;
+            let ewma = obs.ewma_offset_ms;
+            self.observations.insert(node_id, obs);
+            (severity, count, ewma)
+        };
 
         // Only log on severity transitions (to avoid log spam)
         // Also require minimum observations to reduce false positives
@@ -262,10 +246,7 @@ impl ClockDriftDetector {
 
     /// Find the node ID with the oldest observation timestamp.
     fn find_oldest_observation(&self) -> Option<NodeId> {
-        self.observations
-            .iter()
-            .min_by_key(|(_, obs)| obs.last_observed_at)
-            .map(|(id, _)| *id)
+        self.observations.iter().min_by_key(|(_, obs)| obs.last_observed_at).map(|(id, _)| *id)
     }
 
     /// Get nodes currently showing concerning drift (Warning or Alert level).
@@ -276,8 +257,7 @@ impl ClockDriftDetector {
         self.observations
             .iter()
             .filter(|(_, obs)| {
-                obs.observation_count >= MIN_DRIFT_OBSERVATIONS as u64
-                    && obs.severity != DriftSeverity::Normal
+                obs.observation_count >= MIN_DRIFT_OBSERVATIONS as u64 && obs.severity != DriftSeverity::Normal
             })
             .map(|(id, obs)| (*id, obs.severity, obs.ewma_offset_ms as i64))
             .collect()
@@ -288,9 +268,7 @@ impl ClockDriftDetector {
     /// Returns `Some((severity, offset_ms))` if the node has been observed,
     /// `None` otherwise.
     pub fn get_drift(&self, node_id: NodeId) -> Option<(DriftSeverity, i64)> {
-        self.observations
-            .get(&node_id)
-            .map(|obs| (obs.severity, obs.ewma_offset_ms as i64))
+        self.observations.get(&node_id).map(|obs| (obs.severity, obs.ewma_offset_ms as i64))
     }
 
     /// Get summary statistics for monitoring.
@@ -340,11 +318,9 @@ pub struct ClockDriftSummary {
 ///
 /// Used for timestamping RPC requests/responses for drift detection.
 pub fn current_time_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 #[cfg(test)]

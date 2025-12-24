@@ -46,9 +46,7 @@ pub enum ValidationError {
     ElectionTimeoutMaxZero,
 
     /// Maximum election timeout is not greater than minimum.
-    #[snafu(display(
-        "election_timeout_max_ms ({max}) must be greater than election_timeout_min_ms ({min})"
-    ))]
+    #[snafu(display("election_timeout_max_ms ({max}) must be greater than election_timeout_min_ms ({min})"))]
     ElectionTimeoutOrder {
         /// Minimum election timeout in milliseconds.
         min: u64,
@@ -192,9 +190,7 @@ pub fn check_raft_timing_sanity(
     }
 
     if election_timeout_max_ms > 10000 {
-        warnings.push(format!(
-            "election timeout max ({election_timeout_max_ms}ms) > 10000ms may be too conservative"
-        ));
+        warnings.push(format!("election timeout max ({election_timeout_max_ms}ms) > 10000ms may be too conservative"));
     }
 
     warnings
@@ -224,9 +220,7 @@ pub fn validate_secret_key(key_hex: Option<&str>) -> Result<(), ValidationError>
     }
 
     if let Err(e) = hex::decode(key) {
-        return Err(ValidationError::SecretKeyInvalidHex {
-            reason: e.to_string(),
-        });
+        return Err(ValidationError::SecretKeyInvalidHex { reason: e.to_string() });
     }
 
     Ok(())
@@ -290,11 +284,7 @@ pub fn validate_core_config(
 ) -> Result<(), ValidationError> {
     validate_node_id(node_id)?;
     validate_cookie(cookie)?;
-    validate_raft_timings(
-        heartbeat_interval_ms,
-        election_timeout_min_ms,
-        election_timeout_max_ms,
-    )?;
+    validate_raft_timings(heartbeat_interval_ms, election_timeout_min_ms, election_timeout_max_ms)?;
     validate_secret_key(secret_key_hex)?;
     Ok(())
 }
@@ -335,10 +325,7 @@ mod tests {
 
     #[test]
     fn test_cookie_safety_default_rejected() {
-        assert_eq!(
-            validate_cookie_safety(UNSAFE_DEFAULT_COOKIE),
-            Err(ValidationError::CookieUnsafeDefault)
-        );
+        assert_eq!(validate_cookie_safety(UNSAFE_DEFAULT_COOKIE), Err(ValidationError::CookieUnsafeDefault));
     }
 
     #[test]
@@ -353,43 +340,28 @@ mod tests {
 
     #[test]
     fn test_heartbeat_zero_invalid() {
-        assert_eq!(
-            validate_raft_timings(0, 1500, 3000),
-            Err(ValidationError::HeartbeatIntervalZero)
-        );
+        assert_eq!(validate_raft_timings(0, 1500, 3000), Err(ValidationError::HeartbeatIntervalZero));
     }
 
     #[test]
     fn test_election_min_zero_invalid() {
-        assert_eq!(
-            validate_raft_timings(500, 0, 3000),
-            Err(ValidationError::ElectionTimeoutMinZero)
-        );
+        assert_eq!(validate_raft_timings(500, 0, 3000), Err(ValidationError::ElectionTimeoutMinZero));
     }
 
     #[test]
     fn test_election_max_zero_invalid() {
-        assert_eq!(
-            validate_raft_timings(500, 1500, 0),
-            Err(ValidationError::ElectionTimeoutMaxZero)
-        );
+        assert_eq!(validate_raft_timings(500, 1500, 0), Err(ValidationError::ElectionTimeoutMaxZero));
     }
 
     #[test]
     fn test_election_order_invalid() {
         assert_eq!(
             validate_raft_timings(500, 3000, 1500),
-            Err(ValidationError::ElectionTimeoutOrder {
-                min: 3000,
-                max: 1500
-            })
+            Err(ValidationError::ElectionTimeoutOrder { min: 3000, max: 1500 })
         );
         assert_eq!(
             validate_raft_timings(500, 1500, 1500),
-            Err(ValidationError::ElectionTimeoutOrder {
-                min: 1500,
-                max: 1500
-            })
+            Err(ValidationError::ElectionTimeoutOrder { min: 1500, max: 1500 })
         );
     }
 
@@ -438,28 +410,16 @@ mod tests {
 
     #[test]
     fn test_secret_key_wrong_length() {
-        assert_eq!(
-            validate_secret_key(Some("abc")),
-            Err(ValidationError::SecretKeyLength { len: 3 })
-        );
-        assert_eq!(
-            validate_secret_key(Some(&"a".repeat(63))),
-            Err(ValidationError::SecretKeyLength { len: 63 })
-        );
-        assert_eq!(
-            validate_secret_key(Some(&"a".repeat(65))),
-            Err(ValidationError::SecretKeyLength { len: 65 })
-        );
+        assert_eq!(validate_secret_key(Some("abc")), Err(ValidationError::SecretKeyLength { len: 3 }));
+        assert_eq!(validate_secret_key(Some(&"a".repeat(63))), Err(ValidationError::SecretKeyLength { len: 63 }));
+        assert_eq!(validate_secret_key(Some(&"a".repeat(65))), Err(ValidationError::SecretKeyLength { len: 65 }));
     }
 
     #[test]
     fn test_secret_key_invalid_hex() {
         let invalid = "g".repeat(64); // 'g' is not valid hex
         let result = validate_secret_key(Some(&invalid));
-        assert!(matches!(
-            result,
-            Err(ValidationError::SecretKeyInvalidHex { .. })
-        ));
+        assert!(matches!(result, Err(ValidationError::SecretKeyInvalidHex { .. })));
     }
 
     // ========================================================================
@@ -507,8 +467,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_node_id_zero_always_fails() {
@@ -517,12 +478,9 @@ mod property_tests {
 
     #[test]
     fn prop_node_id_nonzero_always_succeeds() {
-        check!()
-            .with_type::<u64>()
-            .filter(|&id| id != 0)
-            .for_each(|id| {
-                assert!(validate_node_id(*id).is_ok());
-            });
+        check!().with_type::<u64>().filter(|&id| id != 0).for_each(|id| {
+            assert!(validate_node_id(*id).is_ok());
+        });
     }
 
     #[test]

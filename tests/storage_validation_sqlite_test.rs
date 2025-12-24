@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 
 use aspen::raft::storage_sqlite::SqliteStateMachine;
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use futures::stream;
 use openraft::entry::RaftEntry;
-use openraft::storage::{RaftLogStorage, RaftStateMachine};
+use openraft::storage::RaftLogStorage;
+use openraft::storage::RaftStateMachine;
 use openraft::testing::log_id;
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -44,14 +47,8 @@ async fn test_sqlite_validation_passes_on_healthy_storage() {
 
     let report = result.unwrap();
     assert_eq!(report.node_id, NodeId(1));
-    assert_eq!(
-        report.checks_passed, 2,
-        "should pass integrity check and schema check"
-    );
-    assert!(
-        report.validation_duration.as_millis() < 100,
-        "validation should complete in <100ms"
-    );
+    assert_eq!(report.checks_passed, 2, "should pass integrity check and schema check");
+    assert!(report.validation_duration.as_millis() < 100, "validation should complete in <100ms");
 }
 
 #[tokio::test]
@@ -176,8 +173,7 @@ fn test_sqlite_validation_fails_on_missing_tables() {
 
     // Create a valid SQLite database but without the required tables
     let conn = Connection::open(&db_path).expect("failed to create db");
-    conn.pragma_update(None, "journal_mode", "WAL")
-        .expect("failed to set WAL");
+    conn.pragma_update(None, "journal_mode", "WAL").expect("failed to set WAL");
 
     // Create only one table instead of all three required tables
     conn.execute(
@@ -197,10 +193,7 @@ fn test_sqlite_validation_fails_on_missing_tables() {
 
     // Validation should still pass because SqliteStateMachine creates missing tables
     let result = sm.validate(1);
-    assert!(
-        result.is_ok(),
-        "validation should pass after tables are auto-created"
-    );
+    assert!(result.is_ok(), "validation should pass after tables are auto-created");
 }
 
 #[tokio::test]
@@ -228,10 +221,7 @@ async fn test_sqlite_validation_after_many_operations() {
 
     // Validate storage
     let result = sm.validate(1);
-    assert!(
-        result.is_ok(),
-        "validation should pass after many operations"
-    );
+    assert!(result.is_ok(), "validation should pass after many operations");
 
     let report = result.unwrap();
     assert_eq!(report.checks_passed, 2);
@@ -278,10 +268,7 @@ fn test_sqlite_validation_report_timing() {
     let report = result.unwrap();
 
     // Validation duration should be measured
-    assert!(
-        report.validation_duration.as_nanos() > 0,
-        "validation duration should be > 0"
-    );
+    assert!(report.validation_duration.as_nanos() > 0, "validation duration should be > 0");
 
     // Should be very fast for an empty database
     assert!(
@@ -316,10 +303,7 @@ async fn test_apply_batch_size_at_limit_succeeds() {
     let entry_stream = Box::pin(stream::iter(entries.into_iter().map(|e| Ok((e, None)))));
     let result = sm.apply(entry_stream).await;
 
-    assert!(
-        result.is_ok(),
-        "should succeed with exactly MAX_BATCH_SIZE entries"
-    );
+    assert!(result.is_ok(), "should succeed with exactly MAX_BATCH_SIZE entries");
 }
 
 #[tokio::test]
@@ -364,9 +348,7 @@ async fn test_setmulti_at_limit_succeeds() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     // Create SetMulti with exactly MAX_SETMULTI_KEYS (100) pairs - should succeed
-    let pairs: Vec<_> = (0..100)
-        .map(|i| (format!("key{}", i), format!("value{}", i)))
-        .collect();
+    let pairs: Vec<_> = (0..100).map(|i| (format!("key{}", i), format!("value{}", i))).collect();
 
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId(1), 0),
@@ -376,10 +358,7 @@ async fn test_setmulti_at_limit_succeeds() {
     let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
     let result = sm.apply(entries).await;
 
-    assert!(
-        result.is_ok(),
-        "should succeed with exactly MAX_SETMULTI_KEYS pairs"
-    );
+    assert!(result.is_ok(), "should succeed with exactly MAX_SETMULTI_KEYS pairs");
 }
 
 #[tokio::test]
@@ -390,9 +369,7 @@ async fn test_setmulti_exceeds_limit_fails() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     // Create SetMulti with MAX_SETMULTI_KEYS + 1 (101) pairs - should fail
-    let pairs: Vec<_> = (0..101)
-        .map(|i| (format!("key{}", i), format!("value{}", i)))
-        .collect();
+    let pairs: Vec<_> = (0..101).map(|i| (format!("key{}", i), format!("value{}", i))).collect();
 
     let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId(1), 0),
@@ -402,10 +379,7 @@ async fn test_setmulti_exceeds_limit_fails() {
     let entries = Box::pin(stream::once(async move { Ok((entry, None)) }));
     let result = sm.apply(entries).await;
 
-    assert!(
-        result.is_err(),
-        "should fail when exceeding MAX_SETMULTI_KEYS"
-    );
+    assert!(result.is_err(), "should fail when exceeding MAX_SETMULTI_KEYS");
 
     let err = result.unwrap_err();
     let err_msg = err.to_string();
@@ -447,10 +421,7 @@ async fn test_batch_limit_error_is_fail_fast() {
 
     // The implementation checks the limit AFTER incrementing batch_count but BEFORE processing,
     // so we expect 1000 entries to be applied (0-999)
-    assert_eq!(
-        count, 1000,
-        "should have applied exactly 1000 entries before failing"
-    );
+    assert_eq!(count, 1000, "should have applied exactly 1000 entries before failing");
 }
 
 #[tokio::test]
@@ -461,9 +432,7 @@ async fn test_setmulti_limit_prevents_transaction_commit() {
     let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
     // First, apply a valid SetMulti
-    let valid_pairs: Vec<_> = (0..50)
-        .map(|i| (format!("valid{}", i), format!("value{}", i)))
-        .collect();
+    let valid_pairs: Vec<_> = (0..50).map(|i| (format!("valid{}", i), format!("value{}", i))).collect();
 
     let valid_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId(1), 0),
@@ -471,20 +440,14 @@ async fn test_setmulti_limit_prevents_transaction_commit() {
     );
 
     let entries = Box::pin(stream::once(async move { Ok((valid_entry, None)) }));
-    sm.apply(entries)
-        .await
-        .expect("valid SetMulti should succeed");
+    sm.apply(entries).await.expect("valid SetMulti should succeed");
 
     // Now try an invalid SetMulti with 101 pairs
-    let invalid_pairs: Vec<_> = (0..101)
-        .map(|i| (format!("invalid{}", i), format!("value{}", i)))
-        .collect();
+    let invalid_pairs: Vec<_> = (0..101).map(|i| (format!("invalid{}", i), format!("value{}", i))).collect();
 
     let invalid_entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId(1), 1),
-        AppRequest::SetMulti {
-            pairs: invalid_pairs,
-        },
+        AppRequest::SetMulti { pairs: invalid_pairs },
     );
 
     let entries = Box::pin(stream::once(async move { Ok((invalid_entry, None)) }));
@@ -495,15 +458,10 @@ async fn test_setmulti_limit_prevents_transaction_commit() {
     // Verify that only the first 50 valid entries exist
     let count = sm.count_kv_pairs().expect("failed to count rows");
 
-    assert_eq!(
-        count, 50,
-        "should have only the valid 50 entries, invalid SetMulti should not commit"
-    );
+    assert_eq!(count, 50, "should have only the valid 50 entries, invalid SetMulti should not commit");
 
     // Verify no "invalid" keys exist
-    let invalid_count = sm
-        .count_kv_pairs_like("invalid%")
-        .expect("failed to count invalid rows");
+    let invalid_count = sm.count_kv_pairs_like("invalid%").expect("failed to count invalid rows");
 
     assert_eq!(invalid_count, 0, "no invalid keys should exist in database");
 }
@@ -568,25 +526,19 @@ async fn test_transaction_guard_rollback_on_error() {
     assert_eq!(sm.count_kv_pairs().unwrap(), 1);
 
     // Apply an entry that exceeds MAX_SETMULTI_KEYS limit (should trigger rollback)
-    let too_many_pairs: Vec<(String, String)> = (0..101)
-        .map(|i| (format!("key{}", i), format!("value{}", i)))
-        .collect();
+    let too_many_pairs: Vec<(String, String)> =
+        (0..101).map(|i| (format!("key{}", i), format!("value{}", i))).collect();
 
     let entry2 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
         log_id::<AppTypeConfig>(1, NodeId(1), 1),
-        AppRequest::SetMulti {
-            pairs: too_many_pairs,
-        },
+        AppRequest::SetMulti { pairs: too_many_pairs },
     );
 
     let entries = Box::pin(stream::once(async move { Ok((entry2, None)) }));
     let result = sm.apply(entries).await;
 
     // Apply should fail due to exceeding limit
-    assert!(
-        result.is_err(),
-        "apply should fail when exceeding MAX_SETMULTI_KEYS"
-    );
+    assert!(result.is_err(), "apply should fail when exceeding MAX_SETMULTI_KEYS");
 
     // Verify TransactionGuard rolled back - only the first entry should remain
     assert_eq!(
@@ -671,10 +623,7 @@ async fn test_cross_storage_validation_happy_path() {
 
     // Validation should pass: last_applied (5) <= committed (10)
     let result = sm.validate_consistency_with_log(&log_store).await;
-    assert!(
-        result.is_ok(),
-        "validation should pass when last_applied <= committed"
-    );
+    assert!(result.is_ok(), "validation should pass when last_applied <= committed");
 }
 
 #[tokio::test]
@@ -706,10 +655,7 @@ async fn test_cross_storage_validation_detects_corruption() {
 
     // Validation should fail: last_applied (10) > committed (5)
     let result = sm.validate_consistency_with_log(&log_store).await;
-    assert!(
-        result.is_err(),
-        "validation should fail when last_applied > committed"
-    );
+    assert!(result.is_err(), "validation should fail when last_applied > committed");
 
     let err_msg = result.unwrap_err();
     assert!(
@@ -717,11 +663,7 @@ async fn test_cross_storage_validation_detects_corruption() {
         "error message should mention both indices, got: {}",
         err_msg
     );
-    assert!(
-        err_msg.contains("corruption"),
-        "error message should mention corruption, got: {}",
-        err_msg
-    );
+    assert!(err_msg.contains("corruption"), "error message should mention corruption, got: {}", err_msg);
 }
 
 #[tokio::test]
@@ -753,10 +695,7 @@ async fn test_cross_storage_validation_edge_case_equal() {
 
     // Validation should pass: last_applied (10) == committed (10)
     let result = sm.validate_consistency_with_log(&log_store).await;
-    assert!(
-        result.is_ok(),
-        "validation should pass when last_applied == committed"
-    );
+    assert!(result.is_ok(), "validation should pass when last_applied == committed");
 }
 
 #[tokio::test]
@@ -775,10 +714,7 @@ async fn test_cross_storage_validation_empty_state() {
 
     // Validation should pass: both are None
     let result = sm.validate_consistency_with_log(&log_store).await;
-    assert!(
-        result.is_ok(),
-        "validation should pass when both last_applied and committed are None"
-    );
+    assert!(result.is_ok(), "validation should pass when both last_applied and committed are None");
 }
 
 #[tokio::test]
@@ -806,10 +742,7 @@ async fn test_cross_storage_validation_no_committed() {
 
     // Validation should pass: committed is None (no validation needed)
     let result = sm.validate_consistency_with_log(&log_store).await;
-    assert!(
-        result.is_ok(),
-        "validation should pass when committed is None"
-    );
+    assert!(result.is_ok(), "validation should pass when committed is None");
 }
 
 // ============================================================================
@@ -851,10 +784,7 @@ async fn test_wal_file_size_reports_size_after_writes() {
 
     // WAL file should exist after writes
     let wal_size = sm.wal_file_size().expect("failed to get WAL size");
-    assert!(
-        wal_size.is_some() || wal_size.is_none(),
-        "WAL may or may not exist depending on checkpoint timing"
-    );
+    assert!(wal_size.is_some() || wal_size.is_none(), "WAL may or may not exist depending on checkpoint timing");
 }
 
 #[tokio::test]
@@ -906,16 +836,12 @@ async fn test_checkpoint_reduces_wal_size() {
         sm.apply(entries).await.expect("failed to apply entry");
     }
 
-    let wal_size_before = sm
-        .wal_file_size()
-        .expect("failed to get WAL size before checkpoint");
+    let wal_size_before = sm.wal_file_size().expect("failed to get WAL size before checkpoint");
 
     // Perform checkpoint
     sm.checkpoint_wal().expect("checkpoint should succeed");
 
-    let wal_size_after = sm
-        .wal_file_size()
-        .expect("failed to get WAL size after checkpoint");
+    let wal_size_after = sm.wal_file_size().expect("failed to get WAL size after checkpoint");
 
     // After checkpoint, WAL should be truncated or removed
     // Note: May not always reduce depending on SQLite's checkpoint mode
@@ -988,10 +914,7 @@ async fn test_auto_checkpoint_skips_below_threshold() {
 
     // Should return None (no checkpoint needed)
     let checkpoint_result = result.unwrap();
-    assert!(
-        checkpoint_result.is_none(),
-        "should not checkpoint when below threshold"
-    );
+    assert!(checkpoint_result.is_none(), "should not checkpoint when below threshold");
 }
 
 #[tokio::test]
@@ -1019,11 +942,7 @@ async fn test_checkpoint_preserves_data_integrity() {
     sm.checkpoint_wal().expect("checkpoint should succeed");
 
     // Verify all data is still readable after checkpoint
-    assert_eq!(
-        sm.count_kv_pairs().expect("failed to count"),
-        50,
-        "all data should be preserved after checkpoint"
-    );
+    assert_eq!(sm.count_kv_pairs().expect("failed to count"), 50, "all data should be preserved after checkpoint");
 
     for i in 0..50 {
         assert_eq!(

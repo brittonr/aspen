@@ -7,97 +7,96 @@
 
 mod support;
 
+use aspen::api::ClusterNode;
+use aspen::api::ClusterState;
+use aspen::api::DEFAULT_SCAN_LIMIT;
+use aspen::api::DeleteRequest;
+use aspen::api::DeleteResult;
+use aspen::api::KeyValueWithRevision;
+use aspen::api::MAX_SCAN_RESULTS;
+use aspen::api::ReadRequest;
+use aspen::api::ReadResult;
+use aspen::api::ScanRequest;
+use aspen::api::ScanResult;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use aspen::api::WriteResult;
+use aspen::api::validate_write_command;
+use aspen::raft::constants::MAX_KEY_SIZE;
+use aspen::raft::constants::MAX_SETMULTI_KEYS;
+use aspen::raft::constants::MAX_VALUE_SIZE;
 use bolero::check;
-
-use aspen::api::{
-    ClusterNode, ClusterState, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult,
-    KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanRequest, ScanResult,
-    WriteCommand, WriteRequest, WriteResult, validate_write_command,
-};
-use aspen::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
-use support::bolero_generators::{
-    OptionalContinuationToken, OptionalRaftAddr, OptionalScanLimit, OversizedKey, OversizedValue,
-    ScanPrefix, SimpleAddr, ValidApiKey, ValidApiKeys, ValidApiPairs, ValidApiValue,
-};
+use support::bolero_generators::OptionalContinuationToken;
+use support::bolero_generators::OptionalRaftAddr;
+use support::bolero_generators::OptionalScanLimit;
+use support::bolero_generators::OversizedKey;
+use support::bolero_generators::OversizedValue;
+use support::bolero_generators::ScanPrefix;
+use support::bolero_generators::SimpleAddr;
+use support::bolero_generators::ValidApiKey;
+use support::bolero_generators::ValidApiKeys;
+use support::bolero_generators::ValidApiPairs;
+use support::bolero_generators::ValidApiValue;
 
 // Property tests for validate_write_command
 
 /// Valid Set commands should pass validation.
 #[test]
 fn test_valid_set_command_passes() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let cmd = WriteCommand::Set {
-                key: key.0.clone(),
-                value: value.0.clone(),
-            };
-            assert!(validate_write_command(&cmd).is_ok());
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let cmd = WriteCommand::Set {
+            key: key.0.clone(),
+            value: value.0.clone(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    });
 }
 
 /// Valid Delete commands should pass validation.
 #[test]
 fn test_valid_delete_command_passes() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<ValidApiKey>()
-        .for_each(|key| {
-            let cmd = WriteCommand::Delete { key: key.0.clone() };
-            assert!(validate_write_command(&cmd).is_ok());
-        });
+    check!().with_iterations(1000).with_type::<ValidApiKey>().for_each(|key| {
+        let cmd = WriteCommand::Delete { key: key.0.clone() };
+        assert!(validate_write_command(&cmd).is_ok());
+    });
 }
 
 /// Valid SetMulti commands within batch limit should pass.
 #[test]
 fn test_valid_setmulti_command_passes() {
-    check!()
-        .with_iterations(500)
-        .with_type::<ValidApiPairs>()
-        .for_each(|pairs| {
-            let cmd = WriteCommand::SetMulti {
-                pairs: pairs.0.clone(),
-            };
-            assert!(validate_write_command(&cmd).is_ok());
-        });
+    check!().with_iterations(500).with_type::<ValidApiPairs>().for_each(|pairs| {
+        let cmd = WriteCommand::SetMulti { pairs: pairs.0.clone() };
+        assert!(validate_write_command(&cmd).is_ok());
+    });
 }
 
 /// Valid DeleteMulti commands within batch limit should pass.
 #[test]
 fn test_valid_deletemulti_command_passes() {
-    check!()
-        .with_iterations(500)
-        .with_type::<ValidApiKeys>()
-        .for_each(|keys| {
-            let cmd = WriteCommand::DeleteMulti {
-                keys: keys.0.clone(),
-            };
-            assert!(validate_write_command(&cmd).is_ok());
-        });
+    check!().with_iterations(500).with_type::<ValidApiKeys>().for_each(|keys| {
+        let cmd = WriteCommand::DeleteMulti { keys: keys.0.clone() };
+        assert!(validate_write_command(&cmd).is_ok());
+    });
 }
 
 /// Oversized key in Set command should fail validation.
 #[test]
 fn test_oversized_key_set_fails() {
-    check!()
-        .with_iterations(100)
-        .with_type::<(OversizedKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let cmd = WriteCommand::Set {
-                key: key.0.clone(),
-                value: value.0.clone(),
-            };
-            let result = validate_write_command(&cmd);
-            assert!(result.is_err());
-            match result {
-                Err(aspen::api::KeyValueStoreError::KeyTooLarge { size, max }) => {
-                    assert!(size > MAX_KEY_SIZE as usize);
-                    assert_eq!(max, MAX_KEY_SIZE);
-                }
-                _ => panic!("Expected KeyTooLarge error"),
+    check!().with_iterations(100).with_type::<(OversizedKey, ValidApiValue)>().for_each(|(key, value)| {
+        let cmd = WriteCommand::Set {
+            key: key.0.clone(),
+            value: value.0.clone(),
+        };
+        let result = validate_write_command(&cmd);
+        assert!(result.is_err());
+        match result {
+            Err(aspen::api::KeyValueStoreError::KeyTooLarge { size, max }) => {
+                assert!(size > MAX_KEY_SIZE as usize);
+                assert_eq!(max, MAX_KEY_SIZE);
             }
-        });
+            _ => panic!("Expected KeyTooLarge error"),
+        }
+    });
 }
 
 /// Oversized value in Set command should fail validation.
@@ -126,212 +125,164 @@ fn test_oversized_value_set_fails() {
 /// Oversized key in Delete command should fail validation.
 #[test]
 fn test_oversized_key_delete_fails() {
-    check!()
-        .with_iterations(100)
-        .with_type::<OversizedKey>()
-        .for_each(|key| {
-            let cmd = WriteCommand::Delete { key: key.0.clone() };
-            let result = validate_write_command(&cmd);
-            assert!(result.is_err());
-            match result {
-                Err(aspen::api::KeyValueStoreError::KeyTooLarge { .. }) => {}
-                _ => panic!("Expected KeyTooLarge error"),
-            }
-        });
+    check!().with_iterations(100).with_type::<OversizedKey>().for_each(|key| {
+        let cmd = WriteCommand::Delete { key: key.0.clone() };
+        let result = validate_write_command(&cmd);
+        assert!(result.is_err());
+        match result {
+            Err(aspen::api::KeyValueStoreError::KeyTooLarge { .. }) => {}
+            _ => panic!("Expected KeyTooLarge error"),
+        }
+    });
 }
 
 /// WriteCommand Set serializes/deserializes correctly (JSON).
 #[test]
 fn test_write_command_set_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let cmd = WriteCommand::Set {
-                key: key.0.clone(),
-                value: value.0.clone(),
-            };
-            let serialized = serde_json::to_string(&cmd).expect("serialize");
-            let deserialized: WriteCommand =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(cmd, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let cmd = WriteCommand::Set {
+            key: key.0.clone(),
+            value: value.0.clone(),
+        };
+        let serialized = serde_json::to_string(&cmd).expect("serialize");
+        let deserialized: WriteCommand = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(cmd, deserialized);
+    });
 }
 
 /// WriteCommand Set serializes/deserializes correctly (bincode).
 #[test]
 fn test_write_command_set_bincode_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let cmd = WriteCommand::Set {
-                key: key.0.clone(),
-                value: value.0.clone(),
-            };
-            let serialized = bincode::serialize(&cmd).expect("serialize");
-            let deserialized: WriteCommand =
-                bincode::deserialize(&serialized).expect("deserialize");
-            assert_eq!(cmd, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let cmd = WriteCommand::Set {
+            key: key.0.clone(),
+            value: value.0.clone(),
+        };
+        let serialized = bincode::serialize(&cmd).expect("serialize");
+        let deserialized: WriteCommand = bincode::deserialize(&serialized).expect("deserialize");
+        assert_eq!(cmd, deserialized);
+    });
 }
 
 /// WriteCommand SetMulti serializes/deserializes correctly.
 #[test]
 fn test_write_command_setmulti_json_roundtrip() {
-    check!()
-        .with_iterations(500)
-        .with_type::<ValidApiPairs>()
-        .for_each(|pairs| {
-            let cmd = WriteCommand::SetMulti {
-                pairs: pairs.0.clone(),
-            };
-            let serialized = serde_json::to_string(&cmd).expect("serialize");
-            let deserialized: WriteCommand =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(cmd, deserialized);
-        });
+    check!().with_iterations(500).with_type::<ValidApiPairs>().for_each(|pairs| {
+        let cmd = WriteCommand::SetMulti { pairs: pairs.0.clone() };
+        let serialized = serde_json::to_string(&cmd).expect("serialize");
+        let deserialized: WriteCommand = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(cmd, deserialized);
+    });
 }
 
 /// WriteCommand Delete serializes/deserializes correctly.
 #[test]
 fn test_write_command_delete_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<ValidApiKey>()
-        .for_each(|key| {
-            let cmd = WriteCommand::Delete { key: key.0.clone() };
-            let serialized = serde_json::to_string(&cmd).expect("serialize");
-            let deserialized: WriteCommand =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(cmd, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<ValidApiKey>().for_each(|key| {
+        let cmd = WriteCommand::Delete { key: key.0.clone() };
+        let serialized = serde_json::to_string(&cmd).expect("serialize");
+        let deserialized: WriteCommand = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(cmd, deserialized);
+    });
 }
 
 /// WriteCommand DeleteMulti serializes/deserializes correctly.
 #[test]
 fn test_write_command_deletemulti_json_roundtrip() {
-    check!()
-        .with_iterations(500)
-        .with_type::<ValidApiKeys>()
-        .for_each(|keys| {
-            let cmd = WriteCommand::DeleteMulti {
-                keys: keys.0.clone(),
-            };
-            let serialized = serde_json::to_string(&cmd).expect("serialize");
-            let deserialized: WriteCommand =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(cmd, deserialized);
-        });
+    check!().with_iterations(500).with_type::<ValidApiKeys>().for_each(|keys| {
+        let cmd = WriteCommand::DeleteMulti { keys: keys.0.clone() };
+        let serialized = serde_json::to_string(&cmd).expect("serialize");
+        let deserialized: WriteCommand = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(cmd, deserialized);
+    });
 }
 
 /// WriteRequest wrapper serializes/deserializes correctly.
 #[test]
 fn test_write_request_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let request = WriteRequest {
-                command: WriteCommand::Set {
-                    key: key.0.clone(),
-                    value: value.0.clone(),
-                },
-            };
-            let serialized = serde_json::to_string(&request).expect("serialize");
-            let deserialized: WriteRequest =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(request, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let request = WriteRequest {
+            command: WriteCommand::Set {
+                key: key.0.clone(),
+                value: value.0.clone(),
+            },
+        };
+        let serialized = serde_json::to_string(&request).expect("serialize");
+        let deserialized: WriteRequest = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(request, deserialized);
+    });
 }
 
 /// WriteResult wrapper serializes/deserializes correctly.
 #[test]
 fn test_write_result_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let result = WriteResult {
-                command: Some(WriteCommand::Set {
-                    key: key.0.clone(),
-                    value: value.0.clone(),
-                }),
-                ..Default::default()
-            };
-            let serialized = serde_json::to_string(&result).expect("serialize");
-            let deserialized: WriteResult = serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(result, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let result = WriteResult {
+            command: Some(WriteCommand::Set {
+                key: key.0.clone(),
+                value: value.0.clone(),
+            }),
+            ..Default::default()
+        };
+        let serialized = serde_json::to_string(&result).expect("serialize");
+        let deserialized: WriteResult = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(result, deserialized);
+    });
 }
 
 /// ReadRequest serializes/deserializes correctly.
 #[test]
 fn test_read_request_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<ValidApiKey>()
-        .for_each(|key| {
-            let request = ReadRequest::new(key.0.clone());
-            let serialized = serde_json::to_string(&request).expect("serialize");
-            let deserialized: ReadRequest = serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(request, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<ValidApiKey>().for_each(|key| {
+        let request = ReadRequest::new(key.0.clone());
+        let serialized = serde_json::to_string(&request).expect("serialize");
+        let deserialized: ReadRequest = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(request, deserialized);
+    });
 }
 
 /// ReadResult serializes/deserializes correctly.
 #[test]
 fn test_read_result_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let result = ReadResult {
-                kv: Some(KeyValueWithRevision {
-                    key: key.0.clone(),
-                    value: value.0.clone(),
-                    version: 1,
-                    create_revision: 0,
-                    mod_revision: 0,
-                }),
-            };
-            let serialized = serde_json::to_string(&result).expect("serialize");
-            let deserialized: ReadResult = serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(result, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let result = ReadResult {
+            kv: Some(KeyValueWithRevision {
+                key: key.0.clone(),
+                value: value.0.clone(),
+                version: 1,
+                create_revision: 0,
+                mod_revision: 0,
+            }),
+        };
+        let serialized = serde_json::to_string(&result).expect("serialize");
+        let deserialized: ReadResult = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(result, deserialized);
+    });
 }
 
 /// DeleteRequest serializes/deserializes correctly.
 #[test]
 fn test_delete_request_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<ValidApiKey>()
-        .for_each(|key| {
-            let request = DeleteRequest { key: key.0.clone() };
-            let serialized = serde_json::to_string(&request).expect("serialize");
-            let deserialized: DeleteRequest =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(request, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<ValidApiKey>().for_each(|key| {
+        let request = DeleteRequest { key: key.0.clone() };
+        let serialized = serde_json::to_string(&request).expect("serialize");
+        let deserialized: DeleteRequest = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(request, deserialized);
+    });
 }
 
 /// DeleteResult serializes/deserializes correctly.
 #[test]
 fn test_delete_result_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, bool)>()
-        .for_each(|(key, deleted)| {
-            let result = DeleteResult {
-                key: key.0.clone(),
-                deleted: *deleted,
-            };
-            let serialized = serde_json::to_string(&result).expect("serialize");
-            let deserialized: DeleteResult =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(result, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, bool)>().for_each(|(key, deleted)| {
+        let result = DeleteResult {
+            key: key.0.clone(),
+            deleted: *deleted,
+        };
+        let serialized = serde_json::to_string(&result).expect("serialize");
+        let deserialized: DeleteResult = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(result, deserialized);
+    });
 }
 
 /// ScanRequest serializes/deserializes correctly.
@@ -355,31 +306,25 @@ fn test_scan_request_json_roundtrip() {
 /// KeyValueWithRevision serializes/deserializes correctly.
 #[test]
 fn test_key_value_with_revision_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(ValidApiKey, ValidApiValue)>()
-        .for_each(|(key, value)| {
-            let entry = KeyValueWithRevision {
-                key: key.0.clone(),
-                value: value.0.clone(),
-                version: 1,
-                create_revision: 0,
-                mod_revision: 0,
-            };
-            let serialized = serde_json::to_string(&entry).expect("serialize");
-            let deserialized: KeyValueWithRevision =
-                serde_json::from_str(&serialized).expect("deserialize");
-            assert_eq!(entry, deserialized);
-        });
+    check!().with_iterations(1000).with_type::<(ValidApiKey, ValidApiValue)>().for_each(|(key, value)| {
+        let entry = KeyValueWithRevision {
+            key: key.0.clone(),
+            value: value.0.clone(),
+            version: 1,
+            create_revision: 0,
+            mod_revision: 0,
+        };
+        let serialized = serde_json::to_string(&entry).expect("serialize");
+        let deserialized: KeyValueWithRevision = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(entry, deserialized);
+    });
 }
 
 /// ScanResult serializes/deserializes correctly.
 #[test]
 fn test_scan_result_json_roundtrip() {
-    check!()
-        .with_iterations(500)
-        .with_type::<(u32, bool, OptionalContinuationToken)>()
-        .for_each(|(count, is_truncated, continuation_token)| {
+    check!().with_iterations(500).with_type::<(u32, bool, OptionalContinuationToken)>().for_each(
+        |(count, is_truncated, continuation_token)| {
             let count = count % 100;
             let entries: Vec<KeyValueWithRevision> = (0..count.min(10))
                 .map(|i| KeyValueWithRevision {
@@ -399,16 +344,15 @@ fn test_scan_result_json_roundtrip() {
             let serialized = serde_json::to_string(&result).expect("serialize");
             let deserialized: ScanResult = serde_json::from_str(&serialized).expect("deserialize");
             assert_eq!(result, deserialized);
-        });
+        },
+    );
 }
 
 /// ClusterNode with simple address serializes correctly.
 #[test]
 fn test_cluster_node_json_roundtrip() {
-    check!()
-        .with_iterations(1000)
-        .with_type::<(u64, SimpleAddr, OptionalRaftAddr)>()
-        .for_each(|(id, addr, raft_addr)| {
+    check!().with_iterations(1000).with_type::<(u64, SimpleAddr, OptionalRaftAddr)>().for_each(
+        |(id, addr, raft_addr)| {
             let id = id % 1000;
             let node = ClusterNode::new(id, addr.0.clone(), raft_addr.0.clone());
             let serialized = serde_json::to_string(&node).expect("serialize");
@@ -417,7 +361,8 @@ fn test_cluster_node_json_roundtrip() {
             assert_eq!(node.id, deserialized.id);
             assert_eq!(node.addr, deserialized.addr);
             assert_eq!(node.raft_addr, deserialized.raft_addr);
-        });
+        },
+    );
 }
 
 /// ClusterState serializes correctly.
@@ -431,9 +376,8 @@ fn test_cluster_state_json_roundtrip() {
             let num_members = (*num_members % 5) as usize;
             let num_learners = (*num_learners % 3) as usize;
 
-            let nodes: Vec<ClusterNode> = (0..num_nodes)
-                .map(|i| ClusterNode::new(i as u64, format!("node_{}", i), None))
-                .collect();
+            let nodes: Vec<ClusterNode> =
+                (0..num_nodes).map(|i| ClusterNode::new(i as u64, format!("node_{}", i), None)).collect();
             let members: Vec<u64> = (0..num_members).map(|i| i as u64).collect();
             let learners: Vec<ClusterNode> = (0..num_learners)
                 .map(|i| ClusterNode::new(100 + i as u64, format!("learner_{}", i), None))
@@ -445,8 +389,7 @@ fn test_cluster_state_json_roundtrip() {
                 learners,
             };
             let serialized = serde_json::to_string(&state).expect("serialize");
-            let deserialized: ClusterState =
-                serde_json::from_str(&serialized).expect("deserialize");
+            let deserialized: ClusterState = serde_json::from_str(&serialized).expect("deserialize");
             assert_eq!(state, deserialized);
         });
 }
@@ -499,18 +442,16 @@ mod boundary_tests {
 
     #[test]
     fn test_setmulti_exactly_at_batch_limit() {
-        let pairs: Vec<(String, String)> = (0..MAX_SETMULTI_KEYS)
-            .map(|i| (format!("key_{}", i), format!("value_{}", i)))
-            .collect();
+        let pairs: Vec<(String, String)> =
+            (0..MAX_SETMULTI_KEYS).map(|i| (format!("key_{}", i), format!("value_{}", i))).collect();
         let cmd = WriteCommand::SetMulti { pairs };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn test_setmulti_one_over_batch_limit() {
-        let pairs: Vec<(String, String)> = (0..=MAX_SETMULTI_KEYS)
-            .map(|i| (format!("key_{}", i), format!("value_{}", i)))
-            .collect();
+        let pairs: Vec<(String, String)> =
+            (0..=MAX_SETMULTI_KEYS).map(|i| (format!("key_{}", i), format!("value_{}", i))).collect();
         let cmd = WriteCommand::SetMulti { pairs };
         match validate_write_command(&cmd) {
             Err(aspen::api::KeyValueStoreError::BatchTooLarge { size, max }) => {
@@ -523,18 +464,14 @@ mod boundary_tests {
 
     #[test]
     fn test_deletemulti_exactly_at_batch_limit() {
-        let keys: Vec<String> = (0..MAX_SETMULTI_KEYS)
-            .map(|i| format!("key_{}", i))
-            .collect();
+        let keys: Vec<String> = (0..MAX_SETMULTI_KEYS).map(|i| format!("key_{}", i)).collect();
         let cmd = WriteCommand::DeleteMulti { keys };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn test_deletemulti_one_over_batch_limit() {
-        let keys: Vec<String> = (0..=MAX_SETMULTI_KEYS)
-            .map(|i| format!("key_{}", i))
-            .collect();
+        let keys: Vec<String> = (0..=MAX_SETMULTI_KEYS).map(|i| format!("key_{}", i)).collect();
         let cmd = WriteCommand::DeleteMulti { keys };
         match validate_write_command(&cmd) {
             Err(aspen::api::KeyValueStoreError::BatchTooLarge { size, max }) => {
@@ -592,10 +529,7 @@ mod boundary_tests {
             key: "".to_string(),
             value: "value".to_string(),
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(aspen::api::KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(aspen::api::KeyValueStoreError::EmptyKey)));
     }
 
     #[test]

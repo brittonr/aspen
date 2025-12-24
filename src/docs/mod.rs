@@ -61,29 +61,37 @@ pub mod peer_manager;
 pub mod store;
 pub mod ticket;
 
-pub use constants::{
-    BACKGROUND_SYNC_INTERVAL, DOCS_SYNC_ALPN, DOCS_SYNC_TIMEOUT, EXPORT_BATCH_SIZE,
-    MAX_DOC_KEY_SIZE, MAX_DOC_VALUE_SIZE, MAX_DOCS_CONNECTIONS,
-};
-
-pub use exporter::{
-    BlobBackedDocsWriter, DocsExporter, DocsWriter, InMemoryDocsWriter, IrohDocsWriter,
-    SyncHandleDocsWriter,
-};
-
-pub use store::{
-    BACKGROUND_SYNC_INTERVAL_SECS, DocsProtocolHandler, DocsResources, DocsSyncResources,
-    DocsSyncService, MAX_OUTBOUND_SYNCS, init_docs_resources,
-};
-
-pub use importer::{
-    DocsImporter, ImportResult, MAX_PEER_SUBSCRIPTIONS, PeerStatus, PeerSubscription,
-};
-
-pub use origin::{KeyOrigin, ORIGIN_KEY_PREFIX};
-
-pub use peer_manager::{
-    MAX_PEER_CONNECTIONS, PeerConnectionState, PeerInfo, PeerManager, SyncStatus,
-};
-
-pub use ticket::{AspenDocsTicket, TICKET_PREFIX};
+pub use constants::BACKGROUND_SYNC_INTERVAL;
+pub use constants::DOCS_SYNC_ALPN;
+pub use constants::DOCS_SYNC_TIMEOUT;
+pub use constants::EXPORT_BATCH_SIZE;
+pub use constants::MAX_DOC_KEY_SIZE;
+pub use constants::MAX_DOC_VALUE_SIZE;
+pub use constants::MAX_DOCS_CONNECTIONS;
+pub use exporter::BlobBackedDocsWriter;
+pub use exporter::DocsExporter;
+pub use exporter::DocsWriter;
+pub use exporter::InMemoryDocsWriter;
+pub use exporter::IrohDocsWriter;
+pub use exporter::SyncHandleDocsWriter;
+pub use importer::DocsImporter;
+pub use importer::ImportResult;
+pub use importer::MAX_PEER_SUBSCRIPTIONS;
+pub use importer::PeerStatus;
+pub use importer::PeerSubscription;
+pub use origin::KeyOrigin;
+pub use origin::ORIGIN_KEY_PREFIX;
+pub use peer_manager::MAX_PEER_CONNECTIONS;
+pub use peer_manager::PeerConnectionState;
+pub use peer_manager::PeerInfo;
+pub use peer_manager::PeerManager;
+pub use peer_manager::SyncStatus;
+pub use store::BACKGROUND_SYNC_INTERVAL_SECS;
+pub use store::DocsProtocolHandler;
+pub use store::DocsResources;
+pub use store::DocsSyncResources;
+pub use store::DocsSyncService;
+pub use store::MAX_OUTBOUND_SYNCS;
+pub use store::init_docs_resources;
+pub use ticket::AspenDocsTicket;
+pub use ticket::TICKET_PREFIX;

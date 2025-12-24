@@ -90,10 +90,7 @@ pub fn validate_sql_query(query: &str) -> Result<(), SqlQueryError> {
     let upper = trimmed.to_uppercase();
     if !upper.starts_with("SELECT") && !upper.starts_with("WITH") {
         return Err(SqlQueryError::QueryNotAllowed {
-            reason: format!(
-                "query must start with SELECT or WITH, got: {}",
-                &trimmed[..trimmed.len().min(20)]
-            ),
+            reason: format!("query must start with SELECT or WITH, got: {}", &trimmed[..trimmed.len().min(20)]),
         });
     }
 
@@ -121,8 +118,7 @@ fn contains_keyword(upper_query: &str, keyword: &str) -> bool {
         let abs_pos = start + pos;
         let before_ok = abs_pos == 0 || !is_identifier_char(upper_query.as_bytes()[abs_pos - 1]);
         let after_pos = abs_pos + keyword.len();
-        let after_ok = after_pos >= upper_query.len()
-            || !is_identifier_char(upper_query.as_bytes()[after_pos]);
+        let after_ok = after_pos >= upper_query.len() || !is_identifier_char(upper_query.as_bytes()[after_pos]);
 
         if before_ok && after_ok {
             return true;
@@ -155,27 +151,21 @@ mod tests {
         assert!(validate_sql_query("SELECT id, name FROM users WHERE id = ?1").is_ok());
 
         // With JOINs
-        assert!(
-            validate_sql_query(
-                "SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id"
-            )
-            .is_ok()
-        );
+        assert!(validate_sql_query("SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id").is_ok());
 
         // With aggregations
         assert!(validate_sql_query("SELECT COUNT(*), AVG(price) FROM products").is_ok());
 
         // With subquery
-        assert!(
-            validate_sql_query("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)")
-                .is_ok()
-        );
+        assert!(validate_sql_query("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)").is_ok());
 
         // CTE (Common Table Expression)
-        assert!(validate_sql_query(
-            "WITH active_users AS (SELECT id FROM users WHERE active = 1) SELECT * FROM active_users"
-        )
-        .is_ok());
+        assert!(
+            validate_sql_query(
+                "WITH active_users AS (SELECT id FROM users WHERE active = 1) SELECT * FROM active_users"
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -235,10 +225,8 @@ mod tests {
         assert!(matches!(err, SqlQueryError::QueryNotAllowed { .. }));
 
         // DELETE in subquery - this still starts with SELECT but has DELETE keyword
-        let err = validate_sql_query(
-            "SELECT * FROM users WHERE id NOT IN (DELETE FROM users RETURNING id)",
-        )
-        .unwrap_err();
+        let err =
+            validate_sql_query("SELECT * FROM users WHERE id NOT IN (DELETE FROM users RETURNING id)").unwrap_err();
         assert!(matches!(err, SqlQueryError::QueryNotAllowed { .. }));
     }
 

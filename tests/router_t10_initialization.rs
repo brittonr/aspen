@@ -15,7 +15,8 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -52,10 +53,7 @@ async fn test_cluster_initialization() -> Result<()> {
 
     // Assert all nodes are in learner state
     for node_id in [0, 1, 2] {
-        router
-            .wait(node_id, timeout())
-            .state(ServerState::Learner, "empty")
-            .await?;
+        router.wait(node_id, timeout()).state(ServerState::Learner, "empty").await?;
     }
 
     // Initialize just node 0 as a single-node cluster (avoids multi-node timing issues)
@@ -67,10 +65,7 @@ async fn test_cluster_initialization() -> Result<()> {
         n0.initialize(nodes).await?;
 
         // Wait for initialization
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "init")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "init").await?;
 
         // Verify node 0 is initialized
         let inited = n0.is_initialized().await?;
@@ -80,19 +75,11 @@ async fn test_cluster_initialization() -> Result<()> {
     // Verify node 0 became leader (single-node cluster)
     tracing::info!("--- verifying leader state");
     let metrics = router.get_raft_handle(0)?.metrics().borrow().clone();
-    assert_eq!(
-        metrics.state,
-        ServerState::Leader,
-        "node 0 should be leader in single-node cluster"
-    );
+    assert_eq!(metrics.state, ServerState::Leader, "node 0 should be leader in single-node cluster");
 
     // Verify leader ID
     let leader_id = router.leader();
-    assert_eq!(
-        leader_id,
-        Some(NodeId::from(0)),
-        "node 0 should be the leader"
-    );
+    assert_eq!(leader_id, Some(NodeId::from(0)), "node 0 should be the leader");
     tracing::info!("cluster leader: {:?}", leader_id);
 
     Ok(())
@@ -108,10 +95,7 @@ async fn test_initialize_err_target_not_in_membership() -> Result<()> {
 
     // Verify nodes are in learner state
     for node_id in [0, 1] {
-        router
-            .wait(node_id, timeout())
-            .state(ServerState::Learner, "empty")
-            .await?;
+        router.wait(node_id, timeout()).state(ServerState::Learner, "empty").await?;
     }
 
     // Try to initialize with membership that doesn't include the node
@@ -121,11 +105,7 @@ async fn test_initialize_err_target_not_in_membership() -> Result<()> {
         nodes.insert(NodeId::from(9), create_test_raft_member_info(9)); // Node 9 doesn't exist
 
         let res = n.initialize(nodes).await;
-        assert!(
-            res.is_err(),
-            "node {} should reject initialization without self in membership",
-            node_id
-        );
+        assert!(res.is_err(), "node {} should reject initialization without self in membership", node_id);
 
         // Verify error is NotInMembers
         let err = res.unwrap_err();
@@ -143,10 +123,7 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
     router.new_raft_node(0).await?;
 
     // Verify node is in learner state
-    router
-        .wait(0, timeout())
-        .state(ServerState::Learner, "empty")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Learner, "empty").await?;
 
     // Initialize node 0
     tracing::info!("--- initializing node 0");
@@ -156,9 +133,7 @@ async fn test_initialize_err_not_allowed() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         n0.initialize(nodes).await?;
 
-        n0.wait(timeout())
-            .log_index_at_least(Some(1), "init")
-            .await?;
+        n0.wait(timeout()).log_index_at_least(Some(1), "init").await?;
     }
 
     // Try to initialize again - should fail

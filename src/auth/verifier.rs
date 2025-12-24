@@ -4,14 +4,16 @@
 
 use std::collections::HashSet;
 use std::sync::RwLock;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use iroh::PublicKey;
 
 use crate::auth::builder::bytes_to_sign;
 use crate::auth::capability::Operation;
 use crate::auth::error::AuthError;
-use crate::auth::token::{Audience, CapabilityToken};
+use crate::auth::token::Audience;
+use crate::auth::token::CapabilityToken;
 use crate::raft::constants::TOKEN_CLOCK_SKEW_SECS;
 
 /// Verifies capability tokens and checks authorization.
@@ -64,24 +66,14 @@ impl TokenVerifier {
     ///
     /// * `token` - The token to verify
     /// * `presenter` - Optional public key of who is presenting the token
-    pub fn verify(
-        &self,
-        token: &CapabilityToken,
-        presenter: Option<&PublicKey>,
-    ) -> Result<(), AuthError> {
+    pub fn verify(&self, token: &CapabilityToken, presenter: Option<&PublicKey>) -> Result<(), AuthError> {
         // 1. Check signature
         let sign_bytes = bytes_to_sign(token);
         let signature = iroh::Signature::from_bytes(&token.signature);
-        token
-            .issuer
-            .verify(&sign_bytes, &signature)
-            .map_err(|_| AuthError::InvalidSignature)?;
+        token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
         // 2. Check expiration
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX epoch")
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before UNIX epoch").as_secs();
 
         if token.expires_at + self.clock_skew_tolerance < now {
             return Err(AuthError::TokenExpired {

@@ -24,29 +24,38 @@
 mod common;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use aspen::api::{SqlConsistency, SqlQueryExecutor, SqlQueryRequest, WriteCommand, WriteRequest};
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use aspen::api::ClusterController;
+use aspen::api::ClusterNode;
+use aspen::api::InitRequest;
+use aspen::api::KeyValueStore;
+use aspen::api::SqlConsistency;
+use aspen::api::SqlQueryExecutor;
+use aspen::api::SqlQueryRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use aspen::node::Node;
+use aspen::node::NodeBuilder;
+use aspen::raft::BatchConfig;
+use aspen::raft::storage::StorageBackend;
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
 use openraft::ServerState;
 use tempfile::TempDir;
 use tokio::sync::Barrier;
-
-use aspen::api::{ClusterController, ClusterNode, InitRequest, KeyValueStore};
-use aspen::node::{Node, NodeBuilder};
-use aspen::raft::BatchConfig;
-use aspen::raft::storage::StorageBackend;
 
 // ====================================================================================
 // Node Setup Helpers
 // ====================================================================================
 
 /// Setup a single-node cluster with write batching enabled (Redb backend).
-async fn setup_single_node_with_batching(
-    temp_dir: &TempDir,
-    batch_config: BatchConfig,
-) -> anyhow::Result<Node> {
+async fn setup_single_node_with_batching(temp_dir: &TempDir, batch_config: BatchConfig) -> anyhow::Result<Node> {
     let data_dir = temp_dir.path().join("node-1");
 
     let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
@@ -122,21 +131,15 @@ async fn setup_single_node_no_batching(temp_dir: &TempDir) -> anyhow::Result<Nod
 /// Spawns N concurrent writers, each performing rapid Set operations.
 /// Measures total throughput (ops/sec) across all writers.
 fn bench_concurrent_throughput(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_throughput");
 
     // Benchmark with batching disabled (baseline) - sequential writes
     {
         let temp_dir = TempDir::new().expect("temp dir");
-        let node = rt.block_on(async {
-            setup_single_node_no_batching(&temp_dir)
-                .await
-                .expect("setup node without batching")
-        });
+        let node =
+            rt.block_on(async { setup_single_node_no_batching(&temp_dir).await.expect("setup node without batching") });
 
         let counter = Arc::new(AtomicU64::new(0));
         let raft_node = node.raft_node().clone();
@@ -178,38 +181,34 @@ fn bench_concurrent_throughput(c: &mut Criterion) {
 
         // Measure throughput over fixed duration
         group.throughput(Throughput::Elements(num_writers as u64));
-        group.bench_with_input(
-            BenchmarkId::new("concurrent_writers", num_writers),
-            &num_writers,
-            |b, &n| {
-                b.to_async(&rt).iter(|| {
-                    let rn = raft_node.clone();
-                    let counter = counter.clone();
-                    async move {
-                        // Spawn N concurrent writes
-                        let mut handles = Vec::with_capacity(n);
-                        for _ in 0..n {
-                            let rn = rn.clone();
-                            let key = format!("key-{:08}", counter.fetch_add(1, Ordering::Relaxed));
-                            handles.push(tokio::spawn(async move {
-                                rn.write(WriteRequest {
-                                    command: WriteCommand::Set {
-                                        key,
-                                        value: "benchmark-value".to_string(),
-                                    },
-                                })
-                                .await
-                            }));
-                        }
-
-                        // Wait for all writes to complete
-                        for h in handles {
-                            h.await.expect("task panic").expect("write failed");
-                        }
+        group.bench_with_input(BenchmarkId::new("concurrent_writers", num_writers), &num_writers, |b, &n| {
+            b.to_async(&rt).iter(|| {
+                let rn = raft_node.clone();
+                let counter = counter.clone();
+                async move {
+                    // Spawn N concurrent writes
+                    let mut handles = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        let rn = rn.clone();
+                        let key = format!("key-{:08}", counter.fetch_add(1, Ordering::Relaxed));
+                        handles.push(tokio::spawn(async move {
+                            rn.write(WriteRequest {
+                                command: WriteCommand::Set {
+                                    key,
+                                    value: "benchmark-value".to_string(),
+                                },
+                            })
+                            .await
+                        }));
                     }
-                })
-            },
-        );
+
+                    // Wait for all writes to complete
+                    for h in handles {
+                        h.await.expect("task panic").expect("write failed");
+                    }
+                }
+            })
+        });
 
         rt.block_on(async {
             let _ = node.shutdown().await;
@@ -224,10 +223,7 @@ fn bench_concurrent_throughput(c: &mut Criterion) {
 /// This benchmark measures actual throughput by running writes for a fixed
 /// duration and counting completed operations.
 fn bench_throughput_measurement(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_ops_per_second");
     group.measurement_time(Duration::from_secs(10));
@@ -236,9 +232,7 @@ fn bench_throughput_measurement(c: &mut Criterion) {
     // Measure with batching
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        setup_single_node_with_batching(&temp_dir, BatchConfig::default())
-            .await
-            .expect("setup node")
+        setup_single_node_with_batching(&temp_dir, BatchConfig::default()).await.expect("setup node")
     });
 
     let counter = Arc::new(AtomicU64::new(0));
@@ -297,18 +291,13 @@ fn bench_throughput_measurement(c: &mut Criterion) {
 /// This validates that batched writes are correctly persisted by querying
 /// the data through the DataFusion SQL layer.
 fn bench_sql_verification(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_sql_verify");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        setup_single_node_with_batching(&temp_dir, BatchConfig::default())
-            .await
-            .expect("setup node")
+        setup_single_node_with_batching(&temp_dir, BatchConfig::default()).await.expect("setup node")
     });
 
     // Pre-populate with batched writes
@@ -379,12 +368,7 @@ fn bench_sql_verification(c: &mut Criterion) {
                     .expect("sql query failed");
 
                 // Verify we got all 1000 rows
-                assert_eq!(
-                    result.rows.len(),
-                    1000,
-                    "Expected 1000 rows, got {}",
-                    result.rows.len()
-                );
+                assert_eq!(result.rows.len(), 1000, "Expected 1000 rows, got {}", result.rows.len());
                 result
             }
         })
@@ -403,10 +387,7 @@ fn bench_sql_verification(c: &mut Criterion) {
 
 /// Benchmark different batch configurations to find optimal settings.
 fn bench_batch_config_sweep(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_config");
     group.measurement_time(Duration::from_secs(5));
@@ -419,11 +400,7 @@ fn bench_batch_config_sweep(c: &mut Criterion) {
 
     for (name, config) in configs {
         let temp_dir = TempDir::new().expect("temp dir");
-        let node = rt.block_on(async {
-            setup_single_node_with_batching(&temp_dir, config)
-                .await
-                .expect("setup node")
-        });
+        let node = rt.block_on(async { setup_single_node_with_batching(&temp_dir, config).await.expect("setup node") });
 
         let counter = Arc::new(AtomicU64::new(0));
         let raft_node = node.raft_node().clone();
@@ -471,19 +448,14 @@ fn bench_batch_config_sweep(c: &mut Criterion) {
 
 /// Measure latency distribution (p50, p90, p99) with batching.
 fn bench_latency_distribution(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_latency");
     group.measurement_time(Duration::from_secs(10));
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        setup_single_node_with_batching(&temp_dir, BatchConfig::default())
-            .await
-            .expect("setup node")
+        setup_single_node_with_batching(&temp_dir, BatchConfig::default()).await.expect("setup node")
     });
 
     let counter = Arc::new(AtomicU64::new(0));
@@ -524,10 +496,7 @@ fn bench_latency_distribution(c: &mut Criterion) {
 /// This is the most accurate throughput measurement as it accounts for
 /// batching behavior and provides real-world ops/sec numbers.
 fn bench_real_throughput(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("batch_real_throughput");
     group.measurement_time(Duration::from_secs(15));
@@ -536,9 +505,7 @@ fn bench_real_throughput(c: &mut Criterion) {
     // Test with batching
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        setup_single_node_with_batching(&temp_dir, BatchConfig::default())
-            .await
-            .expect("setup node")
+        setup_single_node_with_batching(&temp_dir, BatchConfig::default()).await.expect("setup node")
     });
 
     // Run 50 concurrent writers for measurement duration

@@ -34,7 +34,9 @@ use iroh::PublicKey;
 use openraft::Raft;
 use openraft::async_runtime::watch::WatchReceiver;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::protocol_handlers::TrustedPeersRegistry;
 use crate::raft::types::AppTypeConfig;
@@ -122,9 +124,7 @@ async fn membership_watcher_task(
 /// current membership configuration (both voters and learners).
 ///
 /// Called while holding the watch borrow, so must be synchronous.
-fn extract_public_keys_from_metrics(
-    metrics: &openraft::RaftMetrics<AppTypeConfig>,
-) -> Vec<PublicKey> {
+fn extract_public_keys_from_metrics(metrics: &openraft::RaftMetrics<AppTypeConfig>) -> Vec<PublicKey> {
     let membership = metrics.membership_config.membership();
 
     // Collect all PublicKeys from all nodes (voters + learners)
@@ -145,10 +145,7 @@ fn extract_public_keys_from_metrics(
 ///
 /// This is the async part of the sync operation, called after releasing
 /// the metrics borrow.
-async fn sync_public_keys_to_registry(
-    public_keys: Vec<PublicKey>,
-    trusted_peers: &TrustedPeersRegistry,
-) {
+async fn sync_public_keys_to_registry(public_keys: Vec<PublicKey>, trusted_peers: &TrustedPeersRegistry) {
     let count = public_keys.len();
 
     if count == 0 {
@@ -158,16 +155,14 @@ async fn sync_public_keys_to_registry(
     // Update the registry with the new set
     trusted_peers.set_peers(public_keys).await;
 
-    debug!(
-        peer_count = count,
-        "synchronized trusted peers registry with Raft membership"
-    );
+    debug!(peer_count = count, "synchronized trusted peers registry with Raft membership");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use iroh::SecretKey;
+
+    use super::*;
 
     /// Generate a test PublicKey from a seed.
     fn test_public_key(seed: u8) -> PublicKey {

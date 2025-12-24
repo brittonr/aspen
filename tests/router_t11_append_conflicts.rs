@@ -14,23 +14,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
+use openraft::Config;
+use openraft::Entry;
+use openraft::ServerState;
+use openraft::Vote;
 use openraft::raft::AppendEntriesRequest;
-use openraft::storage::{RaftLogReader, RaftLogStorage};
-use openraft::testing::{blank_ent, log_id};
-use openraft::{Config, Entry, ServerState, Vote};
+use openraft::storage::RaftLogReader;
+use openraft::storage::RaftLogStorage;
+use openraft::testing::blank_ent;
+use openraft::testing::log_id;
 
 /// Helper to check if logs match expected terms.
-async fn check_logs(
-    log_store: &mut aspen::raft::storage::InMemoryLogStore,
-    terms: Vec<u64>,
-) -> Result<()> {
-    let logs = log_store
-        .get_log_reader()
-        .await
-        .try_get_log_entries(..)
-        .await?;
+async fn check_logs(log_store: &mut aspen::raft::storage::InMemoryLogStore, terms: Vec<u64>) -> Result<()> {
+    let logs = log_store.get_log_reader().await.try_get_log_entries(..).await?;
 
     let want: Vec<Entry<AppTypeConfig>> = terms
         .iter()
@@ -69,14 +68,8 @@ async fn test_append_conflicts() -> Result<()> {
 
     tracing::info!("--- wait for init node to ready");
 
-    router
-        .wait(0, timeout())
-        .applied_index(None, "empty")
-        .await?;
-    router
-        .wait(0, timeout())
-        .state(ServerState::Learner, "empty")
-        .await?;
+    router.wait(0, timeout()).applied_index(None, "empty").await?;
+    router.wait(0, timeout()).state(ServerState::Learner, "empty").await?;
 
     let (r0, mut sto0, _sm0) = router.remove_node(0).unwrap();
     check_logs(&mut sto0, vec![]).await?;
@@ -168,9 +161,7 @@ async fn test_append_conflicts() -> Result<()> {
 
     check_logs(&mut sto0, vec![0, 1, 1, 1, 1]).await?;
 
-    tracing::info!(
-        "--- case 2: prev_log_id.index == last_applied, inconsistent log should be removed"
-    );
+    tracing::info!("--- case 2: prev_log_id.index == last_applied, inconsistent log should be removed");
 
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, NodeId::from(2)),
@@ -200,9 +191,7 @@ async fn test_append_conflicts() -> Result<()> {
 
     check_logs(&mut sto0, vec![0, 1, 1, 2]).await?;
 
-    tracing::info!(
-        "--- case 3,4: prev_log_id.index <= last_log_id, prev_log_id mismatch, inconsistent log is removed"
-    );
+    tracing::info!("--- case 3,4: prev_log_id.index <= last_log_id, prev_log_id mismatch, inconsistent log is removed");
 
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, NodeId::from(2)),
@@ -217,9 +206,7 @@ async fn test_append_conflicts() -> Result<()> {
 
     check_logs(&mut sto0, vec![0, 1, 1]).await?;
 
-    tracing::info!(
-        "--- case 3,4: prev_log_id.index <= last_log_id, prev_log_id matches, inconsistent log is removed"
-    );
+    tracing::info!("--- case 3,4: prev_log_id.index <= last_log_id, prev_log_id matches, inconsistent log is removed");
     // refill logs
     let req = AppendEntriesRequest {
         vote: Vote::new_committed(1, NodeId::from(2)),

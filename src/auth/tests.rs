@@ -1,6 +1,7 @@
 //! Tests for capability-based authorization.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use iroh::SecretKey;
@@ -34,9 +35,7 @@ fn test_capability_authorizes_read() {
     assert!(cap.authorizes(&Operation::Read {
         key: "users:123".into()
     }));
-    assert!(cap.authorizes(&Operation::Read {
-        key: "users:".into()
-    }));
+    assert!(cap.authorizes(&Operation::Read { key: "users:".into() }));
 
     // Should not authorize reads outside prefix
     assert!(!cap.authorizes(&Operation::Read {
@@ -157,9 +156,7 @@ fn test_token_builder_basic() {
     let key = test_secret_key();
 
     let token = TokenBuilder::new(key.clone())
-        .with_capability(Capability::Read {
-            prefix: "test:".into(),
-        })
+        .with_capability(Capability::Read { prefix: "test:".into() })
         .with_lifetime(Duration::from_secs(3600))
         .build()
         .expect("should build token");
@@ -286,10 +283,7 @@ fn test_token_builder_capability_escalation() {
         })
         .build();
 
-    assert!(matches!(
-        result,
-        Err(AuthError::CapabilityEscalation { .. })
-    ));
+    assert!(matches!(result, Err(AuthError::CapabilityEscalation { .. })));
 }
 
 // ============================================================================
@@ -301,9 +295,7 @@ fn test_token_encode_decode_roundtrip() {
     let key = test_secret_key();
 
     let token = TokenBuilder::new(key)
-        .with_capability(Capability::Full {
-            prefix: "test:".into(),
-        })
+        .with_capability(Capability::Full { prefix: "test:".into() })
         .with_random_nonce()
         .build()
         .expect("should build token");
@@ -401,9 +393,7 @@ fn test_verifier_checks_audience() {
     let verifier = TokenVerifier::new();
 
     // Correct presenter should pass
-    verifier
-        .verify(&token, Some(&intended_audience.public()))
-        .expect("should verify");
+    verifier.verify(&token, Some(&intended_audience.public())).expect("should verify");
 
     // Wrong presenter should fail
     let result = verifier.verify(&token, Some(&wrong_presenter.public()));
@@ -485,9 +475,7 @@ fn test_verifier_revocation() {
     let verifier = TokenVerifier::new();
 
     // Should verify before revocation
-    verifier
-        .verify(&token, None)
-        .expect("should verify before revocation");
+    verifier.verify(&token, None).expect("should verify before revocation");
 
     // Revoke the token
     verifier.revoke_token(&token).unwrap();
@@ -515,9 +503,7 @@ fn test_verifier_trusted_roots() {
     let verifier = TokenVerifier::new().with_trusted_root(trusted.public());
 
     // Trusted issuer should pass
-    verifier
-        .verify(&trusted_token, None)
-        .expect("should verify trusted");
+    verifier.verify(&trusted_token, None).expect("should verify trusted");
 
     // Untrusted issuer should fail
     let result = verifier.verify(&untrusted_token, None);
@@ -542,9 +528,7 @@ fn test_generate_root_token() {
     assert!(matches!(token.audience, Audience::Bearer));
 
     // Should have Full, ClusterAdmin, and Delegate capabilities
-    assert!(token.capabilities.contains(&Capability::Full {
-        prefix: String::new()
-    }));
+    assert!(token.capabilities.contains(&Capability::Full { prefix: String::new() }));
     assert!(token.capabilities.contains(&Capability::ClusterAdmin));
     assert!(token.capabilities.contains(&Capability::Delegate));
 
@@ -553,19 +537,11 @@ fn test_generate_root_token() {
 
     // Should verify correctly
     let verifier = TokenVerifier::new().with_trusted_root(secret.public());
-    verifier
-        .verify(&token, None)
-        .expect("root token should verify");
+    verifier.verify(&token, None).expect("root token should verify");
 
     // Should authorize all operations
     verifier
-        .authorize(
-            &token,
-            &Operation::Read {
-                key: "any:key".into(),
-            },
-            None,
-        )
+        .authorize(&token, &Operation::Read { key: "any:key".into() }, None)
         .expect("root token should authorize reads");
 
     verifier
@@ -580,23 +556,11 @@ fn test_generate_root_token() {
         .expect("root token should authorize writes");
 
     verifier
-        .authorize(
-            &token,
-            &Operation::Delete {
-                key: "any:key".into(),
-            },
-            None,
-        )
+        .authorize(&token, &Operation::Delete { key: "any:key".into() }, None)
         .expect("root token should authorize deletes");
 
     verifier
-        .authorize(
-            &token,
-            &Operation::ClusterAdmin {
-                action: "init".into(),
-            },
-            None,
-        )
+        .authorize(&token, &Operation::ClusterAdmin { action: "init".into() }, None)
         .expect("root token should authorize cluster admin");
 }
 
@@ -748,17 +712,10 @@ async fn test_revocation_key_format() {
 
     // Verify the key is stored with correct format
     let expected_key = format!("_system:auth:revoked:{}", hex::encode(hash));
-    let result = kv
-        .read(crate::api::ReadRequest::new(expected_key))
-        .await
-        .expect("should read");
+    let result = kv.read(crate::api::ReadRequest::new(expected_key)).await.expect("should read");
 
     assert!(result.kv.is_some(), "revocation key should exist");
-    assert_eq!(
-        result.kv.unwrap().value,
-        "",
-        "value should be empty (existence is what matters)"
-    );
+    assert_eq!(result.kv.unwrap().value, "", "value should be empty (existence is what matters)");
 }
 
 #[tokio::test]
@@ -809,17 +766,12 @@ async fn test_integration_persistent_revocation() {
         .expect("should build token");
 
     // Token should verify initially
-    verifier
-        .verify(&token, None)
-        .expect("should verify before revocation");
+    verifier.verify(&token, None).expect("should verify before revocation");
 
     // Revoke in both the verifier (in-memory) and the store (persistent)
     let token_hash = token.hash();
     verifier.revoke_token(&token).unwrap();
-    store
-        .revoke(token_hash)
-        .await
-        .expect("should persist revocation");
+    store.revoke(token_hash).await.expect("should persist revocation");
 
     // Token should fail verification
     let result = verifier.verify(&token, None);
@@ -828,9 +780,7 @@ async fn test_integration_persistent_revocation() {
     // Simulate restart: create new verifier and load from persistent store
     let verifier_after_restart = TokenVerifier::new();
     let loaded_revocations = store.load_all().await.expect("should load");
-    verifier_after_restart
-        .load_revoked(&loaded_revocations)
-        .unwrap();
+    verifier_after_restart.load_revoked(&loaded_revocations).unwrap();
 
     // Token should still be revoked after restart
     let result = verifier_after_restart.verify(&token, None);

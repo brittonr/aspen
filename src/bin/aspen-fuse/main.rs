@@ -37,13 +37,16 @@ use std::sync::Arc;
 use std::thread;
 
 use clap::Parser;
-use fuse_backend_rs::api::server::Server;
-use fuse_backend_rs::transport::{FuseChannel, FuseSession, Writer};
-use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
-
 use client::FuseSyncClient;
 use fs::AspenFs;
+use fuse_backend_rs::api::server::Server;
+use fuse_backend_rs::transport::FuseChannel;
+use fuse_backend_rs::transport::FuseSession;
+use fuse_backend_rs::transport::Writer;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
+use tracing_subscriber::EnvFilter;
 
 /// Number of threads for FUSE request handling.
 const FUSE_THREADS: usize = 4;
@@ -89,11 +92,7 @@ struct Args {
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .compact()
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).with_target(false).compact().init();
 }
 
 fn main() {
@@ -167,10 +166,7 @@ struct FuseServer {
 
 impl FuseServer {
     /// Create a new FUSE server from session.
-    fn new(
-        server: Arc<Server<AspenFs>>,
-        session: &mut FuseSession,
-    ) -> Result<Self, fuse_backend_rs::transport::Error> {
+    fn new(server: Arc<Server<AspenFs>>, session: &mut FuseSession) -> Result<Self, fuse_backend_rs::transport::Error> {
         let channel = session.new_channel()?;
         Ok(Self { server, channel })
     }
@@ -222,9 +218,7 @@ impl FuseServer {
 }
 
 fn run_fuse(args: Args, fs: AspenFs) {
-    let mount_point = args
-        .mount_point
-        .expect("mount_point required for FUSE mode");
+    let mount_point = args.mount_point.expect("mount_point required for FUSE mode");
 
     info!(
         mount_point = %mount_point.display(),
@@ -278,10 +272,7 @@ fn run_fuse(args: Args, fs: AspenFs) {
         handles.push(handle);
     }
 
-    info!(
-        threads = handles.len(),
-        "FUSE workers started, press Ctrl-C to unmount"
-    );
+    info!(threads = handles.len(), "FUSE workers started, press Ctrl-C to unmount");
 
     // Wait for shutdown signal
     let (tx, rx) = std::sync::mpsc::channel();

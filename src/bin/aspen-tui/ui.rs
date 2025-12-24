@@ -2,15 +2,31 @@
 //!
 //! Implements the View layer of The Elm Architecture (TEA).
 
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap},
-};
+use ratatui::Frame;
+use ratatui::layout::Alignment;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Clear;
+use ratatui::widgets::List;
+use ratatui::widgets::ListItem;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Row;
+use ratatui::widgets::Table;
+use ratatui::widgets::Tabs;
+use ratatui::widgets::Wrap;
 
-use crate::app::{ActiveView, App, InputMode};
+use crate::app::ActiveView;
+use crate::app::App;
+use crate::app::InputMode;
 use crate::types::NodeStatus;
 
 /// Main draw function.
@@ -49,9 +65,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     .iter()
     .map(|v| {
         let style = if *v == app.active_view {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -60,11 +74,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     .collect();
 
     let tabs = Tabs::new(titles)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Aspen Cluster Manager "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Aspen Cluster Manager "))
         .select(match app.active_view {
             ActiveView::Cluster => 0,
             ActiveView::Metrics => 1,
@@ -129,17 +139,12 @@ fn draw_node_list(frame: &mut Frame, app: &App, area: Rect) {
             let leader_marker = if node.is_leader { " [L]" } else { "" };
 
             let content = Line::from(vec![
-                Span::styled(
-                    format!("{} ", status_icon),
-                    Style::default().fg(status_color),
-                ),
+                Span::styled(format!("{} ", status_icon), Style::default().fg(status_color)),
                 Span::raw(format!("Node {}{}", node.node_id, leader_marker)),
             ]);
 
             let style = if i == app.selected_node {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -167,10 +172,7 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
         let mut lines = vec![
             Line::from(vec![
                 Span::raw("Node ID: "),
-                Span::styled(
-                    node.node_id.to_string(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(node.node_id.to_string(), Style::default().add_modifier(Modifier::BOLD)),
             ]),
             Line::from(vec![Span::raw("Status: "), Span::raw(status_str)]),
             Line::from(vec![
@@ -181,17 +183,11 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
         ];
 
         if let Some(term) = node.current_term {
-            lines.push(Line::from(vec![
-                Span::raw("Term: "),
-                Span::raw(term.to_string()),
-            ]));
+            lines.push(Line::from(vec![Span::raw("Term: "), Span::raw(term.to_string())]));
         }
 
         if let Some(index) = node.last_applied_index {
-            lines.push(Line::from(vec![
-                Span::raw("Last Applied: "),
-                Span::raw(index.to_string()),
-            ]));
+            lines.push(Line::from(vec![Span::raw("Last Applied: "), Span::raw(index.to_string())]));
         }
 
         if let Some(uptime) = node.uptime_secs {
@@ -210,11 +206,7 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let paragraph = Paragraph::new(content)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Node Details "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Node Details "))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
@@ -232,42 +224,24 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
         let summary = vec![
             Line::from(vec![
                 Span::raw("Total Nodes: "),
-                Span::styled(
-                    metrics.node_count.to_string(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(metrics.node_count.to_string(), Style::default().add_modifier(Modifier::BOLD)),
             ]),
             Line::from(vec![
                 Span::raw("Leader: "),
                 Span::styled(
-                    metrics
-                        .leader
-                        .map(|id| id.to_string())
-                        .unwrap_or_else(|| "None".to_string()),
+                    metrics.leader.map(|id| id.to_string()).unwrap_or_else(|| "None".to_string()),
                     Style::default().fg(Color::Yellow),
                 ),
             ]),
-            Line::from(vec![
-                Span::raw("Term: "),
-                Span::raw(metrics.term.to_string()),
-            ]),
+            Line::from(vec![Span::raw("Term: "), Span::raw(metrics.term.to_string())]),
             Line::from(vec![
                 Span::raw("Last Applied: "),
-                Span::raw(
-                    metrics
-                        .last_applied_index
-                        .map(|i| i.to_string())
-                        .unwrap_or_else(|| "N/A".to_string()),
-                ),
+                Span::raw(metrics.last_applied_index.map(|i| i.to_string()).unwrap_or_else(|| "N/A".to_string())),
             ]),
         ];
 
         let paragraph = Paragraph::new(summary)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Cluster Summary "),
-            )
+            .block(Block::default().borders(Borders::ALL).title(" Cluster Summary "))
             .wrap(Wrap { trim: true });
 
         frame.render_widget(paragraph, chunks[0]);
@@ -297,32 +271,21 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
                 } else {
                     "Follower".to_string()
                 },
-                node.current_term
-                    .map(|t| t.to_string())
-                    .unwrap_or_else(|| "-".to_string()),
-                node.last_applied_index
-                    .map(|i| i.to_string())
-                    .unwrap_or_else(|| "-".to_string()),
+                node.current_term.map(|t| t.to_string()).unwrap_or_else(|| "-".to_string()),
+                node.last_applied_index.map(|i| i.to_string()).unwrap_or_else(|| "-".to_string()),
             ])
         })
         .collect();
 
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(8),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(8),
-            Constraint::Length(10),
-        ],
-    )
+    let table = Table::new(rows, [
+        Constraint::Length(8),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(8),
+        Constraint::Length(10),
+    ])
     .header(header)
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Node Metrics "),
-    );
+    .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
 
     frame.render_widget(table, chunks[1]);
 }
@@ -344,11 +307,7 @@ fn draw_kv_view(frame: &mut Frame, app: &App, area: Rect) {
     ];
 
     let paragraph = Paragraph::new(instructions)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Key-Value Operations "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Key-Value Operations "))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, chunks[0]);
@@ -404,30 +363,21 @@ fn draw_vaults_list(frame: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, vault)| {
             let style = if i == app.selected_vault {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
 
             let content = Line::from(vec![
                 Span::styled(format!(" {} ", vault.name), style),
-                Span::styled(
-                    format!("({} keys)", vault.key_count),
-                    Style::default().fg(Color::DarkGray),
-                ),
+                Span::styled(format!("({} keys)", vault.key_count), Style::default().fg(Color::DarkGray)),
             ]);
             ListItem::new(content)
         })
         .collect();
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Vaults (Enter to browse, r to refresh) "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Vaults (Enter to browse, r to refresh) "))
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
 
     frame.render_widget(list, area);
@@ -448,20 +398,12 @@ fn draw_vault_info(frame: &mut Frame, app: &App, area: Rect) {
         vec![
             Line::from(vec![
                 Span::raw("Vault: "),
-                Span::styled(
-                    &vault.name,
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(&vault.name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(""),
             Line::from(vec![
                 Span::raw("Keys: "),
-                Span::styled(
-                    vault.key_count.to_string(),
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(vault.key_count.to_string(), Style::default().fg(Color::Cyan)),
             ]),
             Line::from(""),
             Line::from("Press Enter to browse vault contents."),
@@ -486,9 +428,7 @@ fn draw_vault_keys_list(frame: &mut Frame, app: &App, area: Rect, vault_name: &s
         .enumerate()
         .map(|(i, kv)| {
             let style = if i == app.selected_vault_key {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -498,11 +438,7 @@ fn draw_vault_keys_list(frame: &mut Frame, app: &App, area: Rect, vault_name: &s
         })
         .collect();
 
-    let title = format!(
-        " {} ({} keys) - Backspace to go back ",
-        vault_name,
-        app.vault_keys.len()
-    );
+    let title = format!(" {} ({} keys) - Backspace to go back ", vault_name, app.vault_keys.len());
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
@@ -518,12 +454,7 @@ fn draw_vault_key_detail(frame: &mut Frame, app: &App, area: Rect) {
         vec![
             Line::from(vec![
                 Span::raw("Key: "),
-                Span::styled(
-                    &kv.key,
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(&kv.key, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(""),
             Line::from(vec![Span::styled(
@@ -538,11 +469,7 @@ fn draw_vault_key_detail(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let paragraph = Paragraph::new(content)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Key Details "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Key Details "))
         .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
@@ -654,15 +581,11 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         .block(Block::default().borders(Borders::ALL));
 
     let mode_widget = Paragraph::new(mode)
-        .style(
-            Style::default()
-                .fg(Color::Black)
-                .bg(if app.input_mode == InputMode::Editing {
-                    Color::Yellow
-                } else {
-                    Color::Green
-                }),
-        )
+        .style(Style::default().fg(Color::Black).bg(if app.input_mode == InputMode::Editing {
+            Color::Yellow
+        } else {
+            Color::Green
+        }))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
 
@@ -679,11 +602,7 @@ fn draw_input_popup(frame: &mut Frame, app: &App) {
 
     let input = Paragraph::new(app.input_buffer.as_str())
         .style(Style::default().fg(Color::Yellow))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Enter command (get <key> | set <key> <value>) "),
-        );
+        .block(Block::default().borders(Borders::ALL).title(" Enter command (get <key> | set <key> <value>) "));
 
     frame.render_widget(input, area);
 

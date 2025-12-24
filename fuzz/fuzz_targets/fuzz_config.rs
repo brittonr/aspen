@@ -84,14 +84,7 @@ fn fuzz_config() {
             // Valid values: "inmemory", "in-memory", "memory", "sqlite", "sql", "persistent", "disk", "redb"
             let _ = matches!(
                 lower.as_str(),
-                "inmemory"
-                    | "in-memory"
-                    | "memory"
-                    | "sqlite"
-                    | "sql"
-                    | "persistent"
-                    | "disk"
-                    | "redb"
+                "inmemory" | "in-memory" | "memory" | "sqlite" | "sql" | "persistent" | "disk" | "redb"
             );
         }
 
@@ -99,10 +92,7 @@ fn fuzz_config() {
         if let Ok(s) = std::str::from_utf8(data) {
             let lower = s.to_lowercase();
             // Valid values: "deterministic", "raft_actor", "raftactor"
-            let _ = matches!(
-                lower.as_str(),
-                "deterministic" | "raft_actor" | "raftactor" | "raft"
-            );
+            let _ = matches!(lower.as_str(), "deterministic" | "raft_actor" | "raftactor" | "raft");
         }
     });
 }

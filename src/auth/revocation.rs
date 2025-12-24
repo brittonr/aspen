@@ -17,7 +17,11 @@
 
 use anyhow::Result;
 
-use crate::api::{KeyValueStore, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::ReadRequest;
+use crate::api::ScanRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 
 /// Maximum number of revoked tokens to load from storage.
 ///
@@ -53,10 +57,7 @@ pub trait RevocationStore: Send + Sync {
     ///
     /// Returns error if the underlying storage operation fails (not including
     /// key not found, which returns `Ok(false)`).
-    fn is_revoked(
-        &self,
-        token_hash: &[u8; 32],
-    ) -> impl std::future::Future<Output = Result<bool>> + Send;
+    fn is_revoked(&self, token_hash: &[u8; 32]) -> impl std::future::Future<Output = Result<bool>> + Send;
 
     /// Load all revoked token hashes from storage.
     ///
@@ -132,10 +133,7 @@ impl<K: KeyValueStore + Send + Sync> RevocationStore for KeyValueRevocationStore
                     _ => {
                         // Invalid hex encoding or wrong length - skip
                         // This shouldn't happen in normal operation, but we handle it gracefully
-                        tracing::warn!(
-                            "invalid revocation key format (expected 32-byte hex): {}",
-                            entry.key
-                        );
+                        tracing::warn!("invalid revocation key format (expected 32-byte hex): {}", entry.key);
                     }
                 }
             }
@@ -223,10 +221,7 @@ mod tests {
         let actual_key = format!("_system:auth:revoked:{}", hex::encode(hash));
 
         // Read directly from KV to verify key format
-        let result = kv
-            .read(ReadRequest::new(actual_key.clone()))
-            .await
-            .expect("should read");
+        let result = kv.read(ReadRequest::new(actual_key.clone())).await.expect("should read");
 
         assert!(result.kv.is_some(), "revocation key should exist");
         assert_eq!(result.kv.unwrap().value, "", "value should be empty");
@@ -273,10 +268,7 @@ mod tests {
         let nonexistent_hash = [99u8; 32];
 
         // Should return false for non-existent key, not error
-        let result = store
-            .is_revoked(&nonexistent_hash)
-            .await
-            .expect("should check");
+        let result = store.is_revoked(&nonexistent_hash).await.expect("should check");
         assert!(!result);
     }
 

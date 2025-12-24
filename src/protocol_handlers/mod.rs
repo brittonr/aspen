@@ -70,19 +70,21 @@ pub mod raft_authenticated;
 pub mod raft_sharded;
 
 // Re-export constants
-pub use constants::{
-    CLIENT_ALPN, LOG_SUBSCRIBER_ALPN, RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN,
-};
-
 // Re-export handlers
-pub use client::{ClientProtocolContext, ClientProtocolHandler};
-pub use log_subscriber::LogSubscriberProtocolHandler;
-pub use raft::RaftProtocolHandler;
-pub use raft_authenticated::{AuthenticatedRaftProtocolHandler, TrustedPeersRegistry};
-pub use raft_sharded::ShardedRaftProtocolHandler;
-
+pub use client::ClientProtocolContext;
+pub use client::ClientProtocolHandler;
+pub use constants::CLIENT_ALPN;
+pub use constants::LOG_SUBSCRIBER_ALPN;
+pub use constants::RAFT_ALPN;
+pub use constants::RAFT_AUTH_ALPN;
+pub use constants::RAFT_SHARDED_ALPN;
 // Re-export error sanitization functions
 pub use error_sanitization::{
-    sanitize_blob_error, sanitize_control_error, sanitize_error_for_client,
-    sanitize_error_string_for_client, sanitize_kv_error,
+    sanitize_blob_error, sanitize_control_error, sanitize_error_for_client, sanitize_error_string_for_client,
+    sanitize_kv_error,
 };
+pub use log_subscriber::LogSubscriberProtocolHandler;
+pub use raft::RaftProtocolHandler;
+pub use raft_authenticated::AuthenticatedRaftProtocolHandler;
+pub use raft_authenticated::TrustedPeersRegistry;
+pub use raft_sharded::ShardedRaftProtocolHandler;

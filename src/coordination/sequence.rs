@@ -4,14 +4,20 @@
 //! Uses batch reservation for performance.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
 use crate::coordination::error::CoordinationError;
-use crate::raft::constants::{CAS_RETRY_INITIAL_BACKOFF_MS, CAS_RETRY_MAX_BACKOFF_MS, MAX_CAS_RETRIES};
-use std::time::Duration;
+use crate::raft::constants::CAS_RETRY_INITIAL_BACKOFF_MS;
+use crate::raft::constants::CAS_RETRY_MAX_BACKOFF_MS;
+use crate::raft::constants::MAX_CAS_RETRIES;
 
 /// Configuration for sequence generator.
 #[derive(Debug, Clone)]
@@ -214,9 +220,10 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use crate::api::inmemory::DeterministicKeyValueStore;
-    use std::collections::HashSet;
 
     #[tokio::test]
     async fn test_sequence_basic() {
@@ -292,14 +299,10 @@ mod tests {
     #[tokio::test]
     async fn test_sequence_concurrent() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let seq = Arc::new(SequenceGenerator::new(
-            store,
-            "test_seq",
-            SequenceConfig {
-                batch_size: 10,
-                ..Default::default()
-            },
-        ));
+        let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig {
+            batch_size: 10,
+            ..Default::default()
+        }));
 
         let handles: Vec<_> = (0..5)
             .map(|_| {

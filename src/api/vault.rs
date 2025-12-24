@@ -89,21 +89,12 @@ mod tests {
         assert!(validate_client_key("").is_ok());
 
         // System prefix rejected
-        assert!(matches!(
-            validate_client_key("_system:internal"),
-            Err(VaultError::SystemPrefixReserved)
-        ));
-        assert!(matches!(
-            validate_client_key("_system:metadata"),
-            Err(VaultError::SystemPrefixReserved)
-        ));
+        assert!(matches!(validate_client_key("_system:internal"), Err(VaultError::SystemPrefixReserved)));
+        assert!(matches!(validate_client_key("_system:metadata"), Err(VaultError::SystemPrefixReserved)));
     }
 
     #[test]
     fn test_vault_error_display() {
-        assert_eq!(
-            VaultError::SystemPrefixReserved.to_string(),
-            "key prefix '_system:' is reserved for internal use"
-        );
+        assert_eq!(VaultError::SystemPrefixReserved.to_string(), "key prefix '_system:' is reserved for internal use");
     }
 }

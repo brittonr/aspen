@@ -32,11 +32,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
-use crate::client_rpc::{ClientRpcRequest, ClientRpcResponse};
+use crate::client_rpc::ClientRpcRequest;
+use crate::client_rpc::ClientRpcResponse;
 
 /// Trait for RPC clients that can send coordination requests.
 ///
@@ -104,10 +107,7 @@ impl<C: CoordinationRpc> LockClient<C> {
                         deadline_ms: result.deadline_ms.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "lock acquisition failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lock acquisition failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LockAcquire"),
@@ -122,11 +122,7 @@ impl<C: CoordinationRpc> LockClient<C> {
     ///
     /// # Returns
     /// Some(guard) if lock was acquired, None if already held.
-    pub async fn try_acquire(
-        &self,
-        holder_id: impl Into<String>,
-        ttl: Duration,
-    ) -> Result<Option<RemoteLockGuard<C>>> {
+    pub async fn try_acquire(&self, holder_id: impl Into<String>, ttl: Duration) -> Result<Option<RemoteLockGuard<C>>> {
         let holder_id = holder_id.into();
         let response = self
             .client
@@ -203,10 +199,7 @@ impl<C: CoordinationRpc> RemoteLockGuard<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "lock release failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lock release failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LockRelease"),
@@ -233,10 +226,7 @@ impl<C: CoordinationRpc> RemoteLockGuard<C> {
                     }
                     Ok(())
                 } else {
-                    bail!(
-                        "lock renewal failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lock renewal failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LockRenew"),
@@ -263,9 +253,7 @@ impl<C: CoordinationRpc> CounterClient<C> {
     pub async fn get(&self) -> Result<u64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::CounterGet {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::CounterGet { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -275,9 +263,7 @@ impl<C: CoordinationRpc> CounterClient<C> {
     pub async fn increment(&self) -> Result<u64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::CounterIncrement {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::CounterIncrement { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -287,9 +273,7 @@ impl<C: CoordinationRpc> CounterClient<C> {
     pub async fn decrement(&self) -> Result<u64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::CounterDecrement {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::CounterDecrement { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -357,10 +341,7 @@ impl<C: CoordinationRpc> CounterClient<C> {
                 if result.success {
                     Ok(result.value.unwrap_or(0))
                 } else {
-                    bail!(
-                        "counter operation failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("counter operation failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for counter operation"),
@@ -387,9 +368,7 @@ impl<C: CoordinationRpc> SignedCounterClient<C> {
     pub async fn get(&self) -> Result<i64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::SignedCounterGet {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::SignedCounterGet { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -444,9 +423,7 @@ impl<C: CoordinationRpc> SequenceClient<C> {
     pub async fn next(&self) -> Result<u64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::SequenceNext {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::SequenceNext { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -472,9 +449,7 @@ impl<C: CoordinationRpc> SequenceClient<C> {
     pub async fn current(&self) -> Result<u64> {
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::SequenceCurrent {
-                key: self.key.clone(),
-            })
+            .send_coordination_request(ClientRpcRequest::SequenceCurrent { key: self.key.clone() })
             .await?;
 
         Self::extract_value(response)
@@ -486,10 +461,7 @@ impl<C: CoordinationRpc> SequenceClient<C> {
                 if result.success {
                     Ok(result.value.unwrap_or(0))
                 } else {
-                    bail!(
-                        "sequence operation failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("sequence operation failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for sequence operation"),
@@ -577,9 +549,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RateLimiterResult(result) => {
-                Ok(result.tokens_remaining.unwrap_or(0))
-            }
+            ClientRpcResponse::RateLimiterResult(result) => Ok(result.tokens_remaining.unwrap_or(0)),
             _ => bail!("unexpected response type for RateLimiterAvailable"),
         }
     }
@@ -600,10 +570,7 @@ impl<C: CoordinationRpc> RateLimiterClient<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "rate limiter reset failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("rate limiter reset failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RateLimiterReset"),
@@ -679,24 +646,14 @@ impl<C: CoordinationRpc> BatchClient<C> {
     pub async fn read(&self, keys: Vec<String>) -> Result<Vec<Option<Vec<u8>>>> {
         use crate::client_rpc::BatchReadResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::BatchRead { keys })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::BatchRead { keys }).await?;
 
         match response {
-            ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
-                success,
-                values,
-                error,
-            }) => {
+            ClientRpcResponse::BatchReadResult(BatchReadResultResponse { success, values, error }) => {
                 if success {
                     Ok(values.unwrap_or_default())
                 } else {
-                    bail!(
-                        "batch read failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("batch read failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for BatchRead"),
@@ -708,7 +665,8 @@ impl<C: CoordinationRpc> BatchClient<C> {
     /// All operations in the batch are applied atomically - either all succeed
     /// or none are applied.
     pub async fn write(&self, operations: Vec<BatchWriteOp>) -> Result<u32> {
-        use crate::client_rpc::{BatchWriteOperation, BatchWriteResultResponse};
+        use crate::client_rpc::BatchWriteOperation;
+        use crate::client_rpc::BatchWriteResultResponse;
 
         let ops: Vec<BatchWriteOperation> = operations
             .into_iter()
@@ -718,10 +676,7 @@ impl<C: CoordinationRpc> BatchClient<C> {
             })
             .collect();
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::BatchWrite { operations: ops })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::BatchWrite { operations: ops }).await?;
 
         match response {
             ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
@@ -732,10 +687,7 @@ impl<C: CoordinationRpc> BatchClient<C> {
                 if success {
                     Ok(operations_applied.unwrap_or(0))
                 } else {
-                    bail!(
-                        "batch write failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("batch write failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for BatchWrite"),
@@ -751,16 +703,14 @@ impl<C: CoordinationRpc> BatchClient<C> {
         conditions: Vec<BatchConditionOp>,
         operations: Vec<BatchWriteOp>,
     ) -> Result<ConditionalBatchResult> {
-        use crate::client_rpc::{
-            BatchCondition, BatchWriteOperation, ConditionalBatchWriteResultResponse,
-        };
+        use crate::client_rpc::BatchCondition;
+        use crate::client_rpc::BatchWriteOperation;
+        use crate::client_rpc::ConditionalBatchWriteResultResponse;
 
         let conds: Vec<BatchCondition> = conditions
             .into_iter()
             .map(|c| match c {
-                BatchConditionOp::ValueEquals { key, expected } => {
-                    BatchCondition::ValueEquals { key, expected }
-                }
+                BatchConditionOp::ValueEquals { key, expected } => BatchCondition::ValueEquals { key, expected },
                 BatchConditionOp::KeyExists { key } => BatchCondition::KeyExists { key },
                 BatchConditionOp::KeyNotExists { key } => BatchCondition::KeyNotExists { key },
             })
@@ -783,16 +733,14 @@ impl<C: CoordinationRpc> BatchClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::ConditionalBatchWriteResult(
-                ConditionalBatchWriteResultResponse {
-                    success: _,
-                    conditions_met,
-                    operations_applied,
-                    failed_condition_index,
-                    failed_condition_reason,
-                    error,
-                },
-            ) => {
+            ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+                success: _,
+                conditions_met,
+                operations_applied,
+                failed_condition_index,
+                failed_condition_reason,
+                error,
+            }) => {
                 if let Some(err) = error {
                     bail!("conditional batch failed: {}", err);
                 }
@@ -955,12 +903,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
     /// * `prefix` - Key prefix to watch (empty string watches all keys)
     /// * `start_index` - Starting log index (0 = from beginning, u64::MAX = latest only)
     /// * `include_prev_value` - Include previous value in events
-    pub async fn create(
-        &self,
-        prefix: String,
-        start_index: u64,
-        include_prev_value: bool,
-    ) -> Result<WatchHandle> {
+    pub async fn create(&self, prefix: String, start_index: u64, include_prev_value: bool) -> Result<WatchHandle> {
         use crate::client_rpc::WatchCreateResultResponse;
 
         let response = self
@@ -985,10 +928,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
                         current_index: current_index.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "watch create failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("watch create failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for WatchCreate"),
@@ -1002,24 +942,14 @@ impl<C: CoordinationRpc> WatchClient<C> {
     pub async fn cancel(&self, watch_id: u64) -> Result<()> {
         use crate::client_rpc::WatchCancelResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::WatchCancel { watch_id })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::WatchCancel { watch_id }).await?;
 
         match response {
-            ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse {
-                success,
-                error,
-                ..
-            }) => {
+            ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse { success, error, .. }) => {
                 if success {
                     Ok(())
                 } else {
-                    bail!(
-                        "watch cancel failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("watch cancel failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for WatchCancel"),
@@ -1033,10 +963,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
     pub async fn status(&self, watch_id: Option<u64>) -> Result<Vec<WatchInfoLocal>> {
         use crate::client_rpc::WatchStatusResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::WatchStatus { watch_id })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::WatchStatus { watch_id }).await?;
 
         match response {
             ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
@@ -1058,10 +985,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "watch status failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("watch status failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for WatchStatus"),
@@ -1163,19 +1087,12 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     ///
     /// # Returns
     /// A `LeaseGrantResult` containing the lease ID and granted TTL.
-    pub async fn grant_with_id(
-        &self,
-        ttl_seconds: u32,
-        lease_id: Option<u64>,
-    ) -> Result<LeaseGrantResult> {
+    pub async fn grant_with_id(&self, ttl_seconds: u32, lease_id: Option<u64>) -> Result<LeaseGrantResult> {
         use crate::client_rpc::LeaseGrantResultResponse;
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::LeaseGrant {
-                ttl_seconds,
-                lease_id,
-            })
+            .send_coordination_request(ClientRpcRequest::LeaseGrant { ttl_seconds, lease_id })
             .await?;
 
         match response {
@@ -1191,10 +1108,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                         ttl_seconds: ttl_seconds.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "lease grant failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lease grant failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LeaseGrant"),
@@ -1211,10 +1125,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     pub async fn revoke(&self, lease_id: u64) -> Result<LeaseRevokeResult> {
         use crate::client_rpc::LeaseRevokeResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::LeaseRevoke { lease_id })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::LeaseRevoke { lease_id }).await?;
 
         match response {
             ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
@@ -1227,10 +1138,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                         keys_deleted: keys_deleted.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "lease revoke failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lease revoke failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LeaseRevoke"),
@@ -1250,10 +1158,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     pub async fn keepalive(&self, lease_id: u64) -> Result<LeaseKeepaliveResult> {
         use crate::client_rpc::LeaseKeepaliveResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id })
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id }).await?;
 
         match response {
             ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
@@ -1268,10 +1173,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                         ttl_seconds: ttl_seconds.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "lease keepalive failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lease keepalive failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LeaseKeepalive"),
@@ -1286,19 +1188,12 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     ///
     /// # Returns
     /// A `LeaseTimeToLiveResult` with lease metadata.
-    pub async fn time_to_live(
-        &self,
-        lease_id: u64,
-        include_keys: bool,
-    ) -> Result<LeaseTimeToLiveResult> {
+    pub async fn time_to_live(&self, lease_id: u64, include_keys: bool) -> Result<LeaseTimeToLiveResult> {
         use crate::client_rpc::LeaseTimeToLiveResultResponse;
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::LeaseTimeToLive {
-                lease_id,
-                include_keys,
-            })
+            .send_coordination_request(ClientRpcRequest::LeaseTimeToLive { lease_id, include_keys })
             .await?;
 
         match response {
@@ -1318,10 +1213,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                         keys: keys.unwrap_or_default(),
                     })
                 } else {
-                    bail!(
-                        "lease time-to-live query failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lease time-to-live query failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LeaseTimeToLive"),
@@ -1335,17 +1227,10 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     pub async fn list(&self) -> Result<Vec<LeaseInfoLocal>> {
         use crate::client_rpc::LeaseListResultResponse;
 
-        let response = self
-            .client
-            .send_coordination_request(ClientRpcRequest::LeaseList)
-            .await?;
+        let response = self.client.send_coordination_request(ClientRpcRequest::LeaseList).await?;
 
         match response {
-            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-                success,
-                leases,
-                error,
-            }) => {
+            ClientRpcResponse::LeaseListResult(LeaseListResultResponse { success, leases, error }) => {
                 if success {
                     Ok(leases
                         .unwrap_or_default()
@@ -1357,10 +1242,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "lease list failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("lease list failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for LeaseList"),
@@ -1392,10 +1274,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
                 if success {
                     Ok(())
                 } else {
-                    bail!(
-                        "write with lease failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("write with lease failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for WriteKeyWithLease"),
@@ -1427,9 +1306,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// handle.stop(); // Stop keepalive when done
     /// ```
     pub fn start_keepalive(&self, lease_id: u64, interval: Duration) -> LeaseKeepaliveHandle
-    where
-        C: 'static,
-    {
+    where C: 'static {
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
         let client = self.client.clone();
@@ -1454,11 +1331,7 @@ async fn run_keepalive_loop<C: CoordinationRpc>(
     let mut ticker = tokio_interval(interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    debug!(
-        lease_id,
-        interval_secs = interval.as_secs(),
-        "Lease keepalive started"
-    );
+    debug!(lease_id, interval_secs = interval.as_secs(), "Lease keepalive started");
 
     loop {
         tokio::select! {
@@ -1485,9 +1358,7 @@ async fn run_keepalive_loop<C: CoordinationRpc>(
 async fn send_keepalive<C: CoordinationRpc>(client: &Arc<C>, lease_id: u64) -> Result<u32> {
     use crate::client_rpc::LeaseKeepaliveResultResponse;
 
-    let response = client
-        .send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id })
-        .await?;
+    let response = client.send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id }).await?;
 
     match response {
         ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
@@ -1499,10 +1370,7 @@ async fn send_keepalive<C: CoordinationRpc>(client: &Arc<C>, lease_id: u64) -> R
             if success {
                 Ok(ttl_seconds.unwrap_or(0))
             } else {
-                bail!(
-                    "keepalive failed: {}",
-                    error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("keepalive failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
             }
         }
         _ => bail!("unexpected response type"),
@@ -1675,10 +1543,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
                         phase: phase.unwrap_or_else(|| "unknown".to_string()),
                     })
                 } else {
-                    bail!(
-                        "barrier enter failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("barrier enter failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for BarrierEnter"),
@@ -1727,10 +1592,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
                         phase: phase.unwrap_or_else(|| "unknown".to_string()),
                     })
                 } else {
-                    bail!(
-                        "barrier leave failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("barrier leave failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for BarrierLeave"),
@@ -1749,9 +1611,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::BarrierStatus {
-                name: name.to_string(),
-            })
+            .send_coordination_request(ClientRpcRequest::BarrierStatus { name: name.to_string() })
             .await?;
 
         match response {
@@ -1769,10 +1629,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
                         phase: phase.unwrap_or_else(|| "none".to_string()),
                     })
                 } else {
-                    bail!(
-                        "barrier status failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("barrier status failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for BarrierStatus"),
@@ -1900,10 +1757,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                         available: available.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "semaphore acquire failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("semaphore acquire failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for SemaphoreAcquire"),
@@ -1958,10 +1812,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                         available: available.unwrap_or(0),
                     }))
                 } else if error.is_some() {
-                    bail!(
-                        "semaphore try_acquire failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("semaphore try_acquire failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 } else {
                     // Not enough permits available
                     Ok(None)
@@ -2002,10 +1853,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                 if success {
                     Ok(available.unwrap_or(0))
                 } else {
-                    bail!(
-                        "semaphore release failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("semaphore release failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for SemaphoreRelease"),
@@ -2024,9 +1872,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::SemaphoreStatus {
-                name: name.to_string(),
-            })
+            .send_coordination_request(ClientRpcRequest::SemaphoreStatus { name: name.to_string() })
             .await?;
 
         match response {
@@ -2043,10 +1889,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
                         capacity: capacity.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "semaphore status failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("semaphore status failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for SemaphoreStatus"),
@@ -2162,10 +2005,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         reader_count: reader_count.unwrap_or(1),
                     })
                 } else {
-                    bail!(
-                        "read lock acquire failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("read lock acquire failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockAcquireRead"),
@@ -2209,17 +2049,10 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         deadline_ms: deadline_ms.unwrap_or(0),
                         reader_count: reader_count.unwrap_or(1),
                     }))
-                } else if error
-                    .as_ref()
-                    .map(|e| e.contains("not available"))
-                    .unwrap_or(false)
-                {
+                } else if error.as_ref().map(|e| e.contains("not available")).unwrap_or(false) {
                     Ok(None)
                 } else {
-                    bail!(
-                        "try_acquire_read failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("try_acquire_read failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockTryAcquireRead"),
@@ -2266,10 +2099,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         deadline_ms: deadline_ms.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "write lock acquire failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("write lock acquire failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockAcquireWrite"),
@@ -2311,17 +2141,10 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         fencing_token: fencing_token.unwrap_or(0),
                         deadline_ms: deadline_ms.unwrap_or(0),
                     }))
-                } else if error
-                    .as_ref()
-                    .map(|e| e.contains("not available"))
-                    .unwrap_or(false)
-                {
+                } else if error.as_ref().map(|e| e.contains("not available")).unwrap_or(false) {
                     Ok(None)
                 } else {
-                    bail!(
-                        "try_acquire_write failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("try_acquire_write failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockTryAcquireWrite"),
@@ -2341,18 +2164,11 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
-                success,
-                error,
-                ..
-            }) => {
+            ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse { success, error, .. }) => {
                 if success {
                     Ok(())
                 } else {
-                    bail!(
-                        "release_read failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("release_read failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockReleaseRead"),
@@ -2362,12 +2178,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
     /// Release a write lock.
     ///
     /// Requires the fencing token from acquisition for verification.
-    pub async fn release_write(
-        &self,
-        name: &str,
-        holder_id: &str,
-        fencing_token: u64,
-    ) -> Result<()> {
+    pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
         use crate::client_rpc::RWLockResultResponse;
 
         let response = self
@@ -2380,18 +2191,11 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
-                success,
-                error,
-                ..
-            }) => {
+            ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse { success, error, .. }) => {
                 if success {
                     Ok(())
                 } else {
-                    bail!(
-                        "release_write failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("release_write failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockReleaseWrite"),
@@ -2439,10 +2243,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         reader_count: reader_count.unwrap_or(1),
                     })
                 } else {
-                    bail!(
-                        "downgrade failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("downgrade failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockDowngrade"),
@@ -2455,9 +2256,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
         let response = self
             .client
-            .send_coordination_request(ClientRpcRequest::RWLockStatus {
-                name: name.to_string(),
-            })
+            .send_coordination_request(ClientRpcRequest::RWLockStatus { name: name.to_string() })
             .await?;
 
         match response {
@@ -2478,10 +2277,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
                         writer_holder,
                     })
                 } else {
-                    bail!(
-                        "status failed: {}",
-                        error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("status failed: {}", error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for RWLockStatus"),
@@ -2572,9 +2368,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
             .client
             .send_coordination_request(ClientRpcRequest::QueueCreate {
                 queue_name: self.queue_name.clone(),
-                default_visibility_timeout_ms: config
-                    .default_visibility_timeout
-                    .map(|d| d.as_millis() as u64),
+                default_visibility_timeout_ms: config.default_visibility_timeout.map(|d| d.as_millis() as u64),
                 default_ttl_ms: config.default_ttl.map(|d| d.as_millis() as u64),
                 max_delivery_attempts: config.max_delivery_attempts,
             })
@@ -2585,10 +2379,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(result.created)
                 } else {
-                    bail!(
-                        "queue create failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("queue create failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueCreate"),
@@ -2611,10 +2402,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(result.items_deleted.unwrap_or(0))
                 } else {
-                    bail!(
-                        "queue delete failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("queue delete failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueDelete"),
@@ -2625,18 +2413,13 @@ impl<C: CoordinationRpc> QueueClient<C> {
     ///
     /// Returns the item ID on success.
     pub async fn enqueue(&self, payload: Vec<u8>) -> Result<u64> {
-        self.enqueue_with_options(payload, QueueEnqueueOptions::default())
-            .await
+        self.enqueue_with_options(payload, QueueEnqueueOptions::default()).await
     }
 
     /// Enqueue an item with options.
     ///
     /// Returns the item ID on success.
-    pub async fn enqueue_with_options(
-        &self,
-        payload: Vec<u8>,
-        options: QueueEnqueueOptions,
-    ) -> Result<u64> {
+    pub async fn enqueue_with_options(&self, payload: Vec<u8>, options: QueueEnqueueOptions) -> Result<u64> {
         let response = self
             .client
             .send_coordination_request(ClientRpcRequest::QueueEnqueue {
@@ -2653,10 +2436,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(result.item_id.unwrap_or(0))
                 } else {
-                    bail!(
-                        "enqueue failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("enqueue failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueEnqueue"),
@@ -2692,10 +2472,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(result.item_ids)
                 } else {
-                    bail!(
-                        "enqueue batch failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("enqueue batch failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueEnqueueBatch"),
@@ -2738,10 +2515,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "dequeue failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("dequeue failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueDequeue"),
@@ -2785,10 +2559,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "dequeue_wait failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("dequeue_wait failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueDequeueWait"),
@@ -2826,10 +2597,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "peek failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("peek failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueuePeek"),
@@ -2851,10 +2619,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "ack failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("ack failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueAck"),
@@ -2878,10 +2643,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "nack failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("nack failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueNack"),
@@ -2889,11 +2651,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
     }
 
     /// Negative acknowledge and move to dead letter queue.
-    pub async fn nack_to_dlq(
-        &self,
-        receipt_handle: &str,
-        error_message: Option<String>,
-    ) -> Result<()> {
+    pub async fn nack_to_dlq(&self, receipt_handle: &str, error_message: Option<String>) -> Result<()> {
         let response = self
             .client
             .send_coordination_request(ClientRpcRequest::QueueNack {
@@ -2909,10 +2667,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "nack_to_dlq failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("nack_to_dlq failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueNack"),
@@ -2922,11 +2677,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
     /// Extend the visibility timeout for a pending item.
     ///
     /// Returns the new visibility deadline (Unix epoch millis).
-    pub async fn extend_visibility(
-        &self,
-        receipt_handle: &str,
-        additional_timeout: Duration,
-    ) -> Result<u64> {
+    pub async fn extend_visibility(&self, receipt_handle: &str, additional_timeout: Duration) -> Result<u64> {
         let response = self
             .client
             .send_coordination_request(ClientRpcRequest::QueueExtendVisibility {
@@ -2941,10 +2692,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(result.new_deadline_ms.unwrap_or(0))
                 } else {
-                    bail!(
-                        "extend_visibility failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("extend_visibility failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueExtendVisibility"),
@@ -2972,10 +2720,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                         total_acked: result.total_acked.unwrap_or(0),
                     })
                 } else {
-                    bail!(
-                        "status failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("status failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueStatus"),
@@ -3009,10 +2754,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                         })
                         .collect())
                 } else {
-                    bail!(
-                        "get_dlq failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("get_dlq failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueGetDLQ"),
@@ -3034,10 +2776,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
                 if result.success {
                     Ok(())
                 } else {
-                    bail!(
-                        "redrive_dlq failed: {}",
-                        result.error.unwrap_or_else(|| "unknown error".to_string())
-                    )
+                    bail!("redrive_dlq failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
                 }
             }
             _ => bail!("unexpected response type for QueueRedriveDLQ"),
@@ -3179,8 +2918,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
         use crate::client_rpc::ServiceRegisterResultResponse;
 
         let tags_json = serde_json::to_string(&options.tags).unwrap_or_else(|_| "[]".to_string());
-        let custom_json =
-            serde_json::to_string(&options.custom_metadata).unwrap_or_else(|_| "{}".to_string());
+        let custom_json = serde_json::to_string(&options.custom_metadata).unwrap_or_else(|_| "{}".to_string());
 
         let response = self
             .client
@@ -3211,10 +2949,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                 deadline_ms: deadline,
             }),
             ClientRpcResponse::ServiceRegisterResult(result) => {
-                bail!(
-                    "service register failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service register failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceRegister"),
         }
@@ -3231,8 +2966,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
         use crate::client_rpc::ServiceDiscoverResultResponse;
 
         let filter = filter.unwrap_or_default();
-        let tags_json = serde_json::to_string(&filter.tags.unwrap_or_default())
-            .unwrap_or_else(|_| "[]".to_string());
+        let tags_json = serde_json::to_string(&filter.tags.unwrap_or_default()).unwrap_or_else(|_| "[]".to_string());
 
         let response = self
             .client
@@ -3260,8 +2994,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                     version: inst.version,
                     tags: inst.tags,
                     weight: inst.weight,
-                    custom_metadata: serde_json::from_str(&inst.custom_metadata)
-                        .unwrap_or_default(),
+                    custom_metadata: serde_json::from_str(&inst.custom_metadata).unwrap_or_default(),
                     registered_at: Duration::from_millis(inst.registered_at_ms),
                     last_heartbeat: Duration::from_millis(inst.last_heartbeat_ms),
                     deadline: Duration::from_millis(inst.deadline_ms),
@@ -3270,10 +3003,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                 })
                 .collect()),
             ClientRpcResponse::ServiceDiscoverResult(result) => {
-                bail!(
-                    "service discover failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service discover failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceDiscover"),
         }
@@ -3298,21 +3028,14 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                 ..
             }) => Ok(services),
             ClientRpcResponse::ServiceListResult(result) => {
-                bail!(
-                    "service list failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service list failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceList"),
         }
     }
 
     /// Get a specific service instance.
-    pub async fn get_instance(
-        &self,
-        service_name: &str,
-        instance_id: &str,
-    ) -> Result<Option<ServiceInstanceInfo>> {
+    pub async fn get_instance(&self, service_name: &str, instance_id: &str) -> Result<Option<ServiceInstanceInfo>> {
         use crate::client_rpc::ServiceGetInstanceResultResponse;
 
         let response = self
@@ -3350,10 +3073,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
                 ..
             }) => Ok(None),
             ClientRpcResponse::ServiceGetInstanceResult(result) => {
-                bail!(
-                    "service get instance failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service get instance failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceGetInstance"),
         }
@@ -3418,10 +3138,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
                 Ok((deadline, status))
             }
             ClientRpcResponse::ServiceHeartbeatResult(result) => {
-                bail!(
-                    "service heartbeat failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service heartbeat failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceHeartbeat"),
         }
@@ -3443,14 +3160,10 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
         match response {
             ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
-                success: true,
-                ..
+                success: true, ..
             }) => Ok(()),
             ClientRpcResponse::ServiceUpdateHealthResult(result) => {
-                bail!(
-                    "service update health failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service update health failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceUpdateHealth"),
         }
@@ -3460,12 +3173,9 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
     pub async fn update_metadata(&self, updates: ServiceMetadataUpdate) -> Result<()> {
         use crate::client_rpc::ServiceUpdateMetadataResultResponse;
 
-        let tags_json = updates
-            .tags
-            .map(|t| serde_json::to_string(&t).unwrap_or_else(|_| "[]".to_string()));
-        let custom_json = updates
-            .custom_metadata
-            .map(|c| serde_json::to_string(&c).unwrap_or_else(|_| "{}".to_string()));
+        let tags_json = updates.tags.map(|t| serde_json::to_string(&t).unwrap_or_else(|_| "[]".to_string()));
+        let custom_json =
+            updates.custom_metadata.map(|c| serde_json::to_string(&c).unwrap_or_else(|_| "{}".to_string()));
 
         let response = self
             .client
@@ -3481,14 +3191,12 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::ServiceUpdateMetadataResult(
-                ServiceUpdateMetadataResultResponse { success: true, .. },
-            ) => Ok(()),
+            ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                success: true,
+                ..
+            }) => Ok(()),
             ClientRpcResponse::ServiceUpdateMetadataResult(result) => {
-                bail!(
-                    "service update metadata failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service update metadata failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceUpdateMetadata"),
         }
@@ -3516,10 +3224,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
                 ..
             }) => Ok(was_registered),
             ClientRpcResponse::ServiceDeregisterResult(result) => {
-                bail!(
-                    "service deregister failed: {}",
-                    result.error.unwrap_or_else(|| "unknown error".to_string())
-                )
+                bail!("service deregister failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
             }
             _ => bail!("unexpected response type for ServiceDeregister"),
         }
@@ -3585,10 +3290,7 @@ pub struct ServiceHeartbeatHandle<C: CoordinationRpc> {
 impl<C: CoordinationRpc + 'static> ServiceHeartbeatHandle<C> {
     /// Check if the heartbeat task is still running.
     pub fn is_running(&self) -> bool {
-        self.task
-            .as_ref()
-            .map(|t| !t.is_finished())
-            .unwrap_or(false)
+        self.task.as_ref().map(|t| !t.is_finished()).unwrap_or(false)
     }
 
     /// Stop the heartbeat task.
@@ -3705,13 +3407,20 @@ pub struct ServiceMetadataUpdate {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::client_rpc::{
-        CounterResultResponse, LeaseGrantResultResponse, LeaseInfo, LeaseKeepaliveResultResponse,
-        LeaseListResultResponse, LeaseRevokeResultResponse, LeaseTimeToLiveResultResponse,
-        LockResultResponse, RateLimiterResultResponse, SequenceResultResponse, WriteResultResponse,
-    };
     use std::sync::Mutex;
+
+    use super::*;
+    use crate::client_rpc::CounterResultResponse;
+    use crate::client_rpc::LeaseGrantResultResponse;
+    use crate::client_rpc::LeaseInfo;
+    use crate::client_rpc::LeaseKeepaliveResultResponse;
+    use crate::client_rpc::LeaseListResultResponse;
+    use crate::client_rpc::LeaseRevokeResultResponse;
+    use crate::client_rpc::LeaseTimeToLiveResultResponse;
+    use crate::client_rpc::LockResultResponse;
+    use crate::client_rpc::RateLimiterResultResponse;
+    use crate::client_rpc::SequenceResultResponse;
+    use crate::client_rpc::WriteResultResponse;
 
     /// Mock RPC client for testing.
     struct MockRpcClient {
@@ -3727,10 +3436,7 @@ mod tests {
     }
 
     impl CoordinationRpc for MockRpcClient {
-        async fn send_coordination_request(
-            &self,
-            _request: ClientRpcRequest,
-        ) -> Result<ClientRpcResponse> {
+        async fn send_coordination_request(&self, _request: ClientRpcRequest) -> Result<ClientRpcResponse> {
             let mut responses = self.responses.lock().unwrap();
             if responses.is_empty() {
                 bail!("no more mock responses");
@@ -3741,13 +3447,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_counter_client_increment() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::CounterResult(
-            CounterResultResponse {
-                success: true,
-                value: Some(42),
-                error: None,
-            },
-        )]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::CounterResult(CounterResultResponse {
+            success: true,
+            value: Some(42),
+            error: None,
+        })]));
 
         let counter = CounterClient::new(client, "test");
         let value = counter.increment().await.unwrap();
@@ -3756,13 +3460,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_sequence_client_next() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SequenceResult(
-            SequenceResultResponse {
-                success: true,
-                value: Some(1001),
-                error: None,
-            },
-        )]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::SequenceResult(SequenceResultResponse {
+            success: true,
+            value: Some(1001),
+            error: None,
+        })]));
 
         let seq = SequenceClient::new(client, "test");
         let value = seq.next().await.unwrap();
@@ -3771,65 +3473,48 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiter_acquired() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
                 success: true,
                 tokens_remaining: Some(99),
                 retry_after_ms: None,
                 error: None,
-            }),
-        ]));
+            })]));
 
         let limiter = RateLimiterClient::new(client, "test", 100.0, 100);
         let result = limiter.try_acquire().await.unwrap();
         assert!(result.is_acquired());
-        assert_eq!(
-            result,
-            RateLimitResult::Acquired {
-                tokens_remaining: 99
-            }
-        );
+        assert_eq!(result, RateLimitResult::Acquired { tokens_remaining: 99 });
     }
 
     #[tokio::test]
     async fn test_rate_limiter_rate_limited() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
                 success: false,
                 tokens_remaining: Some(0),
                 retry_after_ms: Some(500),
                 error: None,
-            }),
-        ]));
+            })]));
 
         let limiter = RateLimiterClient::new(client, "test", 100.0, 100);
         let result = limiter.try_acquire().await.unwrap();
         assert!(result.is_rate_limited());
-        assert_eq!(
-            result,
-            RateLimitResult::RateLimited {
-                retry_after_ms: 500
-            }
-        );
+        assert_eq!(result, RateLimitResult::RateLimited { retry_after_ms: 500 });
     }
 
     #[tokio::test]
     async fn test_lock_client_acquire() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LockResult(
-            LockResultResponse {
-                success: true,
-                fencing_token: Some(42),
-                holder_id: Some("holder-1".to_string()),
-                deadline_ms: Some(1234567890),
-                error: None,
-            },
-        )]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LockResult(LockResultResponse {
+            success: true,
+            fencing_token: Some(42),
+            holder_id: Some("holder-1".to_string()),
+            deadline_ms: Some(1234567890),
+            error: None,
+        })]));
 
         let lock = LockClient::new(client, "test");
-        let guard = lock
-            .acquire("holder-1", Duration::from_secs(30), Duration::from_secs(5))
-            .await
-            .unwrap();
+        let guard = lock.acquire("holder-1", Duration::from_secs(30), Duration::from_secs(5)).await.unwrap();
 
         assert_eq!(guard.fencing_token(), 42);
         assert_eq!(guard.deadline_ms(), 1234567890);
@@ -3841,14 +3526,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_grant_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
                 success: true,
                 lease_id: Some(12345),
                 ttl_seconds: Some(60),
                 error: None,
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.grant(60).await.unwrap();
@@ -3859,14 +3543,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_grant_with_id_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
                 success: true,
                 lease_id: Some(99999),
                 ttl_seconds: Some(300),
                 error: None,
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.grant_with_id(300, Some(99999)).await.unwrap();
@@ -3877,14 +3560,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_grant_failure() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
                 success: false,
                 lease_id: None,
                 ttl_seconds: None,
                 error: Some("Lease ID already exists".to_string()),
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.grant_with_id(60, Some(12345)).await;
@@ -3896,13 +3578,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_revoke_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
                 success: true,
                 keys_deleted: Some(5),
                 error: None,
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.revoke(12345).await.unwrap();
@@ -3912,13 +3593,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_revoke_not_found() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
                 success: false,
                 keys_deleted: None,
                 error: Some("Lease not found".to_string()),
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.revoke(99999).await;
@@ -3930,14 +3610,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_keepalive_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
                 success: true,
                 lease_id: Some(12345),
                 ttl_seconds: Some(60),
                 error: None,
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.keepalive(12345).await.unwrap();
@@ -3948,14 +3627,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_keepalive_expired() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+        let client =
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
                 success: false,
                 lease_id: None,
                 ttl_seconds: None,
                 error: Some("Lease expired or not found".to_string()),
-            }),
-        ]));
+            })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.keepalive(12345).await;
@@ -3967,16 +3645,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_time_to_live_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
+            LeaseTimeToLiveResultResponse {
                 success: true,
                 lease_id: Some(12345),
                 granted_ttl_seconds: Some(60),
                 remaining_ttl_seconds: Some(45),
                 keys: Some(vec!["key1".to_string(), "key2".to_string()]),
                 error: None,
-            }),
-        ]));
+            },
+        )]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.time_to_live(12345, true).await.unwrap();
@@ -3989,16 +3667,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_time_to_live_without_keys() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
+            LeaseTimeToLiveResultResponse {
                 success: true,
                 lease_id: Some(12345),
                 granted_ttl_seconds: Some(60),
                 remaining_ttl_seconds: Some(45),
                 keys: None,
                 error: None,
-            }),
-        ]));
+            },
+        )]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.time_to_live(12345, false).await.unwrap();
@@ -4009,16 +3687,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_time_to_live_not_found() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseTimeToLiveResult(
+            LeaseTimeToLiveResultResponse {
                 success: false,
                 lease_id: None,
                 granted_ttl_seconds: None,
                 remaining_ttl_seconds: None,
                 keys: None,
                 error: Some("Lease not found".to_string()),
-            }),
-        ]));
+            },
+        )]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.time_to_live(99999, false).await;
@@ -4030,26 +3708,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_list_success() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-                success: true,
-                leases: Some(vec![
-                    LeaseInfo {
-                        lease_id: 100,
-                        granted_ttl_seconds: 60,
-                        remaining_ttl_seconds: 50,
-                        attached_keys: 2,
-                    },
-                    LeaseInfo {
-                        lease_id: 200,
-                        granted_ttl_seconds: 120,
-                        remaining_ttl_seconds: 100,
-                        attached_keys: 5,
-                    },
-                ]),
-                error: None,
-            }),
-        ]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+            success: true,
+            leases: Some(vec![
+                LeaseInfo {
+                    lease_id: 100,
+                    granted_ttl_seconds: 60,
+                    remaining_ttl_seconds: 50,
+                    attached_keys: 2,
+                },
+                LeaseInfo {
+                    lease_id: 200,
+                    granted_ttl_seconds: 120,
+                    remaining_ttl_seconds: 100,
+                    attached_keys: 5,
+                },
+            ]),
+            error: None,
+        })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.list().await.unwrap();
@@ -4061,13 +3737,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_list_empty() {
-        let client = Arc::new(MockRpcClient::new(vec![
-            ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
-                success: true,
-                leases: Some(vec![]),
-                error: None,
-            }),
-        ]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+            success: true,
+            leases: Some(vec![]),
+            error: None,
+        })]));
 
         let lease_client = LeaseClient::new(client);
         let result = lease_client.list().await.unwrap();
@@ -4077,34 +3751,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_put_with_lease_success() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(
-            WriteResultResponse {
-                success: true,
-                error: None,
-            },
-        )]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(WriteResultResponse {
+            success: true,
+            error: None,
+        })]));
 
         let lease_client = LeaseClient::new(client);
-        let result = lease_client
-            .put_with_lease("mykey", b"myvalue", 12345)
-            .await;
+        let result = lease_client.put_with_lease("mykey", b"myvalue", 12345).await;
 
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_lease_put_with_lease_failure() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(
-            WriteResultResponse {
-                success: false,
-                error: Some("Lease not found".to_string()),
-            },
-        )]));
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::WriteResult(WriteResultResponse {
+            success: false,
+            error: Some("Lease not found".to_string()),
+        })]));
 
         let lease_client = LeaseClient::new(client);
-        let result = lease_client
-            .put_with_lease("mykey", b"myvalue", 12345)
-            .await;
+        let result = lease_client.put_with_lease("mykey", b"myvalue", 12345).await;
 
         assert!(result.is_err());
     }
@@ -4131,7 +3797,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_lease_keepalive_sends_requests() {
-        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::atomic::AtomicU32;
+        use std::sync::atomic::Ordering;
 
         // Create a mock that counts keepalive requests
         struct CountingMockClient {
@@ -4139,21 +3806,16 @@ mod tests {
         }
 
         impl CoordinationRpc for CountingMockClient {
-            async fn send_coordination_request(
-                &self,
-                request: ClientRpcRequest,
-            ) -> Result<ClientRpcResponse> {
+            async fn send_coordination_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
                 match request {
                     ClientRpcRequest::LeaseKeepalive { .. } => {
                         self.keepalive_count.fetch_add(1, Ordering::SeqCst);
-                        Ok(ClientRpcResponse::LeaseKeepaliveResult(
-                            LeaseKeepaliveResultResponse {
-                                success: true,
-                                lease_id: Some(12345),
-                                ttl_seconds: Some(60),
-                                error: None,
-                            },
-                        ))
+                        Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                            success: true,
+                            lease_id: Some(12345),
+                            ttl_seconds: Some(60),
+                            error: None,
+                        }))
                     }
                     _ => bail!("unexpected request"),
                 }

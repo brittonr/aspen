@@ -13,7 +13,8 @@
 //! - EWMA smoothing edge cases
 
 use bolero::check;
-use bolero_generator::{Driver, TypeGenerator};
+use bolero_generator::Driver;
+use bolero_generator::TypeGenerator;
 
 /// Maximum expected RTT before we consider timestamps suspicious
 const MAX_RTT_MS: i64 = 60_000; // 1 minute

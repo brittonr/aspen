@@ -38,7 +38,9 @@
 //! allocate or store data themselves - they just provide methods for
 //! constructing and deconstructing keys within their namespace.
 
-use super::tuple::{Element, Tuple, TupleError};
+use super::tuple::Element;
+use super::tuple::Tuple;
+use super::tuple::TupleError;
 
 /// A namespace within the key-value store.
 ///
@@ -230,11 +232,7 @@ impl Default for Subspace {
 #[derive(Debug, snafu::Snafu)]
 pub enum SubspaceError {
     /// Key doesn't match subspace prefix.
-    #[snafu(display(
-        "key prefix mismatch: expected {} bytes, got {} bytes",
-        expected_len,
-        actual_len
-    ))]
+    #[snafu(display("key prefix mismatch: expected {} bytes, got {} bytes", expected_len, actual_len))]
     PrefixMismatch {
         /// Expected prefix length.
         expected_len: usize,

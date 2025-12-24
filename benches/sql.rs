@@ -13,8 +13,14 @@ use std::sync::Arc;
 
 use aspen::raft::storage_shared::KvEntry;
 use aspen::sql::RedbSqlExecutor;
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use redb::{Database, ReadableTable, TableDefinition};
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
+use redb::Database;
+use redb::ReadableTable;
+use redb::TableDefinition;
 use tempfile::TempDir;
 
 /// State machine KV table (must match storage_shared.rs)
@@ -50,9 +56,7 @@ fn setup_redb_with_data(temp_dir: &TempDir, count: usize) -> Arc<Database> {
                     lease_id: None,
                 };
                 let bytes = bincode::serialize(&entry).expect("serialize");
-                table
-                    .insert(key.as_bytes(), bytes.as_slice())
-                    .expect("insert");
+                table.insert(key.as_bytes(), bytes.as_slice()).expect("insert");
             }
         }
         write_txn.commit().expect("commit data");
@@ -62,11 +66,7 @@ fn setup_redb_with_data(temp_dir: &TempDir, count: usize) -> Arc<Database> {
 }
 
 /// Setup Redb with prefixed data for scan benchmarks.
-fn setup_redb_with_prefixed_data(
-    temp_dir: &TempDir,
-    prefixes: usize,
-    keys_per_prefix: usize,
-) -> Arc<Database> {
+fn setup_redb_with_prefixed_data(temp_dir: &TempDir, prefixes: usize, keys_per_prefix: usize) -> Arc<Database> {
     let db_path = temp_dir.path().join("bench_prefix.redb");
     let db = Database::create(&db_path).expect("create db");
 
@@ -98,9 +98,7 @@ fn setup_redb_with_prefixed_data(
                     };
                     revision += 1;
                     let bytes = bincode::serialize(&entry).expect("serialize");
-                    table
-                        .insert(key.as_bytes(), bytes.as_slice())
-                        .expect("insert");
+                    table.insert(key.as_bytes(), bytes.as_slice()).expect("insert");
                 }
             }
         }
@@ -116,10 +114,7 @@ fn setup_redb_with_prefixed_data(
 
 /// Benchmark: SELECT * FROM kv (full table scan)
 fn bench_sql_select_all(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 1000);
@@ -131,11 +126,7 @@ fn bench_sql_select_all(c: &mut Criterion) {
     group.bench_function("1000_rows", |b| {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
-            async move {
-                exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000))
-                    .await
-                    .expect("query failed")
-            }
+            async move { exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000)).await.expect("query failed") }
         })
     });
 
@@ -144,10 +135,7 @@ fn bench_sql_select_all(c: &mut Criterion) {
 
 /// Benchmark: SELECT * with varying table sizes
 fn bench_sql_scan_sizes(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("sql_scan_sizes");
 
@@ -179,10 +167,7 @@ fn bench_sql_scan_sizes(c: &mut Criterion) {
 
 /// Benchmark: WHERE key = 'exact' (exact key lookup with pushdown)
 fn bench_sql_exact_key(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 10000);
@@ -195,14 +180,9 @@ fn bench_sql_exact_key(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
             async move {
-                exec.execute(
-                    "SELECT key, value FROM kv WHERE key = 'key_00005000'",
-                    &[],
-                    Some(1),
-                    Some(5000),
-                )
-                .await
-                .expect("query failed")
+                exec.execute("SELECT key, value FROM kv WHERE key = 'key_00005000'", &[], Some(1), Some(5000))
+                    .await
+                    .expect("query failed")
             }
         })
     });
@@ -212,10 +192,7 @@ fn bench_sql_exact_key(c: &mut Criterion) {
 
 /// Benchmark: WHERE key LIKE 'prefix%' (prefix scan with pushdown)
 fn bench_sql_prefix_scan(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     // 10 prefixes, 1000 keys each = 10,000 total
@@ -229,14 +206,9 @@ fn bench_sql_prefix_scan(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
             async move {
-                exec.execute(
-                    "SELECT key, value FROM kv WHERE key LIKE 'prefix_05:%'",
-                    &[],
-                    Some(10000),
-                    Some(30000),
-                )
-                .await
-                .expect("query failed")
+                exec.execute("SELECT key, value FROM kv WHERE key LIKE 'prefix_05:%'", &[], Some(10000), Some(30000))
+                    .await
+                    .expect("query failed")
             }
         })
     });
@@ -246,10 +218,7 @@ fn bench_sql_prefix_scan(c: &mut Criterion) {
 
 /// Benchmark: Range queries (WHERE key >= 'a' AND key < 'b')
 fn bench_sql_range_query(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 10000);
@@ -284,10 +253,7 @@ fn bench_sql_range_query(c: &mut Criterion) {
 
 /// Benchmark: COUNT(*) aggregation
 fn bench_sql_count(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("sql_aggregation_count");
 
@@ -302,9 +268,7 @@ fn bench_sql_count(c: &mut Criterion) {
             b.to_async(&rt).iter(|| {
                 let exec = &executor;
                 async move {
-                    exec.execute("SELECT COUNT(*) FROM kv", &[], Some(1), Some(30000))
-                        .await
-                        .expect("query failed")
+                    exec.execute("SELECT COUNT(*) FROM kv", &[], Some(1), Some(30000)).await.expect("query failed")
                 }
             })
         });
@@ -315,10 +279,7 @@ fn bench_sql_count(c: &mut Criterion) {
 
 /// Benchmark: COUNT with WHERE clause (filter then count)
 fn bench_sql_count_filtered(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_prefixed_data(&temp_dir, 10, 1000);
@@ -331,14 +292,9 @@ fn bench_sql_count_filtered(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
             async move {
-                exec.execute(
-                    "SELECT COUNT(*) FROM kv WHERE key LIKE 'prefix_03:%'",
-                    &[],
-                    Some(1),
-                    Some(30000),
-                )
-                .await
-                .expect("query failed")
+                exec.execute("SELECT COUNT(*) FROM kv WHERE key LIKE 'prefix_03:%'", &[], Some(1), Some(30000))
+                    .await
+                    .expect("query failed")
             }
         })
     });
@@ -352,10 +308,7 @@ fn bench_sql_count_filtered(c: &mut Criterion) {
 
 /// Benchmark: Column projection (SELECT key only vs SELECT *)
 fn bench_sql_projection(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 5000);
@@ -367,11 +320,7 @@ fn bench_sql_projection(c: &mut Criterion) {
     group.bench_function("select_all_columns", |b| {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
-            async move {
-                exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000))
-                    .await
-                    .expect("query failed")
-            }
+            async move { exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000)).await.expect("query failed") }
         })
     });
 
@@ -406,10 +355,7 @@ fn bench_sql_projection(c: &mut Criterion) {
 
 /// Benchmark: ORDER BY operations
 fn bench_sql_order_by(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 5000);
@@ -433,14 +379,9 @@ fn bench_sql_order_by(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
             async move {
-                exec.execute(
-                    "SELECT key, value FROM kv ORDER BY key ASC",
-                    &[],
-                    Some(10000),
-                    Some(30000),
-                )
-                .await
-                .expect("query failed")
+                exec.execute("SELECT key, value FROM kv ORDER BY key ASC", &[], Some(10000), Some(30000))
+                    .await
+                    .expect("query failed")
             }
         })
     });
@@ -449,14 +390,9 @@ fn bench_sql_order_by(c: &mut Criterion) {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
             async move {
-                exec.execute(
-                    "SELECT key, value FROM kv ORDER BY key DESC",
-                    &[],
-                    Some(10000),
-                    Some(30000),
-                )
-                .await
-                .expect("query failed")
+                exec.execute("SELECT key, value FROM kv ORDER BY key DESC", &[], Some(10000), Some(30000))
+                    .await
+                    .expect("query failed")
             }
         })
     });
@@ -470,10 +406,7 @@ fn bench_sql_order_by(c: &mut Criterion) {
 
 /// Benchmark: LIMIT clause performance
 fn bench_sql_limit(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 10000);
@@ -488,9 +421,7 @@ fn bench_sql_limit(c: &mut Criterion) {
             b.to_async(&rt).iter(|| {
                 let exec = &executor;
                 async move {
-                    exec.execute("SELECT * FROM kv", &[], Some(lim as u32), Some(30000))
-                        .await
-                        .expect("query failed")
+                    exec.execute("SELECT * FROM kv", &[], Some(lim as u32), Some(30000)).await.expect("query failed")
                 }
             })
         });
@@ -505,10 +436,7 @@ fn bench_sql_limit(c: &mut Criterion) {
 
 /// Benchmark: Compare raw Redb scan vs DataFusion SQL scan
 fn bench_sql_vs_raw_redb(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let temp_dir = TempDir::new().expect("temp dir");
     let db = setup_redb_with_data(&temp_dir, 1000);
@@ -537,11 +465,7 @@ fn bench_sql_vs_raw_redb(c: &mut Criterion) {
     group.bench_function("datafusion_sql_scan", |b| {
         b.to_async(&rt).iter(|| {
             let exec = &executor;
-            async move {
-                exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000))
-                    .await
-                    .expect("query failed")
-            }
+            async move { exec.execute("SELECT * FROM kv", &[], Some(10000), Some(30000)).await.expect("query failed") }
         })
     });
 

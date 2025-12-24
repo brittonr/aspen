@@ -37,18 +37,19 @@ mod ui;
 use std::io;
 use std::time::Duration;
 
+use app::App;
 use clap::Parser;
 use color_eyre::Result;
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
+use crossterm::event::DisableMouseCapture;
+use crossterm::event::EnableMouseCapture;
+use crossterm::execute;
+use crossterm::terminal::EnterAlternateScreen;
+use crossterm::terminal::LeaveAlternateScreen;
+use crossterm::terminal::disable_raw_mode;
+use crossterm::terminal::enable_raw_mode;
+use event::EventHandler;
 use ratatui::prelude::*;
 use tracing::info;
-
-use app::App;
-use event::EventHandler;
 
 /// Default refresh interval for metrics polling (milliseconds).
 const DEFAULT_REFRESH_INTERVAL_MS: u64 = 1000;
@@ -102,11 +103,7 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
 /// Tiger Style: Focused function for terminal cleanup.
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
     Ok(())
 }

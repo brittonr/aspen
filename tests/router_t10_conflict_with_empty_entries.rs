@@ -9,12 +9,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
+use openraft::Config;
+use openraft::ServerState;
+use openraft::Vote;
 use openraft::raft::AppendEntriesRequest;
-use openraft::storage::{RaftLogReader, RaftLogStorage};
-use openraft::testing::{blank_ent, log_id};
-use openraft::{Config, ServerState, Vote};
+use openraft::storage::RaftLogReader;
+use openraft::storage::RaftLogStorage;
+use openraft::testing::blank_ent;
+use openraft::testing::log_id;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -44,10 +49,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     router.new_raft_node(0).await?;
 
     // Verify it's in learner state
-    router
-        .wait(0, timeout())
-        .state(ServerState::Learner, "node-0 is learner")
-        .await?;
+    router.wait(0, timeout()).state(ServerState::Learner, "node-0 is learner").await?;
 
     tracing::info!("--- test conflict with non-existent prev_log_id (empty entries)");
 
@@ -64,14 +66,8 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     let resp = r0.append_entries(req).await?;
 
-    assert!(
-        !resp.is_success(),
-        "empty entries with non-existent prev_log_id should fail"
-    );
-    assert!(
-        resp.is_conflict(),
-        "should report conflict even with empty entries"
-    );
+    assert!(!resp.is_success(), "empty entries with non-existent prev_log_id should fail");
+    assert!(resp.is_conflict(), "should report conflict even with empty entries");
 
     tracing::info!("--- add initial logs");
 
@@ -90,11 +86,7 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
     let resp = r0.append_entries(req).await?;
     assert!(resp.is_success(), "should successfully feed initial logs");
 
-    let logs = sto0
-        .get_log_reader()
-        .await
-        .try_get_log_entries(0..=2)
-        .await?;
+    let logs = sto0.get_log_reader().await.try_get_log_entries(0..=2).await?;
     assert_eq!(logs.len(), 3, "should have 3 log entries");
 
     tracing::info!("--- test conflict with out-of-bounds prev_log_id (empty entries)");
@@ -109,14 +101,8 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     let resp = r0.append_entries(req).await?;
 
-    assert!(
-        !resp.is_success(),
-        "empty entries with out-of-bounds prev_log_id should fail"
-    );
-    assert!(
-        resp.is_conflict(),
-        "should report conflict for out-of-bounds index"
-    );
+    assert!(!resp.is_success(), "empty entries with out-of-bounds prev_log_id should fail");
+    assert!(resp.is_conflict(), "should report conflict for out-of-bounds index");
 
     tracing::info!("--- test success with matching prev_log_id (empty entries)");
 
@@ -130,21 +116,11 @@ async fn test_conflict_with_empty_entries() -> Result<()> {
 
     let resp = r0.append_entries(req).await?;
 
-    assert!(
-        resp.is_success(),
-        "empty entries with matching prev_log_id should succeed"
-    );
-    assert!(
-        !resp.is_conflict(),
-        "should not report conflict when prev_log_id matches"
-    );
+    assert!(resp.is_success(), "empty entries with matching prev_log_id should succeed");
+    assert!(!resp.is_conflict(), "should not report conflict when prev_log_id matches");
 
     // Verify logs unchanged (empty entries don't modify log)
-    let logs = sto0
-        .get_log_reader()
-        .await
-        .try_get_log_entries(0..=2)
-        .await?;
+    let logs = sto0.get_log_reader().await.try_get_log_entries(0..=2).await?;
     assert_eq!(logs.len(), 3, "logs should be unchanged after empty append");
 
     r0.shutdown().await?;

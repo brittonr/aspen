@@ -23,18 +23,28 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
-use axum::{Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
-use clap::Parser;
-use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
-use tokio::sync::RwLock;
-use tracing::{debug, error, info};
-
+use anyhow::Context;
+use anyhow::Result;
 use aspen::CLIENT_ALPN;
-use aspen::client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, MAX_CLIENT_MESSAGE_SIZE, MetricsResponse,
-};
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
+use aspen::client_rpc::MetricsResponse;
 use aspen::cluster::ticket::AspenClusterTicket;
+use axum::Router;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::get;
+use clap::Parser;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
+use iroh::EndpointId;
+use iroh::SecretKey;
+use tokio::sync::RwLock;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 /// Default HTTP port for the adapter.
 const DEFAULT_PORT: u16 = 9090;
@@ -76,8 +86,7 @@ fn parse_target(target: &str) -> Result<EndpointAddr> {
 
     // Check if it's a cluster ticket (starts with "aspen")
     if target.starts_with("aspen") {
-        let ticket =
-            AspenClusterTicket::deserialize(target).context("failed to parse cluster ticket")?;
+        let ticket = AspenClusterTicket::deserialize(target).context("failed to parse cluster ticket")?;
 
         // Use the first bootstrap peer
         let endpoint_id = ticket
@@ -149,9 +158,7 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     // Bind and serve
-    let addr: SocketAddr = format!("{}:{}", args.bind, args.port)
-        .parse()
-        .context("invalid bind address")?;
+    let addr: SocketAddr = format!("{}:{}", args.bind, args.port).parse().context("invalid bind address")?;
 
     info!("listening on http://{}", addr);
 
@@ -172,11 +179,7 @@ async fn metrics_handler(State(state): State<Arc<AppState>>) -> impl IntoRespons
             let mut last_success = state.last_success.write().await;
             *last_success = Some(std::time::Instant::now());
 
-            (
-                StatusCode::OK,
-                [("content-type", "text/plain; charset=utf-8")],
-                metrics.prometheus_text,
-            )
+            (StatusCode::OK, [("content-type", "text/plain; charset=utf-8")], metrics.prometheus_text)
         }
         Err(e) => {
             error!("failed to fetch metrics: {}", e);
@@ -204,10 +207,7 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
     if healthy {
         (StatusCode::OK, "OK")
     } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "UNHEALTHY: No recent successful scrapes",
-        )
+        (StatusCode::SERVICE_UNAVAILABLE, "UNHEALTHY: No recent successful scrapes")
     }
 }
 
@@ -219,37 +219,26 @@ async fn fetch_metrics(state: &AppState) -> Result<MetricsResponse> {
     );
 
     // Connect to the target node with timeout
-    let connection = tokio::time::timeout(
-        RPC_TIMEOUT,
-        state
-            .endpoint
-            .connect(state.target_addr.clone(), CLIENT_ALPN),
-    )
-    .await
-    .context("connection timeout")?
-    .context("failed to connect to Aspen node")?;
+    let connection = tokio::time::timeout(RPC_TIMEOUT, state.endpoint.connect(state.target_addr.clone(), CLIENT_ALPN))
+        .await
+        .context("connection timeout")?
+        .context("failed to connect to Aspen node")?;
 
     // Open a bidirectional stream
-    let (mut send, mut recv) = connection
-        .open_bi()
-        .await
-        .context("failed to open stream")?;
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
     // Send GetMetrics request
     let request = ClientRpcRequest::GetMetrics;
     let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
-    send.write_all(&request_bytes)
-        .await
-        .context("failed to send request")?;
+    send.write_all(&request_bytes).await.context("failed to send request")?;
     send.finish().context("failed to finish send stream")?;
 
     // Read the response with timeout
-    let response_bytes =
-        tokio::time::timeout(RPC_TIMEOUT, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
-            .await
-            .context("read timeout")?
-            .context("failed to read response")?;
+    let response_bytes = tokio::time::timeout(RPC_TIMEOUT, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
+        .await
+        .context("read timeout")?
+        .context("failed to read response")?;
 
     // Deserialize the response
     let response: ClientRpcResponse =

@@ -12,8 +12,10 @@
 //! - Timestamp edge cases
 
 use bolero::check;
-use bolero_generator::{Driver, TypeGenerator};
-use serde::{Deserialize, Serialize};
+use bolero_generator::Driver;
+use bolero_generator::TypeGenerator;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Tiger Style: Maximum metadata entry size
 const MAX_METADATA_SIZE: usize = 64 * 1024; // 64 KB
@@ -119,8 +121,8 @@ fn fuzz_metadata() {
             // Re-serialize
             if let Ok(serialized) = bincode::serialize(&metadata) {
                 // Re-deserialize
-                let metadata2 = bincode::deserialize::<FuzzNodeMetadata>(&serialized)
-                    .expect("re-deserialization should succeed");
+                let metadata2 =
+                    bincode::deserialize::<FuzzNodeMetadata>(&serialized).expect("re-deserialization should succeed");
 
                 // Verify key fields match
                 assert_eq!(metadata.node_id, metadata2.node_id);
@@ -140,8 +142,8 @@ fn fuzz_metadata() {
 
             // Test serialization
             if let Ok(serialized) = bincode::serialize(&entry) {
-                let entry2 = bincode::deserialize::<FuzzRegistryEntry>(&serialized)
-                    .expect("re-deserialization should succeed");
+                let entry2 =
+                    bincode::deserialize::<FuzzRegistryEntry>(&serialized).expect("re-deserialization should succeed");
                 assert_eq!(entry.key, entry2.key);
             }
         }
@@ -150,22 +152,16 @@ fn fuzz_metadata() {
 
 #[test]
 fn fuzz_metadata_structure_aware() {
-    check!()
-        .with_type::<FuzzNodeMetadata>()
-        .for_each(|metadata| {
-            // Verify we can serialize arbitrary metadata
-            if let Ok(serialized) = bincode::serialize(&metadata) {
-                // Tiger Style: Serialized size should be bounded
-                assert!(
-                    serialized.len() <= MAX_METADATA_SIZE,
-                    "serialized metadata too large: {}",
-                    serialized.len()
-                );
+    check!().with_type::<FuzzNodeMetadata>().for_each(|metadata| {
+        // Verify we can serialize arbitrary metadata
+        if let Ok(serialized) = bincode::serialize(&metadata) {
+            // Tiger Style: Serialized size should be bounded
+            assert!(serialized.len() <= MAX_METADATA_SIZE, "serialized metadata too large: {}", serialized.len());
 
-                // Round-trip
-                let metadata2 = bincode::deserialize::<FuzzNodeMetadata>(&serialized)
-                    .expect("re-deserialization should succeed");
-                assert_eq!(metadata.node_id, metadata2.node_id);
-            }
-        });
+            // Round-trip
+            let metadata2 =
+                bincode::deserialize::<FuzzNodeMetadata>(&serialized).expect("re-deserialization should succeed");
+            assert_eq!(metadata.node_id, metadata2.node_id);
+        }
+    });
 }

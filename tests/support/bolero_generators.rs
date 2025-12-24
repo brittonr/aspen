@@ -12,14 +12,17 @@
 
 #![allow(dead_code)] // Many generators not yet used across all test files
 
-use bolero_generator::{Driver, TypeGenerator};
-
-use aspen::raft::types::{AppRequest, AppTypeConfig, NodeId};
+// Re-export constants for boundary testing
+pub use aspen::raft::constants::MAX_KEY_SIZE;
+pub use aspen::raft::constants::MAX_SETMULTI_KEYS;
+pub use aspen::raft::constants::MAX_VALUE_SIZE;
+use aspen::raft::types::AppRequest;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
+use bolero_generator::Driver;
+use bolero_generator::TypeGenerator;
 use openraft::LogId;
 use openraft::testing::log_id;
-
-// Re-export constants for boundary testing
-pub use aspen::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
 
 // ============================================================================
 // Character Set Constants
@@ -27,8 +30,7 @@ pub use aspen::raft::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE
 
 const LOWERCASE: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const ALPHANUMERIC_UNDERSCORE: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789_";
-const ALPHANUMERIC_SPACE: &[u8] =
-    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
+const ALPHANUMERIC_SPACE: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ";
 const SPECIAL_CHARS: &[u8] = b"!@#$%^&*()-_=+[]{};:'\",.<>?/";
 
 // ============================================================================
@@ -653,10 +655,7 @@ impl TypeGenerator for LogAppendSequence {
             let req = BalancedAppRequest::generate(driver)?;
             entries.push(req.0);
         }
-        Some(LogAppendSequence {
-            start_index,
-            entries,
-        })
+        Some(LogAppendSequence { start_index, entries })
     }
 }
 
@@ -893,22 +892,12 @@ impl TypeGenerator for EndpointAddrBytes {
 
 /// Create a sequence of Set entries for testing.
 pub fn create_set_entries(count: usize, start_index: u64) -> Vec<(String, String, u64)> {
-    (0..count)
-        .map(|i| {
-            (
-                format!("key_{}", i),
-                format!("value_{}", i),
-                start_index + i as u64,
-            )
-        })
-        .collect()
+    (0..count).map(|i| (format!("key_{}", i), format!("value_{}", i), start_index + i as u64)).collect()
 }
 
 /// Create a sequence of Delete entries for testing.
 pub fn create_delete_entries(count: usize, start_index: u64) -> Vec<(String, u64)> {
-    (0..count)
-        .map(|i| (format!("key_{}", i), start_index + i as u64))
-        .collect()
+    (0..count).map(|i| (format!("key_{}", i), start_index + i as u64)).collect()
 }
 
 // ============================================================================
@@ -1248,34 +1237,26 @@ impl TypeGenerator for OptionalBinaryValue {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn test_valid_key_produces_valid_keys() {
-        check!()
-            .with_iterations(100)
-            .with_type::<ValidKey>()
-            .for_each(|key| {
-                assert!(!key.0.is_empty(), "Keys should not be empty");
-                assert!(key.0.len() <= 20, "Keys should be <= 20 chars");
-                // First char should be lowercase
-                assert!(
-                    key.0.chars().next().unwrap().is_ascii_lowercase(),
-                    "First char should be lowercase"
-                );
-            });
+        check!().with_iterations(100).with_type::<ValidKey>().for_each(|key| {
+            assert!(!key.0.is_empty(), "Keys should not be empty");
+            assert!(key.0.len() <= 20, "Keys should be <= 20 chars");
+            // First char should be lowercase
+            assert!(key.0.chars().next().unwrap().is_ascii_lowercase(), "First char should be lowercase");
+        });
     }
 
     #[test]
     fn test_valid_value_produces_valid_values() {
-        check!()
-            .with_iterations(100)
-            .with_type::<ValidValue>()
-            .for_each(|value| {
-                assert!(!value.0.is_empty(), "Values should not be empty");
-                assert!(value.0.len() <= 100, "Values should be <= 100 chars");
-            });
+        check!().with_iterations(100).with_type::<ValidValue>().for_each(|value| {
+            assert!(!value.0.is_empty(), "Values should not be empty");
+            assert!(value.0.len() <= 100, "Values should be <= 100 chars");
+        });
     }
 
     #[test]
@@ -1285,32 +1266,29 @@ mod tests {
         let mut has_delete = false;
         let mut has_delete_multi = false;
 
-        check!()
-            .with_iterations(200)
-            .with_type::<BalancedAppRequest>()
-            .for_each(|req| match &req.0 {
-                AppRequest::Set { .. } => has_set = true,
-                AppRequest::SetMulti { .. } => has_set_multi = true,
-                AppRequest::Delete { .. } => has_delete = true,
-                AppRequest::DeleteMulti { .. } => has_delete_multi = true,
-                // TTL, CAS, Batch, and Lease operations are not generated by BalancedAppRequest yet
-                AppRequest::SetWithTTL { .. }
-                | AppRequest::SetMultiWithTTL { .. }
-                | AppRequest::CompareAndSwap { .. }
-                | AppRequest::CompareAndDelete { .. }
-                | AppRequest::Batch { .. }
-                | AppRequest::ConditionalBatch { .. }
-                | AppRequest::SetWithLease { .. }
-                | AppRequest::SetMultiWithLease { .. }
-                | AppRequest::LeaseGrant { .. }
-                | AppRequest::LeaseRevoke { .. }
-                | AppRequest::LeaseKeepalive { .. }
-                | AppRequest::Transaction { .. }
-                | AppRequest::OptimisticTransaction { .. }
-                | AppRequest::ShardSplit { .. }
-                | AppRequest::ShardMerge { .. }
-                | AppRequest::TopologyUpdate { .. } => {}
-            });
+        check!().with_iterations(200).with_type::<BalancedAppRequest>().for_each(|req| match &req.0 {
+            AppRequest::Set { .. } => has_set = true,
+            AppRequest::SetMulti { .. } => has_set_multi = true,
+            AppRequest::Delete { .. } => has_delete = true,
+            AppRequest::DeleteMulti { .. } => has_delete_multi = true,
+            // TTL, CAS, Batch, and Lease operations are not generated by BalancedAppRequest yet
+            AppRequest::SetWithTTL { .. }
+            | AppRequest::SetMultiWithTTL { .. }
+            | AppRequest::CompareAndSwap { .. }
+            | AppRequest::CompareAndDelete { .. }
+            | AppRequest::Batch { .. }
+            | AppRequest::ConditionalBatch { .. }
+            | AppRequest::SetWithLease { .. }
+            | AppRequest::SetMultiWithLease { .. }
+            | AppRequest::LeaseGrant { .. }
+            | AppRequest::LeaseRevoke { .. }
+            | AppRequest::LeaseKeepalive { .. }
+            | AppRequest::Transaction { .. }
+            | AppRequest::OptimisticTransaction { .. }
+            | AppRequest::ShardSplit { .. }
+            | AppRequest::ShardMerge { .. }
+            | AppRequest::TopologyUpdate { .. } => {}
+        });
 
         // With 200 iterations and 25% probability each, should see all variants
         assert!(has_set, "Should generate Set operations");
@@ -1321,86 +1299,48 @@ mod tests {
 
     #[test]
     fn test_boundary_key_at_limits() {
-        check!()
-            .with_iterations(50)
-            .with_type::<BoundaryKey>()
-            .for_each(|key| {
-                assert!(
-                    key.0.len() >= MAX_KEY_SIZE as usize - 1,
-                    "Boundary keys should be near the limit"
-                );
-                assert!(
-                    key.0.len() <= MAX_KEY_SIZE as usize + 1,
-                    "Boundary keys should not exceed limit + 1"
-                );
-            });
+        check!().with_iterations(50).with_type::<BoundaryKey>().for_each(|key| {
+            assert!(key.0.len() >= MAX_KEY_SIZE as usize - 1, "Boundary keys should be near the limit");
+            assert!(key.0.len() <= MAX_KEY_SIZE as usize + 1, "Boundary keys should not exceed limit + 1");
+        });
     }
 
     #[test]
     fn test_oversized_setmulti_exceeds_limit() {
-        check!()
-            .with_iterations(20)
-            .with_type::<OversizedSetMulti>()
-            .for_each(|pairs| {
-                assert!(
-                    pairs.0.len() > MAX_SETMULTI_KEYS as usize,
-                    "Oversized SetMulti should exceed limit"
-                );
-            });
+        check!().with_iterations(20).with_type::<OversizedSetMulti>().for_each(|pairs| {
+            assert!(pairs.0.len() > MAX_SETMULTI_KEYS as usize, "Oversized SetMulti should exceed limit");
+        });
     }
 
     #[test]
     fn test_valid_node_id_string_parses() {
-        check!()
-            .with_iterations(100)
-            .with_type::<ValidNodeIdString>()
-            .for_each(|s| {
-                let parsed: Result<u64, _> = s.0.parse();
-                assert!(
-                    parsed.is_ok(),
-                    "Valid NodeId string should parse as u64: {}",
-                    s.0
-                );
-            });
+        check!().with_iterations(100).with_type::<ValidNodeIdString>().for_each(|s| {
+            let parsed: Result<u64, _> = s.0.parse();
+            assert!(parsed.is_ok(), "Valid NodeId string should parse as u64: {}", s.0);
+        });
     }
 
     #[test]
     fn test_invalid_node_id_string_fails_parse() {
-        check!()
-            .with_iterations(100)
-            .with_type::<InvalidNodeIdString>()
-            .for_each(|s| {
-                let parsed: Result<u64, _> = s.0.parse();
-                assert!(
-                    parsed.is_err(),
-                    "Invalid NodeId string should fail u64 parse: {}",
-                    s.0
-                );
-            });
+        check!().with_iterations(100).with_type::<InvalidNodeIdString>().for_each(|s| {
+            let parsed: Result<u64, _> = s.0.parse();
+            assert!(parsed.is_err(), "Invalid NodeId string should fail u64 parse: {}", s.0);
+        });
     }
 
     #[test]
     fn test_network_delay_config_valid_ranges() {
-        check!()
-            .with_iterations(100)
-            .with_type::<NetworkDelayConfig>()
-            .for_each(|config| {
-                assert!(
-                    config.max_latency_ms >= config.min_latency_ms,
-                    "Max latency should be >= min latency"
-                );
-                assert!(config.jitter_percent <= 100, "Jitter should be <= 100%");
-            });
+        check!().with_iterations(100).with_type::<NetworkDelayConfig>().for_each(|config| {
+            assert!(config.max_latency_ms >= config.min_latency_ms, "Max latency should be >= min latency");
+            assert!(config.jitter_percent <= 100, "Jitter should be <= 100%");
+        });
     }
 
     #[test]
     fn test_operation_sequence_nonempty() {
-        check!()
-            .with_iterations(50)
-            .with_type::<OperationSequence>()
-            .for_each(|ops| {
-                assert!(!ops.0.is_empty(), "Operation sequence should not be empty");
-                assert!(ops.0.len() < 50, "Operation sequence should respect max");
-            });
+        check!().with_iterations(50).with_type::<OperationSequence>().for_each(|ops| {
+            assert!(!ops.0.is_empty(), "Operation sequence should not be empty");
+            assert!(ops.0.len() < 50, "Operation sequence should respect max");
+        });
     }
 }

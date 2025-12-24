@@ -41,18 +41,30 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use openraft::error::{NetworkError, RPCError, ReplicationClosed, StreamingError, Unreachable};
-use openraft::network::{RPCOption, RaftNetworkFactory, v2::RaftNetworkV2};
-use openraft::raft::{
-    AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
-};
+use openraft::OptionalSend;
+use openraft::Raft;
+use openraft::Snapshot;
+use openraft::error::NetworkError;
+use openraft::error::RPCError;
+use openraft::error::ReplicationClosed;
+use openraft::error::StreamingError;
+use openraft::error::Unreachable;
+use openraft::network::RPCOption;
+use openraft::network::RaftNetworkFactory;
+use openraft::network::v2::RaftNetworkV2;
+use openraft::raft::AppendEntriesRequest;
+use openraft::raft::AppendEntriesResponse;
+use openraft::raft::SnapshotResponse;
+use openraft::raft::VoteRequest;
+use openraft::raft::VoteResponse;
 use openraft::type_config::alias::VoteOf;
-use openraft::{OptionalSend, Raft, Snapshot};
 use parking_lot::Mutex as SyncMutex;
 use tracing::debug;
 
 use crate::raft::constants::MAX_CONNECTIONS_PER_NODE;
-use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
+use crate::raft::types::AppTypeConfig;
+use crate::raft::types::NodeId;
+use crate::raft::types::RaftMemberInfo;
 
 /// Madsim-compatible Raft network factory for deterministic simulation.
 ///
@@ -71,11 +83,7 @@ pub struct MadsimNetworkFactory {
 
 impl MadsimNetworkFactory {
     /// Create a new madsim network factory for the given source node.
-    pub fn new(
-        source_node_id: NodeId,
-        router: Arc<MadsimRaftRouter>,
-        failure_injector: Arc<FailureInjector>,
-    ) -> Self {
+    pub fn new(source_node_id: NodeId, router: Arc<MadsimRaftRouter>, failure_injector: Arc<FailureInjector>) -> Self {
         Self {
             source_node_id,
             router,
@@ -89,12 +97,7 @@ impl RaftNetworkFactory<AppTypeConfig> for MadsimNetworkFactory {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn new_client(&mut self, target: NodeId, _node: &RaftMemberInfo) -> Self::Network {
-        MadsimRaftNetwork::new(
-            self.source_node_id,
-            target,
-            self.router.clone(),
-            self.failure_injector.clone(),
-        )
+        MadsimRaftNetwork::new(self.source_node_id, target, self.router.clone(), self.failure_injector.clone())
     }
 }
 
@@ -130,26 +133,18 @@ impl MadsimRaftNetwork {
     /// Returns Err(RPCError::Unreachable) if the message should be dropped,
     /// otherwise Ok(()).
     async fn check_failure_injection(&self) -> Result<(), RPCError<AppTypeConfig>> {
-        if self
-            .failure_injector
-            .should_drop_message(self.source, self.target)
-        {
-            return Err(RPCError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionRefused,
-                    "failure injector dropped message",
-                ),
-            )));
+        if self.failure_injector.should_drop_message(self.source, self.target) {
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "failure injector dropped message",
+            ))));
         }
         Ok(())
     }
 
     /// Apply network delay if configured by the failure injector.
     async fn apply_network_delay(&self) {
-        if let Some(delay) = self
-            .failure_injector
-            .get_network_delay(self.source, self.target)
-        {
+        if let Some(delay) = self.failure_injector.get_network_delay(self.source, self.target) {
             madsim::time::sleep(delay).await;
         }
     }
@@ -164,9 +159,7 @@ impl RaftNetworkV2<AppTypeConfig> for MadsimRaftNetwork {
         self.check_failure_injection().await?;
         self.apply_network_delay().await;
 
-        self.router
-            .send_append_entries(self.source, self.target, rpc)
-            .await
+        self.router.send_append_entries(self.source, self.target, rpc).await
     }
 
     async fn vote(
@@ -189,18 +182,14 @@ impl RaftNetworkV2<AppTypeConfig> for MadsimRaftNetwork {
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
         // Check failure injection first
         if let Err(_rpc_err) = self.check_failure_injection().await {
-            return Err(StreamingError::Network(NetworkError::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionRefused,
-                    "failure injector dropped snapshot message",
-                ),
-            )));
+            return Err(StreamingError::Network(NetworkError::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "failure injector dropped snapshot message",
+            ))));
         }
         self.apply_network_delay().await;
 
-        self.router
-            .send_snapshot(self.source, self.target, vote, snapshot)
-            .await
+        self.router.send_snapshot(self.source, self.target, vote, snapshot).await
     }
 }
 
@@ -249,27 +238,15 @@ impl MadsimRaftRouter {
     /// Register a node with the router.
     ///
     /// Tiger Style: Bounded registration - fails if max nodes exceeded.
-    pub fn register_node(
-        &self,
-        node_id: NodeId,
-        listen_addr: String,
-        raft: Raft<AppTypeConfig>,
-    ) -> Result<()> {
+    pub fn register_node(&self, node_id: NodeId, listen_addr: String, raft: Raft<AppTypeConfig>) -> Result<()> {
         let mut nodes = self.nodes.lock();
         if nodes.len() >= MAX_CONNECTIONS_PER_NODE as usize {
-            anyhow::bail!(
-                "max nodes exceeded: {} (max: {})",
-                nodes.len(),
-                MAX_CONNECTIONS_PER_NODE
-            );
+            anyhow::bail!("max nodes exceeded: {} (max: {})", nodes.len(), MAX_CONNECTIONS_PER_NODE);
         }
-        nodes.insert(
-            node_id,
-            NodeHandle {
-                _listen_addr: listen_addr,
-                raft,
-            },
-        );
+        nodes.insert(node_id, NodeHandle {
+            _listen_addr: listen_addr,
+            raft,
+        });
         Ok(())
     }
 
@@ -297,32 +274,26 @@ impl MadsimRaftRouter {
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionAborted,
-                    "source node marked as failed",
-                ),
-            )));
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
         }
         if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionRefused,
-                    "target node marked as failed",
-                ),
-            )));
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "target node marked as failed",
+            ))));
         }
 
         // Get target node's Raft handle
         let raft = {
             let nodes = self.nodes.lock();
             let Some(node) = nodes.get(&target) else {
-                return Err(RPCError::Unreachable(Unreachable::new(
-                    &std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("target node {target} not registered"),
-                    ),
-                )));
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("target node {target} not registered"),
+                ))));
             };
             node.raft.clone()
         };
@@ -330,9 +301,7 @@ impl MadsimRaftRouter {
         debug!(%source, %target, "dispatching append_entries RPC");
 
         // Dispatch RPC directly to Raft core
-        raft.append_entries(rpc)
-            .await
-            .map_err(|err| RPCError::Network(NetworkError::new(&err)))
+        raft.append_entries(rpc).await.map_err(|err| RPCError::Network(NetworkError::new(&err)))
     }
 
     /// Send Vote RPC to target node.
@@ -346,32 +315,26 @@ impl MadsimRaftRouter {
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionAborted,
-                    "source node marked as failed",
-                ),
-            )));
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
         }
         if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionRefused,
-                    "target node marked as failed",
-                ),
-            )));
+            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "target node marked as failed",
+            ))));
         }
 
         // Get target node's Raft handle
         let raft = {
             let nodes = self.nodes.lock();
             let Some(node) = nodes.get(&target) else {
-                return Err(RPCError::Unreachable(Unreachable::new(
-                    &std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("target node {target} not registered"),
-                    ),
-                )));
+                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("target node {target} not registered"),
+                ))));
             };
             node.raft.clone()
         };
@@ -379,9 +342,7 @@ impl MadsimRaftRouter {
         debug!(%source, %target, "dispatching vote RPC");
 
         // Dispatch RPC directly to Raft core
-        raft.vote(rpc)
-            .await
-            .map_err(|err| RPCError::Network(NetworkError::new(&err)))
+        raft.vote(rpc).await.map_err(|err| RPCError::Network(NetworkError::new(&err)))
     }
 
     /// Send Snapshot RPC to target node.
@@ -394,32 +355,26 @@ impl MadsimRaftRouter {
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
         // Check if source/target nodes are failed
         if self.is_node_failed(source) {
-            return Err(StreamingError::Network(NetworkError::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionAborted,
-                    "source node marked as failed",
-                ),
-            )));
+            return Err(StreamingError::Network(NetworkError::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "source node marked as failed",
+            ))));
         }
         if self.is_node_failed(target) {
-            return Err(StreamingError::Network(NetworkError::new(
-                &std::io::Error::new(
-                    std::io::ErrorKind::ConnectionRefused,
-                    "target node marked as failed",
-                ),
-            )));
+            return Err(StreamingError::Network(NetworkError::new(&std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                "target node marked as failed",
+            ))));
         }
 
         // Get target node's Raft handle
         let raft = {
             let nodes = self.nodes.lock();
             let Some(node) = nodes.get(&target) else {
-                return Err(StreamingError::Network(NetworkError::new(
-                    &std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("target node {target} not registered"),
-                    ),
-                )));
+                return Err(StreamingError::Network(NetworkError::new(&std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("target node {target} not registered"),
+                ))));
             };
             node.raft.clone()
         };
@@ -463,10 +418,10 @@ pub struct FailureInjector {
     /// Clock drift simulation: node_id -> drift_ms (signed)
     ///
     /// Simulates clock drift by adding asymmetric delays:
-    /// - Positive drift (fast clock): Adds delay to OUTGOING messages from this node
-    ///   (simulates the node's perception that time has passed faster)
-    /// - Negative drift (slow clock): Adds delay to INCOMING messages to this node
-    ///   (simulates the node responding late relative to others)
+    /// - Positive drift (fast clock): Adds delay to OUTGOING messages from this node (simulates the
+    ///   node's perception that time has passed faster)
+    /// - Negative drift (slow clock): Adds delay to INCOMING messages to this node (simulates the
+    ///   node responding late relative to others)
     ///
     /// Note: Madsim uses global virtual time, so we simulate drift effects through
     /// delays rather than actual clock manipulation. This approach effectively tests
@@ -505,13 +460,7 @@ impl FailureInjector {
     /// // 1-27ms latency like MadRaft
     /// injector.set_network_delay_range(node1, node2, 1, 27);
     /// ```
-    pub fn set_network_delay_range(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        min_ms: u64,
-        max_ms: u64,
-    ) {
+    pub fn set_network_delay_range(&self, source: NodeId, target: NodeId, min_ms: u64, max_ms: u64) {
         assert!(min_ms <= max_ms, "min_ms must be <= max_ms");
         let mut delay_ranges = self.delay_ranges.lock();
         delay_ranges.insert((source, target), (min_ms, max_ms));
@@ -529,10 +478,7 @@ impl FailureInjector {
     /// injector.set_packet_loss_rate(node1, node2, 0.1);
     /// ```
     pub fn set_packet_loss_rate(&self, source: NodeId, target: NodeId, rate: f64) {
-        assert!(
-            (0.0..=1.0).contains(&rate),
-            "loss rate must be between 0.0 and 1.0"
-        );
+        assert!((0.0..=1.0).contains(&rate), "loss rate must be between 0.0 and 1.0");
         let mut loss_rates = self.loss_rates.lock();
         loss_rates.insert((source, target), rate);
     }
@@ -768,17 +714,8 @@ impl ByzantineFailureInjector {
     /// * `target` - Target node ID
     /// * `mode` - Type of Byzantine corruption
     /// * `probability` - Probability of corruption (0.0 to 1.0)
-    pub fn set_byzantine_mode(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        mode: ByzantineCorruptionMode,
-        probability: f64,
-    ) {
-        assert!(
-            (0.0..=1.0).contains(&probability),
-            "probability must be between 0.0 and 1.0"
-        );
+    pub fn set_byzantine_mode(&self, source: NodeId, target: NodeId, mode: ByzantineCorruptionMode, probability: f64) {
+        assert!((0.0..=1.0).contains(&probability), "probability must be between 0.0 and 1.0");
         let mut links = self.links.lock();
         let configs = links.entry((source, target)).or_default();
         // Update existing or add new
@@ -796,18 +733,12 @@ impl ByzantineFailureInjector {
     }
 
     /// Check if a particular corruption should be applied.
-    fn should_corrupt(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        mode: ByzantineCorruptionMode,
-    ) -> bool {
+    fn should_corrupt(&self, source: NodeId, target: NodeId, mode: ByzantineCorruptionMode) -> bool {
         let links = self.links.lock();
         if let Some(configs) = links.get(&(source, target)) {
             for (m, prob) in configs {
                 if *m == mode {
-                    let random_value: f64 =
-                        (madsim::rand::random::<u64>() as f64) / (u64::MAX as f64);
+                    let random_value: f64 = (madsim::rand::random::<u64>() as f64) / (u64::MAX as f64);
                     if random_value < *prob {
                         // Record corruption
                         drop(links); // Release lock before acquiring another

@@ -8,10 +8,12 @@
 
 use std::sync::Arc;
 
-use aspen::api::{SqlQueryError, SqlValue};
+use aspen::api::SqlQueryError;
+use aspen::api::SqlValue;
 use aspen::raft::storage_shared::KvEntry;
 use aspen::sql::RedbSqlExecutor;
-use redb::{Database, TableDefinition};
+use redb::Database;
+use redb::TableDefinition;
 use tempfile::tempdir;
 
 /// Table definition for KV data (must match storage_shared.rs).
@@ -49,9 +51,7 @@ fn setup_test_db() -> Arc<Database> {
                 lease_id: None,
             };
             let entry_bytes = bincode::serialize(&entry).unwrap();
-            table
-                .insert(key.as_bytes(), entry_bytes.as_slice())
-                .unwrap();
+            table.insert(key.as_bytes(), entry_bytes.as_slice()).unwrap();
         }
     }
     write_txn.commit().unwrap();
@@ -80,10 +80,7 @@ async fn test_basic_select_all() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT * FROM kv", &[], None, None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT * FROM kv", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 7);
     assert!(!result.is_truncated);
@@ -97,10 +94,7 @@ async fn test_select_specific_columns() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT key, value FROM kv", &[], None, None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT key, value FROM kv", &[], None, None).await.unwrap();
 
     assert_eq!(result.columns.len(), 2);
     assert_eq!(result.columns[0].name, "key");
@@ -112,15 +106,7 @@ async fn test_filter_exact_key() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute(
-            "SELECT key, value FROM kv WHERE key = 'user:1'",
-            &[],
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT key, value FROM kv WHERE key = 'user:1'", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 1);
     assert_eq!(result.rows[0][0], SqlValue::Text("user:1".to_string()));
@@ -133,12 +119,7 @@ async fn test_filter_prefix_like() {
     let executor = RedbSqlExecutor::new(db);
 
     let result = executor
-        .execute(
-            "SELECT key, value FROM kv WHERE key LIKE 'user:%'",
-            &[],
-            None,
-            None,
-        )
+        .execute("SELECT key, value FROM kv WHERE key LIKE 'user:%'", &[], None, None)
         .await
         .unwrap();
 
@@ -164,12 +145,7 @@ async fn test_filter_range() {
     let executor = RedbSqlExecutor::new(db);
 
     let result = executor
-        .execute(
-            "SELECT key, value FROM kv WHERE key >= 'data:' AND key < 'datb:'",
-            &[],
-            None,
-            None,
-        )
+        .execute("SELECT key, value FROM kv WHERE key >= 'data:' AND key < 'datb:'", &[], None, None)
         .await
         .unwrap();
 
@@ -182,10 +158,7 @@ async fn test_limit() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT * FROM kv", &[], Some(3), None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT * FROM kv", &[], Some(3), None).await.unwrap();
 
     assert_eq!(result.row_count, 3);
     assert!(result.is_truncated);
@@ -196,10 +169,7 @@ async fn test_empty_table() {
     let db = setup_empty_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT * FROM kv", &[], None, None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT * FROM kv", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 0);
     assert!(!result.is_truncated);
@@ -210,15 +180,7 @@ async fn test_no_matching_rows() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute(
-            "SELECT * FROM kv WHERE key = 'nonexistent'",
-            &[],
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT * FROM kv WHERE key = 'nonexistent'", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 0);
     assert!(!result.is_truncated);
@@ -233,10 +195,7 @@ async fn test_count_aggregation() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT COUNT(*) as cnt FROM kv", &[], None, None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT COUNT(*) as cnt FROM kv", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 1);
     // The count should be 7
@@ -249,12 +208,7 @@ async fn test_count_with_filter() {
     let executor = RedbSqlExecutor::new(db);
 
     let result = executor
-        .execute(
-            "SELECT COUNT(*) as cnt FROM kv WHERE key LIKE 'user:%'",
-            &[],
-            None,
-            None,
-        )
+        .execute("SELECT COUNT(*) as cnt FROM kv WHERE key LIKE 'user:%'", &[], None, None)
         .await
         .unwrap();
 
@@ -268,12 +222,7 @@ async fn test_order_by() {
     let executor = RedbSqlExecutor::new(db);
 
     let result = executor
-        .execute(
-            "SELECT key, value FROM kv WHERE key LIKE 'user:%' ORDER BY key DESC",
-            &[],
-            None,
-            None,
-        )
+        .execute("SELECT key, value FROM kv WHERE key LIKE 'user:%' ORDER BY key DESC", &[], None, None)
         .await
         .unwrap();
 
@@ -313,15 +262,7 @@ async fn test_version_column() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute(
-            "SELECT key, version FROM kv WHERE key = 'user:1'",
-            &[],
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT key, version FROM kv WHERE key = 'user:1'", &[], None, None).await.unwrap();
 
     assert_eq!(result.row_count, 1);
     assert_eq!(result.rows[0][1], SqlValue::Integer(1));
@@ -333,12 +274,7 @@ async fn test_revision_columns() {
     let executor = RedbSqlExecutor::new(db);
 
     let result = executor
-        .execute(
-            "SELECT key, create_revision, mod_revision FROM kv WHERE key = 'user:1'",
-            &[],
-            None,
-            None,
-        )
+        .execute("SELECT key, create_revision, mod_revision FROM kv WHERE key = 'user:1'", &[], None, None)
         .await
         .unwrap();
 
@@ -353,10 +289,7 @@ async fn test_execution_time_recorded() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT * FROM kv", &[], None, None)
-        .await
-        .unwrap();
+    let result = executor.execute("SELECT * FROM kv", &[], None, None).await.unwrap();
 
     // Execution time should be recorded (this always passes since u64 >= 0)
     // Just check that the field is populated and the query completed
@@ -386,9 +319,7 @@ async fn test_invalid_table() {
     let db = setup_test_db();
     let executor = RedbSqlExecutor::new(db);
 
-    let result = executor
-        .execute("SELECT * FROM nonexistent", &[], None, None)
-        .await;
+    let result = executor.execute("SELECT * FROM nonexistent", &[], None, None).await;
 
     // DataFusion should return an error for unknown table
     assert!(result.is_err());

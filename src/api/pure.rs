@@ -15,7 +15,8 @@
 
 use base64::Engine;
 
-use super::{DEFAULT_SCAN_LIMIT, MAX_SCAN_RESULTS};
+use super::DEFAULT_SCAN_LIMIT;
+use super::MAX_SCAN_RESULTS;
 
 // ============================================================================
 // Scan Pagination Pure Functions
@@ -125,11 +126,7 @@ pub fn paginate_entries<T>(entries: Vec<T>, limit: usize) -> (Vec<T>, bool) {
 /// # Returns
 ///
 /// Tuple of (count, is_truncated, continuation_token).
-pub fn build_scan_metadata(
-    count: usize,
-    is_truncated: bool,
-    last_key: Option<&str>,
-) -> (u32, bool, Option<String>) {
+pub fn build_scan_metadata(count: usize, is_truncated: bool, last_key: Option<&str>) -> (u32, bool, Option<String>) {
     let continuation_token = if is_truncated {
         last_key.map(encode_continuation_token)
     } else {
@@ -173,11 +170,7 @@ where
     let filtered: Vec<_> = entries
         .drain(..)
         .filter(|(k, _)| k.as_ref().starts_with(prefix))
-        .filter(|(k, _)| {
-            start_after
-                .as_deref()
-                .is_none_or(|after| k.as_ref() > after)
-        })
+        .filter(|(k, _)| start_after.as_deref().is_none_or(|after| k.as_ref() > after))
         .collect();
 
     // Sort by key
@@ -189,8 +182,7 @@ where
 
     // Build metadata
     let last_key = paginated.last().map(|(k, _)| k.as_ref());
-    let (count, is_truncated, next_token) =
-        build_scan_metadata(paginated.len(), is_truncated, last_key);
+    let (count, is_truncated, next_token) = build_scan_metadata(paginated.len(), is_truncated, last_key);
 
     (paginated, count, is_truncated, next_token)
 }
@@ -258,12 +250,7 @@ mod tests {
 
     #[test]
     fn test_filter_by_prefix() {
-        let entries = vec![
-            ("prefix:a", 1),
-            ("prefix:b", 2),
-            ("other:c", 3),
-            ("prefix:d", 4),
-        ];
+        let entries = vec![("prefix:a", 1), ("prefix:b", 2), ("other:c", 3), ("prefix:d", 4)];
 
         let filtered: Vec<_> = filter_scan_entries(entries.into_iter(), "prefix:", None).collect();
 
@@ -273,15 +260,9 @@ mod tests {
 
     #[test]
     fn test_filter_with_continuation() {
-        let entries = vec![
-            ("prefix:a", 1),
-            ("prefix:b", 2),
-            ("prefix:c", 3),
-            ("prefix:d", 4),
-        ];
+        let entries = vec![("prefix:a", 1), ("prefix:b", 2), ("prefix:c", 3), ("prefix:d", 4)];
 
-        let filtered: Vec<_> =
-            filter_scan_entries(entries.into_iter(), "prefix:", Some("prefix:b")).collect();
+        let filtered: Vec<_> = filter_scan_entries(entries.into_iter(), "prefix:", Some("prefix:b")).collect();
 
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].0, "prefix:c");
@@ -367,8 +348,7 @@ mod tests {
             ("prefix:b".to_string(), "2".to_string()),
         ];
 
-        let (results, count, is_truncated, token) =
-            execute_scan(entries, "prefix:", None, Some(10));
+        let (results, count, is_truncated, token) = execute_scan(entries, "prefix:", None, Some(10));
 
         // Should be sorted
         assert_eq!(results.len(), 3);
@@ -406,8 +386,7 @@ mod tests {
             ("k:5".to_string(), "5".to_string()),
         ];
 
-        let (results2, count2, is_truncated2, _) =
-            execute_scan(entries2, "k:", token.as_deref(), Some(3));
+        let (results2, count2, is_truncated2, _) = execute_scan(entries2, "k:", token.as_deref(), Some(3));
 
         assert_eq!(results2.len(), 2);
         assert_eq!(results2[0].0, "k:4");
@@ -419,18 +398,18 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_normalize_never_exceeds_max() {
-        check!()
-            .with_type::<(Option<u32>, u32, u32)>()
-            .filter(|(_, _, max)| *max > 0)
-            .for_each(|(limit, default, max)| {
+        check!().with_type::<(Option<u32>, u32, u32)>().filter(|(_, _, max)| *max > 0).for_each(
+            |(limit, default, max)| {
                 let result = normalize_scan_limit(*limit, *default, *max);
                 assert!(result <= *max as usize);
-            });
+            },
+        );
     }
 
     #[test]

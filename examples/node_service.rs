@@ -14,12 +14,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = EnvConfig::from_env()?;
     let peer_count = config.peer_count;
     let node = config.into_builder().start().await?;
-    println!(
-        "Node {} ready at {:?} with {} configured peers",
-        node.node_id(),
-        node.endpoint_addr(),
-        peer_count
-    );
+    println!("Node {} ready at {:?} with {} configured peers", node.node_id(), node.endpoint_addr(), peer_count);
     println!("Client handle acquired for node {}", node.node_id());
 
     Ok(())

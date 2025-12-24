@@ -7,12 +7,16 @@
 /// - Deterministic execution with seed control
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
+use aspen::raft::storage::InMemoryLogStore;
+use aspen::raft::storage::InMemoryStateMachine;
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(node_id: NodeId) -> Raft<aspen::raft::types::AppTypeConfig> {
@@ -30,11 +34,7 @@ async fn create_raft_node(node_id: NodeId) -> Raft<aspen::raft::types::AppTypeCo
     Raft::new(
         node_id,
         config,
-        MadsimNetworkFactory::new(
-            node_id,
-            Arc::new(MadsimRaftRouter::new()),
-            Arc::new(FailureInjector::new()),
-        ),
+        MadsimNetworkFactory::new(node_id, Arc::new(MadsimRaftRouter::new()), Arc::new(FailureInjector::new())),
         log_store,
         state_machine,
     )
@@ -57,20 +57,13 @@ async fn test_single_node_initialization_seed_42() {
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leadership");
     // Wait for node to become leader (single-node cluster)
@@ -78,11 +71,7 @@ async fn test_single_node_initialization_seed_42() {
 
     artifact = artifact.add_event("metrics: check leader status");
     let metrics = raft1.metrics().borrow().clone();
-    assert_eq!(
-        metrics.current_leader,
-        Some(NodeId::from(1)),
-        "node 1 should be leader"
-    );
+    assert_eq!(metrics.current_leader, Some(NodeId::from(1)), "node 1 should be leader");
 
     artifact = artifact.add_event("validation: single-node cluster initialized");
 
@@ -107,31 +96,20 @@ async fn test_single_node_initialization_seed_123() {
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leadership");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
     artifact = artifact.add_event("metrics: check leader status");
     let metrics = raft1.metrics().borrow().clone();
-    assert_eq!(
-        metrics.current_leader,
-        Some(NodeId::from(1)),
-        "node 1 should be leader"
-    );
+    assert_eq!(metrics.current_leader, Some(NodeId::from(1)), "node 1 should be leader");
 
     artifact = artifact.add_event("validation: single-node cluster initialized");
 
@@ -156,31 +134,20 @@ async fn test_single_node_initialization_seed_456() {
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leadership");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
     artifact = artifact.add_event("metrics: check leader status");
     let metrics = raft1.metrics().borrow().clone();
-    assert_eq!(
-        metrics.current_leader,
-        Some(NodeId::from(1)),
-        "node 1 should be leader"
-    );
+    assert_eq!(metrics.current_leader, Some(NodeId::from(1)), "node 1 should be leader");
 
     artifact = artifact.add_event("validation: single-node cluster initialized");
 

@@ -5,9 +5,11 @@
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use crate::constants::{MAX_INODE_CACHE, ROOT_INODE};
+use crate::constants::MAX_INODE_CACHE;
+use crate::constants::ROOT_INODE;
 
 /// Entry type for filesystem nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,14 +53,11 @@ impl InodeManager {
         let mut path_to_inode = HashMap::new();
 
         // Root directory is always inode 1
-        inode_to_entry.insert(
-            ROOT_INODE,
-            InodeEntry {
-                path: String::new(),
-                entry_type: EntryType::Directory,
-                last_access: 0,
-            },
-        );
+        inode_to_entry.insert(ROOT_INODE, InodeEntry {
+            path: String::new(),
+            entry_type: EntryType::Directory,
+            last_access: 0,
+        });
         path_to_inode.insert(String::new(), ROOT_INODE);
 
         Self {
@@ -80,10 +79,7 @@ impl InodeManager {
     pub fn get_or_create(&self, path: &str, entry_type: EntryType) -> u64 {
         // Fast path: check if already cached
         {
-            let path_map = self
-                .path_to_inode
-                .read()
-                .expect("inode manager path_to_inode lock poisoned");
+            let path_map = self.path_to_inode.read().expect("inode manager path_to_inode lock poisoned");
             if let Some(&inode) = path_map.get(path) {
                 // Update access time
                 let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
@@ -100,14 +96,8 @@ impl InodeManager {
         let inode = self.hash_path(path);
         let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
 
-        let mut entries = self
-            .inode_to_entry
-            .write()
-            .expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self
-            .path_to_inode
-            .write()
-            .expect("inode manager path_to_inode lock poisoned");
+        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
 
         // Evict old entries if at capacity
         if entries.len() >= MAX_INODE_CACHE {
@@ -115,14 +105,11 @@ impl InodeManager {
         }
 
         // Insert new entry
-        entries.insert(
-            inode,
-            InodeEntry {
-                path: path.to_string(),
-                entry_type,
-                last_access: access,
-            },
-        );
+        entries.insert(inode, InodeEntry {
+            path: path.to_string(),
+            entry_type,
+            last_access: access,
+        });
         paths.insert(path.to_string(), inode);
 
         inode
@@ -134,10 +121,7 @@ impl InodeManager {
     ///
     /// Panics if internal RwLock is poisoned.
     pub fn get_path(&self, inode: u64) -> Option<InodeEntry> {
-        let entries = self
-            .inode_to_entry
-            .read()
-            .expect("inode manager inode_to_entry lock poisoned");
+        let entries = self.inode_to_entry.read().expect("inode manager inode_to_entry lock poisoned");
         entries.get(&inode).cloned()
     }
 
@@ -147,10 +131,7 @@ impl InodeManager {
     ///
     /// Panics if internal RwLock is poisoned.
     pub fn get_inode(&self, path: &str) -> Option<u64> {
-        let paths = self
-            .path_to_inode
-            .read()
-            .expect("inode manager path_to_inode lock poisoned");
+        let paths = self.path_to_inode.read().expect("inode manager path_to_inode lock poisoned");
         paths.get(path).copied()
     }
 
@@ -161,14 +142,8 @@ impl InodeManager {
     /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn remove(&self, inode: u64) {
-        let mut entries = self
-            .inode_to_entry
-            .write()
-            .expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self
-            .path_to_inode
-            .write()
-            .expect("inode manager path_to_inode lock poisoned");
+        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
 
         if let Some(entry) = entries.remove(&inode) {
             paths.remove(&entry.path);
@@ -181,14 +156,8 @@ impl InodeManager {
     ///
     /// Panics if internal RwLock is poisoned.
     pub fn remove_path(&self, path: &str) {
-        let mut entries = self
-            .inode_to_entry
-            .write()
-            .expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self
-            .path_to_inode
-            .write()
-            .expect("inode manager path_to_inode lock poisoned");
+        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
+        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
 
         if let Some(inode) = paths.remove(path) {
             entries.remove(&inode);
@@ -202,10 +171,7 @@ impl InodeManager {
     /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn update_type(&self, inode: u64, entry_type: EntryType) {
-        let mut entries = self
-            .inode_to_entry
-            .write()
-            .expect("inode manager inode_to_entry lock poisoned");
+        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
         if let Some(entry) = entries.get_mut(&inode) {
             entry.entry_type = entry_type;
         }
@@ -250,10 +216,7 @@ impl InodeManager {
     /// Panics if internal RwLock is poisoned.
     #[allow(dead_code)]
     pub fn cache_size(&self) -> usize {
-        self.inode_to_entry
-            .read()
-            .expect("inode manager inode_to_entry lock poisoned")
-            .len()
+        self.inode_to_entry.read().expect("inode manager inode_to_entry lock poisoned").len()
     }
 }
 
@@ -388,11 +351,7 @@ mod tests {
         for i in 0..1000 {
             let path = format!("test/path/{}", i);
             let inode = mgr.get_or_create(&path, EntryType::File);
-            assert!(
-                inode >= 2 || inode == ROOT_INODE,
-                "Got reserved inode: {}",
-                inode
-            );
+            assert!(inode >= 2 || inode == ROOT_INODE, "Got reserved inode: {}", inode);
         }
     }
 

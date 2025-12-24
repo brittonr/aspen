@@ -69,16 +69,12 @@ pub enum SqlError {
 
 impl From<datafusion::error::DataFusionError> for SqlError {
     fn from(err: datafusion::error::DataFusionError) -> Self {
-        SqlError::DataFusion {
-            source: Arc::new(err),
-        }
+        SqlError::DataFusion { source: Arc::new(err) }
     }
 }
 
 impl From<arrow::error::ArrowError> for SqlError {
     fn from(err: arrow::error::ArrowError) -> Self {
-        SqlError::Arrow {
-            source: Arc::new(err),
-        }
+        SqlError::Arrow { source: Arc::new(err) }
     }
 }

@@ -11,14 +11,22 @@
 
 mod common;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-
-use common::{
-    VALUE_SIZE_LARGE, VALUE_SIZE_MEDIUM, VALUE_SIZE_SMALL, generate_kv_pairs, generate_value,
-    populate_test_data, setup_single_node_cluster, setup_three_node_cluster,
-};
+use common::VALUE_SIZE_LARGE;
+use common::VALUE_SIZE_MEDIUM;
+use common::VALUE_SIZE_SMALL;
+use common::generate_kv_pairs;
+use common::generate_value;
+use common::populate_test_data;
+use common::setup_single_node_cluster;
+use common::setup_three_node_cluster;
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
 
 /// Benchmark single key write operations.
 ///
@@ -106,26 +114,22 @@ fn bench_write_batch(c: &mut Criterion) {
     for batch_size in [10, 50, 100] {
         group.throughput(Throughput::Elements(batch_size as u64));
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(batch_size),
-            &batch_size,
-            |b, &size| {
-                b.to_async(&rt).iter(|| {
-                    let batch_id = counter.fetch_add(1, Ordering::Relaxed);
-                    let prefix = format!("batch-{}", batch_id);
-                    let pairs = generate_kv_pairs(size, &prefix);
-                    let router = &router;
+        group.bench_with_input(BenchmarkId::from_parameter(batch_size), &batch_size, |b, &size| {
+            b.to_async(&rt).iter(|| {
+                let batch_id = counter.fetch_add(1, Ordering::Relaxed);
+                let prefix = format!("batch-{}", batch_id);
+                let pairs = generate_kv_pairs(size, &prefix);
+                let router = &router;
 
-                    async move {
-                        // Write each pair individually (simulating SetMulti behavior)
-                        // Note: The router doesn't have native SetMulti, so we batch writes
-                        for (key, value) in pairs {
-                            router.write(leader, key, value).await.unwrap();
-                        }
+                async move {
+                    // Write each pair individually (simulating SetMulti behavior)
+                    // Note: The router doesn't have native SetMulti, so we batch writes
+                    for (key, value) in pairs {
+                        router.write(leader, key, value).await.unwrap();
                     }
-                })
-            },
-        );
+                }
+            })
+        });
     }
 
     group.finish();
@@ -162,29 +166,25 @@ fn bench_scan(c: &mut Criterion) {
     for scan_prefix in ["prefix-00", "prefix-01"] {
         group.throughput(Throughput::Elements(1000)); // Each prefix has 1000 keys
 
-        group.bench_with_input(
-            BenchmarkId::from_parameter(scan_prefix),
-            &scan_prefix,
-            |b, &prefix| {
-                b.to_async(&rt).iter(|| {
-                    let router = &router;
-                    let p = prefix.to_string();
-                    async move {
-                        // Read all keys with prefix by iterating
-                        // Note: The router's InMemoryStateMachine may not have scan API
-                        // This is a placeholder - in real impl we'd use the KeyValueStore trait
-                        let mut count = 0;
-                        for i in 0..1000 {
-                            let key = format!("{}/key-{:04}", p, i);
-                            if router.read(leader, &key).await.is_some() {
-                                count += 1;
-                            }
+        group.bench_with_input(BenchmarkId::from_parameter(scan_prefix), &scan_prefix, |b, &prefix| {
+            b.to_async(&rt).iter(|| {
+                let router = &router;
+                let p = prefix.to_string();
+                async move {
+                    // Read all keys with prefix by iterating
+                    // Note: The router's InMemoryStateMachine may not have scan API
+                    // This is a placeholder - in real impl we'd use the KeyValueStore trait
+                    let mut count = 0;
+                    for i in 0..1000 {
+                        let key = format!("{}/key-{:04}", p, i);
+                        if router.read(leader, &key).await.is_some() {
+                            count += 1;
                         }
-                        count
                     }
-                })
-            },
-        );
+                    count
+                }
+            })
+        });
     }
 
     group.finish();
@@ -198,10 +198,7 @@ fn bench_scan(c: &mut Criterion) {
 ///
 /// Measures impact of value size on write throughput (64B, 1KB, 64KB).
 fn bench_write_value_sizes(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup cluster
     let (router, leader) = rt.block_on(async { setup_single_node_cluster().await.unwrap() });
@@ -219,11 +216,7 @@ fn bench_write_value_sizes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(size_name), &size, |b, _| {
             b.to_async(&rt).iter(|| {
-                let key = format!(
-                    "size-{}-{}",
-                    size_name,
-                    counter.fetch_add(1, Ordering::Relaxed)
-                );
+                let key = format!("size-{}-{}", size_name, counter.fetch_add(1, Ordering::Relaxed));
                 let router = &router;
                 let v = value.clone();
 
@@ -239,10 +232,7 @@ fn bench_write_value_sizes(c: &mut Criterion) {
 ///
 /// Measures impact of value size on read throughput (64B, 1KB, 64KB).
 fn bench_read_value_sizes(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     let mut group = c.benchmark_group("kv_read_value_size");
     group.throughput(Throughput::Elements(1));
@@ -290,10 +280,7 @@ fn bench_read_value_sizes(c: &mut Criterion) {
 ///
 /// Measures quorum write latency with Raft replication.
 fn bench_3node_write_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup 3-node cluster
     let (router, leader) = rt.block_on(async { setup_three_node_cluster().await.unwrap() });
@@ -321,10 +308,7 @@ fn bench_3node_write_single(c: &mut Criterion) {
 ///
 /// Measures linearizable read latency from leader.
 fn bench_3node_read_single(c: &mut Criterion) {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("runtime");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
     // Setup 3-node cluster and pre-populate data
     let (router, leader) = rt.block_on(async {

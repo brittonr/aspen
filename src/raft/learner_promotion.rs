@@ -39,21 +39,27 @@
 //!
 //! # Response Format
 //!
-//! Success: `{"success": true, "learner_id": 4, "previous_voters": [1,2,3], "new_voters": [1,2,3,4]}`
+//! Success: `{"success": true, "learner_id": 4, "previous_voters": [1,2,3], "new_voters":
+//! [1,2,3,4]}`
 //!
 //! Error: `HTTP 400 Bad Request` with error message
 //!
 //! Tiger Style: Fixed timeouts, bounded membership (max 100 voters), explicit types.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use snafu::Snafu;
 use tokio::sync::RwLock;
 
-use crate::api::{ChangeMembershipRequest, ClusterController};
-use crate::raft::constants::{LEARNER_LAG_THRESHOLD, MAX_VOTERS, MEMBERSHIP_COOLDOWN};
-use crate::raft::node_failure_detection::{FailureType, NodeFailureDetector};
+use crate::api::ChangeMembershipRequest;
+use crate::api::ClusterController;
+use crate::raft::constants::LEARNER_LAG_THRESHOLD;
+use crate::raft::constants::MAX_VOTERS;
+use crate::raft::constants::MEMBERSHIP_COOLDOWN;
+use crate::raft::node_failure_detection::FailureType;
+use crate::raft::node_failure_detection::NodeFailureDetector;
 use crate::raft::types::NodeId;
 
 /// Errors that can occur during learner promotion.
@@ -151,8 +157,7 @@ pub struct PromotionResult {
 /// Enforces safety checks and cooldown periods to prevent unsafe membership
 /// changes. Integrates with NodeFailureDetector to verify learner health.
 pub struct LearnerPromotionCoordinator<C>
-where
-    C: ClusterController,
+where C: ClusterController
 {
     /// Cluster controller for membership operations.
     cluster_controller: Arc<C>,
@@ -165,8 +170,7 @@ where
 }
 
 impl<C> LearnerPromotionCoordinator<C>
-where
-    C: ClusterController + 'static,
+where C: ClusterController + 'static
 {
     /// Create a new promotion coordinator with the given cluster controller.
     pub fn new(cluster_controller: Arc<C>) -> Self {
@@ -201,29 +205,21 @@ where
     /// 5. Maximum voters limit not exceeded
     ///
     /// Tiger Style: Fail-fast on validation errors, explicit error types.
-    pub async fn promote_learner(
-        &self,
-        request: PromotionRequest,
-    ) -> Result<PromotionResult, PromotionError> {
+    pub async fn promote_learner(&self, request: PromotionRequest) -> Result<PromotionResult, PromotionError> {
         // Safety check 1: Membership cooldown
         if !request.force {
             self.check_membership_cooldown().await?;
         }
 
         // Get current membership state
-        let metrics = self.cluster_controller.get_metrics().await.map_err(|e| {
-            PromotionError::MetricsError {
-                source: Box::new(e),
-            }
-        })?;
+        let metrics = self
+            .cluster_controller
+            .get_metrics()
+            .await
+            .map_err(|e| PromotionError::MetricsError { source: Box::new(e) })?;
 
-        let current_voters: Vec<NodeId> =
-            metrics.membership_config.membership().voter_ids().collect();
-        let current_learners: Vec<NodeId> = metrics
-            .membership_config
-            .membership()
-            .learner_ids()
-            .collect();
+        let current_voters: Vec<NodeId> = metrics.membership_config.membership().voter_ids().collect();
+        let current_learners: Vec<NodeId> = metrics.membership_config.membership().learner_ids().collect();
 
         // Verify learner exists and is actually a learner
         if current_voters.contains(&request.learner_id) {
@@ -244,19 +240,16 @@ where
 
         // Safety check 3: Verify learner is caught up on log (unless forced)
         if !request.force {
-            self.verify_learner_caught_up(request.learner_id, &metrics)
-                .await?;
+            self.verify_learner_caught_up(request.learner_id, &metrics).await?;
         }
 
         // Safety check 4: Verify quorum will be maintained
         if !request.force {
-            self.verify_quorum(&current_voters, request.replace_node)
-                .await?;
+            self.verify_quorum(&current_voters, request.replace_node).await?;
         }
 
         // Build new membership set
-        let new_voters =
-            self.build_new_membership(&current_voters, request.learner_id, request.replace_node)?;
+        let new_voters = self.build_new_membership(&current_voters, request.learner_id, request.replace_node)?;
 
         // Execute membership change (convert NodeId to u64 for API boundary)
         let change_request = ChangeMembershipRequest {
@@ -266,9 +259,7 @@ where
         self.cluster_controller
             .change_membership(change_request)
             .await
-            .map_err(|e| PromotionError::MembershipChangeError {
-                source: Box::new(e),
-            })?;
+            .map_err(|e| PromotionError::MembershipChangeError { source: Box::new(e) })?;
 
         // Update last change timestamp
         *self.last_membership_change.write().await = Some(Instant::now());
@@ -310,10 +301,7 @@ where
     /// # Parameters
     ///
     /// * `learner_id` - ID of the learner node to verify.
-    async fn verify_learner_healthy(
-        &self,
-        learner_id: impl Into<NodeId>,
-    ) -> Result<(), PromotionError> {
+    async fn verify_learner_healthy(&self, learner_id: impl Into<NodeId>) -> Result<(), PromotionError> {
         let learner_id = learner_id.into();
         if let Some(ref detector) = self.failure_detector {
             let detector_guard = detector.read().await;
@@ -345,9 +333,7 @@ where
         // Only the leader has replication metrics
         if let Some(ref replication) = metrics.replication {
             if let Some(matched_log_id) = replication.get(&learner_id) {
-                if let (Some(leader_last_log), Some(matched)) =
-                    (metrics.last_log_index, matched_log_id)
-                {
+                if let (Some(leader_last_log), Some(matched)) = (metrics.last_log_index, matched_log_id) {
                     let lag = leader_last_log.saturating_sub(matched.index);
                     if lag > LEARNER_LAG_THRESHOLD {
                         return Err(PromotionError::LearnerLagging { learner_id, lag });
@@ -448,9 +434,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         let current = vec![1.into(), 2.into(), 3.into()];
-        let new = coordinator
-            .build_new_membership(&current, 4.into(), None)
-            .unwrap();
+        let new = coordinator.build_new_membership(&current, 4.into(), None).unwrap();
 
         assert_eq!(new, vec![1.into(), 2.into(), 3.into(), 4.into()]);
     }
@@ -461,9 +445,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         let current = vec![1.into(), 2.into(), 3.into()];
-        let new = coordinator
-            .build_new_membership(&current, 4.into(), Some(2.into()))
-            .unwrap();
+        let new = coordinator.build_new_membership(&current, 4.into(), Some(2.into())).unwrap();
 
         assert_eq!(new, vec![1.into(), 3.into(), 4.into()]);
     }
@@ -475,9 +457,7 @@ mod tests {
 
         // Learner is already in voter set (edge case)
         let current: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
-        let new = coordinator
-            .build_new_membership(&current, 4.into(), None)
-            .unwrap();
+        let new = coordinator.build_new_membership(&current, 4.into(), None).unwrap();
 
         // Should not add duplicate
         let expected: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
@@ -494,10 +474,7 @@ mod tests {
 
         // Try to promote immediately (should fail)
         let result = coordinator.check_membership_cooldown().await;
-        assert!(matches!(
-            result,
-            Err(PromotionError::MembershipChangeTooRecent { .. })
-        ));
+        assert!(matches!(result, Err(PromotionError::MembershipChangeTooRecent { .. })));
     }
 
     #[tokio::test]
@@ -506,8 +483,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         // Simulate a change that happened long ago
-        *coordinator.last_membership_change.write().await =
-            Some(Instant::now() - Duration::from_secs(400));
+        *coordinator.last_membership_change.write().await = Some(Instant::now() - Duration::from_secs(400));
 
         // Should succeed (cooldown elapsed)
         let result = coordinator.check_membership_cooldown().await;
@@ -560,31 +536,24 @@ mod tests {
         // Replacing one node leaves 1 node, which is less than quorum (2)
         // This should fail
         let result = coordinator.verify_quorum(&voters, Some(2.into())).await;
-        assert!(matches!(
-            result,
-            Err(PromotionError::NoQuorumWithoutFailedNode { .. })
-        ));
+        assert!(matches!(result, Err(PromotionError::NoQuorumWithoutFailedNode { .. })));
     }
 
     #[tokio::test]
     async fn test_learner_health_check_with_detector() {
-        use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
+        use crate::raft::node_failure_detection::ConnectionStatus;
+        use crate::raft::node_failure_detection::NodeFailureDetector;
 
         let controller = Arc::new(DeterministicClusterController::new());
         let detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
-        let coordinator =
-            LearnerPromotionCoordinator::with_failure_detector(controller, detector.clone());
+        let coordinator = LearnerPromotionCoordinator::with_failure_detector(controller, detector.clone());
 
         let learner_id = 42;
 
         // Learner is healthy - should pass
         {
             let mut detector_guard = detector.write().await;
-            detector_guard.update_node_status(
-                learner_id,
-                ConnectionStatus::Connected,
-                ConnectionStatus::Connected,
-            );
+            detector_guard.update_node_status(learner_id, ConnectionStatus::Connected, ConnectionStatus::Connected);
         }
 
         let result = coordinator.verify_learner_healthy(learner_id).await;
@@ -601,9 +570,6 @@ mod tests {
         }
 
         let result = coordinator.verify_learner_healthy(learner_id).await;
-        assert!(matches!(
-            result,
-            Err(PromotionError::LearnerUnhealthy { .. })
-        ));
+        assert!(matches!(result, Err(PromotionError::LearnerUnhealthy { .. })));
     }
 }

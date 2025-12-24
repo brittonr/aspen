@@ -19,13 +19,17 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use parking_lot::RwLock;
 
 use super::router::ShardId;
-use super::topology::{DEFAULT_MERGE_SIZE_BYTES, DEFAULT_SPLIT_QPS, DEFAULT_SPLIT_SIZE_BYTES};
+use super::topology::DEFAULT_MERGE_SIZE_BYTES;
+use super::topology::DEFAULT_SPLIT_QPS;
+use super::topology::DEFAULT_SPLIT_SIZE_BYTES;
 
 /// Duration of the metrics measurement window.
 pub const METRICS_WINDOW_DURATION: Duration = Duration::from_secs(60);
@@ -90,8 +94,7 @@ impl ShardMetricsAtomic {
         self.size_bytes.store(new, Ordering::Relaxed);
 
         let old_count = self.key_count.load(Ordering::Relaxed);
-        self.key_count
-            .store(old_count.saturating_sub(1), Ordering::Relaxed);
+        self.key_count.store(old_count.saturating_sub(1), Ordering::Relaxed);
     }
 
     /// Get estimated size in bytes.
@@ -129,14 +132,12 @@ impl ShardMetricsAtomic {
     pub fn reset_window(&self, current_time_ms: u64) {
         self.read_count.store(0, Ordering::Relaxed);
         self.write_count.store(0, Ordering::Relaxed);
-        self.window_start_ms
-            .store(current_time_ms, Ordering::Relaxed);
+        self.window_start_ms.store(current_time_ms, Ordering::Relaxed);
     }
 
     /// Check if shard should be split based on thresholds.
     pub fn should_split(&self, current_time_ms: u64) -> bool {
-        self.size_bytes() > DEFAULT_SPLIT_SIZE_BYTES
-            || self.qps(current_time_ms) > DEFAULT_SPLIT_QPS
+        self.size_bytes() > DEFAULT_SPLIT_SIZE_BYTES || self.qps(current_time_ms) > DEFAULT_SPLIT_QPS
     }
 
     /// Check if shard is eligible for merging.
@@ -225,32 +226,18 @@ impl ShardMetricsCollector {
     /// Get snapshots of all shard metrics.
     pub fn all_snapshots(&self) -> HashMap<ShardId, MetricsSnapshot> {
         let current_ms = self.current_time_ms();
-        self.shards
-            .read()
-            .iter()
-            .map(|(&id, m)| (id, m.snapshot(current_ms)))
-            .collect()
+        self.shards.read().iter().map(|(&id, m)| (id, m.snapshot(current_ms))).collect()
     }
 
     /// Find shards that should be split.
     pub fn shards_to_split(&self) -> Vec<ShardId> {
         let current_ms = self.current_time_ms();
-        self.shards
-            .read()
-            .iter()
-            .filter(|(_, m)| m.should_split(current_ms))
-            .map(|(&id, _)| id)
-            .collect()
+        self.shards.read().iter().filter(|(_, m)| m.should_split(current_ms)).map(|(&id, _)| id).collect()
     }
 
     /// Find shards that could be merged.
     pub fn shards_to_merge(&self) -> Vec<ShardId> {
-        self.shards
-            .read()
-            .iter()
-            .filter(|(_, m)| m.can_merge())
-            .map(|(&id, _)| id)
-            .collect()
+        self.shards.read().iter().filter(|(_, m)| m.can_merge()).map(|(&id, _)| id).collect()
     }
 
     /// Reset all windows (called periodically).

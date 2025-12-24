@@ -56,18 +56,15 @@ pub use node::NodeBuilder;
 
 // Re-export key protocol handler types
 pub use protocol_handlers::{
-    AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler,
-    LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN,
-    RaftProtocolHandler,
+    AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
+    LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN, RaftProtocolHandler,
 };
-
 // Re-export authentication types
 pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
-
 // Re-export log subscriber types
 pub use raft::log_subscriber::{
-    EndOfStreamReason, HistoricalLogReader, KvOperation, LogEntryMessage, LogEntryPayload,
-    SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
+    EndOfStreamReason, HistoricalLogReader, KvOperation, LogEntryMessage, LogEntryPayload, SubscribeRejectReason,
+    SubscribeRequest, SubscribeResponse,
 };
 
 /// Fuzzing-specific module that exposes internal types for fuzz testing.
@@ -87,24 +84,29 @@ pub mod fuzz_helpers {
     //! - Cluster tickets (bootstrap)
 
     // Raft RPC types (network attack surface)
-    pub use crate::raft::rpc::{
-        RaftAppendEntriesRequest, RaftRpcProtocol, RaftRpcResponse, RaftSnapshotRequest,
-        RaftVoteRequest,
-    };
-    pub use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig, NodeId, RaftMemberInfo};
-
     // API request types (HTTP attack surface)
-    pub use crate::api::{
-        AddLearnerRequest, ChangeMembershipRequest, DeleteRequest, InitRequest, ReadRequest,
-        ScanRequest, WriteCommand, WriteRequest,
-    };
-
+    pub use crate::api::AddLearnerRequest;
+    pub use crate::api::ChangeMembershipRequest;
+    pub use crate::api::DeleteRequest;
+    pub use crate::api::InitRequest;
+    pub use crate::api::ReadRequest;
+    pub use crate::api::ScanRequest;
+    pub use crate::api::WriteCommand;
+    pub use crate::api::WriteRequest;
     // KV store traits and implementations for differential fuzzing
     pub use crate::api::{DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError};
-
-    // Cluster ticket type (user input attack surface)
-    pub use crate::cluster::ticket::AspenClusterTicket;
-
     // Client RPC types (Iroh protocol attack surface)
     pub use crate::client_rpc::{ClientRpcRequest, ClientRpcResponse};
+    // Cluster ticket type (user input attack surface)
+    pub use crate::cluster::ticket::AspenClusterTicket;
+    pub use crate::raft::rpc::RaftAppendEntriesRequest;
+    pub use crate::raft::rpc::RaftRpcProtocol;
+    pub use crate::raft::rpc::RaftRpcResponse;
+    pub use crate::raft::rpc::RaftSnapshotRequest;
+    pub use crate::raft::rpc::RaftVoteRequest;
+    pub use crate::raft::types::AppRequest;
+    pub use crate::raft::types::AppResponse;
+    pub use crate::raft::types::AppTypeConfig;
+    pub use crate::raft::types::NodeId;
+    pub use crate::raft::types::RaftMemberInfo;
 }

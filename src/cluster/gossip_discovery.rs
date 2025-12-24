@@ -57,25 +57,35 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use futures::StreamExt;
-use iroh::{EndpointAddr, PublicKey, SecretKey, Signature};
+use iroh::EndpointAddr;
+use iroh::PublicKey;
+use iroh::SecretKey;
+use iroh::Signature;
 use iroh_gossip::api::Event;
 use iroh_gossip::proto::TopicId;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
 use super::IrohEndpointManager;
-use crate::raft::constants::{
-    GOSSIP_ANNOUNCE_FAILURE_THRESHOLD, GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE,
-    GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS, GOSSIP_MAX_STREAM_RETRIES, GOSSIP_MAX_TRACKED_PEERS,
-    GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS, GOSSIP_PER_PEER_BURST, GOSSIP_PER_PEER_RATE_PER_MINUTE,
-    GOSSIP_STREAM_BACKOFF_SECS,
-};
+use crate::raft::constants::GOSSIP_ANNOUNCE_FAILURE_THRESHOLD;
+use crate::raft::constants::GOSSIP_GLOBAL_BURST;
+use crate::raft::constants::GOSSIP_GLOBAL_RATE_PER_MINUTE;
+use crate::raft::constants::GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS;
+use crate::raft::constants::GOSSIP_MAX_STREAM_RETRIES;
+use crate::raft::constants::GOSSIP_MAX_TRACKED_PEERS;
+use crate::raft::constants::GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
+use crate::raft::constants::GOSSIP_PER_PEER_BURST;
+use crate::raft::constants::GOSSIP_PER_PEER_RATE_PER_MINUTE;
+use crate::raft::constants::GOSSIP_STREAM_BACKOFF_SECS;
 use crate::raft::network::IrpcRaftNetworkFactory;
 use crate::raft::pure::calculate_backoff_duration;
 use crate::raft::types::NodeId;
@@ -94,7 +104,8 @@ const GOSSIP_MESSAGE_VERSION: u8 = 2;
 ///
 /// Contains node's ID, EndpointAddr, and a timestamp for freshness tracking.
 ///
-/// Tiger Style: Fixed-size payload, explicit timestamp in microseconds, versioned for forward compatibility.
+/// Tiger Style: Fixed-size payload, explicit timestamp in microseconds, versioned for forward
+/// compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PeerAnnouncement {
     /// Protocol version for forward compatibility checking.
@@ -424,13 +435,10 @@ impl GossipRateLimiter {
             // Create new entry (starts with full bucket, so first message always allowed)
             let mut bucket = TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST);
             bucket.try_consume(); // Consume token for this message
-            self.per_peer.insert(
-                *peer_id,
-                PeerRateEntry {
-                    bucket,
-                    last_access: now,
-                },
-            );
+            self.per_peer.insert(*peer_id, PeerRateEntry {
+                bucket,
+                last_access: now,
+            });
         }
 
         Ok(())
@@ -1103,13 +1111,10 @@ mod tests {
             let peer = SecretKey::from(key_bytes).public();
 
             // Directly insert entries to avoid rate limiting
-            limiter.per_peer.insert(
-                peer,
-                PeerRateEntry {
-                    bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
-                    last_access: now,
-                },
-            );
+            limiter.per_peer.insert(peer, PeerRateEntry {
+                bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+                last_access: now,
+            });
         }
 
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
@@ -1117,13 +1122,10 @@ mod tests {
         // Trigger eviction by adding one more
         limiter.evict_oldest();
         let new_peer = SecretKey::from([0xFF; 32]).public();
-        limiter.per_peer.insert(
-            new_peer,
-            PeerRateEntry {
-                bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
-                last_access: now,
-            },
-        );
+        limiter.per_peer.insert(new_peer, PeerRateEntry {
+            bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+            last_access: now,
+        });
 
         // Should still be at capacity (not over)
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
@@ -1162,23 +1164,17 @@ mod tests {
 
         // Insert peer A with older timestamp
         let peer_a = SecretKey::from([0xAA; 32]).public();
-        limiter.per_peer.insert(
-            peer_a,
-            PeerRateEntry {
-                bucket: TokenBucket::new(12, 3),
-                last_access: now - std::time::Duration::from_secs(100),
-            },
-        );
+        limiter.per_peer.insert(peer_a, PeerRateEntry {
+            bucket: TokenBucket::new(12, 3),
+            last_access: now - std::time::Duration::from_secs(100),
+        });
 
         // Insert peer B with newer timestamp
         let peer_b = SecretKey::from([0xBB; 32]).public();
-        limiter.per_peer.insert(
-            peer_b,
-            PeerRateEntry {
-                bucket: TokenBucket::new(12, 3),
-                last_access: now,
-            },
-        );
+        limiter.per_peer.insert(peer_b, PeerRateEntry {
+            bucket: TokenBucket::new(12, 3),
+            last_access: now,
+        });
 
         // Evict oldest
         limiter.evict_oldest();

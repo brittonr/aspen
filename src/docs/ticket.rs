@@ -2,10 +2,12 @@
 //!
 //! Contains cluster metadata alongside the iroh-docs namespace info.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use iroh::EndpointAddr;
 use iroh_tickets::Ticket;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Prefix for serialized Aspen docs tickets.
 pub const TICKET_PREFIX: &str = "aspendocs";
@@ -74,8 +76,10 @@ impl Ticket for AspenDocsTicket {
 
 #[cfg(test)]
 mod tests {
+    use iroh::EndpointId;
+    use iroh::SecretKey;
+
     use super::*;
-    use iroh::{EndpointId, SecretKey};
 
     #[test]
     fn test_ticket_roundtrip() {
@@ -83,13 +87,7 @@ mod tests {
         let endpoint_id: EndpointId = secret_key.public();
         let addr = EndpointAddr::new(endpoint_id);
 
-        let ticket = AspenDocsTicket::new(
-            "test-cluster".to_string(),
-            0,
-            "abc123".to_string(),
-            vec![addr],
-            true,
-        );
+        let ticket = AspenDocsTicket::new("test-cluster".to_string(), 0, "abc123".to_string(), vec![addr], true);
 
         let serialized = ticket.serialize();
         assert!(serialized.starts_with(TICKET_PREFIX));

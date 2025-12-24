@@ -11,9 +11,8 @@
 //! - Invalid TopicId
 //! - Invalid EndpointId values
 
-use bolero::check;
-
 use aspen::fuzz_helpers::AspenClusterTicket;
+use bolero::check;
 
 #[test]
 fn fuzz_cluster_ticket() {

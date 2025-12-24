@@ -65,21 +65,54 @@ mod semaphore;
 mod sequence;
 mod types;
 
-pub use barrier::{BarrierManager, BarrierPhase, BarrierState};
-pub use counter::{AtomicCounter, BufferedCounter, CounterConfig, SignedAtomicCounter};
-pub use election::{ElectionConfig, ElectionHandle, LeaderElection, LeadershipState};
-pub use error::{CoordinationError, FenceError, RateLimitError};
-pub use lock::{DistributedLock, LockConfig, LockGuard};
-pub use queue::{
-    DLQItem, DLQReason, DequeuedItem, EnqueueOptions, PendingItem, QueueConfig, QueueItem,
-    QueueManager, QueueState, QueueStats, QueueStatus,
-};
-pub use rate_limiter::{DistributedRateLimiter, RateLimiterConfig};
-pub use registry::{
-    DiscoveryFilter, HealthStatus, RegisterOptions, ServiceInstance, ServiceInstanceMetadata,
-    ServiceMetadata, ServiceRegistry,
-};
-pub use rwlock::{RWLockManager, RWLockMode, RWLockState, ReaderEntry, WriterEntry};
-pub use semaphore::{SemaphoreHolder, SemaphoreManager, SemaphoreState};
-pub use sequence::{SequenceConfig, SequenceGenerator};
-pub use types::{BucketState, FencingToken, LockEntry, now_unix_ms};
+pub use barrier::BarrierManager;
+pub use barrier::BarrierPhase;
+pub use barrier::BarrierState;
+pub use counter::AtomicCounter;
+pub use counter::BufferedCounter;
+pub use counter::CounterConfig;
+pub use counter::SignedAtomicCounter;
+pub use election::ElectionConfig;
+pub use election::ElectionHandle;
+pub use election::LeaderElection;
+pub use election::LeadershipState;
+pub use error::CoordinationError;
+pub use error::FenceError;
+pub use error::RateLimitError;
+pub use lock::DistributedLock;
+pub use lock::LockConfig;
+pub use lock::LockGuard;
+pub use queue::DLQItem;
+pub use queue::DLQReason;
+pub use queue::DequeuedItem;
+pub use queue::EnqueueOptions;
+pub use queue::PendingItem;
+pub use queue::QueueConfig;
+pub use queue::QueueItem;
+pub use queue::QueueManager;
+pub use queue::QueueState;
+pub use queue::QueueStats;
+pub use queue::QueueStatus;
+pub use rate_limiter::DistributedRateLimiter;
+pub use rate_limiter::RateLimiterConfig;
+pub use registry::DiscoveryFilter;
+pub use registry::HealthStatus;
+pub use registry::RegisterOptions;
+pub use registry::ServiceInstance;
+pub use registry::ServiceInstanceMetadata;
+pub use registry::ServiceMetadata;
+pub use registry::ServiceRegistry;
+pub use rwlock::RWLockManager;
+pub use rwlock::RWLockMode;
+pub use rwlock::RWLockState;
+pub use rwlock::ReaderEntry;
+pub use rwlock::WriterEntry;
+pub use semaphore::SemaphoreHolder;
+pub use semaphore::SemaphoreManager;
+pub use semaphore::SemaphoreState;
+pub use sequence::SequenceConfig;
+pub use sequence::SequenceGenerator;
+pub use types::BucketState;
+pub use types::FencingToken;
+pub use types::LockEntry;
+pub use types::now_unix_ms;

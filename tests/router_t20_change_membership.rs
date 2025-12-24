@@ -14,7 +14,8 @@ use anyhow::Result;
 use aspen::raft::types::NodeId;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, ServerState};
+use openraft::Config;
+use openraft::ServerState;
 
 fn timeout() -> Option<Duration> {
     Some(Duration::from_secs(10))
@@ -53,15 +54,9 @@ async fn test_add_learner_and_promote() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
 
-        router
-            .wait(0, timeout())
-            .state(ServerState::Leader, "node 0 is leader")
-            .await?;
+        router.wait(0, timeout()).state(ServerState::Leader, "node 0 is leader").await?;
     }
 
     tracing::info!("--- creating node 1 and adding as learner");
@@ -70,21 +65,13 @@ async fn test_add_learner_and_promote() -> Result<()> {
         router.new_raft_node(1).await?;
 
         // Give node 1 time to fully initialize in Learner state
-        router
-            .wait(1, timeout())
-            .state(ServerState::Learner, "node 1 is learner")
-            .await?;
+        router.wait(1, timeout()).state(ServerState::Learner, "node 1 is learner").await?;
 
         let leader = router.get_raft_handle(0)?;
-        leader
-            .add_learner(NodeId(1), create_test_raft_member_info(NodeId(1)), false)
-            .await?;
+        leader.add_learner(NodeId(1), create_test_raft_member_info(NodeId(1)), false).await?;
 
         // Wait for learner to be added (log entry written)
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(2), "learner added")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(2), "learner added").await?;
     }
 
     tracing::info!("--- verify node 1 receives logs and stays in learner state");
@@ -93,26 +80,18 @@ async fn test_add_learner_and_promote() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Node 1 should be in learner state
-        router
-            .wait(1, timeout())
-            .state(ServerState::Learner, "node 1 is learner")
-            .await?;
+        router.wait(1, timeout()).state(ServerState::Learner, "node 1 is learner").await?;
     }
 
     tracing::info!("--- change membership to make both nodes voters");
     {
         let leader = router.get_raft_handle(0)?;
         // change_membership takes an array of node IDs
-        leader
-            .change_membership([NodeId(0), NodeId(1)], false)
-            .await?;
+        leader.change_membership([NodeId(0), NodeId(1)], false).await?;
 
         // Wait for membership change to be applied
         // Membership change takes 2 log entries (joint config + final config)
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(4), "membership changed")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(4), "membership changed").await?;
     }
 
     tracing::info!("--- verify cluster has both voters");
@@ -125,24 +104,12 @@ async fn test_add_learner_and_promote() -> Result<()> {
         let metrics1 = router.get_raft_handle(1)?.metrics().borrow().clone();
 
         let states = [metrics0.state, metrics1.state];
-        assert!(
-            states.contains(&ServerState::Leader),
-            "one node should be leader"
-        );
-        assert!(
-            states.contains(&ServerState::Follower),
-            "one node should be follower"
-        );
+        assert!(states.contains(&ServerState::Leader), "one node should be leader");
+        assert!(states.contains(&ServerState::Follower), "one node should be follower");
 
         // Verify both nodes see the same membership
-        tracing::info!(
-            "node 0 membership: voters={:?}",
-            metrics0.membership_config.voter_ids().collect::<Vec<_>>()
-        );
-        tracing::info!(
-            "node 1 membership: voters={:?}",
-            metrics1.membership_config.voter_ids().collect::<Vec<_>>()
-        );
+        tracing::info!("node 0 membership: voters={:?}", metrics0.membership_config.voter_ids().collect::<Vec<_>>());
+        tracing::info!("node 1 membership: voters={:?}", metrics1.membership_config.voter_ids().collect::<Vec<_>>());
     }
 
     Ok(())
@@ -168,23 +135,15 @@ async fn test_change_membership_without_learner() -> Result<()> {
         nodes.insert(NodeId::from(0), create_test_raft_member_info(0));
         node0.initialize(nodes).await?;
 
-        router
-            .wait(0, timeout())
-            .log_index_at_least(Some(1), "initialized")
-            .await?;
+        router.wait(0, timeout()).log_index_at_least(Some(1), "initialized").await?;
     }
 
     tracing::info!("--- try to change membership without adding learner (should fail)");
     {
         let leader = router.get_raft_handle(0)?;
         // Try to add node 1 as voter without first adding as learner
-        let res = leader
-            .change_membership([NodeId(0), NodeId(1)], false)
-            .await;
-        assert!(
-            res.is_err(),
-            "change_membership should fail without adding learner first"
-        );
+        let res = leader.change_membership([NodeId(0), NodeId(1)], false).await;
+        assert!(res.is_err(), "change_membership should fail without adding learner first");
 
         let err = res.unwrap_err();
         tracing::info!("expected error: {:?}", err);

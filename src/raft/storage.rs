@@ -57,28 +57,50 @@ use std::fmt::Debug;
 use std::io;
 use std::io::Cursor;
 use std::ops::RangeBounds;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-
-use futures::{Stream, TryStreamExt};
-use openraft::alias::{LogIdOf, SnapshotDataOf, VoteOf};
-use openraft::entry::RaftEntry;
-use openraft::storage::{
-    EntryResponder, IOFlushed, RaftLogStorage, RaftSnapshotBuilder, RaftStateMachine, Snapshot,
-};
-use openraft::{EntryPayload, LogState, OptionalSend, RaftLogReader, StoredMembership};
-use redb::{Database, ReadableTable, TableDefinition};
-use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
 use std::sync::RwLock as StdRwLock;
-use tokio::sync::{Mutex, RwLock};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use crate::raft::constants::{INTEGRITY_VERSION, MAX_BATCH_SIZE};
-use crate::raft::integrity::{
-    ChainHash, ChainTipState, GENESIS_HASH, compute_entry_hash, hash_to_hex,
-};
-use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
+use futures::Stream;
+use futures::TryStreamExt;
+use openraft::EntryPayload;
+use openraft::LogState;
+use openraft::OptionalSend;
+use openraft::RaftLogReader;
+use openraft::StoredMembership;
+use openraft::alias::LogIdOf;
+use openraft::alias::SnapshotDataOf;
+use openraft::alias::VoteOf;
+use openraft::entry::RaftEntry;
+use openraft::storage::EntryResponder;
+use openraft::storage::IOFlushed;
+use openraft::storage::RaftLogStorage;
+use openraft::storage::RaftSnapshotBuilder;
+use openraft::storage::RaftStateMachine;
+use openraft::storage::Snapshot;
+use redb::Database;
+use redb::ReadableTable;
+use redb::TableDefinition;
+use serde::Deserialize;
+use serde::Serialize;
+use snafu::ResultExt;
+use snafu::Snafu;
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+
+use crate::raft::constants::INTEGRITY_VERSION;
+use crate::raft::constants::MAX_BATCH_SIZE;
+use crate::raft::integrity::ChainHash;
+use crate::raft::integrity::ChainTipState;
+use crate::raft::integrity::GENESIS_HASH;
+use crate::raft::integrity::compute_entry_hash;
+use crate::raft::integrity::hash_to_hex;
+use crate::raft::types::AppRequest;
+use crate::raft::types::AppResponse;
+use crate::raft::types::AppTypeConfig;
 use crate::utils::ensure_disk_space_available;
 
 // ====================================================================================
@@ -88,7 +110,8 @@ use crate::utils::ensure_disk_space_available;
 /// Storage backend selection for Raft log and state machine.
 ///
 /// Aspen supports three storage backends:
-/// - **Sqlite**: Persistent storage using redb for logs and SQLite for state machine (default, production)
+/// - **Sqlite**: Persistent storage using redb for logs and SQLite for state machine (default,
+///   production)
 /// - **Redb**: Single-fsync storage using shared redb for both log and state machine (optimized)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -119,10 +142,7 @@ impl std::str::FromStr for StorageBackend {
             "inmemory" | "in-memory" | "memory" => Ok(StorageBackend::InMemory),
             "sqlite" | "sql" | "persistent" | "disk" => Ok(StorageBackend::Sqlite),
             "redb" | "single-fsync" | "fast" => Ok(StorageBackend::Redb),
-            _ => Err(format!(
-                "Invalid storage backend '{}'. Valid options: inmemory, sqlite, redb",
-                s
-            )),
+            _ => Err(format!("Invalid storage backend '{}'. Valid options: inmemory, sqlite, redb", s)),
         }
     }
 }
@@ -280,9 +300,7 @@ pub enum StorageError {
     /// This indicates that a log entry's chain hash does not match the expected
     /// value based on the previous hash. This could indicate hardware corruption
     /// or tampering.
-    #[snafu(display(
-        "chain integrity violation at index {index}: expected {expected}, found {found}"
-    ))]
+    #[snafu(display("chain integrity violation at index {index}: expected {expected}, found {found}"))]
     ChainIntegrityViolation {
         /// Log index where the violation was detected.
         index: u64,
@@ -355,11 +373,7 @@ impl LogStoreInner {
         RB: RangeBounds<u64> + Clone + Debug,
         <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone,
     {
-        Ok(self
-            .log
-            .range(range)
-            .map(|(_, entry)| entry.clone())
-            .collect())
+        Ok(self.log.range(range).map(|(_, entry)| entry.clone()).collect())
     }
 
     async fn get_log_state(&mut self) -> Result<LogState<AppTypeConfig>, io::Error> {
@@ -372,10 +386,7 @@ impl LogStoreInner {
         })
     }
 
-    async fn save_committed(
-        &mut self,
-        committed: Option<LogIdOf<AppTypeConfig>>,
-    ) -> Result<(), io::Error> {
+    async fn save_committed(&mut self, committed: Option<LogIdOf<AppTypeConfig>>) -> Result<(), io::Error> {
         self.committed = committed;
         Ok(())
     }
@@ -393,14 +404,8 @@ impl LogStoreInner {
         Ok(self.vote)
     }
 
-    async fn append<I>(
-        &mut self,
-        entries: I,
-        callback: IOFlushed<AppTypeConfig>,
-    ) -> Result<(), io::Error>
-    where
-        I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry>,
-    {
+    async fn append<I>(&mut self, entries: I, callback: IOFlushed<AppTypeConfig>) -> Result<(), io::Error>
+    where I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> {
         for entry in entries {
             self.log.insert(entry.log_id().index(), entry);
         }
@@ -409,11 +414,7 @@ impl LogStoreInner {
     }
 
     async fn truncate(&mut self, log_id: LogIdOf<AppTypeConfig>) -> Result<(), io::Error> {
-        let keys = self
-            .log
-            .range(log_id.index()..)
-            .map(|(k, _)| *k)
-            .collect::<Vec<_>>();
+        let keys = self.log.range(log_id.index()..).map(|(k, _)| *k).collect::<Vec<_>>();
         for key in keys {
             self.log.remove(&key);
         }
@@ -425,11 +426,7 @@ impl LogStoreInner {
             assert!(prev <= &log_id);
         }
         self.last_purged_log_id = Some(log_id);
-        let keys = self
-            .log
-            .range(..=log_id.index())
-            .map(|(k, _)| *k)
-            .collect::<Vec<_>>();
+        let keys = self.log.range(..=log_id.index()).map(|(k, _)| *k).collect::<Vec<_>>();
         for key in keys {
             self.log.remove(&key);
         }
@@ -438,8 +435,7 @@ impl LogStoreInner {
 }
 
 impl RaftLogReader<AppTypeConfig> for InMemoryLogStore
-where
-    <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone,
+where <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone
 {
     async fn try_get_log_entries<RB>(
         &mut self,
@@ -459,8 +455,7 @@ where
 }
 
 impl RaftLogStorage<AppTypeConfig> for InMemoryLogStore
-where
-    <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone,
+where <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone
 {
     type LogReader = Self;
 
@@ -469,10 +464,7 @@ where
         inner.get_log_state().await
     }
 
-    async fn save_committed(
-        &mut self,
-        committed: Option<LogIdOf<AppTypeConfig>>,
-    ) -> Result<(), io::Error> {
+    async fn save_committed(&mut self, committed: Option<LogIdOf<AppTypeConfig>>) -> Result<(), io::Error> {
         let mut inner = self.inner.lock().await;
         inner.save_committed(committed).await
     }
@@ -487,11 +479,7 @@ where
         inner.save_vote(vote).await
     }
 
-    async fn append<I>(
-        &mut self,
-        entries: I,
-        callback: IOFlushed<AppTypeConfig>,
-    ) -> Result<(), io::Error>
+    async fn append<I>(&mut self, entries: I, callback: IOFlushed<AppTypeConfig>) -> Result<(), io::Error>
     where
         I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
@@ -544,16 +532,16 @@ where
 /// The `chain_tip` cache is an optimization to avoid database reads on every append.
 /// It is safe because:
 ///
-/// 1. **Raft serializes appends**: OpenRaft guarantees that log appends are serialized
-///    at the consensus layer. Only the leader appends, and it does so sequentially.
-///    This eliminates concurrent append races.
+/// 1. **Raft serializes appends**: OpenRaft guarantees that log appends are serialized at the
+///    consensus layer. Only the leader appends, and it does so sequentially. This eliminates
+///    concurrent append races.
 ///
-/// 2. **Database is source of truth**: On startup/recovery, `load_chain_tip()` reads
-///    from the database, not the cache. A crash after database commit but before
-///    cache update is safe - the next startup loads the correct state.
+/// 2. **Database is source of truth**: On startup/recovery, `load_chain_tip()` reads from the
+///    database, not the cache. A crash after database commit but before cache update is safe - the
+///    next startup loads the correct state.
 ///
-/// 3. **Truncate is also serialized**: Log truncation only happens during leader
-///    changes, which are also serialized by Raft consensus.
+/// 3. **Truncate is also serialized**: Log truncation only happens during leader changes, which are
+///    also serialized by Raft consensus.
 #[derive(Clone, Debug)]
 pub struct RedbLogStore {
     db: Arc<Database>,
@@ -592,22 +580,12 @@ impl RedbLogStore {
         // Initialize tables (including chain hash tables)
         let write_txn = db.begin_write().context(BeginWriteSnafu)?;
         {
-            write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .context(OpenTableSnafu)?;
-            write_txn
-                .open_table(RAFT_META_TABLE)
-                .context(OpenTableSnafu)?;
-            write_txn
-                .open_table(SNAPSHOT_TABLE)
-                .context(OpenTableSnafu)?;
+            write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
+            write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
             // Chain hashing tables
-            write_txn
-                .open_table(CHAIN_HASH_TABLE)
-                .context(OpenTableSnafu)?;
-            write_txn
-                .open_table(INTEGRITY_META_TABLE)
-                .context(OpenTableSnafu)?;
+            write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
+            write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -636,23 +614,18 @@ impl RedbLogStore {
         let read_txn = db.begin_read().context(BeginReadSnafu)?;
 
         // Try to read cached chain tip
-        let meta_table = read_txn
-            .open_table(INTEGRITY_META_TABLE)
-            .context(OpenTableSnafu)?;
+        let meta_table = read_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
 
-        let tip_hash = meta_table
-            .get("chain_tip_hash")
-            .context(GetSnafu)?
-            .and_then(|v| {
-                let bytes = v.value();
-                if bytes.len() == 32 {
-                    let mut hash = [0u8; 32];
-                    hash.copy_from_slice(bytes);
-                    Some(hash)
-                } else {
-                    None
-                }
-            });
+        let tip_hash = meta_table.get("chain_tip_hash").context(GetSnafu)?.and_then(|v| {
+            let bytes = v.value();
+            if bytes.len() == 32 {
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(bytes);
+                Some(hash)
+            } else {
+                None
+            }
+        });
 
         let tip_index: Option<u64> = meta_table
             .get("chain_tip_index")
@@ -663,9 +636,7 @@ impl RedbLogStore {
             (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),
             _ => {
                 // Chain tip not cached, check if we have any chain hashes
-                let hash_table = read_txn
-                    .open_table(CHAIN_HASH_TABLE)
-                    .context(OpenTableSnafu)?;
+                let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
                 // Get the last entry's hash
                 if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
@@ -695,11 +666,7 @@ impl RedbLogStore {
             return Ok(());
         }
 
-        tracing::info!(
-            current_version,
-            target_version = INTEGRITY_VERSION,
-            "migrating log storage to chain hashing"
-        );
+        tracing::info!(current_version, target_version = INTEGRITY_VERSION, "migrating log storage to chain hashing");
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         let mut prev_hash = GENESIS_HASH;
@@ -707,12 +674,8 @@ impl RedbLogStore {
         let mut last_index: u64 = 0;
 
         {
-            let log_table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .context(OpenTableSnafu)?;
-            let mut hash_table = write_txn
-                .open_table(CHAIN_HASH_TABLE)
-                .context(OpenTableSnafu)?;
+            let log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
             // Iterate all existing entries and compute chain hashes
             for item in log_table.iter().context(RangeSnafu)? {
@@ -729,9 +692,7 @@ impl RedbLogStore {
                 // Compute chain hash
                 let entry_hash = compute_entry_hash(&prev_hash, index, term, entry_bytes);
 
-                hash_table
-                    .insert(index, entry_hash.as_slice())
-                    .context(InsertSnafu)?;
+                hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
 
                 prev_hash = entry_hash;
                 last_index = index;
@@ -743,33 +704,22 @@ impl RedbLogStore {
             }
 
             // Store migration version
-            let mut meta_table = write_txn
-                .open_table(INTEGRITY_META_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
             let version_bytes = bincode::serialize(&INTEGRITY_VERSION).context(SerializeSnafu)?;
-            meta_table
-                .insert("integrity_version", version_bytes.as_slice())
-                .context(InsertSnafu)?;
+            meta_table.insert("integrity_version", version_bytes.as_slice()).context(InsertSnafu)?;
 
             // Store chain tip
-            meta_table
-                .insert("chain_tip_hash", prev_hash.as_slice())
-                .context(InsertSnafu)?;
+            meta_table.insert("chain_tip_hash", prev_hash.as_slice()).context(InsertSnafu)?;
             let index_bytes = bincode::serialize(&last_index).context(SerializeSnafu)?;
-            meta_table
-                .insert("chain_tip_index", index_bytes.as_slice())
-                .context(InsertSnafu)?;
+            meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
         // Update in-memory chain tip
         {
-            let mut chain_tip = self
-                .chain_tip
-                .write()
-                .map_err(|_| StorageError::LockPoisoned {
-                    context: "writing chain_tip during migration".into(),
-                })?;
+            let mut chain_tip = self.chain_tip.write().map_err(|_| StorageError::LockPoisoned {
+                context: "writing chain_tip during migration".into(),
+            })?;
             chain_tip.hash = prev_hash;
             chain_tip.index = last_index;
         }
@@ -829,14 +779,9 @@ impl RedbLogStore {
     }
 
     // Internal helper: Read a value from the metadata table
-    fn read_meta<T: for<'de> Deserialize<'de>>(
-        &self,
-        key: &str,
-    ) -> Result<Option<T>, StorageError> {
+    fn read_meta<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>, StorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(RAFT_META_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
 
         match table.get(key).context(GetSnafu)? {
             Some(value) => {
@@ -852,13 +797,9 @@ impl RedbLogStore {
     fn write_meta<T: Serialize>(&self, key: &str, value: &T) -> Result<(), StorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
-                .open_table(RAFT_META_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
             let serialized = bincode::serialize(value).context(SerializeSnafu)?;
-            table
-                .insert(key, serialized.as_slice())
-                .context(InsertSnafu)?;
+            table.insert(key, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
         Ok(())
@@ -868,9 +809,7 @@ impl RedbLogStore {
     fn delete_meta(&self, key: &str) -> Result<(), StorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut table = write_txn
-                .open_table(RAFT_META_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
             table.remove(key).context(RemoveSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -887,9 +826,7 @@ impl RaftLogReader<AppTypeConfig> for RedbLogStore {
         RB: RangeBounds<u64> + Clone + Debug + OptionalSend,
     {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         let mut entries = Vec::new();
         let iter = table.range(range).context(RangeSnafu)?;
@@ -915,9 +852,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
     async fn get_log_state(&mut self) -> Result<LogState<AppTypeConfig>, io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         // Get last log entry
         let last_log_id = table
@@ -943,10 +878,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         })
     }
 
-    async fn save_committed(
-        &mut self,
-        committed: Option<LogIdOf<AppTypeConfig>>,
-    ) -> Result<(), io::Error> {
+    async fn save_committed(&mut self, committed: Option<LogIdOf<AppTypeConfig>>) -> Result<(), io::Error> {
         if let Some(ref c) = committed {
             self.write_meta("committed", c)?;
         } else {
@@ -967,11 +899,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         Ok(())
     }
 
-    async fn append<I>(
-        &mut self,
-        entries: I,
-        callback: IOFlushed<AppTypeConfig>,
-    ) -> Result<(), io::Error>
+    async fn append<I>(&mut self, entries: I, callback: IOFlushed<AppTypeConfig>) -> Result<(), io::Error>
     where
         I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
@@ -981,12 +909,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         // Get current chain tip for hash computation
         let mut prev_hash = {
-            let chain_tip = self
-                .chain_tip
-                .read()
-                .map_err(|_| StorageError::LockPoisoned {
-                    context: "reading chain_tip for append".into(),
-                })?;
+            let chain_tip = self.chain_tip.read().map_err(|_| StorageError::LockPoisoned {
+                context: "reading chain_tip for append".into(),
+            })?;
             chain_tip.hash
         };
 
@@ -995,12 +920,8 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         let mut new_tip_index: u64 = 0;
         let mut has_entries = false;
         {
-            let mut log_table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .context(OpenTableSnafu)?;
-            let mut hash_table = write_txn
-                .open_table(CHAIN_HASH_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
             // Performance optimization: Pre-serialize all entries before inserting
             // This reduces lock contention and allows redb to optimize bulk inserts
@@ -1026,12 +947,8 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
             // Bulk insert all serialized entries and their hashes
             for (index, _term, data, entry_hash) in &serialized_entries {
-                log_table
-                    .insert(*index, data.as_slice())
-                    .context(InsertSnafu)?;
-                hash_table
-                    .insert(*index, entry_hash.as_slice())
-                    .context(InsertSnafu)?;
+                log_table.insert(*index, data.as_slice()).context(InsertSnafu)?;
+                hash_table.insert(*index, entry_hash.as_slice()).context(InsertSnafu)?;
             }
 
             // Update chain tip tracking
@@ -1044,12 +961,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         // Update cached chain tip after successful commit
         if has_entries {
-            let mut chain_tip = self
-                .chain_tip
-                .write()
-                .map_err(|_| StorageError::LockPoisoned {
-                    context: "writing chain_tip after append".into(),
-                })?;
+            let mut chain_tip = self.chain_tip.write().map_err(|_| StorageError::LockPoisoned {
+                context: "writing chain_tip after append".into(),
+            })?;
             chain_tip.hash = new_tip_hash;
             chain_tip.index = new_tip_index;
         }
@@ -1063,12 +977,8 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut log_table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .context(OpenTableSnafu)?;
-            let mut hash_table = write_txn
-                .open_table(CHAIN_HASH_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
             // Collect keys to remove (>= log_id.index())
             let keys: Vec<u64> = log_table
@@ -1100,12 +1010,9 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         };
 
         {
-            let mut chain_tip = self
-                .chain_tip
-                .write()
-                .map_err(|_| StorageError::LockPoisoned {
-                    context: "writing chain_tip after truncate".into(),
-                })?;
+            let mut chain_tip = self.chain_tip.write().map_err(|_| StorageError::LockPoisoned {
+                context: "writing chain_tip after truncate".into(),
+            })?;
             *chain_tip = new_tip;
         }
 
@@ -1125,12 +1032,8 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
-            let mut log_table = write_txn
-                .open_table(RAFT_LOG_TABLE)
-                .context(OpenTableSnafu)?;
-            let mut hash_table = write_txn
-                .open_table(CHAIN_HASH_TABLE)
-                .context(OpenTableSnafu)?;
+            let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
             // Collect keys to remove (<= log_id.index())
             let keys: Vec<u64> = log_table
@@ -1164,8 +1067,7 @@ impl RedbLogStore {
     /// Used for cross-storage validation to ensure state machine consistency.
     /// Returns the committed log index if it exists, None otherwise.
     pub async fn read_committed_sync(&self) -> Result<Option<u64>, io::Error> {
-        let committed: Option<LogIdOf<AppTypeConfig>> =
-            self.read_meta("committed").map_err(io::Error::other)?;
+        let committed: Option<LogIdOf<AppTypeConfig>> = self.read_meta("committed").map_err(io::Error::other)?;
         Ok(committed.map(|log_id| log_id.index))
     }
 
@@ -1174,9 +1076,7 @@ impl RedbLogStore {
     /// Returns `None` if no hash exists at that index.
     fn read_chain_hash_at(&self, index: u64) -> Result<Option<ChainHash>, StorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(CHAIN_HASH_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
         match table.get(index).context(GetSnafu)? {
             Some(value) => {
@@ -1198,23 +1098,17 @@ impl RedbLogStore {
     /// Returns (tip_index, tip_hash) which can be compared across replicas.
     /// If chain tips match, logs are identical up to that point.
     pub fn chain_tip_for_verification(&self) -> Result<(u64, ChainHash), StorageError> {
-        let chain_tip = self
-            .chain_tip
-            .read()
-            .map_err(|_| StorageError::LockPoisoned {
-                context: "reading chain_tip for verification".into(),
-            })?;
+        let chain_tip = self.chain_tip.read().map_err(|_| StorageError::LockPoisoned {
+            context: "reading chain_tip for verification".into(),
+        })?;
         Ok((chain_tip.index, chain_tip.hash))
     }
 
     /// Get chain tip hash as hex string for logging/display.
     pub fn chain_tip_hash_hex(&self) -> Result<String, StorageError> {
-        let chain_tip = self
-            .chain_tip
-            .read()
-            .map_err(|_| StorageError::LockPoisoned {
-                context: "reading chain_tip for hex display".into(),
-            })?;
+        let chain_tip = self.chain_tip.read().map_err(|_| StorageError::LockPoisoned {
+            context: "reading chain_tip for hex display".into(),
+        })?;
         Ok(hash_to_hex(&chain_tip.hash))
     }
 
@@ -1232,20 +1126,12 @@ impl RedbLogStore {
     ///
     /// - Bounded batch size prevents unbounded verification
     /// - Fail-fast on corruption detection
-    pub fn verify_chain_batch(
-        &self,
-        start_index: u64,
-        batch_size: u32,
-    ) -> Result<u64, StorageError> {
+    pub fn verify_chain_batch(&self, start_index: u64, batch_size: u32) -> Result<u64, StorageError> {
         use crate::raft::integrity::verify_entry_hash;
 
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let log_table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
-        let hash_table = read_txn
-            .open_table(CHAIN_HASH_TABLE)
-            .context(OpenTableSnafu)?;
+        let log_table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+        let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
         // Get previous hash (for chain linkage)
         let mut prev_hash = if start_index == 0 || start_index == 1 {
@@ -1312,9 +1198,7 @@ impl RedbLogStore {
     /// Returns (first_index, last_index) or None if no entries exist.
     pub fn verification_range(&self) -> Result<Option<(u64, u64)>, StorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let log_table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
+        let log_table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         let first = log_table.iter().context(RangeSnafu)?.next();
         let last = log_table.iter().context(RangeSnafu)?.last();
@@ -1341,29 +1225,23 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
         start_index: u64,
         end_index: u64,
     ) -> Result<Vec<crate::raft::log_subscriber::LogEntryPayload>, io::Error> {
-        use crate::raft::log_subscriber::{
-            KvOperation, LogEntryPayload, MAX_HISTORICAL_BATCH_SIZE,
-        };
         use openraft::EntryPayload;
 
+        use crate::raft::log_subscriber::KvOperation;
+        use crate::raft::log_subscriber::LogEntryPayload;
+        use crate::raft::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+
         // Tiger Style: Bound the batch size
-        let actual_end = std::cmp::min(
-            end_index,
-            start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64),
-        );
+        let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));
 
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         let mut entries = Vec::new();
         let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
 
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let now_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
         for item in iter {
             let (_key, value) = item.context(GetSnafu)?;
@@ -1393,9 +1271,7 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
 
     async fn earliest_available_index(&self) -> Result<Option<u64>, io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn
-            .open_table(RAFT_LOG_TABLE)
-            .context(OpenTableSnafu)?;
+        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         let first = table.iter().context(RangeSnafu)?.next();
         match first {
@@ -1468,11 +1344,7 @@ impl InMemoryStateMachine {
     /// * `prefix` - Key prefix to match
     pub async fn scan_keys_with_prefix(&self, prefix: &str) -> Vec<String> {
         let sm = self.state_machine.read().await;
-        sm.data
-            .keys()
-            .filter(|k| k.starts_with(prefix))
-            .cloned()
-            .collect()
+        sm.data.keys().filter(|k| k.starts_with(prefix)).cloned().collect()
     }
 
     /// Scan all key-value pairs that start with the given prefix.
@@ -1484,11 +1356,7 @@ impl InMemoryStateMachine {
     /// * `prefix` - Key prefix to match
     pub async fn scan_kv_with_prefix(&self, prefix: &str) -> Vec<(String, String)> {
         let sm = self.state_machine.read().await;
-        sm.data
-            .iter()
-            .filter(|(k, _)| k.starts_with(prefix))
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        sm.data.iter().filter(|(k, _)| k.starts_with(prefix)).map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     /// Async version of scan_kv_with_prefix for use in async contexts.
@@ -1500,11 +1368,7 @@ impl InMemoryStateMachine {
     /// * `prefix` - Key prefix to match
     pub async fn scan_kv_with_prefix_async(&self, prefix: &str) -> Vec<(String, String)> {
         let sm = self.state_machine.read().await;
-        sm.data
-            .iter()
-            .filter(|(k, _)| k.starts_with(prefix))
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        sm.data.iter().filter(|(k, _)| k.starts_with(prefix)).map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 
@@ -1512,8 +1376,8 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
         let state_machine = self.state_machine.read().await;
-        let data = serde_json::to_vec(&state_machine.data)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        let data =
+            serde_json::to_vec(&state_machine.data).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         let last_applied_log = state_machine.last_applied_log;
         let last_membership = state_machine.last_membership.clone();
         let mut current_snapshot = self.current_snapshot.write().await;
@@ -1521,11 +1385,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
 
         let snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
         let snapshot_id = if let Some(last) = last_applied_log {
-            format!(
-                "{}-{}-{snapshot_idx}",
-                last.committed_leader_id(),
-                last.index()
-            )
+            format!("{}-{}-{snapshot_idx}", last.committed_leader_id(), last.index())
         } else {
             format!("--{snapshot_idx}")
         };
@@ -1554,26 +1414,14 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
 
     async fn applied_state(
         &mut self,
-    ) -> Result<
-        (
-            Option<openraft::LogId<AppTypeConfig>>,
-            StoredMembership<AppTypeConfig>,
-        ),
-        io::Error,
-    > {
+    ) -> Result<(Option<openraft::LogId<AppTypeConfig>>, StoredMembership<AppTypeConfig>), io::Error> {
         let state_machine = self.state_machine.read().await;
-        Ok((
-            state_machine.last_applied_log,
-            state_machine.last_membership.clone(),
-        ))
+        Ok((state_machine.last_applied_log, state_machine.last_membership.clone()))
     }
 
     #[tracing::instrument(level = "trace", skip(self, entries))]
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where
-        Strm:
-            Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
-    {
+    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
         let mut sm = self.state_machine.write().await;
         while let Some((entry, responder)) = entries.try_next().await? {
             sm.last_applied_log = Some(entry.log_id);
@@ -1683,10 +1531,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             ..Default::default()
                         }
                     }
-                    AppRequest::ConditionalBatch {
-                        conditions,
-                        operations,
-                    } => {
+                    AppRequest::ConditionalBatch { conditions, operations } => {
                         // Check all conditions first
                         // condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
                         let mut conditions_met = true;
@@ -1696,7 +1541,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                             let met = match cond_type {
                                 0 => current.map(|v| v == expected).unwrap_or(false), // ValueEquals
                                 1 => current.is_some(),                               // KeyExists
-                                2 => current.is_none(), // KeyNotExists
+                                2 => current.is_none(),                               // KeyNotExists
                                 _ => false,
                             };
                             if !met {
@@ -1743,10 +1588,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                         }
                         AppResponse::default()
                     }
-                    AppRequest::LeaseGrant {
-                        lease_id,
-                        ttl_seconds,
-                    } => {
+                    AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
                         // In-memory doesn't track leases, just return success
                         AppResponse {
                             lease_id: Some(*lease_id),
@@ -1801,8 +1643,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
                     | AppRequest::TopologyUpdate { .. } => AppResponse::default(),
                 },
                 EntryPayload::Membership(ref membership) => {
-                    sm.last_membership =
-                        StoredMembership::new(Some(entry.log_id), membership.clone());
+                    sm.last_membership = StoredMembership::new(Some(entry.log_id), membership.clone());
                     AppResponse::default()
                 }
             };
@@ -1813,9 +1654,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
         Ok(())
     }
 
-    async fn begin_receiving_snapshot(
-        &mut self,
-    ) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {
+    async fn begin_receiving_snapshot(&mut self) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {
         let mut current_snapshot = self.current_snapshot.write().await;
         Ok(match current_snapshot.take() {
             Some(snapshot) => Cursor::new(snapshot.data),
@@ -1833,8 +1672,8 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
         std::io::copy(&mut snapshot, &mut snapshot_data)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
-        let new_data: BTreeMap<String, String> = serde_json::from_slice(&snapshot_data)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        let new_data: BTreeMap<String, String> =
+            serde_json::from_slice(&snapshot_data).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
         // Update state machine
         let mut sm = self.state_machine.write().await;
@@ -1879,10 +1718,11 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::raft::types::NodeId;
     use openraft::Vote;
     use tempfile::TempDir;
+
+    use super::*;
+    use crate::raft::types::NodeId;
 
     // =========================================================================
     // StorageBackend Enum Tests
@@ -1896,74 +1736,32 @@ mod tests {
 
     #[test]
     fn test_storage_backend_from_str_inmemory() {
-        assert_eq!(
-            "inmemory".parse::<StorageBackend>().unwrap(),
-            StorageBackend::InMemory
-        );
-        assert_eq!(
-            "in-memory".parse::<StorageBackend>().unwrap(),
-            StorageBackend::InMemory
-        );
-        assert_eq!(
-            "memory".parse::<StorageBackend>().unwrap(),
-            StorageBackend::InMemory
-        );
+        assert_eq!("inmemory".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
+        assert_eq!("in-memory".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
+        assert_eq!("memory".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
     }
 
     #[test]
     fn test_storage_backend_from_str_sqlite() {
-        assert_eq!(
-            "sqlite".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
-        );
-        assert_eq!(
-            "sql".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
-        );
-        assert_eq!(
-            "persistent".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
-        );
-        assert_eq!(
-            "disk".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
-        );
-        assert_eq!(
-            "redb".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Redb
-        );
+        assert_eq!("sqlite".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("sql".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("persistent".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("disk".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("redb".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
     }
 
     #[test]
     fn test_storage_backend_from_str_redb() {
-        assert_eq!(
-            "redb".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Redb
-        );
-        assert_eq!(
-            "single-fsync".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Redb
-        );
-        assert_eq!(
-            "fast".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Redb
-        );
+        assert_eq!("redb".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
+        assert_eq!("single-fsync".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
+        assert_eq!("fast".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
     }
 
     #[test]
     fn test_storage_backend_from_str_case_insensitive() {
-        assert_eq!(
-            "INMEMORY".parse::<StorageBackend>().unwrap(),
-            StorageBackend::InMemory
-        );
-        assert_eq!(
-            "SQLite".parse::<StorageBackend>().unwrap(),
-            StorageBackend::Sqlite
-        );
-        assert_eq!(
-            "InMemory".parse::<StorageBackend>().unwrap(),
-            StorageBackend::InMemory
-        );
+        assert_eq!("INMEMORY".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
+        assert_eq!("SQLite".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("InMemory".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
     }
 
     #[test]
@@ -2370,7 +2168,9 @@ mod tests {
 
     #[test]
     fn test_stored_snapshot_serde() {
-        use openraft::{Membership, SnapshotMeta, StoredMembership};
+        use openraft::Membership;
+        use openraft::SnapshotMeta;
+        use openraft::StoredMembership;
 
         let membership = Membership::<AppTypeConfig>::new_with_defaults(vec![], []);
         let meta = SnapshotMeta {
@@ -2416,8 +2216,7 @@ mod tests {
         data.data.insert("test".to_string(), "data".to_string());
 
         let serialized = bincode::serialize(&data).expect("serialize");
-        let deserialized: StateMachineData =
-            bincode::deserialize(&serialized).expect("deserialize");
+        let deserialized: StateMachineData = bincode::deserialize(&serialized).expect("deserialize");
 
         assert_eq!(deserialized.data.get("test"), Some(&"data".to_string()));
     }

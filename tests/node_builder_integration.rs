@@ -5,7 +5,8 @@
 
 use std::time::Duration;
 
-use aspen::node::{NodeBuilder, NodeId};
+use aspen::node::NodeBuilder;
+use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -221,14 +222,8 @@ async fn test_multiple_services() {
     assert_eq!(service2.node_id(), NodeId(11));
     assert_ne!(service1.endpoint_addr(), service2.endpoint_addr());
 
-    service1
-        .shutdown()
-        .await
-        .expect("failed to shutdown service1");
-    service2
-        .shutdown()
-        .await
-        .expect("failed to shutdown service2");
+    service1.shutdown().await.expect("failed to shutdown service1");
+    service2.shutdown().await.expect("failed to shutdown service2");
 }
 
 /// Test service restart (shutdown and recreate).
@@ -246,10 +241,7 @@ async fn test_service_restart_inmemory() {
         .expect("failed to start service1");
 
     let endpoint1 = service1.endpoint_addr();
-    service1
-        .shutdown()
-        .await
-        .expect("failed to shutdown service1");
+    service1.shutdown().await.expect("failed to shutdown service1");
 
     // Brief delay before restart
     sleep(Duration::from_millis(100)).await;
@@ -267,10 +259,7 @@ async fn test_service_restart_inmemory() {
     // Endpoint will be different (new instance)
     assert_ne!(endpoint1, endpoint2);
 
-    service2
-        .shutdown()
-        .await
-        .expect("failed to shutdown service2");
+    service2.shutdown().await.expect("failed to shutdown service2");
 }
 
 /// Test rapid start/shutdown cycles.

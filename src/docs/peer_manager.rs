@@ -21,16 +21,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use anyhow::Context;
+use anyhow::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
-
-use crate::client::ClusterSubscription;
-use crate::docs::ticket::AspenDocsTicket;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use super::importer::DocsImporter;
+use crate::client::ClusterSubscription;
+use crate::docs::ticket::AspenDocsTicket;
 
 /// Maximum number of peer connections allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -184,18 +187,11 @@ impl PeerManager {
         }
 
         // Create subscription for the importer
-        let subscription = ClusterSubscription::new(
-            format!("peer-{}", cluster_id),
-            &ticket.cluster_id,
-            cluster_id,
-        )
-        .with_priority(ticket.priority as u32);
+        let subscription = ClusterSubscription::new(format!("peer-{}", cluster_id), &ticket.cluster_id, cluster_id)
+            .with_priority(ticket.priority as u32);
 
         // Add to importer
-        self.importer
-            .add_subscription(subscription)
-            .await
-            .context("failed to add peer subscription")?;
+        self.importer.add_subscription(subscription).await.context("failed to add peer subscription")?;
 
         // Track connection
         {
@@ -221,10 +217,7 @@ impl PeerManager {
         }
 
         // Remove from importer
-        self.importer
-            .remove_subscription(cluster_id)
-            .await
-            .context("failed to remove peer subscription")?;
+        self.importer.remove_subscription(cluster_id).await.context("failed to remove peer subscription")?;
 
         info!(cluster_id, "removed peer cluster");
         Ok(())
@@ -268,18 +261,9 @@ impl PeerManager {
                 .as_ref()
                 .map(|s| s.entries_imported + s.entries_skipped + s.entries_filtered)
                 .unwrap_or(0),
-            entries_imported: import_status
-                .as_ref()
-                .map(|s| s.entries_imported)
-                .unwrap_or(0),
-            entries_skipped: import_status
-                .as_ref()
-                .map(|s| s.entries_skipped)
-                .unwrap_or(0),
-            entries_filtered: import_status
-                .as_ref()
-                .map(|s| s.entries_filtered)
-                .unwrap_or(0),
+            entries_imported: import_status.as_ref().map(|s| s.entries_imported).unwrap_or(0),
+            entries_skipped: import_status.as_ref().map(|s| s.entries_skipped).unwrap_or(0),
+            entries_filtered: import_status.as_ref().map(|s| s.entries_filtered).unwrap_or(0),
         })
     }
 
@@ -298,15 +282,9 @@ impl PeerManager {
                 }
                 PeerConnectionState::Failed => {
                     conn.failure_count += 1;
-                    warn!(
-                        cluster_id,
-                        failures = conn.failure_count,
-                        "peer connection failed"
-                    );
+                    warn!(cluster_id, failures = conn.failure_count, "peer connection failed");
                 }
-                PeerConnectionState::Disconnected
-                    if old_state == PeerConnectionState::Connected =>
-                {
+                PeerConnectionState::Disconnected if old_state == PeerConnectionState::Connected => {
                     info!(cluster_id, "peer disconnected");
                 }
                 _ => {}
@@ -413,16 +391,12 @@ mod tests {
         assert_eq!(status.state, PeerConnectionState::Disconnected);
 
         // Update to connected
-        manager
-            .set_connection_state("cluster-a", PeerConnectionState::Connected)
-            .await;
+        manager.set_connection_state("cluster-a", PeerConnectionState::Connected).await;
         let status = manager.sync_status("cluster-a").await.unwrap();
         assert_eq!(status.state, PeerConnectionState::Connected);
 
         // Track failure
-        manager
-            .set_connection_state("cluster-a", PeerConnectionState::Failed)
-            .await;
+        manager.set_connection_state("cluster-a", PeerConnectionState::Failed).await;
         let peers = manager.list_peers().await;
         assert_eq!(peers[0].failure_count, 1);
     }

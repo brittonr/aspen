@@ -17,7 +17,8 @@ use std::time::Duration;
 
 use crate::raft::clock_drift_detection::DriftSeverity;
 use crate::raft::connection_pool::ConnectionHealth;
-use crate::raft::node_failure_detection::{ConnectionStatus, FailureType};
+use crate::raft::node_failure_detection::ConnectionStatus;
+use crate::raft::node_failure_detection::FailureType;
 
 // ============================================================================
 // Clock Drift Detection Pure Functions
@@ -66,8 +67,7 @@ pub fn calculate_ntp_clock_offset(
     let offset_ms = (t2_minus_t1 + t3_minus_t4) / 2;
 
     // Calculate RTT: (t4 - t1) - (t3 - t2)
-    let rtt_ms = (client_recv_ms as i64 - client_send_ms as i64)
-        - (server_send_ms as i64 - server_recv_ms as i64);
+    let rtt_ms = (client_recv_ms as i64 - client_send_ms as i64) - (server_send_ms as i64 - server_recv_ms as i64);
 
     (offset_ms, rtt_ms)
 }
@@ -156,10 +156,7 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 /// assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(10)); // capped
 /// ```
 #[inline]
-pub fn calculate_backoff_duration(
-    restart_count: usize,
-    backoff_durations: &[Duration],
-) -> Duration {
+pub fn calculate_backoff_duration(restart_count: usize, backoff_durations: &[Duration]) -> Duration {
     let idx = restart_count.min(backoff_durations.len().saturating_sub(1));
     backoff_durations[idx]
 }
@@ -219,9 +216,7 @@ pub fn transition_connection_health(
             ConnectionHealth::Healthy => ConnectionHealth::Degraded {
                 consecutive_failures: 1,
             },
-            ConnectionHealth::Degraded {
-                consecutive_failures,
-            } => {
+            ConnectionHealth::Degraded { consecutive_failures } => {
                 if consecutive_failures >= max_retries {
                     ConnectionHealth::Failed
                 } else {
@@ -285,10 +280,7 @@ pub fn calculate_connection_retry_backoff(attempt: u32, base_ms: u64) -> Duratio
 ///
 /// The classified failure type.
 #[inline]
-pub fn classify_node_failure(
-    raft_heartbeat: ConnectionStatus,
-    iroh_connection: ConnectionStatus,
-) -> FailureType {
+pub fn classify_node_failure(raft_heartbeat: ConnectionStatus, iroh_connection: ConnectionStatus) -> FailureType {
     match (raft_heartbeat, iroh_connection) {
         (ConnectionStatus::Connected, _) => FailureType::Healthy,
         (ConnectionStatus::Disconnected, ConnectionStatus::Connected) => FailureType::ActorCrash,
@@ -312,11 +304,7 @@ pub fn classify_node_failure(
 ///
 /// `true` if the oldest entry should be evicted to make room
 #[inline]
-pub fn should_evict_oldest_unreachable(
-    current_count: usize,
-    max_nodes: usize,
-    new_node_already_tracked: bool,
-) -> bool {
+pub fn should_evict_oldest_unreachable(current_count: usize, max_nodes: usize, new_node_already_tracked: bool) -> bool {
     !new_node_already_tracked && current_count >= max_nodes
 }
 
@@ -356,38 +344,20 @@ mod tests {
 
     #[test]
     fn test_classify_drift_normal() {
-        assert_eq!(
-            classify_drift_severity(50.0, 100, 500),
-            DriftSeverity::Normal
-        );
-        assert_eq!(
-            classify_drift_severity(-50.0, 100, 500),
-            DriftSeverity::Normal
-        );
+        assert_eq!(classify_drift_severity(50.0, 100, 500), DriftSeverity::Normal);
+        assert_eq!(classify_drift_severity(-50.0, 100, 500), DriftSeverity::Normal);
     }
 
     #[test]
     fn test_classify_drift_warning() {
-        assert_eq!(
-            classify_drift_severity(150.0, 100, 500),
-            DriftSeverity::Warning
-        );
-        assert_eq!(
-            classify_drift_severity(-150.0, 100, 500),
-            DriftSeverity::Warning
-        );
+        assert_eq!(classify_drift_severity(150.0, 100, 500), DriftSeverity::Warning);
+        assert_eq!(classify_drift_severity(-150.0, 100, 500), DriftSeverity::Warning);
     }
 
     #[test]
     fn test_classify_drift_alert() {
-        assert_eq!(
-            classify_drift_severity(600.0, 100, 500),
-            DriftSeverity::Alert
-        );
-        assert_eq!(
-            classify_drift_severity(-600.0, 100, 500),
-            DriftSeverity::Alert
-        );
+        assert_eq!(classify_drift_severity(600.0, 100, 500), DriftSeverity::Alert);
+        assert_eq!(classify_drift_severity(-600.0, 100, 500), DriftSeverity::Alert);
     }
 
     #[test]
@@ -414,49 +384,22 @@ mod tests {
 
     #[test]
     fn test_backoff_first_attempt() {
-        let durations = [
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            Duration::from_secs(10),
-        ];
-        assert_eq!(
-            calculate_backoff_duration(0, &durations),
-            Duration::from_secs(1)
-        );
+        let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
+        assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(1));
     }
 
     #[test]
     fn test_backoff_progression() {
-        let durations = [
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            Duration::from_secs(10),
-        ];
-        assert_eq!(
-            calculate_backoff_duration(1, &durations),
-            Duration::from_secs(5)
-        );
-        assert_eq!(
-            calculate_backoff_duration(2, &durations),
-            Duration::from_secs(10)
-        );
+        let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
+        assert_eq!(calculate_backoff_duration(1, &durations), Duration::from_secs(5));
+        assert_eq!(calculate_backoff_duration(2, &durations), Duration::from_secs(10));
     }
 
     #[test]
     fn test_backoff_capped() {
-        let durations = [
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            Duration::from_secs(10),
-        ];
-        assert_eq!(
-            calculate_backoff_duration(100, &durations),
-            Duration::from_secs(10)
-        );
-        assert_eq!(
-            calculate_backoff_duration(usize::MAX, &durations),
-            Duration::from_secs(10)
-        );
+        let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
+        assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(10));
+        assert_eq!(calculate_backoff_duration(usize::MAX, &durations), Duration::from_secs(10));
     }
 
     #[test]
@@ -478,20 +421,14 @@ mod tests {
 
     #[test]
     fn test_health_healthy_success() {
-        assert_eq!(
-            transition_connection_health(ConnectionHealth::Healthy, true, 3),
-            ConnectionHealth::Healthy
-        );
+        assert_eq!(transition_connection_health(ConnectionHealth::Healthy, true, 3), ConnectionHealth::Healthy);
     }
 
     #[test]
     fn test_health_healthy_failure() {
-        assert_eq!(
-            transition_connection_health(ConnectionHealth::Healthy, false, 3),
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
+        assert_eq!(transition_connection_health(ConnectionHealth::Healthy, false, 3), ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
     }
 
     #[test]
@@ -540,30 +477,15 @@ mod tests {
 
     #[test]
     fn test_health_failed_is_terminal() {
-        assert_eq!(
-            transition_connection_health(ConnectionHealth::Failed, true, 3),
-            ConnectionHealth::Failed
-        );
-        assert_eq!(
-            transition_connection_health(ConnectionHealth::Failed, false, 3),
-            ConnectionHealth::Failed
-        );
+        assert_eq!(transition_connection_health(ConnectionHealth::Failed, true, 3), ConnectionHealth::Failed);
+        assert_eq!(transition_connection_health(ConnectionHealth::Failed, false, 3), ConnectionHealth::Failed);
     }
 
     #[test]
     fn test_retry_backoff_progression() {
-        assert_eq!(
-            calculate_connection_retry_backoff(1, 100),
-            Duration::from_millis(100)
-        );
-        assert_eq!(
-            calculate_connection_retry_backoff(2, 100),
-            Duration::from_millis(200)
-        );
-        assert_eq!(
-            calculate_connection_retry_backoff(3, 100),
-            Duration::from_millis(400)
-        );
+        assert_eq!(calculate_connection_retry_backoff(1, 100), Duration::from_millis(100));
+        assert_eq!(calculate_connection_retry_backoff(2, 100), Duration::from_millis(200));
+        assert_eq!(calculate_connection_retry_backoff(3, 100), Duration::from_millis(400));
     }
 
     #[test]
@@ -600,10 +522,7 @@ mod tests {
     #[test]
     fn test_classify_node_crash() {
         assert_eq!(
-            classify_node_failure(
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Disconnected
-            ),
+            classify_node_failure(ConnectionStatus::Disconnected, ConnectionStatus::Disconnected),
             FailureType::NodeCrash
         );
     }
@@ -626,46 +545,41 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_ewma_bounded() {
-        check!()
-            .with_type::<(f64, f64, f64)>()
-            .for_each(|(new_value, old_avg, alpha)| {
-                // Clamp alpha to valid range
-                let alpha = alpha.clamp(0.0, 1.0);
+        check!().with_type::<(f64, f64, f64)>().for_each(|(new_value, old_avg, alpha)| {
+            // Clamp alpha to valid range
+            let alpha = alpha.clamp(0.0, 1.0);
 
-                // Skip NaN/Inf inputs
-                if !new_value.is_finite() || !old_avg.is_finite() {
-                    return;
-                }
+            // Skip NaN/Inf inputs
+            if !new_value.is_finite() || !old_avg.is_finite() {
+                return;
+            }
 
-                let result = compute_ewma(*new_value, *old_avg, alpha);
+            let result = compute_ewma(*new_value, *old_avg, alpha);
 
-                // EWMA should be bounded between inputs when alpha is in [0, 1]
-                if alpha >= 0.0 && alpha <= 1.0 {
-                    let min_val = new_value.min(*old_avg);
-                    let max_val = new_value.max(*old_avg);
-                    assert!(
-                        result >= min_val && result <= max_val,
-                        "EWMA {} not between {} and {}",
-                        result,
-                        min_val,
-                        max_val
-                    );
-                }
-            });
+            // EWMA should be bounded between inputs when alpha is in [0, 1]
+            if alpha >= 0.0 && alpha <= 1.0 {
+                let min_val = new_value.min(*old_avg);
+                let max_val = new_value.max(*old_avg);
+                assert!(
+                    result >= min_val && result <= max_val,
+                    "EWMA {} not between {} and {}",
+                    result,
+                    min_val,
+                    max_val
+                );
+            }
+        });
     }
 
     #[test]
     fn prop_backoff_never_exceeds_max() {
-        let durations = [
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            Duration::from_secs(10),
-        ];
+        let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
         let max_duration = Duration::from_secs(10);
 
         check!().with_type::<usize>().for_each(|restart_count| {
@@ -676,33 +590,22 @@ mod property_tests {
 
     #[test]
     fn prop_health_failed_is_terminal() {
-        check!()
-            .with_type::<(bool, u32)>()
-            .for_each(|(succeeded, max_retries)| {
-                let result = transition_connection_health(
-                    ConnectionHealth::Failed,
-                    *succeeded,
-                    *max_retries,
-                );
-                assert_eq!(result, ConnectionHealth::Failed);
-            });
+        check!().with_type::<(bool, u32)>().for_each(|(succeeded, max_retries)| {
+            let result = transition_connection_health(ConnectionHealth::Failed, *succeeded, *max_retries);
+            assert_eq!(result, ConnectionHealth::Failed);
+        });
     }
 
     #[test]
     fn prop_retry_backoff_monotonic() {
-        check!()
-            .with_type::<(u32, u64)>()
-            .filter(|(_, base)| *base > 0 && *base < 10000)
-            .for_each(|(attempt, base_ms)| {
+        check!().with_type::<(u32, u64)>().filter(|(_, base)| *base > 0 && *base < 10000).for_each(
+            |(attempt, base_ms)| {
                 if *attempt > 0 && *attempt < 30 {
                     let current = calculate_connection_retry_backoff(*attempt, *base_ms);
-                    let next =
-                        calculate_connection_retry_backoff(attempt.saturating_add(1), *base_ms);
-                    assert!(
-                        next >= current,
-                        "Backoff should be monotonically increasing"
-                    );
+                    let next = calculate_connection_retry_backoff(attempt.saturating_add(1), *base_ms);
+                    assert!(next >= current, "Backoff should be monotonically increasing");
                 }
-            });
+            },
+        );
     }
 }

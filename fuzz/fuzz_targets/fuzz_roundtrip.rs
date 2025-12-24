@@ -14,11 +14,12 @@
 //! - Field ordering inconsistencies
 //! - Default value handling differences
 
+use aspen::fuzz_helpers::AspenClusterTicket;
+use aspen::fuzz_helpers::RaftRpcProtocol;
+use aspen::fuzz_helpers::RaftRpcResponse;
+use aspen::fuzz_helpers::TuiRpcRequest;
+use aspen::fuzz_helpers::TuiRpcResponse;
 use bolero::check;
-
-use aspen::fuzz_helpers::{
-    AspenClusterTicket, RaftRpcProtocol, RaftRpcResponse, TuiRpcRequest, TuiRpcResponse,
-};
 
 /// Tiger Style: Maximum message sizes
 const MAX_RPC_SIZE: usize = 10 * 1024 * 1024; // 10 MB
@@ -40,14 +41,10 @@ fn fuzz_roundtrip() {
                     .expect("re-deserialization should succeed for valid message");
 
                 // Serialize again
-                let serialized2 =
-                    postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
+                let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
 
                 // Idempotency: second round-trip should be identical
-                assert_eq!(
-                    serialized, serialized2,
-                    "round-trip must be idempotent for RaftRpcProtocol"
-                );
+                assert_eq!(serialized, serialized2, "round-trip must be idempotent for RaftRpcProtocol");
             }
         }
 
@@ -57,13 +54,9 @@ fn fuzz_roundtrip() {
                 let msg2 = postcard::from_bytes::<RaftRpcResponse>(&serialized)
                     .expect("re-deserialization should succeed for valid message");
 
-                let serialized2 =
-                    postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
+                let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
 
-                assert_eq!(
-                    serialized, serialized2,
-                    "round-trip must be idempotent for RaftRpcResponse"
-                );
+                assert_eq!(serialized, serialized2, "round-trip must be idempotent for RaftRpcResponse");
             }
         }
 
@@ -74,13 +67,9 @@ fn fuzz_roundtrip() {
                     let msg2 = postcard::from_bytes::<TuiRpcRequest>(&serialized)
                         .expect("re-deserialization should succeed for valid message");
 
-                    let serialized2 =
-                        postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
+                    let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
 
-                    assert_eq!(
-                        serialized, serialized2,
-                        "round-trip must be idempotent for TuiRpcRequest"
-                    );
+                    assert_eq!(serialized, serialized2, "round-trip must be idempotent for TuiRpcRequest");
                 }
             }
 
@@ -90,13 +79,9 @@ fn fuzz_roundtrip() {
                     let msg2 = postcard::from_bytes::<TuiRpcResponse>(&serialized)
                         .expect("re-deserialization should succeed for valid message");
 
-                    let serialized2 =
-                        postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
+                    let serialized2 = postcard::to_stdvec(&msg2).expect("re-serialization should succeed");
 
-                    assert_eq!(
-                        serialized, serialized2,
-                        "round-trip must be idempotent for TuiRpcResponse"
-                    );
+                    assert_eq!(serialized, serialized2, "round-trip must be idempotent for TuiRpcResponse");
                 }
             }
         }
@@ -108,13 +93,9 @@ fn fuzz_roundtrip() {
                 let ticket2 = postcard::from_bytes::<AspenClusterTicket>(&serialized)
                     .expect("re-deserialization should succeed for valid ticket");
 
-                let serialized2 =
-                    postcard::to_stdvec(&ticket2).expect("re-serialization should succeed");
+                let serialized2 = postcard::to_stdvec(&ticket2).expect("re-serialization should succeed");
 
-                assert_eq!(
-                    serialized, serialized2,
-                    "round-trip must be idempotent for AspenClusterTicket"
-                );
+                assert_eq!(serialized, serialized2, "round-trip must be idempotent for AspenClusterTicket");
             }
         }
     });

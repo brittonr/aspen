@@ -4,7 +4,10 @@
 
 use std::time::Duration;
 
-use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
+use crossterm::event::Event as CrosstermEvent;
+use crossterm::event::KeyEvent;
+use crossterm::event::MouseEvent;
+use crossterm::event::{self};
 use tokio::sync::mpsc;
 use tokio::time::interval;
 

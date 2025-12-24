@@ -14,11 +14,26 @@ use std::sync::Arc;
 /// - No unbounded collections (Vec growth limited)
 /// - Fixed checkpoint limits
 /// - Explicit error handling
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+/// Soak test infrastructure for long-running stress tests.
+///
+/// This module provides reusable components for soak testing:
+/// - SoakMetrics: Tiger Style metrics collection (fixed-size, bounded)
+/// - SoakTestConfig: Explicit configuration with bounded values
+/// - SoakTestHarness: Reusable test runner with checkpoints
+/// - LoadGenerator: Bounded workload generation utilities
+///
+/// Tiger Style Compliance:
+/// - All types explicitly sized (u64, u32, [T; N])
+/// - No unbounded collections (Vec growth limited)
+/// - Fixed checkpoint limits
+/// - Explicit error handling
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Maximum number of checkpoints to store in memory.
 /// Tiger Style: Fixed limit prevents unbounded memory growth.
@@ -313,11 +328,7 @@ impl Workload {
             let is_read = rng.random_range(0..100) < read_percentage;
             let key_id = rng.random_range(0..key_space_size);
 
-            let op_type = if is_read {
-                WorkloadOp::Read
-            } else {
-                WorkloadOp::Write
-            };
+            let op_type = if is_read { WorkloadOp::Read } else { WorkloadOp::Write };
 
             operations.push((op_type, key_id));
         }
@@ -440,15 +451,7 @@ mod tests {
 
         // With 70% reads, expect roughly 70 reads, 30 writes
         // Allow some variance due to randomness
-        assert!(
-            (55..=85).contains(&read_count),
-            "read_count: {}",
-            read_count
-        );
-        assert!(
-            (15..=45).contains(&write_count),
-            "write_count: {}",
-            write_count
-        );
+        assert!((55..=85).contains(&read_count), "read_count: {}", read_count);
+        assert!((15..=45).contains(&write_count), "write_count: {}", write_count);
     }
 }

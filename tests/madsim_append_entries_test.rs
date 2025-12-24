@@ -9,13 +9,21 @@
 /// Ported from openraft/tests/tests/append_entries/t11_append_conflicts.rs
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
-use aspen::raft::storage::{InMemoryLogStore, InMemoryStateMachine};
-use aspen::raft::types::{AppTypeConfig, NodeId};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
+use aspen::raft::storage::InMemoryLogStore;
+use aspen::raft::storage::InMemoryStateMachine;
+use aspen::raft::types::AppTypeConfig;
+use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
+use openraft::Config;
+use openraft::LogId;
+use openraft::Raft;
+use openraft::Vote;
 use openraft::raft::AppendEntriesRequest;
-use openraft::testing::{blank_ent, log_id};
-use openraft::{Config, LogId, Raft, Vote};
+use openraft::testing::blank_ent;
+use openraft::testing::log_id;
 
 /// Helper to create a Raft instance for madsim testing.
 async fn create_raft_node(
@@ -67,21 +75,14 @@ async fn test_append_conflicts_seed_1001() {
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(
-            NodeId::from(0),
-            "127.0.0.1:26000".to_string(),
-            raft0.clone(),
-        )
+        .register_node(NodeId::from(0), "127.0.0.1:26000".to_string(), raft0.clone())
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
     madsim::time::sleep(std::time::Duration::from_millis(500)).await;
     // Node will be in following state since it's not initialized yet
     let metrics = raft0.metrics().borrow().clone();
-    artifact = artifact.add_event(format!(
-        "validation: node initialized, state={:?}",
-        metrics.running_state
-    ));
+    artifact = artifact.add_event(format!("validation: node initialized, state={:?}", metrics.running_state));
 
     // Case 0: prev_log_id == None, no logs
     artifact = artifact.add_event("case_0: prev_log_id=None, entries=[]");
@@ -116,10 +117,7 @@ async fn test_append_conflicts_seed_1001() {
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
-    assert!(
-        resp.is_success(),
-        "should succeed with matching prev_log_id"
-    );
+    assert!(resp.is_success(), "should succeed with matching prev_log_id");
     assert!(!resp.is_conflict(), "should not conflict");
 
     // Case 3: prev_log_id.index == 0, append multiple entries
@@ -136,10 +134,7 @@ async fn test_append_conflicts_seed_1001() {
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
-    assert!(
-        resp.is_success(),
-        "should succeed appending multiple entries"
-    );
+    assert!(resp.is_success(), "should succeed appending multiple entries");
     assert!(!resp.is_conflict(), "should not conflict");
 
     // Case 4: Resend same entries (idempotent)
@@ -168,10 +163,7 @@ async fn test_append_conflicts_seed_1001() {
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
-    assert!(
-        resp.is_success(),
-        "should succeed when prev_log_id < commit"
-    );
+    assert!(resp.is_success(), "should succeed when prev_log_id < commit");
     assert!(!resp.is_conflict(), "should not conflict");
 
     // Case 6: prev_log_id == last_applied, truncate inconsistent entries
@@ -183,10 +175,7 @@ async fn test_append_conflicts_seed_1001() {
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
-    assert!(
-        resp.is_success(),
-        "should succeed truncating inconsistent log"
-    );
+    assert!(resp.is_success(), "should succeed truncating inconsistent log");
     assert!(!resp.is_conflict(), "should not conflict");
 
     // Case 7: prev_log_id mismatch (index too high) - should conflict
@@ -238,10 +227,7 @@ async fn test_append_conflicts_seed_1001() {
         leader_commit: Some(make_log_id(1, 0, 2)),
     };
     let resp = raft0.append_entries(req).await.expect("append should work");
-    assert!(
-        resp.is_success(),
-        "should succeed with matching prev_log_id"
-    );
+    assert!(resp.is_success(), "should succeed with matching prev_log_id");
     assert!(!resp.is_conflict(), "should not conflict");
 
     // Case 11: prev_log_id.index > last_log_id.index - should conflict
@@ -272,9 +258,10 @@ async fn test_append_conflicts_seed_1001() {
 /// Ported from openraft/tests/tests/append_entries/t10_stream_append.rs
 #[madsim::test]
 async fn test_stream_append_success_seed_1002() {
+    use std::pin::pin;
+
     use futures::StreamExt;
     use futures::stream;
-    use std::pin::pin;
 
     let seed = 1002_u64;
     let mut artifact = SimulationArtifactBuilder::new("madsim_stream_append_success", seed).start();
@@ -288,11 +275,7 @@ async fn test_stream_append_success_seed_1002() {
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(
-            NodeId::from(0),
-            "127.0.0.1:26000".to_string(),
-            raft0.clone(),
-        )
+        .register_node(NodeId::from(0), "127.0.0.1:26000".to_string(), raft0.clone())
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
@@ -303,19 +286,13 @@ async fn test_stream_append_success_seed_1002() {
         AppendEntriesRequest::<AppTypeConfig> {
             vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: None,
-            entries: vec![
-                blank_ent(0, NodeId::from(0), 0),
-                blank_ent(1, NodeId::from(1), 1),
-            ],
+            entries: vec![blank_ent(0, NodeId::from(0), 0), blank_ent(1, NodeId::from(1), 1)],
             leader_commit: None,
         },
         AppendEntriesRequest::<AppTypeConfig> {
             vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: Some(make_log_id(1, 1, 1)),
-            entries: vec![
-                blank_ent(1, NodeId::from(1), 2),
-                blank_ent(1, NodeId::from(1), 3),
-            ],
+            entries: vec![blank_ent(1, NodeId::from(1), 2), blank_ent(1, NodeId::from(1), 3)],
             leader_commit: None,
         },
         AppendEntriesRequest::<AppTypeConfig> {
@@ -334,14 +311,11 @@ async fn test_stream_append_success_seed_1002() {
 
     artifact = artifact.add_event("validation: all requests succeeded");
     assert_eq!(results.len(), 3, "should have 3 results");
-    assert_eq!(
-        results,
-        vec![
-            Ok(Some(make_log_id(1, 1, 1))),
-            Ok(Some(make_log_id(1, 1, 3))),
-            Ok(Some(make_log_id(1, 1, 4))),
-        ]
-    );
+    assert_eq!(results, vec![
+        Ok(Some(make_log_id(1, 1, 1))),
+        Ok(Some(make_log_id(1, 1, 3))),
+        Ok(Some(make_log_id(1, 1, 4))),
+    ]);
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -355,14 +329,14 @@ async fn test_stream_append_success_seed_1002() {
 /// Verifies that the stream terminates after the conflict.
 #[madsim::test]
 async fn test_stream_append_conflict_seed_1003() {
+    use std::pin::pin;
+
     use futures::StreamExt;
     use futures::stream;
     use openraft::raft::StreamAppendError;
-    use std::pin::pin;
 
     let seed = 1003_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_stream_append_conflict", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_stream_append_conflict", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -373,11 +347,7 @@ async fn test_stream_append_conflict_seed_1003() {
 
     artifact = artifact.add_event("register: node with router");
     router
-        .register_node(
-            NodeId::from(0),
-            "127.0.0.1:26000".to_string(),
-            raft0.clone(),
-        )
+        .register_node(NodeId::from(0), "127.0.0.1:26000".to_string(), raft0.clone())
         .expect("failed to register node 0");
 
     artifact = artifact.add_event("wait: for node to initialize");
@@ -388,10 +358,7 @@ async fn test_stream_append_conflict_seed_1003() {
         AppendEntriesRequest::<AppTypeConfig> {
             vote: Vote::new_committed(1, NodeId::from(1)),
             prev_log_id: None,
-            entries: vec![
-                blank_ent(0, NodeId::from(0), 0),
-                blank_ent(1, NodeId::from(1), 1),
-            ],
+            entries: vec![blank_ent(0, NodeId::from(0), 0), blank_ent(1, NodeId::from(1), 1)],
             leader_commit: None,
         },
         // This will conflict: prev_log_id at index 5 doesn't exist
@@ -417,18 +384,11 @@ async fn test_stream_append_conflict_seed_1003() {
     let results: Vec<_> = output_stream.collect().await;
 
     artifact = artifact.add_event("validation: stream terminated after conflict");
-    assert_eq!(
-        results.len(),
-        2,
-        "should have 2 results (1 success, 1 conflict)"
-    );
-    assert_eq!(
-        results,
-        vec![
-            Ok(Some(make_log_id(1, 1, 1))),
-            Err(StreamAppendError::Conflict(Some(make_log_id(1, 1, 5)))),
-        ]
-    );
+    assert_eq!(results.len(), 2, "should have 2 results (1 success, 1 conflict)");
+    assert_eq!(results, vec![
+        Ok(Some(make_log_id(1, 1, 1))),
+        Err(StreamAppendError::Conflict(Some(make_log_id(1, 1, 5)))),
+    ]);
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {

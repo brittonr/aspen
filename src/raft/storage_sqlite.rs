@@ -54,36 +54,56 @@
 //! ```
 
 use std::collections::BTreeMap;
-use std::io::{self, Cursor};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::io::Cursor;
+use std::io::{self};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use futures::{Stream, TryStreamExt};
-use openraft::storage::{
-    ApplyResponder, EntryResponder, RaftSnapshotBuilder, RaftStateMachine, Snapshot,
-};
-use openraft::{EntryPayload, OptionalSend, StoredMembership};
+use futures::Stream;
+use futures::TryStreamExt;
+use openraft::EntryPayload;
+use openraft::OptionalSend;
+use openraft::StoredMembership;
+use openraft::storage::ApplyResponder;
+use openraft::storage::EntryResponder;
+use openraft::storage::RaftSnapshotBuilder;
+use openraft::storage::RaftStateMachine;
+use openraft::storage::Snapshot;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, OptionalExtension, params};
-use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::params;
+use serde::Deserialize;
+use serde::Serialize;
+use snafu::ResultExt;
+use snafu::Snafu;
 use tokio::sync::broadcast;
 use tokio::task::JoinError;
 
-use crate::api::{
-    SqlColumnInfo, SqlQueryError, SqlQueryResult, SqlValue, effective_sql_limit,
-    effective_sql_timeout_ms,
-};
+use crate::api::SqlColumnInfo;
+use crate::api::SqlQueryError;
+use crate::api::SqlQueryResult;
+use crate::api::SqlValue;
+use crate::api::effective_sql_limit;
+use crate::api::effective_sql_timeout_ms;
 use crate::coordination::now_unix_ms;
-use crate::raft::constants::{
-    DEFAULT_READ_POOL_SIZE, MAX_BATCH_SIZE, MAX_SETMULTI_KEYS, MAX_SNAPSHOT_ENTRIES,
-    MAX_SNAPSHOT_SIZE,
-};
-use crate::raft::integrity::{GENESIS_HASH, SnapshotIntegrity};
-use crate::raft::log_subscriber::{KvOperation, LogEntryPayload};
-use crate::raft::types::{AppRequest, AppResponse, AppTypeConfig};
+use crate::raft::constants::DEFAULT_READ_POOL_SIZE;
+use crate::raft::constants::MAX_BATCH_SIZE;
+use crate::raft::constants::MAX_SETMULTI_KEYS;
+use crate::raft::constants::MAX_SNAPSHOT_ENTRIES;
+use crate::raft::constants::MAX_SNAPSHOT_SIZE;
+use crate::raft::integrity::GENESIS_HASH;
+use crate::raft::integrity::SnapshotIntegrity;
+use crate::raft::log_subscriber::KvOperation;
+use crate::raft::log_subscriber::LogEntryPayload;
+use crate::raft::types::AppRequest;
+use crate::raft::types::AppResponse;
+use crate::raft::types::AppTypeConfig;
 use crate::sharding::topology::ShardTopology;
 
 /// Errors that can occur when using SQLite storage.
@@ -303,10 +323,7 @@ impl<'a> TransactionGuard<'a> {
         let _ = conn.execute("ROLLBACK", []);
 
         conn.execute("BEGIN IMMEDIATE", []).context(ExecuteSnafu)?;
-        Ok(Self {
-            conn,
-            committed: false,
-        })
+        Ok(Self { conn, committed: false })
     }
 
     /// Commit the transaction, marking it as complete.
@@ -425,19 +442,10 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                 expires_at_ms: *expires_at_ms,
             },
             AppRequest::SetMulti { pairs } => KvOperation::SetMulti {
-                pairs: pairs
-                    .iter()
-                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
-                    .collect(),
+                pairs: pairs.iter().map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes())).collect(),
             },
-            AppRequest::SetMultiWithTTL {
-                pairs,
-                expires_at_ms,
-            } => KvOperation::SetMultiWithTTL {
-                pairs: pairs
-                    .iter()
-                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
-                    .collect(),
+            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => KvOperation::SetMultiWithTTL {
+                pairs: pairs.iter().map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes())).collect(),
                 expires_at_ms: *expires_at_ms,
             },
             AppRequest::Delete { key } => KvOperation::Delete {
@@ -462,69 +470,36 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
             AppRequest::Batch { operations } => KvOperation::Batch {
                 operations: operations
                     .iter()
-                    .map(|(is_set, key, value)| {
-                        (
-                            *is_set,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
-                    })
+                    .map(|(is_set, key, value)| (*is_set, key.clone().into_bytes(), value.clone().into_bytes()))
                     .collect(),
             },
-            AppRequest::ConditionalBatch {
-                conditions,
-                operations,
-            } => KvOperation::ConditionalBatch {
+            AppRequest::ConditionalBatch { conditions, operations } => KvOperation::ConditionalBatch {
                 conditions: conditions
                     .iter()
                     .map(|(cond_type, key, expected)| {
-                        (
-                            *cond_type,
-                            key.clone().into_bytes(),
-                            expected.clone().into_bytes(),
-                        )
+                        (*cond_type, key.clone().into_bytes(), expected.clone().into_bytes())
                     })
                     .collect(),
                 operations: operations
                     .iter()
-                    .map(|(is_set, key, value)| {
-                        (
-                            *is_set,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
-                    })
+                    .map(|(is_set, key, value)| (*is_set, key.clone().into_bytes(), value.clone().into_bytes()))
                     .collect(),
             },
-            AppRequest::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => KvOperation::SetWithLease {
+            AppRequest::SetWithLease { key, value, lease_id } => KvOperation::SetWithLease {
                 key: key.clone().into_bytes(),
                 value: value.clone().into_bytes(),
                 lease_id: *lease_id,
             },
             AppRequest::SetMultiWithLease { pairs, lease_id } => KvOperation::SetMultiWithLease {
-                pairs: pairs
-                    .iter()
-                    .map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes()))
-                    .collect(),
+                pairs: pairs.iter().map(|(k, v)| (k.clone().into_bytes(), v.clone().into_bytes())).collect(),
                 lease_id: *lease_id,
             },
-            AppRequest::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => KvOperation::LeaseGrant {
+            AppRequest::LeaseGrant { lease_id, ttl_seconds } => KvOperation::LeaseGrant {
                 lease_id: *lease_id,
                 ttl_seconds: *ttl_seconds,
             },
-            AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke {
-                lease_id: *lease_id,
-            },
-            AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive {
-                lease_id: *lease_id,
-            },
+            AppRequest::LeaseRevoke { lease_id } => KvOperation::LeaseRevoke { lease_id: *lease_id },
+            AppRequest::LeaseKeepalive { lease_id } => KvOperation::LeaseKeepalive { lease_id: *lease_id },
             AppRequest::Transaction {
                 compare,
                 success,
@@ -533,58 +508,29 @@ fn app_request_to_kv_operation(payload: &EntryPayload<AppTypeConfig>) -> KvOpera
                 compare: compare
                     .iter()
                     .map(|(target, op, key, value)| {
-                        (
-                            *target,
-                            *op,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
+                        (*target, *op, key.clone().into_bytes(), value.clone().into_bytes())
                     })
                     .collect(),
                 success: success
                     .iter()
-                    .map(|(op_type, key, value)| {
-                        (
-                            *op_type,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
-                    })
+                    .map(|(op_type, key, value)| (*op_type, key.clone().into_bytes(), value.clone().into_bytes()))
                     .collect(),
                 failure: failure
                     .iter()
-                    .map(|(op_type, key, value)| {
-                        (
-                            *op_type,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
-                    })
+                    .map(|(op_type, key, value)| (*op_type, key.clone().into_bytes(), value.clone().into_bytes()))
                     .collect(),
             },
-            AppRequest::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => KvOperation::OptimisticTransaction {
-                read_set: read_set
-                    .iter()
-                    .map(|(key, version)| (key.clone().into_bytes(), *version))
-                    .collect(),
+            AppRequest::OptimisticTransaction { read_set, write_set } => KvOperation::OptimisticTransaction {
+                read_set: read_set.iter().map(|(key, version)| (key.clone().into_bytes(), *version)).collect(),
                 write_set: write_set
                     .iter()
-                    .map(|(is_set, key, value)| {
-                        (
-                            *is_set,
-                            key.clone().into_bytes(),
-                            value.clone().into_bytes(),
-                        )
-                    })
+                    .map(|(is_set, key, value)| (*is_set, key.clone().into_bytes(), value.clone().into_bytes()))
                     .collect(),
             },
             // Shard topology operations are control plane only, not KV operations
-            AppRequest::ShardSplit { .. }
-            | AppRequest::ShardMerge { .. }
-            | AppRequest::TopologyUpdate { .. } => KvOperation::Noop,
+            AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+                KvOperation::Noop
+            }
         },
         EntryPayload::Membership(membership) => KvOperation::MembershipChange {
             description: format!("{:?}", membership),
@@ -646,8 +592,7 @@ fn apply_buffered_entries_impl(
         SqliteStateMachine::update_last_applied_log(&conn, &entry.log_id)?;
 
         // Apply the payload
-        let response =
-            SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
+        let response = SqliteStateMachine::apply_entry_payload(&conn, &entry.payload, &entry.log_id)?;
 
         // Collect payload for broadcast if channel is available
         if log_broadcast.is_some() {
@@ -718,10 +663,7 @@ impl SqliteStateMachine {
     ///
     /// Allows configuring the number of read connections in the pool.
     /// Tiger Style: Explicit pool size parameter, bounded by caller.
-    pub fn with_pool_size(
-        path: impl AsRef<Path>,
-        pool_size: u32,
-    ) -> Result<Arc<Self>, SqliteStorageError> {
+    pub fn with_pool_size(path: impl AsRef<Path>, pool_size: u32) -> Result<Arc<Self>, SqliteStorageError> {
         let path = path.as_ref().to_path_buf();
 
         // Ensure parent directory exists
@@ -736,9 +678,7 @@ impl SqliteStateMachine {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&path)
-                .context(IoSnafu { path: &path })?
-                .permissions();
+            let mut perms = std::fs::metadata(&path).context(IoSnafu { path: &path })?.permissions();
             perms.set_mode(0o600);
             std::fs::set_permissions(&path, perms).context(IoSnafu { path: &path })?;
         }
@@ -746,24 +686,16 @@ impl SqliteStateMachine {
         // Configure SQLite for durability and performance (Tiger Style)
         // WAL mode: Better concurrency, crash-safe
         // FULL synchronous: Ensure data is on disk before commit returns
-        write_conn
-            .pragma_update(None, "journal_mode", "WAL")
-            .context(ExecuteSnafu)?;
-        write_conn
-            .pragma_update(None, "synchronous", "FULL")
-            .context(ExecuteSnafu)?;
+        write_conn.pragma_update(None, "journal_mode", "WAL").context(ExecuteSnafu)?;
+        write_conn.pragma_update(None, "synchronous", "FULL").context(ExecuteSnafu)?;
 
         // Performance optimizations
         // cache_size: 64MB cache for better read performance (10-20% improvement)
         // Negative value = size in KB (Tiger Style: explicit units)
-        write_conn
-            .pragma_update(None, "cache_size", "-64000")
-            .context(ExecuteSnafu)?;
+        write_conn.pragma_update(None, "cache_size", "-64000").context(ExecuteSnafu)?;
 
         // mmap_size: 256MB memory-mapped I/O for faster reads (5-15% improvement)
-        write_conn
-            .pragma_update(None, "mmap_size", "268435456")
-            .context(ExecuteSnafu)?;
+        write_conn.pragma_update(None, "mmap_size", "268435456").context(ExecuteSnafu)?;
 
         // Create tables if they don't exist
         // Note: expires_at_ms stores absolute Unix timestamp in milliseconds.
@@ -782,10 +714,7 @@ impl SqliteStateMachine {
 
         // Add expires_at_ms column if it doesn't exist (schema migration for existing DBs)
         // SQLite returns error if column already exists, which we ignore
-        let _ = write_conn.execute(
-            "ALTER TABLE state_machine_kv ADD COLUMN expires_at_ms INTEGER",
-            [],
-        );
+        let _ = write_conn.execute("ALTER TABLE state_machine_kv ADD COLUMN expires_at_ms INTEGER", []);
 
         write_conn
             .execute(
@@ -809,10 +738,7 @@ impl SqliteStateMachine {
 
         // Create indexes for efficient prefix-based scans
         write_conn
-            .execute(
-                "CREATE INDEX IF NOT EXISTS idx_kv_prefix ON state_machine_kv(key)",
-                [],
-            )
+            .execute("CREATE INDEX IF NOT EXISTS idx_kv_prefix ON state_machine_kv(key)", [])
             .context(ExecuteSnafu)?;
 
         // Create index for efficient TTL expiration queries (cleanup + filtered reads)
@@ -840,18 +766,13 @@ impl SqliteStateMachine {
 
         // Index for efficient lease expiration queries
         write_conn
-            .execute(
-                "CREATE INDEX IF NOT EXISTS idx_lease_expires ON leases(expires_at_ms)",
-                [],
-            )
+            .execute("CREATE INDEX IF NOT EXISTS idx_lease_expires ON leases(expires_at_ms)", [])
             .context(ExecuteSnafu)?;
 
         // Add lease_id column to state_machine_kv if it doesn't exist (schema migration)
         // Keys with non-null lease_id are attached to that lease and deleted when lease expires
-        let _ = write_conn.execute(
-            "ALTER TABLE state_machine_kv ADD COLUMN lease_id INTEGER REFERENCES leases(lease_id)",
-            [],
-        );
+        let _ = write_conn
+            .execute("ALTER TABLE state_machine_kv ADD COLUMN lease_id INTEGER REFERENCES leases(lease_id)", []);
 
         // Index for efficient lookup of keys by lease_id (for revoke operation)
         let _ = write_conn.execute(
@@ -863,28 +784,17 @@ impl SqliteStateMachine {
         // - create_revision: Raft log index when key was first created
         // - mod_revision: Raft log index of last modification
         // - version: Per-key counter (1, 2, 3...), reset on delete+recreate
-        let _ = write_conn.execute(
-            "ALTER TABLE state_machine_kv ADD COLUMN create_revision INTEGER NOT NULL DEFAULT 0",
-            [],
-        );
-        let _ = write_conn.execute(
-            "ALTER TABLE state_machine_kv ADD COLUMN mod_revision INTEGER NOT NULL DEFAULT 0",
-            [],
-        );
-        let _ = write_conn.execute(
-            "ALTER TABLE state_machine_kv ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
-            [],
-        );
+        let _ = write_conn
+            .execute("ALTER TABLE state_machine_kv ADD COLUMN create_revision INTEGER NOT NULL DEFAULT 0", []);
+        let _ =
+            write_conn.execute("ALTER TABLE state_machine_kv ADD COLUMN mod_revision INTEGER NOT NULL DEFAULT 0", []);
+        let _ = write_conn.execute("ALTER TABLE state_machine_kv ADD COLUMN version INTEGER NOT NULL DEFAULT 1", []);
 
         // Index for efficient revision-based queries
-        let _ = write_conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_kv_mod_revision ON state_machine_kv(mod_revision)",
-            [],
-        );
-        let _ = write_conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_kv_create_revision ON state_machine_kv(create_revision)",
-            [],
-        );
+        let _ =
+            write_conn.execute("CREATE INDEX IF NOT EXISTS idx_kv_mod_revision ON state_machine_kv(mod_revision)", []);
+        let _ = write_conn
+            .execute("CREATE INDEX IF NOT EXISTS idx_kv_create_revision ON state_machine_kv(create_revision)", []);
 
         // Create shard topology table for dynamic sharding (TiKV-style multi-raft)
         // Stores serialized ShardTopology as a single BLOB value.
@@ -903,10 +813,7 @@ impl SqliteStateMachine {
 
         // Create read connection pool
         let manager = SqliteConnectionManager::file(&path);
-        let read_pool = Pool::builder()
-            .max_size(pool_size)
-            .build(manager)
-            .context(PoolBuildSnafu)?;
+        let read_pool = Pool::builder().max_size(pool_size).build(manager).context(PoolBuildSnafu)?;
 
         Ok(Arc::new(Self {
             read_pool,
@@ -940,10 +847,7 @@ impl SqliteStateMachine {
     ///
     /// This method takes ownership of the Arc and returns a new one to ensure
     /// the broadcast sender is set atomically during construction.
-    pub fn with_log_broadcast(
-        self: Arc<Self>,
-        sender: broadcast::Sender<LogEntryPayload>,
-    ) -> Arc<Self> {
+    pub fn with_log_broadcast(self: Arc<Self>, sender: broadcast::Sender<LogEntryPayload>) -> Arc<Self> {
         Arc::new(Self {
             read_pool: self.read_pool.clone(),
             write_conn: Arc::clone(&self.write_conn),
@@ -974,9 +878,7 @@ impl SqliteStateMachine {
 
         // Execute a dummy query to force SQLite to update to the latest WAL snapshot
         // This is necessary because WAL readers can hold onto old snapshots
-        let _: i32 = conn
-            .query_row("SELECT 1", [], |row| row.get(0))
-            .context(QuerySnafu)?;
+        let _: i32 = conn.query_row("SELECT 1", [], |row| row.get(0)).context(QuerySnafu)?;
 
         Ok(())
     }
@@ -986,11 +888,8 @@ impl SqliteStateMachine {
     pub fn count_kv_pairs(&self) -> Result<i64, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM state_machine_kv", [], |row| {
-                row.get(0)
-            })
-            .context(QuerySnafu)?;
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM state_machine_kv", [], |row| row.get(0)).context(QuerySnafu)?;
         Ok(count)
     }
 
@@ -1000,11 +899,7 @@ impl SqliteStateMachine {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM state_machine_kv WHERE key LIKE ?1",
-                params![pattern],
-                |row| row.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM state_machine_kv WHERE key LIKE ?1", params![pattern], |row| row.get(0))
             .context(QuerySnafu)?;
         Ok(count)
     }
@@ -1032,20 +927,16 @@ impl SqliteStateMachine {
         })?;
 
         // Run SQLite integrity check
-        let integrity: String = conn
-            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
-            .map_err(|_e| {
-                crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
-                    path: self.path.clone(),
-                }
-            })?;
+        let integrity: String = conn.query_row("PRAGMA integrity_check", [], |row| row.get(0)).map_err(|_e| {
+            crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
+                path: self.path.clone(),
+            }
+        })?;
 
         if integrity != "ok" {
-            return Err(
-                crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
-                    path: self.path.clone(),
-                },
-            );
+            return Err(crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
+                path: self.path.clone(),
+            });
         }
 
         // Verify required tables exist
@@ -1062,11 +953,9 @@ impl SqliteStateMachine {
             })?;
 
         if table_count != 3 {
-            return Err(
-                crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
-                    path: self.path.clone(),
-                },
-            );
+            return Err(crate::raft::storage_validation::StorageValidationError::DatabaseNotFound {
+                path: self.path.clone(),
+            });
         }
 
         drop(conn); // Release connection to pool
@@ -1118,9 +1007,7 @@ impl SqliteStateMachine {
 
         // Hash all key-value pairs in deterministic (sorted) order
         // SQLite ORDER BY ensures consistent ordering across replicas
-        let mut stmt = conn
-            .prepare("SELECT key, value FROM state_machine_kv ORDER BY key")
-            .context(QuerySnafu)?;
+        let mut stmt = conn.prepare("SELECT key, value FROM state_machine_kv ORDER BY key").context(QuerySnafu)?;
 
         let rows = stmt
             .query_map([], |row| {
@@ -1141,11 +1028,7 @@ impl SqliteStateMachine {
 
         // Include last_applied_log in checksum for complete state verification
         let meta_bytes: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT value FROM state_machine_meta WHERE key = 'last_applied_log'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT value FROM state_machine_meta WHERE key = 'last_applied_log'", [], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -1155,11 +1038,7 @@ impl SqliteStateMachine {
         }
 
         let membership_bytes: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT value FROM state_machine_meta WHERE key = 'last_membership'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT value FROM state_machine_meta WHERE key = 'last_membership'", [], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -1181,10 +1060,7 @@ impl SqliteStateMachine {
     ///
     /// # Returns
     /// A Blake3 hash of matching key-value pairs as a hex string.
-    pub fn state_machine_checksum_prefix(
-        &self,
-        prefix: &str,
-    ) -> Result<String, SqliteStorageError> {
+    pub fn state_machine_checksum_prefix(&self, prefix: &str) -> Result<String, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
@@ -1232,12 +1108,9 @@ impl SqliteStateMachine {
     /// - Uses partial index for efficient expiration lookup
     /// - Idempotent: safe to call concurrently or repeatedly
     pub fn delete_expired_keys(&self, batch_limit: u32) -> Result<u32, SqliteStorageError> {
-        let write_conn = self
-            .write_conn
-            .lock()
-            .map_err(|_| SqliteStorageError::MutexPoisoned {
-                operation: "delete_expired_keys",
-            })?;
+        let write_conn = self.write_conn.lock().map_err(|_| SqliteStorageError::MutexPoisoned {
+            operation: "delete_expired_keys",
+        })?;
 
         let now_ms = now_unix_ms();
 
@@ -1408,11 +1281,7 @@ impl SqliteStateMachine {
         let now_ms = now_unix_ms();
 
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM leases WHERE expires_at_ms > ?1",
-                params![now_ms as i64],
-                |row| row.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM leases WHERE expires_at_ms > ?1", params![now_ms as i64], |row| row.get(0))
             .context(QuerySnafu)?;
 
         Ok(count as u64)
@@ -1428,11 +1297,9 @@ impl SqliteStateMachine {
         let now_ms = now_unix_ms();
 
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM leases WHERE expires_at_ms <= ?1",
-                params![now_ms as i64],
-                |row| row.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM leases WHERE expires_at_ms <= ?1", params![now_ms as i64], |row| {
+                row.get(0)
+            })
             .context(QuerySnafu)?;
 
         Ok(count as u64)
@@ -1443,12 +1310,9 @@ impl SqliteStateMachine {
     /// Returns the number of leases deleted.
     /// Tiger Style: Batch size limits prevent unbounded work.
     pub fn delete_expired_leases(&self, batch_limit: u32) -> Result<u32, SqliteStorageError> {
-        let write_conn = self
-            .write_conn
-            .lock()
-            .map_err(|_| SqliteStorageError::MutexPoisoned {
-                operation: "delete_expired_leases",
-            })?;
+        let write_conn = self.write_conn.lock().map_err(|_| SqliteStorageError::MutexPoisoned {
+            operation: "delete_expired_leases",
+        })?;
 
         let now_ms = now_unix_ms();
 
@@ -1470,10 +1334,7 @@ impl SqliteStateMachine {
         // Delete keys attached to expired leases
         for lease_id in &expired_ids {
             write_conn
-                .execute(
-                    "DELETE FROM state_machine_kv WHERE lease_id = ?1",
-                    params![lease_id],
-                )
+                .execute("DELETE FROM state_machine_kv WHERE lease_id = ?1", params![lease_id])
                 .context(ExecuteSnafu)?;
         }
 
@@ -1573,10 +1434,7 @@ impl SqliteStateMachine {
             .context(QuerySnafu)?;
 
         let keys = stmt
-            .query_map(
-                params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64],
-                |row| row.get(0),
-            )
+            .query_map(params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64], |row| row.get(0))
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|k: &String| k.starts_with(prefix)) // Double-check the prefix match
@@ -1588,10 +1446,7 @@ impl SqliteStateMachine {
     /// Scan all key-value pairs that start with the given prefix.
     ///
     /// Returns a list of (key, value) pairs. Expired keys are filtered out.
-    pub fn scan_kv_with_prefix(
-        &self,
-        prefix: &str,
-    ) -> Result<Vec<(String, String)>, SqliteStorageError> {
+    pub fn scan_kv_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
 
@@ -1605,10 +1460,9 @@ impl SqliteStateMachine {
             .context(QuerySnafu)?;
 
         let kv_pairs = stmt
-            .query_map(
-                params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
+            .query_map(params![prefix, end_prefix, now_ms as i64, MAX_BATCH_SIZE as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix)) // Double-check the prefix match
@@ -1621,10 +1475,7 @@ impl SqliteStateMachine {
     ///
     /// This is a thin async wrapper around the sync version since SQLite
     /// operations are synchronous but may need to be called from async code.
-    pub async fn scan_kv_with_prefix_async(
-        &self,
-        prefix: &str,
-    ) -> Result<Vec<(String, String)>, SqliteStorageError> {
+    pub async fn scan_kv_with_prefix_async(&self, prefix: &str) -> Result<Vec<(String, String)>, SqliteStorageError> {
         // SQLite operations are sync but fast enough for inline execution
         // For very large datasets, consider tokio::task::spawn_blocking
         self.scan_kv_with_prefix(prefix)
@@ -1654,9 +1505,7 @@ impl SqliteStateMachine {
         let requested_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize);
         let bounded_limit = requested_limit.min(MAX_BATCH_SIZE as usize);
         // Fetch one extra row to detect if more data exists for pagination.
-        let fetch_limit = bounded_limit
-            .saturating_add(1)
-            .min(MAX_BATCH_SIZE as usize + 1);
+        let fetch_limit = bounded_limit.saturating_add(1).min(MAX_BATCH_SIZE as usize + 1);
         let end_prefix = format!("{}\u{10000}", prefix);
 
         // Different query based on whether we have a continuation token
@@ -1671,10 +1520,9 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(
-                params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
+            stmt.query_map(params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix))
@@ -1689,10 +1537,9 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(
-                params![prefix, end_prefix, now_ms as i64, fetch_limit as i64],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
+            stmt.query_map(params![prefix, end_prefix, now_ms as i64, fetch_limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|(k, _)| k.starts_with(prefix))
@@ -1717,9 +1564,7 @@ impl SqliteStateMachine {
         let now_ms = now_unix_ms();
         let requested_limit = limit.unwrap_or(MAX_BATCH_SIZE as usize);
         let bounded_limit = requested_limit.min(MAX_BATCH_SIZE as usize);
-        let fetch_limit = bounded_limit
-            .saturating_add(1)
-            .min(MAX_BATCH_SIZE as usize + 1);
+        let fetch_limit = bounded_limit.saturating_add(1).min(MAX_BATCH_SIZE as usize + 1);
         let end_prefix = format!("{}\u{10000}", prefix);
 
         let kv_pairs = if let Some(start) = after_key {
@@ -1732,18 +1577,15 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(
-                params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64],
-                |row| {
-                    Ok(crate::api::KeyValueWithRevision {
-                        key: row.get(0)?,
-                        value: row.get(1)?,
-                        version: row.get::<_, i64>(2)? as u64,
-                        create_revision: row.get::<_, i64>(3)? as u64,
-                        mod_revision: row.get::<_, i64>(4)? as u64,
-                    })
-                },
-            )
+            stmt.query_map(params![start, prefix, end_prefix, now_ms as i64, fetch_limit as i64], |row| {
+                Ok(crate::api::KeyValueWithRevision {
+                    key: row.get(0)?,
+                    value: row.get(1)?,
+                    version: row.get::<_, i64>(2)? as u64,
+                    create_revision: row.get::<_, i64>(3)? as u64,
+                    mod_revision: row.get::<_, i64>(4)? as u64,
+                })
+            })
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|kv| kv.key.starts_with(prefix))
@@ -1758,18 +1600,15 @@ impl SqliteStateMachine {
                 )
                 .context(QuerySnafu)?;
 
-            stmt.query_map(
-                params![prefix, end_prefix, now_ms as i64, fetch_limit as i64],
-                |row| {
-                    Ok(crate::api::KeyValueWithRevision {
-                        key: row.get(0)?,
-                        value: row.get(1)?,
-                        version: row.get::<_, i64>(2)? as u64,
-                        create_revision: row.get::<_, i64>(3)? as u64,
-                        mod_revision: row.get::<_, i64>(4)? as u64,
-                    })
-                },
-            )
+            stmt.query_map(params![prefix, end_prefix, now_ms as i64, fetch_limit as i64], |row| {
+                Ok(crate::api::KeyValueWithRevision {
+                    key: row.get(0)?,
+                    value: row.get(1)?,
+                    version: row.get::<_, i64>(2)? as u64,
+                    create_revision: row.get::<_, i64>(3)? as u64,
+                    mod_revision: row.get::<_, i64>(4)? as u64,
+                })
+            })
             .context(QuerySnafu)?
             .filter_map(|r| r.ok())
             .filter(|kv| kv.key.starts_with(prefix))
@@ -1821,12 +1660,9 @@ impl SqliteStateMachine {
         let _timeout = effective_sql_timeout_ms(timeout_ms);
 
         // Get read connection from pool
-        let conn = self
-            .read_pool
-            .get()
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to get connection from pool: {}", e),
-            })?;
+        let conn = self.read_pool.get().map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to get connection from pool: {}", e),
+        })?;
 
         // Reset connection to see latest committed data
         Self::reset_read_connection(&conn).map_err(|e| SqlQueryError::ExecutionFailed {
@@ -1834,18 +1670,12 @@ impl SqliteStateMachine {
         })?;
 
         // Set query_only pragma as defense-in-depth
-        conn.pragma_update(None, "query_only", "ON").map_err(|e| {
-            SqlQueryError::ExecutionFailed {
-                reason: format!("failed to set query_only pragma: {}", e),
-            }
+        conn.pragma_update(None, "query_only", "ON").map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to set query_only pragma: {}", e),
         })?;
 
         // Prepare statement
-        let mut stmt = conn
-            .prepare(query)
-            .map_err(|e| SqlQueryError::SyntaxError {
-                message: e.to_string(),
-            })?;
+        let mut stmt = conn.prepare(query).map_err(|e| SqlQueryError::SyntaxError { message: e.to_string() })?;
 
         // Get column information
         let column_count = stmt.column_count();
@@ -1859,31 +1689,29 @@ impl SqliteStateMachine {
         for (i, param) in params.iter().enumerate() {
             let idx = i + 1; // SQLite parameters are 1-indexed
             match param {
-                SqlValue::Null => stmt
-                    .raw_bind_parameter(idx, rusqlite::types::Null)
-                    .map_err(|e| SqlQueryError::ExecutionFailed {
+                SqlValue::Null => {
+                    stmt.raw_bind_parameter(idx, rusqlite::types::Null).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to bind parameter {}: {}", idx, e),
-                    })?,
-                SqlValue::Integer(v) => stmt.raw_bind_parameter(idx, *v).map_err(|e| {
-                    SqlQueryError::ExecutionFailed {
+                    })?
+                }
+                SqlValue::Integer(v) => {
+                    stmt.raw_bind_parameter(idx, *v).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to bind parameter {}: {}", idx, e),
-                    }
+                    })?
+                }
+                SqlValue::Real(v) => stmt.raw_bind_parameter(idx, *v).map_err(|e| SqlQueryError::ExecutionFailed {
+                    reason: format!("failed to bind parameter {}: {}", idx, e),
                 })?,
-                SqlValue::Real(v) => stmt.raw_bind_parameter(idx, *v).map_err(|e| {
-                    SqlQueryError::ExecutionFailed {
+                SqlValue::Text(v) => {
+                    stmt.raw_bind_parameter(idx, v.as_str()).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to bind parameter {}: {}", idx, e),
-                    }
-                })?,
-                SqlValue::Text(v) => stmt.raw_bind_parameter(idx, v.as_str()).map_err(|e| {
-                    SqlQueryError::ExecutionFailed {
+                    })?
+                }
+                SqlValue::Blob(v) => {
+                    stmt.raw_bind_parameter(idx, v.as_slice()).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to bind parameter {}: {}", idx, e),
-                    }
-                })?,
-                SqlValue::Blob(v) => stmt.raw_bind_parameter(idx, v.as_slice()).map_err(|e| {
-                    SqlQueryError::ExecutionFailed {
-                        reason: format!("failed to bind parameter {}: {}", idx, e),
-                    }
-                })?,
+                    })?
+                }
             }
         }
 
@@ -1896,12 +1724,9 @@ impl SqliteStateMachine {
         let mut raw_rows = stmt.raw_query();
         let mut row_count: u32 = 0;
 
-        while let Some(row) = raw_rows
-            .next()
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to fetch row: {}", e),
-            })?
-        {
+        while let Some(row) = raw_rows.next().map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to fetch row: {}", e),
+        })? {
             row_count += 1;
             if row_count > fetch_limit {
                 // Should not happen with proper LIMIT, but safety check
@@ -1936,11 +1761,9 @@ impl SqliteStateMachine {
     fn extract_sql_value(row: &rusqlite::Row<'_>, idx: usize) -> Result<SqlValue, SqlQueryError> {
         use rusqlite::types::ValueRef;
 
-        let value_ref = row
-            .get_ref(idx)
-            .map_err(|e| SqlQueryError::ExecutionFailed {
-                reason: format!("failed to get column {}: {}", idx, e),
-            })?;
+        let value_ref = row.get_ref(idx).map_err(|e| SqlQueryError::ExecutionFailed {
+            reason: format!("failed to get column {}: {}", idx, e),
+        })?;
 
         match value_ref {
             ValueRef::Null => Ok(SqlValue::Null),
@@ -1994,18 +1817,11 @@ impl SqliteStateMachine {
 
     /// Read metadata from the database.
     /// Uses read pool for concurrent reads.
-    fn read_meta<T: for<'de> Deserialize<'de>>(
-        &self,
-        key: &str,
-    ) -> Result<Option<T>, SqliteStorageError> {
+    fn read_meta<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>, SqliteStorageError> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         Self::reset_read_connection(&conn)?;
         let bytes: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT value FROM state_machine_meta WHERE key = ?1",
-                params![key],
-                |row| row.get(0),
-            )
+            .query_row("SELECT value FROM state_machine_meta WHERE key = ?1", params![key], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -2056,12 +1872,9 @@ impl SqliteStateMachine {
     ///
     /// Tiger Style: Explicit return type, fail-fast on checkpoint errors.
     pub fn checkpoint_wal(&self) -> Result<u32, SqliteStorageError> {
-        let conn = self
-            .write_conn
-            .lock()
-            .map_err(|_| SqliteStorageError::MutexPoisoned {
-                operation: "checkpoint",
-            })?;
+        let conn = self.write_conn.lock().map_err(|_| SqliteStorageError::MutexPoisoned {
+            operation: "checkpoint",
+        })?;
 
         // TRUNCATE mode: checkpoint and truncate WAL file
         let mut checkpointed: i32 = 0;
@@ -2080,10 +1893,7 @@ impl SqliteStateMachine {
     /// Returns None if checkpoint was not needed.
     ///
     /// Tiger Style: Explicit threshold parameter, bounded operation.
-    pub fn auto_checkpoint_if_needed(
-        &self,
-        threshold_bytes: u64,
-    ) -> Result<Option<u32>, SqliteStorageError> {
+    pub fn auto_checkpoint_if_needed(&self, threshold_bytes: u64) -> Result<Option<u32>, SqliteStorageError> {
         match self.wal_file_size()? {
             Some(size) if size > threshold_bytes => {
                 let pages = self.checkpoint_wal()?;
@@ -2097,10 +1907,7 @@ impl SqliteStateMachine {
     ///
     /// Serializes and stores the log ID to track which entries have been applied.
     /// Tiger Style: Single-purpose function, explicit error handling.
-    fn update_last_applied_log(
-        conn: &Connection,
-        log_id: &openraft::LogId<AppTypeConfig>,
-    ) -> Result<(), io::Error> {
+    fn update_last_applied_log(conn: &Connection, log_id: &openraft::LogId<AppTypeConfig>) -> Result<(), io::Error> {
         let last_applied_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
         conn.execute(
             "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
@@ -2120,7 +1927,8 @@ impl SqliteStateMachine {
     /// * `key` - The key to set
     /// * `value` - The value to set
     /// * `log_index` - The Raft log index for this operation (used for mod_revision)
-    /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). NULL means never expires.
+    /// * `expires_at_ms` - Optional expiration timestamp (absolute Unix ms). NULL means never
+    ///   expires.
     /// * `lease_id` - Optional lease ID to attach this key to. Key is deleted when lease expires.
     ///
     /// Tiger Style: Single-purpose, explicit return type.
@@ -2134,11 +1942,9 @@ impl SqliteStateMachine {
     ) -> Result<AppResponse, io::Error> {
         // Query existing version and create_revision before update
         let existing: Option<(i64, i64)> = conn
-            .query_row(
-                "SELECT version, create_revision FROM state_machine_kv WHERE key = ?1",
-                params![key],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-            )
+            .query_row("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1", params![key], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            })
             .optional()
             .context(QuerySnafu)?;
 
@@ -2202,9 +2008,7 @@ impl SqliteStateMachine {
         for (key, value) in pairs {
             // Query existing version and create_revision
             let existing: Option<(i64, i64)> = query_stmt
-                .query_row(params![key], |row| {
-                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-                })
+                .query_row(params![key], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
                 .optional()
                 .context(QuerySnafu)?;
 
@@ -2214,15 +2018,7 @@ impl SqliteStateMachine {
             };
 
             insert_stmt
-                .execute(params![
-                    key,
-                    value,
-                    new_version,
-                    create_rev,
-                    log_idx,
-                    expires,
-                    lease
-                ])
+                .execute(params![key, value, new_version, create_rev, log_idx, expires, lease])
                 .context(ExecuteSnafu)?;
         }
 
@@ -2241,9 +2037,7 @@ impl SqliteStateMachine {
     ///
     /// Tiger Style: Single-purpose, idempotent (no error if key doesn't exist).
     fn apply_delete(conn: &Connection, key: &str) -> Result<AppResponse, io::Error> {
-        let rows = conn
-            .execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
-            .context(ExecuteSnafu)?;
+        let rows = conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key]).context(ExecuteSnafu)?;
         Ok(AppResponse {
             value: None,
             deleted: Some(rows > 0),
@@ -2268,9 +2062,7 @@ impl SqliteStateMachine {
         }
 
         // Prepare statement once and reuse for all deletes
-        let mut stmt = conn
-            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
-            .context(QuerySnafu)?;
+        let mut stmt = conn.prepare("DELETE FROM state_machine_kv WHERE key = ?1").context(QuerySnafu)?;
 
         let mut deleted_any = false;
         for key in keys {
@@ -2379,18 +2171,10 @@ impl SqliteStateMachine {
     /// - `cas_succeeded: Some(false)` with `value: actual_value` if condition didn't match
     ///
     /// Tiger Style: Single-purpose, explicit return type, no side effects on failure.
-    fn apply_compare_and_delete(
-        conn: &Connection,
-        key: &str,
-        expected: &str,
-    ) -> Result<AppResponse, io::Error> {
+    fn apply_compare_and_delete(conn: &Connection, key: &str, expected: &str) -> Result<AppResponse, io::Error> {
         // Read current value
         let current: Option<String> = conn
-            .query_row(
-                "SELECT value FROM state_machine_kv WHERE key = ?1",
-                params![key],
-                |row| row.get(0),
-            )
+            .query_row("SELECT value FROM state_machine_kv WHERE key = ?1", params![key], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -2410,8 +2194,7 @@ impl SqliteStateMachine {
         }
 
         // CAS succeeded - delete the key
-        conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
-            .context(ExecuteSnafu)?;
+        conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key]).context(ExecuteSnafu)?;
 
         Ok(AppResponse {
             deleted: Some(true),
@@ -2431,10 +2214,9 @@ impl SqliteStateMachine {
     ) -> Result<AppResponse, io::Error> {
         let stored_membership = StoredMembership::new(Some(*log_id), membership.clone());
         let membership_bytes = bincode::serialize(&stored_membership).context(SerializeSnafu)?;
-        conn.execute(
-            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
-            params![membership_bytes],
-        )
+        conn.execute("INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)", params![
+            membership_bytes
+        ])
         .context(ExecuteSnafu)?;
         Ok(AppResponse::default())
     }
@@ -2465,9 +2247,7 @@ impl SqliteStateMachine {
         let mut set_stmt = conn
             .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
             .context(QuerySnafu)?;
-        let mut del_stmt = conn
-            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
-            .context(QuerySnafu)?;
+        let mut del_stmt = conn.prepare("DELETE FROM state_machine_kv WHERE key = ?1").context(QuerySnafu)?;
 
         let log_idx = log_index as i64;
 
@@ -2475,9 +2255,7 @@ impl SqliteStateMachine {
             if *is_set {
                 // Query existing version and create_revision
                 let existing: Option<(i64, i64)> = query_stmt
-                    .query_row(params![key], |row| {
-                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-                    })
+                    .query_row(params![key], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
                     .optional()
                     .context(QuerySnafu)?;
 
@@ -2486,9 +2264,7 @@ impl SqliteStateMachine {
                     None => (1, log_idx),
                 };
 
-                set_stmt
-                    .execute(params![key, value, new_version, create_rev, log_idx])
-                    .context(ExecuteSnafu)?;
+                set_stmt.execute(params![key, value, new_version, create_rev, log_idx]).context(ExecuteSnafu)?;
             } else {
                 del_stmt.execute(params![key]).context(ExecuteSnafu)?;
             }
@@ -2535,11 +2311,7 @@ impl SqliteStateMachine {
         let mut failed_index = None;
         for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
             let current: Option<String> = conn
-                .query_row(
-                    "SELECT value FROM state_machine_kv WHERE key = ?1",
-                    params![key],
-                    |row| row.get(0),
-                )
+                .query_row("SELECT value FROM state_machine_kv WHERE key = ?1", params![key], |row| row.get(0))
                 .optional()
                 .context(QuerySnafu)?;
 
@@ -2571,9 +2343,7 @@ impl SqliteStateMachine {
         let mut set_stmt = conn
             .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
             .context(QuerySnafu)?;
-        let mut del_stmt = conn
-            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
-            .context(QuerySnafu)?;
+        let mut del_stmt = conn.prepare("DELETE FROM state_machine_kv WHERE key = ?1").context(QuerySnafu)?;
 
         let log_idx = log_index as i64;
 
@@ -2581,9 +2351,7 @@ impl SqliteStateMachine {
             if *is_set {
                 // Query existing version and create_revision
                 let existing: Option<(i64, i64)> = query_stmt
-                    .query_row(params![key], |row| {
-                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-                    })
+                    .query_row(params![key], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
                     .optional()
                     .context(QuerySnafu)?;
 
@@ -2592,9 +2360,7 @@ impl SqliteStateMachine {
                     None => (1, log_idx),
                 };
 
-                set_stmt
-                    .execute(params![key, value, new_version, create_rev, log_idx])
-                    .context(ExecuteSnafu)?;
+                set_stmt.execute(params![key, value, new_version, create_rev, log_idx]).context(ExecuteSnafu)?;
             } else {
                 del_stmt.execute(params![key]).context(ExecuteSnafu)?;
             }
@@ -2650,16 +2416,11 @@ impl SqliteStateMachine {
         }
 
         // Phase 1: Validate read set - check all versions match
-        let mut query_stmt = conn
-            .prepare("SELECT version FROM state_machine_kv WHERE key = ?1")
-            .context(QuerySnafu)?;
+        let mut query_stmt = conn.prepare("SELECT version FROM state_machine_kv WHERE key = ?1").context(QuerySnafu)?;
 
         for (key, expected_version) in read_set {
-            let current_version: i64 = query_stmt
-                .query_row(params![key], |row| row.get(0))
-                .optional()
-                .context(QuerySnafu)?
-                .unwrap_or(0); // Non-existent key has version 0
+            let current_version: i64 =
+                query_stmt.query_row(params![key], |row| row.get(0)).optional().context(QuerySnafu)?.unwrap_or(0); // Non-existent key has version 0
 
             if current_version != *expected_version {
                 // Conflict detected - return error with details
@@ -2681,9 +2442,7 @@ impl SqliteStateMachine {
         let mut set_stmt = conn
             .prepare("INSERT OR REPLACE INTO state_machine_kv (key, value, version, create_revision, mod_revision) VALUES (?1, ?2, ?3, ?4, ?5)")
             .context(QuerySnafu)?;
-        let mut del_stmt = conn
-            .prepare("DELETE FROM state_machine_kv WHERE key = ?1")
-            .context(QuerySnafu)?;
+        let mut del_stmt = conn.prepare("DELETE FROM state_machine_kv WHERE key = ?1").context(QuerySnafu)?;
 
         let log_idx = log_index as i64;
 
@@ -2691,9 +2450,7 @@ impl SqliteStateMachine {
             if *is_set {
                 // Query existing version and create_revision
                 let existing: Option<(i64, i64)> = version_query_stmt
-                    .query_row(params![key], |row| {
-                        Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
-                    })
+                    .query_row(params![key], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))
                     .optional()
                     .context(QuerySnafu)?;
 
@@ -2702,9 +2459,7 @@ impl SqliteStateMachine {
                     None => (1, log_idx),
                 };
 
-                set_stmt
-                    .execute(params![key, value, new_version, create_rev, log_idx])
-                    .context(ExecuteSnafu)?;
+                set_stmt.execute(params![key, value, new_version, create_rev, log_idx]).context(ExecuteSnafu)?;
             } else {
                 del_stmt.execute(params![key]).context(ExecuteSnafu)?;
             }
@@ -2799,21 +2554,21 @@ impl SqliteStateMachine {
                 .query_row(
                     "SELECT value, version, create_revision, mod_revision FROM state_machine_kv WHERE key = ?1",
                     params![key],
-                    |row| Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, i64>(1)?,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, i64>(3)?,
-                    )),
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, i64>(2)?,
+                            row.get::<_, i64>(3)?,
+                        ))
+                    },
                 )
                 .optional()
                 .context(QuerySnafu)?;
 
             let condition_met = match (target, row.as_ref()) {
                 // Value comparisons
-                (0, Some((value, _, _, _))) => {
-                    Self::compare_values(op, value.as_str(), expected.as_str())
-                }
+                (0, Some((value, _, _, _))) => Self::compare_values(op, value.as_str(), expected.as_str()),
                 (0, None) => {
                     // Key doesn't exist - compare against empty string
                     Self::compare_values(op, "", expected.as_str())
@@ -2926,11 +2681,9 @@ impl SqliteStateMachine {
     ) -> Result<crate::api::TxnOpResult, io::Error> {
         // Check if key exists to determine if create or update
         let existing: Option<(i64, i64)> = conn
-            .query_row(
-                "SELECT version, create_revision FROM state_machine_kv WHERE key = ?1",
-                params![key],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-            )
+            .query_row("SELECT version, create_revision FROM state_machine_kv WHERE key = ?1", params![key], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            })
             .optional()
             .context(QuerySnafu)?;
 
@@ -2945,19 +2698,13 @@ impl SqliteStateMachine {
         )
         .context(ExecuteSnafu)?;
 
-        Ok(crate::api::TxnOpResult::Put {
-            revision: log_index,
-        })
+        Ok(crate::api::TxnOpResult::Put { revision: log_index })
     }
 
     /// Execute a Delete operation within a transaction.
-    fn apply_transaction_delete(
-        conn: &Connection,
-        key: &str,
-    ) -> Result<crate::api::TxnOpResult, io::Error> {
-        let deleted = conn
-            .execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key])
-            .context(ExecuteSnafu)?;
+    fn apply_transaction_delete(conn: &Connection, key: &str) -> Result<crate::api::TxnOpResult, io::Error> {
+        let deleted =
+            conn.execute("DELETE FROM state_machine_kv WHERE key = ?1", params![key]).context(ExecuteSnafu)?;
 
         Ok(crate::api::TxnOpResult::Delete {
             deleted: deleted as u32,
@@ -2965,23 +2712,22 @@ impl SqliteStateMachine {
     }
 
     /// Execute a Get operation within a transaction.
-    fn apply_transaction_get(
-        conn: &Connection,
-        key: &str,
-    ) -> Result<crate::api::TxnOpResult, io::Error> {
+    fn apply_transaction_get(conn: &Connection, key: &str) -> Result<crate::api::TxnOpResult, io::Error> {
         use crate::api::KeyValueWithRevision;
 
         let kv: Option<KeyValueWithRevision> = conn
             .query_row(
                 "SELECT key, value, version, create_revision, mod_revision FROM state_machine_kv WHERE key = ?1",
                 params![key],
-                |row| Ok(KeyValueWithRevision {
-                    key: row.get::<_, String>(0)?,
-                    value: row.get::<_, String>(1)?,
-                    version: row.get::<_, i64>(2)? as u64,
-                    create_revision: row.get::<_, i64>(3)? as u64,
-                    mod_revision: row.get::<_, i64>(4)? as u64,
-                }),
+                |row| {
+                    Ok(KeyValueWithRevision {
+                        key: row.get::<_, String>(0)?,
+                        value: row.get::<_, String>(1)?,
+                        version: row.get::<_, i64>(2)? as u64,
+                        create_revision: row.get::<_, i64>(3)? as u64,
+                        mod_revision: row.get::<_, i64>(4)? as u64,
+                    })
+                },
             )
             .optional()
             .context(QuerySnafu)?;
@@ -3023,8 +2769,7 @@ impl SqliteStateMachine {
             })
             .context(QuerySnafu)?;
 
-        let mut kvs: Vec<KeyValueWithRevision> =
-            rows.filter_map(|r| r.ok()).take(actual_limit).collect();
+        let mut kvs: Vec<KeyValueWithRevision> = rows.filter_map(|r| r.ok()).take(actual_limit).collect();
 
         // Check if there are more results
         let more = kvs.len() > actual_limit;
@@ -3064,11 +2809,7 @@ impl SqliteStateMachine {
     /// * `ttl_seconds` - Time-to-live in seconds
     ///
     /// Tiger Style: Single-purpose, explicit return type.
-    fn apply_lease_grant(
-        conn: &Connection,
-        lease_id: u64,
-        ttl_seconds: u32,
-    ) -> Result<AppResponse, io::Error> {
+    fn apply_lease_grant(conn: &Connection, lease_id: u64, ttl_seconds: u32) -> Result<AppResponse, io::Error> {
         let now_ms = now_unix_ms();
         let expires_at_ms = now_ms + (ttl_seconds as u64 * 1000);
 
@@ -3083,29 +2824,21 @@ impl SqliteStateMachine {
 
         // Check if lease already exists
         let existing: Option<i64> = conn
-            .query_row(
-                "SELECT lease_id FROM leases WHERE lease_id = ?1",
-                params![actual_lease_id as i64],
-                |row| row.get(0),
-            )
+            .query_row("SELECT lease_id FROM leases WHERE lease_id = ?1", params![actual_lease_id as i64], |row| {
+                row.get(0)
+            })
             .optional()
             .context(QuerySnafu)?;
 
         if existing.is_some() {
-            return Err(io::Error::other(format!(
-                "lease {} already exists",
-                actual_lease_id
-            )));
+            return Err(io::Error::other(format!("lease {} already exists", actual_lease_id)));
         }
 
-        conn.execute(
-            "INSERT INTO leases (lease_id, granted_ttl_seconds, expires_at_ms) VALUES (?1, ?2, ?3)",
-            params![
-                actual_lease_id as i64,
-                ttl_seconds as i64,
-                expires_at_ms as i64
-            ],
-        )
+        conn.execute("INSERT INTO leases (lease_id, granted_ttl_seconds, expires_at_ms) VALUES (?1, ?2, ?3)", params![
+            actual_lease_id as i64,
+            ttl_seconds as i64,
+            expires_at_ms as i64
+        ])
         .context(ExecuteSnafu)?;
 
         Ok(AppResponse {
@@ -3128,11 +2861,7 @@ impl SqliteStateMachine {
     fn apply_lease_revoke(conn: &Connection, lease_id: u64) -> Result<AppResponse, io::Error> {
         // Check if lease exists
         let existing: Option<i64> = conn
-            .query_row(
-                "SELECT lease_id FROM leases WHERE lease_id = ?1",
-                params![lease_id as i64],
-                |row| row.get(0),
-            )
+            .query_row("SELECT lease_id FROM leases WHERE lease_id = ?1", params![lease_id as i64], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -3142,18 +2871,12 @@ impl SqliteStateMachine {
 
         // Delete all keys attached to this lease
         let keys_deleted = conn
-            .execute(
-                "DELETE FROM state_machine_kv WHERE lease_id = ?1",
-                params![lease_id as i64],
-            )
+            .execute("DELETE FROM state_machine_kv WHERE lease_id = ?1", params![lease_id as i64])
             .context(ExecuteSnafu)?;
 
         // Delete the lease itself
-        conn.execute(
-            "DELETE FROM leases WHERE lease_id = ?1",
-            params![lease_id as i64],
-        )
-        .context(ExecuteSnafu)?;
+        conn.execute("DELETE FROM leases WHERE lease_id = ?1", params![lease_id as i64])
+            .context(ExecuteSnafu)?;
 
         Ok(AppResponse {
             lease_id: Some(lease_id),
@@ -3192,10 +2915,10 @@ impl SqliteStateMachine {
             Some((granted_ttl_seconds, _)) => {
                 let new_expires_at_ms = now_ms + (granted_ttl_seconds as u64 * 1000);
 
-                conn.execute(
-                    "UPDATE leases SET expires_at_ms = ?1 WHERE lease_id = ?2",
-                    params![new_expires_at_ms as i64, lease_id as i64],
-                )
+                conn.execute("UPDATE leases SET expires_at_ms = ?1 WHERE lease_id = ?2", params![
+                    new_expires_at_ms as i64,
+                    lease_id as i64
+                ])
                 .context(ExecuteSnafu)?;
 
                 Ok(AppResponse {
@@ -3309,10 +3032,7 @@ impl SqliteStateMachine {
     /// * `topology_data` - Serialized ShardTopology bytes
     ///
     /// Tiger Style: Atomic, versioned.
-    fn apply_topology_update(
-        conn: &Connection,
-        topology_data: &[u8],
-    ) -> Result<AppResponse, io::Error> {
+    fn apply_topology_update(conn: &Connection, topology_data: &[u8]) -> Result<AppResponse, io::Error> {
         // Deserialize the topology
         let topology: ShardTopology = bincode::deserialize(topology_data)
             .map_err(|e| io::Error::other(format!("failed to deserialize topology: {}", e)))?;
@@ -3331,9 +3051,7 @@ impl SqliteStateMachine {
     /// Returns an empty topology if none exists yet.
     fn load_topology(conn: &Connection) -> Result<ShardTopology, io::Error> {
         let row: Option<Vec<u8>> = conn
-            .query_row("SELECT data FROM shard_topology WHERE id = 1", [], |row| {
-                row.get(0)
-            })
+            .query_row("SELECT data FROM shard_topology WHERE id = 1", [], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
@@ -3371,26 +3089,19 @@ impl SqliteStateMachine {
         match payload {
             EntryPayload::Blank => Ok(AppResponse::default()),
             EntryPayload::Normal(req) => match req {
-                AppRequest::Set { key, value } => {
-                    Self::apply_set(conn, key, value, log_index, None, None)
-                }
+                AppRequest::Set { key, value } => Self::apply_set(conn, key, value, log_index, None, None),
                 AppRequest::SetWithTTL {
                     key,
                     value,
                     expires_at_ms,
                 } => Self::apply_set(conn, key, value, log_index, Some(*expires_at_ms), None),
-                AppRequest::SetWithLease {
-                    key,
-                    value,
-                    lease_id,
-                } => Self::apply_set(conn, key, value, log_index, None, Some(*lease_id)),
-                AppRequest::SetMulti { pairs } => {
-                    Self::apply_set_multi(conn, pairs, log_index, None, None)
+                AppRequest::SetWithLease { key, value, lease_id } => {
+                    Self::apply_set(conn, key, value, log_index, None, Some(*lease_id))
                 }
-                AppRequest::SetMultiWithTTL {
-                    pairs,
-                    expires_at_ms,
-                } => Self::apply_set_multi(conn, pairs, log_index, Some(*expires_at_ms), None),
+                AppRequest::SetMulti { pairs } => Self::apply_set_multi(conn, pairs, log_index, None, None),
+                AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
+                    Self::apply_set_multi(conn, pairs, log_index, Some(*expires_at_ms), None)
+                }
                 AppRequest::SetMultiWithLease { pairs, lease_id } => {
                     Self::apply_set_multi(conn, pairs, log_index, None, Some(*lease_id))
                 }
@@ -3400,39 +3111,26 @@ impl SqliteStateMachine {
                     key,
                     expected,
                     new_value,
-                } => Self::apply_compare_and_swap(
-                    conn,
-                    key,
-                    expected.as_deref(),
-                    new_value,
-                    log_index,
-                ),
-                AppRequest::CompareAndDelete { key, expected } => {
-                    Self::apply_compare_and_delete(conn, key, expected)
-                }
+                } => Self::apply_compare_and_swap(conn, key, expected.as_deref(), new_value, log_index),
+                AppRequest::CompareAndDelete { key, expected } => Self::apply_compare_and_delete(conn, key, expected),
                 AppRequest::Batch { operations } => Self::apply_batch(conn, operations, log_index),
-                AppRequest::ConditionalBatch {
-                    conditions,
-                    operations,
-                } => Self::apply_conditional_batch(conn, conditions, operations, log_index),
-                // Lease operations
-                AppRequest::LeaseGrant {
-                    lease_id,
-                    ttl_seconds,
-                } => Self::apply_lease_grant(conn, *lease_id, *ttl_seconds),
-                AppRequest::LeaseRevoke { lease_id } => Self::apply_lease_revoke(conn, *lease_id),
-                AppRequest::LeaseKeepalive { lease_id } => {
-                    Self::apply_lease_keepalive(conn, *lease_id)
+                AppRequest::ConditionalBatch { conditions, operations } => {
+                    Self::apply_conditional_batch(conn, conditions, operations, log_index)
                 }
+                // Lease operations
+                AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
+                    Self::apply_lease_grant(conn, *lease_id, *ttl_seconds)
+                }
+                AppRequest::LeaseRevoke { lease_id } => Self::apply_lease_revoke(conn, *lease_id),
+                AppRequest::LeaseKeepalive { lease_id } => Self::apply_lease_keepalive(conn, *lease_id),
                 AppRequest::Transaction {
                     compare,
                     success,
                     failure,
                 } => Self::apply_transaction(conn, log_id.index, compare, success, failure),
-                AppRequest::OptimisticTransaction {
-                    read_set,
-                    write_set,
-                } => Self::apply_optimistic_transaction(conn, log_index, read_set, write_set),
+                AppRequest::OptimisticTransaction { read_set, write_set } => {
+                    Self::apply_optimistic_transaction(conn, log_index, read_set, write_set)
+                }
                 // Shard topology operations (control plane operations on shard 0)
                 AppRequest::ShardSplit {
                     source_shard,
@@ -3441,14 +3139,7 @@ impl SqliteStateMachine {
                     topology_version,
                 } => {
                     let timestamp = now_unix_ms() / 1000; // Convert to seconds
-                    Self::apply_shard_split(
-                        conn,
-                        *source_shard,
-                        split_key,
-                        *new_shard_id,
-                        *topology_version,
-                        timestamp,
-                    )
+                    Self::apply_shard_split(conn, *source_shard, split_key, *new_shard_id, *topology_version, timestamp)
                 }
                 AppRequest::ShardMerge {
                     source_shard,
@@ -3456,21 +3147,11 @@ impl SqliteStateMachine {
                     topology_version,
                 } => {
                     let timestamp = now_unix_ms() / 1000; // Convert to seconds
-                    Self::apply_shard_merge(
-                        conn,
-                        *source_shard,
-                        *target_shard,
-                        *topology_version,
-                        timestamp,
-                    )
+                    Self::apply_shard_merge(conn, *source_shard, *target_shard, *topology_version, timestamp)
                 }
-                AppRequest::TopologyUpdate { topology_data } => {
-                    Self::apply_topology_update(conn, topology_data)
-                }
+                AppRequest::TopologyUpdate { topology_data } => Self::apply_topology_update(conn, topology_data),
             },
-            EntryPayload::Membership(membership) => {
-                Self::apply_membership(conn, log_id, membership)
-            }
+            EntryPayload::Membership(membership) => Self::apply_membership(conn, log_id, membership),
         }
     }
 }
@@ -3484,13 +3165,9 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             SqliteStateMachine::reset_read_connection(&conn)?;
 
             // Read all KV data
-            let mut stmt = conn
-                .prepare("SELECT key, value FROM state_machine_kv")
-                .context(QuerySnafu)?;
+            let mut stmt = conn.prepare("SELECT key, value FROM state_machine_kv").context(QuerySnafu)?;
             let rows = stmt
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
+                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
                 .context(QuerySnafu)?;
 
             let mut data = BTreeMap::new();
@@ -3572,11 +3249,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             // Generate snapshot ID
             let snapshot_idx = state.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
             let snapshot_id = if let Some(last) = last_applied_log {
-                format!(
-                    "{}-{}-{snapshot_idx}",
-                    last.committed_leader_id(),
-                    last.index()
-                )
+                format!("{}-{}-{snapshot_idx}", last.committed_leader_id(), last.index())
             } else {
                 format!("--{snapshot_idx}")
             };
@@ -3606,23 +3279,16 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<SqliteStateMachine> {
             })
             .context(SerializeSnafu)?;
 
-            let write_conn =
-                state
-                    .write_conn
-                    .lock()
-                    .map_err(|_| SqliteStorageError::MutexPoisoned {
-                        operation: "snapshot_build",
-                    })?;
+            let write_conn = state.write_conn.lock().map_err(|_| SqliteStorageError::MutexPoisoned {
+                operation: "snapshot_build",
+            })?;
 
             // Start transaction with RAII guard for automatic rollback on error
             // Tiger Style: Atomic snapshot write, fail-fast with explicit error handling
             let guard = TransactionGuard::new(&write_conn)?;
 
             write_conn
-                .execute(
-                    "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
-                    params![snapshot_blob],
-                )
+                .execute("INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)", params![snapshot_blob])
                 .context(ExecuteSnafu)?;
 
             // Commit transaction - guard is consumed and dropped after commit
@@ -3643,29 +3309,18 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
 
     async fn applied_state(
         &mut self,
-    ) -> Result<
-        (
-            Option<openraft::LogId<AppTypeConfig>>,
-            StoredMembership<AppTypeConfig>,
-        ),
-        io::Error,
-    > {
+    ) -> Result<(Option<openraft::LogId<AppTypeConfig>>, StoredMembership<AppTypeConfig>), io::Error> {
         // Note: We serialize Option<LogId> (see apply() method),
         // so we must deserialize as Option<Option<LogId>> then flatten
-        let last_applied_log: Option<openraft::LogId<AppTypeConfig>> = self
-            .read_meta::<Option<openraft::LogId<AppTypeConfig>>>("last_applied_log")?
-            .flatten();
-        let last_membership: StoredMembership<AppTypeConfig> =
-            self.read_meta("last_membership")?.unwrap_or_default();
+        let last_applied_log: Option<openraft::LogId<AppTypeConfig>> =
+            self.read_meta::<Option<openraft::LogId<AppTypeConfig>>>("last_applied_log")?.flatten();
+        let last_membership: StoredMembership<AppTypeConfig> = self.read_meta("last_membership")?.unwrap_or_default();
 
         Ok((last_applied_log, last_membership))
     }
 
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where
-        Strm:
-            Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
-    {
+    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
         // Tiger Style: Fixed batch size limit for memory and transaction bounds
         const BATCH_BUFFER_SIZE: usize = 100;
 
@@ -3688,10 +3343,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             if total_count > MAX_BATCH_SIZE {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!(
-                        "Batch size {} exceeds maximum limit of {}",
-                        total_count, MAX_BATCH_SIZE
-                    ),
+                    format!("Batch size {} exceeds maximum limit of {}", total_count, MAX_BATCH_SIZE),
                 ));
             }
 
@@ -3730,18 +3382,13 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         SqliteStateMachine::reset_read_connection(&conn)?;
         let bytes: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT data FROM snapshots WHERE id = 'current'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT data FROM snapshots WHERE id = 'current'", [], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
         match bytes {
             Some(bytes) => {
-                let snapshot: StoredSnapshot =
-                    bincode::deserialize(&bytes).context(DeserializeSnafu)?;
+                let snapshot: StoredSnapshot = bincode::deserialize(&bytes).context(DeserializeSnafu)?;
                 Ok(Cursor::new(snapshot.data))
             }
             None => Ok(Cursor::new(Vec::new())),
@@ -3785,29 +3432,23 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
             let guard = TransactionGuard::new(&conn)?;
 
             // Clear existing KV data
-            conn.execute("DELETE FROM state_machine_kv", [])
-                .context(ExecuteSnafu)?;
+            conn.execute("DELETE FROM state_machine_kv", []).context(ExecuteSnafu)?;
 
             // Install new data
             for (key, value) in new_data {
-                conn.execute(
-                    "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                    params![key, value],
-                )
-                .context(ExecuteSnafu)?;
+                conn.execute("INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![key, value])
+                    .context(ExecuteSnafu)?;
             }
 
             // Update metadata
-            let last_applied_bytes =
-                bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
+            let last_applied_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
             conn.execute(
                 "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_applied_log', ?1)",
                 params![last_applied_bytes],
             )
             .context(ExecuteSnafu)?;
 
-            let membership_bytes =
-                bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
             conn.execute(
                 "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
                 params![membership_bytes],
@@ -3821,11 +3462,8 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                 integrity: Some(integrity),
             })
             .context(SerializeSnafu)?;
-            conn.execute(
-                "INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)",
-                params![snapshot_blob],
-            )
-            .context(ExecuteSnafu)?;
+            conn.execute("INSERT OR REPLACE INTO snapshots (id, data) VALUES ('current', ?1)", params![snapshot_blob])
+                .context(ExecuteSnafu)?;
 
             // Commit transaction - guard is consumed and dropped after commit
             guard.commit()?;
@@ -3841,18 +3479,13 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
         let conn = self.read_pool.get().context(PoolSnafu)?;
         SqliteStateMachine::reset_read_connection(&conn)?;
         let bytes: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT data FROM snapshots WHERE id = 'current'",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT data FROM snapshots WHERE id = 'current'", [], |row| row.get(0))
             .optional()
             .context(QuerySnafu)?;
 
         match bytes {
             Some(bytes) => {
-                let snapshot: StoredSnapshot =
-                    bincode::deserialize(&bytes).context(DeserializeSnafu)?;
+                let snapshot: StoredSnapshot = bincode::deserialize(&bytes).context(DeserializeSnafu)?;
 
                 // Verify integrity if present (may be absent in old snapshots)
                 if let Some(ref integrity) = snapshot.integrity {
@@ -3879,10 +3512,7 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
                     );
                 }
 
-                tracing::debug!(
-                    "get_current_snapshot: returning snapshot at {:?}",
-                    snapshot.meta.last_log_id
-                );
+                tracing::debug!("get_current_snapshot: returning snapshot at {:?}", snapshot.meta.last_log_id);
                 Ok(Some(Snapshot {
                     meta: snapshot.meta,
                     snapshot: Cursor::new(snapshot.data),
@@ -3902,11 +3532,12 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::tempdir;
+
     use super::*;
     use crate::api::ScanRequest;
     use crate::raft::StateMachineVariant;
     use crate::raft::constants::MAX_BATCH_SIZE;
-    use tempfile::tempdir;
 
     // =========================================================================
     // SqliteStateMachine Constructor Tests
@@ -3991,16 +3622,8 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('key1', 'value1')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('key2', 'value2')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('key1', 'value1')", []).unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('key2', 'value2')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4018,21 +3641,9 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('test:key1', 'v1')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('test:key2', 'v2')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('other:key1', 'v3')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('test:key1', 'v1')", []).unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('test:key2', 'v2')", []).unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('other:key1', 'v3')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4067,11 +3678,7 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('mykey', 'myvalue')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('mykey', 'myvalue')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4104,10 +3711,10 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..10 {
-                conn.execute(
-                    "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                    params![format!("k{}", i), format!("v{}", i)],
-                )
+                conn.execute("INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
+                    format!("k{}", i),
+                    format!("v{}", i)
+                ])
                 .unwrap();
             }
             guard.commit().unwrap();
@@ -4162,11 +3769,7 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('a', '1')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('a', '1')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4188,11 +3791,7 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('key', 'value')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('key', 'value')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4213,11 +3812,7 @@ mod tests {
         let conn = sm.write_conn.lock().unwrap();
         let guard = TransactionGuard::new(&conn).unwrap();
 
-        conn.execute(
-            "INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')",
-            [],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')", []).unwrap();
 
         // Commit should succeed
         let result = guard.commit();
@@ -4239,11 +3834,7 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
 
-            conn.execute(
-                "INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT INTO state_machine_kv (key, value) VALUES ('test', 'data')", []).unwrap();
 
             // Drop without commit - should rollback
             drop(guard);
@@ -4321,10 +3912,9 @@ mod tests {
             for i in 0..(MAX_BATCH_SIZE as usize + 10) {
                 let key = format!("k{:04}", i);
                 let value = format!("v{key}");
-                conn.execute(
-                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                    params![key, value],
-                )
+                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
+                    key, value
+                ])
                 .unwrap();
             }
             guard.commit().unwrap();
@@ -4373,11 +3963,7 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('a', '1')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('a', '1')", []).unwrap();
             guard.commit().unwrap();
         }
 
@@ -4412,28 +3998,15 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')", [])
+                .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')", [])
+                .unwrap();
             guard.commit().unwrap();
         }
 
         // Query the data
-        let result = sm
-            .execute_sql(
-                "SELECT key, value FROM state_machine_kv ORDER BY key",
-                &[],
-                None,
-                None,
-            )
-            .unwrap();
+        let result = sm.execute_sql("SELECT key, value FROM state_machine_kv ORDER BY key", &[], None, None).unwrap();
 
         assert_eq!(result.columns.len(), 2);
         assert_eq!(result.columns[0].name, "key");
@@ -4457,16 +4030,10 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')", [])
+                .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')", [])
+                .unwrap();
             guard.commit().unwrap();
         }
 
@@ -4494,21 +4061,12 @@ mod tests {
         {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('config:1', 'value')",
-                [],
-            )
-            .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:1', 'Alice')", [])
+                .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('user:2', 'Bob')", [])
+                .unwrap();
+            conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES ('config:1', 'value')", [])
+                .unwrap();
             guard.commit().unwrap();
         }
 
@@ -4536,24 +4094,17 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..100 {
-                conn.execute(
-                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                    params![format!("key:{:03}", i), format!("value:{}", i)],
-                )
+                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
+                    format!("key:{:03}", i),
+                    format!("value:{}", i)
+                ])
                 .unwrap();
             }
             guard.commit().unwrap();
         }
 
         // Query with limit
-        let result = sm
-            .execute_sql(
-                "SELECT key, value FROM state_machine_kv",
-                &[],
-                Some(10),
-                None,
-            )
-            .unwrap();
+        let result = sm.execute_sql("SELECT key, value FROM state_machine_kv", &[], Some(10), None).unwrap();
 
         assert_eq!(result.row_count, 10);
         assert!(result.is_truncated);
@@ -4571,24 +4122,17 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..10 {
-                conn.execute(
-                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
-                    params![format!("key:{}", i), format!("value:{}", i)],
-                )
+                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
+                    format!("key:{}", i),
+                    format!("value:{}", i)
+                ])
                 .unwrap();
             }
             guard.commit().unwrap();
         }
 
         // Count query
-        let result = sm
-            .execute_sql(
-                "SELECT COUNT(*) as total FROM state_machine_kv",
-                &[],
-                None,
-                None,
-            )
-            .unwrap();
+        let result = sm.execute_sql("SELECT COUNT(*) as total FROM state_machine_kv", &[], None, None).unwrap();
 
         assert_eq!(result.columns[0].name, "total");
         assert_eq!(result.row_count, 1);

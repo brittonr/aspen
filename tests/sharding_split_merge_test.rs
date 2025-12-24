@@ -7,20 +7,21 @@
 /// - Concurrent operations during topology transitions
 use std::sync::Arc;
 
-use aspen::api::{
-    DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand,
-    WriteRequest,
-};
-use aspen::sharding::{ShardConfig, ShardTopology, ShardedKeyValueStore};
+use aspen::api::DeterministicKeyValueStore;
+use aspen::api::KeyValueStore;
+use aspen::api::KeyValueStoreError;
+use aspen::api::ReadRequest;
+use aspen::api::WriteCommand;
+use aspen::api::WriteRequest;
+use aspen::sharding::ShardConfig;
+use aspen::sharding::ShardTopology;
+use aspen::sharding::ShardedKeyValueStore;
 use tokio::sync::RwLock;
 
 /// Create a sharded store with the given number of shards and topology.
 async fn create_sharded_store(
     num_shards: u32,
-) -> (
-    ShardedKeyValueStore<DeterministicKeyValueStore>,
-    Arc<RwLock<ShardTopology>>,
-) {
+) -> (ShardedKeyValueStore<DeterministicKeyValueStore>, Arc<RwLock<ShardTopology>>) {
     let config = ShardConfig::new(num_shards);
     let topology = Arc::new(RwLock::new(ShardTopology::new(num_shards, 1000)));
     let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
@@ -35,10 +36,7 @@ async fn create_sharded_store(
 }
 
 /// Helper to find a key that routes to a specific shard.
-fn find_key_for_shard(
-    store: &ShardedKeyValueStore<DeterministicKeyValueStore>,
-    target_shard: u32,
-) -> String {
+fn find_key_for_shard(store: &ShardedKeyValueStore<DeterministicKeyValueStore>, target_shard: u32) -> String {
     for i in 0..1000 {
         let key = format!("key_{}", i);
         if store.router().get_shard_for_key(&key) == target_shard {
@@ -67,10 +65,7 @@ async fn test_basic_sharded_write_read() {
         let read_req = ReadRequest::new(key.clone());
         let result = store.read(read_req).await.expect("read should succeed");
         assert!(result.kv.is_some());
-        assert_eq!(
-            result.kv.unwrap().value,
-            format!("value_for_shard_{}", shard)
-        );
+        assert_eq!(result.kv.unwrap().value, format!("value_for_shard_{}", shard));
     }
 }
 
@@ -94,8 +89,7 @@ async fn test_split_updates_topology_version() {
     // Perform split
     {
         let mut topo = topology.write().await;
-        topo.apply_split(0, "m".to_string(), 1, 2000)
-            .expect("split should succeed");
+        topo.apply_split(0, "m".to_string(), 1, 2000).expect("split should succeed");
     }
 
     // Verify topology version incremented
@@ -198,10 +192,7 @@ async fn test_scan_across_multiple_shards() {
 
     // Verify results are sorted
     for i in 0..result.entries.len() - 1 {
-        assert!(
-            result.entries[i].key < result.entries[i + 1].key,
-            "entries should be sorted"
-        );
+        assert!(result.entries[i].key < result.entries[i + 1].key, "entries should be sorted");
     }
 }
 
@@ -219,8 +210,7 @@ async fn test_write_blocked_during_split() {
     }
 
     let topology = Arc::new(RwLock::new(topology));
-    let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-        ShardedKeyValueStore::with_topology(config, topology);
+    let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::with_topology(config, topology);
 
     // Add shard 0
     store.add_shard(0, DeterministicKeyValueStore::new()).await;
@@ -257,8 +247,7 @@ async fn test_write_redirected_during_merge() {
     }
 
     let topology = Arc::new(RwLock::new(topology));
-    let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-        ShardedKeyValueStore::with_topology(config, topology);
+    let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::with_topology(config, topology);
 
     // Add both shards
     store.add_shard(0, DeterministicKeyValueStore::new()).await;
@@ -291,16 +280,13 @@ async fn test_topology_version_in_shard_moved_error() {
     let mut topology = ShardTopology::new(2, 1000);
 
     // Apply a merge to increment version (shard 1 -> shard 0)
-    topology
-        .apply_merge(1, 0, 2000)
-        .expect("merge should succeed");
+    topology.apply_merge(1, 0, 2000).expect("merge should succeed");
 
     // Now version should be 2
     assert_eq!(topology.version, 2);
 
     let topology = Arc::new(RwLock::new(topology));
-    let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-        ShardedKeyValueStore::with_topology(config, topology);
+    let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::with_topology(config, topology);
 
     // Only add shard 0 (shard 1 is tombstoned)
     store.add_shard(0, DeterministicKeyValueStore::new()).await;
@@ -317,10 +303,7 @@ async fn test_topology_version_in_shard_moved_error() {
             new_shard_id,
             ..
         }) => {
-            assert_eq!(
-                topology_version, 2,
-                "should include current topology version"
-            );
+            assert_eq!(topology_version, 2, "should include current topology version");
             assert_eq!(new_shard_id, 0, "should redirect to successor shard");
         }
         other => panic!("Expected ShardMoved error, got {:?}", other),
@@ -348,17 +331,10 @@ async fn test_multi_key_write_same_shard() {
     // SetMulti should succeed for keys in the same shard
     let write_req = WriteRequest {
         command: WriteCommand::SetMulti {
-            pairs: keys
-                .iter()
-                .enumerate()
-                .map(|(i, k)| (k.clone(), format!("value_{}", i)))
-                .collect(),
+            pairs: keys.iter().enumerate().map(|(i, k)| (k.clone(), format!("value_{}", i))).collect(),
         },
     };
-    store
-        .write(write_req)
-        .await
-        .expect("SetMulti should succeed");
+    store.write(write_req).await.expect("SetMulti should succeed");
 
     // Verify all keys were written
     for (i, key) in keys.iter().enumerate() {
@@ -390,11 +366,7 @@ async fn test_cross_shard_write_rejected() {
 
     match result {
         Err(KeyValueStoreError::Failed { reason }) => {
-            assert!(
-                reason.contains("cross-shard"),
-                "error should mention cross-shard: {}",
-                reason
-            );
+            assert!(reason.contains("cross-shard"), "error should mention cross-shard: {}", reason);
         }
         other => panic!("Expected Failed error for cross-shard, got {:?}", other),
     }

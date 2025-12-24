@@ -28,14 +28,25 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::api::{
-    BatchCondition, BatchOperation, DeleteRequest, DeleteResult, KeyValueStore, KeyValueStoreError,
-    ReadRequest, ReadResult, ScanRequest, ScanResult, TxnOp, WriteCommand, WriteRequest,
-    WriteResult,
-};
-
-use super::router::{ShardConfig, ShardId, ShardRouter};
-use super::topology::{ShardState, ShardTopology};
+use super::router::ShardConfig;
+use super::router::ShardId;
+use super::router::ShardRouter;
+use super::topology::ShardState;
+use super::topology::ShardTopology;
+use crate::api::BatchCondition;
+use crate::api::BatchOperation;
+use crate::api::DeleteRequest;
+use crate::api::DeleteResult;
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::ReadResult;
+use crate::api::ScanRequest;
+use crate::api::ScanResult;
+use crate::api::TxnOp;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
+use crate::api::WriteResult;
 
 /// A sharded KeyValueStore that distributes keys across multiple shards.
 ///
@@ -159,11 +170,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
     /// Generate a ShardMoved error with proper redirect information.
     ///
     /// Checks the topology for tombstoned shards and includes successor info.
-    async fn make_shard_moved_error(
-        &self,
-        key: &str,
-        shard_id: ShardId,
-    ) -> Result<Arc<KV>, KeyValueStoreError> {
+    async fn make_shard_moved_error(&self, key: &str, shard_id: ShardId) -> Result<Arc<KV>, KeyValueStoreError> {
         // Check topology for redirect info if available
         if let Some(ref topology) = self.topology {
             let topo = topology.read().await;
@@ -213,10 +220,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
     }
 
     /// Generate a ShardMoved error by shard ID (when key is unknown).
-    async fn make_shard_moved_error_by_id(
-        &self,
-        shard_id: ShardId,
-    ) -> Result<Arc<KV>, KeyValueStoreError> {
+    async fn make_shard_moved_error_by_id(&self, shard_id: ShardId) -> Result<Arc<KV>, KeyValueStoreError> {
         // Check topology for redirect info if available
         if let Some(ref topology) = self.topology {
             let topo = topology.read().await;
@@ -289,9 +293,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
                             topology_version: topo.version,
                         });
                     }
-                    ShardState::Tombstone {
-                        successor_shard_id, ..
-                    } => {
+                    ShardState::Tombstone { successor_shard_id, .. } => {
                         return Err(KeyValueStoreError::ShardMoved {
                             key: String::new(),
                             new_shard_id: successor_shard_id.unwrap_or(shard_id),
@@ -345,10 +347,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
     /// Check if all keys in a write command belong to the same shard.
     ///
     /// Returns the shard ID if all keys hash to the same shard.
-    fn validate_same_shard(
-        &self,
-        command: &WriteCommand,
-    ) -> Result<Option<ShardId>, KeyValueStoreError> {
+    fn validate_same_shard(&self, command: &WriteCommand) -> Result<Option<ShardId>, KeyValueStoreError> {
         let keys: Vec<&str> = match command {
             WriteCommand::Set { key, .. } => vec![key],
             WriteCommand::SetMulti { pairs, .. } => pairs.iter().map(|(k, _)| k.as_str()).collect(),
@@ -356,25 +355,16 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
             WriteCommand::DeleteMulti { keys, .. } => keys.iter().map(|k| k.as_str()).collect(),
             WriteCommand::CompareAndSwap { key, .. } => vec![key],
             WriteCommand::CompareAndDelete { key, .. } => vec![key],
-            WriteCommand::Batch { operations } => {
-                operations.iter().map(Self::batch_op_key).collect()
-            }
-            WriteCommand::ConditionalBatch {
-                operations,
-                conditions,
-            } => {
+            WriteCommand::Batch { operations } => operations.iter().map(Self::batch_op_key).collect(),
+            WriteCommand::ConditionalBatch { operations, conditions } => {
                 let mut keys: Vec<&str> = operations.iter().map(Self::batch_op_key).collect();
                 keys.extend(conditions.iter().map(Self::condition_key));
                 keys
             }
             WriteCommand::SetWithTTL { key, .. } => vec![key],
-            WriteCommand::SetMultiWithTTL { pairs, .. } => {
-                pairs.iter().map(|(k, _)| k.as_str()).collect()
-            }
+            WriteCommand::SetMultiWithTTL { pairs, .. } => pairs.iter().map(|(k, _)| k.as_str()).collect(),
             WriteCommand::SetWithLease { key, .. } => vec![key],
-            WriteCommand::SetMultiWithLease { pairs, .. } => {
-                pairs.iter().map(|(k, _)| k.as_str()).collect()
-            }
+            WriteCommand::SetMultiWithLease { pairs, .. } => pairs.iter().map(|(k, _)| k.as_str()).collect(),
             WriteCommand::LeaseGrant { .. } => return Ok(None), // Global operations
             WriteCommand::LeaseRevoke { .. } => return Ok(None),
             WriteCommand::LeaseKeepalive { .. } => return Ok(None),
@@ -387,10 +377,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
                 keys.extend(failure.iter().map(Self::txn_op_key));
                 keys
             }
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 let mut keys: Vec<&str> = read_set.iter().map(|(k, _)| k.as_str()).collect();
                 keys.extend(write_set.iter().map(|op| match op {
                     crate::api::WriteOp::Set { key, .. } => key.as_str(),
@@ -400,9 +387,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
             }
             // Shard topology operations are control plane only (shard 0)
             // and don't involve user keys
-            WriteCommand::ShardSplit { .. }
-            | WriteCommand::ShardMerge { .. }
-            | WriteCommand::TopologyUpdate { .. } => {
+            WriteCommand::ShardSplit { .. } | WriteCommand::ShardMerge { .. } | WriteCommand::TopologyUpdate { .. } => {
                 return Ok(None); // Control plane operations
             }
         };
@@ -432,9 +417,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
 impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValueStore<KV> {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Validate all keys belong to the same shard
-        let shard_id: u32 = self
-            .validate_same_shard(&request.command)?
-            .unwrap_or_default();
+        let shard_id: u32 = self.validate_same_shard(&request.command)?.unwrap_or_default();
 
         // Check shard is in writable state (not splitting/merging/tombstone)
         self.check_shard_writable(shard_id).await?;
@@ -459,8 +442,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         let shards = self.shards.read().await;
 
         let mut all_entries = Vec::new();
-        let mut max_entries_per_shard =
-            request.limit.unwrap_or(1000) / shard_ids.len().max(1) as u32;
+        let mut max_entries_per_shard = request.limit.unwrap_or(1000) / shard_ids.len().max(1) as u32;
         if max_entries_per_shard == 0 {
             max_entries_per_shard = 1;
         }
@@ -520,8 +502,7 @@ mod tests {
     #[tokio::test]
     async fn test_sharded_store_routing() {
         let config = ShardConfig::new(4);
-        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
 
         // Add shards
         for i in 0..4 {
@@ -534,8 +515,7 @@ mod tests {
     #[tokio::test]
     async fn test_sharded_store_write_read() {
         let config = ShardConfig::new(2);
-        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
 
         // Add shards
         for i in 0..2 {
@@ -561,8 +541,7 @@ mod tests {
     #[tokio::test]
     async fn test_sharded_store_missing_shard_returns_shard_moved() {
         let config = ShardConfig::new(4);
-        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
 
         // Only add shard 0
         store.add_shard(0, DeterministicKeyValueStore::new()).await;
@@ -603,9 +582,7 @@ mod tests {
 
         // Create topology where shard 1 is tombstoned with successor shard 0
         let mut topology = ShardTopology::new(2, 1000);
-        topology
-            .apply_merge(1, 0, 2000)
-            .expect("merge should succeed");
+        topology.apply_merge(1, 0, 2000).expect("merge should succeed");
 
         let topology = Arc::new(RwLock::new(topology));
         let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
@@ -651,8 +628,7 @@ mod tests {
         }
 
         let topology = Arc::new(RwLock::new(topology));
-        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
         store.set_topology(topology);
 
         // Add shard 0
@@ -696,8 +672,7 @@ mod tests {
         }
 
         let topology = Arc::new(RwLock::new(topology));
-        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let mut store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
         store.set_topology(topology);
 
         // Add both shards
@@ -722,20 +697,13 @@ mod tests {
             },
         };
         let result = store.write(write_req).await;
-        assert!(matches!(
-            result,
-            Err(KeyValueStoreError::ShardMoved {
-                new_shard_id: 0,
-                ..
-            })
-        ));
+        assert!(matches!(result, Err(KeyValueStoreError::ShardMoved { new_shard_id: 0, .. })));
     }
 
     #[tokio::test]
     async fn test_cross_shard_operation_rejected() {
         let config = ShardConfig::new(4);
-        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
 
         // Add all shards
         for i in 0..4 {
@@ -761,10 +729,7 @@ mod tests {
         // Cross-shard SetMulti should fail
         let write_req = WriteRequest {
             command: WriteCommand::SetMulti {
-                pairs: vec![
-                    (key1.clone(), "v1".to_string()),
-                    (key2.clone(), "v2".to_string()),
-                ],
+                pairs: vec![(key1.clone(), "v1".to_string()), (key2.clone(), "v2".to_string())],
             },
         };
         let result = store.write(write_req).await;
@@ -777,8 +742,7 @@ mod tests {
     #[tokio::test]
     async fn test_sharded_scan() {
         let config = ShardConfig::new(2);
-        let store: ShardedKeyValueStore<DeterministicKeyValueStore> =
-            ShardedKeyValueStore::new(config);
+        let store: ShardedKeyValueStore<DeterministicKeyValueStore> = ShardedKeyValueStore::new(config);
 
         // Add shards
         for i in 0..2 {

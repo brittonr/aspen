@@ -27,23 +27,29 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use openraft::Raft;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument, warn};
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::clock_drift_detection::current_time_ms;
-use crate::raft::constants::{
-    MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
-};
-use crate::raft::rpc::{
-    RaftRpcProtocol, RaftRpcResponse, RaftRpcResponseWithTimestamps, TimestampInfo,
-};
+use crate::raft::constants::MAX_CONCURRENT_CONNECTIONS;
+use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::raft::rpc::RaftRpcProtocol;
+use crate::raft::rpc::RaftRpcResponse;
+use crate::raft::rpc::RaftRpcResponseWithTimestamps;
+use crate::raft::rpc::TimestampInfo;
 use crate::raft::types::AppTypeConfig;
 
 /// IRPC server for handling Raft RPC requests.
@@ -64,10 +70,7 @@ impl RaftRpcServer {
     ///
     /// # Returns
     /// Server handle with graceful shutdown support.
-    pub fn spawn(
-        endpoint_manager: Arc<IrohEndpointManager>,
-        raft_core: Raft<AppTypeConfig>,
-    ) -> Self {
+    pub fn spawn(endpoint_manager: Arc<IrohEndpointManager>, raft_core: Raft<AppTypeConfig>) -> Self {
         let cancel_token = CancellationToken::new();
         let cancel_clone = cancel_token.clone();
 
@@ -87,9 +90,7 @@ impl RaftRpcServer {
     pub async fn shutdown(self) -> Result<()> {
         info!("shutting down IRPC server");
         self.cancel_token.cancel();
-        self.join_handle
-            .await
-            .context("IRPC server task panicked")?;
+        self.join_handle.await.context("IRPC server task panicked")?;
         Ok(())
     }
 }
@@ -107,10 +108,7 @@ async fn run_server(
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
 
-    info!(
-        max_connections = MAX_CONCURRENT_CONNECTIONS,
-        "IRPC server listening for incoming connections"
-    );
+    info!(max_connections = MAX_CONCURRENT_CONNECTIONS, "IRPC server listening for incoming connections");
 
     loop {
         tokio::select! {
@@ -162,10 +160,7 @@ async fn run_server(
 ///
 /// Tiger Style: Bounded stream count per connection to prevent resource exhaustion.
 #[instrument(skip(connecting, raft_core))]
-async fn handle_connection(
-    connecting: iroh::endpoint::Incoming,
-    raft_core: Raft<AppTypeConfig>,
-) -> Result<()> {
+async fn handle_connection(connecting: iroh::endpoint::Incoming, raft_core: Raft<AppTypeConfig>) -> Result<()> {
     info!("awaiting incoming connection completion");
     let connection = connecting.await.context("failed to accept connection")?;
     let remote_node_id = connection.remote_id();
@@ -232,10 +227,7 @@ async fn handle_rpc_stream(
 ) -> Result<()> {
     info!("handle_rpc_stream started, reading RPC message");
     // Read the RPC message with size limit
-    let buffer = recv
-        .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
-        .await
-        .context("failed to read RPC message")?;
+    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
 
     // Record server receive time (t2) for clock drift detection
     let server_recv_ms = current_time_ms();
@@ -243,8 +235,7 @@ async fn handle_rpc_stream(
     info!(buffer_size = buffer.len(), "read RPC message bytes");
 
     // Deserialize the RPC request (protocol enum without channels)
-    let request: RaftRpcProtocol =
-        postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
+    let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
     info!(request_type = ?request, "received and deserialized RPC request");
 
@@ -302,14 +293,11 @@ async fn handle_rpc_stream(
     };
 
     // Serialize and send response
-    let response_bytes = postcard::to_stdvec(&response_with_timestamps)
-        .context("failed to serialize RPC response")?;
+    let response_bytes = postcard::to_stdvec(&response_with_timestamps).context("failed to serialize RPC response")?;
 
     info!(response_size = response_bytes.len(), "sending RPC response");
 
-    send.write_all(&response_bytes)
-        .await
-        .context("failed to write RPC response")?;
+    send.write_all(&response_bytes).await.context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
 
     info!("RPC response sent successfully");

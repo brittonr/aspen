@@ -43,15 +43,24 @@ pub mod router;
 pub mod sharded;
 pub mod topology;
 
-pub use automation::{AutomationConfig, ShardAutomationManager};
+pub use automation::AutomationConfig;
+pub use automation::ShardAutomationManager;
 pub use consistent_hash::JumpHash;
-pub use metrics::{MetricsSnapshot, ShardMetricsAtomic, ShardMetricsCollector};
-pub use router::{ShardConfig, ShardId, ShardRange, ShardRouter};
+pub use metrics::MetricsSnapshot;
+pub use metrics::ShardMetricsAtomic;
+pub use metrics::ShardMetricsCollector;
+pub use router::ShardConfig;
+pub use router::ShardId;
+pub use router::ShardRange;
+pub use router::ShardRouter;
 pub use sharded::ShardedKeyValueStore;
-pub use topology::{
-    KeyRange, ShardInfo, ShardMetrics, ShardState, ShardTopology, TopologyAnnouncement,
-    TopologyError,
-};
+pub use topology::KeyRange;
+pub use topology::ShardInfo;
+pub use topology::ShardMetrics;
+pub use topology::ShardState;
+pub use topology::ShardTopology;
+pub use topology::TopologyAnnouncement;
+pub use topology::TopologyError;
 
 /// Maximum number of shards supported.
 ///
@@ -96,10 +105,7 @@ const PHYSICAL_NODE_MASK: u64 = (1u64 << (64 - SHARD_ID_BITS)) - 1;
 /// ```
 #[inline]
 pub fn encode_shard_node_id(physical_node_id: u64, shard_id: ShardId) -> u64 {
-    debug_assert!(
-        physical_node_id <= PHYSICAL_NODE_MASK,
-        "Physical node ID exceeds 48-bit limit"
-    );
+    debug_assert!(physical_node_id <= PHYSICAL_NODE_MASK, "Physical node ID exceeds 48-bit limit");
     debug_assert!(shard_id <= MAX_SHARDS, "Shard ID exceeds MAX_SHARDS limit");
     physical_node_id | ((shard_id as u64) << (64 - SHARD_ID_BITS))
 }
@@ -216,13 +222,8 @@ impl ShardStoragePaths {
 /// # Returns
 ///
 /// Vector of `ShardStoragePaths` for shards 0..num_shards
-pub fn generate_shard_storage_paths(
-    data_dir: impl AsRef<std::path::Path>,
-    num_shards: u32,
-) -> Vec<ShardStoragePaths> {
-    (0..num_shards)
-        .map(|shard_id| ShardStoragePaths::new(data_dir.as_ref(), shard_id))
-        .collect()
+pub fn generate_shard_storage_paths(data_dir: impl AsRef<std::path::Path>, num_shards: u32) -> Vec<ShardStoragePaths> {
+    (0..num_shards).map(|shard_id| ShardStoragePaths::new(data_dir.as_ref(), shard_id)).collect()
 }
 
 #[cfg(test)]
@@ -274,28 +275,16 @@ mod tests {
     fn test_shard_storage_paths_new() {
         let paths = ShardStoragePaths::new("/data/node-1", 3);
         assert_eq!(paths.shard_id, 3);
-        assert_eq!(
-            paths.shard_dir,
-            std::path::PathBuf::from("/data/node-1/shard-3")
-        );
-        assert_eq!(
-            paths.log_path,
-            std::path::PathBuf::from("/data/node-1/shard-3/raft-log.db")
-        );
-        assert_eq!(
-            paths.state_machine_path,
-            std::path::PathBuf::from("/data/node-1/shard-3/state-machine.db")
-        );
+        assert_eq!(paths.shard_dir, std::path::PathBuf::from("/data/node-1/shard-3"));
+        assert_eq!(paths.log_path, std::path::PathBuf::from("/data/node-1/shard-3/raft-log.db"));
+        assert_eq!(paths.state_machine_path, std::path::PathBuf::from("/data/node-1/shard-3/state-machine.db"));
     }
 
     #[test]
     fn test_shard_storage_paths_shard_zero() {
         let paths = ShardStoragePaths::new("/data/node-1", 0);
         assert_eq!(paths.shard_id, 0);
-        assert_eq!(
-            paths.shard_dir,
-            std::path::PathBuf::from("/data/node-1/shard-0")
-        );
+        assert_eq!(paths.shard_dir, std::path::PathBuf::from("/data/node-1/shard-0"));
     }
 
     #[test]
@@ -305,17 +294,9 @@ mod tests {
 
         for (i, p) in paths.iter().enumerate() {
             assert_eq!(p.shard_id, i as u32);
-            assert!(
-                p.shard_dir
-                    .to_string_lossy()
-                    .contains(&format!("shard-{}", i))
-            );
+            assert!(p.shard_dir.to_string_lossy().contains(&format!("shard-{}", i)));
             assert!(p.log_path.to_string_lossy().ends_with("raft-log.db"));
-            assert!(
-                p.state_machine_path
-                    .to_string_lossy()
-                    .ends_with("state-machine.db")
-            );
+            assert!(p.state_machine_path.to_string_lossy().ends_with("state-machine.db"));
         }
     }
 

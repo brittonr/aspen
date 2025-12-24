@@ -55,13 +55,20 @@ pub mod kv_integration;
 pub mod store;
 pub mod types;
 
-pub use constants::{
-    BLOB_GC_GRACE_PERIOD, BLOB_GC_INTERVAL, BLOB_REF_PREFIX, BLOB_THRESHOLD, KV_TAG_PREFIX,
-    MAX_BLOB_SIZE, USER_TAG_PREFIX,
-};
-
-pub use store::{BlobStore, BlobStoreError, IrohBlobStore};
-
-pub use types::{AddBlobResult, BlobListEntry, BlobListResult, BlobRef, BlobStatus, is_blob_ref};
-
+pub use constants::BLOB_GC_GRACE_PERIOD;
+pub use constants::BLOB_GC_INTERVAL;
+pub use constants::BLOB_REF_PREFIX;
+pub use constants::BLOB_THRESHOLD;
+pub use constants::KV_TAG_PREFIX;
+pub use constants::MAX_BLOB_SIZE;
+pub use constants::USER_TAG_PREFIX;
 pub use kv_integration::BlobAwareKeyValueStore;
+pub use store::BlobStore;
+pub use store::BlobStoreError;
+pub use store::IrohBlobStore;
+pub use types::AddBlobResult;
+pub use types::BlobListEntry;
+pub use types::BlobListResult;
+pub use types::BlobRef;
+pub use types::BlobStatus;
+pub use types::is_blob_ref;

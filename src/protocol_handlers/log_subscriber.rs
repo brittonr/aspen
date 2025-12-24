@@ -4,21 +4,37 @@
 //! Uses the same HMAC-SHA256 authentication as the authenticated Raft handler.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
-use tokio::sync::{Semaphore, broadcast};
-use tracing::{debug, error, info, instrument, warn};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
+use tokio::sync::Semaphore;
+use tokio::sync::broadcast;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::raft::auth::{
-    AUTH_HANDSHAKE_TIMEOUT, AuthContext, AuthResponse, AuthResult, MAX_AUTH_MESSAGE_SIZE,
-};
-use crate::raft::log_subscriber::{
-    EndOfStreamReason, HistoricalLogReader, LOG_BROADCAST_BUFFER_SIZE, LogEntryMessage,
-    LogEntryPayload, MAX_HISTORICAL_BATCH_SIZE, MAX_LOG_SUBSCRIBERS, SUBSCRIBE_HANDSHAKE_TIMEOUT,
-    SUBSCRIBE_KEEPALIVE_INTERVAL, SubscribeRejectReason, SubscribeRequest, SubscribeResponse,
-};
+use crate::raft::auth::AUTH_HANDSHAKE_TIMEOUT;
+use crate::raft::auth::AuthContext;
+use crate::raft::auth::AuthResponse;
+use crate::raft::auth::AuthResult;
+use crate::raft::auth::MAX_AUTH_MESSAGE_SIZE;
+use crate::raft::log_subscriber::EndOfStreamReason;
+use crate::raft::log_subscriber::HistoricalLogReader;
+use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+use crate::raft::log_subscriber::LogEntryMessage;
+use crate::raft::log_subscriber::LogEntryPayload;
+use crate::raft::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+use crate::raft::log_subscriber::MAX_LOG_SUBSCRIBERS;
+use crate::raft::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
+use crate::raft::log_subscriber::SUBSCRIBE_KEEPALIVE_INTERVAL;
+use crate::raft::log_subscriber::SubscribeRejectReason;
+use crate::raft::log_subscriber::SubscribeRequest;
+use crate::raft::log_subscriber::SubscribeResponse;
 
 /// Protocol handler for log subscription over Iroh.
 ///
@@ -60,10 +76,7 @@ impl LogSubscriberProtocolHandler {
     ///
     /// # Note
     /// Historical replay is disabled by default. Use `with_historical_reader()` to enable it.
-    pub fn new(
-        cluster_cookie: &str,
-        node_id: u64,
-    ) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
+    pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
         let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         let committed_index = Arc::new(AtomicU64::new(0));
         let handler = Self {
@@ -150,9 +163,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
                     "Log subscriber limit reached ({}), rejecting connection from {}",
                     MAX_LOG_SUBSCRIBERS, remote_node_id
                 );
-                return Err(AcceptError::from_err(std::io::Error::other(
-                    "subscriber limit reached",
-                )));
+                return Err(AcceptError::from_err(std::io::Error::other("subscriber limit reached")));
             }
         };
 
@@ -187,13 +198,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(
-    connection,
-    auth_context,
-    log_receiver,
-    committed_index,
-    historical_reader
-))]
+#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
@@ -208,27 +213,17 @@ async fn handle_log_subscriber_connection(
     let remote_node_id = connection.remote_id();
 
     // Accept the initial stream for authentication and subscription setup
-    let (mut send, mut recv) = connection
-        .accept_bi()
-        .await
-        .context("failed to accept subscriber stream")?;
+    let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
 
     // Step 1: Send challenge
     let challenge = auth_context.generate_challenge();
-    let challenge_bytes =
-        postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
-    send.write_all(&challenge_bytes)
-        .await
-        .context("failed to send challenge")?;
+    let challenge_bytes = postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
+    send.write_all(&challenge_bytes).await.context("failed to send challenge")?;
 
     // Step 2: Receive auth response
     let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-        let buffer = recv
-            .read_to_end(MAX_AUTH_MESSAGE_SIZE)
-            .await
-            .context("failed to read auth response")?;
-        let response: AuthResponse =
-            postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
+        let buffer = recv.read_to_end(MAX_AUTH_MESSAGE_SIZE).await.context("failed to read auth response")?;
+        let response: AuthResponse = postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
         Ok::<_, anyhow::Error>(response)
     })
     .await;
@@ -266,9 +261,7 @@ async fn handle_log_subscriber_connection(
 
     // Step 4: Send auth result
     let result_bytes = postcard::to_stdvec(&auth_result)?;
-    send.write_all(&result_bytes)
-        .await
-        .context("failed to send auth result")?;
+    send.write_all(&result_bytes).await.context("failed to send auth result")?;
 
     if !auth_result.is_ok() {
         warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
@@ -338,9 +331,7 @@ async fn handle_log_subscriber_connection(
         node_id,
     };
     let response_bytes = postcard::to_stdvec(&response)?;
-    send.write_all(&response_bytes)
-        .await
-        .context("failed to send subscribe response")?;
+    send.write_all(&response_bytes).await.context("failed to send subscribe response")?;
 
     info!(
         subscriber_id = subscriber_id,
@@ -351,9 +342,7 @@ async fn handle_log_subscriber_connection(
     );
 
     // Step 6b: Historical replay if requested and available
-    let replay_end_index = if sub_request.start_index < current_committed_index
-        && sub_request.start_index != u64::MAX
-    {
+    let replay_end_index = if sub_request.start_index < current_committed_index && sub_request.start_index != u64::MAX {
         if let Some(ref reader) = historical_reader {
             debug!(
                 subscriber_id = subscriber_id,
@@ -407,9 +396,7 @@ async fn handle_log_subscriber_connection(
                                     error = %err,
                                     "subscriber disconnected during replay"
                                 );
-                                return Err(anyhow::anyhow!(
-                                    "subscriber disconnected during replay"
-                                ));
+                                return Err(anyhow::anyhow!("subscriber disconnected during replay"));
                             }
 
                             total_replayed += 1;
@@ -432,17 +419,10 @@ async fn handle_log_subscriber_connection(
                 }
             }
 
-            info!(
-                subscriber_id = subscriber_id,
-                total_replayed = total_replayed,
-                "historical replay complete"
-            );
+            info!(subscriber_id = subscriber_id, total_replayed = total_replayed, "historical replay complete");
             current_start
         } else {
-            debug!(
-                subscriber_id = subscriber_id,
-                "historical replay requested but no reader available"
-            );
+            debug!(subscriber_id = subscriber_id, "historical replay requested but no reader available");
             current_committed_index
         }
     } else {

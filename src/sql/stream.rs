@@ -5,9 +5,13 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 
-use arrow::array::{ArrayRef, Int64Builder, StringBuilder, UInt64Builder};
+use arrow::array::ArrayRef;
+use arrow::array::Int64Builder;
+use arrow::array::StringBuilder;
+use arrow::array::UInt64Builder;
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
 use datafusion::error::DataFusionError;
@@ -137,15 +141,9 @@ impl RedbRecordBatchStream {
         let mut lease_builder = UInt64Builder::new();
 
         // Read from database
-        let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead {
-            source: Box::new(e),
-        })?;
+        let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead { source: Box::new(e) })?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| SqlError::OpenTable {
-                source: Box::new(e),
-            })?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlError::OpenTable { source: Box::new(e) })?;
 
         // Determine the actual start key for this batch
         let scan_start = match &self.last_key {
@@ -171,9 +169,7 @@ impl RedbRecordBatchStream {
         let iter = match range {
             Ok(iter) => iter,
             Err(e) => {
-                return Err(SqlError::StorageRead {
-                    source: Box::new(e),
-                });
+                return Err(SqlError::StorageRead { source: Box::new(e) });
             }
         };
 
@@ -185,9 +181,7 @@ impl RedbRecordBatchStream {
             let (key_guard, value_guard) = match result {
                 Ok((k, v)) => (k, v),
                 Err(e) => {
-                    return Err(SqlError::StorageRead {
-                        source: Box::new(e),
-                    });
+                    return Err(SqlError::StorageRead { source: Box::new(e) });
                 }
             };
 
@@ -314,12 +308,8 @@ impl RedbRecordBatchStream {
         }
 
         // Create empty arrays for each column in the projected schema
-        let arrays: Vec<ArrayRef> = self
-            .schema
-            .fields()
-            .iter()
-            .map(|field| arrow::array::new_empty_array(field.data_type()))
-            .collect();
+        let arrays: Vec<ArrayRef> =
+            self.schema.fields().iter().map(|field| arrow::array::new_empty_array(field.data_type())).collect();
 
         let batch = RecordBatch::try_new(self.schema.clone(), arrays)?;
         Ok(Some(batch))
@@ -364,13 +354,7 @@ pub fn prefix_scan_stream(
 ) -> RedbRecordBatchStream {
     // Calculate end key using strinc (FoundationDB pattern)
     let end_key = strinc(prefix);
-    RedbRecordBatchStream::new(
-        db,
-        projection,
-        prefix.to_vec(),
-        end_key.unwrap_or_default(),
-        limit,
-    )
+    RedbRecordBatchStream::new(db, projection, prefix.to_vec(), end_key.unwrap_or_default(), limit)
 }
 
 /// Create a range scan stream.

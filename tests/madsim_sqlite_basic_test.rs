@@ -7,23 +7,23 @@
 /// - Validation that SQLite works correctly in simulated environment
 use std::sync::Arc;
 
-use aspen::raft::madsim_network::{FailureInjector, MadsimNetworkFactory, MadsimRaftRouter};
+use aspen::raft::madsim_network::FailureInjector;
+use aspen::raft::madsim_network::MadsimNetworkFactory;
+use aspen::raft::madsim_network::MadsimRaftRouter;
 use aspen::raft::storage::RedbLogStore;
 use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::NodeId;
 use aspen::simulation::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
-use openraft::{Config, Raft};
+use openraft::Config;
+use openraft::Raft;
 
 /// Helper to create a Raft instance with SQLite backend for madsim testing.
 ///
 /// Uses unique paths for each test run to avoid state persistence issues.
 /// SQLite databases on real filesystem (madsim doesn't fully virtualize SQLite file I/O).
 /// The test_name parameter ensures each test gets its own isolated storage.
-async fn create_raft_node_sqlite(
-    node_id: NodeId,
-    test_name: &str,
-) -> Raft<aspen::raft::types::AppTypeConfig> {
+async fn create_raft_node_sqlite(node_id: NodeId, test_name: &str) -> Raft<aspen::raft::types::AppTypeConfig> {
     let config = Config {
         heartbeat_interval: 500,
         election_timeout_min: 1500,
@@ -35,12 +35,8 @@ async fn create_raft_node_sqlite(
     // Use tempdir to create truly isolated storage for each test run
     // This avoids state persistence between test runs
     let temp_base = tempfile::TempDir::new().expect("failed to create temp dir");
-    let log_path = temp_base
-        .path()
-        .join(format!("{}-node-{}-log.redb", test_name, node_id));
-    let sm_path = temp_base
-        .path()
-        .join(format!("{}-node-{}-sm.db", test_name, node_id));
+    let log_path = temp_base.path().join(format!("{}-node-{}-log.redb", test_name, node_id));
+    let sm_path = temp_base.path().join(format!("{}-node-{}-sm.db", test_name, node_id));
 
     let log_store = RedbLogStore::new(&log_path).expect("failed to create log store");
     let state_machine = SqliteStateMachine::new(&sm_path).expect("failed to create state machine");
@@ -52,11 +48,7 @@ async fn create_raft_node_sqlite(
     Raft::new(
         node_id,
         config,
-        MadsimNetworkFactory::new(
-            node_id,
-            Arc::new(MadsimRaftRouter::new()),
-            Arc::new(FailureInjector::new()),
-        ),
+        MadsimNetworkFactory::new(node_id, Arc::new(MadsimRaftRouter::new()), Arc::new(FailureInjector::new())),
         log_store,
         state_machine,
     )
@@ -73,8 +65,7 @@ async fn create_raft_node_sqlite(
 #[madsim::test]
 async fn test_sqlite_single_node_initialization_seed_42() {
     let seed = 42_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_sqlite_single_node_init", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_sqlite_single_node_init", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -85,20 +76,13 @@ async fn test_sqlite_single_node_initialization_seed_42() {
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leadership");
     // Wait for node to become leader (single-node cluster)
@@ -106,11 +90,7 @@ async fn test_sqlite_single_node_initialization_seed_42() {
 
     artifact = artifact.add_event("metrics: check leader status");
     let metrics = raft1.metrics().borrow().clone();
-    assert_eq!(
-        metrics.current_leader,
-        Some(NodeId::from(1)),
-        "node 1 should be leader with SQLite backend"
-    );
+    assert_eq!(metrics.current_leader, Some(NodeId::from(1)), "node 1 should be leader with SQLite backend");
 
     artifact = artifact.add_event("validation: single-node SQLite cluster initialized");
 
@@ -124,8 +104,7 @@ async fn test_sqlite_single_node_initialization_seed_42() {
 #[madsim::test]
 async fn test_sqlite_single_node_initialization_seed_123() {
     let seed = 123_u64;
-    let mut artifact =
-        SimulationArtifactBuilder::new("madsim_sqlite_single_node_init", seed).start();
+    let mut artifact = SimulationArtifactBuilder::new("madsim_sqlite_single_node_init", seed).start();
 
     artifact = artifact.add_event("create: router and failure injector");
     let router = Arc::new(MadsimRaftRouter::new());
@@ -136,31 +115,20 @@ async fn test_sqlite_single_node_initialization_seed_123() {
 
     artifact = artifact.add_event("register: node 1 with router");
     router
-        .register_node(
-            NodeId::from(1),
-            "127.0.0.1:26001".to_string(),
-            raft1.clone(),
-        )
+        .register_node(NodeId::from(1), "127.0.0.1:26001".to_string(), raft1.clone())
         .expect("failed to register node 1");
 
     artifact = artifact.add_event("init: initialize single-node cluster");
     let mut nodes = std::collections::BTreeMap::new();
     nodes.insert(NodeId::from(1), create_test_raft_member_info(1));
-    raft1
-        .initialize(nodes)
-        .await
-        .expect("failed to initialize cluster");
+    raft1.initialize(nodes).await.expect("failed to initialize cluster");
 
     artifact = artifact.add_event("wait: for leadership");
     madsim::time::sleep(std::time::Duration::from_millis(2000)).await;
 
     artifact = artifact.add_event("metrics: check leader status");
     let metrics = raft1.metrics().borrow().clone();
-    assert_eq!(
-        metrics.current_leader,
-        Some(NodeId::from(1)),
-        "node 1 should be leader with SQLite backend"
-    );
+    assert_eq!(metrics.current_leader, Some(NodeId::from(1)), "node 1 should be leader with SQLite backend");
 
     artifact = artifact.add_event("validation: single-node SQLite cluster initialized");
 

@@ -3,7 +3,8 @@
 //! Provides race-free counter operations built on CAS primitives.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use rand::Rng;
@@ -11,8 +12,13 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
-use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
-use crate::coordination::error::{CoordinationError, MaxRetriesExceededSnafu};
+use crate::api::KeyValueStore;
+use crate::api::KeyValueStoreError;
+use crate::api::ReadRequest;
+use crate::api::WriteCommand;
+use crate::api::WriteRequest;
+use crate::coordination::error::CoordinationError;
+use crate::coordination::error::MaxRetriesExceededSnafu;
 
 /// Configuration for atomic counter.
 #[derive(Debug, Clone)]
@@ -57,12 +63,10 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value
-                    .parse::<u64>()
-                    .map_err(|_| CoordinationError::CorruptedData {
-                        key: self.key.clone(),
-                        reason: "not a valid u64".to_string(),
-                    })
+                value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
+                    key: self.key.clone(),
+                    reason: "not a valid u64".to_string(),
+                })
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -100,11 +104,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
         loop {
             let current = self.get().await?;
-            let expected = if current == 0 {
-                None
-            } else {
-                Some(current.to_string())
-            };
+            let expected = if current == 0 { None } else { Some(current.to_string()) };
 
             match self
                 .store
@@ -140,11 +140,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     ///
     /// Returns true if the swap succeeded, false if the current value
     /// didn't match the expected value.
-    pub async fn compare_and_set(
-        &self,
-        expected: u64,
-        new_value: u64,
-    ) -> Result<bool, CoordinationError> {
+    pub async fn compare_and_set(&self, expected: u64, new_value: u64) -> Result<bool, CoordinationError> {
         let expected_str = if expected == 0 {
             None
         } else {
@@ -170,20 +166,14 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
     /// Apply a modification function atomically.
     async fn modify<F>(&self, f: F) -> Result<u64, CoordinationError>
-    where
-        F: Fn(u64) -> u64,
-    {
+    where F: Fn(u64) -> u64 {
         let mut attempt = 0;
 
         loop {
             let current = self.get().await?;
             let new_value = f(current);
 
-            let expected = if current == 0 {
-                None
-            } else {
-                Some(current.to_string())
-            };
+            let expected = if current == 0 { None } else { Some(current.to_string()) };
 
             match self
                 .store
@@ -246,12 +236,10 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value
-                    .parse::<i64>()
-                    .map_err(|_| CoordinationError::CorruptedData {
-                        key: self.key.clone(),
-                        reason: "not a valid i64".to_string(),
-                    })
+                value.parse::<i64>().map_err(|_| CoordinationError::CorruptedData {
+                    key: self.key.clone(),
+                    reason: "not a valid i64".to_string(),
+                })
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -270,20 +258,14 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
 
     /// Apply a modification function atomically.
     async fn modify<F>(&self, f: F) -> Result<i64, CoordinationError>
-    where
-        F: Fn(i64) -> i64,
-    {
+    where F: Fn(i64) -> i64 {
         let mut attempt = 0;
 
         loop {
             let current = self.get().await?;
             let new_value = f(current);
 
-            let expected = if current == 0 {
-                None
-            } else {
-                Some(current.to_string())
-            };
+            let expected = if current == 0 { None } else { Some(current.to_string()) };
 
             match self
                 .store
@@ -339,12 +321,7 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
     /// * `key` - The counter key
     /// * `flush_threshold` - Flush when local count reaches this value
     /// * `flush_interval` - Also flush periodically at this interval
-    pub fn new(
-        store: Arc<S>,
-        key: impl Into<String>,
-        flush_threshold: u64,
-        _flush_interval: Duration,
-    ) -> Self {
+    pub fn new(store: Arc<S>, key: impl Into<String>, flush_threshold: u64, _flush_interval: Duration) -> Self {
         let counter = AtomicCounter::new(store, key, CounterConfig::default());
         let local = Arc::new(AtomicU64::new(0));
 
@@ -489,11 +466,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_increments() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let counter = Arc::new(AtomicCounter::new(
-            store,
-            "test_counter",
-            CounterConfig::default(),
-        ));
+        let counter = Arc::new(AtomicCounter::new(store, "test_counter", CounterConfig::default()));
 
         let handles: Vec<_> = (0..10)
             .map(|_| {
