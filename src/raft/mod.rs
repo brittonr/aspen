@@ -54,6 +54,8 @@ pub mod lease_cleanup;
 pub mod log_subscriber;
 /// Deterministic simulation network for madsim testing.
 pub mod madsim_network;
+/// Membership watcher for TrustedPeersRegistry synchronization.
+pub mod membership_watcher;
 /// Raft network layer implementation over Iroh.
 pub mod network;
 /// RaftNode implementation with direct async APIs.
@@ -80,6 +82,8 @@ pub mod supervisor;
 pub mod ttl_cleanup;
 /// Type definitions and configurations for OpenRaft.
 pub mod types;
+/// Write batching for amortized fsync costs.
+pub mod write_batcher;
 
 use std::sync::Arc;
 

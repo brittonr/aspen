@@ -64,11 +64,14 @@ use iroh::EndpointAddr;
 pub use self::types::NodeId;
 
 use iroh::protocol::Router;
+use tokio_util::sync::CancellationToken;
 
 use crate::api::{ClusterController, KeyValueStore};
 use crate::cluster::bootstrap::{NodeHandle, bootstrap_node};
 use crate::cluster::config::NodeConfig;
-use crate::protocol_handlers::{AuthenticatedRaftProtocolHandler, RaftProtocolHandler};
+use crate::protocol_handlers::{
+    AuthenticatedRaftProtocolHandler, RaftProtocolHandler, TrustedPeersRegistry,
+};
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -224,6 +227,7 @@ impl NodeBuilder {
         Ok(Node {
             handle,
             router: None,
+            membership_watcher_cancel: None,
         })
     }
 }
@@ -237,6 +241,9 @@ pub struct Node {
     /// Router for handling incoming protocol connections.
     /// Stored to keep it alive - dropping the Router shuts down protocol handling.
     router: Option<Router>,
+    /// Cancellation token for the membership watcher task.
+    /// Used to gracefully shut down the watcher when the node shuts down.
+    membership_watcher_cancel: Option<CancellationToken>,
 }
 
 impl Node {
@@ -318,10 +325,29 @@ impl Node {
 
         // Register authenticated handler if enabled
         if self.handle.config.iroh.enable_raft_auth {
-            let auth_handler =
-                AuthenticatedRaftProtocolHandler::new(raft_core, &self.handle.config.cookie);
+            use crate::raft::membership_watcher::spawn_membership_watcher;
+
+            // Pre-populate TrustedPeersRegistry with this node's own identity
+            // This allows self-connections and provides the starting point for
+            // membership-based peer authorization.
+            let our_public_key = self.handle.iroh_manager.node_addr().id;
+            let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
+
+            // Spawn the membership watcher to keep TrustedPeersRegistry in sync with Raft membership.
+            // The watcher monitors Raft metrics for membership changes and updates the registry
+            // with PublicKeys from RaftMemberInfo.iroh_addr.id.
+            let watcher_cancel = spawn_membership_watcher(
+                self.handle.raft_node.raft().clone(),
+                trusted_peers.clone(),
+            );
+            self.membership_watcher_cancel = Some(watcher_cancel);
+
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
-            tracing::info!("registered authenticated Raft RPC protocol handler (ALPN: raft-auth)");
+            tracing::info!(
+                our_public_key = %our_public_key,
+                "registered authenticated Raft RPC protocol handler with membership sync (ALPN: raft-auth)"
+            );
         }
 
         // Add gossip handler if enabled
@@ -340,11 +366,18 @@ impl Node {
     /// Gracefully shutdown the node.
     ///
     /// Shuts down all components in reverse order of startup:
-    /// 1. Gossip discovery (if enabled)
-    /// 2. IRPC server
-    /// 3. Iroh endpoint
-    /// 4. RaftNode
+    /// 1. Membership watcher (if enabled)
+    /// 2. Gossip discovery (if enabled)
+    /// 3. IRPC server
+    /// 4. Iroh endpoint
+    /// 5. RaftNode
     pub async fn shutdown(self) -> Result<()> {
+        // Cancel membership watcher if running
+        if let Some(cancel) = self.membership_watcher_cancel {
+            tracing::info!("cancelling membership watcher");
+            cancel.cancel();
+        }
+
         self.handle.shutdown().await
     }
 }

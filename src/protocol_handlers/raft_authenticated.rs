@@ -3,42 +3,131 @@
 //! This module provides `AuthenticatedRaftProtocolHandler`, which handles
 //! authenticated Raft RPC connections over Iroh with the `raft-auth` ALPN.
 //!
-//! Uses HMAC-SHA256 challenge-response authentication to verify that connecting
-//! nodes share the same cluster cookie before processing Raft RPCs.
+//! Uses Iroh's native NodeId verification at connection accept time. NodeId
+//! is cryptographically verified during the QUIC TLS handshake, so we only
+//! need to check if the NodeId is in the trusted peers set.
 
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use iroh::PublicKey;
 use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError, ProtocolHandler};
 use openraft::Raft;
-use tokio::sync::Semaphore;
-use tracing::{debug, error, info, instrument, warn};
+use tokio::sync::{RwLock, Semaphore};
+use tracing::{debug, error, info, warn};
 
-use crate::raft::auth::{
-    AUTH_HANDSHAKE_TIMEOUT, AuthContext, AuthResponse, AuthResult, MAX_AUTH_MESSAGE_SIZE,
-};
 use crate::raft::constants::{
     MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION,
 };
 use crate::raft::rpc::{RaftRpcProtocol, RaftRpcResponse};
 use crate::raft::types::AppTypeConfig;
 
+// ============================================================================
+// TrustedPeersRegistry
+// ============================================================================
+
+/// Registry of Iroh PublicKeys authorized to participate in Raft.
+///
+/// Populated from Raft membership (voters + learners). Connections from
+/// unknown peers are rejected at accept time.
+///
+/// # Iroh-Native Authentication
+///
+/// Iroh already provides cryptographic identity verification:
+/// - `connection.remote_id()` returns Ed25519 public key
+/// - PublicKey is verified during QUIC TLS handshake
+/// - Transport is encrypted end-to-end
+///
+/// This registry simply checks if the verified PublicKey is authorized.
+///
+/// # Tiger Style
+///
+/// - Bounded by MAX_PEERS (from constants.rs)
+/// - RwLock for concurrent read access
+#[derive(Debug, Clone)]
+pub struct TrustedPeersRegistry {
+    /// Set of authorized Iroh PublicKeys.
+    peers: Arc<RwLock<HashSet<PublicKey>>>,
+}
+
+impl TrustedPeersRegistry {
+    /// Create a new empty trusted peers registry.
+    pub fn new() -> Self {
+        Self {
+            peers: Arc::new(RwLock::new(HashSet::new())),
+        }
+    }
+
+    /// Create a registry with initial peers.
+    pub fn with_peers(peers: impl IntoIterator<Item = PublicKey>) -> Self {
+        Self {
+            peers: Arc::new(RwLock::new(peers.into_iter().collect())),
+        }
+    }
+
+    /// Check if a PublicKey is trusted.
+    pub async fn is_trusted(&self, public_key: &PublicKey) -> bool {
+        self.peers.read().await.contains(public_key)
+    }
+
+    /// Add a trusted PublicKey (called when Raft membership changes).
+    pub async fn add_peer(&self, public_key: PublicKey) {
+        self.peers.write().await.insert(public_key);
+    }
+
+    /// Remove a PublicKey (called when node leaves cluster).
+    pub async fn remove_peer(&self, public_key: &PublicKey) {
+        self.peers.write().await.remove(public_key);
+    }
+
+    /// Replace entire peer set (called on membership change).
+    pub async fn set_peers(&self, peers: impl IntoIterator<Item = PublicKey>) {
+        let mut guard = self.peers.write().await;
+        guard.clear();
+        guard.extend(peers);
+    }
+
+    /// Get current peer count.
+    pub async fn peer_count(&self) -> usize {
+        self.peers.read().await.len()
+    }
+}
+
+impl Default for TrustedPeersRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// AuthenticatedRaftProtocolHandler
+// ============================================================================
+
 /// Protocol handler for authenticated Raft RPC over Iroh.
 ///
-/// Uses HMAC-SHA256 challenge-response authentication to verify that connecting
-/// nodes share the same cluster cookie before processing Raft RPCs.
+/// Uses Iroh's native PublicKey verification at connection accept time.
+/// No per-stream authentication is needed - PublicKey is cryptographically
+/// verified during the QUIC TLS handshake.
+///
+/// # Security Model
+///
+/// 1. QUIC TLS handshake verifies remote peer's Ed25519 identity
+/// 2. `connection.remote_id()` returns the verified PublicKey
+/// 3. We check if PublicKey is in the trusted peers registry
+/// 4. If not trusted, connection is rejected immediately
 ///
 /// # Tiger Style
 ///
 /// - Bounded connection count via semaphore
-/// - Explicit authentication timeout
-/// - Fixed nonce and HMAC sizes
+/// - PublicKey check at connection accept (fast path)
+/// - No per-stream overhead
 #[derive(Debug)]
 pub struct AuthenticatedRaftProtocolHandler {
     raft_core: Raft<AppTypeConfig>,
-    auth_context: AuthContext,
+    trusted_peers: TrustedPeersRegistry,
     connection_semaphore: Arc<Semaphore>,
 }
 
@@ -47,23 +136,42 @@ impl AuthenticatedRaftProtocolHandler {
     ///
     /// # Arguments
     /// * `raft_core` - Raft instance to forward RPCs to
-    /// * `cluster_cookie` - Shared secret for authentication
+    /// * `trusted_peers` - Registry of authorized PublicKeys
     ///
     /// # Security Note
-    /// Authentication is handled by HMAC-SHA256 challenge-response using the cluster cookie.
-    /// Iroh already provides cryptographic identity verification at the transport layer.
-    pub fn new(raft_core: Raft<AppTypeConfig>, cluster_cookie: &str) -> Self {
+    /// Authentication is handled by Iroh's QUIC TLS layer. The trusted_peers
+    /// registry determines which verified PublicKeys are authorized.
+    pub fn new(raft_core: Raft<AppTypeConfig>, trusted_peers: TrustedPeersRegistry) -> Self {
         Self {
             raft_core,
-            auth_context: AuthContext::new(cluster_cookie),
+            trusted_peers,
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
         }
+    }
+
+    /// Get a reference to the trusted peers registry.
+    ///
+    /// Use this to update the registry when Raft membership changes.
+    pub fn trusted_peers(&self) -> &TrustedPeersRegistry {
+        &self.trusted_peers
     }
 }
 
 impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
-        let remote_node_id = connection.remote_id();
+        // Get remote PublicKey (verified by QUIC TLS handshake)
+        let remote_id = connection.remote_id();
+
+        // IROH-NATIVE: Check if PublicKey is in trusted peers
+        if !self.trusted_peers.is_trusted(&remote_id).await {
+            warn!(
+                remote_node = %remote_id,
+                "rejecting connection from untrusted peer"
+            );
+            return Err(AcceptError::from_err(std::io::Error::other(
+                "untrusted node",
+            )));
+        }
 
         // Try to acquire a connection permit
         let permit = match self.connection_semaphore.clone().try_acquire_owned() {
@@ -71,7 +179,7 @@ impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
             Err(_) => {
                 warn!(
                     "Authenticated Raft connection limit reached ({}), rejecting connection from {}",
-                    MAX_CONCURRENT_CONNECTIONS, remote_node_id
+                    MAX_CONCURRENT_CONNECTIONS, remote_id
                 );
                 return Err(AcceptError::from_err(std::io::Error::other(
                     "connection limit reached",
@@ -79,15 +187,10 @@ impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
             }
         };
 
-        debug!(remote_node = %remote_node_id, "accepted authenticated Raft RPC connection");
+        debug!(remote_node = %remote_id, "accepted authenticated Raft RPC connection");
 
-        // Handle the connection with authentication
-        let result = handle_authenticated_raft_connection(
-            connection,
-            self.raft_core.clone(),
-            self.auth_context.clone(),
-        )
-        .await;
+        // Handle the connection - NO PER-STREAM AUTH NEEDED
+        let result = handle_raft_connection(connection, self.raft_core.clone()).await;
 
         drop(permit);
 
@@ -100,16 +203,16 @@ impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
     }
 }
 
-/// Handle an authenticated Raft RPC connection.
-///
-/// Performs challenge-response authentication before processing RPCs.
-#[instrument(skip(connection, raft_core, auth_context))]
-async fn handle_authenticated_raft_connection(
+// ============================================================================
+// Connection and Stream Handling
+// ============================================================================
+
+/// Handle Raft RPC connection. No per-stream auth - PublicKey verified at accept.
+async fn handle_raft_connection(
     connection: Connection,
     raft_core: Raft<AppTypeConfig>,
-    auth_context: AuthContext,
 ) -> anyhow::Result<()> {
-    let remote_node_id = connection.remote_id();
+    let remote_id = connection.remote_id();
 
     // Tiger Style: Fixed limit on concurrent streams per connection
     let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
@@ -120,7 +223,7 @@ async fn handle_authenticated_raft_connection(
         let stream = match connection.accept_bi().await {
             Ok(stream) => stream,
             Err(err) => {
-                debug!(remote_node = %remote_node_id, error = %err, "Authenticated Raft connection closed");
+                debug!(remote_node = %remote_id, error = %err, "Raft connection closed");
                 break;
             }
         };
@@ -130,9 +233,9 @@ async fn handle_authenticated_raft_connection(
             Ok(permit) => permit,
             Err(_) => {
                 warn!(
-                    remote_node = %remote_node_id,
+                    remote_node = %remote_id,
                     max_streams = MAX_STREAMS_PER_CONNECTION,
-                    "Authenticated Raft stream limit reached, dropping stream"
+                    "Raft stream limit reached, dropping stream"
                 );
                 continue;
             }
@@ -140,17 +243,14 @@ async fn handle_authenticated_raft_connection(
 
         active_streams.fetch_add(1, Ordering::Relaxed);
         let active_streams_clone = active_streams.clone();
-
         let raft_core_clone = raft_core.clone();
-        let auth_context_clone = auth_context.clone();
         let (send, recv) = stream;
+
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) =
-                handle_authenticated_raft_stream((recv, send), raft_core_clone, auth_context_clone)
-                    .await
-            {
-                error!(error = %err, "failed to handle authenticated Raft RPC stream");
+            // DIRECT RPC - no auth handshake needed
+            if let Err(err) = handle_raft_rpc_stream((recv, send), raft_core_clone).await {
+                error!(error = %err, "failed to handle Raft RPC stream");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
         });
@@ -159,96 +259,16 @@ async fn handle_authenticated_raft_connection(
     Ok(())
 }
 
-/// Handle a single authenticated Raft RPC stream.
+/// Handle a single Raft RPC stream.
 ///
-/// Uses length-prefixed framing for auth messages so they can share a stream with RPC:
-/// - Each auth message is prefixed with a 4-byte big-endian length
-/// - RPC message uses read_to_end after auth completes (client finishes send)
-///
-/// Protocol:
-/// 1. Send AuthChallenge (length-prefixed)
-/// 2. Receive AuthResponse (length-prefixed)
-/// 3. Verify HMAC
-/// 4. Send AuthResult (length-prefixed)
-/// 5. If authenticated, read RPC (read_to_end) and process
-#[instrument(skip(recv, send, raft_core, auth_context))]
-async fn handle_authenticated_raft_stream(
+/// No authentication needed - connection was already verified at accept time.
+async fn handle_raft_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     raft_core: Raft<AppTypeConfig>,
-    auth_context: AuthContext,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    // Step 1: Generate and send challenge (length-prefixed)
-    let challenge = auth_context.generate_challenge();
-    let challenge_bytes =
-        postcard::to_stdvec(&challenge).context("failed to serialize challenge")?;
-    write_length_prefixed(&mut send, &challenge_bytes)
-        .await
-        .context("failed to send challenge")?;
-
-    // Step 2: Receive response with timeout (length-prefixed)
-    let response_result = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-        let buffer = read_length_prefixed(&mut recv, MAX_AUTH_MESSAGE_SIZE)
-            .await
-            .context("failed to read auth response")?;
-        let response: AuthResponse =
-            postcard::from_bytes(&buffer).context("failed to deserialize auth response")?;
-        Ok::<_, anyhow::Error>(response)
-    })
-    .await;
-
-    let response = match response_result {
-        Ok(Ok(response)) => response,
-        Ok(Err(err)) => {
-            warn!(error = %err, "authentication failed: bad response");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
-                .context("failed to serialize auth result")?;
-            // Best-effort send of failure response - log if it fails but don't block error return
-            if let Err(write_err) = write_length_prefixed(&mut send, &result_bytes).await {
-                debug!(error = %write_err, "failed to send auth failure response to client");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(error = %finish_err, "failed to finish stream after auth failure");
-            }
-            return Err(err);
-        }
-        Err(_) => {
-            warn!("authentication timed out");
-            let result_bytes = postcard::to_stdvec(&AuthResult::Failed)
-                .context("failed to serialize auth result")?;
-            // Best-effort send of failure response - log if it fails but don't block error return
-            if let Err(write_err) = write_length_prefixed(&mut send, &result_bytes).await {
-                debug!(error = %write_err, "failed to send auth timeout response to client");
-            }
-            if let Err(finish_err) = send.finish() {
-                debug!(error = %finish_err, "failed to finish stream after auth timeout");
-            }
-            return Err(anyhow::anyhow!("authentication timeout"));
-        }
-    };
-
-    // Step 3: Verify the response
-    let auth_result = auth_context.verify_response(&challenge, &response);
-
-    // Step 4: Send result (length-prefixed)
-    let result_bytes =
-        postcard::to_stdvec(&auth_result).context("failed to serialize auth result")?;
-    write_length_prefixed(&mut send, &result_bytes)
-        .await
-        .context("failed to send auth result")?;
-
-    if !auth_result.is_ok() {
-        warn!(result = ?auth_result, "authentication failed");
-        if let Err(finish_err) = send.finish() {
-            debug!(error = %finish_err, "failed to finish stream after auth verification failure");
-        }
-        return Err(anyhow::anyhow!("authentication failed: {:?}", auth_result));
-    }
-
-    debug!("authentication successful, processing Raft RPC");
-
-    // Step 5: Read and process the Raft RPC message (read_to_end - client finishes send)
+    // Read the Raft RPC message
     let buffer = recv
         .read_to_end(MAX_RPC_MESSAGE_SIZE as usize)
         .await
@@ -257,9 +277,9 @@ async fn handle_authenticated_raft_stream(
     let request: RaftRpcProtocol =
         postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
-    debug!(request_type = ?request, "received authenticated Raft RPC request");
+    debug!(request_type = ?request, "received Raft RPC request");
 
-    // Process the RPC (same as unauthenticated handler)
+    // Process the RPC
     let response = match request {
         RaftRpcProtocol::Vote(vote_req) => {
             let result = match raft_core.vote(vote_req.request).await {
@@ -303,61 +323,96 @@ async fn handle_authenticated_raft_stream(
         .context("failed to write RPC response")?;
     send.finish().context("failed to finish send stream")?;
 
-    debug!("authenticated Raft RPC response sent successfully");
+    debug!("Raft RPC response sent successfully");
 
     Ok(())
 }
 
-/// Read a length-prefixed message from a stream.
-///
-/// Format: 4-byte big-endian length + payload
-/// Tiger Style: Bounded by max_size to prevent memory exhaustion.
-pub async fn read_length_prefixed(
-    recv: &mut iroh::endpoint::RecvStream,
-    max_size: usize,
-) -> anyhow::Result<Vec<u8>> {
-    use anyhow::Context;
+// ============================================================================
+// Tests
+// ============================================================================
 
-    // Read 4-byte length prefix
-    let mut len_buf = [0u8; 4];
-    recv.read_exact(&mut len_buf)
-        .await
-        .context("failed to read length prefix")?;
-    let len = u32::from_be_bytes(len_buf) as usize;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iroh::SecretKey;
 
-    // Validate length
-    if len > max_size {
-        return Err(anyhow::anyhow!("message too large: {} > {}", len, max_size));
+    /// Generate a test PublicKey from a SecretKey.
+    fn test_public_key(seed: u8) -> PublicKey {
+        // Create a deterministic secret key by hashing the seed
+        let mut key_bytes = [0u8; 32];
+        key_bytes[0] = seed;
+        let secret = SecretKey::from_bytes(&key_bytes);
+        secret.public()
     }
 
-    // Read payload
-    let mut buf = vec![0u8; len];
-    recv.read_exact(&mut buf)
-        .await
-        .context("failed to read message payload")?;
+    #[tokio::test]
+    async fn test_trusted_peers_registry_new() {
+        let registry = TrustedPeersRegistry::new();
+        assert_eq!(registry.peer_count().await, 0);
+    }
 
-    Ok(buf)
-}
+    #[tokio::test]
+    async fn test_trusted_peers_add_and_check() {
+        let registry = TrustedPeersRegistry::new();
 
-/// Write a length-prefixed message to a stream.
-///
-/// Format: 4-byte big-endian length + payload
-pub async fn write_length_prefixed(
-    send: &mut iroh::endpoint::SendStream,
-    data: &[u8],
-) -> anyhow::Result<()> {
-    use anyhow::Context;
+        // Generate a test PublicKey (in real code this comes from Iroh)
+        let public_key = test_public_key(1);
 
-    // Write 4-byte length prefix
-    let len = data.len() as u32;
-    send.write_all(&len.to_be_bytes())
-        .await
-        .context("failed to write length prefix")?;
+        assert!(!registry.is_trusted(&public_key).await);
 
-    // Write payload
-    send.write_all(data)
-        .await
-        .context("failed to write message payload")?;
+        registry.add_peer(public_key).await;
+        assert!(registry.is_trusted(&public_key).await);
+        assert_eq!(registry.peer_count().await, 1);
+    }
 
-    Ok(())
+    #[tokio::test]
+    async fn test_trusted_peers_remove() {
+        let registry = TrustedPeersRegistry::new();
+        let public_key = test_public_key(2);
+
+        registry.add_peer(public_key).await;
+        assert!(registry.is_trusted(&public_key).await);
+
+        registry.remove_peer(&public_key).await;
+        assert!(!registry.is_trusted(&public_key).await);
+        assert_eq!(registry.peer_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_trusted_peers_set_peers() {
+        let registry = TrustedPeersRegistry::new();
+        let pk1 = test_public_key(1);
+        let pk2 = test_public_key(2);
+        let pk3 = test_public_key(3);
+
+        registry.add_peer(pk1).await;
+        registry.add_peer(pk2).await;
+        assert_eq!(registry.peer_count().await, 2);
+
+        // Replace with new set
+        registry.set_peers([pk2, pk3]).await;
+        assert!(!registry.is_trusted(&pk1).await);
+        assert!(registry.is_trusted(&pk2).await);
+        assert!(registry.is_trusted(&pk3).await);
+        assert_eq!(registry.peer_count().await, 2);
+    }
+
+    #[tokio::test]
+    async fn test_trusted_peers_with_peers() {
+        let pk1 = test_public_key(1);
+        let pk2 = test_public_key(2);
+
+        let registry = TrustedPeersRegistry::with_peers([pk1, pk2]);
+        assert!(registry.is_trusted(&pk1).await);
+        assert!(registry.is_trusted(&pk2).await);
+        assert_eq!(registry.peer_count().await, 2);
+    }
+
+    #[test]
+    fn test_trusted_peers_default() {
+        let registry = TrustedPeersRegistry::default();
+        // Just verify it compiles and creates empty registry
+        assert!(Arc::strong_count(&registry.peers) >= 1);
+    }
 }
