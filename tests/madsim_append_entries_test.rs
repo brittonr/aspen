@@ -311,11 +311,14 @@ async fn test_stream_append_success_seed_1002() {
 
     artifact = artifact.add_event("validation: all requests succeeded");
     assert_eq!(results.len(), 3, "should have 3 results");
-    assert_eq!(results, vec![
-        Ok(Some(make_log_id(1, 1, 1))),
-        Ok(Some(make_log_id(1, 1, 3))),
-        Ok(Some(make_log_id(1, 1, 4))),
-    ]);
+    assert_eq!(
+        results,
+        vec![
+            Ok(Some(make_log_id(1, 1, 1))),
+            Ok(Some(make_log_id(1, 1, 3))),
+            Ok(Some(make_log_id(1, 1, 4))),
+        ]
+    );
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {
@@ -385,10 +388,13 @@ async fn test_stream_append_conflict_seed_1003() {
 
     artifact = artifact.add_event("validation: stream terminated after conflict");
     assert_eq!(results.len(), 2, "should have 2 results (1 success, 1 conflict)");
-    assert_eq!(results, vec![
-        Ok(Some(make_log_id(1, 1, 1))),
-        Err(StreamAppendError::Conflict(Some(make_log_id(1, 1, 5)))),
-    ]);
+    assert_eq!(
+        results,
+        vec![
+            Ok(Some(make_log_id(1, 1, 1))),
+            Err(StreamAppendError::Conflict(Some(make_log_id(1, 1, 5)))),
+        ]
+    );
 
     let artifact = artifact.build();
     if let Ok(path) = artifact.persist("docs/simulations") {

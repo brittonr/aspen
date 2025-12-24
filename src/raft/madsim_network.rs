@@ -243,10 +243,13 @@ impl MadsimRaftRouter {
         if nodes.len() >= MAX_CONNECTIONS_PER_NODE as usize {
             anyhow::bail!("max nodes exceeded: {} (max: {})", nodes.len(), MAX_CONNECTIONS_PER_NODE);
         }
-        nodes.insert(node_id, NodeHandle {
-            _listen_addr: listen_addr,
-            raft,
-        });
+        nodes.insert(
+            node_id,
+            NodeHandle {
+                _listen_addr: listen_addr,
+                raft,
+            },
+        );
         Ok(())
     }
 

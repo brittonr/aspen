@@ -1433,7 +1433,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// are bundled into the log append transaction, so there's nothing to do here
     /// except retrieve and send the responses via the responders.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+    {
         // State was already applied during append().
         // Retrieve the computed responses and send them via responders.
         // EntryResponder<C> is a tuple: (Entry<C>, Option<ApplyResponder<C>>)

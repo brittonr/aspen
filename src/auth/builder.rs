@@ -3,8 +3,6 @@
 //! Provides a fluent API for constructing tokens with proper signing.
 
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use iroh::PublicKey;
 use iroh::SecretKey;
@@ -150,7 +148,7 @@ impl TokenBuilder {
             }
         }
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before UNIX epoch").as_secs();
+        let now = crate::utils::current_time_secs();
 
         // Create token without signature first
         let mut token = CapabilityToken {

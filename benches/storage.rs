@@ -53,9 +53,10 @@ fn populate_sqlite_data(sm: &Arc<SqliteStateMachine>, count: usize, value_size: 
     for i in 0..count {
         let key = format!("key-{:08}", i);
         write_conn
-            .execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", rusqlite::params![
-                key, &value
-            ])
+            .execute(
+                "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                rusqlite::params![key, &value],
+            )
             .unwrap();
     }
 
@@ -73,9 +74,10 @@ fn populate_sqlite_prefix_data(sm: &Arc<SqliteStateMachine>, prefixes: usize, ke
         for i in 0..keys_per_prefix {
             let key = format!("prefix-{:02}/key-{:04}", prefix, i);
             write_conn
-                .execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", rusqlite::params![
-                    key, &value
-                ])
+                .execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    rusqlite::params![key, &value],
+                )
                 .unwrap();
         }
     }
@@ -106,9 +108,10 @@ fn bench_sqlite_write_single(c: &mut Criterion) {
                 // Use direct SQL write to isolate state machine performance
                 let write_conn = sm.write_conn.lock().expect("lock poisoned");
                 write_conn
-                    .execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", rusqlite::params![
-                        key, v
-                    ])
+                    .execute(
+                        "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                        rusqlite::params![key, v],
+                    )
                     .unwrap();
             }
         })

@@ -669,7 +669,9 @@ impl AspenRouter {
 
     /// Execute a callback with read-only access to the internal Raft state.
     pub async fn external_request<F>(&self, target: impl Into<NodeId>, req: F) -> Result<()>
-    where F: FnOnce(&openraft::RaftState<AppTypeConfig>) + Send + 'static {
+    where
+        F: FnOnce(&openraft::RaftState<AppTypeConfig>) + Send + 'static,
+    {
         let raft = self.get_raft_handle(target)?;
         raft.external_request(req).await.map_err(|e| anyhow::anyhow!("{:?}", e))?;
         Ok(())

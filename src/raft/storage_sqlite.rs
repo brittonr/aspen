@@ -2214,9 +2214,10 @@ impl SqliteStateMachine {
     ) -> Result<AppResponse, io::Error> {
         let stored_membership = StoredMembership::new(Some(*log_id), membership.clone());
         let membership_bytes = bincode::serialize(&stored_membership).context(SerializeSnafu)?;
-        conn.execute("INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)", params![
-            membership_bytes
-        ])
+        conn.execute(
+            "INSERT OR REPLACE INTO state_machine_meta (key, value) VALUES ('last_membership', ?1)",
+            params![membership_bytes],
+        )
         .context(ExecuteSnafu)?;
         Ok(AppResponse::default())
     }
@@ -2834,11 +2835,10 @@ impl SqliteStateMachine {
             return Err(io::Error::other(format!("lease {} already exists", actual_lease_id)));
         }
 
-        conn.execute("INSERT INTO leases (lease_id, granted_ttl_seconds, expires_at_ms) VALUES (?1, ?2, ?3)", params![
-            actual_lease_id as i64,
-            ttl_seconds as i64,
-            expires_at_ms as i64
-        ])
+        conn.execute(
+            "INSERT INTO leases (lease_id, granted_ttl_seconds, expires_at_ms) VALUES (?1, ?2, ?3)",
+            params![actual_lease_id as i64, ttl_seconds as i64, expires_at_ms as i64],
+        )
         .context(ExecuteSnafu)?;
 
         Ok(AppResponse {
@@ -2915,10 +2915,10 @@ impl SqliteStateMachine {
             Some((granted_ttl_seconds, _)) => {
                 let new_expires_at_ms = now_ms + (granted_ttl_seconds as u64 * 1000);
 
-                conn.execute("UPDATE leases SET expires_at_ms = ?1 WHERE lease_id = ?2", params![
-                    new_expires_at_ms as i64,
-                    lease_id as i64
-                ])
+                conn.execute(
+                    "UPDATE leases SET expires_at_ms = ?1 WHERE lease_id = ?2",
+                    params![new_expires_at_ms as i64, lease_id as i64],
+                )
                 .context(ExecuteSnafu)?;
 
                 Ok(AppResponse {
@@ -3320,7 +3320,9 @@ impl RaftStateMachine<AppTypeConfig> for Arc<SqliteStateMachine> {
     }
 
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+    {
         // Tiger Style: Fixed batch size limit for memory and transaction bounds
         const BATCH_BUFFER_SIZE: usize = 100;
 
@@ -3711,10 +3713,10 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..10 {
-                conn.execute("INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
-                    format!("k{}", i),
-                    format!("v{}", i)
-                ])
+                conn.execute(
+                    "INSERT INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("k{}", i), format!("v{}", i)],
+                )
                 .unwrap();
             }
             guard.commit().unwrap();
@@ -3912,9 +3914,10 @@ mod tests {
             for i in 0..(MAX_BATCH_SIZE as usize + 10) {
                 let key = format!("k{:04}", i);
                 let value = format!("v{key}");
-                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
-                    key, value
-                ])
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![key, value],
+                )
                 .unwrap();
             }
             guard.commit().unwrap();
@@ -4094,10 +4097,10 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..100 {
-                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
-                    format!("key:{:03}", i),
-                    format!("value:{}", i)
-                ])
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("key:{:03}", i), format!("value:{}", i)],
+                )
                 .unwrap();
             }
             guard.commit().unwrap();
@@ -4122,10 +4125,10 @@ mod tests {
             let conn = sm.write_conn.lock().unwrap();
             let guard = TransactionGuard::new(&conn).unwrap();
             for i in 0..10 {
-                conn.execute("INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)", params![
-                    format!("key:{}", i),
-                    format!("value:{}", i)
-                ])
+                conn.execute(
+                    "INSERT OR REPLACE INTO state_machine_kv (key, value) VALUES (?1, ?2)",
+                    params![format!("key:{}", i), format!("value:{}", i)],
+                )
                 .unwrap();
             }
             guard.commit().unwrap();

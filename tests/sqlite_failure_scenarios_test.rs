@@ -1067,9 +1067,10 @@ async fn test_snapshot_metadata_corruption_detection() {
         // Write corrupted blob to snapshots table
         let corrupted_snapshot_bytes: Vec<u8> = (0..256).map(|_| rand::random::<u8>()).collect();
 
-        conn.execute("UPDATE snapshots SET data = ?1 WHERE id = 'current'", rusqlite::params![
-            corrupted_snapshot_bytes
-        ])
+        conn.execute(
+            "UPDATE snapshots SET data = ?1 WHERE id = 'current'",
+            rusqlite::params![corrupted_snapshot_bytes],
+        )
         .expect("failed to corrupt snapshot");
     }
 
@@ -1355,9 +1356,10 @@ async fn test_cross_storage_corruption_log_state_divergence() {
             Some(log_id::<AppTypeConfig>(1, NodeId::from(1), 100));
         let corrupted_bytes = bincode::serialize(&future_log_id).expect("failed to serialize");
 
-        conn.execute("UPDATE state_machine_meta SET value = ?1 WHERE key = 'last_applied_log'", rusqlite::params![
-            corrupted_bytes
-        ])
+        conn.execute(
+            "UPDATE state_machine_meta SET value = ?1 WHERE key = 'last_applied_log'",
+            rusqlite::params![corrupted_bytes],
+        )
         .expect("failed to corrupt last_applied");
     }
 

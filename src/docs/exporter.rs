@@ -491,7 +491,9 @@ impl DocsExporter {
     /// Scans all keys in the KV store and exports them to docs.
     /// Used for initial population and periodic drift correction.
     pub async fn full_sync_from_kv<KV>(&self, kv_store: &KV) -> Result<u64>
-    where KV: KeyValueStore {
+    where
+        KV: KeyValueStore,
+    {
         info!("starting full sync from KV store");
 
         let mut exported = 0u64;

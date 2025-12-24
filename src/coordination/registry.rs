@@ -803,10 +803,13 @@ mod tests {
 
         // Discover healthy only - should get one
         let healthy = registry
-            .discover("test-service", DiscoveryFilter {
-                healthy_only: true,
-                ..Default::default()
-            })
+            .discover(
+                "test-service",
+                DiscoveryFilter {
+                    healthy_only: true,
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
         assert_eq!(healthy.len(), 1);
@@ -849,10 +852,13 @@ mod tests {
 
         // Filter by tag
         let filtered = registry
-            .discover("test-service", DiscoveryFilter {
-                tags: vec!["region:us-east".to_string()],
-                ..Default::default()
-            })
+            .discover(
+                "test-service",
+                DiscoveryFilter {
+                    tags: vec!["region:us-east".to_string()],
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
         assert_eq!(filtered.len(), 1);
@@ -991,12 +997,17 @@ mod tests {
 
         // Update metadata
         registry
-            .update_metadata("test-service", "instance-1", token, ServiceInstanceMetadata {
-                version: "2.0.0".to_string(),
-                weight: 200,
-                tags: vec!["updated".to_string()],
-                ..Default::default()
-            })
+            .update_metadata(
+                "test-service",
+                "instance-1",
+                token,
+                ServiceInstanceMetadata {
+                    version: "2.0.0".to_string(),
+                    weight: 200,
+                    tags: vec!["updated".to_string()],
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
 

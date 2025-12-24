@@ -1,8 +1,5 @@
 //! Shared types for coordination primitives.
 
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -118,8 +115,11 @@ impl BucketState {
 }
 
 /// Get current Unix timestamp in milliseconds.
+///
+/// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
+#[inline]
 pub fn now_unix_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before Unix epoch").as_millis() as u64
+    crate::utils::current_time_ms()
 }
 
 #[cfg(test)]

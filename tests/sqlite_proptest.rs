@@ -232,11 +232,13 @@ fn test_applying_same_entry_twice_is_idempotent() {
             let (mut sm, _temp_dir) = create_temp_sm();
 
             // Apply first entry
-            let entry1 =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry1 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: value1.clone(),
-                });
+                },
+            );
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry1, None)) }));
 
@@ -246,11 +248,13 @@ fn test_applying_same_entry_twice_is_idempotent() {
             assert_eq!(stored.as_ref(), Some(&value1));
 
             // Apply second entry with same log ID (simulating replay)
-            let entry2 =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry2 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: value2.clone(),
-                });
+                },
+            );
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry2, None)) }));
 
@@ -500,11 +504,13 @@ fn test_large_value_storage() {
 
             let large_value = "x".repeat(size_kb * 1024);
 
-            let entry =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: large_value.clone(),
-                });
+                },
+            );
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
 
@@ -702,11 +708,13 @@ fn test_delete_idempotency() {
             let mut sm = SqliteStateMachine::new(&db_path).expect("failed to create state machine");
 
             // Set a key
-            let entry1 =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry1 = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: value.clone(),
-                });
+                },
+            );
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry1, None)) }));
             sm.apply(entries_stream).await.expect("failed to apply set");
 
@@ -766,11 +774,13 @@ fn test_key_size_at_boundary() {
             let key = "k".repeat(key_size);
             let value = "test_value".to_string();
 
-            let entry =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: value.clone(),
-                });
+                },
+            );
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
 
@@ -801,11 +811,13 @@ fn test_value_size_at_boundary() {
             let key = "large_value_key".to_string();
             let value = "x".repeat(value_size);
 
-            let entry =
-                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
+            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                make_log_id(1, 1, 1),
+                AppRequest::Set {
                     key: key.clone(),
                     value: value.clone(),
-                });
+                },
+            );
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
             sm.apply(entries_stream).await.expect("apply should succeed for large value");

@@ -299,10 +299,14 @@ mod tests {
     #[tokio::test]
     async fn test_sequence_concurrent() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig {
-            batch_size: 10,
-            ..Default::default()
-        }));
+        let seq = Arc::new(SequenceGenerator::new(
+            store,
+            "test_seq",
+            SequenceConfig {
+                batch_size: 10,
+                ..Default::default()
+            },
+        ));
 
         let handles: Vec<_> = (0..5)
             .map(|_| {

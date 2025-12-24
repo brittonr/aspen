@@ -634,11 +634,11 @@ impl SubscriberState {
 // ============================================================================
 
 /// Get current time in milliseconds since UNIX epoch.
+///
+/// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
+#[inline]
 fn current_time_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time before UNIX epoch")
-        .as_millis() as u64
+    crate::utils::current_time_ms()
 }
 
 // ============================================================================

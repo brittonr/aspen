@@ -802,7 +802,7 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
         endpoint_id: base.iroh_manager.node_addr().id.to_string(),
         raft_addr: String::new(),
         status: NodeStatus::Online,
-        last_updated_secs: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+        last_updated_secs: crate::utils::current_time_secs(),
     })?;
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
@@ -1298,7 +1298,7 @@ fn register_node_metadata(
         endpoint_id: iroh_manager.node_addr().id.to_string(),
         raft_addr: String::new(),
         status: NodeStatus::Online,
-        last_updated_secs: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+        last_updated_secs: crate::utils::current_time_secs(),
     })?;
     Ok(())
 }

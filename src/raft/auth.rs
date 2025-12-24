@@ -234,13 +234,24 @@ impl AuthContext {
     /// Compute HMAC over authentication data.
     ///
     /// HMAC input: nonce || timestamp || client_endpoint_id
+    ///
+    /// # Panics
+    ///
+    /// This function uses `.expect()` on HMAC key creation. Per RFC 2104,
+    /// HMAC-SHA256 accepts keys of any length (shorter keys are zero-padded,
+    /// longer keys are hashed first). Since `self.key` is always a fixed
+    /// `[u8; 32]` array derived from Blake3, this will never fail. The
+    /// `.expect()` is retained for defense-in-depth against future refactoring
+    /// that might change the key type.
     fn compute_hmac(
         &self,
         nonce: &[u8; AUTH_NONCE_SIZE],
         timestamp_ms: u64,
         client_id: &[u8; 32],
     ) -> [u8; AUTH_HMAC_SIZE] {
-        let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC key size is always valid (32 bytes)");
+        // SAFETY: HMAC-SHA256 accepts any key length per RFC 2104. Our key is
+        // a fixed [u8; 32] from AuthContext, which guarantees valid input.
+        let mut mac = HmacSha256::new_from_slice(&self.key).expect("HMAC accepts any key size per RFC 2104");
 
         // Feed data in deterministic order
         mac.update(nonce);
@@ -266,11 +277,11 @@ impl std::fmt::Debug for AuthContext {
 // ============================================================================
 
 /// Get current time in milliseconds since UNIX epoch.
+///
+/// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
+#[inline]
 fn current_time_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time before UNIX epoch")
-        .as_millis() as u64
+    crate::utils::current_time_ms()
 }
 
 /// Constant-time comparison of two HMAC values.

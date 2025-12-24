@@ -618,9 +618,12 @@ mod tests {
         let health = ConnectionHealth::Degraded {
             consecutive_failures: 2,
         };
-        assert!(matches!(health, ConnectionHealth::Degraded {
-            consecutive_failures: 2
-        }));
+        assert!(matches!(
+            health,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 2
+            }
+        ));
     }
 
     #[test]
@@ -659,12 +662,18 @@ mod tests {
     #[test]
     fn test_connection_health_eq_different_variants() {
         assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Failed);
-        assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Degraded {
-            consecutive_failures: 1
-        });
-        assert_ne!(ConnectionHealth::Failed, ConnectionHealth::Degraded {
-            consecutive_failures: 1
-        });
+        assert_ne!(
+            ConnectionHealth::Healthy,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 1
+            }
+        );
+        assert_ne!(
+            ConnectionHealth::Failed,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 1
+            }
+        );
     }
 
     #[test]

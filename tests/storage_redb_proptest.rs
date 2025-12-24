@@ -190,10 +190,15 @@ fn test_inmemory_log_state() {
             // Create and append entries
             let entries: Vec<_> = (1..=count as u64)
                 .map(|i| {
-                    make_entry(1, 1, i, AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: format!("v{}", i),
-                    })
+                    make_entry(
+                        1,
+                        1,
+                        i,
+                        AppRequest::Set {
+                            key: format!("k{}", i),
+                            value: format!("v{}", i),
+                        },
+                    )
                 })
                 .collect();
 
@@ -222,10 +227,15 @@ fn test_inmemory_truncate() {
             // Append entries
             let entries: Vec<_> = (1..=total as u64)
                 .map(|i| {
-                    make_entry(1, 1, i, AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: format!("v{}", i),
-                    })
+                    make_entry(
+                        1,
+                        1,
+                        i,
+                        AppRequest::Set {
+                            key: format!("k{}", i),
+                            value: format!("v{}", i),
+                        },
+                    )
                 })
                 .collect();
 
@@ -259,10 +269,15 @@ fn test_inmemory_purge() {
             // Append entries
             let entries: Vec<_> = (1..=total as u64)
                 .map(|i| {
-                    make_entry(1, 1, i, AppRequest::Set {
-                        key: format!("k{}", i),
-                        value: format!("v{}", i),
-                    })
+                    make_entry(
+                        1,
+                        1,
+                        i,
+                        AppRequest::Set {
+                            key: format!("k{}", i),
+                            value: format!("v{}", i),
+                        },
+                    )
                 })
                 .collect();
 
@@ -392,10 +407,15 @@ fn test_redb_entries_persist_across_reopen() {
 
                     let entries: Vec<_> = (1..=count as u64)
                         .map(|i| {
-                            make_entry(1, 1, i, AppRequest::Set {
-                                key: format!("k{}", i),
-                                value: format!("v{}", i),
-                            })
+                            make_entry(
+                                1,
+                                1,
+                                i,
+                                AppRequest::Set {
+                                    key: format!("k{}", i),
+                                    value: format!("v{}", i),
+                                },
+                            )
                         })
                         .collect();
 
@@ -468,10 +488,15 @@ fn test_redb_truncate() {
                 // Append entries
                 let entries: Vec<_> = (1..=total as u64)
                     .map(|i| {
-                        make_entry(1, 1, i, AppRequest::Set {
-                            key: format!("k{}", i),
-                            value: format!("v{}", i),
-                        })
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
                     })
                     .collect();
 
@@ -511,10 +536,15 @@ fn test_redb_purge() {
                 // Append entries
                 let entries: Vec<_> = (1..=total as u64)
                     .map(|i| {
-                        make_entry(1, 1, i, AppRequest::Set {
-                            key: format!("k{}", i),
-                            value: format!("v{}", i),
-                        })
+                        make_entry(
+                            1,
+                            1,
+                            i,
+                            AppRequest::Set {
+                                key: format!("k{}", i),
+                                value: format!("v{}", i),
+                            },
+                        )
                     })
                     .collect();
 

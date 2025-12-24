@@ -4,8 +4,6 @@
 
 use std::collections::HashSet;
 use std::sync::RwLock;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use iroh::PublicKey;
 
@@ -73,7 +71,7 @@ impl TokenVerifier {
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
         // 2. Check expiration
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before UNIX epoch").as_secs();
+        let now = crate::utils::current_time_secs();
 
         if token.expires_at + self.clock_skew_tolerance < now {
             return Err(AuthError::TokenExpired {
