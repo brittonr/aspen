@@ -374,7 +374,22 @@
               );
 
               doc = craneLib.cargoDoc commonArgs;
-              fmt = craneLib.cargoFmt basicArgs;
+
+              # Custom fmt check using nightly rustfmt to support unstable features
+              # in rustfmt.toml (imports_granularity, overflow_delimited_expr, etc.)
+              fmt =
+                pkgs.runCommand "aspen-fmt-check" {
+                  nativeBuildInputs = [pkgs.rust-bin.nightly.latest.rustfmt pkgs.findutils];
+                } ''
+                  cd ${src}
+                  find . -name '*.rs' \
+                    -not -path './target/*' \
+                    -not -path './openraft/*' \
+                    -not -path './vendor/*' \
+                    -exec rustfmt --edition 2024 --check {} +
+                  touch $out
+                '';
+
               deny = craneLib.cargoDeny commonArgs;
 
               audit = craneLib.cargoAudit {

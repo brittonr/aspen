@@ -16,6 +16,7 @@ const TEST_COOKIE: &str = "node-builder-test-cookie";
 
 /// Test basic service lifecycle: start and shutdown.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_service_lifecycle() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-1");
@@ -41,6 +42,7 @@ async fn test_service_lifecycle() {
 
 /// Test service with custom storage backend.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_custom_storage_backend() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-2");
@@ -58,6 +60,7 @@ async fn test_custom_storage_backend() {
 
 /// Test service with gossip discovery enabled.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_gossip_enabled() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-3");
@@ -76,6 +79,7 @@ async fn test_gossip_enabled() {
 
 /// Test service with mDNS discovery enabled.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_mdns_enabled() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-4");
@@ -94,6 +98,7 @@ async fn test_mdns_enabled() {
 
 /// Test service with custom Raft timeouts.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_custom_raft_timeouts() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-5");
@@ -113,6 +118,7 @@ async fn test_custom_raft_timeouts() {
 
 /// Test accessing RaftNode from the service.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_raft_node_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-6");
@@ -132,6 +138,7 @@ async fn test_raft_node_access() {
 
 /// Test accessing Raft metrics for direct operations.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_raft_metrics_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-7");
@@ -159,6 +166,7 @@ async fn test_raft_metrics_access() {
 
 /// Test accessing bootstrap handle for advanced operations.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_bootstrap_handle_access() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-88");
@@ -201,6 +209,7 @@ async fn test_builder_all_options() {
 
 /// Test multiple services can coexist.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_multiple_services() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -228,6 +237,7 @@ async fn test_multiple_services() {
 
 /// Test service restart (shutdown and recreate).
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_service_restart_inmemory() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-12");
@@ -264,6 +274,7 @@ async fn test_service_restart_inmemory() {
 
 /// Test rapid start/shutdown cycles.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_rapid_lifecycle_cycles() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-13");
@@ -290,6 +301,7 @@ async fn test_rapid_lifecycle_cycles() {
 
 /// Test service with empty peer list.
 #[tokio::test]
+#[ignore = "requires network access (Iroh P2P binding, mDNS) - not available in Nix sandbox"]
 async fn test_peer_configuration() {
     let temp_dir = TempDir::new().unwrap();
     let data_dir = temp_dir.path().join("node-14");

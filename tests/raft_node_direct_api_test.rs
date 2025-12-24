@@ -32,6 +32,9 @@ use tokio::time::timeout;
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Helper to create a single-node cluster.
+///
+/// Note: mDNS is disabled for sandbox/CI compatibility (mDNS requires multicast
+/// networking which is not available in Nix sandbox).
 async fn setup_single_node(node_id: u64, temp_dir: &TempDir) -> anyhow::Result<aspen::node::Node> {
     let data_dir = temp_dir.path().join(format!("node-{}", node_id));
     // Use a unique test cookie to satisfy cookie validation
@@ -39,6 +42,7 @@ async fn setup_single_node(node_id: u64, temp_dir: &TempDir) -> anyhow::Result<a
     let node = NodeBuilder::new(NodeId(node_id), &data_dir)
         .with_storage(StorageBackend::InMemory)
         .with_cookie(test_cookie)
+        .with_mdns(false) // Disable mDNS for sandbox/CI compatibility
         .start()
         .await?;
     Ok(node)
