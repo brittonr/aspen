@@ -156,9 +156,7 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
 
     // Verify data on leader node only (ReadIndex on followers is timing-sensitive)
     let value1 = kv_store1
-        .read(ReadRequest {
-            key: "test-key".to_string(),
-        })
+        .read(ReadRequest::new("test-key".to_string()))
         .await?;
     assert_eq!(value1.kv.unwrap().value, "test-value");
     info!("Leader read verified");
@@ -266,9 +264,7 @@ async fn test_multi_node_cluster_manual_config() -> Result<()> {
 
     // Verify data on leader node only (ReadIndex on followers is timing-sensitive)
     let value = kv_store
-        .read(ReadRequest {
-            key: "multi-node-key".to_string(),
-        })
+        .read(ReadRequest::new("multi-node-key".to_string()))
         .await?;
     assert_eq!(value.kv.unwrap().value, "multi-node-value");
 

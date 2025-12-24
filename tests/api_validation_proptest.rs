@@ -272,7 +272,7 @@ fn test_read_request_json_roundtrip() {
         .with_iterations(1000)
         .with_type::<ValidApiKey>()
         .for_each(|key| {
-            let request = ReadRequest { key: key.0.clone() };
+            let request = ReadRequest::new(key.0.clone());
             let serialized = serde_json::to_string(&request).expect("serialize");
             let deserialized: ReadRequest = serde_json::from_str(&serialized).expect("deserialize");
             assert_eq!(request, deserialized);

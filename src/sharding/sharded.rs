@@ -552,9 +552,7 @@ mod tests {
         store.write(write_req).await.unwrap();
 
         // Read it back
-        let read_req = ReadRequest {
-            key: "test_key".to_string(),
-        };
+        let read_req = ReadRequest::new("test_key".to_string());
         let result = store.read(read_req).await.unwrap();
         assert!(result.kv.is_some());
         assert_eq!(result.kv.unwrap().value, "test_value");
@@ -627,9 +625,7 @@ mod tests {
         }
 
         // Should return ShardMoved pointing to successor (shard 0)
-        let read_req = ReadRequest {
-            key: test_key.clone(),
-        };
+        let read_req = ReadRequest::new(test_key.clone());
         let result = store.read(read_req).await;
         assert!(matches!(
             result,

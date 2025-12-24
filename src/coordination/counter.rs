@@ -54,13 +54,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
     /// Get the current counter value.
     pub async fn get(&self) -> Result<u64, CoordinationError> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 value
@@ -249,13 +243,7 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
 
     /// Get the current counter value.
     pub async fn get(&self) -> Result<i64, CoordinationError> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 value

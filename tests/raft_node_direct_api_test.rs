@@ -287,9 +287,7 @@ async fn test_write_read_cycle() {
     assert!(write_result.is_ok(), "write failed: {:?}", write_result);
 
     // Read the key back
-    let read_request = ReadRequest {
-        key: "mykey".to_string(),
-    };
+    let read_request = ReadRequest::new("mykey".to_string());
 
     let read_result = timeout(TEST_TIMEOUT, raft_node.read(read_request))
         .await
@@ -315,9 +313,7 @@ async fn test_read_nonexistent_key_returns_not_found() {
     sleep(Duration::from_millis(500)).await;
 
     let raft_node = node.raft_node();
-    let read_request = ReadRequest {
-        key: "nonexistent".to_string(),
-    };
+    let read_request = ReadRequest::new("nonexistent".to_string());
 
     let result = raft_node.read(read_request).await;
     assert!(
@@ -364,9 +360,7 @@ async fn test_delete_existing_key() {
     assert!(result.deleted);
 
     // Verify key is gone
-    let read_request = ReadRequest {
-        key: "to_delete".to_string(),
-    };
+    let read_request = ReadRequest::new("to_delete".to_string());
     let read_result = raft_node.read(read_request).await;
     assert!(matches!(
         read_result,
@@ -406,9 +400,7 @@ async fn test_set_multi_writes_multiple_keys() {
 
     // Verify all keys were written
     for i in 1..=3 {
-        let read_request = ReadRequest {
-            key: format!("key{}", i),
-        };
+        let read_request = ReadRequest::new(format!("key{}", i));
         let result = raft_node.read(read_request).await.unwrap();
         assert_eq!(result.kv.unwrap().value, format!("value{}", i));
     }
@@ -548,9 +540,7 @@ async fn test_overwrite_existing_key() {
 
     // Verify initial value
     let read1 = raft_node
-        .read(ReadRequest {
-            key: "key".to_string(),
-        })
+        .read(ReadRequest::new("key".to_string()))
         .await
         .unwrap();
     assert_eq!(read1.kv.unwrap().value, "value1");
@@ -566,9 +556,7 @@ async fn test_overwrite_existing_key() {
 
     // Verify new value
     let read2 = raft_node
-        .read(ReadRequest {
-            key: "key".to_string(),
-        })
+        .read(ReadRequest::new("key".to_string()))
         .await
         .unwrap();
     assert_eq!(read2.kv.unwrap().value, "value2");

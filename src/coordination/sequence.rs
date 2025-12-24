@@ -104,13 +104,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     pub async fn reserve(&self, count: u64) -> Result<u64, CoordinationError> {
         loop {
             // Read current sequence value
-            let current = match self
-                .store
-                .read(ReadRequest {
-                    key: self.key.clone(),
-                })
-                .await
-            {
+            let current = match self.store.read(ReadRequest::new(self.key.clone())).await {
                 Ok(result) => {
                     let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                     value
@@ -182,13 +176,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         }
 
         // No local batch, read from storage
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 let value =
@@ -209,13 +197,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     ///
     /// This is the highest ID that has been reserved (but maybe not yet returned).
     pub async fn last_allocated(&self) -> Result<u64, CoordinationError> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 value

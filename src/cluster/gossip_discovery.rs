@@ -508,11 +508,16 @@ impl GossipPeerDiscovery {
             .gossip()
             .context("gossip not enabled on IrohEndpointManager")?;
 
-        // Subscribe to the topic
-        let gossip_topic = gossip
-            .subscribe(topic_id, vec![])
-            .await
-            .context("failed to subscribe to gossip topic")?;
+        // Subscribe to the topic with timeout
+        // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
+        // If gossip is unavailable, the node should continue without it (non-fatal).
+        let gossip_topic = tokio::time::timeout(
+            crate::raft::constants::GOSSIP_SUBSCRIBE_TIMEOUT,
+            gossip.subscribe(topic_id, vec![]),
+        )
+        .await
+        .context("timeout subscribing to gossip topic")?
+        .context("failed to subscribe to gossip topic")?;
 
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();

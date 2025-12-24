@@ -217,9 +217,7 @@ async fn test_cluster_controller_current_state_returns_latest() {
 async fn test_kv_store_new_is_empty() {
     let store = DeterministicKeyValueStore::new();
     let result = store
-        .read(ReadRequest {
-            key: "nonexistent".to_string(),
-        })
+        .read(ReadRequest::new("nonexistent".to_string()))
         .await;
 
     match result {
@@ -247,9 +245,7 @@ async fn test_kv_store_set_and_read() {
 
     // Read
     let result = store
-        .read(ReadRequest {
-            key: "key1".to_string(),
-        })
+        .read(ReadRequest::new("key1".to_string()))
         .await
         .unwrap();
 
@@ -285,9 +281,7 @@ async fn test_kv_store_set_overwrites() {
         .unwrap();
 
     let result = store
-        .read(ReadRequest {
-            key: "key1".to_string(),
-        })
+        .read(ReadRequest::new("key1".to_string()))
         .await
         .unwrap();
 
@@ -314,9 +308,7 @@ async fn test_kv_store_set_multi() {
     // Verify all keys exist
     for i in 1..=3 {
         let result = store
-            .read(ReadRequest {
-                key: format!("key{}", i),
-            })
+            .read(ReadRequest::new(format!("key{}", i)))
             .await
             .unwrap();
         assert_eq!(result.kv.unwrap().value, format!("value{}", i));
@@ -349,11 +341,7 @@ async fn test_kv_store_delete_existing_key() {
     assert_eq!(result.key, "key1");
 
     // Verify it's gone
-    let read_result = store
-        .read(ReadRequest {
-            key: "key1".to_string(),
-        })
-        .await;
+    let read_result = store.read(ReadRequest::new("key1".to_string())).await;
     assert!(read_result.is_err());
 }
 
@@ -398,11 +386,7 @@ async fn test_kv_store_delete_via_write_command() {
         .unwrap();
 
     // Verify deleted
-    let result = store
-        .read(ReadRequest {
-            key: "key1".to_string(),
-        })
-        .await;
+    let result = store.read(ReadRequest::new("key1".to_string())).await;
     assert!(result.is_err());
 }
 
@@ -435,21 +419,13 @@ async fn test_kv_store_delete_multi() {
 
     // Verify deleted keys are gone
     for key in ["key1", "key3", "key5"] {
-        let result = store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await;
+        let result = store.read(ReadRequest::new(key.to_string())).await;
         assert!(result.is_err(), "Key {} should be deleted", key);
     }
 
     // Verify remaining keys exist
     for key in ["key2", "key4"] {
-        let result = store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await;
+        let result = store.read(ReadRequest::new(key.to_string())).await;
         assert!(result.is_ok(), "Key {} should exist", key);
     }
 }
@@ -841,10 +817,7 @@ fn test_kv_store_write_read_consistency() {
                     .await
                     .unwrap();
 
-                let result = store
-                    .read(ReadRequest { key: key.0.clone() })
-                    .await
-                    .unwrap();
+                let result = store.read(ReadRequest::new(key.0.clone())).await.unwrap();
                 assert_eq!(result.kv.unwrap().value, value.0);
             });
         });

@@ -498,7 +498,7 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::ReadKey { key } => {
-            let result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
+            let result = ctx.kv_store.read(ReadRequest::new(key.clone())).await;
 
             match result {
                 Ok(resp) => {
@@ -2257,7 +2257,7 @@ async fn process_client_request(
             use crate::api::WriteCommand;
             use crate::coordination::LockEntry;
 
-            let read_result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
+            let read_result = ctx.kv_store.read(ReadRequest::new(key.clone())).await;
 
             match read_result {
                 Ok(result) => {
@@ -2353,7 +2353,7 @@ async fn process_client_request(
             use crate::api::WriteCommand;
             use crate::coordination::LockEntry;
 
-            let read_result = ctx.kv_store.read(ReadRequest { key: key.clone() }).await;
+            let read_result = ctx.kv_store.read(ReadRequest::new(key.clone())).await;
 
             match read_result {
                 Ok(result) => {
@@ -2939,7 +2939,7 @@ async fn process_client_request(
             // Read all keys atomically
             let mut values = Vec::with_capacity(keys.len());
             for key in &keys {
-                let request = ReadRequest { key: key.clone() };
+                let request = ReadRequest::new(key.clone());
                 match ctx.kv_store.read(request).await {
                     Ok(result) => {
                         // Key exists - return the value

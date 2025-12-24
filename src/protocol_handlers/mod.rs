@@ -48,9 +48,11 @@
 //!
 //! # Authentication
 //!
-//! The `AuthenticatedRaftProtocolHandler` uses HMAC-SHA256 challenge-response
-//! authentication based on the cluster cookie. This prevents unauthorized nodes
-//! from participating in consensus.
+//! The `AuthenticatedRaftProtocolHandler` uses Iroh's native NodeId verification
+//! for authentication. NodeId is cryptographically verified during the QUIC TLS
+//! handshake (Ed25519 public key), and the server checks if the NodeId is in the
+//! `TrustedPeersRegistry` (populated from Raft membership). This eliminates
+//! per-stream authentication overhead while maintaining strong cryptographic identity.
 //!
 //! # Tiger Style
 //!
@@ -76,9 +78,7 @@ pub use constants::{
 pub use client::{ClientProtocolContext, ClientProtocolHandler};
 pub use log_subscriber::LogSubscriberProtocolHandler;
 pub use raft::RaftProtocolHandler;
-pub use raft_authenticated::{
-    AuthenticatedRaftProtocolHandler, read_length_prefixed, write_length_prefixed,
-};
+pub use raft_authenticated::{AuthenticatedRaftProtocolHandler, TrustedPeersRegistry};
 pub use raft_sharded::ShardedRaftProtocolHandler;
 
 // Re-export error sanitization functions

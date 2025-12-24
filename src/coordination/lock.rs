@@ -269,13 +269,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
 
     /// Read the current lock entry from storage.
     async fn read_lock_entry(&self) -> Result<Option<LockEntry>, CoordinationError> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 let entry: LockEntry =

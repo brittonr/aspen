@@ -355,13 +355,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
 
     /// Read semaphore state from the store.
     async fn read_state(&self, key: &str) -> Result<Option<SemaphoreState>> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 if value.is_empty() {

@@ -73,11 +73,11 @@ use tokio::select;
 use tracing::{error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::auth::AuthContext;
 use crate::raft::clock_drift_detection::{ClockDriftDetector, current_time_ms};
 use crate::raft::connection_pool::RaftConnectionPool;
 use crate::raft::constants::{
-    IROH_READ_TIMEOUT, MAX_PEERS, MAX_RPC_MESSAGE_SIZE, MAX_SNAPSHOT_SIZE,
+    FAILURE_DETECTOR_CHANNEL_CAPACITY, IROH_READ_TIMEOUT, MAX_PEERS, MAX_RPC_MESSAGE_SIZE,
+    MAX_SNAPSHOT_SIZE,
 };
 use crate::raft::node_failure_detection::{ConnectionStatus, NodeFailureDetector};
 use crate::raft::rpc::{
@@ -89,6 +89,18 @@ use crate::raft::types::{AppTypeConfig, NodeId, RaftMemberInfo};
 use crate::sharding::router::ShardId;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// Update message for the failure detector.
+///
+/// Tiger Style: Bounded channel prevents unbounded task spawning.
+/// Instead of spawning a new task for each failure update, we send
+/// through a bounded channel and let a single consumer process updates.
+#[derive(Debug)]
+struct FailureDetectorUpdate {
+    node_id: NodeId,
+    raft_status: ConnectionStatus,
+    iroh_status: ConnectionStatus,
+}
 
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
@@ -126,6 +138,11 @@ pub struct IrpcRaftNetworkFactory {
     /// Purely observational - does NOT affect Raft consensus.
     /// Used to detect NTP misconfiguration for operational health.
     drift_detector: Arc<RwLock<ClockDriftDetector>>,
+    /// Bounded channel for failure detector updates.
+    ///
+    /// Tiger Style: Prevents unbounded task spawning by batching updates
+    /// through a single consumer task instead of spawning per-failure tasks.
+    failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
 }
 
 impl IrpcRaftNetworkFactory {
@@ -135,19 +152,22 @@ impl IrpcRaftNetworkFactory {
     ///
     /// * `endpoint_manager` - Iroh endpoint manager for P2P connections
     /// * `peer_addrs` - Initial peer addresses for fallback lookup
-    /// * `auth_context` - Optional auth context for HMAC-SHA256 authentication.
-    ///   When Some, connections use `RAFT_AUTH_ALPN` and perform handshake.
+    ///
+    /// # Iroh-Native Authentication
+    ///
+    /// Authentication is handled at connection accept time by the server using
+    /// Iroh's native NodeId verification. The client side (this factory) does
+    /// not need to perform any authentication - it simply connects and the
+    /// server validates the NodeId against the TrustedPeersRegistry.
     pub fn new(
         endpoint_manager: Arc<IrohEndpointManager>,
         peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
-        auth_context: Option<AuthContext>,
     ) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
         let connection_pool = Arc::new(RaftConnectionPool::new(
             Arc::clone(&endpoint_manager),
             Arc::clone(&failure_detector),
-            auth_context,
         ));
 
         // Start the background cleanup task for idle connections
@@ -156,11 +176,30 @@ impl IrpcRaftNetworkFactory {
             pool_clone.start_cleanup_task().await;
         });
 
+        // Tiger Style: Bounded channel prevents unbounded task spawning
+        // Instead of spawning a new task for each failure update, we use a
+        // bounded channel with a single consumer task.
+        let (failure_update_tx, mut failure_update_rx) =
+            tokio::sync::mpsc::channel::<FailureDetectorUpdate>(FAILURE_DETECTOR_CHANNEL_CAPACITY);
+
+        // Spawn single consumer task for failure detector updates
+        let failure_detector_clone = Arc::clone(&failure_detector);
+        tokio::spawn(async move {
+            while let Some(update) = failure_update_rx.recv().await {
+                failure_detector_clone.write().await.update_node_status(
+                    update.node_id,
+                    update.raft_status,
+                    update.iroh_status,
+                );
+            }
+        });
+
         Self {
             connection_pool,
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
             failure_detector,
             drift_detector,
+            failure_update_tx,
         }
     }
 
@@ -266,6 +305,7 @@ impl IrpcRaftNetworkFactory {
             failure_detector: Arc::clone(&self.failure_detector),
             drift_detector: Arc::clone(&self.drift_detector),
             shard_id: Some(shard_id),
+            failure_update_tx: self.failure_update_tx.clone(),
         }
     }
 }
@@ -299,6 +339,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
             failure_detector: Arc::clone(&self.failure_detector),
             drift_detector: Arc::clone(&self.drift_detector),
             shard_id: None, // Non-sharded mode for backward compatibility
+            failure_update_tx: self.failure_update_tx.clone(),
         }
     }
 }
@@ -309,6 +350,7 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
 /// - Explicit error handling for connection failures
 /// - Fail fast if peer address is missing
 /// - Connection pooling for efficient stream multiplexing
+/// - Bounded channel for failure detector updates (prevents unbounded task spawning)
 ///
 /// # Sharded Mode
 ///
@@ -326,6 +368,11 @@ pub struct IrpcRaftNetwork {
     /// When set, all RPC messages are prefixed with this shard ID,
     /// and responses are expected to include the shard ID prefix.
     shard_id: Option<ShardId>,
+    /// Bounded channel for failure detector updates.
+    ///
+    /// Tiger Style: Prevents unbounded task spawning by sending updates
+    /// through a bounded channel instead of spawning per-failure tasks.
+    failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
 }
 
 impl IrpcRaftNetwork {
@@ -364,14 +411,13 @@ impl IrpcRaftNetwork {
                     error = %err,
                     "connection failure, classifying as NodeCrash"
                 );
-                let failure_detector_clone = Arc::clone(&self.failure_detector);
-                let target = self.target;
-                tokio::spawn(async move {
-                    failure_detector_clone.write().await.update_node_status(
-                        target,
-                        ConnectionStatus::Disconnected, // Raft failed
-                        ConnectionStatus::Disconnected, // Iroh failed (can't reach node)
-                    );
+                // Tiger Style: Use bounded channel instead of spawning unbounded tasks
+                // try_send is non-blocking; if channel is full, we drop the update
+                // (acceptable since failure detector will get future updates)
+                let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
+                    node_id: self.target,
+                    raft_status: ConnectionStatus::Disconnected,
+                    iroh_status: ConnectionStatus::Disconnected,
                 });
             })
             .context("failed to get connection from pool")?;
@@ -391,14 +437,13 @@ impl IrpcRaftNetwork {
                     error = %err,
                     "stream failure with connection up, classifying as ActorCrash"
                 );
-                let failure_detector_clone = Arc::clone(&self.failure_detector);
-                let target = self.target;
-                tokio::spawn(async move {
-                    failure_detector_clone.write().await.update_node_status(
-                        target,
-                        ConnectionStatus::Disconnected, // Raft failed
-                        ConnectionStatus::Connected,    // Iroh works (connection exists)
-                    );
+                // Tiger Style: Use bounded channel instead of spawning unbounded tasks
+                // try_send is non-blocking; if channel is full, we drop the update
+                // (acceptable since failure detector will get future updates)
+                let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
+                    node_id: self.target,
+                    raft_status: ConnectionStatus::Disconnected,
+                    iroh_status: ConnectionStatus::Connected,
                 });
             })
             .context("failed to acquire stream from connection")?;

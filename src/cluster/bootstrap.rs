@@ -48,7 +48,6 @@ use crate::cluster::ticket::AspenClusterTicket;
 use crate::cluster::{IrohEndpointConfig, IrohEndpointManager};
 use crate::protocol_handlers::ShardedRaftProtocolHandler;
 use crate::raft::StateMachineVariant;
-use crate::raft::auth::AuthContext;
 use crate::raft::lease_cleanup::{LeaseCleanupConfig, spawn_lease_cleanup_task};
 use crate::raft::log_subscriber::{LOG_BROADCAST_BUFFER_SIZE, LogEntryPayload};
 use crate::raft::network::IrpcRaftNetworkFactory;
@@ -473,19 +472,18 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     // Parse peer addresses from config if provided
     let peer_addrs = parse_peer_addresses(&config.peers)?;
 
-    // Create auth context if Raft authentication is enabled
-    let auth_context = if config.iroh.enable_raft_auth {
-        info!("Raft authentication enabled - using HMAC-SHA256 challenge-response");
-        Some(AuthContext::new(&config.cookie))
-    } else {
-        None
-    };
+    // Iroh-Native Authentication: No client-side auth needed
+    // Authentication is handled at connection accept time by the server.
+    // The server validates the remote NodeId (verified by QUIC TLS handshake)
+    // against the TrustedPeersRegistry populated from Raft membership.
+    if config.iroh.enable_raft_auth {
+        info!("Raft authentication enabled - using Iroh-native NodeId verification");
+    }
 
-    // Create network factory
+    // Create network factory (no auth context needed - server handles auth)
     let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
         iroh_manager.clone(),
         peer_addrs,
-        auth_context,
     ));
 
     // Derive gossip topic ID
@@ -954,19 +952,18 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     // Parse peer addresses from config if provided
     let peer_addrs = parse_peer_addresses(&config.peers)?;
 
-    // Create auth context if Raft authentication is enabled
-    let auth_context = if config.iroh.enable_raft_auth {
-        info!("Raft authentication enabled - using HMAC-SHA256 challenge-response");
-        Some(AuthContext::new(&config.cookie))
-    } else {
-        None
-    };
+    // Iroh-Native Authentication: No client-side auth needed
+    // Authentication is handled at connection accept time by the server.
+    // The server validates the remote NodeId (verified by QUIC TLS handshake)
+    // against the TrustedPeersRegistry populated from Raft membership.
+    if config.iroh.enable_raft_auth {
+        info!("Raft authentication enabled - using Iroh-native NodeId verification");
+    }
 
-    // Create network factory
+    // Create network factory (no auth context needed - server handles auth)
     let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
         iroh_manager.clone(),
         peer_addrs,
-        auth_context,
     ));
 
     // Derive gossip topic ID - always computed for cluster ticket generation,
@@ -1048,6 +1045,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
     };
 
     // Create Raft config with custom timeouts from NodeConfig
+    // Tiger Style: Explicit snapshot timeout prevents indefinite hang during large transfers
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
         heartbeat_interval: config.heartbeat_interval_ms,
@@ -1057,6 +1055,7 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
         max_in_snapshot_log_to_keep: 100,
         enable_tick: true, // Ensure automatic elections are enabled
+        install_snapshot_timeout: crate::raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
         ..RaftConfig::default()
     });
 

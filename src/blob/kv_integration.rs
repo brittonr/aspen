@@ -125,13 +125,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
 
     /// Read a key from the underlying store, used for checking existing values.
     async fn read_raw(&self, key: &str) -> Option<String> {
-        match self
-            .kv
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await
-        {
+        match self.kv.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => result.kv.map(|kv| kv.value),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(_) => None,

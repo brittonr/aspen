@@ -1030,13 +1030,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Read and deserialize JSON from a key.
     async fn read_json<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 if value_str.is_empty() {

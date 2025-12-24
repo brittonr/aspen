@@ -36,6 +36,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
@@ -46,9 +47,9 @@ use tracing::{error, info, instrument, warn};
 use crate::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, ClusterState,
     ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore,
-    KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult,
-    ScanRequest, ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest,
-    SqlQueryResult, WriteRequest, WriteResult, sql_validation::validate_sql_query,
+    KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadConsistency, ReadRequest,
+    ReadResult, ScanRequest, ScanResult, SqlConsistency, SqlQueryError, SqlQueryExecutor,
+    SqlQueryRequest, SqlQueryResult, WriteRequest, WriteResult, sql_validation::validate_sql_query,
     validate_sql_request, validate_write_command,
 };
 use crate::raft::StateMachineVariant;
@@ -79,6 +80,12 @@ pub struct RaftNode {
 
     /// Semaphore to limit concurrent operations.
     semaphore: Arc<Semaphore>,
+
+    /// Cached SQL executor for Redb state machines.
+    ///
+    /// Lazily initialized on first SQL query to avoid startup overhead.
+    /// Caches the DataFusion SessionContext for ~400µs savings per query.
+    sql_executor: OnceLock<crate::sql::RedbSqlExecutor>,
 }
 
 impl RaftNode {
@@ -94,6 +101,7 @@ impl RaftNode {
             state_machine,
             initialized: AtomicBool::new(false),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
+            sql_executor: OnceLock::new(),
         }
     }
 
@@ -236,7 +244,16 @@ impl ClusterController for RaftNode {
         }
 
         info!("calling raft.initialize() with {} nodes", nodes.len());
-        self.raft.initialize(nodes).await.map_err(|err| {
+        // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
+        tokio::time::timeout(
+            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
+            self.raft.initialize(nodes),
+        )
+        .await
+        .map_err(|_| ControlPlaneError::Timeout {
+            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+        })?
+        .map_err(|err| {
             error!("raft.initialize() failed: {:?}", err);
             ControlPlaneError::Failed {
                 reason: err.to_string(),
@@ -282,12 +299,18 @@ impl ClusterController for RaftNode {
             "adding learner with Iroh address"
         );
 
-        self.raft
-            .add_learner(learner.id.into(), node, true)
-            .await
-            .map_err(|err| ControlPlaneError::Failed {
-                reason: err.to_string(),
-            })?;
+        // Tiger Style: Explicit timeout prevents indefinite hang if leader unavailable
+        tokio::time::timeout(
+            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
+            self.raft.add_learner(learner.id.into(), node, true),
+        )
+        .await
+        .map_err(|_| ControlPlaneError::Timeout {
+            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+        })?
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
 
         Ok(self.build_cluster_state())
     }
@@ -316,12 +339,18 @@ impl ClusterController for RaftNode {
         let members: std::collections::BTreeSet<NodeId> =
             request.members.iter().map(|&id| id.into()).collect();
 
-        self.raft
-            .change_membership(members, false)
-            .await
-            .map_err(|err| ControlPlaneError::Failed {
-                reason: err.to_string(),
-            })?;
+        // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
+        tokio::time::timeout(
+            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
+            self.raft.change_membership(members, false),
+        )
+        .await
+        .map_err(|_| ControlPlaneError::Timeout {
+            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+        })?
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
+        })?;
 
         Ok(self.build_cluster_state())
     }
@@ -668,38 +697,89 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
-        // Enforce linearizable reads via ReadIndex protocol.
-        //
-        // ReadIndex works by:
-        // 1. Leader records its current commit index
-        // 2. Leader confirms it's still leader via heartbeat quorum
-        // 3. await_ready() waits for our state machine to catch up to that commit index
-        //
-        // This guarantees linearizability because any read after await_ready()
-        // sees all writes committed before get_read_linearizer() was called.
-        //
-        // Note: We refresh leader_hint after errors since leadership may have changed.
-        let linearizer = self
-            .raft
-            .get_read_linearizer(ReadPolicy::ReadIndex)
-            .await
-            .map_err(|err| {
-                // Refresh leader hint on error - leadership may have changed
-                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                KeyValueStoreError::NotLeader {
-                    leader: leader_hint,
-                    reason: err.to_string(),
-                }
-            })?;
+        // Apply consistency level based on request
+        match request.consistency {
+            ReadConsistency::Linearizable => {
+                // ReadIndex: Strongest consistency via quorum confirmation
+                //
+                // ReadIndex works by:
+                // 1. Leader records its current commit index
+                // 2. Leader confirms it's still leader via heartbeat quorum
+                // 3. await_ready() waits for our state machine to catch up to that commit index
+                //
+                // This guarantees linearizability because any read after await_ready()
+                // sees all writes committed before get_read_linearizer() was called.
+                let linearizer = self
+                    .raft
+                    .get_read_linearizer(ReadPolicy::ReadIndex)
+                    .await
+                    .map_err(|err| {
+                        let leader_hint =
+                            self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                        KeyValueStoreError::NotLeader {
+                            leader: leader_hint,
+                            reason: err.to_string(),
+                        }
+                    })?;
 
-        linearizer.await_ready(&self.raft).await.map_err(|err| {
-            // Refresh leader hint on error - leadership may have changed during await
-            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-            KeyValueStoreError::NotLeader {
-                leader: leader_hint,
-                reason: err.to_string(),
+                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+                tokio::time::timeout(
+                    crate::raft::constants::READ_INDEX_TIMEOUT,
+                    linearizer.await_ready(&self.raft),
+                )
+                .await
+                .map_err(|_| KeyValueStoreError::Timeout {
+                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                })?
+                .map_err(|err| {
+                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                    KeyValueStoreError::NotLeader {
+                        leader: leader_hint,
+                        reason: err.to_string(),
+                    }
+                })?;
             }
-        })?;
+            ReadConsistency::Lease => {
+                // LeaseRead: Lower latency via leader lease (no quorum confirmation)
+                //
+                // Uses the leader's lease to serve reads without contacting followers.
+                // Safe as long as clock drift is less than the lease duration.
+                // Falls back to ReadIndex if the lease has expired.
+                let linearizer = self
+                    .raft
+                    .get_read_linearizer(ReadPolicy::LeaseRead)
+                    .await
+                    .map_err(|err| {
+                        let leader_hint =
+                            self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                        KeyValueStoreError::NotLeader {
+                            leader: leader_hint,
+                            reason: err.to_string(),
+                        }
+                    })?;
+
+                // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+                tokio::time::timeout(
+                    crate::raft::constants::READ_INDEX_TIMEOUT,
+                    linearizer.await_ready(&self.raft),
+                )
+                .await
+                .map_err(|_| KeyValueStoreError::Timeout {
+                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                })?
+                .map_err(|err| {
+                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                    KeyValueStoreError::NotLeader {
+                        leader: leader_hint,
+                        reason: err.to_string(),
+                    }
+                })?;
+            }
+            ReadConsistency::Stale => {
+                // Stale: Read directly from local state machine without consistency checks
+                // WARNING: May return uncommitted or rolled-back data
+            }
+        }
 
         // Read directly from state machine (linearizability guaranteed by ReadIndex above)
         match &self.state_machine {
@@ -802,7 +882,16 @@ impl KeyValueStore for RaftNode {
                 }
             })?;
 
-        linearizer.await_ready(&self.raft).await.map_err(|err| {
+        // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+        tokio::time::timeout(
+            crate::raft::constants::READ_INDEX_TIMEOUT,
+            linearizer.await_ready(&self.raft),
+        )
+        .await
+        .map_err(|_| KeyValueStoreError::Timeout {
+            duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+        })?
+        .map_err(|err| {
             let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
             KeyValueStoreError::NotLeader {
                 leader: leader_hint,
@@ -957,7 +1046,16 @@ impl SqlQueryExecutor for RaftNode {
                     }
                 })?;
 
-            linearizer.await_ready(&self.raft).await.map_err(|_err| {
+            // Tiger Style: Explicit timeout prevents indefinite hang during network partition
+            tokio::time::timeout(
+                crate::raft::constants::READ_INDEX_TIMEOUT,
+                linearizer.await_ready(&self.raft),
+            )
+            .await
+            .map_err(|_| SqlQueryError::Timeout {
+                duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|_err| {
                 let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
                 SqlQueryError::NotLeader {
                     leader: leader_hint,
@@ -984,7 +1082,10 @@ impl SqlQueryExecutor for RaftNode {
             }
             StateMachineVariant::Redb(sm) => {
                 // Execute SQL on Redb state machine via DataFusion
-                let executor = crate::sql::RedbSqlExecutor::new(sm.db().clone());
+                // Use cached executor for ~400µs savings per query
+                let executor = self
+                    .sql_executor
+                    .get_or_init(|| crate::sql::RedbSqlExecutor::new(sm.db().clone()));
                 executor
                     .execute(
                         &request.query,

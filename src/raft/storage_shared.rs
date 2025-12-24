@@ -97,7 +97,8 @@ const INTEGRITY_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new(
 
 // State machine tables
 /// Key-value data: key = user key bytes, value = serialized KvEntry
-const SM_KV_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_kv");
+/// Public for SQL executor fast path access.
+pub const SM_KV_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_kv");
 
 /// Lease data: key = lease_id (u64), value = serialized LeaseEntry
 const SM_LEASES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("sm_leases");

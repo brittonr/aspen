@@ -12,6 +12,13 @@
 //! - Lazy connection: Connections created on first use, not eagerly
 //! - Idle cleanup: Unused connections removed after timeout
 //!
+//! # Iroh-Native Authentication
+//!
+//! Authentication is handled by Iroh at the QUIC TLS layer:
+//! - NodeId is cryptographically verified during connection establishment
+//! - No per-stream authentication handshake is needed
+//! - Server validates NodeId against trusted peers registry at accept time
+//!
 //! # Tiger Style
 //!
 //! - Bounded resources: MAX_PEERS limits pool size, MAX_STREAMS_PER_CONNECTION per connection
@@ -53,9 +60,6 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
 use crate::cluster::IrohEndpointManager;
-use crate::raft::auth::{
-    AUTH_HANDSHAKE_TIMEOUT, AuthChallenge, AuthContext, AuthResult, MAX_AUTH_MESSAGE_SIZE,
-};
 use crate::raft::constants::{
     IROH_CONNECT_TIMEOUT, IROH_STREAM_OPEN_TIMEOUT, MAX_PEERS, MAX_STREAMS_PER_CONNECTION,
 };
@@ -95,6 +99,9 @@ pub enum ConnectionHealth {
 /// A persistent connection to a peer node.
 ///
 /// Manages a single QUIC connection with health tracking and stream multiplexing.
+/// No per-stream authentication is needed - NodeId is verified at connection time
+/// by Iroh's QUIC TLS layer.
+///
 /// Tiger Style: Bounded stream count, explicit health states.
 pub struct PeerConnection {
     /// The persistent QUIC connection.
@@ -109,10 +116,6 @@ pub struct PeerConnection {
     stream_semaphore: Arc<Semaphore>,
     /// Active stream count (for metrics).
     active_streams: Arc<AtomicU32>,
-    /// Authentication context for Raft RPC (None if auth disabled).
-    auth_context: Option<AuthContext>,
-    /// Our endpoint ID for authentication (32 bytes).
-    our_endpoint_id: [u8; 32],
 }
 
 impl PeerConnection {
@@ -122,14 +125,11 @@ impl PeerConnection {
     ///
     /// * `connection` - The QUIC connection to the peer
     /// * `node_id` - The peer's Raft node ID
-    /// * `auth_context` - Optional auth context for HMAC-SHA256 authentication
-    /// * `our_endpoint_id` - Our Iroh endpoint ID for authentication
-    pub fn new(
-        connection: Connection,
-        node_id: NodeId,
-        auth_context: Option<AuthContext>,
-        our_endpoint_id: [u8; 32],
-    ) -> Self {
+    ///
+    /// # Security Note
+    /// Authentication is handled by Iroh's QUIC TLS layer. The remote NodeId
+    /// is cryptographically verified during connection establishment.
+    pub fn new(connection: Connection, node_id: NodeId) -> Self {
         Self {
             connection,
             node_id,
@@ -137,8 +137,6 @@ impl PeerConnection {
             health: AsyncMutex::new(ConnectionHealth::Healthy),
             stream_semaphore: Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize)),
             active_streams: Arc::new(AtomicU32::new(0)),
-            auth_context,
-            our_endpoint_id,
         }
     }
 
@@ -147,6 +145,8 @@ impl PeerConnection {
     /// Returns a `StreamHandle` that automatically decrements the active stream count
     /// and releases the semaphore permit when dropped. This ensures proper cleanup
     /// even if the caller forgets to close the streams or panics.
+    ///
+    /// No authentication handshake is performed - NodeId was verified at connection time.
     ///
     /// Tiger Style: Enforces stream limit per connection, fails fast on unhealthy connections.
     pub async fn acquire_stream(&self) -> Result<StreamHandle> {
@@ -170,14 +170,13 @@ impl PeerConnection {
 
         // Track active streams
         let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed) + 1;
-        info!(
+        debug!(
             node_id = %self.node_id,
             active_streams = active_count,
             "acquiring stream from connection"
         );
 
         // Open bidirectional stream with timeout
-        info!(node_id = %self.node_id, "opening bi stream with timeout");
         let stream_result =
             tokio::time::timeout(IROH_STREAM_OPEN_TIMEOUT, self.connection.open_bi())
                 .await
@@ -189,7 +188,7 @@ impl PeerConnection {
             Ok(stream) => {
                 use crate::raft::pure::transition_connection_health;
 
-                info!(node_id = %self.node_id, "stream opened successfully");
+                debug!(node_id = %self.node_id, "stream opened successfully");
                 // Update last used timestamp on success
                 *self.last_used.lock().await = Instant::now();
 
@@ -204,27 +203,10 @@ impl PeerConnection {
                 drop(health);
 
                 let active_streams = Arc::clone(&self.active_streams);
-                let (mut send, mut recv) = stream;
-
-                // Perform auth handshake if auth is enabled
-                if let Some(ref auth_ctx) = self.auth_context {
-                    match self
-                        .perform_auth_handshake(&mut send, &mut recv, auth_ctx)
-                        .await
-                    {
-                        Ok(()) => {
-                            debug!(node_id = %self.node_id, "auth handshake successful");
-                        }
-                        Err(err) => {
-                            // Auth failed - clean up and return error
-                            self.active_streams.fetch_sub(1, Ordering::Relaxed);
-                            warn!(node_id = %self.node_id, error = %err, "auth handshake failed");
-                            return Err(err);
-                        }
-                    }
-                }
+                let (send, recv) = stream;
 
                 // Return stream handle with guard that cleans up on drop
+                // NO AUTH HANDSHAKE - NodeId verified at connection time
                 let guard = StreamGuard {
                     _permit: permit,
                     active_streams,
@@ -287,122 +269,6 @@ impl PeerConnection {
     pub fn active_stream_count(&self) -> u32 {
         self.active_streams.load(Ordering::Relaxed)
     }
-
-    /// Perform client-side auth handshake.
-    ///
-    /// Uses length-prefixed framing so auth messages and RPC can share the same stream:
-    /// - Each message is prefixed with a 4-byte big-endian length
-    /// - This allows the server to read auth response without requiring stream finish
-    ///
-    /// Client-side protocol:
-    /// 1. Receive AuthChallenge from server (length-prefixed)
-    /// 2. Compute AuthResponse using our endpoint ID
-    /// 3. Send AuthResponse (length-prefixed)
-    /// 4. Receive AuthResult (length-prefixed)
-    /// 5. Return Ok if authenticated, Err otherwise (stream stays open for RPC)
-    ///
-    /// Tiger Style: Fixed timeouts, bounded message sizes.
-    async fn perform_auth_handshake(
-        &self,
-        send: &mut SendStream,
-        recv: &mut RecvStream,
-        auth_ctx: &AuthContext,
-    ) -> Result<()> {
-        // Step 1: Receive challenge from server (length-prefixed)
-        let challenge_bytes = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-            read_length_prefixed(recv, MAX_AUTH_MESSAGE_SIZE)
-                .await
-                .context("failed to read auth challenge")
-        })
-        .await
-        .context("timeout reading auth challenge")??;
-
-        let challenge: AuthChallenge = postcard::from_bytes(&challenge_bytes)
-            .context("failed to deserialize auth challenge")?;
-
-        debug!(
-            node_id = %self.node_id,
-            protocol_version = challenge.protocol_version,
-            "received auth challenge"
-        );
-
-        // Step 2: Compute response
-        let response = auth_ctx.compute_response(&challenge, &self.our_endpoint_id);
-
-        // Step 3: Send response (length-prefixed, don't finish - RPC follows)
-        let response_bytes =
-            postcard::to_stdvec(&response).context("failed to serialize auth response")?;
-        tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-            write_length_prefixed(send, &response_bytes)
-                .await
-                .context("failed to send auth response")
-        })
-        .await
-        .context("timeout sending auth response")??;
-
-        // Step 4: Receive result (length-prefixed)
-        let result_bytes = tokio::time::timeout(AUTH_HANDSHAKE_TIMEOUT, async {
-            read_length_prefixed(recv, MAX_AUTH_MESSAGE_SIZE)
-                .await
-                .context("failed to read auth result")
-        })
-        .await
-        .context("timeout reading auth result")??;
-
-        let result: AuthResult =
-            postcard::from_bytes(&result_bytes).context("failed to deserialize auth result")?;
-
-        // Step 5: Check result
-        if result.is_ok() {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("authentication failed: {:?}", result))
-        }
-    }
-}
-
-/// Read a length-prefixed message from a stream.
-///
-/// Format: 4-byte big-endian length + payload
-/// Tiger Style: Bounded by max_size to prevent memory exhaustion.
-async fn read_length_prefixed(recv: &mut RecvStream, max_size: usize) -> Result<Vec<u8>> {
-    // Read 4-byte length prefix
-    let mut len_buf = [0u8; 4];
-    recv.read_exact(&mut len_buf)
-        .await
-        .context("failed to read length prefix")?;
-    let len = u32::from_be_bytes(len_buf) as usize;
-
-    // Validate length
-    if len > max_size {
-        return Err(anyhow::anyhow!("message too large: {} > {}", len, max_size));
-    }
-
-    // Read payload
-    let mut buf = vec![0u8; len];
-    recv.read_exact(&mut buf)
-        .await
-        .context("failed to read message payload")?;
-
-    Ok(buf)
-}
-
-/// Write a length-prefixed message to a stream.
-///
-/// Format: 4-byte big-endian length + payload
-async fn write_length_prefixed(send: &mut SendStream, data: &[u8]) -> Result<()> {
-    // Write 4-byte length prefix
-    let len = data.len() as u32;
-    send.write_all(&len.to_be_bytes())
-        .await
-        .context("failed to write length prefix")?;
-
-    // Write payload
-    send.write_all(data)
-        .await
-        .context("failed to write message payload")?;
-
-    Ok(())
 }
 
 /// Handle to an acquired stream pair with automatic cleanup.
@@ -438,6 +304,9 @@ impl Drop for StreamGuard {
 /// Maintains persistent QUIC connections to peer nodes with automatic
 /// reconnection, health tracking, and idle cleanup.
 ///
+/// Authentication is handled by Iroh at the QUIC TLS layer - no per-stream
+/// authentication handshake is needed.
+///
 /// Tiger Style: Bounded pool size (MAX_PEERS), explicit lifecycle management.
 pub struct RaftConnectionPool {
     /// Iroh endpoint manager for creating connections.
@@ -448,8 +317,6 @@ pub struct RaftConnectionPool {
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
     /// Background cleanup task handle.
     cleanup_task: AsyncMutex<Option<JoinHandle<()>>>,
-    /// Authentication context for Raft RPC (None if auth disabled).
-    auth_context: Option<AuthContext>,
 }
 
 impl RaftConnectionPool {
@@ -459,19 +326,19 @@ impl RaftConnectionPool {
     ///
     /// * `endpoint_manager` - Iroh endpoint manager for creating connections
     /// * `failure_detector` - Failure detector for tracking node health
-    /// * `auth_context` - Optional authentication context for Raft RPC. When Some,
-    ///   connections use `RAFT_AUTH_ALPN` and perform HMAC-SHA256 handshake.
+    ///
+    /// # Security Note
+    /// Authentication is handled by Iroh's QUIC TLS layer. Connections use
+    /// `RAFT_AUTH_ALPN` and the server validates NodeId against trusted peers.
     pub fn new(
         endpoint_manager: Arc<IrohEndpointManager>,
         failure_detector: Arc<RwLock<NodeFailureDetector>>,
-        auth_context: Option<AuthContext>,
     ) -> Self {
         Self {
             endpoint_manager,
             connections: Arc::new(RwLock::new(HashMap::new())),
             failure_detector,
             cleanup_task: AsyncMutex::new(None),
-            auth_context,
         }
     }
 
@@ -530,12 +397,8 @@ impl RaftConnectionPool {
             "creating new connection to peer"
         );
 
-        // Select ALPN based on auth setting
-        let alpn = if self.auth_context.is_some() {
-            crate::protocol_handlers::RAFT_AUTH_ALPN
-        } else {
-            crate::protocol_handlers::RAFT_ALPN
-        };
+        // Always use RAFT_AUTH_ALPN - server validates NodeId against trusted peers
+        let alpn = crate::protocol_handlers::RAFT_AUTH_ALPN;
 
         // Attempt connection with retries
         let mut attempts = 0;
@@ -589,15 +452,8 @@ impl RaftConnectionPool {
             }
         };
 
-        // Create peer connection wrapper
-        // PublicKey implements Deref<Target = [u8; 32]>, so we can dereference it
-        let our_endpoint_id: [u8; 32] = *self.endpoint_manager.endpoint().id();
-        let peer_conn = Arc::new(PeerConnection::new(
-            connection,
-            node_id,
-            self.auth_context.clone(),
-            our_endpoint_id,
-        ));
+        // Create peer connection wrapper (no auth context needed)
+        let peer_conn = Arc::new(PeerConnection::new(connection, node_id));
 
         // Store in pool (replace any failed connection)
         {
@@ -621,6 +477,10 @@ impl RaftConnectionPool {
     }
 
     /// Start background cleanup task for idle connections.
+    ///
+    /// Tiger Style: Avoids holding write lock while awaiting async checks.
+    /// Instead, collects connection Arcs under read lock, processes without lock,
+    /// then acquires write lock only for removal.
     pub async fn start_cleanup_task(&self) {
         let pool = Arc::clone(&self.connections);
         let failure_detector = Arc::clone(&self.failure_detector);
@@ -631,11 +491,20 @@ impl RaftConnectionPool {
             loop {
                 interval.tick().await;
 
-                let mut connections = pool.write().await;
-                let mut to_remove = Vec::new();
+                // Phase 1: Collect connection Arcs under read lock (no awaits)
+                // Tiger Style: Minimize lock hold time by avoiding awaits under lock
+                let candidates: Vec<(NodeId, Arc<PeerConnection>)> = {
+                    let connections = pool.read().await;
+                    connections
+                        .iter()
+                        .map(|(id, conn)| (*id, Arc::clone(conn)))
+                        .collect()
+                };
 
-                // Check each connection for idle timeout or failed health
-                for (node_id, conn) in connections.iter() {
+                // Phase 2: Check each connection WITHOUT holding the pool lock
+                // This allows other operations to proceed while we await on each connection
+                let mut to_remove = Vec::new();
+                for (node_id, conn) in candidates {
                     let is_idle = conn.is_idle(CONNECTION_IDLE_TIMEOUT).await;
                     let health = conn.health().await;
                     let active_streams = conn.active_stream_count();
@@ -643,36 +512,37 @@ impl RaftConnectionPool {
                     let should_remove = is_idle || health == ConnectionHealth::Failed;
 
                     if should_remove {
-                        to_remove.push(*node_id);
+                        to_remove.push(node_id);
                         debug!(
                             node_id = %node_id,
                             health = ?health,
                             active_streams,
-                            "removing connection from pool"
+                            "marking connection for removal from pool"
                         );
                     }
                 }
 
-                // Remove idle/failed connections
-                for node_id in to_remove {
-                    if connections.remove(&node_id).is_some() {
-                        // Note: We can't close the connection directly here because it's behind an Arc
-                        // The connection will be closed when all Arc references are dropped
-                        debug!(
-                            %node_id,
-                            "removed connection from pool (will close when all references dropped)"
-                        );
+                // Phase 3: Acquire write lock only for removal (quick operation)
+                if !to_remove.is_empty() {
+                    let mut connections = pool.write().await;
+                    for node_id in to_remove {
+                        if connections.remove(&node_id).is_some() {
+                            // Note: We can't close the connection directly here because it's behind an Arc
+                            // The connection will be closed when all Arc references are dropped
+                            debug!(
+                                %node_id,
+                                "removed connection from pool (will close when all references dropped)"
+                            );
 
-                        // Update failure detector
-                        failure_detector.write().await.update_node_status(
-                            node_id,
-                            ConnectionStatus::Disconnected,
-                            ConnectionStatus::Disconnected,
-                        );
+                            // Update failure detector
+                            failure_detector.write().await.update_node_status(
+                                node_id,
+                                ConnectionStatus::Disconnected,
+                                ConnectionStatus::Disconnected,
+                            );
+                        }
                     }
-                }
 
-                if !connections.is_empty() {
                     debug!(
                         pool_size = connections.len(),
                         "connection pool cleanup complete"

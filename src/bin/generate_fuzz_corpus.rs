@@ -187,10 +187,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
         ),
         (
             "read_request",
-            serde_json::to_string(&ReadRequest {
-                key: "test".to_string(),
-            })
-            .unwrap(),
+            serde_json::to_string(&ReadRequest::new("test".to_string())).unwrap(),
         ),
         (
             "delete_request",

@@ -47,11 +47,15 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use openraft::{Config, Raft};
 
+use crate::api::{SqlConsistency, SqlQueryError, SqlQueryRequest, SqlQueryResult};
+use crate::raft::StateMachineVariant;
 use crate::raft::madsim_network::{
     ByzantineCorruptionMode, ByzantineFailureInjector, FailureInjector, MadsimNetworkFactory,
     MadsimRaftRouter,
 };
+use crate::raft::node::RaftNode;
 use crate::raft::storage::{InMemoryLogStore, InMemoryStateMachine, RedbLogStore, StorageBackend};
+use crate::raft::storage_shared::SharedRedbStorage;
 use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::{AppRequest, AppTypeConfig, NodeId, RaftMemberInfo};
 use crate::simulation::{SimulationArtifact, SimulationArtifactBuilder};
@@ -141,6 +145,23 @@ impl TesterConfig {
     /// ```
     pub fn with_persistent_storage(mut self, storage_dir: impl Into<std::path::PathBuf>) -> Self {
         self.storage_backend = StorageBackend::Sqlite;
+        self.storage_dir = Some(storage_dir.into());
+        self
+    }
+
+    /// Use Redb storage for testing SQL queries with single-fsync architecture.
+    ///
+    /// SharedRedbStorage implements both log and state machine in a single struct,
+    /// enabling single-fsync writes (~2-3ms vs ~9ms with SQLite).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let config = TesterConfig::new(3, "sql_test")
+    ///     .with_redb_storage("/tmp/aspen-sql-test");
+    /// ```
+    pub fn with_redb_storage(mut self, storage_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.storage_backend = StorageBackend::Redb;
         self.storage_dir = Some(storage_dir.into());
         self
     }
@@ -465,6 +486,14 @@ struct NodeStoragePaths {
     state_path: std::path::PathBuf,
 }
 
+/// Storage paths for a Redb node (for future crash recovery testing).
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+struct RedbStoragePath {
+    /// Path to the shared Redb database file.
+    db_path: std::path::PathBuf,
+}
+
 /// Node handle for tracking individual node state.
 enum TestNode {
     /// In-memory node (for testing).
@@ -481,6 +510,18 @@ enum TestNode {
         connected: AtomicBool,
         storage_paths: NodeStoragePaths,
     },
+    /// Redb node (for SQL testing with single-fsync storage).
+    Redb {
+        raft: Raft<AppTypeConfig>,
+        /// RaftNode wrapper for SqlQueryExecutor access.
+        raft_node: Arc<RaftNode>,
+        /// Shared Redb storage (implements both log and state machine).
+        storage: Arc<SharedRedbStorage>,
+        connected: AtomicBool,
+        /// Storage path (for future crash recovery testing).
+        #[allow(dead_code)]
+        storage_path: RedbStoragePath,
+    },
 }
 
 impl TestNode {
@@ -488,6 +529,7 @@ impl TestNode {
         match self {
             TestNode::InMemory { raft, .. } => raft,
             TestNode::Persistent { raft, .. } => raft,
+            TestNode::Redb { raft, .. } => raft,
         }
     }
 
@@ -495,6 +537,7 @@ impl TestNode {
         match self {
             TestNode::InMemory { connected, .. } => connected,
             TestNode::Persistent { connected, .. } => connected,
+            TestNode::Redb { connected, .. } => connected,
         }
     }
 
@@ -502,6 +545,26 @@ impl TestNode {
         match self {
             TestNode::InMemory { .. } => None,
             TestNode::Persistent { storage_paths, .. } => Some(storage_paths),
+            TestNode::Redb { .. } => None,
+        }
+    }
+
+    /// Get Redb storage path (for future crash recovery testing).
+    #[allow(dead_code)]
+    fn redb_storage_path(&self) -> Option<&RedbStoragePath> {
+        match self {
+            TestNode::InMemory { .. } => None,
+            TestNode::Persistent { .. } => None,
+            TestNode::Redb { storage_path, .. } => Some(storage_path),
+        }
+    }
+
+    /// Get the RaftNode wrapper for SQL execution (only available for Redb nodes).
+    fn raft_node(&self) -> Option<&Arc<RaftNode>> {
+        match self {
+            TestNode::InMemory { .. } => None,
+            TestNode::Persistent { .. } => None,
+            TestNode::Redb { raft_node, .. } => Some(raft_node),
         }
     }
 }
@@ -702,28 +765,58 @@ impl AspenRaftTester {
                     }
                 }
                 StorageBackend::Redb => {
-                    // For madsim testing, use InMemory mode for Redb backend
-                    // as we want deterministic simulation without disk I/O
-                    let log_store = InMemoryLogStore::default();
-                    let state_machine = InMemoryStateMachine::new();
+                    // Use real Redb storage for SQL testing with single-fsync architecture.
+                    // SharedRedbStorage implements both RaftLogStorage AND RaftStateMachine.
+                    let storage_dir = config
+                        .storage_dir
+                        .as_ref()
+                        .expect("storage_dir must be set for Redb backend");
+
+                    // Create unique paths for this node
+                    let node_dir = storage_dir.join(format!("node-{}", i));
+                    std::fs::create_dir_all(&node_dir)
+                        .expect("failed to create node storage directory");
+
+                    let db_path = node_dir.join("shared.redb");
+
+                    // SharedRedbStorage is the single-fsync backend - it implements
+                    // BOTH log storage AND state machine in a single struct.
+                    // SharedRedbStorage derives Clone (uses Arc internally for database).
+                    let storage =
+                        SharedRedbStorage::new(&db_path).expect("failed to create Redb storage");
 
                     let network_factory =
                         MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
+                    // Pass clones of SharedRedbStorage for BOTH log_store and state_machine.
+                    // SharedRedbStorage is Clone (internally Arc-wrapped), so this is cheap.
+                    // This is what enables single-fsync writes.
                     let raft = Raft::new(
                         node_id,
                         raft_config.clone(),
                         network_factory,
-                        log_store,
-                        state_machine.clone(),
+                        storage.clone(),
+                        storage.clone(),
                     )
                     .await
                     .expect("failed to create raft instance");
 
-                    TestNode::InMemory {
+                    // Wrap storage in Arc for StateMachineVariant and storage in TestNode
+                    let storage = Arc::new(storage);
+
+                    // Create RaftNode wrapper to expose SqlQueryExecutor trait
+                    let raft_node = Arc::new(RaftNode::new(
+                        node_id,
+                        Arc::new(raft.clone()),
+                        StateMachineVariant::Redb(storage.clone()),
+                    ));
+
+                    TestNode::Redb {
                         raft,
-                        state_machine,
+                        raft_node,
+                        storage,
                         connected: AtomicBool::new(true),
+                        storage_path: RedbStoragePath { db_path },
                     }
                 }
             };
@@ -1283,7 +1376,7 @@ impl AspenRaftTester {
     /// Read a value from the leader's state machine.
     ///
     /// Reads directly from the state machine (bypassing Raft read API).
-    /// Works for both in-memory and persistent (SQLite) nodes.
+    /// Works for in-memory, persistent (SQLite), and Redb nodes.
     pub async fn read(&mut self, key: &str) -> Result<Option<String>> {
         let leader_idx = self
             .check_one_leader()
@@ -1297,8 +1390,146 @@ impl AspenRaftTester {
                 // SqliteStateMachine.get returns Result<Option<String>, SqliteStorageError>
                 state_machine.get(key).await.unwrap_or(None)
             }
+            TestNode::Redb { storage, .. } => {
+                // SharedRedbStorage.get returns Result<Option<KvEntry>, SharedStorageError>
+                storage
+                    .get(key)
+                    .map(|opt| opt.map(|e| e.value))
+                    .unwrap_or(None)
+            }
         };
         Ok(value)
+    }
+
+    // =========================================================================
+    // SQL Query Operations (for Redb nodes)
+    // =========================================================================
+
+    /// Execute a SQL query through the current leader.
+    ///
+    /// Uses Linearizable consistency by default. Only works with Redb nodes.
+    ///
+    /// # Arguments
+    /// * `query` - SQL query string (must be SELECT, not mutation)
+    ///
+    /// # Returns
+    /// * `Ok(SqlQueryResult)` - Query results with columns and rows
+    /// * `Err` - If no leader, node doesn't support SQL, or query fails
+    ///
+    /// # Example
+    /// ```ignore
+    /// let result = t.execute_sql("SELECT * FROM kv WHERE key LIKE 'user:%'").await?;
+    /// assert_eq!(result.row_count, 10);
+    /// ```
+    pub async fn execute_sql(&mut self, query: &str) -> Result<SqlQueryResult> {
+        self.execute_sql_with_consistency(query, SqlConsistency::Linearizable)
+            .await
+    }
+
+    /// Execute a SQL query with specific consistency level.
+    ///
+    /// # Arguments
+    /// * `query` - SQL query string
+    /// * `consistency` - `Linearizable` (uses ReadIndex) or `Stale` (local read)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Linearizable read (through Raft)
+    /// let result = t.execute_sql_with_consistency(
+    ///     "SELECT COUNT(*) FROM kv",
+    ///     SqlConsistency::Linearizable,
+    /// ).await?;
+    ///
+    /// // Stale read (direct from state machine)
+    /// let result = t.execute_sql_with_consistency(
+    ///     "SELECT * FROM kv",
+    ///     SqlConsistency::Stale,
+    /// ).await?;
+    /// ```
+    pub async fn execute_sql_with_consistency(
+        &mut self,
+        query: &str,
+        consistency: SqlConsistency,
+    ) -> Result<SqlQueryResult> {
+        let leader_idx = self
+            .check_one_leader()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("No leader available for SQL query"))?;
+
+        self.execute_sql_on_node(leader_idx, query, consistency)
+            .await
+    }
+
+    /// Execute a SQL query on a specific node.
+    ///
+    /// Useful for testing stale reads on followers or verifying data replication.
+    ///
+    /// # Arguments
+    /// * `node_idx` - 0-based index of the node to query
+    /// * `query` - SQL query string
+    /// * `consistency` - `Linearizable` or `Stale`
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Query follower with stale consistency
+    /// let result = t.execute_sql_on_node(1, "SELECT * FROM kv", SqlConsistency::Stale).await?;
+    /// ```
+    pub async fn execute_sql_on_node(
+        &mut self,
+        node_idx: usize,
+        query: &str,
+        consistency: SqlConsistency,
+    ) -> Result<SqlQueryResult> {
+        assert!(node_idx < self.nodes.len(), "Invalid node index");
+
+        let raft_node = self.nodes[node_idx].raft_node().ok_or_else(|| {
+            anyhow::anyhow!("SQL not supported on this node type (use Redb backend)")
+        })?;
+
+        let request = SqlQueryRequest {
+            query: query.to_string(),
+            params: vec![],
+            consistency,
+            limit: None,
+            timeout_ms: Some(10_000), // 10 second timeout for tests
+        };
+
+        use crate::api::SqlQueryExecutor;
+        let result = raft_node.execute_sql(request).await.map_err(|e| match e {
+            SqlQueryError::NotLeader { leader } => {
+                anyhow::anyhow!("Not leader, leader hint: {:?}", leader)
+            }
+            SqlQueryError::NotSupported { backend } => {
+                anyhow::anyhow!("SQL not supported on {} backend", backend)
+            }
+            SqlQueryError::SyntaxError { message } => {
+                anyhow::anyhow!("SQL syntax error: {}", message)
+            }
+            SqlQueryError::ExecutionFailed { reason } => {
+                anyhow::anyhow!("SQL execution failed: {}", reason)
+            }
+            SqlQueryError::Timeout { duration_ms } => {
+                anyhow::anyhow!("SQL query timed out after {}ms", duration_ms)
+            }
+            SqlQueryError::QueryNotAllowed { reason } => {
+                anyhow::anyhow!("SQL query not allowed: {}", reason)
+            }
+            SqlQueryError::QueryTooLarge { size, max } => {
+                anyhow::anyhow!("SQL query too large: {} bytes (max {})", size, max)
+            }
+            SqlQueryError::TooManyParams { count, max } => {
+                anyhow::anyhow!("Too many SQL params: {} (max {})", count, max)
+            }
+        })?;
+
+        self.artifact =
+            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!(
+                "sql: query='{}' returned {} rows",
+                query.chars().take(50).collect::<String>(),
+                result.row_count
+            ));
+
+        Ok(result)
     }
 
     // =========================================================================

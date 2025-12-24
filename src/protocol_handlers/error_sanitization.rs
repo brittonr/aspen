@@ -132,6 +132,9 @@ pub fn sanitize_control_error(err: &crate::api::ControlPlaneError) -> String {
         ControlPlaneError::Unsupported { operation, .. } => {
             format!("operation not supported: {}", operation)
         }
+        ControlPlaneError::Timeout { duration_ms } => {
+            format!("operation timed out after {}ms", duration_ms)
+        }
     }
 }
 

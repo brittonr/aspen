@@ -131,6 +131,7 @@ base64 = "0.22"
 # DataFusion SQL engine (Phase 3 of migration plan)
 datafusion = { version = "45", default-features = false, features = ["nested_expressions"] }
 arrow = "54"
+regex = "1.10"
 
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }

@@ -35,8 +35,10 @@
 
 mod common;
 
-use aspen::api::{ReadRequest, WriteCommand, WriteRequest};
-use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use aspen::api::{
+    ReadRequest, SqlConsistency, SqlQueryExecutor, SqlQueryRequest, WriteCommand, WriteRequest,
+};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
 
@@ -122,7 +124,7 @@ fn bench_prod_read_single(c: &mut Criterion) {
             let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
             let key = format!("read-key-{:06}", key_idx);
             let kv = node.kv_store();
-            async move { kv.read(ReadRequest { key }).await.expect("read failed") }
+            async move { kv.read(ReadRequest::new(key)).await.expect("read failed") }
         })
     });
 
@@ -233,7 +235,7 @@ fn bench_prod_read_3node(c: &mut Criterion) {
             let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
             let key = format!("read-key-{:06}", key_idx);
             let kv = leader.kv_store();
-            async move { kv.read(ReadRequest { key }).await.expect("read failed") }
+            async move { kv.read(ReadRequest::new(key)).await.expect("read failed") }
         })
     });
 
@@ -331,7 +333,7 @@ fn bench_redb_read_single(c: &mut Criterion) {
             let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
             let key = format!("read-key-{:06}", key_idx);
             let kv = node.kv_store();
-            async move { kv.read(ReadRequest { key }).await.expect("read failed") }
+            async move { kv.read(ReadRequest::new(key)).await.expect("read failed") }
         })
     });
 
@@ -449,7 +451,7 @@ fn bench_redb_read_3node(c: &mut Criterion) {
             let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 1000;
             let key = format!("read-key-{:06}", key_idx);
             let kv = leader.kv_store();
-            async move { kv.read(ReadRequest { key }).await.expect("read failed") }
+            async move { kv.read(ReadRequest::new(key)).await.expect("read failed") }
         })
     });
 
@@ -463,6 +465,482 @@ fn bench_redb_read_3node(c: &mut Criterion) {
     });
 }
 
+// ====================================================================================
+// 3-Node SQL Benchmarks (DataFusion on Redb via Raft)
+// ====================================================================================
+
+/// Benchmark 3-node SQL SELECT * (full table scan).
+///
+/// This measures SQL query latency through the full Raft stack:
+/// - Query goes through RaftNode.execute_sql()
+/// - Uses ReadIndex for linearizable consistency
+/// - DataFusion executes against Redb storage
+fn bench_sql_select_all_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let nodes = rt.block_on(async {
+        let nodes = common::setup_production_three_node_redb(&temp_dir)
+            .await
+            .expect("setup 3-node redb cluster");
+
+        // Pre-populate with 1000 keys through leader
+        let kv = nodes[0].kv_store();
+        for i in 0..1000 {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("bench-key-{:06}", i),
+                    value: format!("bench-value-{:06}", i),
+                },
+            })
+            .await
+            .expect("populate failed");
+        }
+
+        // Wait for replication
+        let raft1 = nodes[0].raft_node();
+        let metrics = raft1.raft().metrics().borrow().clone();
+        let current_index = metrics.last_log_index.unwrap_or(0);
+        raft1
+            .raft()
+            .wait(Some(std::time::Duration::from_secs(10)))
+            .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+            .await
+            .expect("replication wait");
+
+        nodes
+    });
+
+    let leader = &nodes[0];
+    let mut group = c.benchmark_group("sql_3node");
+    group.throughput(Throughput::Elements(1000));
+
+    group.bench_function("select_all_1000", |b| {
+        b.to_async(&rt).iter(|| {
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query: "SELECT * FROM kv".to_string(),
+                        params: vec![],
+                        consistency: SqlConsistency::Linearizable,
+                        limit: Some(10000),
+                        timeout_ms: Some(30000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup all nodes
+    rt.block_on(async {
+        for node in nodes {
+            let _ = node.shutdown().await;
+        }
+    });
+}
+
+/// Benchmark 3-node SQL point lookup (WHERE key = 'exact').
+///
+/// Tests filter pushdown performance for exact key matching.
+fn bench_sql_point_lookup_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let nodes = rt.block_on(async {
+        let nodes = common::setup_production_three_node_redb(&temp_dir)
+            .await
+            .expect("setup 3-node redb cluster");
+
+        // Pre-populate with 10000 keys
+        let kv = nodes[0].kv_store();
+        for i in 0..10000 {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("key-{:08}", i),
+                    value: format!("value-{:08}", i),
+                },
+            })
+            .await
+            .expect("populate failed");
+        }
+
+        // Wait for replication
+        let raft1 = nodes[0].raft_node();
+        let metrics = raft1.raft().metrics().borrow().clone();
+        let current_index = metrics.last_log_index.unwrap_or(0);
+        raft1
+            .raft()
+            .wait(Some(std::time::Duration::from_secs(30)))
+            .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+            .await
+            .expect("replication wait");
+
+        nodes
+    });
+
+    let leader = &nodes[0];
+    let counter = AtomicU64::new(0);
+    let mut group = c.benchmark_group("sql_3node");
+    group.throughput(Throughput::Elements(1));
+
+    group.bench_function("point_lookup", |b| {
+        b.to_async(&rt).iter(|| {
+            let key_idx = counter.fetch_add(1, Ordering::Relaxed) % 10000;
+            let key = format!("key-{:08}", key_idx);
+            let query = format!("SELECT * FROM kv WHERE key = '{}'", key);
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query,
+                        params: vec![],
+                        consistency: SqlConsistency::Linearizable,
+                        limit: Some(1),
+                        timeout_ms: Some(5000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        for node in nodes {
+            let _ = node.shutdown().await;
+        }
+    });
+}
+
+/// Benchmark 3-node SQL prefix scan (WHERE key LIKE 'prefix:%').
+///
+/// Tests filter pushdown for prefix matching.
+fn bench_sql_prefix_scan_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let nodes = rt.block_on(async {
+        let nodes = common::setup_production_three_node_redb(&temp_dir)
+            .await
+            .expect("setup 3-node redb cluster");
+
+        // Pre-populate: 10 prefixes x 100 keys = 1000 total
+        let kv = nodes[0].kv_store();
+        for prefix in 0..10 {
+            for key_id in 0..100 {
+                kv.write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: format!("prefix_{:02}:key_{:04}", prefix, key_id),
+                        value: format!("value_{}_{}", prefix, key_id),
+                    },
+                })
+                .await
+                .expect("populate failed");
+            }
+        }
+
+        // Wait for replication
+        let raft1 = nodes[0].raft_node();
+        let metrics = raft1.raft().metrics().borrow().clone();
+        let current_index = metrics.last_log_index.unwrap_or(0);
+        raft1
+            .raft()
+            .wait(Some(std::time::Duration::from_secs(10)))
+            .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+            .await
+            .expect("replication wait");
+
+        nodes
+    });
+
+    let leader = &nodes[0];
+    let mut group = c.benchmark_group("sql_3node");
+    group.throughput(Throughput::Elements(100)); // Each prefix has 100 keys
+
+    group.bench_function("prefix_scan_100", |b| {
+        b.to_async(&rt).iter(|| {
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query: "SELECT * FROM kv WHERE key LIKE 'prefix_05:%'".to_string(),
+                        params: vec![],
+                        consistency: SqlConsistency::Linearizable,
+                        limit: Some(1000),
+                        timeout_ms: Some(30000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        for node in nodes {
+            let _ = node.shutdown().await;
+        }
+    });
+}
+
+/// Benchmark 3-node SQL COUNT(*) aggregation.
+///
+/// Tests aggregation performance on replicated data.
+fn bench_sql_count_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let nodes = rt.block_on(async {
+        let nodes = common::setup_production_three_node_redb(&temp_dir)
+            .await
+            .expect("setup 3-node redb cluster");
+
+        // Pre-populate with 5000 keys
+        let kv = nodes[0].kv_store();
+        for i in 0..5000 {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("count-key-{:06}", i),
+                    value: format!("count-value-{:06}", i),
+                },
+            })
+            .await
+            .expect("populate failed");
+        }
+
+        // Wait for replication
+        let raft1 = nodes[0].raft_node();
+        let metrics = raft1.raft().metrics().borrow().clone();
+        let current_index = metrics.last_log_index.unwrap_or(0);
+        raft1
+            .raft()
+            .wait(Some(std::time::Duration::from_secs(20)))
+            .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+            .await
+            .expect("replication wait");
+
+        nodes
+    });
+
+    let leader = &nodes[0];
+    let mut group = c.benchmark_group("sql_3node");
+    group.throughput(Throughput::Elements(5000));
+
+    group.bench_function("count_5000", |b| {
+        b.to_async(&rt).iter(|| {
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query: "SELECT COUNT(*) FROM kv".to_string(),
+                        params: vec![],
+                        consistency: SqlConsistency::Linearizable,
+                        limit: Some(1),
+                        timeout_ms: Some(30000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        for node in nodes {
+            let _ = node.shutdown().await;
+        }
+    });
+}
+
+/// Benchmark 3-node SQL with Stale consistency (local read, no ReadIndex).
+///
+/// Compares Linearizable vs Stale consistency overhead.
+fn bench_sql_stale_vs_linearizable_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let temp_dir = TempDir::new().expect("temp dir");
+    let nodes = rt.block_on(async {
+        let nodes = common::setup_production_three_node_redb(&temp_dir)
+            .await
+            .expect("setup 3-node redb cluster");
+
+        // Pre-populate with 1000 keys
+        let kv = nodes[0].kv_store();
+        for i in 0..1000 {
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: format!("consistency-key-{:06}", i),
+                    value: format!("consistency-value-{:06}", i),
+                },
+            })
+            .await
+            .expect("populate failed");
+        }
+
+        // Wait for replication
+        let raft1 = nodes[0].raft_node();
+        let metrics = raft1.raft().metrics().borrow().clone();
+        let current_index = metrics.last_log_index.unwrap_or(0);
+        raft1
+            .raft()
+            .wait(Some(std::time::Duration::from_secs(10)))
+            .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+            .await
+            .expect("replication wait");
+
+        nodes
+    });
+
+    let leader = &nodes[0];
+    let mut group = c.benchmark_group("sql_3node_consistency");
+    group.throughput(Throughput::Elements(1000));
+
+    group.bench_function("linearizable", |b| {
+        b.to_async(&rt).iter(|| {
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query: "SELECT * FROM kv".to_string(),
+                        params: vec![],
+                        consistency: SqlConsistency::Linearizable,
+                        limit: Some(10000),
+                        timeout_ms: Some(30000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.bench_function("stale", |b| {
+        b.to_async(&rt).iter(|| {
+            let raft_node = leader.raft_node();
+            async move {
+                raft_node
+                    .execute_sql(SqlQueryRequest {
+                        query: "SELECT * FROM kv".to_string(),
+                        params: vec![],
+                        consistency: SqlConsistency::Stale,
+                        limit: Some(10000),
+                        timeout_ms: Some(30000),
+                    })
+                    .await
+                    .expect("sql query failed")
+            }
+        })
+    });
+
+    group.finish();
+
+    // Cleanup
+    rt.block_on(async {
+        for node in nodes {
+            let _ = node.shutdown().await;
+        }
+    });
+}
+
+/// Benchmark SQL query with varying data sizes.
+fn bench_sql_data_sizes_3node(c: &mut Criterion) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+
+    let mut group = c.benchmark_group("sql_3node_sizes");
+
+    for size in [100, 500, 1000, 2000] {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let nodes = rt.block_on(async {
+            let nodes = common::setup_production_three_node_redb(&temp_dir)
+                .await
+                .expect("setup 3-node redb cluster");
+
+            // Pre-populate with `size` keys
+            let kv = nodes[0].kv_store();
+            for i in 0..size {
+                kv.write(WriteRequest {
+                    command: WriteCommand::Set {
+                        key: format!("size-key-{:06}", i),
+                        value: format!("size-value-{:06}", i),
+                    },
+                })
+                .await
+                .expect("populate failed");
+            }
+
+            // Wait for replication
+            let raft1 = nodes[0].raft_node();
+            let metrics = raft1.raft().metrics().borrow().clone();
+            let current_index = metrics.last_log_index.unwrap_or(0);
+            raft1
+                .raft()
+                .wait(Some(std::time::Duration::from_secs(15)))
+                .applied_index_at_least(Some(current_index), "pre-populated data replicated")
+                .await
+                .expect("replication wait");
+
+            nodes
+        });
+
+        let leader = &nodes[0];
+        group.throughput(Throughput::Elements(size as u64));
+
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, _| {
+            b.to_async(&rt).iter(|| {
+                let raft_node = leader.raft_node();
+                async move {
+                    raft_node
+                        .execute_sql(SqlQueryRequest {
+                            query: "SELECT * FROM kv".to_string(),
+                            params: vec![],
+                            consistency: SqlConsistency::Linearizable,
+                            limit: Some(10000),
+                            timeout_ms: Some(30000),
+                        })
+                        .await
+                        .expect("sql query failed")
+                }
+            })
+        });
+
+        // Cleanup nodes for this iteration
+        rt.block_on(async {
+            for node in nodes {
+                let _ = node.shutdown().await;
+            }
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     production_benches,
     bench_prod_write_single,
@@ -474,4 +952,15 @@ criterion_group!(
     bench_redb_write_3node,
     bench_redb_read_3node,
 );
-criterion_main!(production_benches);
+
+criterion_group!(
+    sql_3node_benches,
+    bench_sql_select_all_3node,
+    bench_sql_point_lookup_3node,
+    bench_sql_prefix_scan_3node,
+    bench_sql_count_3node,
+    bench_sql_stale_vs_linearizable_3node,
+    bench_sql_data_sizes_3node,
+);
+
+criterion_main!(production_benches, sql_3node_benches);

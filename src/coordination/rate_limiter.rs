@@ -200,13 +200,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
     /// Read the current bucket state from storage.
     async fn read_state(&self) -> Result<BucketState, CoordinationError> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 let state: BucketState =
@@ -240,13 +234,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         let new_json = serde_json::to_string(new)?;
 
         // Handle initial state (key doesn't exist yet)
-        let expected = match self
-            .store
-            .read(ReadRequest {
-                key: self.key.clone(),
-            })
-            .await
-        {
+        let expected = match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(_) => Some(current_json),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => return Err(CoordinationError::Storage { source: e }),

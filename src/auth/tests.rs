@@ -749,7 +749,7 @@ async fn test_revocation_key_format() {
     // Verify the key is stored with correct format
     let expected_key = format!("_system:auth:revoked:{}", hex::encode(hash));
     let result = kv
-        .read(crate::api::ReadRequest { key: expected_key })
+        .read(crate::api::ReadRequest::new(expected_key))
         .await
         .expect("should read");
 

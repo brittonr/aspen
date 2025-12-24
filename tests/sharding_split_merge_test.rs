@@ -64,7 +64,7 @@ async fn test_basic_sharded_write_read() {
         store.write(write_req).await.expect("write should succeed");
 
         // Verify read
-        let read_req = ReadRequest { key: key.clone() };
+        let read_req = ReadRequest::new(key.clone());
         let result = store.read(read_req).await.expect("read should succeed");
         assert!(result.kv.is_some());
         assert_eq!(
@@ -126,7 +126,7 @@ async fn test_merge_creates_tombstone_with_successor() {
     store.remove_shard(1).await;
 
     // Now reading from a key that routes to shard 1 should return ShardMoved
-    let read_req = ReadRequest { key: key.clone() };
+    let read_req = ReadRequest::new(key.clone());
     let result = store.read(read_req).await;
 
     match result {
@@ -153,7 +153,7 @@ async fn test_shard_moved_error_contains_key() {
     let key = find_key_for_shard(&store, 2);
 
     // Try to read from removed shard
-    let read_req = ReadRequest { key: key.clone() };
+    let read_req = ReadRequest::new(key.clone());
     let result = store.read(read_req).await;
 
     match result {
@@ -308,7 +308,7 @@ async fn test_topology_version_in_shard_moved_error() {
     // Find a key that routes to shard 1 (tombstoned)
     let key = find_key_for_shard(&store, 1);
 
-    let read_req = ReadRequest { key };
+    let read_req = ReadRequest::new(key);
     let result = store.read(read_req).await;
 
     match result {
@@ -362,7 +362,7 @@ async fn test_multi_key_write_same_shard() {
 
     // Verify all keys were written
     for (i, key) in keys.iter().enumerate() {
-        let read_req = ReadRequest { key: key.clone() };
+        let read_req = ReadRequest::new(key.clone());
         let result = store.read(read_req).await.expect("read should succeed");
         assert!(result.kv.is_some());
         assert_eq!(result.kv.unwrap().value, format!("value_{}", i));

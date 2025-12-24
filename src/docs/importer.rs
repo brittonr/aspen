@@ -312,9 +312,7 @@ impl DocsImporter {
         // Read existing origin to check priority
         let existing_origin = match self
             .kv_store
-            .read(ReadRequest {
-                key: origin_key.clone(),
-            })
+            .read(ReadRequest::new(origin_key.clone()))
             .await
         {
             Ok(result) => {
@@ -404,7 +402,7 @@ impl DocsImporter {
     pub async fn get_key_origin(&self, key: &str) -> Option<KeyOrigin> {
         let origin_key = KeyOrigin::storage_key(key);
 
-        match self.kv_store.read(ReadRequest { key: origin_key }).await {
+        match self.kv_store.read(ReadRequest::new(origin_key)).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value)?;
                 KeyOrigin::from_bytes(value.as_bytes())
@@ -444,12 +442,7 @@ mod tests {
 
     /// Helper to read a value from the test KV store
     async fn read_value(kv_store: &Arc<DeterministicKeyValueStore>, key: &str) -> Option<String> {
-        match kv_store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await
-        {
+        match kv_store.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => result.kv.map(|kv| kv.value),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => panic!("unexpected error: {}", e),

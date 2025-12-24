@@ -39,7 +39,7 @@
 //!     }).await?;
 //!
 //!     // Read it back
-//!     let result = store.read(ReadRequest { key: "user:123".into() }).await?;
+//!     let result = store.read(ReadRequest::new("user:123".into())).await?;
 //!     assert_eq!(result.value, "Alice");
 //!     Ok(())
 //! }
@@ -200,6 +200,16 @@ pub enum ControlPlaneError {
         backend: String,
         /// Name of the unsupported operation.
         operation: String,
+    },
+
+    /// The operation timed out.
+    ///
+    /// Tiger Style: Explicit timeout prevents indefinite hangs during
+    /// membership operations when leader is unavailable or quorum lost.
+    #[error("operation timed out after {duration_ms}ms")]
+    Timeout {
+        /// Duration in milliseconds before timeout.
+        duration_ms: u64,
     },
 }
 
@@ -850,11 +860,86 @@ pub struct WriteResult {
     pub conflict_actual_version: Option<i64>,
 }
 
+/// Consistency level for read operations.
+///
+/// Controls the trade-off between read latency and consistency guarantees.
+/// See OpenRaft's `ReadPolicy` for implementation details.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ReadConsistency {
+    /// Strong consistency via ReadIndex protocol (default).
+    ///
+    /// Guarantees linearizable reads by confirming leadership with a quorum
+    /// before serving the read. Higher latency (~50-100µs overhead) but
+    /// guaranteed to see all committed writes.
+    ///
+    /// Use when: Correctness is critical (financial transactions, counters).
+    #[default]
+    Linearizable,
+
+    /// Lease-based reads for lower latency.
+    ///
+    /// Uses the leader lease to serve reads without quorum confirmation.
+    /// Only works when the leader has a valid lease (typically within
+    /// the heartbeat interval). Falls back to ReadIndex if lease expired.
+    ///
+    /// Latency: ~1-5µs (vs ~50-100µs for Linearizable)
+    ///
+    /// Safety: Requires clock synchronization (drift < lease duration).
+    /// Safe for LAN deployments and same-datacenter clusters.
+    ///
+    /// Use when: Low latency is critical and brief staleness is acceptable.
+    Lease,
+
+    /// Local read without any consistency checks.
+    ///
+    /// Reads directly from the local state machine without confirming
+    /// leadership or waiting for log application. May return stale data.
+    ///
+    /// Latency: ~1µs (just a local lookup)
+    ///
+    /// WARNING: May read uncommitted or rolled-back data. Only use for
+    /// monitoring, debugging, or when eventual consistency is acceptable.
+    ///
+    /// Use when: Maximum performance needed, staleness is acceptable.
+    Stale,
+}
+
 /// Request to read a single key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReadRequest {
     /// The key to read.
     pub key: String,
+    /// Consistency level for the read operation.
+    ///
+    /// Defaults to `Linearizable` for strong consistency.
+    #[serde(default)]
+    pub consistency: ReadConsistency,
+}
+
+impl ReadRequest {
+    /// Create a new read request with default (Linearizable) consistency.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            consistency: ReadConsistency::default(),
+        }
+    }
+
+    /// Create a read request with lease-based consistency (lower latency).
+    pub fn with_lease(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            consistency: ReadConsistency::Lease,
+        }
+    }
+
+    /// Create a stale read request (local read, no consistency guarantees).
+    pub fn stale(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            consistency: ReadConsistency::Stale,
+        }
+    }
 }
 
 /// Response from a read operation.

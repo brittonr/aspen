@@ -300,6 +300,8 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
     let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
         .with_storage(StorageBackend::Sqlite)
         .with_cookie("bench-cluster")
+        .with_gossip(false) // Disable gossip to avoid hanging on subscription
+        .with_mdns(false) // Disable mDNS for faster startup
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -342,6 +344,8 @@ pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Nod
     let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
         .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
+        .with_gossip(false) // Disable gossip to avoid hanging on subscription
+        .with_mdns(false) // Disable mDNS for faster startup
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -383,6 +387,8 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     let mut node1 = NodeBuilder::new(aspen::node::NodeId(1), temp_dir.path().join("node-1"))
         .with_storage(StorageBackend::Sqlite)
         .with_cookie("bench-cluster")
+        .with_gossip(false) // Disable gossip to avoid hanging on subscription
+        .with_mdns(false) // Disable mDNS for faster startup
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -393,6 +399,8 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
         .with_storage(StorageBackend::Sqlite)
         .with_cookie("bench-cluster")
+        .with_gossip(false)
+        .with_mdns(false)
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -403,6 +411,8 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
         .with_storage(StorageBackend::Sqlite)
         .with_cookie("bench-cluster")
+        .with_gossip(false)
+        .with_mdns(false)
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -485,6 +495,8 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     let mut node1 = NodeBuilder::new(aspen::node::NodeId(1), temp_dir.path().join("node-1"))
         .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
+        .with_gossip(false) // Disable gossip to avoid hanging on subscription
+        .with_mdns(false) // Disable mDNS for faster startup
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -495,6 +507,8 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
         .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
+        .with_gossip(false)
+        .with_mdns(false)
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()
@@ -505,6 +519,8 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
         .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
+        .with_gossip(false)
+        .with_mdns(false)
         .with_heartbeat_interval_ms(100)
         .with_election_timeout_ms(300, 600)
         .start()

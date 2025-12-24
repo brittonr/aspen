@@ -653,13 +653,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Read JSON from key.
     async fn read_json<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>> {
-        match self
-            .store
-            .read(ReadRequest {
-                key: key.to_string(),
-            })
-            .await
-        {
+        match self.store.read(ReadRequest::new(key.to_string())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 if value.is_empty() {

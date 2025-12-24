@@ -103,7 +103,7 @@ impl<K: KeyValueStore + Send + Sync> RevocationStore for KeyValueRevocationStore
 
     async fn is_revoked(&self, token_hash: &[u8; 32]) -> Result<bool> {
         let key = format!("{}{}", REVOCATION_PREFIX, hex::encode(token_hash));
-        let result = self.kv.read(ReadRequest { key }).await;
+        let result = self.kv.read(ReadRequest::new(key)).await;
         // Key exists = revoked, key not found = not revoked
         Ok(result.is_ok() && result.unwrap().kv.is_some())
     }
@@ -224,9 +224,7 @@ mod tests {
 
         // Read directly from KV to verify key format
         let result = kv
-            .read(ReadRequest {
-                key: actual_key.clone(),
-            })
+            .read(ReadRequest::new(actual_key.clone()))
             .await
             .expect("should read");
 

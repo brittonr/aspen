@@ -491,25 +491,19 @@ async fn test_batch_write_set_operations() {
 
     // Verify all keys were set
     let r1 = store
-        .read(ReadRequest {
-            key: "key1".to_string(),
-        })
+        .read(ReadRequest::new("key1".to_string()))
         .await
         .unwrap();
     assert_eq!(r1.kv.unwrap().value, "value1");
 
     let r2 = store
-        .read(ReadRequest {
-            key: "key2".to_string(),
-        })
+        .read(ReadRequest::new("key2".to_string()))
         .await
         .unwrap();
     assert_eq!(r2.kv.unwrap().value, "value2");
 
     let r3 = store
-        .read(ReadRequest {
-            key: "key3".to_string(),
-        })
+        .read(ReadRequest::new("key3".to_string()))
         .await
         .unwrap();
     assert_eq!(r3.kv.unwrap().value, "value3");
@@ -550,19 +544,13 @@ async fn test_batch_write_mixed_operations() {
 
     // Verify new key exists
     let r1 = store
-        .read(ReadRequest {
-            key: "new_key".to_string(),
-        })
+        .read(ReadRequest::new("new_key".to_string()))
         .await
         .unwrap();
     assert_eq!(r1.kv.unwrap().value, "new_value");
 
     // Verify deleted key is gone
-    let r2 = store
-        .read(ReadRequest {
-            key: "to_delete".to_string(),
-        })
-        .await;
+    let r2 = store.read(ReadRequest::new("to_delete".to_string())).await;
     assert!(r2.is_err(), "Deleted key should not exist");
 }
 
@@ -607,17 +595,13 @@ async fn test_conditional_batch_success() {
 
     // Verify updates
     let version = store
-        .read(ReadRequest {
-            key: "version".to_string(),
-        })
+        .read(ReadRequest::new("version".to_string()))
         .await
         .unwrap();
     assert_eq!(version.kv.unwrap().value, "2");
 
     let data = store
-        .read(ReadRequest {
-            key: "data".to_string(),
-        })
+        .read(ReadRequest::new("data".to_string()))
         .await
         .unwrap();
     assert_eq!(data.kv.unwrap().value, "updated");
@@ -658,11 +642,7 @@ async fn test_conditional_batch_failure() {
     assert_eq!(result.batch_applied, None);
 
     // Verify data was NOT written
-    let data_result = store
-        .read(ReadRequest {
-            key: "data".to_string(),
-        })
-        .await;
+    let data_result = store.read(ReadRequest::new("data".to_string())).await;
     assert!(
         data_result.is_err(),
         "Data should not be written on failed condition"
@@ -701,9 +681,7 @@ async fn test_conditional_batch_key_exists() {
     assert_eq!(result.conditions_met, Some(true));
 
     let existing = store
-        .read(ReadRequest {
-            key: "existing".to_string(),
-        })
+        .read(ReadRequest::new("existing".to_string()))
         .await
         .unwrap();
     assert_eq!(existing.kv.unwrap().value, "updated");
@@ -730,9 +708,7 @@ async fn test_conditional_batch_key_not_exists() {
     assert_eq!(result.conditions_met, Some(true));
 
     let new_key = store
-        .read(ReadRequest {
-            key: "new_key".to_string(),
-        })
+        .read(ReadRequest::new("new_key".to_string()))
         .await
         .unwrap();
     assert_eq!(new_key.kv.unwrap().value, "created");
@@ -755,9 +731,7 @@ async fn test_conditional_batch_key_not_exists() {
 
     // Value should still be "created"
     let new_key_after = store
-        .read(ReadRequest {
-            key: "new_key".to_string(),
-        })
+        .read(ReadRequest::new("new_key".to_string()))
         .await
         .unwrap();
     assert_eq!(new_key_after.kv.unwrap().value, "created");
@@ -806,9 +780,7 @@ async fn test_conditional_batch_multiple_conditions() {
     assert_eq!(result.conditions_met, Some(true));
 
     let result_val = store
-        .read(ReadRequest {
-            key: "result".to_string(),
-        })
+        .read(ReadRequest::new("result".to_string()))
         .await
         .unwrap();
     assert_eq!(result_val.kv.unwrap().value, "all_conditions_passed");
