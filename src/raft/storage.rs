@@ -1459,16 +1459,15 @@ impl InMemoryStateMachine {
         sm.data.get(key).cloned()
     }
 
-    /// Scan all keys that start with the given prefix.
+    /// Scan all keys that start with the given prefix (async version).
     ///
-    /// Returns a list of full key names. This is a synchronous blocking operation.
+    /// Returns a list of full key names.
     ///
     /// # Arguments
     ///
     /// * `prefix` - Key prefix to match
-    pub fn scan_keys_with_prefix(&self, prefix: &str) -> Vec<String> {
-        // Block on async read - this is a synchronous API for compatibility
-        let sm = futures::executor::block_on(self.state_machine.read());
+    pub async fn scan_keys_with_prefix(&self, prefix: &str) -> Vec<String> {
+        let sm = self.state_machine.read().await;
         sm.data
             .keys()
             .filter(|k| k.starts_with(prefix))
@@ -1478,14 +1477,13 @@ impl InMemoryStateMachine {
 
     /// Scan all key-value pairs that start with the given prefix.
     ///
-    /// Returns a list of (key, value) pairs. This is a synchronous blocking operation.
+    /// Returns a list of (key, value) pairs.
     ///
     /// # Arguments
     ///
     /// * `prefix` - Key prefix to match
-    pub fn scan_kv_with_prefix(&self, prefix: &str) -> Vec<(String, String)> {
-        // Block on async read - this is a synchronous API for compatibility
-        let sm = futures::executor::block_on(self.state_machine.read());
+    pub async fn scan_kv_with_prefix(&self, prefix: &str) -> Vec<(String, String)> {
+        let sm = self.state_machine.read().await;
         sm.data
             .iter()
             .filter(|(k, _)| k.starts_with(prefix))
@@ -2313,17 +2311,17 @@ mod tests {
         assert_eq!(value, None);
     }
 
-    #[test]
-    fn test_inmemory_state_machine_scan_keys_empty() {
+    #[tokio::test]
+    async fn test_inmemory_state_machine_scan_keys_empty() {
         let sm = InMemoryStateMachine::new();
-        let keys = sm.scan_keys_with_prefix("test:");
+        let keys = sm.scan_keys_with_prefix("test:").await;
         assert!(keys.is_empty());
     }
 
-    #[test]
-    fn test_inmemory_state_machine_scan_kv_empty() {
+    #[tokio::test]
+    async fn test_inmemory_state_machine_scan_kv_empty() {
         let sm = InMemoryStateMachine::new();
-        let pairs = sm.scan_kv_with_prefix("test:");
+        let pairs = sm.scan_kv_with_prefix("test:").await;
         assert!(pairs.is_empty());
     }
 

@@ -656,7 +656,10 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
     // Create supervisor for all shards
     let supervisor = Supervisor::new(format!("sharded-node-{}", config.node_id));
 
-    let data_dir = config.data_dir.as_ref().expect("data_dir must be set");
+    let data_dir = config
+        .data_dir
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("data_dir must be set for sharded node bootstrap"))?;
 
     let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
     let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();

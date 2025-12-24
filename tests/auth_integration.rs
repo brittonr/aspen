@@ -446,10 +446,10 @@ async fn test_revoked_token_rejected() {
         .expect("token should authorize before revocation");
 
     // Revoke the token
-    verifier.revoke_token(&token);
+    verifier.revoke_token(&token).unwrap();
 
     // Verify revocation count increased
-    assert_eq!(verifier.revocation_count(), 1);
+    assert_eq!(verifier.revocation_count().unwrap(), 1);
 
     // Token should fail verification after revocation
     let result = verifier.verify(&token, None);
@@ -479,17 +479,17 @@ async fn test_revoked_token_rejected() {
         .expect("should build token2");
 
     let hash = token2.hash();
-    verifier.revoke(hash);
-    assert_eq!(verifier.revocation_count(), 2);
+    verifier.revoke(hash).unwrap();
+    assert_eq!(verifier.revocation_count().unwrap(), 2);
 
     // Check is_revoked helper
-    assert!(verifier.is_revoked(&hash));
-    assert!(verifier.is_revoked(&token.hash()));
+    assert!(verifier.is_revoked(&hash).unwrap());
+    assert!(verifier.is_revoked(&token.hash()).unwrap());
 
     // Clear revocations
-    verifier.clear_revocations();
-    assert_eq!(verifier.revocation_count(), 0);
-    assert!(!verifier.is_revoked(&hash));
+    verifier.clear_revocations().unwrap();
+    assert_eq!(verifier.revocation_count().unwrap(), 0);
+    assert!(!verifier.is_revoked(&hash).unwrap());
 
     // Token should verify again after clearing revocations
     verifier

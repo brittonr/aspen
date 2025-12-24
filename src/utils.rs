@@ -51,7 +51,11 @@ pub fn check_disk_space(path: &Path) -> std::io::Result<DiskSpace> {
     let path_cstr = std::ffi::CString::new(path.as_os_str().as_bytes())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
 
+    // SAFETY: statvfs is a C struct that can be safely zero-initialized.
+    // All fields are primitive types (integers) with no invariants.
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: statvfs() is a POSIX syscall. path_cstr is a valid null-terminated
+    // C string (from CString), and stat is a valid mutable reference to statvfs.
     let result = unsafe { libc::statvfs(path_cstr.as_ptr(), &mut stat) };
 
     if result != 0 {

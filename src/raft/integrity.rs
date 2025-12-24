@@ -341,21 +341,21 @@ impl ChainVerifier {
     /// Spawn the background verification task.
     ///
     /// Returns a `JoinHandle` that can be used to abort the task.
-    /// The task runs indefinitely until cancelled.
+    /// The task runs indefinitely until cancelled, or until a chain
+    /// integrity violation is detected.
     ///
-    /// # Panics
-    ///
-    /// Panics on chain corruption detection (fail-fast behavior).
-    pub fn spawn(self) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            self.run().await;
-        })
+    /// On corruption detection, the task exits with an error logged at FATAL level.
+    /// The caller should monitor the JoinHandle and take appropriate action
+    /// (e.g., shutdown the node for manual inspection).
+    pub fn spawn(self) -> tokio::task::JoinHandle<Result<(), crate::raft::storage::StorageError>> {
+        tokio::spawn(async move { self.run().await })
     }
 
     /// Run the verification loop.
     ///
     /// This is the main entry point called by `spawn()`.
-    async fn run(self) {
+    /// Returns `Err` on chain corruption detection (fail-fast behavior).
+    async fn run(self) -> Result<(), crate::raft::storage::StorageError> {
         let mut verification_index: u64 = 0;
         let mut total_verified: u64 = 0;
         let mut pass_count: u64 = 0;
@@ -414,12 +414,14 @@ impl ChainVerifier {
                     }
                 }
                 Err(e) => {
-                    // FAIL-FAST: Chain integrity violation is unrecoverable
+                    // FAIL-FAST: Chain integrity violation is unrecoverable.
+                    // Return error to caller instead of panicking - let orchestration
+                    // layer decide how to handle (shutdown, alert, manual inspection).
                     tracing::error!(
                         error = %e,
-                        "CHAIN INTEGRITY VIOLATION DETECTED - FATAL"
+                        "CHAIN INTEGRITY VIOLATION DETECTED - FATAL - verification task exiting"
                     );
-                    panic!("Chain integrity violation: {}", e);
+                    return Err(e);
                 }
             }
         }

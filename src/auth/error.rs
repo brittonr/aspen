@@ -102,6 +102,15 @@ pub enum AuthError {
     /// No token provided when one was required.
     #[error("no token provided")]
     NoToken,
+
+    /// Internal error (e.g., lock poisoning).
+    ///
+    /// Tiger Style: Return error instead of panicking on lock poisoning.
+    #[error("internal error: {reason}")]
+    InternalError {
+        /// Description of the internal error.
+        reason: String,
+    },
 }
 
 impl From<postcard::Error> for AuthError {

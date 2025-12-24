@@ -202,53 +202,47 @@ impl ClockDriftDetector {
 
         let prev_severity = self.observations.get(&node_id).map(|o| o.severity);
 
-        // Update or insert observation
-        if let Some(obs) = self.observations.get_mut(&node_id) {
-            obs.update(
-                offset_ms,
-                self.warning_threshold_ms,
-                self.alert_threshold_ms,
-            );
-        } else {
-            self.observations.insert(
-                node_id,
-                DriftObservation::new(
+        // Update or insert observation, capturing new severity for logging
+        let (new_severity, obs_count, ewma_offset) =
+            if let Some(obs) = self.observations.get_mut(&node_id) {
+                obs.update(
                     offset_ms,
                     self.warning_threshold_ms,
                     self.alert_threshold_ms,
-                ),
-            );
-        }
-
-        // Get current state for logging
-        // SAFETY: We just inserted or updated above, so this key is guaranteed to exist
-        let obs = self
-            .observations
-            .get(&node_id)
-            .expect("observation must exist after insert/update");
-        let new_severity = obs.severity;
+                );
+                (obs.severity, obs.observation_count, obs.ewma_offset_ms)
+            } else {
+                let obs = DriftObservation::new(
+                    offset_ms,
+                    self.warning_threshold_ms,
+                    self.alert_threshold_ms,
+                );
+                let severity = obs.severity;
+                let count = obs.observation_count;
+                let ewma = obs.ewma_offset_ms;
+                self.observations.insert(node_id, obs);
+                (severity, count, ewma)
+            };
 
         // Only log on severity transitions (to avoid log spam)
         // Also require minimum observations to reduce false positives
-        if obs.observation_count >= MIN_DRIFT_OBSERVATIONS as u64
-            && prev_severity != Some(new_severity)
-        {
+        if obs_count >= MIN_DRIFT_OBSERVATIONS as u64 && prev_severity != Some(new_severity) {
             match new_severity {
                 DriftSeverity::Alert => {
                     error!(
                         node_id = %node_id,
-                        offset_ms = obs.ewma_offset_ms as i64,
+                        offset_ms = ewma_offset as i64,
                         rtt_ms = rtt_ms,
-                        observation_count = obs.observation_count,
+                        observation_count = obs_count,
                         "ALERT: significant clock drift detected - check NTP synchronization"
                     );
                 }
                 DriftSeverity::Warning => {
                     warn!(
                         node_id = %node_id,
-                        offset_ms = obs.ewma_offset_ms as i64,
+                        offset_ms = ewma_offset as i64,
                         rtt_ms = rtt_ms,
-                        observation_count = obs.observation_count,
+                        observation_count = obs_count,
                         "clock drift detected: offset exceeds {}ms warning threshold",
                         self.warning_threshold_ms
                     );
@@ -257,7 +251,7 @@ impl ClockDriftDetector {
                     if prev_severity.is_some() {
                         info!(
                             node_id = %node_id,
-                            offset_ms = obs.ewma_offset_ms as i64,
+                            offset_ms = ewma_offset as i64,
                             "clock drift returned to normal"
                         );
                     }

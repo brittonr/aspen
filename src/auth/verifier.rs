@@ -119,7 +119,10 @@ impl TokenVerifier {
 
         // 5. Check revocation
         let hash = token.hash();
-        if self.revoked.read().expect("lock poisoned").contains(&hash) {
+        let revoked_guard = self.revoked.read().map_err(|_| AuthError::InternalError {
+            reason: "revocation lock poisoned".to_string(),
+        })?;
+        if revoked_guard.contains(&hash) {
             return Err(AuthError::TokenRevoked);
         }
 
@@ -163,34 +166,53 @@ impl TokenVerifier {
     /// Revoke a token by its hash.
     ///
     /// Once revoked, the token will fail verification even if otherwise valid.
-    pub fn revoke(&self, token_hash: [u8; 32]) {
+    /// Returns error if internal lock is poisoned.
+    pub fn revoke(&self, token_hash: [u8; 32]) -> Result<(), AuthError> {
         self.revoked
             .write()
-            .expect("lock poisoned")
+            .map_err(|_| AuthError::InternalError {
+                reason: "revocation lock poisoned".to_string(),
+            })?
             .insert(token_hash);
+        Ok(())
     }
 
     /// Revoke a token directly.
-    pub fn revoke_token(&self, token: &CapabilityToken) {
-        self.revoke(token.hash());
+    pub fn revoke_token(&self, token: &CapabilityToken) -> Result<(), AuthError> {
+        self.revoke(token.hash())
     }
 
     /// Check if a token is revoked.
-    pub fn is_revoked(&self, token_hash: &[u8; 32]) -> bool {
-        self.revoked
-            .read()
-            .expect("lock poisoned")
-            .contains(token_hash)
+    ///
+    /// Returns `Err` if internal lock is poisoned.
+    pub fn is_revoked(&self, token_hash: &[u8; 32]) -> Result<bool, AuthError> {
+        let guard = self.revoked.read().map_err(|_| AuthError::InternalError {
+            reason: "revocation lock poisoned".to_string(),
+        })?;
+        Ok(guard.contains(token_hash))
     }
 
     /// Clear all revocations (use with caution).
-    pub fn clear_revocations(&self) {
-        self.revoked.write().expect("lock poisoned").clear();
+    ///
+    /// Returns `Err` if internal lock is poisoned.
+    pub fn clear_revocations(&self) -> Result<(), AuthError> {
+        self.revoked
+            .write()
+            .map_err(|_| AuthError::InternalError {
+                reason: "revocation lock poisoned".to_string(),
+            })?
+            .clear();
+        Ok(())
     }
 
     /// Get the number of revoked tokens.
-    pub fn revocation_count(&self) -> usize {
-        self.revoked.read().expect("lock poisoned").len()
+    ///
+    /// Returns `Err` if internal lock is poisoned.
+    pub fn revocation_count(&self) -> Result<usize, AuthError> {
+        let guard = self.revoked.read().map_err(|_| AuthError::InternalError {
+            reason: "revocation lock poisoned".to_string(),
+        })?;
+        Ok(guard.len())
     }
 
     /// Load revoked tokens from persistent storage.
@@ -201,22 +223,27 @@ impl TokenVerifier {
     /// # Arguments
     ///
     /// * `hashes` - Slice of 32-byte token hashes to mark as revoked
-    pub fn load_revoked(&self, hashes: &[[u8; 32]]) {
-        let mut revoked = self.revoked.write().expect("lock poisoned");
+    ///
+    /// Returns `Err` if internal lock is poisoned.
+    pub fn load_revoked(&self, hashes: &[[u8; 32]]) -> Result<(), AuthError> {
+        let mut revoked = self.revoked.write().map_err(|_| AuthError::InternalError {
+            reason: "revocation lock poisoned".to_string(),
+        })?;
         revoked.extend(hashes.iter().copied());
+        Ok(())
     }
 
     /// Get all revoked hashes.
     ///
     /// Returns a snapshot of all currently revoked token hashes.
     /// Useful for persistence or debugging.
-    pub fn get_all_revoked(&self) -> Vec<[u8; 32]> {
-        self.revoked
-            .read()
-            .expect("lock poisoned")
-            .iter()
-            .copied()
-            .collect()
+    ///
+    /// Returns `Err` if internal lock is poisoned.
+    pub fn get_all_revoked(&self) -> Result<Vec<[u8; 32]>, AuthError> {
+        let guard = self.revoked.read().map_err(|_| AuthError::InternalError {
+            reason: "revocation lock poisoned".to_string(),
+        })?;
+        Ok(guard.iter().copied().collect())
     }
 }
 

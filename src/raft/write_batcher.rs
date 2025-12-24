@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn test_batch_config_variants() {
         let high = BatchConfig::high_throughput();
-        assert_eq!(high.max_entries, 500);
+        assert_eq!(high.max_entries, 100); // Capped at MAX_SETMULTI_KEYS
         assert_eq!(high.max_wait, Duration::from_millis(5));
 
         let low = BatchConfig::low_latency();

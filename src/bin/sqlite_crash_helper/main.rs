@@ -49,6 +49,9 @@ async fn main() {
 
     // Now simulate a crash by calling abort()
     // This exits immediately without running destructors or cleanup
+    // SAFETY: abort() is a POSIX syscall that terminates the process immediately.
+    // This is intentional for testing SQLite's crash recovery. No cleanup is needed
+    // since the test specifically validates durability after an unclean shutdown.
     unsafe {
         libc::abort();
     }

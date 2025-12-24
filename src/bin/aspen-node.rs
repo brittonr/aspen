@@ -76,7 +76,7 @@ use aspen::protocol_handlers::{
 use clap::Parser;
 use iroh::PublicKey;
 use tokio::signal;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
@@ -402,7 +402,7 @@ async fn main() -> Result<()> {
         let primary_shard = sharded_handle
             .primary_shard()
             .cloned()
-            .expect("shard 0 must be present");
+            .ok_or_else(|| anyhow::anyhow!("shard 0 must be present in sharded mode"))?;
         let controller: ClusterControllerHandle = primary_shard.clone();
         let network_factory = sharded_handle.base.network_factory.clone();
 
@@ -609,17 +609,20 @@ async fn main() -> Result<()> {
 /// (systemd sends SIGTERM) and development (Ctrl-C sends SIGINT).
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        match signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(err) => error!("failed to install Ctrl+C handler: {}", err),
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(err) => error!("failed to install SIGTERM handler: {}", err),
+        }
     };
 
     #[cfg(not(unix))]

@@ -142,6 +142,8 @@ fn main() {
     info!("connected to Aspen cluster");
 
     // Get current user info
+    // SAFETY: getuid() and getgid() are POSIX syscalls that return the real
+    // user/group ID. They have no preconditions and cannot fail.
     let uid = unsafe { libc::getuid() };
     let gid = unsafe { libc::getgid() };
 
@@ -283,10 +285,11 @@ fn run_fuse(args: Args, fs: AspenFs) {
 
     // Wait for shutdown signal
     let (tx, rx) = std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
+    if let Err(err) = ctrlc::set_handler(move || {
         let _ = tx.send(());
-    })
-    .expect("failed to set Ctrl-C handler");
+    }) {
+        error!("failed to set Ctrl-C handler: {}", err);
+    }
 
     let _ = rx.recv();
 

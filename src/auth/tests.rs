@@ -490,7 +490,7 @@ fn test_verifier_revocation() {
         .expect("should verify before revocation");
 
     // Revoke the token
-    verifier.revoke_token(&token);
+    verifier.revoke_token(&token).unwrap();
 
     // Should fail after revocation
     let result = verifier.verify(&token, None);
@@ -720,12 +720,12 @@ async fn test_load_revoked_at_startup() {
 
     // Create a new verifier and load the revocations
     let verifier = TokenVerifier::new();
-    verifier.load_revoked(&loaded);
+    verifier.load_revoked(&loaded).unwrap();
 
     // Verify the verifier sees all as revoked
-    assert!(verifier.is_revoked(&hash1));
-    assert!(verifier.is_revoked(&hash2));
-    assert!(verifier.is_revoked(&hash3));
+    assert!(verifier.is_revoked(&hash1).unwrap());
+    assert!(verifier.is_revoked(&hash2).unwrap());
+    assert!(verifier.is_revoked(&hash3).unwrap());
 }
 
 #[tokio::test]
@@ -770,12 +770,12 @@ async fn test_verifier_load_and_get_revoked() {
     let hash2 = [2u8; 32];
     let hash3 = [3u8; 32];
 
-    verifier.revoke(hash1);
-    verifier.revoke(hash2);
-    verifier.revoke(hash3);
+    verifier.revoke(hash1).unwrap();
+    verifier.revoke(hash2).unwrap();
+    verifier.revoke(hash3).unwrap();
 
     // Get all revoked hashes
-    let all_revoked = verifier.get_all_revoked();
+    let all_revoked = verifier.get_all_revoked().unwrap();
     assert_eq!(all_revoked.len(), 3);
     assert!(all_revoked.contains(&hash1));
     assert!(all_revoked.contains(&hash2));
@@ -783,13 +783,13 @@ async fn test_verifier_load_and_get_revoked() {
 
     // Create a new verifier and load from the first one
     let verifier2 = TokenVerifier::new();
-    verifier2.load_revoked(&all_revoked);
+    verifier2.load_revoked(&all_revoked).unwrap();
 
     // Both verifiers should see the same revocations
-    assert_eq!(verifier2.revocation_count(), 3);
-    assert!(verifier2.is_revoked(&hash1));
-    assert!(verifier2.is_revoked(&hash2));
-    assert!(verifier2.is_revoked(&hash3));
+    assert_eq!(verifier2.revocation_count().unwrap(), 3);
+    assert!(verifier2.is_revoked(&hash1).unwrap());
+    assert!(verifier2.is_revoked(&hash2).unwrap());
+    assert!(verifier2.is_revoked(&hash3).unwrap());
 }
 
 #[tokio::test]
@@ -815,7 +815,7 @@ async fn test_integration_persistent_revocation() {
 
     // Revoke in both the verifier (in-memory) and the store (persistent)
     let token_hash = token.hash();
-    verifier.revoke_token(&token);
+    verifier.revoke_token(&token).unwrap();
     store
         .revoke(token_hash)
         .await
@@ -828,7 +828,9 @@ async fn test_integration_persistent_revocation() {
     // Simulate restart: create new verifier and load from persistent store
     let verifier_after_restart = TokenVerifier::new();
     let loaded_revocations = store.load_all().await.expect("should load");
-    verifier_after_restart.load_revoked(&loaded_revocations);
+    verifier_after_restart
+        .load_revoked(&loaded_revocations)
+        .unwrap();
 
     // Token should still be revoked after restart
     let result = verifier_after_restart.verify(&token, None);

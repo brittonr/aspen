@@ -299,11 +299,8 @@ impl ClusterController for RaftNode {
         .map_err(|_| ControlPlaneError::Timeout {
             duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
         })?
-        .map_err(|err| {
-            error!("raft.initialize() failed: {:?}", err);
-            ControlPlaneError::Failed {
-                reason: err.to_string(),
-            }
+        .map_err(|err| ControlPlaneError::Failed {
+            reason: err.to_string(),
         })?;
         info!("raft.initialize() completed successfully");
 
@@ -733,12 +730,9 @@ impl KeyValueStore for RaftNode {
                     conflict_actual_version: resp.data.conflict_actual_version,
                 })
             }
-            Err(err) => {
-                warn!(error = %err, "write operation failed");
-                Err(KeyValueStoreError::Failed {
-                    reason: err.to_string(),
-                })
-            }
+            Err(err) => Err(KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }),
         }
     }
 
@@ -905,12 +899,9 @@ impl KeyValueStore for RaftNode {
                     deleted,
                 })
             }
-            Err(err) => {
-                warn!(error = %err, "delete operation failed");
-                Err(KeyValueStoreError::Failed {
-                    reason: err.to_string(),
-                })
-            }
+            Err(err) => Err(KeyValueStoreError::Failed {
+                reason: err.to_string(),
+            }),
         }
     }
 

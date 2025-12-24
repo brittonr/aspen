@@ -211,19 +211,21 @@ async fn run(
 /// Tiger Style: Handles both signals for graceful shutdown.
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-        info!("received SIGINT, initiating graceful shutdown");
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => info!("received SIGINT, initiating graceful shutdown"),
+            Err(err) => error!("failed to install Ctrl+C handler: {}", err),
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
-        info!("received SIGTERM, initiating graceful shutdown");
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+                info!("received SIGTERM, initiating graceful shutdown");
+            }
+            Err(err) => error!("failed to install SIGTERM handler: {}", err),
+        }
     };
 
     #[cfg(not(unix))]
