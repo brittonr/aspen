@@ -204,3 +204,7 @@ harness = false
 [[bench]]
 name = "sql"
 harness = false
+
+[[bench]]
+name = "write_batching"
+harness = false

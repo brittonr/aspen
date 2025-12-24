@@ -202,6 +202,28 @@ impl NodeBuilder {
         self
     }
 
+    /// Configure write batching for improved throughput.
+    ///
+    /// When enabled, multiple write operations are batched together into
+    /// a single Raft proposal to amortize fsync costs. This significantly
+    /// increases throughput under concurrent load.
+    ///
+    /// Default: `BatchConfig::default()` (batching enabled)
+    pub fn with_write_batching(mut self, config: crate::raft::BatchConfig) -> Self {
+        self.config.batch_config = Some(config);
+        self
+    }
+
+    /// Disable write batching.
+    ///
+    /// When disabled, each write operation goes directly to Raft without
+    /// batching. This may be preferred for low-latency scenarios with
+    /// minimal concurrent writes.
+    pub fn without_write_batching(mut self) -> Self {
+        self.config.batch_config = None;
+        self
+    }
+
     /// Start the node by bootstrapping a full Aspen cluster node.
     ///
     /// This initializes all components:

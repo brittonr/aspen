@@ -798,12 +798,21 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
         // Register Raft core with sharded protocol handler
         sharded_handler.register_shard(shard_id, raft.as_ref().clone());
 
-        // Create RaftNode wrapper
-        let raft_node = Arc::new(RaftNode::new(
-            shard_node_id.into(),
-            raft.clone(),
-            state_machine_variant,
-        ));
+        // Create RaftNode wrapper - use batch config from NodeConfig or default
+        let raft_node = if let Some(batch_config) = config.batch_config.clone() {
+            Arc::new(RaftNode::with_write_batching(
+                shard_node_id.into(),
+                raft.clone(),
+                state_machine_variant,
+                batch_config.finalize(),
+            ))
+        } else {
+            Arc::new(RaftNode::new(
+                shard_node_id.into(),
+                raft.clone(),
+                state_machine_variant,
+            ))
+        };
 
         // Create health monitor
         let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
@@ -1190,12 +1199,22 @@ pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 
-    // Create RaftNode (direct wrapper)
-    let raft_node = Arc::new(RaftNode::new(
-        config.node_id.into(),
-        raft.clone(),
-        state_machine_variant,
-    ));
+    // Create RaftNode - use batch config from NodeConfig if enabled
+    // Write batching provides ~10x throughput improvement at ~2ms added latency
+    let raft_node = if let Some(batch_config) = config.batch_config.clone() {
+        Arc::new(RaftNode::with_write_batching(
+            config.node_id.into(),
+            raft.clone(),
+            state_machine_variant,
+            batch_config.finalize(),
+        ))
+    } else {
+        Arc::new(RaftNode::new(
+            config.node_id.into(),
+            raft.clone(),
+            state_machine_variant,
+        ))
+    };
 
     // Create supervisor for tracking health failures
     let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));

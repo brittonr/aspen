@@ -85,6 +85,9 @@ pub mod types;
 /// Write batching for amortized fsync costs.
 pub mod write_batcher;
 
+// Re-export key types for convenience
+pub use write_batcher::BatchConfig;
+
 use std::sync::Arc;
 
 use crate::api::{

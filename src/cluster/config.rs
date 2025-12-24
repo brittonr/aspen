@@ -183,6 +183,16 @@ pub struct NodeConfig {
     /// Default is 50 (5% of MAX_CONCURRENT_OPS = 1000).
     #[serde(default = "default_sqlite_read_pool_size")]
     pub sqlite_read_pool_size: u32,
+
+    /// Write batching configuration.
+    ///
+    /// When enabled, multiple write operations are batched together into
+    /// a single Raft proposal to amortize fsync costs. This significantly
+    /// increases throughput under concurrent load.
+    ///
+    /// Default: Some(BatchConfig::default()) - batching enabled
+    #[serde(default = "default_batch_config")]
+    pub batch_config: Option<crate::raft::BatchConfig>,
 }
 
 impl Default for NodeConfig {
@@ -209,6 +219,7 @@ impl Default for NodeConfig {
             sharding: ShardingConfig::default(),
             peers: vec![],
             sqlite_read_pool_size: default_sqlite_read_pool_size(),
+            batch_config: default_batch_config(),
         }
     }
 }
@@ -714,6 +725,7 @@ impl NodeConfig {
             peers: parse_env_vec("ASPEN_PEERS"),
             sqlite_read_pool_size: parse_env("ASPEN_SQLITE_READ_POOL_SIZE")
                 .unwrap_or_else(default_sqlite_read_pool_size),
+            batch_config: default_batch_config(),
         }
     }
 
@@ -1087,6 +1099,10 @@ fn default_enable_mdns() -> bool {
 
 fn default_sqlite_read_pool_size() -> u32 {
     DEFAULT_READ_POOL_SIZE
+}
+
+fn default_batch_config() -> Option<crate::raft::BatchConfig> {
+    Some(crate::raft::BatchConfig::default())
 }
 
 // Helper functions for parsing environment variables
