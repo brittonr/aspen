@@ -179,9 +179,8 @@ impl App {
     /// Tiger Style: Explicit initialization of all fields.
     pub fn new(_node_urls: Vec<String>, debug_mode: bool, max_display_nodes: usize) -> Self {
         // Start with disconnected client - use connect command or ticket to connect
-        let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Disconnected(
-            crate::client_trait::DisconnectedClient,
-        ));
+        let client: Arc<dyn ClusterClient> =
+            Arc::new(ClientImpl::Disconnected(crate::client_trait::DisconnectedClient));
 
         Self {
             should_quit: false,
@@ -213,24 +212,15 @@ impl App {
     ///
     /// Uses the MultiNodeClient to automatically discover and connect to all
     /// nodes in the cluster.
-    pub async fn new_with_iroh(
-        ticket: String,
-        debug_mode: bool,
-        max_display_nodes: usize,
-    ) -> Result<Self> {
+    pub async fn new_with_iroh(ticket: String, debug_mode: bool, max_display_nodes: usize) -> Result<Self> {
         // Parse the ticket to get all endpoint addresses
-        let endpoint_addrs =
-            parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
+        let endpoint_addrs = parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
 
-        info!(
-            "Ticket contains {} bootstrap peers, creating multi-node client",
-            endpoint_addrs.len()
-        );
+        info!("Ticket contains {} bootstrap peers, creating multi-node client", endpoint_addrs.len());
 
         // Create MultiNodeClient with all bootstrap endpoints
-        let multi_client = MultiNodeClient::new(endpoint_addrs)
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
+        let multi_client =
+            MultiNodeClient::new(endpoint_addrs).await.map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
 
         Ok(Self {
@@ -453,9 +443,7 @@ impl App {
                     // Connect to HTTP nodes - enter edit mode to get addresses
                     self.input_mode = InputMode::Editing;
                     self.input_buffer = "http://127.0.0.1:21001".to_string(); // Default suggestion
-                    self.set_status(
-                        "Enter HTTP node address(es) separated by spaces, then press Enter",
-                    );
+                    self.set_status("Enter HTTP node address(es) separated by spaces, then press Enter");
                 }
                 KeyCode::Char('t') => {
                     // Connect via Iroh ticket - enter edit mode to get ticket
@@ -673,11 +661,9 @@ impl App {
     async fn execute_kv_operation(&mut self) {
         let input = self.input_buffer.trim().to_string();
 
-        if input.starts_with("get ") {
-            let key = input.strip_prefix("get ").unwrap().to_string();
-            self.read_key(&key).await;
-        } else if input.starts_with("set ") {
-            let rest = input.strip_prefix("set ").unwrap();
+        if let Some(key) = input.strip_prefix("get ") {
+            self.read_key(key).await;
+        } else if let Some(rest) = input.strip_prefix("set ") {
             if let Some((key, value)) = rest.split_once(' ') {
                 self.write_key(key, value.as_bytes().to_vec()).await;
             } else {
@@ -732,18 +718,14 @@ impl App {
                 // Create MultiNodeClient with all bootstrap endpoints
                 match MultiNodeClient::new(endpoint_addrs).await {
                     Ok(multi_client) => {
-                        let new_client: Arc<dyn ClusterClient> =
-                            Arc::new(ClientImpl::MultiNode(multi_client));
+                        let new_client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
 
                         // Test the connection
                         match new_client.get_node_info().await {
                             Ok(node_info) => {
                                 // Connection successful, replace the client
                                 self.client = new_client;
-                                self.set_status(&format!(
-                                    "Connected to cluster via Iroh (node {})",
-                                    node_info.node_id
-                                ));
+                                self.set_status(&format!("Connected to cluster via Iroh (node {})", node_info.node_id));
                                 // Immediately refresh to populate all discovered nodes
                                 self.refresh_cluster_state().await;
                             }

@@ -18,11 +18,10 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use super::{
-    AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController,
-    ClusterState, ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest,
-    KeyValueStore, KeyValueStoreError, KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest,
-    ReadResult, ScanRequest, ScanResult, WriteCommand, WriteOp, WriteRequest, WriteResult,
-    validate_write_command,
+    AddLearnerRequest, BatchCondition, BatchOperation, ChangeMembershipRequest, ClusterController, ClusterState,
+    ControlPlaneError, DEFAULT_SCAN_LIMIT, DeleteRequest, DeleteResult, InitRequest, KeyValueStore, KeyValueStoreError,
+    KeyValueWithRevision, MAX_SCAN_RESULTS, ReadRequest, ReadResult, ScanRequest, ScanResult, WriteCommand, WriteOp,
+    WriteRequest, WriteResult, validate_write_command,
 };
 
 /// Value with version tracking for OCC support.
@@ -82,19 +81,13 @@ impl ClusterController for DeterministicClusterController {
         Ok(guard.clone())
     }
 
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
         let mut guard = self.state.lock().await;
         guard.learners.push(request.learner);
         Ok(guard.clone())
     }
 
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError> {
         if request.members.is_empty() {
             return Err(ControlPlaneError::InvalidRequest {
                 reason: "members must include at least one voter".into(),
@@ -109,9 +102,7 @@ impl ClusterController for DeterministicClusterController {
         Ok(self.state.lock().await.clone())
     }
 
-    async fn get_metrics(
-        &self,
-    ) -> Result<super::RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(&self) -> Result<super::RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
         // Deterministic backend is in-memory stub without Raft consensus
         Err(ControlPlaneError::Unsupported {
             backend: "deterministic".into(),
@@ -202,12 +193,7 @@ impl DeterministicKeyValueStore {
     }
 
     /// Insert or update a key with proper version tracking.
-    fn insert_versioned(
-        inner: &mut HashMap<String, VersionedValue>,
-        key: String,
-        value: String,
-        revision: u64,
-    ) {
+    fn insert_versioned(inner: &mut HashMap<String, VersionedValue>, key: String, value: String, revision: u64) {
         let existing = inner.get(&key);
         let (new_version, create_rev) = match existing {
             Some(v) => (v.version + 1, v.create_revision),
@@ -222,6 +208,213 @@ impl DeterministicKeyValueStore {
                 mod_revision: revision,
             },
         );
+    }
+
+    /// Evaluates all comparison predicates for a Transaction operation.
+    ///
+    /// Returns true if all comparisons pass, false if any fails.
+    fn evaluate_transaction_comparisons(
+        inner: &HashMap<String, VersionedValue>,
+        comparisons: &[super::TxnCompare],
+    ) -> bool {
+        use super::{CompareOp, CompareTarget};
+
+        for cmp in comparisons {
+            let current_versioned = inner.get(&cmp.key);
+            let passed = match cmp.target {
+                CompareTarget::Value => {
+                    let actual = current_versioned.map(|v| v.value.clone()).unwrap_or_default();
+                    match cmp.op {
+                        CompareOp::Equal => actual == cmp.value,
+                        CompareOp::NotEqual => actual != cmp.value,
+                        CompareOp::Greater => actual > cmp.value,
+                        CompareOp::Less => actual < cmp.value,
+                    }
+                }
+                CompareTarget::Version => {
+                    let compare_val: i64 = cmp.value.parse().unwrap_or(0);
+                    let actual = current_versioned.map(|v| v.version).unwrap_or(0);
+                    match cmp.op {
+                        CompareOp::Equal => actual == compare_val,
+                        CompareOp::NotEqual => actual != compare_val,
+                        CompareOp::Greater => actual > compare_val,
+                        CompareOp::Less => actual < compare_val,
+                    }
+                }
+                CompareTarget::CreateRevision => {
+                    let compare_val: u64 = cmp.value.parse().unwrap_or(0);
+                    let actual = current_versioned.map(|v| v.create_revision).unwrap_or(0);
+                    match cmp.op {
+                        CompareOp::Equal => actual == compare_val,
+                        CompareOp::NotEqual => actual != compare_val,
+                        CompareOp::Greater => actual > compare_val,
+                        CompareOp::Less => actual < compare_val,
+                    }
+                }
+                CompareTarget::ModRevision => {
+                    let compare_val: u64 = cmp.value.parse().unwrap_or(0);
+                    let actual = current_versioned.map(|v| v.mod_revision).unwrap_or(0);
+                    match cmp.op {
+                        CompareOp::Equal => actual == compare_val,
+                        CompareOp::NotEqual => actual != compare_val,
+                        CompareOp::Greater => actual > compare_val,
+                        CompareOp::Less => actual < compare_val,
+                    }
+                }
+            };
+            if !passed {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Executes a list of transaction operations on the store.
+    ///
+    /// Returns a vector of results, one per operation.
+    fn execute_transaction_operations(
+        inner: &mut HashMap<String, VersionedValue>,
+        operations: &[super::TxnOp],
+        revision: u64,
+    ) -> Vec<super::TxnOpResult> {
+        use super::TxnOp;
+
+        let mut results = Vec::new();
+        for op in operations {
+            match op {
+                TxnOp::Put { key, value } => {
+                    Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+                    results.push(super::TxnOpResult::Put { revision });
+                }
+                TxnOp::Delete { key } => {
+                    let deleted = if inner.remove(key).is_some() { 1 } else { 0 };
+                    results.push(super::TxnOpResult::Delete { deleted });
+                }
+                TxnOp::Get { key } => {
+                    let kv = inner.get(key).map(|v| KeyValueWithRevision {
+                        key: key.clone(),
+                        value: v.value.clone(),
+                        version: v.version as u64,
+                        create_revision: v.create_revision,
+                        mod_revision: v.mod_revision,
+                    });
+                    results.push(super::TxnOpResult::Get { kv });
+                }
+                TxnOp::Range { prefix, limit } => {
+                    let matching: Vec<_> = inner.iter().filter(|(k, _)| k.starts_with(prefix)).collect();
+                    let more = matching.len() > *limit as usize;
+                    let kvs: Vec<_> = matching
+                        .into_iter()
+                        .take(*limit as usize)
+                        .map(|(k, v)| KeyValueWithRevision {
+                            key: k.clone(),
+                            value: v.value.clone(),
+                            version: v.version as u64,
+                            create_revision: v.create_revision,
+                            mod_revision: v.mod_revision,
+                        })
+                        .collect();
+                    results.push(super::TxnOpResult::Range { kvs, more });
+                }
+            }
+        }
+        results
+    }
+
+    /// Handles a ConditionalBatch operation.
+    ///
+    /// Checks all conditions first, then applies operations if all pass.
+    fn handle_conditional_batch(
+        inner: &mut HashMap<String, VersionedValue>,
+        conditions: &[BatchCondition],
+        operations: &[BatchOperation],
+        revision: u64,
+    ) -> WriteResult {
+        // Check all conditions first
+        let mut failed_index = None;
+        for (i, cond) in conditions.iter().enumerate() {
+            let met = match cond {
+                BatchCondition::ValueEquals { key, expected } => {
+                    inner.get(key).map(|v| &v.value == expected).unwrap_or(false)
+                }
+                BatchCondition::KeyExists { key } => inner.contains_key(key),
+                BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
+            };
+            if !met {
+                failed_index = Some(i as u32);
+                break;
+            }
+        }
+
+        if failed_index.is_none() {
+            // All conditions passed - apply operations
+            for op in operations {
+                match op {
+                    BatchOperation::Set { key, value } => {
+                        Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+                    }
+                    BatchOperation::Delete { key } => {
+                        inner.remove(key);
+                    }
+                }
+            }
+            WriteResult {
+                batch_applied: Some(operations.len() as u32),
+                conditions_met: Some(true),
+                header_revision: Some(revision),
+                ..Default::default()
+            }
+        } else {
+            WriteResult {
+                conditions_met: Some(false),
+                failed_condition_index: failed_index,
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Handles an OptimisticTransaction operation.
+    ///
+    /// Validates read set versions, then applies write set if all match.
+    fn handle_optimistic_transaction(
+        inner: &mut HashMap<String, VersionedValue>,
+        read_set: &[(String, i64)],
+        write_set: &[WriteOp],
+        revision: u64,
+    ) -> WriteResult {
+        // Phase 1: Validate read set versions
+        for (key, expected_version) in read_set {
+            let current_version = inner.get(key).map(|v| v.version).unwrap_or(0);
+            if current_version != *expected_version {
+                // Conflict detected
+                return WriteResult {
+                    occ_conflict: Some(true),
+                    conflict_key: Some(key.clone()),
+                    conflict_expected_version: Some(*expected_version),
+                    conflict_actual_version: Some(current_version),
+                    ..Default::default()
+                };
+            }
+        }
+
+        // Phase 2: Apply write set
+        for op in write_set {
+            match op {
+                WriteOp::Set { key, value } => {
+                    Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+                }
+                WriteOp::Delete { key } => {
+                    inner.remove(key);
+                }
+            }
+        }
+
+        WriteResult {
+            occ_conflict: Some(false),
+            batch_applied: Some(write_set.len() as u32),
+            header_revision: Some(revision),
+            ..Default::default()
+        }
     }
 }
 
@@ -265,9 +458,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
                 Ok(WriteResult {
-                    command: Some(WriteCommand::SetMulti {
-                        pairs: pairs.clone(),
-                    }),
+                    command: Some(WriteCommand::SetMulti { pairs: pairs.clone() }),
                     header_revision: Some(revision),
                     ..Default::default()
                 })
@@ -340,12 +531,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 for op in operations {
                     match op {
                         BatchOperation::Set { key, value } => {
-                            Self::insert_versioned(
-                                &mut inner,
-                                key.clone(),
-                                value.clone(),
-                                revision,
-                            );
+                            Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                         }
                         BatchOperation::Delete { key } => {
                             inner.remove(key);
@@ -361,77 +547,17 @@ impl KeyValueStore for DeterministicKeyValueStore {
             WriteCommand::ConditionalBatch {
                 ref conditions,
                 ref operations,
-            } => {
-                // Check all conditions first
-                let mut conditions_met = true;
-                let mut failed_index = None;
-                for (i, cond) in conditions.iter().enumerate() {
-                    let met = match cond {
-                        BatchCondition::ValueEquals { key, expected } => inner
-                            .get(key)
-                            .map(|v| &v.value == expected)
-                            .unwrap_or(false),
-                        BatchCondition::KeyExists { key } => inner.contains_key(key),
-                        BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
-                    };
-                    if !met {
-                        conditions_met = false;
-                        failed_index = Some(i as u32);
-                        break;
-                    }
-                }
-
-                if conditions_met {
-                    for op in operations {
-                        match op {
-                            BatchOperation::Set { key, value } => {
-                                Self::insert_versioned(
-                                    &mut inner,
-                                    key.clone(),
-                                    value.clone(),
-                                    revision,
-                                );
-                            }
-                            BatchOperation::Delete { key } => {
-                                inner.remove(key);
-                            }
-                        }
-                    }
-                    Ok(WriteResult {
-                        batch_applied: Some(operations.len() as u32),
-                        conditions_met: Some(true),
-                        header_revision: Some(revision),
-                        ..Default::default()
-                    })
-                } else {
-                    Ok(WriteResult {
-                        conditions_met: Some(false),
-                        failed_condition_index: failed_index,
-                        ..Default::default()
-                    })
-                }
-            }
+            } => Ok(Self::handle_conditional_batch(&mut inner, conditions, operations, revision)),
             // Lease operations: in-memory store doesn't track leases, just stores values
-            WriteCommand::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => {
+            WriteCommand::SetWithLease { key, value, lease_id } => {
                 Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 Ok(WriteResult {
-                    command: Some(WriteCommand::SetWithLease {
-                        key,
-                        value,
-                        lease_id,
-                    }),
+                    command: Some(WriteCommand::SetWithLease { key, value, lease_id }),
                     header_revision: Some(revision),
                     ..Default::default()
                 })
             }
-            WriteCommand::SetMultiWithLease {
-                ref pairs,
-                lease_id,
-            } => {
+            WriteCommand::SetMultiWithLease { ref pairs, lease_id } => {
                 for (key, value) in pairs {
                     Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
@@ -444,10 +570,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
-            WriteCommand::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => {
+            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => {
                 // In-memory doesn't track leases, just return success
                 Ok(WriteResult {
                     lease_id: Some(lease_id),
@@ -476,111 +599,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 success,
                 failure,
             } => {
-                use crate::api::{CompareOp, CompareTarget, TxnOp, TxnOpResult};
-
-                // Evaluate all comparisons
-                let mut all_passed = true;
-                for cmp in &compare {
-                    let current_versioned = inner.get(&cmp.key);
-                    let passed = match cmp.target {
-                        CompareTarget::Value => {
-                            let actual = current_versioned
-                                .map(|v| v.value.clone())
-                                .unwrap_or_default();
-                            match cmp.op {
-                                CompareOp::Equal => actual == cmp.value,
-                                CompareOp::NotEqual => actual != cmp.value,
-                                CompareOp::Greater => actual > cmp.value,
-                                CompareOp::Less => actual < cmp.value,
-                            }
-                        }
-                        CompareTarget::Version => {
-                            let compare_val: i64 = cmp.value.parse().unwrap_or(0);
-                            let actual = current_versioned.map(|v| v.version).unwrap_or(0);
-                            match cmp.op {
-                                CompareOp::Equal => actual == compare_val,
-                                CompareOp::NotEqual => actual != compare_val,
-                                CompareOp::Greater => actual > compare_val,
-                                CompareOp::Less => actual < compare_val,
-                            }
-                        }
-                        CompareTarget::CreateRevision => {
-                            let compare_val: u64 = cmp.value.parse().unwrap_or(0);
-                            let actual = current_versioned.map(|v| v.create_revision).unwrap_or(0);
-                            match cmp.op {
-                                CompareOp::Equal => actual == compare_val,
-                                CompareOp::NotEqual => actual != compare_val,
-                                CompareOp::Greater => actual > compare_val,
-                                CompareOp::Less => actual < compare_val,
-                            }
-                        }
-                        CompareTarget::ModRevision => {
-                            let compare_val: u64 = cmp.value.parse().unwrap_or(0);
-                            let actual = current_versioned.map(|v| v.mod_revision).unwrap_or(0);
-                            match cmp.op {
-                                CompareOp::Equal => actual == compare_val,
-                                CompareOp::NotEqual => actual != compare_val,
-                                CompareOp::Greater => actual > compare_val,
-                                CompareOp::Less => actual < compare_val,
-                            }
-                        }
-                    };
-                    if !passed {
-                        all_passed = false;
-                        break;
-                    }
-                }
-
-                // Execute the appropriate branch
+                // Evaluate comparisons and execute appropriate branch
+                let all_passed = Self::evaluate_transaction_comparisons(&inner, &compare);
                 let ops = if all_passed { &success } else { &failure };
-                let mut results = Vec::new();
-
-                for op in ops {
-                    match op {
-                        TxnOp::Put { key, value } => {
-                            Self::insert_versioned(
-                                &mut inner,
-                                key.clone(),
-                                value.clone(),
-                                revision,
-                            );
-                            results.push(TxnOpResult::Put { revision });
-                        }
-                        TxnOp::Delete { key } => {
-                            let deleted = if inner.remove(key).is_some() { 1 } else { 0 };
-                            results.push(TxnOpResult::Delete { deleted });
-                        }
-                        TxnOp::Get { key } => {
-                            let kv = inner.get(key).map(|v| KeyValueWithRevision {
-                                key: key.clone(),
-                                value: v.value.clone(),
-                                version: v.version as u64,
-                                create_revision: v.create_revision,
-                                mod_revision: v.mod_revision,
-                            });
-                            results.push(TxnOpResult::Get { kv });
-                        }
-                        TxnOp::Range { prefix, limit } => {
-                            let matching: Vec<_> = inner
-                                .iter()
-                                .filter(|(k, _)| k.starts_with(prefix))
-                                .collect();
-                            let more = matching.len() > *limit as usize;
-                            let kvs: Vec<_> = matching
-                                .into_iter()
-                                .take(*limit as usize)
-                                .map(|(k, v)| KeyValueWithRevision {
-                                    key: k.clone(),
-                                    value: v.value.clone(),
-                                    version: v.version as u64,
-                                    create_revision: v.create_revision,
-                                    mod_revision: v.mod_revision,
-                                })
-                                .collect();
-                            results.push(TxnOpResult::Range { kvs, more });
-                        }
-                    }
-                }
+                let results = Self::execute_transaction_operations(&mut inner, ops, revision);
 
                 Ok(WriteResult {
                     succeeded: Some(all_passed),
@@ -589,58 +611,16 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
-            WriteCommand::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => {
-                // Phase 1: Validate read set versions
-                // Check that each key in the read_set still has the expected version
-                for (key, expected_version) in &read_set {
-                    let current_version = inner.get(key).map(|v| v.version).unwrap_or(0);
-                    if current_version != *expected_version {
-                        // Conflict detected - return error with details
-                        return Ok(WriteResult {
-                            occ_conflict: Some(true),
-                            conflict_key: Some(key.clone()),
-                            conflict_expected_version: Some(*expected_version),
-                            conflict_actual_version: Some(current_version),
-                            ..Default::default()
-                        });
-                    }
-                }
-
-                // Phase 2: Apply write set with version tracking
-                // All read set versions matched, so we can safely apply the writes
-                for op in &write_set {
-                    match op {
-                        WriteOp::Set { key, value } => {
-                            Self::insert_versioned(
-                                &mut inner,
-                                key.clone(),
-                                value.clone(),
-                                revision,
-                            );
-                        }
-                        WriteOp::Delete { key } => {
-                            inner.remove(key);
-                        }
-                    }
-                }
-
-                Ok(WriteResult {
-                    occ_conflict: Some(false),
-                    batch_applied: Some(write_set.len() as u32),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
+                Ok(Self::handle_optimistic_transaction(&mut inner, &read_set, &write_set, revision))
             }
             // Shard topology operations are not supported in the in-memory store
             // These require the Raft-backed state machine for proper coordination
-            WriteCommand::ShardSplit { .. }
-            | WriteCommand::ShardMerge { .. }
-            | WriteCommand::TopologyUpdate { .. } => Err(KeyValueStoreError::Failed {
-                reason: "shard topology operations not supported in in-memory store".to_string(),
-            }),
+            WriteCommand::ShardSplit { .. } | WriteCommand::ShardMerge { .. } | WriteCommand::TopologyUpdate { .. } => {
+                Err(KeyValueStoreError::Failed {
+                    reason: "shard topology operations not supported in in-memory store".to_string(),
+                })
+            }
         }
     }
 
@@ -673,10 +653,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let limit = request
-            .limit
-            .unwrap_or(DEFAULT_SCAN_LIMIT)
-            .min(MAX_SCAN_RESULTS) as usize;
+        let limit = request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {
@@ -718,9 +695,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
 
         // Generate continuation token if truncated
         let continuation_token = if is_truncated {
-            entries
-                .last()
-                .map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
+            entries.last().map(|e| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &e.key))
         } else {
             None
         };

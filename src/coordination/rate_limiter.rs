@@ -10,6 +10,7 @@ use tracing::debug;
 use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
 use crate::coordination::error::{CoordinationError, RateLimitError};
 use crate::coordination::types::{BucketState, now_unix_ms};
+use crate::raft::constants::{CAS_RETRY_INITIAL_BACKOFF_MS, CAS_RETRY_MAX_BACKOFF_MS, MAX_CAS_RETRIES};
 
 /// Configuration for distributed rate limiter.
 #[derive(Debug, Clone)]
@@ -74,6 +75,9 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     ///
     /// Returns `Ok(remaining)` if allowed, `Err(RateLimitError)` if rate limited.
     pub async fn try_acquire_n(&self, n: u64) -> Result<u64, RateLimitError> {
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
+
         loop {
             let now_ms = now_unix_ms();
             let current = match self.read_state().await {
@@ -124,8 +128,16 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                     return Ok(new_state.tokens as u64);
                 }
                 Err(CoordinationError::CasConflict) => {
-                    // Contention, retry immediately
-                    continue;
+                    attempt += 1;
+                    if attempt >= MAX_CAS_RETRIES {
+                        return Err(RateLimitError {
+                            requested: n,
+                            available: 0,
+                            retry_after_ms: 1000,
+                        });
+                    }
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 }
                 Err(_) => {
                     return Err(RateLimitError {
@@ -172,6 +184,9 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         let new_state = BucketState::new(self.config.capacity, self.config.refill_rate);
         let json = serde_json::to_string(&new_state)?;
 
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
+
         // Try to overwrite with CAS loop
         loop {
             let current = self.read_state().await.ok();
@@ -192,7 +207,17 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                 .await
             {
                 Ok(_) => return Ok(()),
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                    attempt += 1;
+                    if attempt >= MAX_CAS_RETRIES {
+                        return Err(CoordinationError::MaxRetriesExceeded {
+                            operation: "rate limiter reset".to_string(),
+                            attempts: attempt,
+                        });
+                    }
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                }
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             }
         }
@@ -225,11 +250,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     }
 
     /// Compare-and-swap bucket state.
-    async fn cas_state(
-        &self,
-        current: &BucketState,
-        new: &BucketState,
-    ) -> Result<(), CoordinationError> {
+    async fn cas_state(&self, current: &BucketState, new: &BucketState) -> Result<(), CoordinationError> {
         let current_json = serde_json::to_string(current)?;
         let new_json = serde_json::to_string(new)?;
 
@@ -252,9 +273,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             .await
         {
             Ok(_) => Ok(()),
-            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                Err(CoordinationError::CasConflict)
-            }
+            Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Err(CoordinationError::CasConflict),
             Err(e) => Err(CoordinationError::Storage { source: e }),
         }
     }
@@ -308,8 +327,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_acquire_with_timeout() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let limiter =
-            DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(100.0, 1));
+        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(100.0, 1));
 
         // Exhaust
         limiter.try_acquire().await.unwrap();
@@ -339,8 +357,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_reset() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let limiter =
-            DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
 
         // Exhaust
         for _ in 0..5 {
@@ -360,8 +377,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_available() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let limiter =
-            DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 10));
+        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 10));
 
         assert_eq!(limiter.available().await.unwrap(), 10);
 

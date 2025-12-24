@@ -23,10 +23,9 @@ use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, W
 use crate::coordination::sequence::SequenceGenerator;
 use crate::coordination::types::now_unix_ms;
 use crate::raft::constants::{
-    DEFAULT_QUEUE_DEDUP_TTL_MS, DEFAULT_QUEUE_POLL_INTERVAL_MS,
-    DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS, MAX_QUEUE_BATCH_SIZE, MAX_QUEUE_CLEANUP_BATCH,
-    MAX_QUEUE_ITEM_SIZE, MAX_QUEUE_ITEM_TTL_MS, MAX_QUEUE_POLL_INTERVAL_MS,
-    MAX_QUEUE_VISIBILITY_TIMEOUT_MS,
+    CAS_RETRY_INITIAL_BACKOFF_MS, CAS_RETRY_MAX_BACKOFF_MS, DEFAULT_QUEUE_DEDUP_TTL_MS, DEFAULT_QUEUE_POLL_INTERVAL_MS,
+    DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS, MAX_CAS_RETRIES, MAX_QUEUE_BATCH_SIZE, MAX_QUEUE_CLEANUP_BATCH,
+    MAX_QUEUE_ITEM_SIZE, MAX_QUEUE_ITEM_TTL_MS, MAX_QUEUE_POLL_INTERVAL_MS, MAX_QUEUE_VISIBILITY_TIMEOUT_MS,
 };
 
 /// Queue key prefix.
@@ -244,6 +243,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Returns (created, queue_state) where created is false if queue already existed.
     pub async fn create(&self, name: &str, config: QueueConfig) -> Result<(bool, QueueState)> {
         let key = format!("{}{}", QUEUE_PREFIX, name);
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
         loop {
             let current = self.read_queue_state(&key).await?;
@@ -258,10 +259,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                             .default_visibility_timeout_ms
                             .unwrap_or(DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS)
                             .min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS),
-                        default_ttl_ms: config
-                            .default_ttl_ms
-                            .unwrap_or(0)
-                            .min(MAX_QUEUE_ITEM_TTL_MS),
+                        default_ttl_ms: config.default_ttl_ms.unwrap_or(0).min(MAX_QUEUE_ITEM_TTL_MS),
                         created_at_ms: now_unix_ms(),
                         stats: QueueStats::default(),
                     };
@@ -282,7 +280,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                             debug!(name, "queue created");
                             return Ok((true, state));
                         }
-                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                        Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                            attempt += 1;
+                            if attempt >= MAX_CAS_RETRIES {
+                                bail!("queue create CAS failed after {} attempts (max retries exceeded)", attempt);
+                            }
+                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                            backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                        }
                         Err(e) => bail!("queue create CAS failed: {}", e),
                     }
                 }
@@ -330,19 +335,10 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Enqueue an item.
     ///
     /// Returns the item ID on success.
-    pub async fn enqueue(
-        &self,
-        name: &str,
-        payload: Vec<u8>,
-        options: EnqueueOptions,
-    ) -> Result<u64> {
+    pub async fn enqueue(&self, name: &str, payload: Vec<u8>, options: EnqueueOptions) -> Result<u64> {
         // Validate payload size
         if payload.len() > MAX_QUEUE_ITEM_SIZE as usize {
-            bail!(
-                "payload size {} exceeds max {}",
-                payload.len(),
-                MAX_QUEUE_ITEM_SIZE
-            );
+            bail!("payload size {} exceeds max {}", payload.len(), MAX_QUEUE_ITEM_SIZE);
         }
 
         let queue_key = format!("{}{}", QUEUE_PREFIX, name);
@@ -363,12 +359,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             if let Some(entry) = self.read_dedup_entry(&dedup_key).await?
                 && !entry.is_expired()
             {
-                debug!(
-                    name,
-                    dedup_id,
-                    item_id = entry.item_id,
-                    "duplicate detected"
-                );
+                debug!(name, dedup_id, item_id = entry.item_id, "duplicate detected");
                 return Ok(entry.item_id);
             }
         }
@@ -379,10 +370,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let item_id = seq_gen.next().await?;
 
         let now = now_unix_ms();
-        let ttl_ms = options
-            .ttl_ms
-            .unwrap_or(queue_state.default_ttl_ms)
-            .min(MAX_QUEUE_ITEM_TTL_MS);
+        let ttl_ms = options.ttl_ms.unwrap_or(queue_state.default_ttl_ms).min(MAX_QUEUE_ITEM_TTL_MS);
         let expires_at_ms = if ttl_ms > 0 { now + ttl_ms } else { 0 };
 
         let item = QueueItem {
@@ -438,17 +426,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Enqueue multiple items in a batch.
     ///
     /// Returns the list of item IDs on success.
-    pub async fn enqueue_batch(
-        &self,
-        name: &str,
-        items: Vec<(Vec<u8>, EnqueueOptions)>,
-    ) -> Result<Vec<u64>> {
+    pub async fn enqueue_batch(&self, name: &str, items: Vec<(Vec<u8>, EnqueueOptions)>) -> Result<Vec<u64>> {
         if items.len() > MAX_QUEUE_BATCH_SIZE as usize {
-            bail!(
-                "batch size {} exceeds max {}",
-                items.len(),
-                MAX_QUEUE_BATCH_SIZE
-            );
+            bail!("batch size {} exceeds max {}", items.len(), MAX_QUEUE_BATCH_SIZE);
         }
 
         let mut item_ids = Vec::with_capacity(items.len());
@@ -518,12 +498,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             }
 
             // Check max delivery attempts
-            if queue_state.max_delivery_attempts > 0
-                && item.delivery_attempts >= queue_state.max_delivery_attempts
-            {
+            if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
                 // Move to DLQ
-                self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None)
-                    .await?;
+                self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
                 let _ = self.delete_key(&item_key).await;
                 continue;
             }
@@ -599,9 +576,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let mut poll_interval = DEFAULT_QUEUE_POLL_INTERVAL_MS;
 
         loop {
-            let items = self
-                .dequeue(name, consumer_id, max_items, visibility_timeout_ms)
-                .await?;
+            let items = self.dequeue(name, consumer_id, max_items, visibility_timeout_ms).await?;
 
             if !items.is_empty() {
                 return Ok(items);
@@ -762,15 +737,12 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Extend the visibility timeout for a pending item.
     ///
     /// Returns the new visibility deadline.
-    pub async fn extend_visibility(
-        &self,
-        name: &str,
-        receipt_handle: &str,
-        additional_timeout_ms: u64,
-    ) -> Result<u64> {
+    pub async fn extend_visibility(&self, name: &str, receipt_handle: &str, additional_timeout_ms: u64) -> Result<u64> {
         let additional_timeout_ms = additional_timeout_ms.min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS);
         let item_id = self.parse_receipt_handle(receipt_handle)?;
         let pending_key = format!("{}{}:pending:{:020}", QUEUE_PREFIX, name, item_id);
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
         loop {
             let pending: PendingItem = match self.read_json(&pending_key).await? {
@@ -804,7 +776,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                     debug!(name, item_id, new_deadline, "visibility extended");
                     return Ok(new_deadline);
                 }
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                    attempt += 1;
+                    if attempt >= MAX_CAS_RETRIES {
+                        bail!("extend visibility CAS failed after {} attempts (max retries exceeded)", attempt);
+                    }
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                }
                 Err(e) => bail!("extend visibility CAS failed: {}", e),
             }
         }
@@ -823,12 +802,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let pending_prefix = format!("{}{}:pending:", QUEUE_PREFIX, name);
         let dlq_prefix = format!("{}{}:dlq:", QUEUE_PREFIX, name);
 
-        let visible_keys = self
-            .scan_keys(&items_prefix, MAX_QUEUE_CLEANUP_BATCH)
-            .await?;
-        let pending_keys = self
-            .scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH)
-            .await?;
+        let visible_keys = self.scan_keys(&items_prefix, MAX_QUEUE_CLEANUP_BATCH).await?;
+        let pending_keys = self.scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH).await?;
         let dlq_keys = self.scan_keys(&dlq_prefix, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         Ok(QueueStatus {
@@ -905,9 +880,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Cleanup expired pending items.
     async fn cleanup_expired_pending(&self, name: &str) -> Result<u32> {
         let pending_prefix = format!("{}{}:pending:", QUEUE_PREFIX, name);
-        let keys = self
-            .scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH)
-            .await?;
+        let keys = self.scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         let mut cleaned = 0u32;
 
@@ -956,9 +929,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Get message groups that currently have pending items.
     async fn get_pending_message_groups(&self, name: &str) -> Result<Vec<String>> {
         let pending_prefix = format!("{}{}:pending:", QUEUE_PREFIX, name);
-        let keys = self
-            .scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH)
-            .await?;
+        let keys = self.scan_keys(&pending_prefix, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         let mut groups = Vec::new();
         for key in keys {
@@ -974,13 +945,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     }
 
     /// Move an item to the DLQ.
-    async fn move_to_dlq(
-        &self,
-        name: &str,
-        item: &QueueItem,
-        reason: DLQReason,
-        error: Option<String>,
-    ) -> Result<()> {
+    async fn move_to_dlq(&self, name: &str, item: &QueueItem, reason: DLQReason, error: Option<String>) -> Result<()> {
         let dlq_item = DLQItem {
             item_id: item.item_id,
             payload: item.payload.clone(),
@@ -1013,9 +978,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         if parts.is_empty() {
             bail!("invalid receipt handle format");
         }
-        parts[0]
-            .parse()
-            .map_err(|_| anyhow::anyhow!("invalid item ID in receipt handle"))
+        parts[0].parse().map_err(|_| anyhow::anyhow!("invalid item ID in receipt handle"))
     }
 
     /// Read queue state.
@@ -1066,9 +1029,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         match self
             .store
             .write(WriteRequest {
-                command: WriteCommand::Delete {
-                    key: key.to_string(),
-                },
+                command: WriteCommand::Delete { key: key.to_string() },
             })
             .await
         {
@@ -1080,20 +1041,17 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Increment enqueue count in queue stats.
     async fn increment_enqueue_count(&self, name: &str) -> Result<()> {
-        self.update_queue_stats(name, |stats| stats.total_enqueued += 1)
-            .await
+        self.update_queue_stats(name, |stats| stats.total_enqueued += 1).await
     }
 
     /// Increment ack count in queue stats.
     async fn increment_ack_count(&self, name: &str) -> Result<()> {
-        self.update_queue_stats(name, |stats| stats.total_acked += 1)
-            .await
+        self.update_queue_stats(name, |stats| stats.total_acked += 1).await
     }
 
     /// Increment DLQ count in queue stats.
     async fn increment_dlq_count(&self, name: &str) -> Result<()> {
-        self.update_queue_stats(name, |stats| stats.total_dlq += 1)
-            .await
+        self.update_queue_stats(name, |stats| stats.total_dlq += 1).await
     }
 
     /// Update queue stats atomically.
@@ -1102,6 +1060,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         F: Fn(&mut QueueStats),
     {
         let queue_key = format!("{}{}", QUEUE_PREFIX, name);
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
         loop {
             let current = match self.read_queue_state(&queue_key).await? {
@@ -1127,7 +1087,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 .await
             {
                 Ok(_) => return Ok(()),
-                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => continue,
+                Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
+                    attempt += 1;
+                    if attempt >= MAX_CAS_RETRIES {
+                        bail!("stats update CAS failed after {} attempts (max retries exceeded)", attempt);
+                    }
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                }
                 Err(e) => bail!("stats update CAS failed: {}", e),
             }
         }
@@ -1152,17 +1119,11 @@ mod tests {
         let manager = QueueManager::new(store);
 
         // Enqueue
-        let item_id = manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        let item_id = manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
         assert!(item_id > 0);
 
         // Dequeue
-        let items = manager
-            .dequeue("test", "consumer1", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 10, 30000).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].item_id, item_id);
         assert_eq!(items[0].payload, b"hello");
@@ -1171,10 +1132,7 @@ mod tests {
         manager.ack("test", &items[0].receipt_handle).await.unwrap();
 
         // Queue should be empty
-        let items = manager
-            .dequeue("test", "consumer1", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 10, 30000).await.unwrap();
         assert!(items.is_empty());
     }
 
@@ -1184,27 +1142,15 @@ mod tests {
         let manager = QueueManager::new(store);
 
         // Enqueue multiple items
-        let id1 = manager
-            .enqueue("test", b"first".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
-        let id2 = manager
-            .enqueue("test", b"second".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
-        let id3 = manager
-            .enqueue("test", b"third".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        let id1 = manager.enqueue("test", b"first".to_vec(), EnqueueOptions::default()).await.unwrap();
+        let id2 = manager.enqueue("test", b"second".to_vec(), EnqueueOptions::default()).await.unwrap();
+        let id3 = manager.enqueue("test", b"third".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         assert!(id1 < id2);
         assert!(id2 < id3);
 
         // Dequeue - should get in FIFO order
-        let items = manager
-            .dequeue("test", "consumer1", 3, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 3, 30000).await.unwrap();
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].item_id, id1);
         assert_eq!(items[1].item_id, id2);
@@ -1217,10 +1163,7 @@ mod tests {
         let manager = QueueManager::new(store);
 
         // Enqueue
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         // Dequeue with very short timeout (1ms)
         let items = manager.dequeue("test", "consumer1", 10, 1).await.unwrap();
@@ -1231,10 +1174,7 @@ mod tests {
 
         // Should be able to dequeue again after cleanup
         manager.cleanup_expired_pending("test").await.unwrap();
-        let items = manager
-            .dequeue("test", "consumer2", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer2", 10, 30000).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].delivery_attempts, 2);
     }
@@ -1244,15 +1184,9 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let manager = QueueManager::new(store);
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
-        let items = manager
-            .dequeue("test", "consumer1", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 10, 30000).await.unwrap();
         manager.ack("test", &items[0].receipt_handle).await.unwrap();
 
         // Should not be able to ack again
@@ -1265,25 +1199,13 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let manager = QueueManager::new(store);
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
-        let items = manager
-            .dequeue("test", "consumer1", 10, 30000)
-            .await
-            .unwrap();
-        manager
-            .nack("test", &items[0].receipt_handle, false, None)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 10, 30000).await.unwrap();
+        manager.nack("test", &items[0].receipt_handle, false, None).await.unwrap();
 
         // Should be able to dequeue again
-        let items = manager
-            .dequeue("test", "consumer2", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer2", 10, 30000).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].delivery_attempts, 2);
     }
@@ -1305,24 +1227,15 @@ mod tests {
             .await
             .unwrap();
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         // First delivery
         let items = manager.dequeue("test", "c1", 10, 30000).await.unwrap();
-        manager
-            .nack("test", &items[0].receipt_handle, false, None)
-            .await
-            .unwrap();
+        manager.nack("test", &items[0].receipt_handle, false, None).await.unwrap();
 
         // Second delivery - should move to DLQ
         let items = manager.dequeue("test", "c2", 10, 30000).await.unwrap();
-        manager
-            .nack("test", &items[0].receipt_handle, false, None)
-            .await
-            .unwrap();
+        manager.nack("test", &items[0].receipt_handle, false, None).await.unwrap();
 
         // Queue should be empty
         let items = manager.dequeue("test", "c3", 10, 30000).await.unwrap();
@@ -1339,10 +1252,7 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let manager = QueueManager::new(store);
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         // Peek
         let items = manager.peek("test", 10).await.unwrap();
@@ -1353,10 +1263,7 @@ mod tests {
         assert_eq!(items.len(), 1);
 
         // Dequeue - should still get it
-        let items = manager
-            .dequeue("test", "consumer1", 10, 30000)
-            .await
-            .unwrap();
+        let items = manager.dequeue("test", "consumer1", 10, 30000).await.unwrap();
         assert_eq!(items.len(), 1);
     }
 
@@ -1366,14 +1273,8 @@ mod tests {
         let manager = QueueManager::new(store);
 
         // Create and enqueue
-        manager
-            .enqueue("test", b"item1".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
-        manager
-            .enqueue("test", b"item2".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"item1".to_vec(), EnqueueOptions::default()).await.unwrap();
+        manager.enqueue("test", b"item2".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         let status = manager.status("test").await.unwrap();
         assert!(status.exists);
@@ -1400,27 +1301,18 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let manager = QueueManager::new(store);
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         // Dequeue and nack to DLQ
         let items = manager.dequeue("test", "c1", 10, 30000).await.unwrap();
-        manager
-            .nack("test", &items[0].receipt_handle, true, None)
-            .await
-            .unwrap();
+        manager.nack("test", &items[0].receipt_handle, true, None).await.unwrap();
 
         // Verify in DLQ
         let dlq_items = manager.get_dlq("test", 10).await.unwrap();
         assert_eq!(dlq_items.len(), 1);
 
         // Redrive
-        manager
-            .redrive_dlq("test", dlq_items[0].item_id)
-            .await
-            .unwrap();
+        manager.redrive_dlq("test", dlq_items[0].item_id).await.unwrap();
 
         // DLQ should be empty
         let dlq_items = manager.get_dlq("test", 10).await.unwrap();
@@ -1437,19 +1329,13 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let manager = QueueManager::new(store);
 
-        manager
-            .enqueue("test", b"hello".to_vec(), EnqueueOptions::default())
-            .await
-            .unwrap();
+        manager.enqueue("test", b"hello".to_vec(), EnqueueOptions::default()).await.unwrap();
 
         let items = manager.dequeue("test", "c1", 10, 1000).await.unwrap();
         let original_deadline = items[0].visibility_deadline_ms;
 
         // Extend visibility
-        let new_deadline = manager
-            .extend_visibility("test", &items[0].receipt_handle, 60000)
-            .await
-            .unwrap();
+        let new_deadline = manager.extend_visibility("test", &items[0].receipt_handle, 60000).await.unwrap();
 
         assert!(new_deadline > original_deadline);
     }
@@ -1482,16 +1368,10 @@ mod tests {
         };
 
         // First enqueue
-        let id1 = manager
-            .enqueue("test", b"hello".to_vec(), opts.clone())
-            .await
-            .unwrap();
+        let id1 = manager.enqueue("test", b"hello".to_vec(), opts.clone()).await.unwrap();
 
         // Second enqueue with same dedup ID should return same ID
-        let id2 = manager
-            .enqueue("test", b"hello".to_vec(), opts.clone())
-            .await
-            .unwrap();
+        let id2 = manager.enqueue("test", b"hello".to_vec(), opts.clone()).await.unwrap();
 
         assert_eq!(id1, id2);
 

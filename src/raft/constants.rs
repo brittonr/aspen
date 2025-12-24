@@ -839,3 +839,29 @@ pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 /// Used in:
 /// - `network.rs`: IrpcRaftNetworkFactory failure update channel
 pub const FAILURE_DETECTOR_CHANNEL_CAPACITY: usize = 100;
+
+// ============================================================================
+// CAS Retry Constants
+// ============================================================================
+
+/// Maximum CAS retry attempts before failing (100).
+///
+/// Tiger Style: Bounded retries prevent indefinite spinning under contention.
+/// 100 retries with exponential backoff allows for transient contention
+/// while preventing infinite loops. Total max wait ~13 seconds.
+///
+/// Used in:
+/// - `coordination/sequence.rs`: SequenceGenerator::reserve()
+/// - `coordination/rate_limiter.rs`: try_acquire_n(), reset()
+/// - `coordination/queue.rs`: create(), extend_visibility(), update_queue_stats()
+pub const MAX_CAS_RETRIES: u32 = 100;
+
+/// Initial backoff delay for CAS retries (1 millisecond).
+///
+/// Tiger Style: Short initial delay minimizes latency under light contention.
+pub const CAS_RETRY_INITIAL_BACKOFF_MS: u64 = 1;
+
+/// Maximum backoff delay for CAS retries (128 milliseconds).
+///
+/// Tiger Style: Upper bound prevents excessive wait times.
+pub const CAS_RETRY_MAX_BACKOFF_MS: u64 = 128;

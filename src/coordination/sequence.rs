@@ -10,6 +10,8 @@ use tracing::debug;
 
 use crate::api::{KeyValueStore, KeyValueStoreError, ReadRequest, WriteCommand, WriteRequest};
 use crate::coordination::error::CoordinationError;
+use crate::raft::constants::{CAS_RETRY_INITIAL_BACKOFF_MS, CAS_RETRY_MAX_BACKOFF_MS, MAX_CAS_RETRIES};
+use std::time::Duration;
 
 /// Configuration for sequence generator.
 #[derive(Debug, Clone)]
@@ -56,10 +58,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         Self {
             store,
             key: key.into(),
-            state: Mutex::new(SequenceState {
-                next: 0,
-                batch_end: 0,
-            }),
+            state: Mutex::new(SequenceState { next: 0, batch_end: 0 }),
             config,
         }
     }
@@ -102,29 +101,27 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     /// Returns the start of the range (inclusive).
     /// Caller gets [start, start + count).
     pub async fn reserve(&self, count: u64) -> Result<u64, CoordinationError> {
+        let mut attempt = 0u32;
+        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
+
         loop {
             // Read current sequence value
             let current = match self.store.read(ReadRequest::new(self.key.clone())).await {
                 Ok(result) => {
                     let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                    value
-                        .parse::<u64>()
-                        .map_err(|_| CoordinationError::CorruptedData {
-                            key: self.key.clone(),
-                            reason: "not a valid u64".to_string(),
-                        })?
+                    value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid u64".to_string(),
+                    })?
                 }
                 Err(KeyValueStoreError::NotFound { .. }) => self.config.start_value - 1,
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             };
 
             // Check for overflow
-            let new_value =
-                current
-                    .checked_add(count)
-                    .ok_or_else(|| CoordinationError::SequenceExhausted {
-                        key: self.key.clone(),
-                    })?;
+            let new_value = current
+                .checked_add(count)
+                .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
 
             // Reserve range with CAS
             let expected = if current < self.config.start_value {
@@ -155,8 +152,15 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                     return Ok(current + 1); // Return start of reserved range
                 }
                 Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
-                    // Contention, retry immediately
-                    continue;
+                    attempt += 1;
+                    if attempt >= MAX_CAS_RETRIES {
+                        return Err(CoordinationError::MaxRetriesExceeded {
+                            operation: "sequence reserve".to_string(),
+                            attempts: attempt,
+                        });
+                    }
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 }
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             }
@@ -179,13 +183,10 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
-                let value =
-                    value_str
-                        .parse::<u64>()
-                        .map_err(|_| CoordinationError::CorruptedData {
-                            key: self.key.clone(),
-                            reason: "not a valid u64".to_string(),
-                        })?;
+                let value = value_str.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
+                    key: self.key.clone(),
+                    reason: "not a valid u64".to_string(),
+                })?;
                 Ok(value + 1) // Next would be current + 1
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(self.config.start_value),
@@ -200,12 +201,10 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value
-                    .parse::<u64>()
-                    .map_err(|_| CoordinationError::CorruptedData {
-                        key: self.key.clone(),
-                        reason: "not a valid u64".to_string(),
-                    })
+                value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
+                    key: self.key.clone(),
+                    reason: "not a valid u64".to_string(),
+                })
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -236,11 +235,7 @@ mod tests {
     #[tokio::test]
     async fn test_sequence_uniqueness() {
         let store = Arc::new(DeterministicKeyValueStore::new());
-        let seq = Arc::new(SequenceGenerator::new(
-            store,
-            "test_seq",
-            SequenceConfig::default(),
-        ));
+        let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig::default()));
 
         let mut ids = HashSet::new();
         for _ in 0..200 {

@@ -222,8 +222,8 @@ impl SignedTopologyAnnouncement {
     /// Create a signed topology announcement.
     #[allow(dead_code)]
     fn sign(announcement: TopologyAnnouncement, secret_key: &SecretKey) -> Result<Self> {
-        let announcement_bytes = postcard::to_stdvec(&announcement)
-            .context("failed to serialize topology announcement")?;
+        let announcement_bytes =
+            postcard::to_stdvec(&announcement).context("failed to serialize topology announcement")?;
         let signature = secret_key.sign(&announcement_bytes);
         let public_key = secret_key.public();
 
@@ -422,8 +422,7 @@ impl GossipRateLimiter {
             }
 
             // Create new entry (starts with full bucket, so first message always allowed)
-            let mut bucket =
-                TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST);
+            let mut bucket = TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST);
             bucket.try_consume(); // Consume token for this message
             self.per_peer.insert(
                 *peer_id,
@@ -441,12 +440,7 @@ impl GossipRateLimiter {
     ///
     /// Tiger Style: O(n) scan is acceptable for bounded n=256.
     fn evict_oldest(&mut self) {
-        if let Some(oldest_key) = self
-            .per_peer
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(key, _)| *key)
-        {
+        if let Some(oldest_key) = self.per_peer.iter().min_by_key(|(_, entry)| entry.last_access).map(|(key, _)| *key) {
             self.per_peer.remove(&oldest_key);
         }
     }
@@ -504,20 +498,16 @@ impl GossipPeerDiscovery {
         network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
     ) -> Result<Self> {
         // Get gossip instance or fail
-        let gossip = iroh_manager
-            .gossip()
-            .context("gossip not enabled on IrohEndpointManager")?;
+        let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
 
         // Subscribe to the topic with timeout
         // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
         // If gossip is unavailable, the node should continue without it (non-fatal).
-        let gossip_topic = tokio::time::timeout(
-            crate::raft::constants::GOSSIP_SUBSCRIBE_TIMEOUT,
-            gossip.subscribe(topic_id, vec![]),
-        )
-        .await
-        .context("timeout subscribing to gossip topic")?
-        .context("failed to subscribe to gossip topic")?;
+        let gossip_topic =
+            tokio::time::timeout(crate::raft::constants::GOSSIP_SUBSCRIBE_TIMEOUT, gossip.subscribe(topic_id, vec![]))
+                .await
+                .context("timeout subscribing to gossip topic")?
+                .context("failed to subscribe to gossip topic")?;
 
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
@@ -631,10 +621,8 @@ impl GossipPeerDiscovery {
 
             // Error recovery state for transient stream errors
             let mut consecutive_errors: u32 = 0;
-            let backoff_durations: Vec<Duration> = GOSSIP_STREAM_BACKOFF_SECS
-                .iter()
-                .map(|s| Duration::from_secs(*s))
-                .collect();
+            let backoff_durations: Vec<Duration> =
+                GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
 
             loop {
                 tokio::select! {
@@ -867,14 +855,10 @@ impl GossipPeerDiscovery {
         let timeout = Duration::from_secs(10);
 
         // Take tasks out of Option (they will be None after this, preventing Drop from aborting)
-        let mut announcer_task = self
-            .announcer_task
-            .take()
-            .expect("announcer_task already consumed");
-        let mut receiver_task = self
-            .receiver_task
-            .take()
-            .expect("receiver_task already consumed");
+        let mut announcer_task =
+            self.announcer_task.take().context("announcer task not initialized or already consumed")?;
+        let mut receiver_task =
+            self.receiver_task.take().context("receiver task not initialized or already consumed")?;
 
         tokio::select! {
             result = &mut announcer_task => {
@@ -1122,10 +1106,7 @@ mod tests {
             limiter.per_peer.insert(
                 peer,
                 PeerRateEntry {
-                    bucket: TokenBucket::new(
-                        GOSSIP_PER_PEER_RATE_PER_MINUTE,
-                        GOSSIP_PER_PEER_BURST,
-                    ),
+                    bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
                     last_access: now,
                 },
             );
@@ -1164,11 +1145,7 @@ mod tests {
             key_bytes[0] = (i & 0xFF) as u8;
             key_bytes[1] = ((i >> 8) & 0xFF) as u8;
             let peer = SecretKey::from(key_bytes).public();
-            assert!(
-                limiter.check(&peer).is_ok(),
-                "message {} should be allowed",
-                i
-            );
+            assert!(limiter.check(&peer).is_ok(), "message {} should be allowed", i);
         }
 
         // Next message should hit global limit
@@ -1225,10 +1202,7 @@ mod tests {
         let verified = signed.verify();
         assert!(verified.is_some());
         assert_eq!(verified.unwrap().node_id, announcement.node_id);
-        assert_eq!(
-            verified.unwrap().topology_version,
-            announcement.topology_version
-        );
+        assert_eq!(verified.unwrap().topology_version, announcement.topology_version);
     }
 
     #[test]
@@ -1243,10 +1217,7 @@ mod tests {
 
         // Verify still works after roundtrip
         assert!(deserialized.verify().is_some());
-        assert_eq!(
-            deserialized.verify().unwrap().topology_version,
-            signed.verify().unwrap().topology_version
-        );
+        assert_eq!(deserialized.verify().unwrap().topology_version, signed.verify().unwrap().topology_version);
     }
 
     #[test]

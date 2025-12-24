@@ -12,37 +12,34 @@ use tokio::sync::Semaphore;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::api::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore,
-    ReadRequest, WriteRequest, validate_client_key,
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, InitRequest, KeyValueStore, ReadRequest,
+    WriteRequest, validate_client_key,
 };
 use crate::auth::TokenVerifier;
 use crate::blob::IrohBlobStore;
 use crate::client_rpc::{
-    AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse,
-    BatchReadResultResponse, BatchWriteResultResponse, BlobListEntry as RpcBlobListEntry,
-    ChangeMembershipResultResponse, CheckpointWalResultResponse, ClientRpcRequest,
-    ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse, ClusterStateResponse,
-    ClusterTicketResponse, ConditionalBatchWriteResultResponse, CounterResultResponse,
+    AddBlobResultResponse, AddLearnerResultResponse, AddPeerResultResponse, BatchReadResultResponse,
+    BatchWriteResultResponse, BlobListEntry as RpcBlobListEntry, ChangeMembershipResultResponse,
+    CheckpointWalResultResponse, ClientRpcRequest, ClientRpcResponse, ClientTicketResponse as ClientTicketRpcResponse,
+    ClusterStateResponse, ClusterTicketResponse, ConditionalBatchWriteResultResponse, CounterResultResponse,
     DeleteResultResponse, DocsTicketResponse as DocsTicketRpcResponse, GetBlobResultResponse,
-    GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse,
-    LeaseGrantResultResponse, LeaseInfo, LeaseKeepaliveResultResponse, LeaseListResultResponse,
-    LeaseRevokeResultResponse, LeaseTimeToLiveResultResponse, ListBlobsResultResponse,
-    LockResultResponse, MAX_CLIENT_MESSAGE_SIZE, MAX_CLUSTER_NODES, MetricsResponse,
-    NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse, ProtectBlobResultResponse,
-    RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse, ScanEntry,
-    ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse,
-    SnapshotResultResponse, SqlResultResponse, UnprotectBlobResultResponse, VaultKeysResponse,
-    VaultListResponse, WatchCancelResultResponse, WatchCreateResultResponse,
-    WatchStatusResultResponse, WriteResultResponse,
+    GetBlobTicketResultResponse, HasBlobResultResponse, HealthResponse, InitResultResponse, LeaseGrantResultResponse,
+    LeaseInfo, LeaseKeepaliveResultResponse, LeaseListResultResponse, LeaseRevokeResultResponse,
+    LeaseTimeToLiveResultResponse, ListBlobsResultResponse, LockResultResponse, MAX_CLIENT_MESSAGE_SIZE,
+    MAX_CLUSTER_NODES, MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
+    ProtectBlobResultResponse, RaftMetricsResponse, RateLimiterResultResponse, ReadResultResponse, ScanEntry,
+    ScanResultResponse, SequenceResultResponse, SignedCounterResultResponse, SnapshotResultResponse, SqlResultResponse,
+    UnprotectBlobResultResponse, VaultKeysResponse, VaultListResponse, WatchCancelResultResponse,
+    WatchCreateResultResponse, WatchStatusResultResponse, WriteResultResponse,
 };
 use crate::cluster::IrohEndpointManager;
 use crate::coordination::{
-    AtomicCounter, CounterConfig, DistributedLock, DistributedRateLimiter, LockConfig,
-    RateLimiterConfig, SequenceConfig, SequenceGenerator, SignedAtomicCounter,
+    AtomicCounter, CounterConfig, DistributedLock, DistributedRateLimiter, LockConfig, RateLimiterConfig,
+    SequenceConfig, SequenceGenerator, SignedAtomicCounter,
 };
 use crate::raft::constants::{
-    CLIENT_RPC_BURST, CLIENT_RPC_RATE_LIMIT_PREFIX, CLIENT_RPC_RATE_PER_SECOND,
-    CLIENT_RPC_REQUEST_COUNTER, CLIENT_RPC_REQUEST_ID_SEQUENCE,
+    CLIENT_RPC_BURST, CLIENT_RPC_RATE_LIMIT_PREFIX, CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_REQUEST_COUNTER,
+    CLIENT_RPC_REQUEST_ID_SEQUENCE,
 };
 
 use super::constants::{MAX_CLIENT_CONNECTIONS, MAX_CLIENT_STREAMS_PER_CONNECTION};
@@ -148,9 +145,7 @@ impl ProtocolHandler for ClientProtocolHandler {
                     "Client connection limit reached ({}), rejecting connection from {}",
                     MAX_CLIENT_CONNECTIONS, remote_node_id
                 );
-                return Err(AcceptError::from_err(std::io::Error::other(
-                    "connection limit reached",
-                )));
+                return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
             }
         };
 
@@ -173,10 +168,7 @@ impl ProtocolHandler for ClientProtocolHandler {
 
 /// Handle a single Client connection.
 #[instrument(skip(connection, ctx))]
-async fn handle_client_connection(
-    connection: Connection,
-    ctx: Arc<ClientProtocolContext>,
-) -> anyhow::Result<()> {
+async fn handle_client_connection(connection: Connection, ctx: Arc<ClientProtocolContext>) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
     let stream_semaphore = Arc::new(Semaphore::new(MAX_CLIENT_STREAMS_PER_CONNECTION as usize));
@@ -235,11 +227,8 @@ async fn handle_client_request(
     // Generate unique request ID using distributed sequence
     // Tiger Style: Monotonic IDs enable cluster-wide request tracing
     let request_id = {
-        let seq = SequenceGenerator::new(
-            ctx.kv_store.clone(),
-            CLIENT_RPC_REQUEST_ID_SEQUENCE,
-            SequenceConfig::default(),
-        );
+        let seq =
+            SequenceGenerator::new(ctx.kv_store.clone(), CLIENT_RPC_REQUEST_ID_SEQUENCE, SequenceConfig::default());
         seq.next().await.unwrap_or(0)
     };
 
@@ -247,23 +236,19 @@ async fn handle_client_request(
     tracing::Span::current().record("request_id", request_id);
 
     // Read the request with size limit
-    let buffer = recv
-        .read_to_end(MAX_CLIENT_MESSAGE_SIZE)
-        .await
-        .context("failed to read Client request")?;
+    let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
 
     // Try to parse as AuthenticatedRequest first (new format)
     // Fall back to legacy ClientRpcRequest for backwards compatibility
-    let (request, token) =
-        match postcard::from_bytes::<crate::client_rpc::AuthenticatedRequest>(&buffer) {
-            Ok(auth_req) => (auth_req.request, auth_req.token),
-            Err(_) => {
-                // Legacy format: parse as plain ClientRpcRequest
-                let req: ClientRpcRequest = postcard::from_bytes(&buffer)
-                    .context("failed to deserialize Client request")?;
-                (req, None)
-            }
-        };
+    let (request, token) = match postcard::from_bytes::<crate::client_rpc::AuthenticatedRequest>(&buffer) {
+        Ok(auth_req) => (auth_req.request, auth_req.token),
+        Err(_) => {
+            // Legacy format: parse as plain ClientRpcRequest
+            let req: ClientRpcRequest =
+                postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
+            (req, None)
+        }
+    };
 
     debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 
@@ -282,15 +267,10 @@ async fn handle_client_request(
             retry_after_ms = e.retry_after_ms,
             "Client rate limited"
         );
-        let response = ClientRpcResponse::error(
-            "RATE_LIMITED",
-            format!("Too many requests. Retry after {}ms", e.retry_after_ms),
-        );
-        let response_bytes =
-            postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
-        send.write_all(&response_bytes)
-            .await
-            .context("failed to write rate limit response")?;
+        let response =
+            ClientRpcResponse::error("RATE_LIMITED", format!("Too many requests. Retry after {}ms", e.retry_after_ms));
+        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
+        send.write_all(&response_bytes).await.context("failed to write rate limit response")?;
         send.finish().context("failed to finish send stream")?;
         return Ok(());
     }
@@ -314,15 +294,11 @@ async fn handle_client_request(
                             operation = ?operation,
                             "Authorization failed"
                         );
-                        let response = ClientRpcResponse::error(
-                            "UNAUTHORIZED",
-                            format!("Authorization failed: {}", auth_err),
-                        );
-                        let response_bytes = postcard::to_stdvec(&response)
-                            .context("failed to serialize auth error response")?;
-                        send.write_all(&response_bytes)
-                            .await
-                            .context("failed to write auth error response")?;
+                        let response =
+                            ClientRpcResponse::error("UNAUTHORIZED", format!("Authorization failed: {}", auth_err));
+                        let response_bytes =
+                            postcard::to_stdvec(&response).context("failed to serialize auth error response")?;
+                        send.write_all(&response_bytes).await.context("failed to write auth error response")?;
                         send.finish().context("failed to finish send stream")?;
                         return Ok(());
                     }
@@ -336,15 +312,11 @@ async fn handle_client_request(
                             operation = ?operation,
                             "Missing authentication token"
                         );
-                        let response = ClientRpcResponse::error(
-                            "UNAUTHORIZED",
-                            "Authentication required but no token provided",
-                        );
-                        let response_bytes = postcard::to_stdvec(&response)
-                            .context("failed to serialize auth error response")?;
-                        send.write_all(&response_bytes)
-                            .await
-                            .context("failed to write auth error response")?;
+                        let response =
+                            ClientRpcResponse::error("UNAUTHORIZED", "Authentication required but no token provided");
+                        let response_bytes =
+                            postcard::to_stdvec(&response).context("failed to serialize auth error response")?;
+                        send.write_all(&response_bytes).await.context("failed to write auth error response")?;
                         send.finish().context("failed to finish send stream")?;
                         return Ok(());
                     }
@@ -371,22 +343,15 @@ async fn handle_client_request(
     };
 
     // Serialize and send response
-    let response_bytes =
-        postcard::to_stdvec(&response).context("failed to serialize Client response")?;
-    send.write_all(&response_bytes)
-        .await
-        .context("failed to write Client response")?;
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
+    send.write_all(&response_bytes).await.context("failed to write Client response")?;
     send.finish().context("failed to finish send stream")?;
 
     // Increment cluster-wide request counter (best-effort, non-blocking)
     // Tiger Style: Fire-and-forget counter increment doesn't block request path
     let kv_store = ctx.kv_store.clone();
     tokio::spawn(async move {
-        let counter = AtomicCounter::new(
-            kv_store,
-            CLIENT_RPC_REQUEST_COUNTER,
-            CounterConfig::default(),
-        );
+        let counter = AtomicCounter::new(kv_store, CLIENT_RPC_REQUEST_COUNTER, CounterConfig::default());
         if let Err(e) = counter.increment().await {
             debug!(error = %e, "Failed to increment request counter");
         }
@@ -442,11 +407,8 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetLeader => {
-            let leader = ctx
-                .controller
-                .get_leader()
-                .await
-                .map_err(|e| anyhow::anyhow!("failed to get leader: {}", e))?;
+            let leader =
+                ctx.controller.get_leader().await.map_err(|e| anyhow::anyhow!("failed to get leader: {}", e))?;
             Ok(ClientRpcResponse::Leader(leader))
         }
 
@@ -562,13 +524,11 @@ async fn process_client_request(
 
             // Validate key against reserved _system: prefix
             if let Err(vault_err) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: false,
-                        actual_value: None,
-                        error: Some(vault_err.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: false,
+                    actual_value: None,
+                    error: Some(vault_err.to_string()),
+                }));
             }
 
             let result = ctx
@@ -583,28 +543,24 @@ async fn process_client_request(
                 .await;
 
             match result {
-                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: true,
-                        actual_value: None,
-                        error: None,
-                    },
-                )),
-                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => Ok(
-                    ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: true,
+                    actual_value: None,
+                    error: None,
+                })),
+                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
+                    Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
                         success: false,
                         actual_value: actual.map(|v| v.into_bytes()),
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: false,
-                        actual_value: None,
-                        // HIGH-4: Sanitize error messages to prevent information leakage
-                        error: Some(sanitize_kv_error(&e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: false,
+                    actual_value: None,
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_kv_error(&e)),
+                })),
             }
         }
 
@@ -614,13 +570,11 @@ async fn process_client_request(
 
             // Validate key against reserved _system: prefix
             if let Err(vault_err) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: false,
-                        actual_value: None,
-                        error: Some(vault_err.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: false,
+                    actual_value: None,
+                    error: Some(vault_err.to_string()),
+                }));
             }
 
             let result = ctx
@@ -634,28 +588,24 @@ async fn process_client_request(
                 .await;
 
             match result {
-                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: true,
-                        actual_value: None,
-                        error: None,
-                    },
-                )),
-                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => Ok(
-                    ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                Ok(_) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: true,
+                    actual_value: None,
+                    error: None,
+                })),
+                Err(crate::api::KeyValueStoreError::CompareAndSwapFailed { actual, .. }) => {
+                    Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
                         success: false,
                         actual_value: actual.map(|v| v.into_bytes()),
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(
-                    CompareAndSwapResultResponse {
-                        success: false,
-                        actual_value: None,
-                        // HIGH-4: Sanitize error messages to prevent information leakage
-                        error: Some(sanitize_kv_error(&e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
+                    success: false,
+                    actual_value: None,
+                    // HIGH-4: Sanitize error messages to prevent information leakage
+                    error: Some(sanitize_kv_error(&e)),
+                })),
             }
         }
 
@@ -684,8 +634,7 @@ async fn process_client_request(
 
             // Parse the address as either JSON EndpointAddr or bare EndpointId
             let iroh_addr = if addr.starts_with('{') {
-                serde_json::from_str::<EndpointAddr>(&addr)
-                    .map_err(|e| format!("invalid JSON EndpointAddr: {e}"))
+                serde_json::from_str::<EndpointAddr>(&addr).map_err(|e| format!("invalid JSON EndpointAddr: {e}"))
             } else {
                 iroh::EndpointId::from_str(&addr)
                     .map(EndpointAddr::new)
@@ -700,33 +649,24 @@ async fn process_client_request(
                         })
                         .await
                 }
-                Err(parse_err) => {
-                    Err(crate::api::ControlPlaneError::InvalidRequest { reason: parse_err })
-                }
+                Err(parse_err) => Err(crate::api::ControlPlaneError::InvalidRequest { reason: parse_err }),
             };
 
-            Ok(ClientRpcResponse::AddLearnerResult(
-                AddLearnerResultResponse {
-                    success: result.is_ok(),
-                    // HIGH-4: Sanitize error messages to prevent information leakage
-                    error: result.err().map(|e| sanitize_control_error(&e)),
-                },
-            ))
+            Ok(ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
+                success: result.is_ok(),
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_control_error(&e)),
+            }))
         }
 
         ClientRpcRequest::ChangeMembership { members } => {
-            let result = ctx
-                .controller
-                .change_membership(ChangeMembershipRequest { members })
-                .await;
+            let result = ctx.controller.change_membership(ChangeMembershipRequest { members }).await;
 
-            Ok(ClientRpcResponse::ChangeMembershipResult(
-                ChangeMembershipResultResponse {
-                    success: result.is_ok(),
-                    // HIGH-4: Sanitize error messages to prevent information leakage
-                    error: result.err().map(|e| sanitize_control_error(&e)),
-                },
-            ))
+            Ok(ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
+                success: result.is_ok(),
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_control_error(&e)),
+            }))
         }
 
         ClientRpcRequest::Ping => Ok(ClientRpcResponse::Pong),
@@ -744,13 +684,11 @@ async fn process_client_request(
 
             // Convert ClusterNode to NodeDescriptor with membership info
             // Tiger Style: Bounded to MAX_CLUSTER_NODES
-            let mut nodes: Vec<NodeDescriptor> = Vec::with_capacity(
-                (cluster_state.nodes.len() + cluster_state.learners.len()).min(MAX_CLUSTER_NODES),
-            );
+            let mut nodes: Vec<NodeDescriptor> =
+                Vec::with_capacity((cluster_state.nodes.len() + cluster_state.learners.len()).min(MAX_CLUSTER_NODES));
 
             // Track which nodes are voters (members)
-            let member_ids: std::collections::HashSet<u64> =
-                cluster_state.members.iter().copied().collect();
+            let member_ids: std::collections::HashSet<u64> = cluster_state.members.iter().copied().collect();
 
             // Add all nodes from the cluster state
             for node in cluster_state.nodes.iter().take(MAX_CLUSTER_NODES) {
@@ -901,11 +839,7 @@ async fn process_client_request(
                     } else {
                         0
                     };
-                    let last_applied = metrics
-                        .last_applied
-                        .as_ref()
-                        .map(|la| la.index)
-                        .unwrap_or(0);
+                    let last_applied = metrics.last_applied.as_ref().map(|la| la.index).unwrap_or(0);
                     let snapshot_index = metrics.snapshot.as_ref().map(|s| s.index).unwrap_or(0);
 
                     // Get cluster-wide request counter
@@ -999,21 +933,19 @@ async fn process_client_request(
                 })
                 .await;
 
-            Ok(ClientRpcResponse::PromoteLearnerResult(
-                PromoteLearnerResultResponse {
-                    success: result.is_ok(),
-                    learner_id,
-                    previous_voters,
-                    new_voters: new_members,
-                    message: if result.is_ok() {
-                        format!("Learner {} promoted to voter", learner_id)
-                    } else {
-                        "Promotion failed".to_string()
-                    },
-                    // HIGH-4: Sanitize error messages to prevent information leakage
-                    error: result.err().map(|e| sanitize_control_error(&e)),
+            Ok(ClientRpcResponse::PromoteLearnerResult(PromoteLearnerResultResponse {
+                success: result.is_ok(),
+                learner_id,
+                previous_voters,
+                new_voters: new_members,
+                message: if result.is_ok() {
+                    format!("Learner {} promoted to voter", learner_id)
+                } else {
+                    "Promotion failed".to_string()
                 },
-            ))
+                // HIGH-4: Sanitize error messages to prevent information leakage
+                error: result.err().map(|e| sanitize_control_error(&e)),
+            }))
         }
 
         ClientRpcRequest::CheckpointWal => {
@@ -1021,15 +953,16 @@ async fn process_client_request(
             // which is not exposed through the ClusterController/KeyValueStore traits.
             // This would need to be implemented as a new trait method or by extending
             // the ClientProtocolContext to include the state machine reference.
-            Ok(ClientRpcResponse::CheckpointWalResult(
-                CheckpointWalResultResponse {
-                    success: false,
-                    pages_checkpointed: None,
-                    wal_size_before_bytes: None,
-                    wal_size_after_bytes: None,
-                    error: Some("WAL checkpoint requires state machine access - use trigger_snapshot for log compaction".to_string()),
-                },
-            ))
+            Ok(ClientRpcResponse::CheckpointWalResult(CheckpointWalResultResponse {
+                success: false,
+                pages_checkpointed: None,
+                wal_size_before_bytes: None,
+                wal_size_after_bytes: None,
+                error: Some(
+                    "WAL checkpoint requires state machine access - use trigger_snapshot for log compaction"
+                        .to_string(),
+                ),
+            }))
         }
 
         ClientRpcRequest::ListVaults => {
@@ -1037,9 +970,7 @@ async fn process_client_request(
             // Use ScanKeys with an empty prefix to list all keys.
             Ok(ClientRpcResponse::VaultList(VaultListResponse {
                 vaults: vec![],
-                error: Some(
-                    "ListVaults is deprecated. Use ScanKeys with a prefix instead.".to_string(),
-                ),
+                error: Some("ListVaults is deprecated. Use ScanKeys with a prefix instead.".to_string()),
             }))
         }
 
@@ -1049,16 +980,11 @@ async fn process_client_request(
             Ok(ClientRpcResponse::VaultKeys(VaultKeysResponse {
                 vault: vault_name,
                 keys: vec![],
-                error: Some(
-                    "GetVaultKeys is deprecated. Use ScanKeys with a prefix instead.".to_string(),
-                ),
+                error: Some("GetVaultKeys is deprecated. Use ScanKeys with a prefix instead.".to_string()),
             }))
         }
 
-        ClientRpcRequest::AddPeer {
-            node_id,
-            endpoint_addr,
-        } => {
+        ClientRpcRequest::AddPeer { node_id, endpoint_addr } => {
             // Parse the endpoint address (JSON-serialized EndpointAddr)
             let parsed_addr: iroh::EndpointAddr = match serde_json::from_str(&endpoint_addr) {
                 Ok(addr) => addr,
@@ -1072,10 +998,7 @@ async fn process_client_request(
                     // HIGH-4: Don't expose parse error details to clients
                     return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
                         success: false,
-                        error: Some(
-                            "invalid endpoint_addr: expected JSON-serialized EndpointAddr"
-                                .to_string(),
-                        ),
+                        error: Some("invalid endpoint_addr: expected JSON-serialized EndpointAddr".to_string()),
                     }));
                 }
             };
@@ -1084,10 +1007,7 @@ async fn process_client_request(
             let network_factory = match &ctx.network_factory {
                 Some(nf) => nf,
                 None => {
-                    warn!(
-                        node_id = node_id,
-                        "AddPeer: network_factory not available in context"
-                    );
+                    warn!(node_id = node_id, "AddPeer: network_factory not available in context");
                     return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
                         success: false,
                         error: Some("network_factory not configured for this node".to_string()),
@@ -1097,9 +1017,7 @@ async fn process_client_request(
 
             // Add peer to the network factory
             // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
-            network_factory
-                .add_peer(crate::raft::types::NodeId(node_id), parsed_addr.clone())
-                .await;
+            network_factory.add_peer(crate::raft::types::NodeId(node_id), parsed_addr.clone()).await;
 
             info!(
                 node_id = node_id,
@@ -1134,11 +1052,7 @@ async fn process_client_request(
 
             // Parse explicit endpoint_ids if provided
             if let Some(ids_str) = &endpoint_ids {
-                for id_str in ids_str
-                    .split(',')
-                    .map(|s| s.trim())
-                    .filter(|s| !s.is_empty())
-                {
+                for id_str in ids_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
                     // Skip if we've hit the limit (Tiger Style: MAX_BOOTSTRAP_PEERS = 16)
                     if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
                         debug!(
@@ -1175,11 +1089,7 @@ async fn process_client_request(
                 && let Ok(cluster_state) = ctx.controller.current_state().await
             {
                 // Add endpoint IDs from nodes with known iroh_addr
-                for node in cluster_state
-                    .nodes
-                    .iter()
-                    .chain(cluster_state.learners.iter())
-                {
+                for node in cluster_state.nodes.iter().chain(cluster_state.learners.iter()) {
                     if added_peers >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
                         break;
                     }
@@ -1244,17 +1154,13 @@ async fn process_client_request(
             }))
         }
 
-        ClientRpcRequest::GetDocsTicket {
-            read_write,
-            priority,
-        } => {
+        ClientRpcRequest::GetDocsTicket { read_write, priority } => {
             use crate::docs::ticket::AspenDocsTicket;
 
             let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
 
             // Derive namespace ID from cluster cookie
-            let namespace_hash =
-                blake3::hash(format!("aspen-docs-{}", ctx.cluster_cookie).as_bytes());
+            let namespace_hash = blake3::hash(format!("aspen-docs-{}", ctx.cluster_cookie).as_bytes());
             let namespace_id_str = format!("{}", namespace_hash);
 
             let ticket = AspenDocsTicket::new(
@@ -1397,10 +1303,7 @@ async fn process_client_request(
             };
 
             match blob_store.has(&hash).await {
-                Ok(exists) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
-                    exists,
-                    error: None,
-                })),
+                Ok(exists) => Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse { exists, error: None })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "blob has check failed");
@@ -1417,13 +1320,11 @@ async fn process_client_request(
             use iroh_blobs::Hash;
 
             let Some(ref blob_store) = ctx.blob_store else {
-                return Ok(ClientRpcResponse::GetBlobTicketResult(
-                    GetBlobTicketResultResponse {
-                        success: false,
-                        ticket: None,
-                        error: Some("blob store not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
+                    success: false,
+                    ticket: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
             };
 
             // Parse hash from string
@@ -1431,34 +1332,28 @@ async fn process_client_request(
                 Ok(h) => h,
                 Err(_) => {
                     // HIGH-4: Don't expose parse error details
-                    return Ok(ClientRpcResponse::GetBlobTicketResult(
-                        GetBlobTicketResultResponse {
-                            success: false,
-                            ticket: None,
-                            error: Some("invalid hash".to_string()),
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
+                        success: false,
+                        ticket: None,
+                        error: Some("invalid hash".to_string()),
+                    }));
                 }
             };
 
             match blob_store.ticket(&hash).await {
-                Ok(ticket) => Ok(ClientRpcResponse::GetBlobTicketResult(
-                    GetBlobTicketResultResponse {
-                        success: true,
-                        ticket: Some(ticket.to_string()),
-                        error: None,
-                    },
-                )),
+                Ok(ticket) => Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
+                    success: true,
+                    ticket: Some(ticket.to_string()),
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "blob ticket generation failed");
-                    Ok(ClientRpcResponse::GetBlobTicketResult(
-                        GetBlobTicketResultResponse {
-                            success: false,
-                            ticket: None,
-                            error: Some(sanitize_blob_error(&e)),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
+                        success: false,
+                        ticket: None,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
                 }
             }
         }
@@ -1470,15 +1365,13 @@ async fn process_client_request(
             use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
-                return Ok(ClientRpcResponse::ListBlobsResult(
-                    ListBlobsResultResponse {
-                        blobs: vec![],
-                        count: 0,
-                        has_more: false,
-                        continuation_token: None,
-                        error: Some("blob store not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::ListBlobsResult(ListBlobsResultResponse {
+                    blobs: vec![],
+                    count: 0,
+                    has_more: false,
+                    continuation_token: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
             };
 
             // Tiger Style: Cap limit to prevent unbounded responses
@@ -1496,28 +1389,24 @@ async fn process_client_request(
                         })
                         .collect();
 
-                    Ok(ClientRpcResponse::ListBlobsResult(
-                        ListBlobsResultResponse {
-                            blobs,
-                            count,
-                            has_more: result.continuation_token.is_some(),
-                            continuation_token: result.continuation_token,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ListBlobsResult(ListBlobsResultResponse {
+                        blobs,
+                        count,
+                        has_more: result.continuation_token.is_some(),
+                        continuation_token: result.continuation_token,
+                        error: None,
+                    }))
                 }
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "blob list failed");
-                    Ok(ClientRpcResponse::ListBlobsResult(
-                        ListBlobsResultResponse {
-                            blobs: vec![],
-                            count: 0,
-                            has_more: false,
-                            continuation_token: None,
-                            error: Some(sanitize_blob_error(&e)),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ListBlobsResult(ListBlobsResultResponse {
+                        blobs: vec![],
+                        count: 0,
+                        has_more: false,
+                        continuation_token: None,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
                 }
             }
         }
@@ -1527,44 +1416,36 @@ async fn process_client_request(
             use iroh_blobs::Hash;
 
             let Some(ref blob_store) = ctx.blob_store else {
-                return Ok(ClientRpcResponse::ProtectBlobResult(
-                    ProtectBlobResultResponse {
-                        success: false,
-                        error: Some("blob store not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
+                    success: false,
+                    error: Some("blob store not enabled".to_string()),
+                }));
             };
 
             // Parse hash from string
             let hash = match hash.parse::<Hash>() {
                 Ok(h) => h,
                 Err(e) => {
-                    return Ok(ClientRpcResponse::ProtectBlobResult(
-                        ProtectBlobResultResponse {
-                            success: false,
-                            error: Some(format!("invalid hash: {}", e)),
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
+                        success: false,
+                        error: Some(format!("invalid hash: {}", e)),
+                    }));
                 }
             };
 
             let tag_name = IrohBlobStore::user_tag(&tag);
             match blob_store.protect(&hash, &tag_name).await {
-                Ok(()) => Ok(ClientRpcResponse::ProtectBlobResult(
-                    ProtectBlobResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
+                    success: true,
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "blob protect failed");
-                    Ok(ClientRpcResponse::ProtectBlobResult(
-                        ProtectBlobResultResponse {
-                            success: false,
-                            error: Some(sanitize_blob_error(&e)),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
+                        success: false,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
                 }
             }
         }
@@ -1573,31 +1454,25 @@ async fn process_client_request(
             use crate::blob::BlobStore;
 
             let Some(ref blob_store) = ctx.blob_store else {
-                return Ok(ClientRpcResponse::UnprotectBlobResult(
-                    UnprotectBlobResultResponse {
-                        success: false,
-                        error: Some("blob store not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
+                    success: false,
+                    error: Some("blob store not enabled".to_string()),
+                }));
             };
 
             let tag_name = IrohBlobStore::user_tag(&tag);
             match blob_store.unprotect(&tag_name).await {
-                Ok(()) => Ok(ClientRpcResponse::UnprotectBlobResult(
-                    UnprotectBlobResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
+                    success: true,
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "blob unprotect failed");
-                    Ok(ClientRpcResponse::UnprotectBlobResult(
-                        UnprotectBlobResultResponse {
-                            success: false,
-                            error: Some(sanitize_blob_error(&e)),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
+                        success: false,
+                        error: Some(sanitize_blob_error(&e)),
+                    }))
                 }
             }
         }
@@ -1610,14 +1485,12 @@ async fn process_client_request(
             use crate::docs::ticket::AspenDocsTicket;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::AddPeerClusterResult(
-                    AddPeerClusterResultResponse {
-                        success: false,
-                        cluster_id: None,
-                        priority: None,
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
+                    success: false,
+                    cluster_id: None,
+                    priority: None,
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
             // Parse the ticket
@@ -1625,14 +1498,12 @@ async fn process_client_request(
                 Ok(t) => t,
                 Err(_) => {
                     // HIGH-4: Don't expose parse error details
-                    return Ok(ClientRpcResponse::AddPeerClusterResult(
-                        AddPeerClusterResultResponse {
-                            success: false,
-                            cluster_id: None,
-                            priority: None,
-                            error: Some("invalid ticket".to_string()),
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
+                        success: false,
+                        cluster_id: None,
+                        priority: None,
+                        error: Some("invalid ticket".to_string()),
+                    }));
                 }
             };
 
@@ -1640,25 +1511,21 @@ async fn process_client_request(
             let priority = docs_ticket.priority as u32;
 
             match peer_manager.add_peer(docs_ticket).await {
-                Ok(()) => Ok(ClientRpcResponse::AddPeerClusterResult(
-                    AddPeerClusterResultResponse {
-                        success: true,
-                        cluster_id: Some(cluster_id),
-                        priority: Some(priority),
-                        error: None,
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
+                    success: true,
+                    cluster_id: Some(cluster_id),
+                    priority: Some(priority),
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "add peer cluster failed");
-                    Ok(ClientRpcResponse::AddPeerClusterResult(
-                        AddPeerClusterResultResponse {
-                            success: false,
-                            cluster_id: Some(cluster_id),
-                            priority: None,
-                            error: Some("peer cluster operation failed".to_string()),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
+                        success: false,
+                        cluster_id: Some(cluster_id),
+                        priority: None,
+                        error: Some("peer cluster operation failed".to_string()),
+                    }))
                 }
             }
         }
@@ -1667,33 +1534,27 @@ async fn process_client_request(
             use crate::client_rpc::RemovePeerClusterResultResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::RemovePeerClusterResult(
-                    RemovePeerClusterResultResponse {
-                        success: false,
-                        cluster_id: cluster_id.clone(),
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
+                    success: false,
+                    cluster_id: cluster_id.clone(),
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
             match peer_manager.remove_peer(&cluster_id).await {
-                Ok(()) => Ok(ClientRpcResponse::RemovePeerClusterResult(
-                    RemovePeerClusterResultResponse {
-                        success: true,
-                        cluster_id,
-                        error: None,
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
+                    success: true,
+                    cluster_id,
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "remove peer cluster failed");
-                    Ok(ClientRpcResponse::RemovePeerClusterResult(
-                        RemovePeerClusterResultResponse {
-                            success: false,
-                            cluster_id,
-                            error: Some("peer cluster operation failed".to_string()),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::RemovePeerClusterResult(RemovePeerClusterResultResponse {
+                        success: false,
+                        cluster_id,
+                        error: Some("peer cluster operation failed".to_string()),
+                    }))
                 }
             }
         }
@@ -1702,13 +1563,11 @@ async fn process_client_request(
             use crate::client_rpc::{ListPeerClustersResultResponse, PeerClusterInfo};
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::ListPeerClustersResult(
-                    ListPeerClustersResultResponse {
-                        peers: vec![],
-                        count: 0,
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::ListPeerClustersResult(ListPeerClustersResultResponse {
+                    peers: vec![],
+                    count: 0,
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
             let peers = peer_manager.list_peers().await;
@@ -1726,61 +1585,53 @@ async fn process_client_request(
                 })
                 .collect();
 
-            Ok(ClientRpcResponse::ListPeerClustersResult(
-                ListPeerClustersResultResponse {
-                    peers: peer_infos,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ListPeerClustersResult(ListPeerClustersResultResponse {
+                peers: peer_infos,
+                count,
+                error: None,
+            }))
         }
 
         ClientRpcRequest::GetPeerClusterStatus { cluster_id } => {
             use crate::client_rpc::PeerClusterStatusResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::PeerClusterStatus(
-                    PeerClusterStatusResponse {
-                        found: false,
-                        cluster_id: cluster_id.clone(),
-                        state: "unknown".to_string(),
-                        syncing: false,
-                        entries_received: 0,
-                        entries_imported: 0,
-                        entries_skipped: 0,
-                        entries_filtered: 0,
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
+                    found: false,
+                    cluster_id: cluster_id.clone(),
+                    state: "unknown".to_string(),
+                    syncing: false,
+                    entries_received: 0,
+                    entries_imported: 0,
+                    entries_skipped: 0,
+                    entries_filtered: 0,
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
             match peer_manager.sync_status(&cluster_id).await {
-                Some(status) => Ok(ClientRpcResponse::PeerClusterStatus(
-                    PeerClusterStatusResponse {
-                        found: true,
-                        cluster_id: status.cluster_id,
-                        state: format!("{:?}", status.state),
-                        syncing: status.syncing,
-                        entries_received: status.entries_received,
-                        entries_imported: status.entries_imported,
-                        entries_skipped: status.entries_skipped,
-                        entries_filtered: status.entries_filtered,
-                        error: None,
-                    },
-                )),
-                None => Ok(ClientRpcResponse::PeerClusterStatus(
-                    PeerClusterStatusResponse {
-                        found: false,
-                        cluster_id,
-                        state: "unknown".to_string(),
-                        syncing: false,
-                        entries_received: 0,
-                        entries_imported: 0,
-                        entries_skipped: 0,
-                        entries_filtered: 0,
-                        error: None,
-                    },
-                )),
+                Some(status) => Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
+                    found: true,
+                    cluster_id: status.cluster_id,
+                    state: format!("{:?}", status.state),
+                    syncing: status.syncing,
+                    entries_received: status.entries_received,
+                    entries_imported: status.entries_imported,
+                    entries_skipped: status.entries_skipped,
+                    entries_filtered: status.entries_filtered,
+                    error: None,
+                })),
+                None => Ok(ClientRpcResponse::PeerClusterStatus(PeerClusterStatusResponse {
+                    found: false,
+                    cluster_id,
+                    state: "unknown".to_string(),
+                    syncing: false,
+                    entries_received: 0,
+                    entries_imported: 0,
+                    entries_skipped: 0,
+                    entries_filtered: 0,
+                    error: None,
+                })),
             }
         }
 
@@ -1793,31 +1644,25 @@ async fn process_client_request(
             use crate::client_rpc::UpdatePeerClusterFilterResultResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
-                    UpdatePeerClusterFilterResultResponse {
-                        success: false,
-                        cluster_id: cluster_id.clone(),
-                        filter_type: None,
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
+                    success: false,
+                    cluster_id: cluster_id.clone(),
+                    filter_type: None,
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
             // Parse filter type and prefixes
             let filter = match filter_type.to_lowercase().as_str() {
                 "full" | "fullreplication" => SubscriptionFilter::FullReplication,
                 "include" | "prefixfilter" => {
-                    let prefix_list: Vec<String> = prefixes
-                        .as_ref()
-                        .map(|p| serde_json::from_str(p).unwrap_or_default())
-                        .unwrap_or_default();
+                    let prefix_list: Vec<String> =
+                        prefixes.as_ref().map(|p| serde_json::from_str(p).unwrap_or_default()).unwrap_or_default();
                     SubscriptionFilter::PrefixFilter(prefix_list)
                 }
                 "exclude" | "prefixexclude" => {
-                    let prefix_list: Vec<String> = prefixes
-                        .as_ref()
-                        .map(|p| serde_json::from_str(p).unwrap_or_default())
-                        .unwrap_or_default();
+                    let prefix_list: Vec<String> =
+                        prefixes.as_ref().map(|p| serde_json::from_str(p).unwrap_or_default()).unwrap_or_default();
                     SubscriptionFilter::PrefixExclude(prefix_list)
                 }
                 other => {
@@ -1832,38 +1677,27 @@ async fn process_client_request(
                 }
             };
 
-            match peer_manager
-                .importer()
-                .update_filter(&cluster_id, filter.clone())
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
-                    UpdatePeerClusterFilterResultResponse {
-                        success: true,
-                        cluster_id,
-                        filter_type: Some(filter_type),
-                        error: None,
-                    },
-                )),
+            match peer_manager.importer().update_filter(&cluster_id, filter.clone()).await {
+                Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
+                    success: true,
+                    cluster_id,
+                    filter_type: Some(filter_type),
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "update peer cluster filter failed");
-                    Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
-                        UpdatePeerClusterFilterResultResponse {
-                            success: false,
-                            cluster_id,
-                            filter_type: None,
-                            error: Some("peer cluster operation failed".to_string()),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
+                        success: false,
+                        cluster_id,
+                        filter_type: None,
+                        error: Some("peer cluster operation failed".to_string()),
+                    }))
                 }
             }
         }
 
-        ClientRpcRequest::UpdatePeerClusterPriority {
-            cluster_id,
-            priority,
-        } => {
+        ClientRpcRequest::UpdatePeerClusterPriority { cluster_id, priority } => {
             use crate::client_rpc::UpdatePeerClusterPriorityResultResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
@@ -1879,84 +1713,61 @@ async fn process_client_request(
             };
 
             // Get current priority before update
-            let previous_priority = peer_manager
-                .list_peers()
-                .await
-                .into_iter()
-                .find(|p| p.cluster_id == cluster_id)
-                .map(|p| p.priority);
+            let previous_priority =
+                peer_manager.list_peers().await.into_iter().find(|p| p.cluster_id == cluster_id).map(|p| p.priority);
 
-            match peer_manager
-                .importer()
-                .update_priority(&cluster_id, priority)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
-                    UpdatePeerClusterPriorityResultResponse {
+            match peer_manager.importer().update_priority(&cluster_id, priority).await {
+                Ok(()) => {
+                    Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
                         success: true,
                         cluster_id,
                         previous_priority,
                         new_priority: Some(priority),
                         error: None,
-                    },
-                )),
+                    }))
+                }
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "update peer cluster priority failed");
-                    Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
-                        UpdatePeerClusterPriorityResultResponse {
-                            success: false,
-                            cluster_id,
-                            previous_priority,
-                            new_priority: None,
-                            error: Some("peer cluster operation failed".to_string()),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
+                        success: false,
+                        cluster_id,
+                        previous_priority,
+                        new_priority: None,
+                        error: Some("peer cluster operation failed".to_string()),
+                    }))
                 }
             }
         }
 
-        ClientRpcRequest::SetPeerClusterEnabled {
-            cluster_id,
-            enabled,
-        } => {
+        ClientRpcRequest::SetPeerClusterEnabled { cluster_id, enabled } => {
             use crate::client_rpc::SetPeerClusterEnabledResultResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
-                    SetPeerClusterEnabledResultResponse {
-                        success: false,
-                        cluster_id: cluster_id.clone(),
-                        enabled: None,
-                        error: Some("peer sync not enabled".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
+                    success: false,
+                    cluster_id: cluster_id.clone(),
+                    enabled: None,
+                    error: Some("peer sync not enabled".to_string()),
+                }));
             };
 
-            match peer_manager
-                .importer()
-                .set_enabled(&cluster_id, enabled)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
-                    SetPeerClusterEnabledResultResponse {
-                        success: true,
-                        cluster_id,
-                        enabled: Some(enabled),
-                        error: None,
-                    },
-                )),
+            match peer_manager.importer().set_enabled(&cluster_id, enabled).await {
+                Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
+                    success: true,
+                    cluster_id,
+                    enabled: Some(enabled),
+                    error: None,
+                })),
                 Err(e) => {
                     // HIGH-4: Log full error internally, return sanitized message to client
                     warn!(error = %e, "set peer cluster enabled failed");
-                    Ok(ClientRpcResponse::SetPeerClusterEnabledResult(
-                        SetPeerClusterEnabledResultResponse {
-                            success: false,
-                            cluster_id,
-                            enabled: None,
-                            error: Some("peer cluster operation failed".to_string()),
-                        },
-                    ))
+                    Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
+                        success: false,
+                        cluster_id,
+                        enabled: None,
+                        error: Some("peer cluster operation failed".to_string()),
+                    }))
                 }
             }
         }
@@ -1965,42 +1776,36 @@ async fn process_client_request(
             use crate::client_rpc::KeyOriginResultResponse;
 
             let Some(ref peer_manager) = ctx.peer_manager else {
-                return Ok(ClientRpcResponse::KeyOriginResult(
-                    KeyOriginResultResponse {
-                        found: false,
-                        key: key.clone(),
-                        cluster_id: None,
-                        priority: None,
-                        timestamp_secs: None,
-                        is_local: None,
-                    },
-                ));
+                return Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
+                    found: false,
+                    key: key.clone(),
+                    cluster_id: None,
+                    priority: None,
+                    timestamp_secs: None,
+                    is_local: None,
+                }));
             };
 
             match peer_manager.importer().get_key_origin(&key).await {
                 Some(origin) => {
                     let is_local = origin.is_local();
-                    Ok(ClientRpcResponse::KeyOriginResult(
-                        KeyOriginResultResponse {
-                            found: true,
-                            key,
-                            cluster_id: Some(origin.cluster_id),
-                            priority: Some(origin.priority),
-                            timestamp_secs: Some(origin.timestamp_secs),
-                            is_local: Some(is_local),
-                        },
-                    ))
-                }
-                None => Ok(ClientRpcResponse::KeyOriginResult(
-                    KeyOriginResultResponse {
-                        found: false,
+                    Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
+                        found: true,
                         key,
-                        cluster_id: None,
-                        priority: None,
-                        timestamp_secs: None,
-                        is_local: None,
-                    },
-                )),
+                        cluster_id: Some(origin.cluster_id),
+                        priority: Some(origin.priority),
+                        timestamp_secs: Some(origin.timestamp_secs),
+                        is_local: Some(is_local),
+                    }))
+                }
+                None => Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
+                    found: false,
+                    key,
+                    cluster_id: None,
+                    priority: None,
+                    timestamp_secs: None,
+                    is_local: None,
+                })),
             }
         }
 
@@ -2039,9 +1844,7 @@ async fn process_client_request(
                                 }
                             }
                             serde_json::Value::String(s) => SqlValue::Text(s),
-                            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
-                                SqlValue::Text(v.to_string())
-                            }
+                            serde_json::Value::Array(_) | serde_json::Value::Object(_) => SqlValue::Text(v.to_string()),
                         })
                         .collect(),
                     Err(e) => {
@@ -2085,9 +1888,7 @@ async fn process_client_request(
                                     SqlValue::Blob(b) => {
                                         // Encode blob as base64
                                         use base64::Engine;
-                                        serde_json::Value::String(
-                                            base64::engine::general_purpose::STANDARD.encode(&b),
-                                        )
+                                        serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&b))
                                     }
                                 })
                                 .collect()
@@ -2167,10 +1968,9 @@ async fn process_client_request(
                 Err(e) => {
                     use crate::coordination::CoordinationError;
                     let (holder, deadline) = match &e {
-                        CoordinationError::LockHeld {
-                            holder,
-                            deadline_ms,
-                        } => (Some(holder.clone()), Some(*deadline_ms)),
+                        CoordinationError::LockHeld { holder, deadline_ms } => {
+                            (Some(holder.clone()), Some(*deadline_ms))
+                        }
                         _ => (None, None),
                     };
                     Ok(ClientRpcResponse::LockResult(LockResultResponse {
@@ -2184,11 +1984,7 @@ async fn process_client_request(
             }
         }
 
-        ClientRpcRequest::LockTryAcquire {
-            key,
-            holder_id,
-            ttl_ms,
-        } => {
+        ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
             if let Err(e) = validate_client_key(&key) {
                 return Ok(ClientRpcResponse::LockResult(LockResultResponse {
                     success: false,
@@ -2221,10 +2017,9 @@ async fn process_client_request(
                 Err(e) => {
                     use crate::coordination::CoordinationError;
                     let (holder, deadline) = match &e {
-                        CoordinationError::LockHeld {
-                            holder,
-                            deadline_ms,
-                        } => (Some(holder.clone()), Some(*deadline_ms)),
+                        CoordinationError::LockHeld { holder, deadline_ms } => {
+                            (Some(holder.clone()), Some(*deadline_ms))
+                        }
                         _ => (None, None),
                     };
                     Ok(ClientRpcResponse::LockResult(LockResultResponse {
@@ -2264,8 +2059,7 @@ async fn process_client_request(
                     let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                     match serde_json::from_str::<LockEntry>(&value) {
                         Ok(entry) => {
-                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token
-                            {
+                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token {
                                 return Ok(ClientRpcResponse::LockResult(LockResultResponse {
                                     success: false,
                                     fencing_token: Some(entry.fencing_token),
@@ -2277,7 +2071,8 @@ async fn process_client_request(
 
                             // Release the lock via CAS
                             let released = entry.released();
-                            let released_json = serde_json::to_string(&released).unwrap();
+                            let released_json = serde_json::to_string(&released)
+                                .map_err(|e| anyhow::anyhow!("failed to serialize released lock entry: {}", e))?;
 
                             match ctx
                                 .kv_store
@@ -2360,8 +2155,7 @@ async fn process_client_request(
                     let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                     match serde_json::from_str::<LockEntry>(&value) {
                         Ok(entry) => {
-                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token
-                            {
+                            if entry.holder_id != holder_id || entry.fencing_token != fencing_token {
                                 return Ok(ClientRpcResponse::LockResult(LockResultResponse {
                                     success: false,
                                     fencing_token: Some(entry.fencing_token),
@@ -2373,7 +2167,8 @@ async fn process_client_request(
 
                             // Create renewed entry
                             let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
-                            let renewed_json = serde_json::to_string(&renewed).unwrap();
+                            let renewed_json = serde_json::to_string(&renewed)
+                                .map_err(|e| anyhow::anyhow!("failed to serialize renewed lock entry: {}", e))?;
 
                             match ctx
                                 .kv_store
@@ -2606,63 +2401,49 @@ async fn process_client_request(
         // =====================================================================
         ClientRpcRequest::SignedCounterGet { key } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: false,
-                        value: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
-            let counter =
-                SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            let counter = SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
             match counter.get().await {
-                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: true,
-                        value: Some(value),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: false,
-                        value: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
         ClientRpcRequest::SignedCounterAdd { key, amount } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: false,
-                        value: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
-            let counter =
-                SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
+            let counter = SignedAtomicCounter::new(ctx.kv_store.clone(), &key, CounterConfig::default());
             match counter.add(amount).await {
-                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: true,
-                        value: Some(value),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(
-                    SignedCounterResultResponse {
-                        success: false,
-                        value: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: true,
+                    value: Some(value),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+                    success: false,
+                    value: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
@@ -2751,14 +2532,12 @@ async fn process_client_request(
             refill_rate,
         } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
             let config = RateLimiterConfig {
@@ -2768,22 +2547,18 @@ async fn process_client_request(
             };
             let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
             match limiter.try_acquire_n(tokens).await {
-                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: true,
-                        tokens_remaining: Some(remaining),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: Some(e.available),
-                        retry_after_ms: Some(e.retry_after_ms),
-                        error: None,
-                    },
-                )),
+                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: true,
+                    tokens_remaining: Some(remaining),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: Some(e.available),
+                    retry_after_ms: Some(e.retry_after_ms),
+                    error: None,
+                })),
             }
         }
 
@@ -2795,14 +2570,12 @@ async fn process_client_request(
             timeout_ms,
         } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
             let config = RateLimiterConfig {
@@ -2811,26 +2584,19 @@ async fn process_client_request(
                 initial_tokens: None,
             };
             let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
-            match limiter
-                .acquire_n(tokens, std::time::Duration::from_millis(timeout_ms))
-                .await
-            {
-                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: true,
-                        tokens_remaining: Some(remaining),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: Some(e.available),
-                        retry_after_ms: Some(e.retry_after_ms),
-                        error: Some("timeout waiting for tokens".to_string()),
-                    },
-                )),
+            match limiter.acquire_n(tokens, std::time::Duration::from_millis(timeout_ms)).await {
+                Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: true,
+                    tokens_remaining: Some(remaining),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: Some(e.available),
+                    retry_after_ms: Some(e.retry_after_ms),
+                    error: Some("timeout waiting for tokens".to_string()),
+                })),
             }
         }
 
@@ -2840,14 +2606,12 @@ async fn process_client_request(
             refill_rate,
         } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
             let config = RateLimiterConfig {
@@ -2857,22 +2621,18 @@ async fn process_client_request(
             };
             let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
             match limiter.available().await {
-                Ok(tokens) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: true,
-                        tokens_remaining: Some(tokens),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Ok(tokens) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: true,
+                    tokens_remaining: Some(tokens),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
@@ -2882,14 +2642,12 @@ async fn process_client_request(
             refill_rate,
         } => {
             if let Err(e) = validate_client_key(&key) {
-                return Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                }));
             }
 
             let config = RateLimiterConfig {
@@ -2899,22 +2657,18 @@ async fn process_client_request(
             };
             let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
             match limiter.reset().await {
-                Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: true,
-                        tokens_remaining: Some(capacity),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(
-                    RateLimiterResultResponse {
-                        success: false,
-                        tokens_remaining: None,
-                        retry_after_ms: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: true,
+                    tokens_remaining: Some(capacity),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                    success: false,
+                    tokens_remaining: None,
+                    retry_after_ms: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
@@ -2926,13 +2680,11 @@ async fn process_client_request(
             // Validate all keys
             for key in &keys {
                 if let Err(e) = validate_client_key(key) {
-                    return Ok(ClientRpcResponse::BatchReadResult(
-                        BatchReadResultResponse {
-                            success: false,
-                            values: None,
-                            error: Some(e.to_string()),
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
+                        success: false,
+                        values: None,
+                        error: Some(e.to_string()),
+                    }));
                 }
             }
 
@@ -2952,24 +2704,20 @@ async fn process_client_request(
                     }
                     Err(e) => {
                         // Real error - fail the entire batch
-                        return Ok(ClientRpcResponse::BatchReadResult(
-                            BatchReadResultResponse {
-                                success: false,
-                                values: None,
-                                error: Some(e.to_string()),
-                            },
-                        ));
+                        return Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
+                            success: false,
+                            values: None,
+                            error: Some(e.to_string()),
+                        }));
                     }
                 }
             }
 
-            Ok(ClientRpcResponse::BatchReadResult(
-                BatchReadResultResponse {
-                    success: true,
-                    values: Some(values),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
+                success: true,
+                values: Some(values),
+                error: None,
+            }))
         }
 
         ClientRpcRequest::BatchWrite { operations } => {
@@ -2983,13 +2731,11 @@ async fn process_client_request(
                     BatchWriteOperation::Delete { key } => key,
                 };
                 if let Err(e) = validate_client_key(key) {
-                    return Ok(ClientRpcResponse::BatchWriteResult(
-                        BatchWriteResultResponse {
-                            success: false,
-                            operations_applied: None,
-                            error: Some(e.to_string()),
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
+                        success: false,
+                        operations_applied: None,
+                        error: Some(e.to_string()),
+                    }));
                 }
             }
 
@@ -3001,40 +2747,29 @@ async fn process_client_request(
                         key: key.clone(),
                         value: String::from_utf8_lossy(value).to_string(),
                     },
-                    BatchWriteOperation::Delete { key } => {
-                        BatchOperation::Delete { key: key.clone() }
-                    }
+                    BatchWriteOperation::Delete { key } => BatchOperation::Delete { key: key.clone() },
                 })
                 .collect();
 
             let request = WriteRequest {
-                command: WriteCommand::Batch {
-                    operations: batch_ops,
-                },
+                command: WriteCommand::Batch { operations: batch_ops },
             };
 
             match ctx.kv_store.write(request).await {
-                Ok(result) => Ok(ClientRpcResponse::BatchWriteResult(
-                    BatchWriteResultResponse {
-                        success: true,
-                        operations_applied: result.batch_applied,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::BatchWriteResult(
-                    BatchWriteResultResponse {
-                        success: false,
-                        operations_applied: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                Ok(result) => Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
+                    success: true,
+                    operations_applied: result.batch_applied,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
+                    success: false,
+                    operations_applied: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
-        ClientRpcRequest::ConditionalBatchWrite {
-            conditions,
-            operations,
-        } => {
+        ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
             use crate::api::{BatchCondition as ApiBatchCondition, BatchOperation, WriteCommand};
             use crate::client_rpc::{BatchCondition, BatchWriteOperation};
 
@@ -3046,16 +2781,14 @@ async fn process_client_request(
                     BatchCondition::KeyNotExists { key } => key,
                 };
                 if let Err(e) = validate_client_key(key) {
-                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(
-                        ConditionalBatchWriteResultResponse {
-                            success: false,
-                            conditions_met: false,
-                            operations_applied: None,
-                            failed_condition_index: None,
-                            failed_condition_reason: Some(e.to_string()),
-                            error: None,
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+                        success: false,
+                        conditions_met: false,
+                        operations_applied: None,
+                        failed_condition_index: None,
+                        failed_condition_reason: Some(e.to_string()),
+                        error: None,
+                    }));
                 }
             }
 
@@ -3066,16 +2799,14 @@ async fn process_client_request(
                     BatchWriteOperation::Delete { key } => key,
                 };
                 if let Err(e) = validate_client_key(key) {
-                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(
-                        ConditionalBatchWriteResultResponse {
-                            success: false,
-                            conditions_met: false,
-                            operations_applied: None,
-                            failed_condition_index: None,
-                            failed_condition_reason: Some(e.to_string()),
-                            error: None,
-                        },
-                    ));
+                    return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+                        success: false,
+                        conditions_met: false,
+                        operations_applied: None,
+                        failed_condition_index: None,
+                        failed_condition_reason: Some(e.to_string()),
+                        error: None,
+                    }));
                 }
             }
 
@@ -3083,18 +2814,12 @@ async fn process_client_request(
             let api_conditions: Vec<ApiBatchCondition> = conditions
                 .iter()
                 .map(|c| match c {
-                    BatchCondition::ValueEquals { key, expected } => {
-                        ApiBatchCondition::ValueEquals {
-                            key: key.clone(),
-                            expected: String::from_utf8_lossy(expected).to_string(),
-                        }
-                    }
-                    BatchCondition::KeyExists { key } => {
-                        ApiBatchCondition::KeyExists { key: key.clone() }
-                    }
-                    BatchCondition::KeyNotExists { key } => {
-                        ApiBatchCondition::KeyNotExists { key: key.clone() }
-                    }
+                    BatchCondition::ValueEquals { key, expected } => ApiBatchCondition::ValueEquals {
+                        key: key.clone(),
+                        expected: String::from_utf8_lossy(expected).to_string(),
+                    },
+                    BatchCondition::KeyExists { key } => ApiBatchCondition::KeyExists { key: key.clone() },
+                    BatchCondition::KeyNotExists { key } => ApiBatchCondition::KeyNotExists { key: key.clone() },
                 })
                 .collect();
 
@@ -3106,9 +2831,7 @@ async fn process_client_request(
                         key: key.clone(),
                         value: String::from_utf8_lossy(value).to_string(),
                     },
-                    BatchWriteOperation::Delete { key } => {
-                        BatchOperation::Delete { key: key.clone() }
-                    }
+                    BatchWriteOperation::Delete { key } => BatchOperation::Delete { key: key.clone() },
                 })
                 .collect();
 
@@ -3122,27 +2845,23 @@ async fn process_client_request(
             match ctx.kv_store.write(request).await {
                 Ok(result) => {
                     let conditions_met = result.conditions_met.unwrap_or(false);
-                    Ok(ClientRpcResponse::ConditionalBatchWriteResult(
-                        ConditionalBatchWriteResultResponse {
-                            success: conditions_met,
-                            conditions_met,
-                            operations_applied: result.batch_applied,
-                            failed_condition_index: result.failed_condition_index,
-                            failed_condition_reason: None,
-                            error: None,
-                        },
-                    ))
-                }
-                Err(e) => Ok(ClientRpcResponse::ConditionalBatchWriteResult(
-                    ConditionalBatchWriteResultResponse {
-                        success: false,
-                        conditions_met: false,
-                        operations_applied: None,
-                        failed_condition_index: None,
+                    Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+                        success: conditions_met,
+                        conditions_met,
+                        operations_applied: result.batch_applied,
+                        failed_condition_index: result.failed_condition_index,
                         failed_condition_reason: None,
-                        error: Some(e.to_string()),
-                    },
-                )),
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
+                    success: false,
+                    conditions_met: false,
+                    operations_applied: None,
+                    failed_condition_index: None,
+                    failed_condition_reason: None,
+                    error: Some(e.to_string()),
+                })),
             }
         }
 
@@ -3153,59 +2872,50 @@ async fn process_client_request(
             // Watch operations require a streaming connection via LOG_SUBSCRIBER_ALPN.
             // The ClientRpcRequest::WatchCreate is for documentation completeness,
             // but actual watch functionality is handled by LogSubscriberProtocolHandler.
-            Ok(ClientRpcResponse::WatchCreateResult(
-                WatchCreateResultResponse {
-                    success: false,
-                    watch_id: None,
-                    current_index: None,
-                    error: Some(
-                        "Watch operations require the streaming protocol. \
+            Ok(ClientRpcResponse::WatchCreateResult(WatchCreateResultResponse {
+                success: false,
+                watch_id: None,
+                current_index: None,
+                error: Some(
+                    "Watch operations require the streaming protocol. \
                          Connect via LOG_SUBSCRIBER_ALPN (aspen-logs) for real-time \
                          key change notifications."
-                            .to_string(),
-                    ),
-                },
-            ))
+                        .to_string(),
+                ),
+            }))
         }
 
         ClientRpcRequest::WatchCancel { watch_id } => {
             // Same as WatchCreate - streaming protocol required
-            Ok(ClientRpcResponse::WatchCancelResult(
-                WatchCancelResultResponse {
-                    success: false,
-                    watch_id,
-                    error: Some(
-                        "Watch operations require the streaming protocol. \
+            Ok(ClientRpcResponse::WatchCancelResult(WatchCancelResultResponse {
+                success: false,
+                watch_id,
+                error: Some(
+                    "Watch operations require the streaming protocol. \
                          Use LOG_SUBSCRIBER_ALPN (aspen-logs)."
-                            .to_string(),
-                    ),
-                },
-            ))
+                        .to_string(),
+                ),
+            }))
         }
 
         ClientRpcRequest::WatchStatus { .. } => {
             // TODO: Could implement this to query LogSubscriberProtocolHandler state
             // For now, redirect to streaming protocol
-            Ok(ClientRpcResponse::WatchStatusResult(
-                WatchStatusResultResponse {
-                    success: false,
-                    watches: None,
-                    error: Some(
-                        "Watch operations require the streaming protocol. \
+            Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
+                success: false,
+                watches: None,
+                error: Some(
+                    "Watch operations require the streaming protocol. \
                          Use LOG_SUBSCRIBER_ALPN (aspen-logs)."
-                            .to_string(),
-                    ),
-                },
-            ))
+                        .to_string(),
+                ),
+            }))
         }
 
         // =====================================================================
         // Lease operations
         // =====================================================================
-        ClientRpcRequest::LeaseGrant {
-            ttl_seconds,
-            lease_id,
-        } => {
+        ClientRpcRequest::LeaseGrant { ttl_seconds, lease_id } => {
             use crate::api::WriteRequest;
 
             let actual_lease_id = lease_id.unwrap_or(0);
@@ -3221,22 +2931,18 @@ async fn process_client_request(
                 .await;
 
             match result {
-                Ok(response) => Ok(ClientRpcResponse::LeaseGrantResult(
-                    LeaseGrantResultResponse {
-                        success: true,
-                        lease_id: response.lease_id,
-                        ttl_seconds: response.ttl_seconds,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::LeaseGrantResult(
-                    LeaseGrantResultResponse {
-                        success: false,
-                        lease_id: None,
-                        ttl_seconds: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(response) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                    success: true,
+                    lease_id: response.lease_id,
+                    ttl_seconds: response.ttl_seconds,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
+                    success: false,
+                    lease_id: None,
+                    ttl_seconds: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3251,20 +2957,16 @@ async fn process_client_request(
                 .await;
 
             match result {
-                Ok(response) => Ok(ClientRpcResponse::LeaseRevokeResult(
-                    LeaseRevokeResultResponse {
-                        success: true,
-                        keys_deleted: response.keys_deleted,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::LeaseRevokeResult(
-                    LeaseRevokeResultResponse {
-                        success: false,
-                        keys_deleted: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(response) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+                    success: true,
+                    keys_deleted: response.keys_deleted,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
+                    success: false,
+                    keys_deleted: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3279,29 +2981,22 @@ async fn process_client_request(
                 .await;
 
             match result {
-                Ok(response) => Ok(ClientRpcResponse::LeaseKeepaliveResult(
-                    LeaseKeepaliveResultResponse {
-                        success: true,
-                        lease_id: response.lease_id,
-                        ttl_seconds: response.ttl_seconds,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::LeaseKeepaliveResult(
-                    LeaseKeepaliveResultResponse {
-                        success: false,
-                        lease_id: None,
-                        ttl_seconds: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(response) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                    success: true,
+                    lease_id: response.lease_id,
+                    ttl_seconds: response.ttl_seconds,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
+                    success: false,
+                    lease_id: None,
+                    ttl_seconds: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
-        ClientRpcRequest::LeaseTimeToLive {
-            lease_id,
-            include_keys,
-        } => {
+        ClientRpcRequest::LeaseTimeToLive { lease_id, include_keys } => {
             // Query state machine for lease info
             match &ctx.state_machine {
                 Some(sm) => {
@@ -3314,42 +3009,36 @@ async fn process_client_request(
                                 None
                             };
 
-                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-                                LeaseTimeToLiveResultResponse {
-                                    success: true,
-                                    lease_id: Some(lease_id),
-                                    granted_ttl_seconds: Some(granted_ttl),
-                                    remaining_ttl_seconds: Some(remaining_ttl),
-                                    keys,
-                                    error: None,
-                                },
-                            ))
+                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                                success: true,
+                                lease_id: Some(lease_id),
+                                granted_ttl_seconds: Some(granted_ttl),
+                                remaining_ttl_seconds: Some(remaining_ttl),
+                                keys,
+                                error: None,
+                            }))
                         }
                         None => {
                             // Lease not found or expired
-                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-                                LeaseTimeToLiveResultResponse {
-                                    success: false,
-                                    lease_id: Some(lease_id),
-                                    granted_ttl_seconds: None,
-                                    remaining_ttl_seconds: None,
-                                    keys: None,
-                                    error: Some("Lease not found or expired".to_string()),
-                                },
-                            ))
+                            Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                                success: false,
+                                lease_id: Some(lease_id),
+                                granted_ttl_seconds: None,
+                                remaining_ttl_seconds: None,
+                                keys: None,
+                                error: Some("Lease not found or expired".to_string()),
+                            }))
                         }
                     }
                 }
-                None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-                    LeaseTimeToLiveResultResponse {
-                        success: false,
-                        lease_id: Some(lease_id),
-                        granted_ttl_seconds: None,
-                        remaining_ttl_seconds: None,
-                        keys: None,
-                        error: Some("State machine not available".to_string()),
-                    },
-                )),
+                None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                    success: false,
+                    lease_id: Some(lease_id),
+                    granted_ttl_seconds: None,
+                    remaining_ttl_seconds: None,
+                    keys: None,
+                    error: Some("State machine not available".to_string()),
+                })),
             }
         }
 
@@ -3369,29 +3058,21 @@ async fn process_client_request(
                         })
                         .collect();
 
-                    Ok(ClientRpcResponse::LeaseListResult(
-                        LeaseListResultResponse {
-                            success: true,
-                            leases: Some(leases),
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                        success: true,
+                        leases: Some(leases),
+                        error: None,
+                    }))
                 }
-                None => Ok(ClientRpcResponse::LeaseListResult(
-                    LeaseListResultResponse {
-                        success: false,
-                        leases: None,
-                        error: Some("State machine not available".to_string()),
-                    },
-                )),
+                None => Ok(ClientRpcResponse::LeaseListResult(LeaseListResultResponse {
+                    success: false,
+                    leases: None,
+                    error: Some("State machine not available".to_string()),
+                })),
             }
         }
 
-        ClientRpcRequest::WriteKeyWithLease {
-            key,
-            value,
-            lease_id,
-        } => {
+        ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
             use crate::api::WriteRequest;
 
             // Convert Vec<u8> to String
@@ -3439,28 +3120,21 @@ async fn process_client_request(
                 None
             };
 
-            match manager
-                .enter(&name, &participant_id, required_count, timeout)
-                .await
-            {
-                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierEnterResult(
-                    BarrierResultResponse {
-                        success: true,
-                        current_count: Some(current),
-                        required_count: Some(required_count),
-                        phase: Some(phase),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::BarrierEnterResult(
-                    BarrierResultResponse {
-                        success: false,
-                        current_count: None,
-                        required_count: None,
-                        phase: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match manager.enter(&name, &participant_id, required_count, timeout).await {
+                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+                    success: true,
+                    current_count: Some(current),
+                    required_count: Some(required_count),
+                    phase: Some(phase),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+                    success: false,
+                    current_count: None,
+                    required_count: None,
+                    phase: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3480,24 +3154,20 @@ async fn process_client_request(
             };
 
             match manager.leave(&name, &participant_id, timeout).await {
-                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierLeaveResult(
-                    BarrierResultResponse {
-                        success: true,
-                        current_count: Some(current),
-                        required_count: None,
-                        phase: Some(phase),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::BarrierLeaveResult(
-                    BarrierResultResponse {
-                        success: false,
-                        current_count: None,
-                        required_count: None,
-                        phase: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok((current, phase)) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
+                    success: true,
+                    current_count: Some(current),
+                    required_count: None,
+                    phase: Some(phase),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
+                    success: false,
+                    current_count: None,
+                    required_count: None,
+                    phase: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3508,24 +3178,20 @@ async fn process_client_request(
             let manager = BarrierManager::new(ctx.kv_store.clone());
 
             match manager.status(&name).await {
-                Ok((current, required, phase)) => Ok(ClientRpcResponse::BarrierStatusResult(
-                    BarrierResultResponse {
-                        success: true,
-                        current_count: Some(current),
-                        required_count: Some(required),
-                        phase: Some(phase),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::BarrierStatusResult(
-                    BarrierResultResponse {
-                        success: false,
-                        current_count: None,
-                        required_count: None,
-                        phase: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok((current, required, phase)) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
+                    success: true,
+                    current_count: Some(current),
+                    required_count: Some(required),
+                    phase: Some(phase),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
+                    success: false,
+                    current_count: None,
+                    required_count: None,
+                    phase: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3550,30 +3216,23 @@ async fn process_client_request(
                 None
             };
 
-            match manager
-                .acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout)
-                .await
-            {
-                Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(
-                    SemaphoreResultResponse {
-                        success: true,
-                        permits_acquired: Some(acquired),
-                        available: Some(available),
-                        capacity: Some(capacity),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SemaphoreAcquireResult(
-                    SemaphoreResultResponse {
-                        success: false,
-                        permits_acquired: None,
-                        available: None,
-                        capacity: None,
-                        retry_after_ms: Some(100), // Suggest 100ms retry
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match manager.acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout).await {
+                Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+                    success: true,
+                    permits_acquired: Some(acquired),
+                    available: Some(available),
+                    capacity: Some(capacity),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+                    success: false,
+                    permits_acquired: None,
+                    available: None,
+                    capacity: None,
+                    retry_after_ms: Some(100), // Suggest 100ms retry
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3589,40 +3248,33 @@ async fn process_client_request(
 
             let manager = SemaphoreManager::new(ctx.kv_store.clone());
 
-            match manager
-                .try_acquire(&name, &holder_id, permits, capacity, ttl_ms)
-                .await
-            {
-                Ok(Some((acquired, available))) => Ok(
-                    ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+            match manager.try_acquire(&name, &holder_id, permits, capacity, ttl_ms).await {
+                Ok(Some((acquired, available))) => {
+                    Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
                         success: true,
                         permits_acquired: Some(acquired),
                         available: Some(available),
                         capacity: Some(capacity),
                         retry_after_ms: None,
                         error: None,
-                    }),
-                ),
-                Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(
-                    SemaphoreResultResponse {
-                        success: false,
-                        permits_acquired: None,
-                        available: None,
-                        capacity: Some(capacity),
-                        retry_after_ms: Some(100),
-                        error: Some("No permits available".to_string()),
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(
-                    SemaphoreResultResponse {
-                        success: false,
-                        permits_acquired: None,
-                        available: None,
-                        capacity: None,
-                        retry_after_ms: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                    success: false,
+                    permits_acquired: None,
+                    available: None,
+                    capacity: Some(capacity),
+                    retry_after_ms: Some(100),
+                    error: Some("No permits available".to_string()),
+                })),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                    success: false,
+                    permits_acquired: None,
+                    available: None,
+                    capacity: None,
+                    retry_after_ms: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3637,26 +3289,22 @@ async fn process_client_request(
             let manager = SemaphoreManager::new(ctx.kv_store.clone());
 
             match manager.release(&name, &holder_id, permits).await {
-                Ok(available) => Ok(ClientRpcResponse::SemaphoreReleaseResult(
-                    SemaphoreResultResponse {
-                        success: true,
-                        permits_acquired: None,
-                        available: Some(available),
-                        capacity: None,
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SemaphoreReleaseResult(
-                    SemaphoreResultResponse {
-                        success: false,
-                        permits_acquired: None,
-                        available: None,
-                        capacity: None,
-                        retry_after_ms: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(available) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+                    success: true,
+                    permits_acquired: None,
+                    available: Some(available),
+                    capacity: None,
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+                    success: false,
+                    permits_acquired: None,
+                    available: None,
+                    capacity: None,
+                    retry_after_ms: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3667,26 +3315,22 @@ async fn process_client_request(
             let manager = SemaphoreManager::new(ctx.kv_store.clone());
 
             match manager.status(&name).await {
-                Ok((available, capacity)) => Ok(ClientRpcResponse::SemaphoreStatusResult(
-                    SemaphoreResultResponse {
-                        success: true,
-                        permits_acquired: None,
-                        available: Some(available),
-                        capacity: Some(capacity),
-                        retry_after_ms: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::SemaphoreStatusResult(
-                    SemaphoreResultResponse {
-                        success: false,
-                        permits_acquired: None,
-                        available: None,
-                        capacity: None,
-                        retry_after_ms: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok((available, capacity)) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+                    success: true,
+                    permits_acquired: None,
+                    available: Some(available),
+                    capacity: Some(capacity),
+                    retry_after_ms: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+                    success: false,
+                    permits_acquired: None,
+                    available: None,
+                    capacity: None,
+                    retry_after_ms: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3709,12 +3353,9 @@ async fn process_client_request(
                 None
             };
 
-            match manager
-                .acquire_read(&name, &holder_id, ttl_ms, timeout)
-                .await
-            {
-                Ok((fencing_token, deadline_ms, reader_count)) => Ok(
-                    ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            match manager.acquire_read(&name, &holder_id, ttl_ms, timeout).await {
+                Ok((fencing_token, deadline_ms, reader_count)) => {
+                    Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
                         success: true,
                         mode: Some("read".to_string()),
                         fencing_token: Some(fencing_token),
@@ -3722,19 +3363,17 @@ async fn process_client_request(
                         reader_count: Some(reader_count),
                         writer_holder: None,
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::RWLockAcquireReadResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3749,8 +3388,8 @@ async fn process_client_request(
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
             match manager.try_acquire_read(&name, &holder_id, ttl_ms).await {
-                Ok(Some((fencing_token, deadline_ms, reader_count))) => Ok(
-                    ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                Ok(Some((fencing_token, deadline_ms, reader_count))) => {
+                    Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
                         success: true,
                         mode: Some("read".to_string()),
                         fencing_token: Some(fencing_token),
@@ -3758,30 +3397,26 @@ async fn process_client_request(
                         reader_count: Some(reader_count),
                         writer_holder: None,
                         error: None,
-                    }),
-                ),
-                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some("lock not available".to_string()),
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some("lock not available".to_string()),
+                })),
+                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3801,12 +3436,9 @@ async fn process_client_request(
                 None
             };
 
-            match manager
-                .acquire_write(&name, &holder_id, ttl_ms, timeout)
-                .await
-            {
-                Ok((fencing_token, deadline_ms)) => Ok(
-                    ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+            match manager.acquire_write(&name, &holder_id, ttl_ms, timeout).await {
+                Ok((fencing_token, deadline_ms)) => {
+                    Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
                         success: true,
                         mode: Some("write".to_string()),
                         fencing_token: Some(fencing_token),
@@ -3814,19 +3446,17 @@ async fn process_client_request(
                         reader_count: Some(0),
                         writer_holder: Some(holder_id),
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3841,8 +3471,8 @@ async fn process_client_request(
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
             match manager.try_acquire_write(&name, &holder_id, ttl_ms).await {
-                Ok(Some((fencing_token, deadline_ms))) => Ok(
-                    ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                Ok(Some((fencing_token, deadline_ms))) => {
+                    Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
                         success: true,
                         mode: Some("write".to_string()),
                         fencing_token: Some(fencing_token),
@@ -3850,30 +3480,26 @@ async fn process_client_request(
                         reader_count: Some(0),
                         writer_holder: Some(holder_id),
                         error: None,
-                    }),
-                ),
-                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some("lock not available".to_string()),
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some("lock not available".to_string()),
+                })),
+                Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3884,28 +3510,24 @@ async fn process_client_request(
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
             match manager.release_read(&name, &holder_id).await {
-                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseReadResult(
-                    RWLockResultResponse {
-                        success: true,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RWLockReleaseReadResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+                    success: true,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3919,32 +3541,25 @@ async fn process_client_request(
 
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
-            match manager
-                .release_write(&name, &holder_id, fencing_token)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(
-                    RWLockResultResponse {
-                        success: true,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match manager.release_write(&name, &holder_id, fencing_token).await {
+                Ok(()) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+                    success: true,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3959,12 +3574,9 @@ async fn process_client_request(
 
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
-            match manager
-                .downgrade(&name, &holder_id, fencing_token, ttl_ms)
-                .await
-            {
-                Ok((new_token, deadline_ms, reader_count)) => Ok(
-                    ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+            match manager.downgrade(&name, &holder_id, fencing_token, ttl_ms).await {
+                Ok((new_token, deadline_ms, reader_count)) => {
+                    Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
                         success: true,
                         mode: Some("read".to_string()),
                         fencing_token: Some(new_token),
@@ -3972,19 +3584,17 @@ async fn process_client_request(
                         reader_count: Some(reader_count),
                         writer_holder: None,
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::RWLockDowngradeResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -3995,8 +3605,8 @@ async fn process_client_request(
             let manager = RWLockManager::new(ctx.kv_store.clone());
 
             match manager.status(&name).await {
-                Ok((mode, reader_count, writer_holder, fencing_token)) => Ok(
-                    ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+                Ok((mode, reader_count, writer_holder, fencing_token)) => {
+                    Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
                         success: true,
                         mode: Some(mode),
                         fencing_token: Some(fencing_token),
@@ -4004,19 +3614,17 @@ async fn process_client_request(
                         reader_count: Some(reader_count),
                         writer_holder,
                         error: None,
-                    }),
-                ),
-                Err(e) => Ok(ClientRpcResponse::RWLockStatusResult(
-                    RWLockResultResponse {
-                        success: false,
-                        mode: None,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        reader_count: None,
-                        writer_holder: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+                    success: false,
+                    mode: None,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    reader_count: None,
+                    writer_holder: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4040,20 +3648,16 @@ async fn process_client_request(
             };
 
             match manager.create(&queue_name, config).await {
-                Ok((created, _)) => Ok(ClientRpcResponse::QueueCreateResult(
-                    QueueCreateResultResponse {
-                        success: true,
-                        created,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueCreateResult(
-                    QueueCreateResultResponse {
-                        success: false,
-                        created: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok((created, _)) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+                    success: true,
+                    created,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+                    success: false,
+                    created: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4064,20 +3668,16 @@ async fn process_client_request(
             let manager = QueueManager::new(ctx.kv_store.clone());
 
             match manager.delete(&queue_name).await {
-                Ok(items_deleted) => Ok(ClientRpcResponse::QueueDeleteResult(
-                    QueueDeleteResultResponse {
-                        success: true,
-                        items_deleted: Some(items_deleted),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueDeleteResult(
-                    QueueDeleteResultResponse {
-                        success: false,
-                        items_deleted: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(items_deleted) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
+                    success: true,
+                    items_deleted: Some(items_deleted),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
+                    success: false,
+                    items_deleted: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4099,20 +3699,16 @@ async fn process_client_request(
             };
 
             match manager.enqueue(&queue_name, payload, options).await {
-                Ok(item_id) => Ok(ClientRpcResponse::QueueEnqueueResult(
-                    QueueEnqueueResultResponse {
-                        success: true,
-                        item_id: Some(item_id),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueEnqueueResult(
-                    QueueEnqueueResultResponse {
-                        success: false,
-                        item_id: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(item_id) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
+                    success: true,
+                    item_id: Some(item_id),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
+                    success: false,
+                    item_id: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4136,20 +3732,16 @@ async fn process_client_request(
                 .collect();
 
             match manager.enqueue_batch(&queue_name, batch).await {
-                Ok(item_ids) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(
-                    QueueEnqueueBatchResultResponse {
-                        success: true,
-                        item_ids,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(
-                    QueueEnqueueBatchResultResponse {
-                        success: false,
-                        item_ids: vec![],
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(item_ids) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
+                    success: true,
+                    item_ids,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
+                    success: false,
+                    item_ids: vec![],
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4164,10 +3756,7 @@ async fn process_client_request(
 
             let manager = QueueManager::new(ctx.kv_store.clone());
 
-            match manager
-                .dequeue(&queue_name, &consumer_id, max_items, visibility_timeout_ms)
-                .await
-            {
+            match manager.dequeue(&queue_name, &consumer_id, max_items, visibility_timeout_ms).await {
                 Ok(items) => {
                     let response_items: Vec<QueueDequeuedItemResponse> = items
                         .into_iter()
@@ -4180,21 +3769,17 @@ async fn process_client_request(
                             visibility_deadline_ms: item.visibility_deadline_ms,
                         })
                         .collect();
-                    Ok(ClientRpcResponse::QueueDequeueResult(
-                        QueueDequeueResultResponse {
-                            success: true,
-                            items: response_items,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                        success: true,
+                        items: response_items,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(
-                    QueueDequeueResultResponse {
-                        success: false,
-                        items: vec![],
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                    success: false,
+                    items: vec![],
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4211,13 +3796,7 @@ async fn process_client_request(
             let manager = QueueManager::new(ctx.kv_store.clone());
 
             match manager
-                .dequeue_wait(
-                    &queue_name,
-                    &consumer_id,
-                    max_items,
-                    visibility_timeout_ms,
-                    wait_timeout_ms,
-                )
+                .dequeue_wait(&queue_name, &consumer_id, max_items, visibility_timeout_ms, wait_timeout_ms)
                 .await
             {
                 Ok(items) => {
@@ -4232,28 +3811,21 @@ async fn process_client_request(
                             visibility_deadline_ms: item.visibility_deadline_ms,
                         })
                         .collect();
-                    Ok(ClientRpcResponse::QueueDequeueResult(
-                        QueueDequeueResultResponse {
-                            success: true,
-                            items: response_items,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                        success: true,
+                        items: response_items,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(
-                    QueueDequeueResultResponse {
-                        success: false,
-                        items: vec![],
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                    success: false,
+                    items: vec![],
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
-        ClientRpcRequest::QueuePeek {
-            queue_name,
-            max_items,
-        } => {
+        ClientRpcRequest::QueuePeek { queue_name, max_items } => {
             use crate::client_rpc::{QueueItemResponse, QueuePeekResultResponse};
             use crate::coordination::QueueManager;
 
@@ -4271,21 +3843,17 @@ async fn process_client_request(
                             delivery_attempts: item.delivery_attempts,
                         })
                         .collect();
-                    Ok(ClientRpcResponse::QueuePeekResult(
-                        QueuePeekResultResponse {
-                            success: true,
-                            items: response_items,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
+                        success: true,
+                        items: response_items,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::QueuePeekResult(
-                    QueuePeekResultResponse {
-                        success: false,
-                        items: vec![],
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
+                    success: false,
+                    items: vec![],
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4321,22 +3889,15 @@ async fn process_client_request(
 
             let manager = QueueManager::new(ctx.kv_store.clone());
 
-            match manager
-                .nack(&queue_name, &receipt_handle, move_to_dlq, error_message)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::QueueNackResult(
-                    QueueNackResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueNackResult(
-                    QueueNackResultResponse {
-                        success: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match manager.nack(&queue_name, &receipt_handle, move_to_dlq, error_message).await {
+                Ok(()) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+                    success: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4350,24 +3911,19 @@ async fn process_client_request(
 
             let manager = QueueManager::new(ctx.kv_store.clone());
 
-            match manager
-                .extend_visibility(&queue_name, &receipt_handle, additional_timeout_ms)
-                .await
-            {
-                Ok(new_deadline) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
-                    QueueExtendVisibilityResultResponse {
+            match manager.extend_visibility(&queue_name, &receipt_handle, additional_timeout_ms).await {
+                Ok(new_deadline) => {
+                    Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
                         success: true,
                         new_deadline_ms: Some(new_deadline),
                         error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
-                    QueueExtendVisibilityResultResponse {
-                        success: false,
-                        new_deadline_ms: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
+                    success: false,
+                    new_deadline_ms: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4378,37 +3934,30 @@ async fn process_client_request(
             let manager = QueueManager::new(ctx.kv_store.clone());
 
             match manager.status(&queue_name).await {
-                Ok(status) => Ok(ClientRpcResponse::QueueStatusResult(
-                    QueueStatusResultResponse {
-                        success: true,
-                        exists: status.exists,
-                        visible_count: Some(status.visible_count),
-                        pending_count: Some(status.pending_count),
-                        dlq_count: Some(status.dlq_count),
-                        total_enqueued: Some(status.total_enqueued),
-                        total_acked: Some(status.total_acked),
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueStatusResult(
-                    QueueStatusResultResponse {
-                        success: false,
-                        exists: false,
-                        visible_count: None,
-                        pending_count: None,
-                        dlq_count: None,
-                        total_enqueued: None,
-                        total_acked: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(status) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
+                    success: true,
+                    exists: status.exists,
+                    visible_count: Some(status.visible_count),
+                    pending_count: Some(status.pending_count),
+                    dlq_count: Some(status.dlq_count),
+                    total_enqueued: Some(status.total_enqueued),
+                    total_acked: Some(status.total_acked),
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
+                    success: false,
+                    exists: false,
+                    visible_count: None,
+                    pending_count: None,
+                    dlq_count: None,
+                    total_enqueued: None,
+                    total_acked: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
-        ClientRpcRequest::QueueGetDLQ {
-            queue_name,
-            max_items,
-        } => {
+        ClientRpcRequest::QueueGetDLQ { queue_name, max_items } => {
             use crate::client_rpc::{QueueDLQItemResponse, QueueGetDLQResultResponse};
             use crate::coordination::QueueManager;
 
@@ -4428,46 +3977,35 @@ async fn process_client_request(
                             last_error: item.last_error,
                         })
                         .collect();
-                    Ok(ClientRpcResponse::QueueGetDLQResult(
-                        QueueGetDLQResultResponse {
-                            success: true,
-                            items: response_items,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+                        success: true,
+                        items: response_items,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::QueueGetDLQResult(
-                    QueueGetDLQResultResponse {
-                        success: false,
-                        items: vec![],
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+                    success: false,
+                    items: vec![],
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
-        ClientRpcRequest::QueueRedriveDLQ {
-            queue_name,
-            item_id,
-        } => {
+        ClientRpcRequest::QueueRedriveDLQ { queue_name, item_id } => {
             use crate::client_rpc::QueueRedriveDLQResultResponse;
             use crate::coordination::QueueManager;
 
             let manager = QueueManager::new(ctx.kv_store.clone());
 
             match manager.redrive_dlq(&queue_name, item_id).await {
-                Ok(()) => Ok(ClientRpcResponse::QueueRedriveDLQResult(
-                    QueueRedriveDLQResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::QueueRedriveDLQResult(
-                    QueueRedriveDLQResultResponse {
-                        success: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(()) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
+                    success: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4486,9 +4024,7 @@ async fn process_client_request(
             lease_id,
         } => {
             use crate::client_rpc::ServiceRegisterResultResponse;
-            use crate::coordination::{
-                HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry,
-            };
+            use crate::coordination::{HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry};
             use std::collections::HashMap;
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
@@ -4497,8 +4033,7 @@ async fn process_client_request(
             let tags_vec: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
 
             // Parse custom metadata from JSON object
-            let custom_map: HashMap<String, String> =
-                serde_json::from_str(&custom_metadata).unwrap_or_default();
+            let custom_map: HashMap<String, String> = serde_json::from_str(&custom_metadata).unwrap_or_default();
 
             let metadata = ServiceInstanceMetadata {
                 version,
@@ -4513,26 +4048,21 @@ async fn process_client_request(
                 lease_id,
             };
 
-            match registry
-                .register(&service_name, &instance_id, &address, metadata, options)
-                .await
-            {
-                Ok((fencing_token, deadline_ms)) => Ok(ClientRpcResponse::ServiceRegisterResult(
-                    ServiceRegisterResultResponse {
+            match registry.register(&service_name, &instance_id, &address, metadata, options).await {
+                Ok((fencing_token, deadline_ms)) => {
+                    Ok(ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
                         success: true,
                         fencing_token: Some(fencing_token),
                         deadline_ms: Some(deadline_ms),
                         error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceRegisterResult(
-                    ServiceRegisterResultResponse {
-                        success: false,
-                        fencing_token: None,
-                        deadline_ms: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
+                    success: false,
+                    fencing_token: None,
+                    deadline_ms: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4546,24 +4076,17 @@ async fn process_client_request(
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
-            match registry
-                .deregister(&service_name, &instance_id, fencing_token)
-                .await
-            {
-                Ok(was_registered) => Ok(ClientRpcResponse::ServiceDeregisterResult(
-                    ServiceDeregisterResultResponse {
-                        success: true,
-                        was_registered,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceDeregisterResult(
-                    ServiceDeregisterResultResponse {
-                        success: false,
-                        was_registered: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match registry.deregister(&service_name, &instance_id, fencing_token).await {
+                Ok(was_registered) => Ok(ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+                    success: true,
+                    was_registered,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+                    success: false,
+                    was_registered: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4599,16 +4122,13 @@ async fn process_client_request(
                             address: inst.address,
                             health_status: match inst.health_status {
                                 crate::coordination::HealthStatus::Healthy => "healthy".to_string(),
-                                crate::coordination::HealthStatus::Unhealthy => {
-                                    "unhealthy".to_string()
-                                }
+                                crate::coordination::HealthStatus::Unhealthy => "unhealthy".to_string(),
                                 crate::coordination::HealthStatus::Unknown => "unknown".to_string(),
                             },
                             version: inst.metadata.version,
                             tags: inst.metadata.tags,
                             weight: inst.metadata.weight,
-                            custom_metadata: serde_json::to_string(&inst.metadata.custom)
-                                .unwrap_or_default(),
+                            custom_metadata: serde_json::to_string(&inst.metadata.custom).unwrap_or_default(),
                             registered_at_ms: inst.registered_at_ms,
                             last_heartbeat_ms: inst.last_heartbeat_ms,
                             deadline_ms: inst.deadline_ms,
@@ -4617,23 +4137,19 @@ async fn process_client_request(
                         })
                         .collect();
                     let count = response_instances.len() as u32;
-                    Ok(ClientRpcResponse::ServiceDiscoverResult(
-                        ServiceDiscoverResultResponse {
-                            success: true,
-                            instances: response_instances,
-                            count,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
+                        success: true,
+                        instances: response_instances,
+                        count,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::ServiceDiscoverResult(
-                    ServiceDiscoverResultResponse {
-                        success: false,
-                        instances: vec![],
-                        count: 0,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
+                    success: false,
+                    instances: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4646,23 +4162,19 @@ async fn process_client_request(
             match registry.discover_services(&prefix, limit).await {
                 Ok(services) => {
                     let count = services.len() as u32;
-                    Ok(ClientRpcResponse::ServiceListResult(
-                        ServiceListResultResponse {
-                            success: true,
-                            services,
-                            count,
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ServiceListResult(ServiceListResultResponse {
+                        success: true,
+                        services,
+                        count,
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::ServiceListResult(
-                    ServiceListResultResponse {
-                        success: false,
-                        services: vec![],
-                        count: 0,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceListResult(ServiceListResultResponse {
+                    success: false,
+                    services: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4689,39 +4201,32 @@ async fn process_client_request(
                         version: inst.metadata.version,
                         tags: inst.metadata.tags,
                         weight: inst.metadata.weight,
-                        custom_metadata: serde_json::to_string(&inst.metadata.custom)
-                            .unwrap_or_default(),
+                        custom_metadata: serde_json::to_string(&inst.metadata.custom).unwrap_or_default(),
                         registered_at_ms: inst.registered_at_ms,
                         last_heartbeat_ms: inst.last_heartbeat_ms,
                         deadline_ms: inst.deadline_ms,
                         lease_id: inst.lease_id,
                         fencing_token: inst.fencing_token,
                     };
-                    Ok(ClientRpcResponse::ServiceGetInstanceResult(
-                        ServiceGetInstanceResultResponse {
-                            success: true,
-                            found: true,
-                            instance: Some(response_instance),
-                            error: None,
-                        },
-                    ))
-                }
-                Ok(None) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
-                    ServiceGetInstanceResultResponse {
+                    Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
                         success: true,
-                        found: false,
-                        instance: None,
+                        found: true,
+                        instance: Some(response_instance),
                         error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
-                    ServiceGetInstanceResultResponse {
-                        success: false,
-                        found: false,
-                        instance: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+                    success: true,
+                    found: false,
+                    instance: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+                    success: false,
+                    found: false,
+                    instance: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4735,33 +4240,26 @@ async fn process_client_request(
 
             let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
-            match registry
-                .heartbeat(&service_name, &instance_id, fencing_token)
-                .await
-            {
+            match registry.heartbeat(&service_name, &instance_id, fencing_token).await {
                 Ok((new_deadline, health_status)) => {
                     let status_str = match health_status {
                         crate::coordination::HealthStatus::Healthy => "healthy",
                         crate::coordination::HealthStatus::Unhealthy => "unhealthy",
                         crate::coordination::HealthStatus::Unknown => "unknown",
                     };
-                    Ok(ClientRpcResponse::ServiceHeartbeatResult(
-                        ServiceHeartbeatResultResponse {
-                            success: true,
-                            new_deadline_ms: Some(new_deadline),
-                            health_status: Some(status_str.to_string()),
-                            error: None,
-                        },
-                    ))
+                    Ok(ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                        success: true,
+                        new_deadline_ms: Some(new_deadline),
+                        health_status: Some(status_str.to_string()),
+                        error: None,
+                    }))
                 }
-                Err(e) => Ok(ClientRpcResponse::ServiceHeartbeatResult(
-                    ServiceHeartbeatResultResponse {
-                        success: false,
-                        new_deadline_ms: None,
-                        health_status: None,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Err(e) => Ok(ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                    success: false,
+                    new_deadline_ms: None,
+                    health_status: None,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4782,22 +4280,15 @@ async fn process_client_request(
                 _ => HealthStatus::Unknown,
             };
 
-            match registry
-                .update_health(&service_name, &instance_id, fencing_token, health_status)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
-                    ServiceUpdateHealthResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
-                    ServiceUpdateHealthResultResponse {
-                        success: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+            match registry.update_health(&service_name, &instance_id, fencing_token, health_status).await {
+                Ok(()) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+                    success: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
@@ -4842,47 +4333,35 @@ async fn process_client_request(
                         instance.metadata.weight = w;
                     }
                     if let Some(c) = custom_metadata
-                        && let Ok(parsed_custom) =
-                            serde_json::from_str::<HashMap<String, String>>(&c)
+                        && let Ok(parsed_custom) = serde_json::from_str::<HashMap<String, String>>(&c)
                     {
                         instance.metadata.custom = parsed_custom;
                     }
 
-                    match registry
-                        .update_metadata(
-                            &service_name,
-                            &instance_id,
-                            fencing_token,
-                            instance.metadata,
-                        )
-                        .await
+                    match registry.update_metadata(&service_name, &instance_id, fencing_token, instance.metadata).await
                     {
-                        Ok(()) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                            ServiceUpdateMetadataResultResponse {
+                        Ok(()) => {
+                            Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
                                 success: true,
                                 error: None,
-                            },
-                        )),
-                        Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                            ServiceUpdateMetadataResultResponse {
+                            }))
+                        }
+                        Err(e) => {
+                            Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
                                 success: false,
                                 error: Some(format!("{}", e)),
-                            },
-                        )),
+                            }))
+                        }
                     }
                 }
-                Ok(None) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                    ServiceUpdateMetadataResultResponse {
-                        success: false,
-                        error: Some("instance not found".to_string()),
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                    ServiceUpdateMetadataResultResponse {
-                        success: false,
-                        error: Some(format!("{}", e)),
-                    },
-                )),
+                Ok(None) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    success: false,
+                    error: Some("instance not found".to_string()),
+                })),
+                Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    success: false,
+                    error: Some(format!("{}", e)),
+                })),
             }
         }
 
