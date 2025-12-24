@@ -727,6 +727,22 @@
               ''}";
             };
 
+            # Rust formatter with nightly rustfmt for unstable features
+            rustfmt = {
+              type = "app";
+              program = "${pkgs.writeShellScript "rustfmt" ''
+                set -e
+                MODE="''${1:-}"
+                if [ "$MODE" = "check" ]; then
+                  echo "Checking Rust formatting..."
+                  ${pkgs.rust-bin.nightly.latest.rustfmt}/bin/rustfmt --edition 2024 --check $(find . -name '*.rs' -not -path './target/*' -not -path './openraft/*' -not -path './vendor/*')
+                else
+                  echo "Formatting Rust files..."
+                  ${pkgs.rust-bin.nightly.latest.rustfmt}/bin/rustfmt --edition 2024 $(find . -name '*.rs' -not -path './target/*' -not -path './openraft/*' -not -path './vendor/*')
+                fi
+              ''}";
+            };
+
             # Code coverage command
             # Usage: nix run .#coverage [subcommand]
             #   nix run .#coverage        - Show summary (default)

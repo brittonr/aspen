@@ -1,0 +1,48 @@
+# Aspen rustfmt configuration
+# See https://rust-lang.github.io/rustfmt/
+#
+# Usage:
+#   nix run .#fmt        - Format all Rust files (nightly rustfmt)
+#   nix run .#fmt check  - Check formatting without modifying
+#   cargo fmt            - Format with stable rustfmt (ignores unstable options)
+
+# Enable unstable features (requires nightly rustfmt via `nix run .#fmt`)
+unstable_features = true
+
+# Edition (matches Cargo.toml)
+edition = "2024"
+
+# Maximum line width
+max_width = 120
+
+# Import organization
+reorder_imports = true
+imports_granularity = "Item"
+group_imports = "StdExternalCrate"
+
+# Function signature formatting
+# NOTE: rustfmt does NOT support automatic parameter reordering.
+# Parameter ordering (borrowed refs before owned types) must be enforced
+# through code review. See CLAUDE.md "Naming and Parameter Conventions" section.
+fn_params_layout = "Tall"
+fn_call_width = 100
+
+# Control flow formatting
+where_single_line = true
+
+# Trailing commas and overflow
+trailing_comma = "Vertical"
+overflow_delimited_expr = true
+
+# Comments
+wrap_comments = true
+comment_width = 100
+
+# Chain expressions
+chain_width = 100
+
+# Inline attribute width (0 = always newline)
+inline_attribute_width = 0
+
+# Derives - keep separate for easier diffs
+merge_derives = false

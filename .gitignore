@@ -133,8 +133,7 @@ target/
 .cargo/registry/
 .cargo/git/
 
-# Rustfmt
-rustfmt.toml
+# Rustfmt skip file (rustfmt.toml is tracked for team consistency)
 rustfmt.skip
 
 # Docs

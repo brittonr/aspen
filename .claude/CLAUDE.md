@@ -354,6 +354,68 @@ Aspen follows "Tiger Style" principles (see tigerstyle.md):
 - Avoid duplicates and aliases; maintain single source of truth
 - Pass large objects (>16 bytes) by reference
 
+### Naming and Parameter Conventions
+
+Follow Rust API Guidelines (https://rust-lang.github.io/api-guidelines/naming.html):
+
+**Casing:**
+
+- Types, traits, enum variants: `UpperCamelCase` (acronyms as words: `Uuid`, not `UUID`)
+- Functions, methods, variables, modules: `snake_case`
+- Constants and statics: `SCREAMING_SNAKE_CASE`
+
+**Conversion methods (C-CONV):**
+
+- `as_*`: Free conversion, borrowed to borrowed (`as_bytes`, `as_mut_slice`)
+- `to_*`: Expensive conversion, borrowed to owned (`to_string`, `to_vec`)
+- `into_*`: Owned to owned, consumes self (`into_inner`, `into_bytes`)
+
+**Getters (C-GETTER):**
+
+- Omit `get_` prefix: use `fn len()` not `fn get_len()`
+- Use `*_mut()` suffix for mutable access: `fn first_mut()`
+
+**Iterator methods (C-ITER):**
+
+- `iter(&self)` returns `Iter` yielding `&T`
+- `iter_mut(&mut self)` returns `IterMut` yielding `&mut T`
+- `into_iter(self)` returns `IntoIter` yielding `T`
+
+**Function parameter ordering:**
+
+NOTE: rustfmt cannot enforce parameter ordering; this is enforced through code review.
+
+Preferred order (most to least important):
+
+1. `&self` / `&mut self` / `self` (receiver always first)
+2. Borrowed references (`&T`, `&str`, `&[T]`) - cheap to pass, no ownership transfer
+3. Small Copy types (`u32`, `bool`, `NodeId`) - pass by value
+4. Owned types (`String`, `Vec<T>`, `Box<T>`) - ownership transfer
+5. Closures and callbacks (`F: FnOnce(...)`) - always last
+
+Examples:
+
+```rust
+// Good: borrowed refs before owned types, closure last
+fn process(name: &str, id: u32, data: Vec<u8>, callback: impl FnOnce())
+
+// Good: self first, then references, then owned
+fn update(&mut self, prefix: &[u8], new_value: String)
+
+// Avoid: owned before borrowed (harder to call, unclear ownership)
+fn process(data: Vec<u8>, name: &str)  // prefer: (name: &str, data: Vec<u8>)
+```
+
+**Variable naming with units:**
+
+- Include units in descending specificity: `timeout_ms`, `size_bytes`, `latency_us_max`
+- Boolean prefixes: `is_`, `has_`, `should_`, `can_` (`is_leader`, `has_quorum`)
+
+**Error type naming:**
+
+- Pattern: `VerbObjectError` (`ParseConfigError`, `ConnectNodeError`)
+- Not: `ObjectVerbError` or `ErrorVerb`
+
 ### Zero Technical Debt
 
 - Do it right the first time; avoid rushing features that create debt

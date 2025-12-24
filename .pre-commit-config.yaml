@@ -30,20 +30,18 @@ repos:
         name: alejandra (nix formatter)
         files: \.nix$
 
-  # Rust formatting
+  # Rust formatting (uses nightly rustfmt for unstable features in rustfmt.toml)
   - repo: local
     hooks:
-      - id: cargo-fmt
-        name: cargo fmt
-        description: Format Rust code with rustfmt
+      - id: rustfmt
+        name: rustfmt (nightly)
+        description: Format Rust code with nightly rustfmt
         entry: nix
         args:
-          - develop
-          - -c
-          - cargo
-          - fmt
+          - run
+          - .#rustfmt
           - --
-          - --check
+          - check
         language: system
         files: \.rs$
         pass_filenames: false
