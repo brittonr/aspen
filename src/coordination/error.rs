@@ -114,24 +114,57 @@ pub enum FenceError {
     },
 }
 
-/// Error when rate limited.
+/// Error when rate limited or unable to check rate limit.
+///
+/// Distinguishes between actual rate limiting (tokens exhausted) and
+/// storage failures (unable to determine rate limit state).
 #[derive(Debug, Clone)]
-pub struct RateLimitError {
-    /// Tokens requested.
-    pub requested: u64,
-    /// Tokens available.
-    pub available: u64,
-    /// Estimated wait time in milliseconds until enough tokens available.
-    pub retry_after_ms: u64,
+pub enum RateLimitError {
+    /// Request was rate limited due to insufficient tokens.
+    TokensExhausted {
+        /// Tokens requested.
+        requested: u64,
+        /// Tokens available.
+        available: u64,
+        /// Estimated wait time in milliseconds until enough tokens available.
+        retry_after_ms: u64,
+    },
+    /// Storage unavailable, rate limit state cannot be determined.
+    ///
+    /// This may occur when the cluster is not initialized, during a
+    /// network partition, or when storage is otherwise unreachable.
+    StorageUnavailable {
+        /// Human-readable description of the failure.
+        reason: String,
+    },
+}
+
+impl RateLimitError {
+    /// Returns the retry_after_ms if this is a TokensExhausted error, None otherwise.
+    pub fn retry_after_ms(&self) -> Option<u64> {
+        match self {
+            RateLimitError::TokensExhausted { retry_after_ms, .. } => Some(*retry_after_ms),
+            RateLimitError::StorageUnavailable { .. } => None,
+        }
+    }
 }
 
 impl fmt::Display for RateLimitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "rate limited: requested {} tokens, {} available, retry after {}ms",
-            self.requested, self.available, self.retry_after_ms
-        )
+        match self {
+            RateLimitError::TokensExhausted {
+                requested,
+                available,
+                retry_after_ms,
+            } => write!(
+                f,
+                "rate limited: requested {} tokens, {} available, retry after {}ms",
+                requested, available, retry_after_ms
+            ),
+            RateLimitError::StorageUnavailable { reason } => {
+                write!(f, "rate limiter storage unavailable: {}", reason)
+            }
+        }
     }
 }
 

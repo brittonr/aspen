@@ -417,6 +417,18 @@ impl ClusterController for RaftNode {
         let metrics = self.raft.metrics().borrow().clone();
         Ok(metrics.snapshot)
     }
+
+    fn is_initialized(&self) -> bool {
+        // Fast path: check atomic flag (Acquire ensures we see prior writes)
+        if self.initialized.load(Ordering::Acquire) {
+            return true;
+        }
+
+        // Slow path: check if membership exists via Raft replication
+        // A node may have received membership through replication without explicit init()
+        let metrics = self.raft.metrics().borrow().clone();
+        metrics.membership_config.membership().nodes().next().is_some()
+    }
 }
 
 #[async_trait]

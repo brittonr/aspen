@@ -92,6 +92,7 @@ use crate::coordination::CounterConfig;
 use crate::coordination::DistributedLock;
 use crate::coordination::DistributedRateLimiter;
 use crate::coordination::LockConfig;
+use crate::coordination::RateLimitError;
 use crate::coordination::RateLimiterConfig;
 use crate::coordination::SequenceConfig;
 use crate::coordination::SequenceGenerator;
@@ -307,27 +308,76 @@ async fn handle_client_request(
 
     debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 
-    // Rate limit check using distributed rate limiter
-    // Tiger Style: Per-client rate limiting prevents DoS from individual clients
-    let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
-    let limiter = DistributedRateLimiter::new(
-        ctx.kv_store.clone(),
-        &rate_limit_key,
-        RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
+    // Check if cluster is initialized
+    let is_initialized = ctx.controller.is_initialized();
+
+    // Safe operations that don't require initialization or rate limiting
+    // These are status/bootstrap operations that should work on any node
+    let is_safe_operation = matches!(
+        &request,
+        ClientRpcRequest::Ping
+            | ClientRpcRequest::GetHealth
+            | ClientRpcRequest::GetNodeInfo
+            | ClientRpcRequest::GetClusterTicket
+            | ClientRpcRequest::GetRaftMetrics
+            | ClientRpcRequest::InitCluster
     );
 
-    if let Err(e) = limiter.try_acquire().await {
-        warn!(
-            client_id = %client_id,
-            retry_after_ms = e.retry_after_ms,
-            "Client rate limited"
-        );
-        let response =
-            ClientRpcResponse::error("RATE_LIMITED", format!("Too many requests. Retry after {}ms", e.retry_after_ms));
-        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
-        send.write_all(&response_bytes).await.context("failed to write rate limit response")?;
+    // For unsafe operations on uninitialized cluster, return clear error
+    // Tiger Style: Fail-fast with actionable error message
+    if !is_safe_operation && !is_initialized {
+        let response = ClientRpcResponse::error("NOT_INITIALIZED", "cluster not initialized - call InitCluster first");
+        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize not initialized response")?;
+        send.write_all(&response_bytes).await.context("failed to write not initialized response")?;
         send.finish().context("failed to finish send stream")?;
         return Ok(());
+    }
+
+    // Rate limit check for unsafe operations only
+    // Tiger Style: Per-client rate limiting prevents DoS from individual clients
+    if !is_safe_operation {
+        let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
+        let limiter = DistributedRateLimiter::new(
+            ctx.kv_store.clone(),
+            &rate_limit_key,
+            RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
+        );
+
+        match limiter.try_acquire().await {
+            Ok(_) => {}
+            Err(RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
+                warn!(
+                    client_id = %client_id,
+                    retry_after_ms,
+                    "Client rate limited"
+                );
+                let response = ClientRpcResponse::error(
+                    "RATE_LIMITED",
+                    format!("Too many requests. Retry after {}ms", retry_after_ms),
+                );
+                let response_bytes =
+                    postcard::to_stdvec(&response).context("failed to serialize rate limit response")?;
+                send.write_all(&response_bytes).await.context("failed to write rate limit response")?;
+                send.finish().context("failed to finish send stream")?;
+                return Ok(());
+            }
+            Err(RateLimitError::StorageUnavailable { reason }) => {
+                // FAIL CLOSED: Reject request when rate limiter storage is unavailable
+                // This maintains DoS protection at the cost of availability during partitions
+                warn!(
+                    client_id = %client_id,
+                    reason = %reason,
+                    "Rate limiter storage unavailable, rejecting request"
+                );
+                let response =
+                    ClientRpcResponse::error("SERVICE_UNAVAILABLE", "rate limiter unavailable - try again later");
+                let response_bytes =
+                    postcard::to_stdvec(&response).context("failed to serialize unavailable response")?;
+                send.write_all(&response_bytes).await.context("failed to write unavailable response")?;
+                send.finish().context("failed to finish send stream")?;
+                return Ok(());
+            }
+        }
     }
 
     // Authorization check: verify capability token if auth is enabled
@@ -501,10 +551,19 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::InitCluster => {
+            // Build ClusterNode for the current node to initialize as single-node cluster
+            let endpoint_addr = ctx.endpoint_manager.node_addr();
+            let this_node = crate::api::ClusterNode {
+                id: ctx.node_id,
+                addr: endpoint_addr.id.to_string(),
+                raft_addr: None,
+                iroh_addr: Some(endpoint_addr.clone()),
+            };
+
             let result = ctx
                 .controller
                 .init(InitRequest {
-                    initial_members: vec![],
+                    initial_members: vec![this_node],
                 })
                 .await;
 
@@ -2620,12 +2679,22 @@ async fn process_client_request(
                     retry_after_ms: None,
                     error: None,
                 })),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-                    success: false,
-                    tokens_remaining: Some(e.available),
-                    retry_after_ms: Some(e.retry_after_ms),
-                    error: None,
-                })),
+                Err(e) => {
+                    let (available, retry_ms, err_msg) = match &e {
+                        RateLimitError::TokensExhausted {
+                            available,
+                            retry_after_ms,
+                            ..
+                        } => (Some(*available), Some(*retry_after_ms), None),
+                        RateLimitError::StorageUnavailable { reason } => (None, None, Some(reason.clone())),
+                    };
+                    Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: available,
+                        retry_after_ms: retry_ms,
+                        error: err_msg,
+                    }))
+                }
             }
         }
 
@@ -2658,12 +2727,22 @@ async fn process_client_request(
                     retry_after_ms: None,
                     error: None,
                 })),
-                Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
-                    success: false,
-                    tokens_remaining: Some(e.available),
-                    retry_after_ms: Some(e.retry_after_ms),
-                    error: Some("timeout waiting for tokens".to_string()),
-                })),
+                Err(e) => {
+                    let (available, retry_ms, err_msg) = match &e {
+                        RateLimitError::TokensExhausted {
+                            available,
+                            retry_after_ms,
+                            ..
+                        } => (Some(*available), Some(*retry_after_ms), "timeout waiting for tokens".to_string()),
+                        RateLimitError::StorageUnavailable { reason } => (None, None, reason.clone()),
+                    };
+                    Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+                        success: false,
+                        tokens_remaining: available,
+                        retry_after_ms: retry_ms,
+                        error: Some(err_msg),
+                    }))
+                }
             }
         }
 

@@ -312,6 +312,15 @@ pub trait ClusterController: Send + Sync {
     async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
         Ok(self.get_metrics().await?.current_leader.map(|id| id.0))
     }
+
+    /// Check if the cluster has been initialized.
+    ///
+    /// Returns `true` if init() has been called or if this node has
+    /// received membership info through Raft replication.
+    ///
+    /// This is a non-blocking, synchronous check that does not require
+    /// consensus. Use this for fast-path decisions about cluster readiness.
+    fn is_initialized(&self) -> bool;
 }
 
 // Blanket implementation for Arc<T> where T: ClusterController
@@ -341,6 +350,10 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         &self,
     ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError> {
         (**self).trigger_snapshot().await
+    }
+
+    fn is_initialized(&self) -> bool {
+        (**self).is_initialized()
     }
 }
 

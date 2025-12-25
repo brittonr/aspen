@@ -91,38 +91,36 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             let now_ms = now_unix_ms();
             let current = match self.read_state().await {
                 Ok(state) => state,
-                Err(_) => {
-                    return Err(RateLimitError {
-                        requested: n,
-                        available: 0,
-                        retry_after_ms: 1000, // Fallback
-                    });
+                Err(e) => {
+                    // Storage unavailable - return distinct error for caller to handle
+                    return Err(RateLimitError::StorageUnavailable { reason: e.to_string() });
                 }
             };
 
-            // Calculate replenished tokens
+            // Calculate replenished tokens using CONFIG values (not stored values)
+            // This ensures config changes take effect immediately
             let elapsed_ms = now_ms.saturating_sub(current.last_update_ms);
             let elapsed_secs = elapsed_ms as f64 / 1000.0;
-            let replenished = elapsed_secs * current.refill_rate;
-            let available = (current.tokens + replenished).min(current.capacity as f64);
+            let replenished = elapsed_secs * self.config.refill_rate;
+            let available = (current.tokens + replenished).min(self.config.capacity as f64);
 
             // Check if we can acquire
             if (n as f64) > available {
                 let deficit = (n as f64) - available;
-                let wait_secs = deficit / current.refill_rate;
-                return Err(RateLimitError {
+                let wait_secs = deficit / self.config.refill_rate;
+                return Err(RateLimitError::TokensExhausted {
                     requested: n,
                     available: available as u64,
                     retry_after_ms: (wait_secs * 1000.0).ceil() as u64,
                 });
             }
 
-            // Prepare new state
+            // Prepare new state with current config values
             let new_state = BucketState {
                 tokens: available - (n as f64),
                 last_update_ms: now_ms,
-                capacity: current.capacity,
-                refill_rate: current.refill_rate,
+                capacity: self.config.capacity,
+                refill_rate: self.config.refill_rate,
             };
 
             // Atomic update
@@ -139,7 +137,8 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                 Err(CoordinationError::CasConflict) => {
                     attempt += 1;
                     if attempt >= MAX_CAS_RETRIES {
-                        return Err(RateLimitError {
+                        // CAS contention is still rate limiting - use TokensExhausted
+                        return Err(RateLimitError::TokensExhausted {
                             requested: n,
                             available: 0,
                             retry_after_ms: 1000,
@@ -148,12 +147,9 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                     tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                     backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 }
-                Err(_) => {
-                    return Err(RateLimitError {
-                        requested: n,
-                        available: 0,
-                        retry_after_ms: 1000,
-                    });
+                Err(e) => {
+                    // Storage error during CAS - return distinct error
+                    return Err(RateLimitError::StorageUnavailable { reason: e.to_string() });
                 }
             }
         }
@@ -171,10 +167,16 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         loop {
             match self.try_acquire_n(n).await {
                 Ok(remaining) => return Ok(remaining),
-                Err(e) => {
-                    let wait = Duration::from_millis(e.retry_after_ms.min(100));
+                Err(ref e) => {
+                    // For storage errors, immediately propagate (no retry would help)
+                    // For token exhaustion, wait and retry
+                    let retry_ms = match e.retry_after_ms() {
+                        Some(ms) => ms,
+                        None => return Err(e.clone()), // StorageUnavailable - no point retrying
+                    };
+                    let wait = Duration::from_millis(retry_ms.min(100));
                     if Instant::now() + wait > deadline {
-                        return Err(e);
+                        return Err(e.clone());
                     }
                     tokio::time::sleep(wait).await;
                 }
@@ -393,5 +395,52 @@ mod tests {
         limiter.try_acquire_n(3).await.unwrap();
 
         assert_eq!(limiter.available().await.unwrap(), 7);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_tokens_exhausted_error() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let limiter = DistributedRateLimiter::new(
+            store,
+            "test_limiter",
+            RateLimiterConfig::new(10.0, 5), // 10/sec, burst 5
+        );
+
+        // Exhaust all tokens
+        for _ in 0..5 {
+            limiter.try_acquire().await.unwrap();
+        }
+
+        // Should get TokensExhausted error
+        let result = limiter.try_acquire().await;
+        match result {
+            Err(RateLimitError::TokensExhausted {
+                requested,
+                available,
+                retry_after_ms,
+            }) => {
+                assert_eq!(requested, 1);
+                assert_eq!(available, 0);
+                assert!(retry_after_ms > 0);
+            }
+            _ => panic!("Expected TokensExhausted error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_error_helper_methods() {
+        // Test TokensExhausted retry_after_ms helper
+        let exhausted_err = RateLimitError::TokensExhausted {
+            requested: 1,
+            available: 0,
+            retry_after_ms: 100,
+        };
+        assert_eq!(exhausted_err.retry_after_ms(), Some(100));
+
+        // Test StorageUnavailable has no retry_after_ms
+        let storage_err = RateLimitError::StorageUnavailable {
+            reason: "test error".to_string(),
+        };
+        assert_eq!(storage_err.retry_after_ms(), None);
     }
 }

@@ -138,6 +138,12 @@ impl ClusterController for DeterministicClusterController {
             operation: "trigger_snapshot".into(),
         })
     }
+
+    fn is_initialized(&self) -> bool {
+        // In-memory deterministic backend is always considered "initialized"
+        // since it doesn't have the Raft bootstrapping concept
+        true
+    }
 }
 
 /// In-memory deterministic implementation of [`KeyValueStore`] for testing.

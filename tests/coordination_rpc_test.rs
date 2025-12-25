@@ -343,8 +343,9 @@ async fn test_rate_limiter_returns_retry_after() {
 
     // Next acquire should fail with retry_after
     let err = limiter.try_acquire().await.unwrap_err();
-    assert!(err.retry_after_ms > 0, "Should have retry_after_ms");
-    assert!(err.retry_after_ms <= 1000, "retry_after_ms should be <= 1 second");
+    let retry_ms = err.retry_after_ms().expect("Should have retry_after_ms for TokensExhausted");
+    assert!(retry_ms > 0, "Should have retry_after_ms > 0");
+    assert!(retry_ms <= 1000, "retry_after_ms should be <= 1 second");
 }
 
 #[tokio::test]
