@@ -288,6 +288,10 @@ pub struct IrohConfig {
     /// - Resolves peer addresses from DHT (enables peer discovery)
     /// - Cryptographic authentication via Ed25519 signatures
     ///
+    /// **Security**: When this is enabled, `enable_raft_auth` is automatically set to
+    /// true (unless explicitly disabled). This prevents unauthorized nodes from joining
+    /// the cluster after discovering the node's address via the public DHT.
+    ///
     /// Default: false (Pkarr disabled).
     #[serde(default)]
     pub enable_pkarr: bool,
@@ -349,6 +353,34 @@ impl Default for IrohConfig {
             pkarr_republish_delay_secs: default_pkarr_republish_delay_secs(),
             enable_raft_auth: false,
         }
+    }
+}
+
+impl IrohConfig {
+    /// Apply security defaults based on configuration.
+    ///
+    /// This method enforces security-by-default policies:
+    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically
+    ///   enabled to prevent unauthorized nodes from joining the cluster.
+    ///
+    /// Returns true if any settings were changed.
+    pub fn apply_security_defaults(&mut self) -> bool {
+        let mut changed = false;
+
+        // Auto-enable Raft auth when Pkarr is enabled
+        // Rationale: Pkarr publishes node addresses to a public DHT, making nodes
+        // discoverable by anyone. Without Raft auth, any node that discovers the
+        // address could potentially join the cluster and disrupt consensus.
+        if self.enable_pkarr && !self.enable_raft_auth {
+            self.enable_raft_auth = true;
+            changed = true;
+            tracing::info!(
+                "Raft authentication auto-enabled because Pkarr DHT discovery is enabled. \
+                 This prevents unauthorized nodes from joining the cluster."
+            );
+        }
+
+        changed
     }
 }
 
@@ -926,6 +958,20 @@ impl NodeConfig {
         if other.sqlite_read_pool_size != default_sqlite_read_pool_size() {
             self.sqlite_read_pool_size = other.sqlite_read_pool_size;
         }
+    }
+
+    /// Apply security defaults based on configuration.
+    ///
+    /// This method enforces security-by-default policies across all config sections.
+    /// Call this after loading and merging configuration, before using it.
+    ///
+    /// Current policies:
+    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically
+    ///   enabled to prevent unauthorized nodes from joining the cluster.
+    ///
+    /// Returns true if any settings were changed.
+    pub fn apply_security_defaults(&mut self) -> bool {
+        self.iroh.apply_security_defaults()
     }
 
     /// Validate configuration on startup.

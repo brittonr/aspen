@@ -274,6 +274,10 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_raft_auth: args.enable_raft_auth,
     };
     config.peers = args.peers.clone();
+
+    // Apply security defaults (e.g., auto-enable raft_auth when pkarr is on)
+    config.apply_security_defaults();
+
     config
 }
 

@@ -604,7 +604,11 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
 /// - Sharding is not enabled in config
 /// - Base node bootstrap fails
 /// - Any shard's Raft instance fails to initialize
-pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHandle> {
+pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
+    // Apply security defaults before using config
+    // This auto-enables raft_auth when pkarr is enabled for defense-in-depth
+    config.apply_security_defaults();
+
     ensure!(config.sharding.enabled, "sharding must be enabled to use bootstrap_sharded_node");
 
     let num_shards = config.sharding.num_shards;
@@ -832,7 +836,11 @@ pub async fn bootstrap_sharded_node(config: NodeConfig) -> Result<ShardedNodeHan
 /// This replaces the actor-based bootstrap with direct async APIs,
 /// removing the overhead of message passing while maintaining the
 /// same functionality.
-pub async fn bootstrap_node(config: NodeConfig) -> Result<NodeHandle> {
+pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
+    // Apply security defaults before using config
+    // This auto-enables raft_auth when pkarr is enabled for defense-in-depth
+    config.apply_security_defaults();
+
     info!(node_id = config.node_id, "bootstrapping node with simplified architecture");
 
     // Initialize metadata store
