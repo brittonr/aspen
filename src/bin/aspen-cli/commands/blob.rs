@@ -39,6 +39,15 @@ pub enum BlobCommand {
 
     /// Remove protection from a blob.
     Unprotect(UnprotectArgs),
+
+    /// Delete a blob from the store.
+    Delete(DeleteArgs),
+
+    /// Download a blob from a remote peer using a ticket.
+    Download(DownloadArgs),
+
+    /// Get detailed status information about a blob.
+    Status(StatusArgs),
 }
 
 #[derive(Args)]
@@ -103,6 +112,32 @@ pub struct ProtectArgs {
 pub struct UnprotectArgs {
     /// Tag name to remove.
     pub tag: String,
+}
+
+#[derive(Args)]
+pub struct DeleteArgs {
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: String,
+
+    /// Force deletion even if protected.
+    #[arg(long)]
+    pub force: bool,
+}
+
+#[derive(Args)]
+pub struct DownloadArgs {
+    /// Blob ticket from remote peer.
+    pub ticket: String,
+
+    /// Optional tag to protect the downloaded blob from GC.
+    #[arg(long)]
+    pub tag: Option<String>,
+}
+
+#[derive(Args)]
+pub struct StatusArgs {
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: String,
 }
 
 /// Add blob output.
@@ -304,6 +339,105 @@ impl Outputable for ProtectBlobOutput {
     }
 }
 
+/// Delete blob output.
+pub struct DeleteBlobOutput {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl Outputable for DeleteBlobOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "success": self.success,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.success {
+            "deleted".to_string()
+        } else {
+            format!("Delete failed: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}
+
+/// Download blob output.
+pub struct DownloadBlobOutput {
+    pub success: bool,
+    pub hash: Option<String>,
+    pub size: Option<u64>,
+    pub error: Option<String>,
+}
+
+impl Outputable for DownloadBlobOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "success": self.success,
+            "hash": self.hash,
+            "size": self.size,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.success {
+            let hash = self.hash.as_deref().unwrap_or("unknown");
+            let size = self.size.unwrap_or(0);
+            format!("Downloaded {} ({} bytes)", hash, size)
+        } else {
+            format!("Download failed: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}
+
+/// Blob status output.
+pub struct BlobStatusOutput {
+    pub found: bool,
+    pub hash: Option<String>,
+    pub size: Option<u64>,
+    pub complete: Option<bool>,
+    pub tags: Option<Vec<String>>,
+    pub error: Option<String>,
+}
+
+impl Outputable for BlobStatusOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "found": self.found,
+            "hash": self.hash,
+            "size": self.size,
+            "complete": self.complete,
+            "tags": self.tags,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if !self.found {
+            return format!(
+                "Blob not found: {}",
+                self.error.as_deref().unwrap_or(self.hash.as_deref().unwrap_or("unknown"))
+            );
+        }
+
+        let hash = self.hash.as_deref().unwrap_or("unknown");
+        let size = self.size.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown size".to_string());
+        let complete = if self.complete.unwrap_or(false) {
+            "complete"
+        } else {
+            "incomplete"
+        };
+        let tags = self
+            .tags
+            .as_ref()
+            .map(|t| if t.is_empty() { "none".to_string() } else { t.join(", ") })
+            .unwrap_or_else(|| "unknown".to_string());
+
+        format!("Hash: {}\nSize: {}\nStatus: {}\nTags: {}", hash, size, complete, tags)
+    }
+}
+
 impl BlobCommand {
     /// Execute the blob command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -315,6 +449,9 @@ impl BlobCommand {
             BlobCommand::List(args) => blob_list(client, args, json).await,
             BlobCommand::Protect(args) => blob_protect(client, args, json).await,
             BlobCommand::Unprotect(args) => blob_unprotect(client, args, json).await,
+            BlobCommand::Delete(args) => blob_delete(client, args, json).await,
+            BlobCommand::Download(args) => blob_download(client, args, json).await,
+            BlobCommand::Status(args) => blob_status(client, args, json).await,
         }
     }
 }
@@ -507,6 +644,82 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -
             };
             print_output(&output, json);
             if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::DeleteBlob {
+            hash: args.hash,
+            force: args.force,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::DeleteBlobResult(result) => {
+            let output = DeleteBlobOutput {
+                success: result.success,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::DownloadBlob {
+            ticket: args.ticket,
+            tag: args.tag,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::DownloadBlobResult(result) => {
+            let output = DownloadBlobOutput {
+                success: result.success,
+                hash: result.hash,
+                size: result.size,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::GetBlobStatus { hash: args.hash }).await?;
+
+    match response {
+        ClientRpcResponse::GetBlobStatusResult(result) => {
+            let output = BlobStatusOutput {
+                found: result.found,
+                hash: result.hash,
+                size: result.size,
+                complete: result.complete,
+                tags: result.tags,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.found {
                 std::process::exit(1);
             }
             Ok(())

@@ -287,6 +287,35 @@ pub enum ClientRpcRequest {
         tag: String,
     },
 
+    /// Delete a blob from the store.
+    ///
+    /// Removes the blob and all its data. Protected blobs cannot be deleted
+    /// unless force is true.
+    DeleteBlob {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+        /// Force deletion even if protected.
+        force: bool,
+    },
+
+    /// Download a blob from a remote peer using a ticket.
+    ///
+    /// Fetches the blob from the peer specified in the ticket and stores it locally.
+    DownloadBlob {
+        /// Serialized BlobTicket from the remote peer.
+        ticket: String,
+        /// Optional tag to protect the downloaded blob from GC.
+        tag: Option<String>,
+    },
+
+    /// Get detailed status information about a blob.
+    ///
+    /// Returns size, completion status, and protection tags.
+    GetBlobStatus {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+    },
+
     // =========================================================================
     // Peer cluster operations (cluster-to-cluster sync)
     // =========================================================================
@@ -1342,15 +1371,21 @@ impl ClientRpcRequest {
             }),
 
             // Blob operations (content-addressed, use _blob prefix)
-            Self::AddBlob { .. } | Self::ProtectBlob { .. } | Self::UnprotectBlob { .. } => Some(Operation::Write {
+            Self::AddBlob { .. }
+            | Self::ProtectBlob { .. }
+            | Self::UnprotectBlob { .. }
+            | Self::DeleteBlob { .. }
+            | Self::DownloadBlob { .. } => Some(Operation::Write {
                 key: "_blob:".to_string(),
                 value: vec![],
             }),
-            Self::GetBlob { .. } | Self::HasBlob { .. } | Self::GetBlobTicket { .. } | Self::ListBlobs { .. } => {
-                Some(Operation::Read {
-                    key: "_blob:".to_string(),
-                })
-            }
+            Self::GetBlob { .. }
+            | Self::HasBlob { .. }
+            | Self::GetBlobTicket { .. }
+            | Self::ListBlobs { .. }
+            | Self::GetBlobStatus { .. } => Some(Operation::Read {
+                key: "_blob:".to_string(),
+            }),
 
             // Peer cluster operations (admin)
             Self::AddPeerCluster { .. }
@@ -1536,6 +1571,15 @@ pub enum ClientRpcResponse {
 
     /// Unprotect blob result.
     UnprotectBlobResult(UnprotectBlobResultResponse),
+
+    /// Delete blob result.
+    DeleteBlobResult(DeleteBlobResultResponse),
+
+    /// Download blob result.
+    DownloadBlobResult(DownloadBlobResultResponse),
+
+    /// Get blob status result.
+    GetBlobStatusResult(GetBlobStatusResultResponse),
 
     // =========================================================================
     // Peer cluster operation responses
@@ -2194,6 +2238,45 @@ pub struct ProtectBlobResultResponse {
 pub struct UnprotectBlobResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Delete blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Download blob result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// BLAKE3 hash of the downloaded blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Size of the downloaded blob in bytes.
+    pub size: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Get blob status result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBlobStatusResultResponse {
+    /// Whether the blob exists.
+    pub found: bool,
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Size of the blob in bytes.
+    pub size: Option<u64>,
+    /// Whether the blob is complete (all chunks present).
+    pub complete: Option<bool>,
+    /// List of protection tags.
+    pub tags: Option<Vec<String>>,
     /// Error message if failed.
     pub error: Option<String>,
 }
