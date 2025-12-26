@@ -11,6 +11,7 @@
 #   ASPEN_DATA_DIR    - Base data directory (default: /tmp/aspen-kitty-$$)
 #   ASPEN_STORAGE     - Storage backend: inmemory, redb, sqlite (default: redb)
 #   ASPEN_BLOBS       - Enable blob storage: true/false (default: true)
+#   ASPEN_DOCS        - Enable iroh-docs CRDT sync: true/false (default: true)
 
 set -eu
 
@@ -21,6 +22,7 @@ LOG_LEVEL="${ASPEN_LOG_LEVEL:-info}"
 DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-kitty-$$}"
 STORAGE="${ASPEN_STORAGE:-redb}"  # redb uses DataFusion SQL layer
 BLOBS_ENABLED="${ASPEN_BLOBS:-true}"  # Enable blob storage by default
+DOCS_ENABLED="${ASPEN_DOCS:-true}"    # Enable iroh-docs CRDT sync by default
 
 # Find binary in common locations
 find_binary() {
@@ -162,14 +164,14 @@ generate_session_file() {
             cat >> "$session_file" << EOF
 title node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         else
             cat >> "$session_file" << EOF
 new_tab node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         fi
@@ -370,6 +372,7 @@ print_info() {
     printf "Cookie:   $COOKIE\n"
     printf "Storage:  $STORAGE\n"
     printf "Blobs:    $BLOBS_ENABLED\n"
+    printf "Docs:     $DOCS_ENABLED\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
@@ -379,6 +382,13 @@ print_info() {
     printf "  nix run .#aspen-cli -- --ticket $ticket cluster status\n"
     printf "  nix run .#aspen-cli -- --ticket $ticket kv set mykey 'hello'\n"
     printf "  nix run .#aspen-cli -- --ticket $ticket kv get mykey\n"
+    if [ "$DOCS_ENABLED" = "true" ]; then
+        printf "\n"
+        printf "${BLUE}Docs (CRDT sync):${NC}\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket docs status\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket docs set mykey 'hello'\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket docs list\n"
+    fi
     printf "\n"
     printf "${BLUE}======================================${NC}\n"
     printf "Kitty window has $((NODE_COUNT + 1)) tabs:\n"
