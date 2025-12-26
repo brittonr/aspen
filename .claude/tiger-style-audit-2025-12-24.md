@@ -54,6 +54,7 @@ The Aspen codebase demonstrates **excellent overall compliance** with Tiger Styl
 | `src/cluster/bootstrap.rs` | 805, 1301 | System time `.unwrap()` | FIXED - uses `crate::utils::current_time_secs()` |
 
 **Implementation**: Added safe time utilities to `src/utils.rs`:
+
 ```rust
 /// Returns 0 if system time is before UNIX epoch (prevents panics)
 #[inline]
@@ -100,6 +101,7 @@ Tiger Style requires: "Use explicitly sized types (`u32`, `i64`) instead of `usi
 **Violations found**: 30+
 
 **Struct fields needing fixes**:
+
 | File | Field | Fix |
 |------|-------|-----|
 | `src/raft/write_batcher.rs:46,49` | `max_entries: usize`, `max_bytes: usize` | Use `u32`, `u64` |
@@ -110,6 +112,7 @@ Tiger Style requires: "Use explicitly sized types (`u32`, `i64`) instead of `usi
 | `src/sharding/automation.rs:47,49` | `max_concurrent_splits/merges: usize` | Use `u32` |
 
 **Error type fields**:
+
 | File | Field | Fix |
 |------|-------|-----|
 | `src/api/mod.rs:975,983,991` | `size: usize` in error variants | Use `u32` |
@@ -117,6 +120,7 @@ Tiger Style requires: "Use explicitly sized types (`u32`, `i64`) instead of `usi
 | `src/auth/error.rs:60,89` | `count: usize`, `size: usize` | Use `u32` |
 
 **Constants needing fixes**:
+
 | File | Constant | Fix |
 |------|----------|-----|
 | `src/raft/constants.rs:370` | `GOSSIP_MAX_TRACKED_PEERS: usize` | Use `u32` |
@@ -145,6 +149,7 @@ The codebase has well-defined resource bounds in `src/raft/constants.rs` (868 li
 **Total violations**: 79 functions
 
 **Top 10 by length**:
+
 | Rank | File | Function | Lines | Action |
 |------|------|----------|-------|--------|
 | 1 | `src/cluster/gossip_discovery.rs` | `spawn` | 345 | Extract `spawn_announcer_task()`, `spawn_listener_task()` |
@@ -159,6 +164,7 @@ The codebase has well-defined resource bounds in `src/raft/constants.rs` (868 li
 | 10 | `src/client/watch.rs` | `from` | 209 | Extract per-event-type deserializers |
 
 **Categories**:
+
 - Event loop handlers (345-312 lines): Extract inner async closures to module level
 - Complex validation (277-244 lines): JUSTIFIED for multi-variant matching
 - Binary startup (232-118 lines): Split into logical phases
@@ -173,6 +179,7 @@ The codebase has well-defined resource bounds in `src/raft/constants.rs` (868 li
 **Upon review**: NOT A DEADLOCK RISK
 
 The `read_handler` and `write_handler` fields are typed as:
+
 ```rust
 read_handler: Option<Arc<dyn Fn(&str, &str) -> Option<String> + Send + Sync>>
 write_handler: Option<Arc<dyn Fn(&str, &str, &str) -> bool + Send + Sync>>
@@ -181,6 +188,7 @@ write_handler: Option<Arc<dyn Fn(&str, &str, &str) -> bool + Send + Sync>>
 These are **synchronous `Fn` closures**, not async functions. The handlers execute within the same synchronous context - no `.await` occurs while locks are held.
 
 **Key points**:
+
 1. `tokio::sync::RwLock::read().await` acquires the lock, but subsequent operations within that scope are synchronous
 2. The handler closures are `Fn`, not `async Fn` - they cannot await or yield
 3. Lock guards are held only during synchronous operations, then dropped normally
@@ -194,16 +202,20 @@ These are **synchronous `Fn` closures**, not async functions. The handlers execu
 **Critical areas requiring optimization**:
 
 1. **`src/raft/storage_sqlite.rs:432-473`** - Double clones in loops:
+
    ```rust
    key: key.clone().into_bytes(),
    value: value.clone().into_bytes(),
    ```
+
    **Fix**: Use `.as_bytes().to_vec()` instead
 
 2. **`src/raft/node.rs:450-523`** - Systematic cloning in WriteCommand matching:
+
    ```rust
    BatchOperation::Set { key, value } => (true, key.clone(), value.clone()),
    ```
+
    **Fix**: Use move semantics where possible
 
 3. **`src/protocol_handlers/raft.rs:67,119`** - Arc clones before `try_acquire_owned()`:
@@ -242,6 +254,7 @@ These are **synchronous `Fn` closures**, not async functions. The handlers execu
 ### 10. Naming Convention Violations (LOW PRIORITY)
 
 **Acronym violations in type names (14)**:
+
 | Type | Fix |
 |------|-----|
 | `RWLockMode`, `RWLockState`, `RWLockManager<S>` | `ReadWriteLock*` |
@@ -347,6 +360,7 @@ The codebase demonstrates excellent Tiger Style compliance in several areas:
 ### Problem
 
 SQL queries in the TUI failed with:
+
 ```
 Error: max retries exceeded: failed to deserialize response: This is a feature that PostCard will never implement
 ```
@@ -354,6 +368,7 @@ Error: max retries exceeded: failed to deserialize response: This is a feature t
 ### Root Cause
 
 `SqlResultResponse` used `serde_json::Value` for the `rows` field:
+
 ```rust
 pub rows: Option<Vec<Vec<serde_json::Value>>>,
 ```
