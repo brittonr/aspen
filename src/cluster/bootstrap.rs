@@ -1377,6 +1377,10 @@ async fn setup_gossip_discovery(
 /// Initialize DocsExporter and P2P sync if enabled.
 ///
 /// Returns (docs_exporter_cancel, docs_sync).
+///
+/// If no namespace_secret is configured, derives one from the cluster cookie.
+/// This ensures all nodes with the same cookie share the same docs namespace,
+/// enabling automatic cross-node replication without explicit configuration.
 async fn initialize_docs_export(
     config: &NodeConfig,
     data_dir: &std::path::Path,
@@ -1398,11 +1402,29 @@ async fn initialize_docs_export(
     use crate::docs::DocsSyncResources;
     use crate::docs::SyncHandleDocsWriter;
     use crate::docs::init_docs_resources;
+    use sha2::Digest;
+    use sha2::Sha256;
+
+    // Derive namespace secret from cookie if not explicitly configured.
+    // This ensures all nodes with the same cookie share the same docs namespace.
+    let namespace_secret = config.docs.namespace_secret.clone().unwrap_or_else(|| {
+        let mut hasher = Sha256::new();
+        hasher.update(b"aspen-docs-namespace:");
+        hasher.update(config.cookie.as_bytes());
+        let hash = hasher.finalize();
+        let derived = hex::encode(hash);
+        info!(
+            node_id = config.node_id,
+            cookie = %config.cookie,
+            "derived docs namespace secret from cluster cookie"
+        );
+        derived
+    });
 
     let resources = match init_docs_resources(
         data_dir,
         config.docs.in_memory,
-        config.docs.namespace_secret.as_deref(),
+        Some(&namespace_secret),
         config.docs.author_secret.as_deref(),
     ) {
         Ok(r) => r,

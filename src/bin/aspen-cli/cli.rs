@@ -27,6 +27,7 @@ use crate::commands::semaphore::SemaphoreCommand;
 use crate::commands::sequence::SequenceCommand;
 use crate::commands::service::ServiceCommand;
 use crate::commands::sql::SqlCommand;
+use crate::commands::verify::VerifyCommand;
 
 /// Command-line interface for Aspen distributed system.
 #[derive(Parser)]
@@ -147,6 +148,12 @@ pub enum Commands {
     /// Execute read-only SQL queries against the distributed state machine.
     #[command(subcommand)]
     Sql(SqlCommand),
+
+    /// Verify cluster replication (KV, docs, blobs).
+    ///
+    /// Run verification tests to ensure data is being replicated correctly.
+    #[command(subcommand)]
+    Verify(VerifyCommand),
 }
 
 impl Cli {
@@ -191,6 +198,7 @@ impl Cli {
             Commands::Sequence(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Service(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Sql(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Verify(cmd) => cmd.run(&client, self.global.json).await,
         }
     }
 }

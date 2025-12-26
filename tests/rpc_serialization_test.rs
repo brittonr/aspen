@@ -242,6 +242,7 @@ fn test_raft_metrics_response_postcard_roundtrip() {
                     last_log_index: *last_log_index,
                     last_applied_index: *last_applied_index,
                     snapshot_index: *snapshot_index,
+                    replication: None,
                 });
                 let serialized = postcard::to_stdvec(&response).expect("serialize");
                 let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
@@ -650,6 +651,7 @@ mod unit_tests {
                 last_log_index: Some(10),
                 last_applied_index: Some(10),
                 snapshot_index: None,
+                replication: None,
             }),
             ClientRpcResponse::Leader(Some(1)),
             ClientRpcResponse::NodeInfo(NodeInfoResponse {

@@ -159,4 +159,51 @@ impl AspenClient {
     pub async fn shutdown(self) {
         self.endpoint.close().await;
     }
+
+    /// Send an RPC request to a specific endpoint address.
+    ///
+    /// Used for cross-node verification where we need to query
+    /// multiple nodes directly.
+    pub async fn send_to(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        // Connect to the specific peer
+        let connection = timeout(self.rpc_timeout, async {
+            self.endpoint.connect(addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
+        })
+        .await
+        .context("connection timeout")??;
+
+        // Open bidirectional stream
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
+
+        // Wrap request with authentication if token is present
+        let authenticated_request = if let Some(ref token) = self.token {
+            AuthenticatedRequest::new(request, token.clone())
+        } else {
+            AuthenticatedRequest::unauthenticated(request)
+        };
+
+        // Serialize and send request
+        let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
+
+        send.write_all(&request_bytes).await.context("failed to send request")?;
+
+        send.finish().context("failed to finish send stream")?;
+
+        // Read response with timeout
+        let response_bytes = timeout(self.rpc_timeout, async {
+            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
+        })
+        .await
+        .context("response timeout")??;
+
+        // Deserialize response
+        let response: ClientRpcResponse =
+            postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
+
+        // Close connection gracefully
+        connection.close(VarInt::from_u32(0), b"done");
+
+        Ok(response)
+    }
+
 }

@@ -1904,6 +1904,22 @@ pub struct RaftMetricsResponse {
     pub last_applied_index: Option<u64>,
     /// Snapshot log index.
     pub snapshot_index: Option<u64>,
+    /// Replication state for each node (only populated when this node is leader).
+    ///
+    /// Maps node_id -> matched_log_index. The matched index indicates how far
+    /// each follower has replicated. A `None` value means the node's progress
+    /// is unknown (e.g., newly added learner).
+    pub replication: Option<Vec<ReplicationProgress>>,
+}
+
+/// Replication progress for a single node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplicationProgress {
+    /// Node identifier.
+    pub node_id: u64,
+    /// The highest log index known to be replicated on this node.
+    /// `None` means replication progress is unknown.
+    pub matched_index: Option<u64>,
 }
 
 /// Node information response.

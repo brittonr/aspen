@@ -515,11 +515,24 @@ async fn process_client_request(
         }
 
         ClientRpcRequest::GetRaftMetrics => {
+            use crate::client_rpc::ReplicationProgress;
+
             let metrics = ctx
                 .controller
                 .get_metrics()
                 .await
                 .map_err(|e| anyhow::anyhow!("failed to get Raft metrics: {}", e))?;
+
+            // Extract replication progress if this node is leader
+            let replication = metrics.replication.as_ref().map(|repl_map| {
+                repl_map
+                    .iter()
+                    .map(|(node_id, matched)| ReplicationProgress {
+                        node_id: node_id.0,
+                        matched_index: matched.as_ref().map(|log_id| log_id.index),
+                    })
+                    .collect()
+            });
 
             Ok(ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: ctx.node_id,
@@ -529,6 +542,7 @@ async fn process_client_request(
                 last_log_index: metrics.last_log_index,
                 last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
                 snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
+                replication,
             }))
         }
 

@@ -116,6 +116,7 @@ async fn test_client_response_serialization() {
             last_log_index: Some(100),
             last_applied_index: Some(99),
             snapshot_index: Some(50),
+            replication: None,
         }),
         ClientRpcResponse::Leader(Some(1)),
         ClientRpcResponse::NodeInfo(NodeInfoResponse {

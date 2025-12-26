@@ -18,3 +18,4 @@ pub mod semaphore;
 pub mod sequence;
 pub mod service;
 pub mod sql;
+pub mod verify;

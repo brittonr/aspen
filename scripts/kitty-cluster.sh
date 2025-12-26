@@ -24,6 +24,9 @@ STORAGE="${ASPEN_STORAGE:-redb}"  # redb uses DataFusion SQL layer
 BLOBS_ENABLED="${ASPEN_BLOBS:-true}"  # Enable blob storage by default
 DOCS_ENABLED="${ASPEN_DOCS:-true}"    # Enable iroh-docs CRDT sync by default
 
+# Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
+# You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
+
 # Find binary in common locations
 find_binary() {
     local name="$1"
@@ -48,7 +51,8 @@ find_binary() {
     # Check target/release (cargo build --release)
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local project_dir="$(dirname "$script_dir")"
+    local project_dir
+    project_dir="$(dirname "$script_dir")"
 
     bin="$project_dir/target/release/$name"
     if [ -x "$bin" ]; then
@@ -160,6 +164,7 @@ generate_session_file() {
         secret=$(printf '%064x' "$((1000 + id))")
 
         # First tab uses 'launch', subsequent tabs use 'new_tab'
+        # Note: Docs namespace secret is automatically derived from cookie
         if [ "$id" -eq 1 ]; then
             cat >> "$session_file" << EOF
 title node-$id
@@ -372,7 +377,7 @@ print_info() {
     printf "Cookie:   $COOKIE\n"
     printf "Storage:  $STORAGE\n"
     printf "Blobs:    $BLOBS_ENABLED\n"
-    printf "Docs:     $DOCS_ENABLED\n"
+    printf "Docs:     $DOCS_ENABLED (namespace derived from cookie)\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
