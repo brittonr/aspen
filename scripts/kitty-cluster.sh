@@ -10,6 +10,7 @@
 #   ASPEN_LOG_LEVEL   - Log level for nodes (default: info)
 #   ASPEN_DATA_DIR    - Base data directory (default: /tmp/aspen-kitty-$$)
 #   ASPEN_STORAGE     - Storage backend: inmemory, redb, sqlite (default: redb)
+#   ASPEN_BLOBS       - Enable blob storage: true/false (default: true)
 
 set -eu
 
@@ -19,6 +20,7 @@ COOKIE="${ASPEN_COOKIE:-kitty-cluster-$$}"
 LOG_LEVEL="${ASPEN_LOG_LEVEL:-info}"
 DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-kitty-$$}"
 STORAGE="${ASPEN_STORAGE:-redb}"  # redb uses DataFusion SQL layer
+BLOBS_ENABLED="${ASPEN_BLOBS:-true}"  # Enable blob storage by default
 
 # Find binary in common locations
 find_binary() {
@@ -160,14 +162,14 @@ generate_session_file() {
             cat >> "$session_file" << EOF
 title node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         else
             cat >> "$session_file" << EOF
 new_tab node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         fi
@@ -367,6 +369,7 @@ print_info() {
     printf "\n"
     printf "Cookie:   $COOKIE\n"
     printf "Storage:  $STORAGE\n"
+    printf "Blobs:    $BLOBS_ENABLED\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
