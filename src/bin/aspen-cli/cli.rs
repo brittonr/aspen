@@ -15,6 +15,7 @@ use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
+use crate::commands::docs::DocsCommand;
 use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
@@ -97,6 +98,10 @@ pub enum Commands {
     #[command(subcommand)]
     Counter(CounterCommand),
 
+    /// CRDT-replicated docs namespace operations.
+    #[command(subcommand)]
+    Docs(DocsCommand),
+
     /// Key-value store operations.
     #[command(subcommand)]
     Kv(KvCommand),
@@ -174,6 +179,7 @@ impl Cli {
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lease(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lock(cmd) => cmd.run(&client, self.global.json).await,

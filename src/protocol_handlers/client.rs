@@ -130,6 +130,8 @@ pub struct ClientProtocolContext {
     pub blob_store: Option<Arc<IrohBlobStore>>,
     /// Peer manager for cluster-to-cluster sync (optional).
     pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    /// Docs sync resources for iroh-docs operations (optional).
+    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
     /// Cluster cookie for ticket generation.
     pub cluster_cookie: String,
     /// Node start time for uptime calculation.
@@ -1779,6 +1781,297 @@ async fn process_client_request(
                     }))
                 }
             }
+        }
+
+        // =========================================================================
+        // Docs operations (iroh-docs CRDT replication)
+        // =========================================================================
+        ClientRpcRequest::DocsSet { key, value } => {
+            use crate::client_rpc::DocsSetResultResponse;
+            use crate::docs::BlobBackedDocsWriter;
+            use crate::docs::DocsWriter;
+
+            let Some(ref docs_sync) = ctx.docs_sync else {
+                return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
+                    success: false,
+                    key: None,
+                    size: None,
+                    error: Some("docs not enabled".to_string()),
+                }));
+            };
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
+                    success: false,
+                    key: None,
+                    size: None,
+                    error: Some("blob store not enabled (required for docs)".to_string()),
+                }));
+            };
+
+            let writer = BlobBackedDocsWriter::new(
+                docs_sync.sync_handle.clone(),
+                docs_sync.namespace_id,
+                docs_sync.author.clone(),
+                blob_store.clone(),
+            );
+
+            let value_len = value.len() as u64;
+            match writer.set_entry(key.as_bytes().to_vec(), value).await {
+                Ok(()) => Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
+                    success: true,
+                    key: Some(key),
+                    size: Some(value_len),
+                    error: None,
+                })),
+                Err(e) => {
+                    warn!(key = %key, error = %e, "docs set failed");
+                    Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
+                        success: false,
+                        key: Some(key),
+                        size: None,
+                        error: Some("docs operation failed".to_string()),
+                    }))
+                }
+            }
+        }
+
+        ClientRpcRequest::DocsGet { key } => {
+            use crate::blob::BlobStore;
+            use crate::client_rpc::DocsGetResultResponse;
+
+            let Some(ref docs_sync) = ctx.docs_sync else {
+                return Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                    found: false,
+                    value: None,
+                    size: None,
+                    error: Some("docs not enabled".to_string()),
+                }));
+            };
+
+            let key_bytes: bytes::Bytes = bytes::Bytes::from(key.as_bytes().to_vec());
+            match docs_sync
+                .sync_handle
+                .get_exact(docs_sync.namespace_id, docs_sync.author.id(), key_bytes, false)
+                .await
+            {
+                Ok(Some(entry)) => {
+                    // Entry found, now get the content
+                    let content_hash = entry.content_hash();
+                    let content_len = entry.content_len();
+
+                    // Try to get content from blob store if available
+                    if let Some(ref blob_store) = ctx.blob_store {
+                        match blob_store.get_bytes(&content_hash).await {
+                            Ok(Some(bytes)) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                                found: true,
+                                value: Some(bytes.to_vec()),
+                                size: Some(content_len),
+                                error: None,
+                            })),
+                            Ok(None) => {
+                                // Content exists but not in blob store
+                                Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                                    found: true,
+                                    value: None,
+                                    size: Some(content_len),
+                                    error: Some("content not available locally".to_string()),
+                                }))
+                            }
+                            Err(e) => {
+                                warn!(key = %key, error = %e, "docs get content failed");
+                                Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                                    found: true,
+                                    value: None,
+                                    size: Some(content_len),
+                                    error: Some("failed to fetch content".to_string()),
+                                }))
+                            }
+                        }
+                    } else {
+                        Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                            found: true,
+                            value: None,
+                            size: Some(content_len),
+                            error: Some("blob store not enabled".to_string()),
+                        }))
+                    }
+                }
+                Ok(None) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                    found: false,
+                    value: None,
+                    size: None,
+                    error: None,
+                })),
+                Err(e) => {
+                    warn!(key = %key, error = %e, "docs get failed");
+                    Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+                        found: false,
+                        value: None,
+                        size: None,
+                        error: Some("docs operation failed".to_string()),
+                    }))
+                }
+            }
+        }
+
+        ClientRpcRequest::DocsDelete { key } => {
+            use crate::client_rpc::DocsDeleteResultResponse;
+            use crate::docs::BlobBackedDocsWriter;
+            use crate::docs::DocsWriter;
+
+            let Some(ref docs_sync) = ctx.docs_sync else {
+                return Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
+                    success: false,
+                    error: Some("docs not enabled".to_string()),
+                }));
+            };
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
+                    success: false,
+                    error: Some("blob store not enabled (required for docs)".to_string()),
+                }));
+            };
+
+            let writer = BlobBackedDocsWriter::new(
+                docs_sync.sync_handle.clone(),
+                docs_sync.namespace_id,
+                docs_sync.author.clone(),
+                blob_store.clone(),
+            );
+
+            match writer.delete_entry(key.as_bytes().to_vec()).await {
+                Ok(()) => Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => {
+                    warn!(key = %key, error = %e, "docs delete failed");
+                    Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
+                        success: false,
+                        error: Some("docs operation failed".to_string()),
+                    }))
+                }
+            }
+        }
+
+        ClientRpcRequest::DocsList { prefix, limit } => {
+            use crate::client_rpc::DocsListEntry;
+            use crate::client_rpc::DocsListResultResponse;
+            use iroh_docs::store::Query;
+
+            let Some(ref docs_sync) = ctx.docs_sync else {
+                return Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
+                    entries: vec![],
+                    count: 0,
+                    has_more: false,
+                    error: Some("docs not enabled".to_string()),
+                }));
+            };
+
+            // Build query based on prefix filter
+            // Add 1 to limit to detect if there are more entries
+            let effective_limit = limit.unwrap_or(100) as u64 + 1;
+            let query: Query = if let Some(ref prefix_str) = prefix {
+                Query::single_latest_per_key().key_prefix(prefix_str.as_bytes()).limit(effective_limit).into()
+            } else {
+                Query::single_latest_per_key().limit(effective_limit).into()
+            };
+
+            // Create irpc channel to receive results
+            let (tx, mut rx) = irpc::channel::mpsc::channel::<iroh_docs::api::RpcResult<iroh_docs::SignedEntry>>(1000);
+
+            // Start the query
+            if let Err(e) = docs_sync.sync_handle.get_many(docs_sync.namespace_id, query, tx).await {
+                warn!(error = %e, "docs list query failed");
+                return Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
+                    entries: vec![],
+                    count: 0,
+                    has_more: false,
+                    error: Some("docs list query failed".to_string()),
+                }));
+            }
+
+            // Collect results from the channel
+            // recv() returns Result<Option<RpcResult<SignedEntry>>, RecvError>
+            let mut entries = Vec::new();
+            let max_entries = limit.unwrap_or(100) as usize;
+            let mut has_more = false;
+
+            while let Ok(Some(result)) = rx.recv().await {
+                match result {
+                    Ok(signed_entry) => {
+                        if entries.len() >= max_entries {
+                            has_more = true;
+                            break;
+                        }
+                        let key = String::from_utf8_lossy(signed_entry.key()).to_string();
+                        let size = signed_entry.content_len();
+                        let hash = signed_entry.content_hash().to_string();
+                        entries.push(DocsListEntry { key, size, hash });
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "error receiving docs entry");
+                        // Continue processing other entries
+                    }
+                }
+            }
+
+            let count = entries.len() as u32;
+            Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
+                entries,
+                count,
+                has_more,
+                error: None,
+            }))
+        }
+
+        ClientRpcRequest::DocsStatus => {
+            use crate::client_rpc::DocsStatusResultResponse;
+            use iroh_docs::store::Query;
+
+            let Some(ref docs_sync) = ctx.docs_sync else {
+                return Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
+                    enabled: false,
+                    namespace_id: None,
+                    author_id: None,
+                    entry_count: None,
+                    replica_open: None,
+                    error: None,
+                }));
+            };
+
+            let namespace_id = docs_sync.namespace_id.to_string();
+            let author_id = docs_sync.author.id().to_string();
+
+            // Count entries using SyncHandle::get_many
+            // Tiger Style: Use bounded query to avoid unbounded memory use
+            let query: Query = Query::single_latest_per_key().limit(10001).into(); // Count up to 10000, +1 to detect more
+            let (tx, mut rx) = irpc::channel::mpsc::channel::<iroh_docs::api::RpcResult<iroh_docs::SignedEntry>>(1000);
+
+            let entry_count = if docs_sync.sync_handle.get_many(docs_sync.namespace_id, query, tx).await.is_ok() {
+                let mut count: u64 = 0;
+                // recv() returns Result<Option<RpcResult<SignedEntry>>, RecvError>
+                while let Ok(Some(_)) = rx.recv().await {
+                    count += 1;
+                    if count > 10000 {
+                        break; // Tiger Style: bounded count
+                    }
+                }
+                Some(count)
+            } else {
+                None
+            };
+
+            Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
+                enabled: true,
+                namespace_id: Some(namespace_id),
+                author_id: Some(author_id),
+                entry_count,
+                replica_open: Some(true),
+                error: None,
+            }))
         }
 
         // =========================================================================

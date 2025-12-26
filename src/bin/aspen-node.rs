@@ -515,6 +515,16 @@ async fn main() -> Result<()> {
     };
 
     // Create Client protocol context and handler
+    // Wrap docs_sync in Arc for sharing with the context
+    let docs_sync_arc = node_mode.docs_sync().map(|ds| {
+        Arc::new(aspen::docs::DocsSyncResources {
+            sync_handle: ds.sync_handle.clone(),
+            namespace_id: ds.namespace_id,
+            author: ds.author.clone(),
+            docs_dir: ds.docs_dir.clone(),
+        })
+    });
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -524,6 +534,7 @@ async fn main() -> Result<()> {
         endpoint_manager: node_mode.iroh_manager().clone(),
         blob_store: node_mode.blob_store().cloned(),
         peer_manager: node_mode.peer_manager().cloned(),
+        docs_sync: docs_sync_arc,
         cluster_cookie: config.cookie.clone(),
         start_time: Instant::now(),
         network_factory: Some(network_factory),

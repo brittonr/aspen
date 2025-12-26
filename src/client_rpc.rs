@@ -317,6 +317,48 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Docs operations (iroh-docs CRDT replication)
+    // =========================================================================
+    /// Set a key-value pair in the docs namespace.
+    ///
+    /// Writes directly to the iroh-docs namespace for CRDT replication.
+    DocsSet {
+        /// The key to set.
+        key: String,
+        /// The value to set.
+        value: Vec<u8>,
+    },
+
+    /// Get a value from the docs namespace.
+    ///
+    /// Reads from the local iroh-docs replica.
+    DocsGet {
+        /// The key to get.
+        key: String,
+    },
+
+    /// Delete a key from the docs namespace.
+    ///
+    /// Sets a tombstone marker for CRDT deletion.
+    DocsDelete {
+        /// The key to delete.
+        key: String,
+    },
+
+    /// List entries in the docs namespace.
+    ///
+    /// Returns all entries matching an optional prefix.
+    DocsList {
+        /// Optional prefix filter.
+        prefix: Option<String>,
+        /// Maximum entries to return.
+        limit: Option<u32>,
+    },
+
+    /// Get docs namespace status and sync information.
+    DocsStatus,
+
+    // =========================================================================
     // Peer cluster operations (cluster-to-cluster sync)
     // =========================================================================
     /// Add a peer cluster to sync with.
@@ -1387,6 +1429,21 @@ impl ClientRpcRequest {
                 key: "_blob:".to_string(),
             }),
 
+            // Docs operations (iroh-docs CRDT replication)
+            Self::DocsSet { key, .. } | Self::DocsDelete { key } => Some(Operation::Write {
+                key: format!("_docs:{key}"),
+                value: vec![],
+            }),
+            Self::DocsGet { key } => Some(Operation::Read {
+                key: format!("_docs:{key}"),
+            }),
+            Self::DocsList { prefix, .. } => Some(Operation::Read {
+                key: format!("_docs:{}", prefix.as_deref().unwrap_or("")),
+            }),
+            Self::DocsStatus => Some(Operation::Read {
+                key: "_docs:".to_string(),
+            }),
+
             // Peer cluster operations (admin)
             Self::AddPeerCluster { .. }
             | Self::RemovePeerCluster { .. }
@@ -1580,6 +1637,24 @@ pub enum ClientRpcResponse {
 
     /// Get blob status result.
     GetBlobStatusResult(GetBlobStatusResultResponse),
+
+    // =========================================================================
+    // Docs operation responses
+    // =========================================================================
+    /// Docs set result.
+    DocsSetResult(DocsSetResultResponse),
+
+    /// Docs get result.
+    DocsGetResult(DocsGetResultResponse),
+
+    /// Docs delete result.
+    DocsDeleteResult(DocsDeleteResultResponse),
+
+    /// Docs list result.
+    DocsListResult(DocsListResultResponse),
+
+    /// Docs status result.
+    DocsStatusResult(DocsStatusResultResponse),
 
     // =========================================================================
     // Peer cluster operation responses
@@ -2277,6 +2352,86 @@ pub struct GetBlobStatusResultResponse {
     pub complete: Option<bool>,
     /// List of protection tags.
     pub tags: Option<Vec<String>>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Docs operation response types
+// =============================================================================
+
+/// Docs set result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsSetResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// The key that was set.
+    pub key: Option<String>,
+    /// Size of the value in bytes.
+    pub size: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Docs get result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsGetResultResponse {
+    /// Whether the key was found.
+    pub found: bool,
+    /// The value if found.
+    pub value: Option<Vec<u8>>,
+    /// Size of the value in bytes.
+    pub size: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Docs delete result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsDeleteResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Docs list entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsListEntry {
+    /// The key.
+    pub key: String,
+    /// Size of the value in bytes.
+    pub size: u64,
+    /// Content hash (hex-encoded).
+    pub hash: String,
+}
+
+/// Docs list result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsListResultResponse {
+    /// List of entries.
+    pub entries: Vec<DocsListEntry>,
+    /// Total count returned.
+    pub count: u32,
+    /// Whether more entries are available.
+    pub has_more: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Docs status result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocsStatusResultResponse {
+    /// Whether docs is enabled.
+    pub enabled: bool,
+    /// Namespace ID (hex-encoded).
+    pub namespace_id: Option<String>,
+    /// Author ID (hex-encoded).
+    pub author_id: Option<String>,
+    /// Number of entries in the namespace.
+    pub entry_count: Option<u64>,
+    /// Whether the replica is open.
+    pub replica_open: Option<bool>,
     /// Error message if failed.
     pub error: Option<String>,
 }
