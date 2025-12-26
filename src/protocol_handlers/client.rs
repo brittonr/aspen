@@ -312,9 +312,9 @@ async fn handle_client_request(
     // Check if cluster is initialized
     let is_initialized = ctx.controller.is_initialized();
 
-    // Safe operations that don't require initialization or rate limiting
+    // Bootstrap operations: can run before cluster initialization
     // These are status/bootstrap operations that should work on any node
-    let is_safe_operation = matches!(
+    let is_bootstrap_operation = matches!(
         &request,
         ClientRpcRequest::Ping
             | ClientRpcRequest::GetHealth
@@ -324,9 +324,24 @@ async fn handle_client_request(
             | ClientRpcRequest::InitCluster
     );
 
-    // For unsafe operations on uninitialized cluster, return clear error
+    // Rate-limit-exempt operations: skip rate limiting to avoid KV store dependency
+    // Includes bootstrap operations plus cluster management operations that:
+    // - Are administrative (run by operators, not regular client traffic)
+    // - Are protected by Raft consensus anyway
+    // - Must work during cluster bootstrap before KV store is available
+    let is_rate_limit_exempt = is_bootstrap_operation
+        || matches!(
+            &request,
+            ClientRpcRequest::AddLearner { .. }
+                | ClientRpcRequest::ChangeMembership { .. }
+                | ClientRpcRequest::TriggerSnapshot
+                | ClientRpcRequest::GetClusterState
+                | ClientRpcRequest::GetLeader
+        );
+
+    // For non-bootstrap operations on uninitialized cluster, return clear error
     // Tiger Style: Fail-fast with actionable error message
-    if !is_safe_operation && !is_initialized {
+    if !is_bootstrap_operation && !is_initialized {
         let response = ClientRpcResponse::error("NOT_INITIALIZED", "cluster not initialized - call InitCluster first");
         let response_bytes = postcard::to_stdvec(&response).context("failed to serialize not initialized response")?;
         send.write_all(&response_bytes).await.context("failed to write not initialized response")?;
@@ -334,9 +349,9 @@ async fn handle_client_request(
         return Ok(());
     }
 
-    // Rate limit check for unsafe operations only
+    // Rate limit check for non-exempt operations only
     // Tiger Style: Per-client rate limiting prevents DoS from individual clients
-    if !is_safe_operation {
+    if !is_rate_limit_exempt {
         let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
         let limiter = DistributedRateLimiter::new(
             ctx.kv_store.clone(),

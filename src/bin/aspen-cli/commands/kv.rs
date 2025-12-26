@@ -203,12 +203,10 @@ async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
                         "key": args.key
                     })
                 );
+            } else if result.success {
+                println!("OK");
             } else {
-                if result.success {
-                    println!("OK");
-                } else {
-                    println!("Write failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
-                }
+                println!("Write failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
             }
             Ok(())
         }
@@ -233,12 +231,10 @@ async fn kv_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result
                         "deleted": result.deleted
                     })
                 );
+            } else if result.deleted {
+                println!("Deleted");
             } else {
-                if result.deleted {
-                    println!("Deleted");
-                } else {
-                    println!("Key not found");
-                }
+                println!("Key not found");
             }
             Ok(())
         }
@@ -272,13 +268,11 @@ async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
                         "success": result.success
                     })
                 );
+            } else if result.success {
+                println!("OK");
             } else {
-                if result.success {
-                    println!("OK");
-                } else {
-                    println!("CONFLICT: value has changed");
-                    std::process::exit(1);
-                }
+                println!("CONFLICT: value has changed");
+                std::process::exit(1);
             }
             Ok(())
         }
@@ -311,13 +305,11 @@ async fn kv_cad(client: &AspenClient, args: CadArgs, json: bool) -> Result<()> {
                         "success": result.success
                     })
                 );
+            } else if result.success {
+                println!("Deleted");
             } else {
-                if result.success {
-                    println!("Deleted");
-                } else {
-                    println!("CONFLICT: value has changed");
-                    std::process::exit(1);
-                }
+                println!("CONFLICT: value has changed");
+                std::process::exit(1);
             }
             Ok(())
         }

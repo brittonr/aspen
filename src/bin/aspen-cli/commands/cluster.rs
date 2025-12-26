@@ -270,12 +270,10 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
                         "message": result.message
                     })
                 );
+            } else if result.success {
+                println!("Learner {} promoted to voter", args.learner_id);
             } else {
-                if result.success {
-                    println!("Learner {} promoted to voter", args.learner_id);
-                } else {
-                    println!("Promotion failed: {}", result.message);
-                }
+                println!("Promotion failed: {}", result.message);
             }
             Ok(())
         }
@@ -335,13 +333,11 @@ async fn checkpoint_wal(client: &AspenClient, json: bool) -> Result<()> {
                         "wal_size_after_bytes": result.wal_size_after_bytes
                     })
                 );
+            } else if result.success {
+                let pages = result.pages_checkpointed.unwrap_or(0);
+                println!("WAL checkpoint complete: {} pages checkpointed", pages);
             } else {
-                if result.success {
-                    let pages = result.pages_checkpointed.unwrap_or(0);
-                    println!("WAL checkpoint complete: {} pages checkpointed", pages);
-                } else {
-                    println!("WAL checkpoint failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
-                }
+                println!("WAL checkpoint failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
             }
             Ok(())
         }
