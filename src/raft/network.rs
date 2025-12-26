@@ -491,6 +491,27 @@ impl IrpcRaftNetwork {
         // Record client receive time (t4) for clock drift detection
         let client_recv_ms = current_time_ms();
 
+        // CRITICAL: Detect empty response buffer
+        // This can happen when the server panics mid-RPC or closes the stream prematurely.
+        // An empty buffer is always an error - we need at least 1 byte for valid postcard encoding.
+        if response_buf.is_empty() {
+            error!(
+                target_node = %self.target,
+                shard_id = ?self.shard_id,
+                "received empty response buffer from peer - peer may have panicked or closed stream prematurely"
+            );
+            // Mark node as having Raft issues (actor crash) but Iroh connection worked
+            self.failure_detector.write().await.update_node_status(
+                self.target,
+                ConnectionStatus::Disconnected,
+                ConnectionStatus::Connected,
+            );
+            return Err(anyhow::anyhow!(
+                "empty response buffer from node {} - peer RaftCore may have panicked",
+                self.target
+            ));
+        }
+
         // If sharded mode, strip shard ID prefix from response and verify
         let response_bytes = if let Some(expected_shard_id) = self.shard_id {
             let response_shard_id = try_decode_shard_prefix(&response_buf).ok_or_else(|| {
@@ -540,6 +561,7 @@ impl IrpcRaftNetwork {
                 postcard::from_bytes::<RaftRpcResponse>(response_bytes)
                     .map_err(|e| {
                         error!(
+                            target_node = %self.target,
                             error = %e,
                             bytes_len = response_bytes.len(),
                             first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
@@ -550,12 +572,27 @@ impl IrpcRaftNetwork {
                     .context("failed to deserialize RPC response")?
             };
 
-        // Update failure detector: RPC succeeded with both connection and Raft working
-        self.failure_detector.write().await.update_node_status(
-            self.target,
-            ConnectionStatus::Connected,
-            ConnectionStatus::Connected,
-        );
+        // Check if we received a fatal error response - this means the peer's RaftCore is down
+        if let RaftRpcResponse::FatalError(error_kind) = &response {
+            warn!(
+                target_node = %self.target,
+                error_kind = %error_kind,
+                "peer reported fatal RaftCore error"
+            );
+            // Mark Raft as disconnected but Iroh as connected (we got a response)
+            self.failure_detector.write().await.update_node_status(
+                self.target,
+                ConnectionStatus::Disconnected,
+                ConnectionStatus::Connected,
+            );
+        } else {
+            // Update failure detector: RPC succeeded with both connection and Raft working
+            self.failure_detector.write().await.update_node_status(
+                self.target,
+                ConnectionStatus::Connected,
+                ConnectionStatus::Connected,
+            );
+        }
 
         Ok(response)
     }
@@ -606,9 +643,21 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
             }
         };
 
-        // Extract result from response
+        // Extract result from response, handling fatal errors gracefully
         match response {
             RaftRpcResponse::AppendEntries(result) => Ok(result),
+            RaftRpcResponse::FatalError(error_kind) => {
+                // Peer's RaftCore is in a fatal state - treat as unreachable
+                // The failure detector was already updated in send_rpc
+                error!(
+                    target_node = %self.target,
+                    error_kind = %error_kind,
+                    "peer RaftCore reported fatal error for append_entries"
+                );
+                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
+                    format!("peer RaftCore fatal error: {}", error_kind),
+                ))))
+            }
             _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "unexpected response type for append_entries",
@@ -636,9 +685,21 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
             }
         };
 
-        // Extract result from response
+        // Extract result from response, handling fatal errors gracefully
         match response {
             RaftRpcResponse::Vote(result) => Ok(result),
+            RaftRpcResponse::FatalError(error_kind) => {
+                // Peer's RaftCore is in a fatal state - treat as unreachable
+                // The failure detector was already updated in send_rpc
+                error!(
+                    target_node = %self.target,
+                    error_kind = %error_kind,
+                    "peer RaftCore reported fatal error for vote"
+                );
+                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
+                    format!("peer RaftCore fatal error: {}", error_kind),
+                ))))
+            }
             _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "unexpected response type for vote",
@@ -711,11 +772,23 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
             }
         };
 
-        // Extract result from response
+        // Extract result from response, handling fatal errors gracefully
         match response {
             RaftRpcResponse::InstallSnapshot(result) => {
                 // Handle remote RaftError as StorageError since snapshot installation failed
                 result.map_err(|raft_err| StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err)))
+            }
+            RaftRpcResponse::FatalError(error_kind) => {
+                // Peer's RaftCore is in a fatal state - treat as unreachable
+                // The failure detector was already updated in send_rpc
+                error!(
+                    target_node = %self.target,
+                    error_kind = %error_kind,
+                    "peer RaftCore reported fatal error for install_snapshot"
+                );
+                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
+                    format!("peer RaftCore fatal error: {}", error_kind),
+                ))))
             }
             _ => Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

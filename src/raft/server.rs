@@ -46,6 +46,7 @@ use crate::raft::clock_drift_detection::current_time_ms;
 use crate::raft::constants::MAX_CONCURRENT_CONNECTIONS;
 use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
 use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::raft::rpc::RaftFatalErrorKind;
 use crate::raft::rpc::RaftRpcProtocol;
 use crate::raft::rpc::RaftRpcResponse;
 use crate::raft::rpc::RaftRpcResponseWithTimestamps;
@@ -220,6 +221,11 @@ async fn handle_connection(connecting: iroh::endpoint::Incoming, raft_core: Raft
 }
 
 /// Handle a single RPC message on a bidirectional stream.
+///
+/// This function ensures that EVERY RPC receives a response, even when the
+/// RaftCore is in a fatal state (panicked, stopped, or storage error).
+/// This prevents clients from receiving empty responses and allows proper
+/// failure detection.
 #[instrument(skip(recv, send, raft_core))]
 async fn handle_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
@@ -240,30 +246,48 @@ async fn handle_rpc_stream(
     info!(request_type = ?request, "received and deserialized RPC request");
 
     // Process the RPC and create response
+    // IMPORTANT: Even on fatal errors, we send a proper response to the client
+    // instead of dropping the stream. This enables proper failure detection.
     let response = match request {
         RaftRpcProtocol::Vote(vote_req) => {
-            // vote() returns Result<T, RaftError<C>>
-            // Handle Fatal errors by logging and returning error response
-            let result = match raft_core.vote(vote_req.request).await {
-                Ok(result) => result,
-                Err(err) => {
-                    error!(error = ?err, "vote RPC failed with fatal error");
-                    return Err(anyhow::anyhow!("vote failed: {:?}", err));
+            match raft_core.vote(vote_req.request).await {
+                Ok(result) => RaftRpcResponse::Vote(result),
+                Err(openraft::error::RaftError::Fatal(fatal)) => {
+                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+                    error!(
+                        error_kind = %error_kind,
+                        fatal_error = ?fatal,
+                        rpc_type = "vote",
+                        "RaftCore in fatal state, sending error response to client"
+                    );
+                    RaftRpcResponse::FatalError(error_kind)
                 }
-            };
-            RaftRpcResponse::Vote(result)
+                Err(openraft::error::RaftError::APIError(api_err)) => {
+                    // API errors for vote should not happen (Infallible), but handle gracefully
+                    error!(api_error = ?api_err, "unexpected API error in vote RPC");
+                    RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+                }
+            }
         }
         RaftRpcProtocol::AppendEntries(append_req) => {
-            // append_entries() returns Result<T, RaftError<C>>
-            // Handle Fatal errors by logging and returning error response
-            let result = match raft_core.append_entries(append_req.request).await {
-                Ok(result) => result,
-                Err(err) => {
-                    error!(error = ?err, "append_entries RPC failed with fatal error");
-                    return Err(anyhow::anyhow!("append_entries failed: {:?}", err));
+            match raft_core.append_entries(append_req.request).await {
+                Ok(result) => RaftRpcResponse::AppendEntries(result),
+                Err(openraft::error::RaftError::Fatal(fatal)) => {
+                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+                    error!(
+                        error_kind = %error_kind,
+                        fatal_error = ?fatal,
+                        rpc_type = "append_entries",
+                        "RaftCore in fatal state, sending error response to client"
+                    );
+                    RaftRpcResponse::FatalError(error_kind)
                 }
-            };
-            RaftRpcResponse::AppendEntries(result)
+                Err(openraft::error::RaftError::APIError(api_err)) => {
+                    // API errors for append_entries should not happen (Infallible), but handle gracefully
+                    error!(api_error = ?api_err, "unexpected API error in append_entries RPC");
+                    RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+                }
+            }
         }
         RaftRpcProtocol::InstallSnapshot(snapshot_req) => {
             // Convert snapshot bytes back to Cursor for Raft
@@ -272,16 +296,32 @@ async fn handle_rpc_stream(
                 meta: snapshot_req.snapshot_meta,
                 snapshot: snapshot_cursor,
             };
-            let result = raft_core
-                .install_full_snapshot(snapshot_req.vote, snapshot)
-                .await
-                .map_err(openraft::error::RaftError::Fatal);
-            RaftRpcResponse::InstallSnapshot(result)
+            match raft_core.install_full_snapshot(snapshot_req.vote, snapshot).await {
+                Ok(result) => RaftRpcResponse::InstallSnapshot(Ok(result)),
+                Err(fatal) => {
+                    let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
+                    error!(
+                        error_kind = %error_kind,
+                        fatal_error = ?fatal,
+                        rpc_type = "install_snapshot",
+                        "RaftCore in fatal state, sending error response to client"
+                    );
+                    RaftRpcResponse::FatalError(error_kind)
+                }
+            }
         }
     };
 
     // Record server send time (t3) for clock drift detection
     let server_send_ms = current_time_ms();
+
+    // Log if we're sending a fatal error response
+    if let RaftRpcResponse::FatalError(kind) = &response {
+        warn!(
+            error_kind = %kind,
+            "sending fatal error response to client - node requires attention"
+        );
+    }
 
     // Wrap response with timestamps for clock drift detection
     let response_with_timestamps = RaftRpcResponseWithTimestamps {

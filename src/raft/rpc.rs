@@ -115,6 +115,55 @@ pub enum RaftRpcResponse {
     AppendEntries(AppendEntriesResponse<AppTypeConfig>),
     /// InstallSnapshot response, may fail with RaftError.
     InstallSnapshot(Result<SnapshotResponse<AppTypeConfig>, RaftError<AppTypeConfig>>),
+    /// Fatal error response indicating the Raft core is in an unrecoverable state.
+    ///
+    /// Sent when the server's RaftCore has panicked, stopped, or encountered a storage error.
+    /// Clients should mark this node as unreachable and retry with other nodes.
+    ///
+    /// The error kind distinguishes between:
+    /// - `Panicked`: RaftCore task panicked (programming error)
+    /// - `Stopped`: RaftCore was explicitly shut down
+    /// - `StorageError`: Unrecoverable storage failure
+    FatalError(RaftFatalErrorKind),
+}
+
+/// Classification of fatal Raft errors for wire protocol.
+///
+/// This is a simplified representation of `openraft::error::Fatal` that can be
+/// serialized and sent over the wire. It allows clients to understand why the
+/// server cannot process requests and take appropriate action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RaftFatalErrorKind {
+    /// RaftCore panicked - indicates a programming error.
+    /// The node should be restarted, and clients should retry with other nodes.
+    Panicked,
+    /// RaftCore was explicitly stopped via shutdown.
+    /// This is a normal shutdown, clients should retry with other nodes.
+    Stopped,
+    /// Unrecoverable storage error (log or state machine).
+    /// Data may be corrupted, requires operator intervention.
+    StorageError,
+}
+
+impl RaftFatalErrorKind {
+    /// Convert from an openraft Fatal error to the wire protocol representation.
+    pub fn from_fatal<C: openraft::RaftTypeConfig>(fatal: &openraft::error::Fatal<C>) -> Self {
+        match fatal {
+            openraft::error::Fatal::Panicked => Self::Panicked,
+            openraft::error::Fatal::Stopped => Self::Stopped,
+            openraft::error::Fatal::StorageError(_) => Self::StorageError,
+        }
+    }
+}
+
+impl std::fmt::Display for RaftFatalErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Panicked => write!(f, "RaftCore panicked"),
+            Self::Stopped => write!(f, "RaftCore stopped"),
+            Self::StorageError => write!(f, "storage error"),
+        }
+    }
 }
 
 /// Server-side timestamps for clock drift detection.
@@ -895,5 +944,154 @@ mod tests {
 
         assert_eq!(deserialized.shard_id, 99);
         assert!(matches!(deserialized.request, RaftRpcProtocol::Vote(_)));
+    }
+
+    // =========================================================================
+    // RaftFatalErrorKind Tests
+    // =========================================================================
+
+    #[test]
+    fn test_fatal_error_kind_panicked() {
+        let kind = RaftFatalErrorKind::Panicked;
+        assert_eq!(kind, RaftFatalErrorKind::Panicked);
+        assert_eq!(format!("{}", kind), "RaftCore panicked");
+    }
+
+    #[test]
+    fn test_fatal_error_kind_stopped() {
+        let kind = RaftFatalErrorKind::Stopped;
+        assert_eq!(kind, RaftFatalErrorKind::Stopped);
+        assert_eq!(format!("{}", kind), "RaftCore stopped");
+    }
+
+    #[test]
+    fn test_fatal_error_kind_storage_error() {
+        let kind = RaftFatalErrorKind::StorageError;
+        assert_eq!(kind, RaftFatalErrorKind::StorageError);
+        assert_eq!(format!("{}", kind), "storage error");
+    }
+
+    #[test]
+    fn test_fatal_error_kind_from_fatal_panicked() {
+        let fatal = openraft::error::Fatal::<AppTypeConfig>::Panicked;
+        let kind = RaftFatalErrorKind::from_fatal(&fatal);
+        assert_eq!(kind, RaftFatalErrorKind::Panicked);
+    }
+
+    #[test]
+    fn test_fatal_error_kind_from_fatal_stopped() {
+        let fatal = openraft::error::Fatal::<AppTypeConfig>::Stopped;
+        let kind = RaftFatalErrorKind::from_fatal(&fatal);
+        assert_eq!(kind, RaftFatalErrorKind::Stopped);
+    }
+
+    #[test]
+    fn test_fatal_error_kind_clone() {
+        let kind = RaftFatalErrorKind::Panicked;
+        let cloned = kind;
+        assert_eq!(cloned, RaftFatalErrorKind::Panicked);
+    }
+
+    #[test]
+    fn test_fatal_error_kind_copy() {
+        let kind = RaftFatalErrorKind::Stopped;
+        let copied: RaftFatalErrorKind = kind;
+        assert_eq!(copied, RaftFatalErrorKind::Stopped);
+        // Original still usable (Copy trait)
+        assert_eq!(kind, RaftFatalErrorKind::Stopped);
+    }
+
+    #[test]
+    fn test_fatal_error_kind_debug() {
+        let kind = RaftFatalErrorKind::StorageError;
+        let debug_str = format!("{:?}", kind);
+        assert!(debug_str.contains("StorageError"));
+    }
+
+    #[test]
+    fn test_fatal_error_kind_serde_roundtrip() {
+        for kind in [
+            RaftFatalErrorKind::Panicked,
+            RaftFatalErrorKind::Stopped,
+            RaftFatalErrorKind::StorageError,
+        ] {
+            let json = serde_json::to_string(&kind).expect("serialize");
+            let deserialized: RaftFatalErrorKind = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(deserialized, kind);
+        }
+    }
+
+    #[test]
+    fn test_rpc_response_fatal_error() {
+        let response = RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked);
+        assert!(matches!(
+            response,
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+        ));
+    }
+
+    #[test]
+    fn test_rpc_response_fatal_error_clone() {
+        let response = RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped);
+        let cloned = response.clone();
+        assert!(matches!(
+            cloned,
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)
+        ));
+    }
+
+    #[test]
+    fn test_rpc_response_fatal_error_serde_roundtrip() {
+        let original = RaftRpcResponse::FatalError(RaftFatalErrorKind::StorageError);
+
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: RaftRpcResponse = serde_json::from_str(&json).expect("deserialize");
+
+        assert!(matches!(
+            deserialized,
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::StorageError)
+        ));
+    }
+
+    #[test]
+    fn test_rpc_response_with_timestamps_fatal_error() {
+        let response = RaftRpcResponseWithTimestamps {
+            inner: RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked),
+            timestamps: Some(TimestampInfo {
+                server_recv_ms: 1000,
+                server_send_ms: 1005,
+            }),
+        };
+
+        assert!(matches!(
+            response.inner,
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
+        ));
+        assert!(response.timestamps.is_some());
+    }
+
+    #[test]
+    fn test_rpc_response_with_timestamps_fatal_error_serde_roundtrip() {
+        let original = RaftRpcResponseWithTimestamps {
+            inner: RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped),
+            timestamps: Some(TimestampInfo {
+                server_recv_ms: 5000,
+                server_send_ms: 5010,
+            }),
+        };
+
+        // Use postcard for wire format testing (what we actually use)
+        let bytes = postcard::to_stdvec(&original).expect("serialize");
+        let deserialized: RaftRpcResponseWithTimestamps =
+            postcard::from_bytes(&bytes).expect("deserialize");
+
+        assert!(matches!(
+            deserialized.inner,
+            RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)
+        ));
+        assert!(deserialized.timestamps.is_some());
+        let ts = deserialized.timestamps.unwrap();
+        assert_eq!(ts.server_recv_ms, 5000);
+        assert_eq!(ts.server_send_ms, 5010);
     }
 }
