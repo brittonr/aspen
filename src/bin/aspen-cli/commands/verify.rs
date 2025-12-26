@@ -14,6 +14,15 @@
 //! For Blobs: Adds a test blob, then queries each node to verify the
 //! blob hash exists (content-addressed deduplication means same content
 //! will have same hash on all nodes).
+//!
+//! ## Metrics Collected
+//!
+//! Each verification test captures:
+//! - Total duration (ms)
+//! - Per-phase timing breakdown (write, replicate, read, cleanup)
+//! - Replication lag per node (matched_index vs last_applied)
+//! - Node-level status (healthy, behind, unreachable)
+//! - Error counts and details
 
 use std::time::Duration;
 use std::time::Instant;
@@ -91,6 +100,43 @@ pub struct VerifyAllArgs {
     pub continue_on_error: bool,
 }
 
+/// Detailed timing breakdown for verification phases.
+#[derive(Clone, Default)]
+pub struct VerifyTiming {
+    /// Time spent writing test data (ms).
+    pub write_ms: u64,
+    /// Time spent waiting for replication (ms).
+    pub replicate_ms: u64,
+    /// Time spent reading/verifying data (ms).
+    pub read_ms: u64,
+    /// Time spent on cleanup (ms).
+    pub cleanup_ms: u64,
+    /// Time spent on cross-node queries (ms).
+    pub cross_node_ms: u64,
+}
+
+impl VerifyTiming {
+    /// Total time across all phases.
+    pub fn total_ms(&self) -> u64 {
+        self.write_ms + self.replicate_ms + self.read_ms + self.cleanup_ms + self.cross_node_ms
+    }
+}
+
+/// Per-node replication status for detailed metrics.
+#[derive(Clone)]
+pub struct NodeReplicationStatus {
+    /// Node ID.
+    pub node_id: u64,
+    /// Current matched index (how far this node has replicated).
+    pub matched_index: u64,
+    /// Leader's last applied index at time of check.
+    pub leader_applied: u64,
+    /// Replication lag in entries (leader_applied - matched_index).
+    pub lag: u64,
+    /// Status label: "OK", "BEHIND", "UNREACHABLE".
+    pub status: String,
+}
+
 /// Result of a single verification test.
 #[derive(Clone)]
 pub struct VerifyResult {
@@ -99,25 +145,86 @@ pub struct VerifyResult {
     pub message: String,
     pub duration_ms: u64,
     pub details: Option<String>,
+    /// Detailed timing breakdown (optional for enhanced output).
+    pub timing: Option<VerifyTiming>,
+    /// Per-node replication status (optional for KV verification).
+    pub node_status: Option<Vec<NodeReplicationStatus>>,
 }
 
 impl Outputable for VerifyResult {
     fn to_json(&self) -> serde_json::Value {
-        serde_json::json!({
+        let mut json = serde_json::json!({
             "name": self.name,
             "passed": self.passed,
             "message": self.message,
             "duration_ms": self.duration_ms,
             "details": self.details
-        })
+        });
+
+        // Add timing breakdown if available
+        if let Some(ref timing) = self.timing {
+            json["timing"] = serde_json::json!({
+                "write_ms": timing.write_ms,
+                "replicate_ms": timing.replicate_ms,
+                "read_ms": timing.read_ms,
+                "cleanup_ms": timing.cleanup_ms,
+                "cross_node_ms": timing.cross_node_ms,
+                "total_ms": timing.total_ms()
+            });
+        }
+
+        // Add per-node replication status if available
+        if let Some(ref nodes) = self.node_status {
+            json["nodes"] = serde_json::json!(
+                nodes.iter().map(|n| {
+                    serde_json::json!({
+                        "node_id": n.node_id,
+                        "matched_index": n.matched_index,
+                        "leader_applied": n.leader_applied,
+                        "lag": n.lag,
+                        "status": n.status
+                    })
+                }).collect::<Vec<_>>()
+            );
+        }
+
+        json
     }
 
     fn to_human(&self) -> String {
         let status = if self.passed { "PASS" } else { "FAIL" };
         let mut output = format!("[{}] {} ({} ms): {}", status, self.name, self.duration_ms, self.message);
+
+        // Add details line
         if let Some(ref details) = self.details {
             output.push_str(&format!("\n  {}", details));
         }
+
+        // Add timing breakdown if available and there's interesting detail
+        if let Some(ref timing) = self.timing
+            && (timing.write_ms > 0 || timing.read_ms > 0)
+        {
+            output.push_str(&format!(
+                "\n  timing: write={}ms, replicate={}ms, read={}ms, cleanup={}ms",
+                timing.write_ms, timing.replicate_ms, timing.read_ms, timing.cleanup_ms
+            ));
+            if timing.cross_node_ms > 0 {
+                output.push_str(&format!(", cross-node={}ms", timing.cross_node_ms));
+            }
+        }
+
+        // Add per-node status if available and there's lag
+        if let Some(ref nodes) = self.node_status {
+            let lagging: Vec<_> = nodes.iter().filter(|n| n.lag > 0).collect();
+            if !lagging.is_empty() {
+                let lag_info: Vec<String> = lagging
+                    .iter()
+                    .map(|n| format!("node {}: {} behind", n.node_id, n.lag))
+                    .collect();
+                output.push_str(&format!("\n  replication lag: {}", lag_info.join(", ")));
+            }
+        }
+
         output
     }
 }
@@ -182,11 +289,15 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
 
     let mut errors = Vec::new();
     let mut replication_details = Vec::new();
+    let mut node_status_list: Vec<NodeReplicationStatus> = Vec::new();
+    let mut timing = VerifyTiming::default();
+
     let test_keys: Vec<String> = (0..args.count)
         .map(|i| format!("{}test_{}_{}", args.prefix, timestamp, i))
         .collect();
 
     // Step 1: Write test keys
+    let write_start = Instant::now();
     for (i, key) in test_keys.iter().enumerate() {
         let value = format!("verify_value_{}", i);
         let response = client
@@ -205,9 +316,12 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             Err(e) => errors.push(format!("Write {} error: {}", key, e)),
         }
     }
+    timing.write_ms = write_start.elapsed().as_millis() as u64;
 
     // Brief pause for replication
+    let replicate_start = Instant::now();
     tokio::time::sleep(Duration::from_millis(100)).await;
+    timing.replicate_ms = replicate_start.elapsed().as_millis() as u64;
 
     // Step 2: Check replication status from leader
     let replication_ok = match client.send(ClientRpcRequest::GetRaftMetrics).await {
@@ -219,12 +333,23 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
                 let mut all_caught_up = true;
                 for progress in replication {
                     let matched = progress.matched_index.unwrap_or(0);
+                    let lag = last_applied.saturating_sub(matched);
                     let status = if matched >= last_applied {
-                        "OK"
+                        "OK".to_string()
                     } else {
                         all_caught_up = false;
-                        "BEHIND"
+                        "BEHIND".to_string()
                     };
+
+                    // Capture per-node status
+                    node_status_list.push(NodeReplicationStatus {
+                        node_id: progress.node_id,
+                        matched_index: matched,
+                        leader_applied: last_applied,
+                        lag,
+                        status: status.clone(),
+                    });
+
                     replication_details.push(format!(
                         "node {}: matched={}, last_applied={} [{}]",
                         progress.node_id, matched, last_applied, status
@@ -251,7 +376,8 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
         }
     };
 
-    // Step 2: Read back and verify
+    // Step 3: Read back and verify
+    let read_start = Instant::now();
     let mut read_success = 0;
     for (i, key) in test_keys.iter().enumerate() {
         let expected = format!("verify_value_{}", i);
@@ -276,13 +402,16 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             Err(e) => errors.push(format!("Read {} error: {}", key, e)),
         }
     }
+    timing.read_ms = read_start.elapsed().as_millis() as u64;
 
     // Step 4: Cleanup (unless --no-cleanup)
+    let cleanup_start = Instant::now();
     if !args.no_cleanup {
         for key in &test_keys {
             let _ = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await;
         }
     }
+    timing.cleanup_ms = cleanup_start.elapsed().as_millis() as u64;
 
     let duration_ms = start.elapsed().as_millis() as u64;
     let passed = errors.is_empty() && read_success == args.count && replication_ok;
@@ -311,6 +440,12 @@ async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Resu
             None
         } else {
             Some(all_details.join(" | "))
+        },
+        timing: Some(timing),
+        node_status: if node_status_list.is_empty() {
+            None
+        } else {
+            Some(node_status_list)
         },
     };
 
@@ -351,6 +486,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
                     message: format!("Status check failed: {}", e.message),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 };
                 print_output(&result, json);
                 anyhow::bail!("Docs verification failed");
@@ -363,6 +500,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
                 message: "Unexpected response from docs status".to_string(),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Docs verification failed");
@@ -374,6 +513,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
                 message: format!("Error: {}", e),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Docs verification failed");
@@ -387,6 +528,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
             message: "Docs sync not enabled (skipped)".to_string(),
             duration_ms: start.elapsed().as_millis() as u64,
             details: None,
+            timing: None,
+            node_status: None,
         };
         print_output(&result, json);
         return Ok(());
@@ -472,6 +615,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
         } else {
             Some(details.join(", "))
         },
+        timing: None,
+        node_status: None,
     };
 
     print_output(&result, json);
@@ -511,6 +656,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                     message: format!("Add blob failed: {}", result.error.unwrap_or_default()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 };
                 print_output(&result, json);
                 anyhow::bail!("Blob verification failed");
@@ -524,6 +671,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                     message: "Blob storage not enabled (skipped)".to_string(),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 };
                 print_output(&result, json);
                 return Ok(());
@@ -535,6 +684,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                 message: format!("Add blob failed: {}", e.message),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Blob verification failed");
@@ -546,6 +697,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                 message: "Unexpected response from add blob".to_string(),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Blob verification failed");
@@ -557,6 +710,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                 message: format!("Error: {}", e),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Blob verification failed");
@@ -572,6 +727,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
                 message: "Add blob returned no hash".to_string(),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
             print_output(&result, json);
             anyhow::bail!("Blob verification failed");
@@ -646,6 +803,8 @@ async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> 
         },
         duration_ms,
         details: Some(details.join(", ")),
+        timing: None,
+        node_status: None,
     };
 
     print_output(&result, json);
@@ -794,6 +953,8 @@ async fn run_verify_kv(client: &AspenClient, no_cleanup: bool) -> VerifyResult {
         },
         duration_ms: start.elapsed().as_millis() as u64,
         details: replication_detail,
+        timing: None,
+        node_status: None,
     }
 }
 
@@ -808,6 +969,8 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
             message: format!("Docs enabled, {} entries", status.entry_count.unwrap_or(0)),
             duration_ms: start.elapsed().as_millis() as u64,
             details: status.namespace_id.map(|ns| format!("namespace: {}", ns)),
+            timing: None,
+            node_status: None,
         },
         Ok(ClientRpcResponse::Error(e)) => {
             if e.message.contains("not enabled") || e.message.contains("disabled") {
@@ -817,6 +980,8 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
                     message: "Docs not enabled (skipped)".to_string(),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 }
             } else {
                 VerifyResult {
@@ -825,6 +990,8 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
                     message: format!("Error: {}", e.message),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 }
             }
         }
@@ -834,6 +1001,8 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
             message: "Unexpected response".to_string(),
             duration_ms: start.elapsed().as_millis() as u64,
             details: None,
+            timing: None,
+            node_status: None,
         },
     }
 }
@@ -860,6 +1029,8 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
                     message: "Blobs not enabled (skipped)".to_string(),
                     duration_ms: start.elapsed().as_millis() as u64,
                     details: None,
+                    timing: None,
+                    node_status: None,
                 };
             }
             return VerifyResult {
@@ -868,6 +1039,8 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
                 message: format!("Error: {}", e.message),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
         }
         _ => {
@@ -877,6 +1050,8 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
                 message: "Add blob failed".to_string(),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
         }
     };
@@ -890,6 +1065,8 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
                 message: "No hash returned".to_string(),
                 duration_ms: start.elapsed().as_millis() as u64,
                 details: None,
+                timing: None,
+                node_status: None,
             };
         }
     };
@@ -918,6 +1095,8 @@ async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult
         },
         duration_ms: start.elapsed().as_millis() as u64,
         details: None,
+        timing: None,
+        node_status: None,
     }
 }
 
