@@ -63,25 +63,14 @@ async fn test_kv_verification_basic_roundtrip() {
     // Verify reads match
     for (i, key) in test_keys.iter().enumerate() {
         let expected = format!("verify_value_{}", i);
-        let result = store
-            .read(ReadRequest::new(key.to_string()))
-            .await
-            .expect("read should succeed");
+        let result = store.read(ReadRequest::new(key.to_string())).await.expect("read should succeed");
         let kv = result.kv.as_ref().unwrap_or_else(|| panic!("key {} should be found", key));
-        assert_eq!(
-            kv.value,
-            expected,
-            "value mismatch for key {}",
-            key
-        );
+        assert_eq!(kv.value, expected, "value mismatch for key {}", key);
     }
 
     // Cleanup
     for key in test_keys {
-        store
-            .delete(DeleteRequest { key: key.to_string() })
-            .await
-            .expect("delete should succeed");
+        store.delete(DeleteRequest { key: key.to_string() }).await.expect("delete should succeed");
     }
 }
 
@@ -115,23 +104,19 @@ async fn test_kv_verification_delete_cycle() {
         .expect("write should succeed");
 
     // Verify exists
-    let result = store
-        .read(ReadRequest::new("test_delete_key".to_string()))
-        .await
-        .expect("read should succeed");
+    let result = store.read(ReadRequest::new("test_delete_key".to_string())).await.expect("read should succeed");
     assert!(result.kv.is_some(), "key should exist after write");
 
     // Delete
     store
-        .delete(DeleteRequest { key: "test_delete_key".to_string() })
+        .delete(DeleteRequest {
+            key: "test_delete_key".to_string(),
+        })
         .await
         .expect("delete should succeed");
 
     // Verify deleted
-    let result = store
-        .read(ReadRequest::new("test_delete_key".to_string()))
-        .await
-        .expect("read should succeed");
+    let result = store.read(ReadRequest::new("test_delete_key".to_string())).await.expect("read should succeed");
     assert!(result.kv.is_none(), "key should not exist after delete");
 }
 
@@ -161,10 +146,7 @@ async fn test_cluster_init_verification() {
     assert_eq!(init_result.members.len(), 3, "should have 3 members");
 
     // Verify current state reflects initialization
-    let state = controller
-        .current_state()
-        .await
-        .expect("current_state should succeed");
+    let state = controller.current_state().await.expect("current_state should succeed");
     assert_eq!(state.nodes.len(), 3, "current state should show 3 nodes");
 }
 
@@ -277,18 +259,9 @@ async fn test_madsim_replication_verification() {
     let final_metrics3 = raft3.metrics().borrow().clone();
 
     // All nodes should have applied the same log index
-    assert!(
-        final_metrics1.last_applied.is_some(),
-        "node 1 should have applied entries"
-    );
-    assert!(
-        final_metrics2.last_applied.is_some(),
-        "node 2 should have applied entries"
-    );
-    assert!(
-        final_metrics3.last_applied.is_some(),
-        "node 3 should have applied entries"
-    );
+    assert!(final_metrics1.last_applied.is_some(), "node 1 should have applied entries");
+    assert!(final_metrics2.last_applied.is_some(), "node 2 should have applied entries");
+    assert!(final_metrics3.last_applied.is_some(), "node 3 should have applied entries");
 
     // Verify log indices are consistent (replication complete)
     let applied1 = final_metrics1.last_applied.map(|l| l.index).unwrap_or(0);
@@ -303,24 +276,9 @@ async fn test_madsim_replication_verification() {
         _ => panic!("invalid leader"),
     };
 
-    assert!(
-        applied1 >= leader_applied - 1,
-        "node 1 should be caught up: {} vs {}",
-        applied1,
-        leader_applied
-    );
-    assert!(
-        applied2 >= leader_applied - 1,
-        "node 2 should be caught up: {} vs {}",
-        applied2,
-        leader_applied
-    );
-    assert!(
-        applied3 >= leader_applied - 1,
-        "node 3 should be caught up: {} vs {}",
-        applied3,
-        leader_applied
-    );
+    assert!(applied1 >= leader_applied - 1, "node 1 should be caught up: {} vs {}", applied1, leader_applied);
+    assert!(applied2 >= leader_applied - 1, "node 2 should be caught up: {} vs {}", applied2, leader_applied);
+    assert!(applied3 >= leader_applied - 1, "node 3 should be caught up: {} vs {}", applied3, leader_applied);
 }
 
 /// Test replication lag detection in verification.
@@ -443,10 +401,7 @@ async fn test_verification_empty_cluster() {
     let controller = DeterministicClusterController::new();
 
     // Before init, cluster should be empty
-    let state = controller
-        .current_state()
-        .await
-        .expect("current_state should succeed");
+    let state = controller.current_state().await.expect("current_state should succeed");
 
     assert!(state.nodes.is_empty(), "uninitialized cluster should have no nodes");
 }
@@ -496,10 +451,7 @@ async fn test_scan_verification_with_prefix() {
 
     assert_eq!(results.entries.len(), 10, "should find 10 keys with prefix");
     for entry in &results.entries {
-        assert!(
-            entry.key.starts_with("scan_test_"),
-            "all keys should have the prefix"
-        );
+        assert!(entry.key.starts_with("scan_test_"), "all keys should have the prefix");
     }
 }
 
@@ -532,10 +484,7 @@ async fn test_scan_verification_pagination() {
         .expect("scan should succeed");
 
     assert_eq!(page1.entries.len(), 20, "first page should have 20 keys");
-    assert!(
-        page1.continuation_token.is_some(),
-        "should have continuation token"
-    );
+    assert!(page1.continuation_token.is_some(), "should have continuation token");
 
     // Get next page
     let page2 = store
@@ -552,8 +501,5 @@ async fn test_scan_verification_pagination() {
     // Verify no overlap
     let page1_keys: std::collections::HashSet<_> = page1.entries.iter().map(|e| &e.key).collect();
     let page2_keys: std::collections::HashSet<_> = page2.entries.iter().map(|e| &e.key).collect();
-    assert!(
-        page1_keys.is_disjoint(&page2_keys),
-        "pages should not overlap"
-    );
+    assert!(page1_keys.is_disjoint(&page2_keys), "pages should not overlap");
 }

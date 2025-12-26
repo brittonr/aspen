@@ -32,9 +32,13 @@
 //!    - Query DNS service for initial bootstrap peers
 //!    - Recommended for cloud/multi-region deployments
 //!
-//! 3. **Pkarr** (opt-in): DHT-based distributed discovery
-//!    - Publish node addresses to DHT relay
-//!    - Provides resilience against DNS failures
+//! 3. **Pkarr DHT Discovery** (opt-in): Full DHT-based distributed discovery
+//!    - Uses `DhtDiscovery` for both publishing AND resolution
+//!    - Publishes node addresses to BitTorrent Mainline DHT (decentralized)
+//!    - Publishes to relay servers as fallback (configurable)
+//!    - Resolves peer addresses from DHT (enables true peer discovery)
+//!    - Cryptographic authentication via Ed25519 signatures
+//!    - Configuration options: DHT on/off, relay on/off, republish interval
 //!
 //! ## Gossip (Broadcasts Raft Metadata - Default)
 //!
@@ -138,8 +142,40 @@ pub struct IrohEndpointConfig {
     pub enable_dns_discovery: bool,
     /// Custom DNS discovery URL (None = use n0's service).
     pub dns_discovery_url: Option<String>,
-    /// Enable Pkarr publisher (default: false).
+    /// Enable Pkarr DHT discovery (default: false).
+    ///
+    /// When enabled, uses `DhtDiscovery` which provides both publishing AND resolution
+    /// via the BitTorrent Mainline DHT and optional relay servers. This is more powerful
+    /// than the previous `PkarrPublisher` which only supported publishing.
+    ///
+    /// Features:
+    /// - Publishes node addresses to DHT (decentralized, no relay dependency)
+    /// - Publishes to relay servers (optional, for fallback)
+    /// - Resolves peer addresses from DHT (enables peer discovery)
+    /// - Cryptographic authentication via Ed25519 signatures
     pub enable_pkarr: bool,
+    /// Enable DHT publishing when Pkarr is enabled (default: true).
+    ///
+    /// When true, node addresses are published to the BitTorrent Mainline DHT.
+    /// This provides decentralized discovery without relay server dependencies.
+    ///
+    /// Set to false to use relay-only mode (more centralized but potentially faster).
+    pub enable_pkarr_dht: bool,
+    /// Enable Pkarr relay publishing when Pkarr is enabled (default: true).
+    ///
+    /// When true, node addresses are also published to Number 0's relay server
+    /// at `dns.iroh.link`. This provides a reliable fallback when DHT lookups are slow.
+    pub enable_pkarr_relay: bool,
+    /// Include direct IP addresses in Pkarr DNS records (default: true).
+    ///
+    /// When true, both relay URLs and direct addresses are published.
+    /// When false, only relay URLs are published (for privacy/NAT scenarios).
+    pub include_pkarr_direct_addresses: bool,
+    /// Republish delay for Pkarr DHT in seconds (default: 600 = 10 minutes).
+    ///
+    /// How often to republish addresses to the DHT to maintain freshness.
+    /// Lower values increase network traffic but improve discovery reliability.
+    pub pkarr_republish_delay_secs: u64,
     /// ALPNs (Application-Layer Protocol Negotiation) to accept on this endpoint.
     ///
     /// # When to Set ALPNs
@@ -182,6 +218,10 @@ impl Default for IrohEndpointConfig {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
+            enable_pkarr_dht: true,               // DHT enabled by default when pkarr is on
+            enable_pkarr_relay: true,             // Relay enabled by default for fallback
+            include_pkarr_direct_addresses: true, // Include direct IPs by default
+            pkarr_republish_delay_secs: 600,      // 10 minutes default republish
             alpns: Vec::new(),
         }
     }
@@ -244,9 +284,48 @@ impl IrohEndpointConfig {
         self
     }
 
-    /// Enable or disable Pkarr publisher.
+    /// Enable or disable Pkarr DHT discovery.
+    ///
+    /// When enabled, uses `DhtDiscovery` which provides both publishing AND resolution
+    /// via the BitTorrent Mainline DHT and optional relay servers.
     pub fn with_pkarr(mut self, enable: bool) -> Self {
         self.enable_pkarr = enable;
+        self
+    }
+
+    /// Enable or disable DHT publishing when Pkarr is enabled.
+    ///
+    /// When true, node addresses are published to the BitTorrent Mainline DHT.
+    /// This provides decentralized discovery without relay server dependencies.
+    pub fn with_pkarr_dht(mut self, enable: bool) -> Self {
+        self.enable_pkarr_dht = enable;
+        self
+    }
+
+    /// Enable or disable relay publishing when Pkarr is enabled.
+    ///
+    /// When true, node addresses are published to Number 0's relay server.
+    /// This provides a reliable fallback when DHT lookups are slow.
+    pub fn with_pkarr_relay(mut self, enable: bool) -> Self {
+        self.enable_pkarr_relay = enable;
+        self
+    }
+
+    /// Include or exclude direct IP addresses in Pkarr DNS records.
+    ///
+    /// When true, both relay URLs and direct addresses are published.
+    /// When false, only relay URLs are published (for privacy/NAT scenarios).
+    pub fn with_pkarr_direct_addresses(mut self, include: bool) -> Self {
+        self.include_pkarr_direct_addresses = include;
+        self
+    }
+
+    /// Set the republish delay for Pkarr DHT in seconds.
+    ///
+    /// How often to republish addresses to the DHT to maintain freshness.
+    /// Lower values increase network traffic but improve discovery reliability.
+    pub fn with_pkarr_republish_delay_secs(mut self, secs: u64) -> Self {
+        self.pkarr_republish_delay_secs = secs;
         self
     }
 
@@ -355,11 +434,37 @@ impl IrohEndpointManager {
             );
         }
 
-        // Pkarr Publisher: Publish node addresses to DHT-based relay
+        // Pkarr DHT Discovery: Full publish + resolve via DHT and/or relay
+        //
+        // DhtDiscovery provides:
+        // - Publishing to BitTorrent Mainline DHT (decentralized)
+        // - Publishing to relay servers (fallback)
+        // - Resolution from both DHT and relay (enabling peer discovery)
+        // - Cryptographic authentication via Ed25519 signatures
+        //
+        // This is a significant upgrade from PkarrPublisher which was publish-only.
         if config.enable_pkarr {
-            let pkarr_builder = iroh::discovery::pkarr::PkarrPublisher::n0_dns();
-            builder = builder.discovery(pkarr_builder);
-            tracing::info!("Pkarr publisher enabled with n0 Pkarr service");
+            use iroh::discovery::pkarr::dht::DhtDiscovery;
+
+            // Build DhtDiscovery with configurable options
+            let mut dht_builder = DhtDiscovery::builder()
+                .dht(config.enable_pkarr_dht)
+                .include_direct_addresses(config.include_pkarr_direct_addresses)
+                .republish_delay(std::time::Duration::from_secs(config.pkarr_republish_delay_secs));
+
+            // Add relay if enabled (n0's relay at dns.iroh.link)
+            if config.enable_pkarr_relay {
+                dht_builder = dht_builder.n0_dns_pkarr_relay();
+            }
+
+            builder = builder.discovery(dht_builder);
+            tracing::info!(
+                dht_enabled = config.enable_pkarr_dht,
+                relay_enabled = config.enable_pkarr_relay,
+                include_direct_addrs = config.include_pkarr_direct_addresses,
+                republish_delay_secs = config.pkarr_republish_delay_secs,
+                "Pkarr DHT discovery enabled (publish + resolve)"
+            );
         }
 
         let endpoint = builder.bind().await.context("failed to bind Iroh endpoint")?;

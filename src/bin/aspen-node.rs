@@ -267,6 +267,10 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_dns_discovery: args.enable_dns_discovery,
         dns_discovery_url: args.dns_discovery_url.clone(),
         enable_pkarr: args.enable_pkarr,
+        enable_pkarr_dht: true,               // DHT enabled by default when pkarr is on
+        enable_pkarr_relay: true,             // Relay enabled by default for fallback
+        include_pkarr_direct_addresses: true, // Include direct IPs by default
+        pkarr_republish_delay_secs: 600,      // 10 minutes default republish
         enable_raft_auth: args.enable_raft_auth,
     };
     config.peers = args.peers.clone();

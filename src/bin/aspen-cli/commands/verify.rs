@@ -176,15 +176,18 @@ impl Outputable for VerifyResult {
         // Add per-node replication status if available
         if let Some(ref nodes) = self.node_status {
             json["nodes"] = serde_json::json!(
-                nodes.iter().map(|n| {
-                    serde_json::json!({
-                        "node_id": n.node_id,
-                        "matched_index": n.matched_index,
-                        "leader_applied": n.leader_applied,
-                        "lag": n.lag,
-                        "status": n.status
+                nodes
+                    .iter()
+                    .map(|n| {
+                        serde_json::json!({
+                            "node_id": n.node_id,
+                            "matched_index": n.matched_index,
+                            "leader_applied": n.leader_applied,
+                            "lag": n.lag,
+                            "status": n.status
+                        })
                     })
-                }).collect::<Vec<_>>()
+                    .collect::<Vec<_>>()
             );
         }
 
@@ -217,10 +220,8 @@ impl Outputable for VerifyResult {
         if let Some(ref nodes) = self.node_status {
             let lagging: Vec<_> = nodes.iter().filter(|n| n.lag > 0).collect();
             if !lagging.is_empty() {
-                let lag_info: Vec<String> = lagging
-                    .iter()
-                    .map(|n| format!("node {}: {} behind", n.node_id, n.lag))
-                    .collect();
+                let lag_info: Vec<String> =
+                    lagging.iter().map(|n| format!("node {}: {} behind", n.node_id, n.lag)).collect();
                 output.push_str(&format!("\n  replication lag: {}", lag_info.join(", ")));
             }
         }
@@ -254,10 +255,7 @@ impl Outputable for VerifyAllResult {
             output.push('\n');
         }
 
-        output.push_str(&format!(
-            "\nSummary: {} passed, {} failed",
-            self.total_passed, self.total_failed
-        ));
+        output.push_str(&format!("\nSummary: {} passed, {} failed", self.total_passed, self.total_failed));
 
         if self.total_failed == 0 {
             output.push_str("\nAll verification tests passed!");
@@ -282,19 +280,14 @@ impl VerifyCommand {
 /// Verify KV store replication.
 async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Result<()> {
     let start = Instant::now();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
     let mut errors = Vec::new();
     let mut replication_details = Vec::new();
     let mut node_status_list: Vec<NodeReplicationStatus> = Vec::new();
     let mut timing = VerifyTiming::default();
 
-    let test_keys: Vec<String> = (0..args.count)
-        .map(|i| format!("{}test_{}_{}", args.prefix, timestamp, i))
-        .collect();
+    let test_keys: Vec<String> = (0..args.count).map(|i| format!("{}test_{}_{}", args.prefix, timestamp, i)).collect();
 
     // Step 1: Write test keys
     let write_start = Instant::now();
@@ -537,10 +530,8 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
 
     // Optionally write and verify a test entry
     if args.write_test {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let timestamp =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
         let test_key = format!("__verify_docs_{}", timestamp);
         let test_value = "docs_verify_value";
 
@@ -602,10 +593,7 @@ async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> 
         name: "docs-sync".to_string(),
         passed,
         message: if passed {
-            format!(
-                "Docs enabled, namespace {}",
-                namespace_id.as_deref().unwrap_or("unknown")
-            )
+            format!("Docs enabled, namespace {}", namespace_id.as_deref().unwrap_or("unknown"))
         } else {
             "Docs verification failed".to_string()
         },
@@ -877,10 +865,7 @@ async fn verify_all(client: &AspenClient, args: VerifyAllArgs, json: bool) -> Re
 /// Helper to run KV verification and return result.
 async fn run_verify_kv(client: &AspenClient, no_cleanup: bool) -> VerifyResult {
     let start = Instant::now();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
     let count = 3;
     let prefix = "__verify_";
@@ -1134,9 +1119,7 @@ fn parse_endpoint_addr(addr_str: &str) -> Result<EndpointAddr> {
     // Try parsing as hex-encoded public key (64 hex chars = 32 bytes)
     if addr_str.len() == 64 && addr_str.chars().all(|c| c.is_ascii_hexdigit()) {
         let bytes = hex::decode(addr_str).context("failed to decode hex public key")?;
-        let bytes_array: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
+        let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
         let public_key = PublicKey::from_bytes(&bytes_array).context("invalid public key bytes")?;
         return Ok(EndpointAddr::new(public_key));
     }
@@ -1155,9 +1138,8 @@ fn parse_endpoint_addr(addr_str: &str) -> Result<EndpointAddr> {
                 let key_hex = &rest[..end];
                 if key_hex.len() == 64 && key_hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     let bytes = hex::decode(key_hex).context("failed to decode public key from debug format")?;
-                    let bytes_array: [u8; 32] = bytes
-                        .try_into()
-                        .map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
+                    let bytes_array: [u8; 32] =
+                        bytes.try_into().map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
                     let public_key = PublicKey::from_bytes(&bytes_array).context("invalid public key bytes")?;
                     return Ok(EndpointAddr::new(public_key));
                 }

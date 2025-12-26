@@ -276,14 +276,51 @@ pub struct IrohConfig {
     /// Only relevant when enable_dns_discovery is true.
     pub dns_discovery_url: Option<String>,
 
-    /// Enable Pkarr publisher for distributed peer discovery.
+    /// Enable Pkarr DHT discovery for distributed peer discovery.
     ///
-    /// When enabled, nodes publish their addresses to a Pkarr relay (DHT-based).
-    /// Other nodes can then discover them via DNS lookups.
+    /// When enabled, uses `DhtDiscovery` which provides both publishing AND resolution
+    /// via the BitTorrent Mainline DHT and optional relay servers. This is a significant
+    /// upgrade from the previous `PkarrPublisher` which only supported publishing.
+    ///
+    /// Features:
+    /// - Publishes node addresses to DHT (decentralized, no relay dependency)
+    /// - Publishes to relay servers (optional, for fallback)
+    /// - Resolves peer addresses from DHT (enables peer discovery)
+    /// - Cryptographic authentication via Ed25519 signatures
     ///
     /// Default: false (Pkarr disabled).
     #[serde(default)]
     pub enable_pkarr: bool,
+
+    /// Enable DHT publishing when Pkarr is enabled (default: true).
+    ///
+    /// When true, node addresses are published to the BitTorrent Mainline DHT.
+    /// This provides decentralized discovery without relay server dependencies.
+    ///
+    /// Set to false to use relay-only mode (more centralized but potentially faster).
+    #[serde(default = "default_enable_pkarr_dht")]
+    pub enable_pkarr_dht: bool,
+
+    /// Enable Pkarr relay publishing when Pkarr is enabled (default: true).
+    ///
+    /// When true, node addresses are also published to Number 0's relay server
+    /// at `dns.iroh.link`. This provides a reliable fallback when DHT lookups are slow.
+    #[serde(default = "default_enable_pkarr_relay")]
+    pub enable_pkarr_relay: bool,
+
+    /// Include direct IP addresses in Pkarr DNS records (default: true).
+    ///
+    /// When true, both relay URLs and direct addresses are published.
+    /// When false, only relay URLs are published (for privacy/NAT scenarios).
+    #[serde(default = "default_include_pkarr_direct_addresses")]
+    pub include_pkarr_direct_addresses: bool,
+
+    /// Republish delay for Pkarr DHT in seconds (default: 600 = 10 minutes).
+    ///
+    /// How often to republish addresses to the DHT to maintain freshness.
+    /// Lower values increase network traffic but improve discovery reliability.
+    #[serde(default = "default_pkarr_republish_delay_secs")]
+    pub pkarr_republish_delay_secs: u64,
 
     /// Enable HMAC-SHA256 authentication for Raft RPC.
     ///
@@ -306,6 +343,10 @@ impl Default for IrohConfig {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
+            enable_pkarr_dht: default_enable_pkarr_dht(),
+            enable_pkarr_relay: default_enable_pkarr_relay(),
+            include_pkarr_direct_addresses: default_include_pkarr_direct_addresses(),
+            pkarr_republish_delay_secs: default_pkarr_republish_delay_secs(),
             enable_raft_auth: false,
         }
     }
@@ -675,6 +716,13 @@ impl NodeConfig {
                 enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
                 dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
                 enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
+                enable_pkarr_dht: parse_env("ASPEN_IROH_ENABLE_PKARR_DHT").unwrap_or_else(default_enable_pkarr_dht),
+                enable_pkarr_relay: parse_env("ASPEN_IROH_ENABLE_PKARR_RELAY")
+                    .unwrap_or_else(default_enable_pkarr_relay),
+                include_pkarr_direct_addresses: parse_env("ASPEN_IROH_INCLUDE_PKARR_DIRECT_ADDRESSES")
+                    .unwrap_or_else(default_include_pkarr_direct_addresses),
+                pkarr_republish_delay_secs: parse_env("ASPEN_IROH_PKARR_REPUBLISH_DELAY_SECS")
+                    .unwrap_or_else(default_pkarr_republish_delay_secs),
                 enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
             },
             docs: DocsConfig {
@@ -794,6 +842,18 @@ impl NodeConfig {
         }
         if other.iroh.enable_pkarr {
             self.iroh.enable_pkarr = other.iroh.enable_pkarr;
+        }
+        if other.iroh.enable_pkarr_dht != default_enable_pkarr_dht() {
+            self.iroh.enable_pkarr_dht = other.iroh.enable_pkarr_dht;
+        }
+        if other.iroh.enable_pkarr_relay != default_enable_pkarr_relay() {
+            self.iroh.enable_pkarr_relay = other.iroh.enable_pkarr_relay;
+        }
+        if other.iroh.include_pkarr_direct_addresses != default_include_pkarr_direct_addresses() {
+            self.iroh.include_pkarr_direct_addresses = other.iroh.include_pkarr_direct_addresses;
+        }
+        if other.iroh.pkarr_republish_delay_secs != default_pkarr_republish_delay_secs() {
+            self.iroh.pkarr_republish_delay_secs = other.iroh.pkarr_republish_delay_secs;
         }
         if other.iroh.enable_raft_auth {
             self.iroh.enable_raft_auth = other.iroh.enable_raft_auth;
@@ -1068,6 +1128,22 @@ fn default_enable_mdns() -> bool {
     true
 }
 
+fn default_enable_pkarr_dht() -> bool {
+    true // DHT enabled by default when pkarr is on
+}
+
+fn default_enable_pkarr_relay() -> bool {
+    true // Relay enabled by default for fallback
+}
+
+fn default_include_pkarr_direct_addresses() -> bool {
+    true // Include direct IPs by default
+}
+
+fn default_pkarr_republish_delay_secs() -> u64 {
+    600 // 10 minutes default republish
+}
+
 fn default_sqlite_read_pool_size() -> u32 {
     DEFAULT_READ_POOL_SIZE
 }
@@ -1189,6 +1265,10 @@ mod tests {
                 enable_dns_discovery: true,
                 dns_discovery_url: Some("https://dns.example.com".into()),
                 enable_pkarr: true,
+                enable_pkarr_dht: true,
+                enable_pkarr_relay: true,
+                include_pkarr_direct_addresses: true,
+                pkarr_republish_delay_secs: 600,
                 enable_raft_auth: false,
             },
             peers: vec!["peer1".into()],

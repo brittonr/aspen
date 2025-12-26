@@ -39,6 +39,10 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
+            enable_pkarr_dht: true,
+            enable_pkarr_relay: true,
+            include_pkarr_direct_addresses: true,
+            pkarr_republish_delay_secs: 600,
             enable_raft_auth: false,
         },
         ..Default::default()
@@ -219,6 +223,10 @@ fn test_config_with_ticket() {
         enable_dns_discovery: false,
         dns_discovery_url: None,
         enable_pkarr: false,
+        enable_pkarr_dht: true,
+        enable_pkarr_relay: true,
+        include_pkarr_direct_addresses: true,
+        pkarr_republish_delay_secs: 600,
         enable_raft_auth: false,
     };
 
@@ -289,6 +297,10 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             enable_dns_discovery: false,
             dns_discovery_url: None,
             enable_pkarr: false,
+            enable_pkarr_dht: true,
+            enable_pkarr_relay: true,
+            include_pkarr_direct_addresses: true,
+            pkarr_republish_delay_secs: 600,
             enable_raft_auth: false,
         },
         ..Default::default()
@@ -307,6 +319,10 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             enable_dns_discovery: true,
             dns_discovery_url: Some("https://dns.example.com".into()),
             enable_pkarr: false,
+            enable_pkarr_dht: true,
+            enable_pkarr_relay: true,
+            include_pkarr_direct_addresses: true,
+            pkarr_republish_delay_secs: 600,
             enable_raft_auth: true, // Override to enable
         },
         ..Default::default()
