@@ -183,6 +183,25 @@ struct Args {
     #[arg(long)]
     enable_pkarr: bool,
 
+    /// Custom Pkarr relay URL for discovery.
+    /// For private infrastructure, run your own pkarr relay and set this URL.
+    /// Only relevant when --enable-pkarr is set.
+    #[arg(long)]
+    pkarr_relay_url: Option<String>,
+
+    /// Relay server mode: "default", "custom", or "disabled".
+    /// - default: Use n0's public relay infrastructure (default)
+    /// - custom: Use your own relay servers (requires --relay-url)
+    /// - disabled: No relays, direct connections only
+    #[arg(long)]
+    relay_mode: Option<String>,
+
+    /// Custom relay server URLs for connection facilitation.
+    /// Required when --relay-mode=custom. Recommended to have 2+ for redundancy.
+    /// Can be specified multiple times.
+    #[arg(long)]
+    relay_url: Vec<String>,
+
     /// Enable HMAC-SHA256 authentication for Raft RPC.
     /// When enabled, nodes perform mutual authentication using the cluster
     /// cookie before accepting Raft RPC requests.
@@ -259,6 +278,17 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     config.heartbeat_interval_ms = args.heartbeat_interval_ms.unwrap_or(500);
     config.election_timeout_min_ms = args.election_timeout_min_ms.unwrap_or(1500);
     config.election_timeout_max_ms = args.election_timeout_max_ms.unwrap_or(3000);
+    // Parse relay mode from CLI string
+    let relay_mode = args
+        .relay_mode
+        .as_deref()
+        .map(|s| match s.to_lowercase().as_str() {
+            "custom" => aspen::cluster::config::RelayMode::Custom,
+            "disabled" => aspen::cluster::config::RelayMode::Disabled,
+            _ => aspen::cluster::config::RelayMode::Default,
+        })
+        .unwrap_or_default();
+
     config.iroh = IrohConfig {
         secret_key: args.iroh_secret_key.clone(),
         enable_gossip: !args.disable_gossip,
@@ -271,6 +301,9 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_pkarr_relay: true,             // Relay enabled by default for fallback
         include_pkarr_direct_addresses: true, // Include direct IPs by default
         pkarr_republish_delay_secs: 600,      // 10 minutes default republish
+        pkarr_relay_url: args.pkarr_relay_url.clone(),
+        relay_mode,
+        relay_urls: args.relay_url.clone(),
         enable_raft_auth: args.enable_raft_auth,
     };
     config.peers = args.peers.clone();

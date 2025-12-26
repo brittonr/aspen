@@ -226,6 +226,46 @@ impl Default for NodeConfig {
     }
 }
 
+/// Relay server mode for Iroh connections.
+///
+/// Relays facilitate connections when direct peer-to-peer isn't possible (NAT traversal)
+/// and help with hole-punching. They are stateless connection facilitators.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RelayMode {
+    /// Use n0's public relay infrastructure (default).
+    ///
+    /// Good for development and testing. For production, consider using
+    /// dedicated relays for better performance and control.
+    #[default]
+    Default,
+
+    /// Use custom relay servers.
+    ///
+    /// Requires `relay_urls` to be configured with at least one relay URL.
+    /// Recommended to have 2+ relays in different regions for redundancy.
+    Custom,
+
+    /// Disable relay servers entirely.
+    ///
+    /// Only direct peer-to-peer connections will work. This is only suitable
+    /// for networks where all nodes can directly reach each other (no NAT).
+    Disabled,
+}
+
+impl std::str::FromStr for RelayMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "default" => Ok(RelayMode::Default),
+            "custom" => Ok(RelayMode::Custom),
+            "disabled" => Ok(RelayMode::Disabled),
+            _ => Err(format!("invalid relay mode: {s}, expected: default, custom, disabled")),
+        }
+    }
+}
+
 /// Iroh networking configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrohConfig {
@@ -326,6 +366,36 @@ pub struct IrohConfig {
     #[serde(default = "default_pkarr_republish_delay_secs")]
     pub pkarr_republish_delay_secs: u64,
 
+    /// Custom Pkarr relay URL for discovery.
+    ///
+    /// If not provided, uses n0's public Pkarr relay (`dns.iroh.link`).
+    /// For private infrastructure, run your own pkarr relay and set this URL.
+    ///
+    /// Only relevant when `enable_pkarr` and `enable_pkarr_relay` are true.
+    pub pkarr_relay_url: Option<String>,
+
+    /// Relay server mode for connection facilitation (default: default).
+    ///
+    /// Relays help establish connections when direct P2P isn't possible (NAT traversal).
+    /// Options:
+    /// - `default`: Use n0's public relay infrastructure
+    /// - `custom`: Use your own relay servers (requires `relay_urls`)
+    /// - `disabled`: No relays, direct connections only
+    ///
+    /// For production, dedicated relays are recommended for better performance and control.
+    #[serde(default)]
+    pub relay_mode: RelayMode,
+
+    /// Custom relay server URLs (required when relay_mode is "custom").
+    ///
+    /// Recommended to configure 2+ relays in different regions for redundancy.
+    /// Example: `["https://relay-us.company.com", "https://relay-eu.company.com"]`
+    ///
+    /// Each URL should point to an iroh-relay server.
+    /// See: <https://github.com/n0-computer/iroh/tree/main/iroh-relay>
+    #[serde(default)]
+    pub relay_urls: Vec<String>,
+
     /// Enable HMAC-SHA256 authentication for Raft RPC.
     ///
     /// When enabled, nodes perform mutual authentication using the cluster
@@ -351,6 +421,9 @@ impl Default for IrohConfig {
             enable_pkarr_relay: default_enable_pkarr_relay(),
             include_pkarr_direct_addresses: default_include_pkarr_direct_addresses(),
             pkarr_republish_delay_secs: default_pkarr_republish_delay_secs(),
+            pkarr_relay_url: None,
+            relay_mode: RelayMode::default(),
+            relay_urls: Vec::new(),
             enable_raft_auth: false,
         }
     }
@@ -755,6 +828,9 @@ impl NodeConfig {
                     .unwrap_or_else(default_include_pkarr_direct_addresses),
                 pkarr_republish_delay_secs: parse_env("ASPEN_IROH_PKARR_REPUBLISH_DELAY_SECS")
                     .unwrap_or_else(default_pkarr_republish_delay_secs),
+                pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
+                relay_mode: parse_env("ASPEN_IROH_RELAY_MODE").unwrap_or_default(),
+                relay_urls: parse_env_vec("ASPEN_IROH_RELAY_URLS"),
                 enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
             },
             docs: DocsConfig {
@@ -886,6 +962,15 @@ impl NodeConfig {
         }
         if other.iroh.pkarr_republish_delay_secs != default_pkarr_republish_delay_secs() {
             self.iroh.pkarr_republish_delay_secs = other.iroh.pkarr_republish_delay_secs;
+        }
+        if other.iroh.pkarr_relay_url.is_some() {
+            self.iroh.pkarr_relay_url = other.iroh.pkarr_relay_url;
+        }
+        if other.iroh.relay_mode != RelayMode::default() {
+            self.iroh.relay_mode = other.iroh.relay_mode;
+        }
+        if !other.iroh.relay_urls.is_empty() {
+            self.iroh.relay_urls = other.iroh.relay_urls;
         }
         if other.iroh.enable_raft_auth {
             self.iroh.enable_raft_auth = other.iroh.enable_raft_auth;
@@ -1315,6 +1400,9 @@ mod tests {
                 enable_pkarr_relay: true,
                 include_pkarr_direct_addresses: true,
                 pkarr_republish_delay_secs: 600,
+                pkarr_relay_url: Some("https://pkarr.example.com".into()),
+                relay_mode: RelayMode::Custom,
+                relay_urls: vec!["https://relay1.example.com".into()],
                 enable_raft_auth: false,
             },
             peers: vec!["peer1".into()],

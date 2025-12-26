@@ -176,6 +176,23 @@ pub struct IrohEndpointConfig {
     /// How often to republish addresses to the DHT to maintain freshness.
     /// Lower values increase network traffic but improve discovery reliability.
     pub pkarr_republish_delay_secs: u64,
+    /// Custom Pkarr relay URL for discovery (None = use n0's dns.iroh.link).
+    ///
+    /// For private infrastructure, run your own pkarr relay and set this URL.
+    /// Only relevant when `enable_pkarr` and `enable_pkarr_relay` are true.
+    pub pkarr_relay_url: Option<String>,
+    /// Relay server mode for connection facilitation.
+    ///
+    /// Relays help establish connections when direct P2P isn't possible (NAT traversal).
+    /// - `Default`: Use n0's public relay infrastructure
+    /// - `Custom`: Use your own relay servers (requires `relay_urls`)
+    /// - `Disabled`: No relays, direct connections only
+    pub relay_mode: config::RelayMode,
+    /// Custom relay server URLs (required when relay_mode is Custom).
+    ///
+    /// Tiger Style: Bounded to max 4 relay servers for resource limits.
+    /// Recommended to configure 2+ relays in different regions for redundancy.
+    pub relay_urls: Vec<String>,
     /// ALPNs (Application-Layer Protocol Negotiation) to accept on this endpoint.
     ///
     /// # When to Set ALPNs
@@ -222,6 +239,9 @@ impl Default for IrohEndpointConfig {
             enable_pkarr_relay: true,             // Relay enabled by default for fallback
             include_pkarr_direct_addresses: true, // Include direct IPs by default
             pkarr_republish_delay_secs: 600,      // 10 minutes default republish
+            pkarr_relay_url: None,
+            relay_mode: config::RelayMode::Default,
+            relay_urls: Vec::new(),
             alpns: Vec::new(),
         }
     }
@@ -329,6 +349,37 @@ impl IrohEndpointConfig {
         self
     }
 
+    /// Set custom Pkarr relay URL for discovery.
+    ///
+    /// For private infrastructure, run your own pkarr relay and set this URL.
+    /// Only relevant when `enable_pkarr` and `enable_pkarr_relay` are true.
+    pub fn with_pkarr_relay_url(mut self, url: String) -> Self {
+        self.pkarr_relay_url = Some(url);
+        self
+    }
+
+    /// Set the relay server mode.
+    ///
+    /// - `Default`: Use n0's public relay infrastructure
+    /// - `Custom`: Use your own relay servers (requires `relay_urls`)
+    /// - `Disabled`: No relays, direct connections only
+    pub fn with_relay_mode(mut self, mode: config::RelayMode) -> Self {
+        self.relay_mode = mode;
+        self
+    }
+
+    /// Set custom relay server URLs.
+    ///
+    /// Required when relay_mode is Custom. Recommended to configure 2+ relays
+    /// in different regions for redundancy.
+    ///
+    /// Tiger Style: Bounded to max 4 relay servers.
+    pub fn with_relay_urls(mut self, urls: Vec<String>) -> Self {
+        // Tiger Style: Bound the number of relay URLs
+        self.relay_urls = urls.into_iter().take(4).collect();
+        self
+    }
+
     /// Set ALPNs to accept on this endpoint.
     ///
     /// Required when NOT using an Iroh Router for ALPN dispatching.
@@ -397,9 +448,55 @@ impl IrohEndpointManager {
             }
         }
 
-        // Configure relay mode based on relay URLs
-        // Use default relay mode for NAT traversal
-        builder = builder.relay_mode(RelayMode::Default);
+        // Configure relay mode based on configuration
+        // Relays facilitate connections when direct P2P isn't possible (NAT traversal)
+        let relay_mode = match config.relay_mode {
+            config::RelayMode::Default => {
+                tracing::info!("using default n0 relay infrastructure");
+                RelayMode::Default
+            }
+            config::RelayMode::Disabled => {
+                tracing::info!("relay servers disabled - direct connections only");
+                RelayMode::Disabled
+            }
+            config::RelayMode::Custom => {
+                if config.relay_urls.is_empty() {
+                    // Fall back to default if no custom URLs provided
+                    tracing::warn!("relay_mode is Custom but no relay_urls configured, falling back to default");
+                    RelayMode::Default
+                } else {
+                    // Parse relay URLs and construct custom relay map
+                    use iroh::RelayUrl;
+
+                    let mut relay_nodes = Vec::new();
+                    for url_str in &config.relay_urls {
+                        match url_str.parse::<RelayUrl>() {
+                            Ok(url) => {
+                                relay_nodes.push(url);
+                                tracing::info!(url = %url_str, "added custom relay server");
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    url = %url_str,
+                                    error = %e,
+                                    "failed to parse relay URL, skipping"
+                                );
+                            }
+                        }
+                    }
+
+                    if relay_nodes.is_empty() {
+                        tracing::warn!("no valid relay URLs parsed, falling back to default relays");
+                        RelayMode::Default
+                    } else {
+                        let relay_map: iroh::RelayMap = relay_nodes.into_iter().collect();
+                        tracing::info!(relay_count = relay_map.len(), "configured custom relay infrastructure");
+                        RelayMode::Custom(relay_map)
+                    }
+                }
+            }
+        };
+        builder = builder.relay_mode(relay_mode);
 
         // Configure ALPNs if provided.
         // When using Router (spawn_router()), ALPNs are set automatically via .accept() calls.
@@ -452,15 +549,39 @@ impl IrohEndpointManager {
                 .include_direct_addresses(config.include_pkarr_direct_addresses)
                 .republish_delay(std::time::Duration::from_secs(config.pkarr_republish_delay_secs));
 
-            // Add relay if enabled (n0's relay at dns.iroh.link)
+            // Add relay if enabled
             if config.enable_pkarr_relay {
-                dht_builder = dht_builder.n0_dns_pkarr_relay();
+                if let Some(ref relay_url) = config.pkarr_relay_url {
+                    // Use custom pkarr relay URL (private infrastructure)
+                    match relay_url.parse::<url::Url>() {
+                        Ok(url) => {
+                            dht_builder = dht_builder.pkarr_relay(url);
+                            tracing::info!(
+                                relay_url = %relay_url,
+                                "Pkarr using custom relay server (private infrastructure)"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                relay_url = %relay_url,
+                                error = %e,
+                                "failed to parse custom pkarr relay URL, falling back to n0 relay"
+                            );
+                            dht_builder = dht_builder.n0_dns_pkarr_relay();
+                        }
+                    }
+                } else {
+                    // Use n0's default relay at dns.iroh.link
+                    dht_builder = dht_builder.n0_dns_pkarr_relay();
+                    tracing::debug!("Pkarr using n0 default relay (dns.iroh.link)");
+                }
             }
 
             builder = builder.discovery(dht_builder);
             tracing::info!(
                 dht_enabled = config.enable_pkarr_dht,
                 relay_enabled = config.enable_pkarr_relay,
+                custom_relay = config.pkarr_relay_url.is_some(),
                 include_direct_addrs = config.include_pkarr_direct_addresses,
                 republish_delay_secs = config.pkarr_republish_delay_secs,
                 "Pkarr DHT discovery enabled (publish + resolve)"

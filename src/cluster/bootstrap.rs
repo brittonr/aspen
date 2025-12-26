@@ -435,7 +435,16 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
         .with_pkarr_dht(config.iroh.enable_pkarr_dht)
         .with_pkarr_relay(config.iroh.enable_pkarr_relay)
         .with_pkarr_direct_addresses(config.iroh.include_pkarr_direct_addresses)
-        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs);
+        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs)
+        .with_relay_mode(config.iroh.relay_mode.clone())
+        .with_relay_urls(config.iroh.relay_urls.clone());
+
+    // Add optional pkarr relay URL for custom pkarr infrastructure
+    let iroh_config = if let Some(pkarr_url) = &config.iroh.pkarr_relay_url {
+        iroh_config.with_pkarr_relay_url(pkarr_url.clone())
+    } else {
+        iroh_config
+    };
 
     let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
         iroh_config.with_dns_discovery_url(dns_url.clone())
@@ -1241,7 +1250,16 @@ async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpoin
         .with_pkarr_dht(config.iroh.enable_pkarr_dht)
         .with_pkarr_relay(config.iroh.enable_pkarr_relay)
         .with_pkarr_direct_addresses(config.iroh.include_pkarr_direct_addresses)
-        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs);
+        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs)
+        .with_relay_mode(config.iroh.relay_mode.clone())
+        .with_relay_urls(config.iroh.relay_urls.clone());
+
+    // Add optional pkarr relay URL for custom pkarr infrastructure
+    let iroh_config = if let Some(pkarr_url) = &config.iroh.pkarr_relay_url {
+        iroh_config.with_pkarr_relay_url(pkarr_url.clone())
+    } else {
+        iroh_config
+    };
 
     let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
         iroh_config.with_dns_discovery_url(dns_url.clone())

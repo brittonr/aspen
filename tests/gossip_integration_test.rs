@@ -43,6 +43,9 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
             enable_pkarr_relay: true,
             include_pkarr_direct_addresses: true,
             pkarr_republish_delay_secs: 600,
+            pkarr_relay_url: None,
+            relay_mode: Default::default(),
+            relay_urls: Vec::new(),
             enable_raft_auth: false,
         },
         ..Default::default()
@@ -227,6 +230,9 @@ fn test_config_with_ticket() {
         enable_pkarr_relay: true,
         include_pkarr_direct_addresses: true,
         pkarr_republish_delay_secs: 600,
+        pkarr_relay_url: None,
+        relay_mode: Default::default(),
+        relay_urls: Vec::new(),
         enable_raft_auth: false,
     };
 
@@ -301,6 +307,9 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             enable_pkarr_relay: true,
             include_pkarr_direct_addresses: true,
             pkarr_republish_delay_secs: 600,
+            pkarr_relay_url: None,
+            relay_mode: Default::default(),
+            relay_urls: Vec::new(),
             enable_raft_auth: false,
         },
         ..Default::default()
@@ -323,6 +332,9 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
             enable_pkarr_relay: true,
             include_pkarr_direct_addresses: true,
             pkarr_republish_delay_secs: 600,
+            pkarr_relay_url: None,
+            relay_mode: Default::default(),
+            relay_urls: Vec::new(),
             enable_raft_auth: true, // Override to enable
         },
         ..Default::default()

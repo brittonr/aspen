@@ -506,6 +506,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tui-logger",
+ "url",
  "vhost",
 ]
 
