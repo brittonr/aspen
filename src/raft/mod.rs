@@ -6,14 +6,14 @@
 //! # Architecture
 //!
 //! - **RaftNode**: Direct wrapper around OpenRaft implementing ClusterController and KeyValueStore
-//! - **Storage**: Hybrid storage backend (redb for log, SQLite for state machine)
+//! - **Storage**: Single-fsync Redb storage for both log and state machine
 //! - **Network**: IRPC-based network transport over Iroh P2P connections
 //! - **Supervisor**: Lightweight task supervision with restart logic
 //!
 //! # Key Components
 //!
 //! - `RaftNode`: Direct async API for Raft operations (recommended)
-//! - `SqliteStateMachine`: ACID state machine storage with snapshot support
+//! - `SharedRedbStorage`: Single-fsync storage with DataFusion SQL support
 //! - `IrpcRaftNetwork`: Network layer implementing RaftNetworkV2 over IRPC/Iroh
 //! - `NodeFailureDetector`: Distinguishes transient errors from node-level failures
 //!
@@ -72,8 +72,6 @@ pub mod server;
 pub mod storage;
 /// Single-fsync Redb storage (shared log + state machine).
 pub mod storage_shared;
-/// SQLite-based state machine implementation.
-pub mod storage_sqlite;
 /// Offline storage validation and integrity checks.
 pub mod storage_validation;
 /// Task supervision with restart logic.
@@ -99,9 +97,8 @@ use crate::api::ScanResult;
 use crate::raft::constants::MAX_BATCH_SIZE;
 use crate::raft::storage::InMemoryStateMachine;
 use crate::raft::storage_shared::SharedRedbStorage;
-use crate::raft::storage_sqlite::SqliteStateMachine;
 
-/// State machine variant that can hold either in-memory, sqlite-backed, or redb-backed storage.
+/// State machine variant that can hold either in-memory or redb-backed storage.
 ///
 /// This enum allows the RaftActor to read from the same state machine that
 /// receives writes through the Raft core, fixing the NotFound bug where reads
@@ -110,8 +107,6 @@ use crate::raft::storage_sqlite::SqliteStateMachine;
 pub enum StateMachineVariant {
     /// In-memory state machine (for testing).
     InMemory(Arc<InMemoryStateMachine>),
-    /// SQLite-backed state machine (for production).
-    Sqlite(Arc<SqliteStateMachine>),
     /// Redb-backed state machine (single-fsync, optimized for low latency).
     Redb(Arc<SharedRedbStorage>),
 }
@@ -126,9 +121,6 @@ impl StateMachineVariant {
     pub async fn get(&self, key: &str) -> Result<Option<String>, KeyValueStoreError> {
         match self {
             Self::InMemory(sm) => Ok(sm.get(key).await),
-            Self::Sqlite(sm) => sm.get(key).await.map_err(|err| KeyValueStoreError::Failed {
-                reason: format!("sqlite storage read error: {}", err),
-            }),
             Self::Redb(sm) => sm.get(key).map(|opt| opt.map(|e| e.value)).map_err(|err| KeyValueStoreError::Failed {
                 reason: format!("redb storage read error: {}", err),
             }),
@@ -153,15 +145,6 @@ impl StateMachineVariant {
         match self {
             Self::InMemory(sm) => {
                 let kv_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
-                Self::build_scan_result(kv_pairs, &start_after, limit)
-            }
-            Self::Sqlite(sm) => {
-                let kv_pairs =
-                    sm.scan(&request.prefix, start_after.as_deref(), Some(fetch_limit)).await.map_err(|err| {
-                        KeyValueStoreError::Failed {
-                            reason: format!("sqlite storage scan error: {}", err),
-                        }
-                    })?;
                 Self::build_scan_result(kv_pairs, &start_after, limit)
             }
             Self::Redb(sm) => {
@@ -231,24 +214,21 @@ impl StateMachineVariant {
     /// Get lease information by ID.
     ///
     /// Returns (granted_ttl_seconds, remaining_ttl_seconds) if the lease exists.
-    /// Returns None if the lease doesn't exist, has expired, or storage backend doesn't support
-    /// leases.
+    /// Returns None if the lease doesn't exist or has expired.
     pub fn get_lease(&self, lease_id: u64) -> Option<(u32, u32)> {
         match self {
             Self::InMemory(_) => None, // In-memory doesn't track leases
-            Self::Sqlite(sm) => sm.get_lease(lease_id).ok().flatten(),
-            Self::Redb(_) => None, // TODO: Implement lease support for Redb
+            Self::Redb(sm) => sm.get_lease(lease_id).ok().flatten(),
         }
     }
 
     /// Get all keys attached to a lease.
     ///
-    /// Returns an empty list if the lease doesn't exist or storage doesn't support leases.
+    /// Returns an empty list if the lease doesn't exist.
     pub fn get_lease_keys(&self, lease_id: u64) -> Vec<String> {
         match self {
             Self::InMemory(_) => vec![], // In-memory doesn't track leases
-            Self::Sqlite(sm) => sm.get_lease_keys(lease_id).unwrap_or_default(),
-            Self::Redb(_) => vec![], // TODO: Implement lease support for Redb
+            Self::Redb(sm) => sm.get_lease_keys(lease_id).unwrap_or_default(),
         }
     }
 
@@ -258,8 +238,7 @@ impl StateMachineVariant {
     pub fn list_leases(&self) -> Vec<(u64, u32, u32)> {
         match self {
             Self::InMemory(_) => vec![], // In-memory doesn't track leases
-            Self::Sqlite(sm) => sm.list_leases().unwrap_or_default(),
-            Self::Redb(_) => vec![], // TODO: Implement lease support for Redb
+            Self::Redb(sm) => sm.list_leases().unwrap_or_default(),
         }
     }
 }

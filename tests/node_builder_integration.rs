@@ -48,7 +48,7 @@ async fn test_custom_storage_backend() {
     let data_dir = temp_dir.path().join("node-2");
 
     let service = NodeBuilder::new(NodeId(2), &data_dir)
-        .with_storage(StorageBackend::Sqlite)
+        .with_storage(StorageBackend::Redb)
         .with_cookie(TEST_COOKIE)
         .start()
         .await

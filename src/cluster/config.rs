@@ -37,7 +37,7 @@
 //! node_id = 1
 //! data_dir = "./data/node-1"
 //! raft_addr = "127.0.0.1:5301"
-//! storage_backend = "Sqlite"
+//! storage_backend = "redb"
 //! control_backend = "Raft"
 //!
 //! [iroh]
@@ -73,7 +73,6 @@ use serde::Serialize;
 use snafu::ResultExt;
 use snafu::Snafu;
 
-use crate::raft::constants::DEFAULT_READ_POOL_SIZE;
 use crate::raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
@@ -95,33 +94,17 @@ pub struct NodeConfig {
     pub data_dir: Option<PathBuf>,
 
     /// Storage backend for Raft log and state machine.
-    /// - Sqlite: ACID-compliant SQLite storage (recommended for production)
+    /// - Redb: Single-fsync ACID-compliant redb storage (recommended for production)
     /// - InMemory: Fast, non-durable (data lost on restart), good for testing
-    /// - Redb: ACID-compliant redb storage (deprecated, use Sqlite)
     ///
-    /// Default: Sqlite
+    /// Default: Redb
     #[serde(default)]
     pub storage_backend: StorageBackend,
 
-    /// Path for redb-backed Raft log database.
+    /// Path for redb-backed shared database (log + state machine).
     /// Only used when storage_backend = Redb.
-    /// Defaults to "{data_dir}/raft-log.redb" if not specified.
-    pub redb_log_path: Option<PathBuf>,
-
-    /// Path for redb-backed state machine database.
-    /// Only used when storage_backend = Redb.
-    /// Defaults to "{data_dir}/state-machine.redb" if not specified.
-    pub redb_sm_path: Option<PathBuf>,
-
-    /// Path for sqlite-backed Raft log database.
-    /// Only used when storage_backend = Sqlite.
-    /// Defaults to "{data_dir}/raft-log.db" if not specified.
-    pub sqlite_log_path: Option<PathBuf>,
-
-    /// Path for sqlite-backed state machine database.
-    /// Only used when storage_backend = Sqlite.
-    /// Defaults to "{data_dir}/state-machine.db" if not specified.
-    pub sqlite_sm_path: Option<PathBuf>,
+    /// Defaults to "{data_dir}/node_{id}_shared.redb" if not specified.
+    pub redb_path: Option<PathBuf>,
 
     /// Hostname for informational purposes.
     #[serde(default = "default_host")]
@@ -176,16 +159,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub peers: Vec<String>,
 
-    /// SQLite read connection pool size.
-    ///
-    /// Controls the number of concurrent read connections to SQLite.
-    /// SQLite WAL mode handles many concurrent readers efficiently.
-    ///
-    /// Tiger Style: Bounded pool prevents unbounded connection creation.
-    /// Default is 50 (5% of MAX_CONCURRENT_OPS = 1000).
-    #[serde(default = "default_sqlite_read_pool_size")]
-    pub sqlite_read_pool_size: u32,
-
     /// Write batching configuration.
     ///
     /// When enabled, multiple write operations are batched together into
@@ -203,10 +176,7 @@ impl Default for NodeConfig {
             node_id: 0,
             data_dir: None,
             storage_backend: StorageBackend::default(),
-            redb_log_path: None,
-            redb_sm_path: None,
-            sqlite_log_path: None,
-            sqlite_sm_path: None,
+            redb_path: None,
             host: default_host(),
             cookie: default_cookie(),
             http_addr: default_http_addr(),
@@ -220,7 +190,6 @@ impl Default for NodeConfig {
             peer_sync: PeerSyncConfig::default(),
             sharding: ShardingConfig::default(),
             peers: vec![],
-            sqlite_read_pool_size: default_sqlite_read_pool_size(),
             batch_config: default_batch_config(),
         }
     }
@@ -799,10 +768,7 @@ impl NodeConfig {
             node_id: parse_env("ASPEN_NODE_ID").unwrap_or(0),
             data_dir: parse_env("ASPEN_DATA_DIR"),
             storage_backend: parse_env("ASPEN_STORAGE_BACKEND").unwrap_or_else(StorageBackend::default),
-            redb_log_path: parse_env("ASPEN_REDB_LOG_PATH"),
-            redb_sm_path: parse_env("ASPEN_REDB_SM_PATH"),
-            sqlite_log_path: parse_env("ASPEN_SQLITE_LOG_PATH"),
-            sqlite_sm_path: parse_env("ASPEN_SQLITE_SM_PATH"),
+            redb_path: parse_env("ASPEN_REDB_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
             http_addr: parse_env("ASPEN_HTTP_ADDR").unwrap_or_else(default_http_addr),
@@ -871,8 +837,6 @@ impl NodeConfig {
                     .collect(),
             },
             peers: parse_env_vec("ASPEN_PEERS"),
-            sqlite_read_pool_size: parse_env("ASPEN_SQLITE_READ_POOL_SIZE")
-                .unwrap_or_else(default_sqlite_read_pool_size),
             batch_config: default_batch_config(),
         }
     }
@@ -905,21 +869,12 @@ impl NodeConfig {
         // Tiger Style: Only merge storage_backend if explicitly set (non-default)
         // This preserves TOML settings when CLI args don't override them
         // Example: TOML sets `storage_backend = "inmemory"`, CLI doesn't override,
-        // so InMemory is preserved instead of being overwritten by default Sqlite
+        // so InMemory is preserved instead of being overwritten by default Redb
         if other.storage_backend != StorageBackend::default() {
             self.storage_backend = other.storage_backend;
         }
-        if other.redb_log_path.is_some() {
-            self.redb_log_path = other.redb_log_path;
-        }
-        if other.redb_sm_path.is_some() {
-            self.redb_sm_path = other.redb_sm_path;
-        }
-        if other.sqlite_log_path.is_some() {
-            self.sqlite_log_path = other.sqlite_log_path;
-        }
-        if other.sqlite_sm_path.is_some() {
-            self.sqlite_sm_path = other.sqlite_sm_path;
+        if other.redb_path.is_some() {
+            self.redb_path = other.redb_path;
         }
         if other.heartbeat_interval_ms != default_heartbeat_interval_ms() {
             self.heartbeat_interval_ms = other.heartbeat_interval_ms;
@@ -1039,10 +994,6 @@ impl NodeConfig {
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
-        // SQLite pool size: override if non-default
-        if other.sqlite_read_pool_size != default_sqlite_read_pool_size() {
-            self.sqlite_read_pool_size = other.sqlite_read_pool_size;
-        }
     }
 
     /// Apply security defaults based on configuration.
@@ -1144,12 +1095,7 @@ impl NodeConfig {
 
         // Validate explicit storage paths if provided
         // Tiger Style: Fail fast on invalid paths before node startup
-        for (name, path) in [
-            ("redb_log_path", &self.redb_log_path),
-            ("redb_sm_path", &self.redb_sm_path),
-            ("sqlite_log_path", &self.sqlite_log_path),
-            ("sqlite_sm_path", &self.sqlite_sm_path),
-        ] {
+        for (name, path) in [("redb_path", &self.redb_path)] {
             if let Some(path) = path {
                 // Validate parent directory exists or can be created
                 if let Some(parent) = path.parent()
@@ -1275,10 +1221,6 @@ fn default_pkarr_republish_delay_secs() -> u64 {
     600 // 10 minutes default republish
 }
 
-fn default_sqlite_read_pool_size() -> u32 {
-    DEFAULT_READ_POOL_SIZE
-}
-
 fn default_batch_config() -> Option<crate::raft::BatchConfig> {
     Some(crate::raft::BatchConfig::default())
 }
@@ -1372,7 +1314,7 @@ mod tests {
         let mut base = NodeConfig {
             node_id: 1,
             control_backend: ControlBackend::RaftActor, // Default value
-            storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default value
+            storage_backend: crate::raft::storage::StorageBackend::Redb, // Default value
             ..Default::default()
         };
 
@@ -1407,8 +1349,7 @@ mod tests {
             },
             peers: vec!["peer1".into()],
             storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override
-            redb_log_path: Some(PathBuf::from("/custom/raft-log.redb")),
-            redb_sm_path: Some(PathBuf::from("/custom/state-machine.redb")),
+            redb_path: Some(PathBuf::from("/custom/node_shared.redb")),
             ..Default::default()
         };
 
@@ -1428,7 +1369,7 @@ mod tests {
         assert!(!base.iroh.enable_gossip);
         assert_eq!(base.iroh.gossip_ticket, Some("test-ticket".into()));
         assert_eq!(base.peers, vec!["peer1"]);
-        // InMemory (non-default) should override Sqlite (default)
+        // InMemory (non-default) should override Redb (default)
         assert_eq!(base.storage_backend, crate::raft::storage::StorageBackend::InMemory);
     }
 
@@ -1445,9 +1386,9 @@ mod tests {
 
         // Override config uses DEFAULT values - should NOT override base
         let override_config = NodeConfig {
-            node_id: 0,                                                    // Default: 0 doesn't override
-            control_backend: ControlBackend::RaftActor,                    // Default: should NOT override
-            storage_backend: crate::raft::storage::StorageBackend::Sqlite, // Default: should NOT override
+            node_id: 0,                                                  // Default: 0 doesn't override
+            control_backend: ControlBackend::RaftActor,                  // Default: should NOT override
+            storage_backend: crate::raft::storage::StorageBackend::Redb, // Default: should NOT override
             ..Default::default()
         };
 

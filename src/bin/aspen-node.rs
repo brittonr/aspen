@@ -266,10 +266,8 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     config.node_id = args.node_id.unwrap_or(0);
     config.data_dir = args.data_dir.clone();
     config.storage_backend = args.storage_backend.as_deref().and_then(|s| s.parse().ok()).unwrap_or_default();
-    config.redb_log_path = args.redb_log_path.clone();
-    config.redb_sm_path = args.redb_sm_path.clone();
-    config.sqlite_log_path = None;
-    config.sqlite_sm_path = None;
+    // Prefer redb_log_path if provided, fall back to redb_sm_path for backwards compat
+    config.redb_path = args.redb_log_path.clone().or_else(|| args.redb_sm_path.clone());
     config.host = args.host.clone().unwrap_or_else(|| "127.0.0.1".into());
     config.cookie = args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into());
     // HTTP API removed - set to localhost:0 (unused)

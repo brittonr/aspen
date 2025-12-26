@@ -68,10 +68,8 @@ use crate::raft::madsim_network::MadsimRaftRouter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::InMemoryLogStore;
 use crate::raft::storage::InMemoryStateMachine;
-use crate::raft::storage::RedbLogStore;
 use crate::raft::storage::StorageBackend;
 use crate::raft::storage_shared::SharedRedbStorage;
-use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::types::AppRequest;
 use crate::raft::types::AppTypeConfig;
 use crate::raft::types::NodeId;
@@ -111,9 +109,9 @@ pub struct TesterConfig {
     pub election_timeout_min_ms: u64,
     /// Maximum election timeout in milliseconds.
     pub election_timeout_max_ms: u64,
-    /// Storage backend to use (InMemory or Sqlite for persistence).
+    /// Storage backend to use (InMemory or Redb for persistence).
     pub storage_backend: StorageBackend,
-    /// Base directory for persistent storage (only used with Sqlite backend).
+    /// Base directory for persistent storage (only used with Redb backend).
     pub storage_dir: Option<std::path::PathBuf>,
     /// Liveness testing configuration (TigerBeetle-style two-phase testing).
     pub liveness: LivenessConfig,
@@ -149,7 +147,7 @@ impl TesterConfig {
         self
     }
 
-    /// Use persistent storage (Sqlite backend) for testing crash recovery.
+    /// Use persistent storage (Redb backend) for testing crash recovery.
     ///
     /// # Example
     ///
@@ -158,7 +156,7 @@ impl TesterConfig {
     ///     .with_persistent_storage("/tmp/aspen-test");
     /// ```
     pub fn with_persistent_storage(mut self, storage_dir: impl Into<std::path::PathBuf>) -> Self {
-        self.storage_backend = StorageBackend::Sqlite;
+        self.storage_backend = StorageBackend::Redb;
         self.storage_dir = Some(storage_dir.into());
         self
     }
@@ -491,17 +489,7 @@ impl BuggifyConfig {
     }
 }
 
-/// Storage paths for a persistent node.
-#[derive(Clone, Debug)]
-struct NodeStoragePaths {
-    /// Path to the Redb log store file.
-    log_path: std::path::PathBuf,
-    /// Path to the SQLite state machine database.
-    state_path: std::path::PathBuf,
-}
-
-/// Storage paths for a Redb node (for future crash recovery testing).
-#[allow(dead_code)]
+/// Storage paths for a Redb node (for crash recovery testing).
 #[derive(Clone, Debug)]
 struct RedbStoragePath {
     /// Path to the shared Redb database file.
@@ -516,15 +504,7 @@ enum TestNode {
         state_machine: Arc<InMemoryStateMachine>,
         connected: AtomicBool,
     },
-    /// Persistent node (for crash recovery testing).
-    Persistent {
-        raft: Raft<AppTypeConfig>,
-        #[allow(dead_code)]
-        state_machine: Arc<SqliteStateMachine>,
-        connected: AtomicBool,
-        storage_paths: NodeStoragePaths,
-    },
-    /// Redb node (for SQL testing with single-fsync storage).
+    /// Redb node (for SQL testing and crash recovery with single-fsync storage).
     Redb {
         raft: Raft<AppTypeConfig>,
         /// RaftNode wrapper for SqlQueryExecutor access.
@@ -532,8 +512,7 @@ enum TestNode {
         /// Shared Redb storage (implements both log and state machine).
         storage: Arc<SharedRedbStorage>,
         connected: AtomicBool,
-        /// Storage path (for future crash recovery testing).
-        #[allow(dead_code)]
+        /// Storage path (for crash recovery testing).
         storage_path: RedbStoragePath,
     },
 }
@@ -542,7 +521,6 @@ impl TestNode {
     fn raft(&self) -> &Raft<AppTypeConfig> {
         match self {
             TestNode::InMemory { raft, .. } => raft,
-            TestNode::Persistent { raft, .. } => raft,
             TestNode::Redb { raft, .. } => raft,
         }
     }
@@ -550,25 +528,14 @@ impl TestNode {
     fn connected(&self) -> &AtomicBool {
         match self {
             TestNode::InMemory { connected, .. } => connected,
-            TestNode::Persistent { connected, .. } => connected,
             TestNode::Redb { connected, .. } => connected,
         }
     }
 
-    fn storage_paths(&self) -> Option<&NodeStoragePaths> {
-        match self {
-            TestNode::InMemory { .. } => None,
-            TestNode::Persistent { storage_paths, .. } => Some(storage_paths),
-            TestNode::Redb { .. } => None,
-        }
-    }
-
-    /// Get Redb storage path (for future crash recovery testing).
-    #[allow(dead_code)]
+    /// Get Redb storage path (for crash recovery testing).
     fn redb_storage_path(&self) -> Option<&RedbStoragePath> {
         match self {
             TestNode::InMemory { .. } => None,
-            TestNode::Persistent { .. } => None,
             TestNode::Redb { storage_path, .. } => Some(storage_path),
         }
     }
@@ -577,7 +544,6 @@ impl TestNode {
     fn raft_node(&self) -> Option<&Arc<RaftNode>> {
         match self {
             TestNode::InMemory { .. } => None,
-            TestNode::Persistent { .. } => None,
             TestNode::Redb { raft_node, .. } => Some(raft_node),
         }
     }
@@ -715,34 +681,6 @@ impl AspenRaftTester {
                         raft,
                         state_machine,
                         connected: AtomicBool::new(true),
-                    }
-                }
-                StorageBackend::Sqlite => {
-                    let storage_dir = config.storage_dir.as_ref().expect("storage_dir must be set for Sqlite backend");
-
-                    // Create unique paths for this node
-                    let node_dir = storage_dir.join(format!("node-{}", i));
-                    std::fs::create_dir_all(&node_dir).expect("failed to create node storage directory");
-
-                    let log_path = node_dir.join("raft-log.redb");
-                    let state_path = node_dir.join("state-machine.db");
-
-                    let log_store = RedbLogStore::new(&log_path).expect("failed to create persistent log store");
-                    let state_machine =
-                        SqliteStateMachine::new(&state_path).expect("failed to create persistent state machine");
-
-                    let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
-
-                    let raft =
-                        Raft::new(node_id, raft_config.clone(), network_factory, log_store, state_machine.clone())
-                            .await
-                            .expect("failed to create raft instance");
-
-                    TestNode::Persistent {
-                        raft,
-                        state_machine,
-                        connected: AtomicBool::new(true),
-                        storage_paths: NodeStoragePaths { log_path, state_path },
                     }
                 }
                 StorageBackend::Redb => {
@@ -1124,8 +1062,8 @@ impl AspenRaftTester {
         self.router.mark_node_failed(node_id, true);
         self.nodes[i].connected().store(false, Ordering::SeqCst);
 
-        // For persistent nodes, shutdown Raft to release database locks
-        if self.nodes[i].storage_paths().is_some() {
+        // For Redb nodes, shutdown Raft to release database locks
+        if self.nodes[i].redb_storage_path().is_some() {
             // Shutdown the Raft instance to release resources
             let _ = self.nodes[i].raft().shutdown().await;
         }
@@ -1138,17 +1076,17 @@ impl AspenRaftTester {
     /// Restart a crashed node.
     ///
     /// For in-memory nodes, this only clears the failed status.
-    /// For persistent nodes, this recreates the node with the same storage,
+    /// For Redb nodes, this recreates the node with the same storage,
     /// simulating a full crash recovery.
     pub async fn restart_node(&mut self, i: usize) {
         assert!(i < self.nodes.len(), "Invalid node index");
         let node_id = NodeId::from(i as u64 + 1);
 
-        // For persistent nodes, actually recreate the node to simulate full restart
-        if let Some(storage_paths) = self.nodes[i].storage_paths() {
-            let storage_paths = storage_paths.clone();
+        // For Redb nodes, actually recreate the node to simulate full restart
+        if let Some(storage_path) = self.nodes[i].redb_storage_path() {
+            let storage_path = storage_path.clone();
 
-            // Recreate the node with the same persistent storage
+            // Recreate the node with the same Redb storage
             let raft_config = Config {
                 heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_MS,
                 election_timeout_min: DEFAULT_ELECTION_TIMEOUT_MIN_MS,
@@ -1157,13 +1095,12 @@ impl AspenRaftTester {
             };
             let raft_config = Arc::new(raft_config.validate().expect("invalid raft config"));
 
-            let log_store = RedbLogStore::new(&storage_paths.log_path).expect("failed to reopen persistent log store");
-            let state_machine =
-                SqliteStateMachine::new(&storage_paths.state_path).expect("failed to reopen persistent state machine");
+            // Reopen SharedRedbStorage (implements both log and state machine)
+            let storage = SharedRedbStorage::new(&storage_path.db_path).expect("failed to reopen Redb storage");
 
             let network_factory = MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
 
-            let raft = Raft::new(node_id, raft_config, network_factory, log_store, state_machine.clone())
+            let raft = Raft::new(node_id, raft_config, network_factory, storage.clone(), storage.clone())
                 .await
                 .expect("failed to recreate raft instance");
 
@@ -1172,16 +1109,22 @@ impl AspenRaftTester {
                 .register_node(node_id, format!("127.0.0.1:{}", 26000 + i), raft.clone())
                 .expect("failed to re-register node");
 
+            // Wrap storage in Arc and create RaftNode wrapper
+            let storage = Arc::new(storage);
+            let raft_node =
+                Arc::new(RaftNode::new(node_id, Arc::new(raft.clone()), StateMachineVariant::Redb(storage.clone())));
+
             // Replace the node in our list
-            self.nodes[i] = TestNode::Persistent {
+            self.nodes[i] = TestNode::Redb {
                 raft,
-                state_machine,
+                raft_node,
+                storage,
                 connected: AtomicBool::new(true),
-                storage_paths,
+                storage_path,
             };
 
             self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-                .add_event(format!("restart: node {} with persistent storage", i));
+                .add_event(format!("restart: node {} with Redb storage", i));
         } else {
             // For in-memory nodes, just clear the failed status
             self.nodes[i].connected().store(true, Ordering::SeqCst);
@@ -1306,7 +1249,7 @@ impl AspenRaftTester {
     /// Read a value from the leader's state machine.
     ///
     /// Reads directly from the state machine (bypassing Raft read API).
-    /// Works for in-memory, persistent (SQLite), and Redb nodes.
+    /// Works for in-memory and Redb nodes.
     pub async fn read(&mut self, key: &str) -> Result<Option<String>> {
         let leader_idx =
             self.check_one_leader().await.ok_or_else(|| anyhow::anyhow!("No leader available for read"))?;
@@ -1314,10 +1257,6 @@ impl AspenRaftTester {
         // Read depends on the node type
         let value = match &self.nodes[leader_idx] {
             TestNode::InMemory { state_machine, .. } => state_machine.get(key).await,
-            TestNode::Persistent { state_machine, .. } => {
-                // SqliteStateMachine.get returns Result<Option<String>, SqliteStorageError>
-                state_machine.get(key).await.unwrap_or(None)
-            }
             TestNode::Redb { storage, .. } => {
                 // SharedRedbStorage.get returns Result<Option<KvEntry>, SharedStorageError>
                 storage.get(key).map(|opt| opt.map(|e| e.value)).unwrap_or(None)

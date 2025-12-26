@@ -54,8 +54,6 @@ use crate::cluster::metadata::NodeStatus;
 use crate::cluster::ticket::AspenClusterTicket;
 use crate::protocol_handlers::ShardedRaftProtocolHandler;
 use crate::raft::StateMachineVariant;
-use crate::raft::lease_cleanup::LeaseCleanupConfig;
-use crate::raft::lease_cleanup::spawn_lease_cleanup_task;
 use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use crate::raft::log_subscriber::LogEntryPayload;
 use crate::raft::network::IrpcRaftNetworkFactory;
@@ -64,14 +62,11 @@ use crate::raft::node::RaftNodeHealth;
 use crate::raft::server::RaftRpcServer;
 use crate::raft::storage::InMemoryLogStore;
 use crate::raft::storage::InMemoryStateMachine;
-use crate::raft::storage::RedbLogStore;
 use crate::raft::storage::StorageBackend;
 use crate::raft::storage_shared::SharedRedbStorage;
-use crate::raft::storage_sqlite::SqliteStateMachine;
 use crate::raft::supervisor::Supervisor;
 use crate::raft::ttl_cleanup::TtlCleanupConfig;
 use crate::raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
-use crate::raft::ttl_cleanup::spawn_ttl_cleanup_task;
 use crate::raft::types::NodeId;
 use crate::sharding::ShardConfig;
 use crate::sharding::ShardId;
@@ -705,33 +700,6 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
                 );
                 (raft, StateMachineVariant::InMemory(state_machine), None)
             }
-            StorageBackend::Sqlite => {
-                let log_store = Arc::new(RedbLogStore::new(&paths.log_path)?);
-                let sqlite_state_machine =
-                    SqliteStateMachine::with_pool_size(&paths.state_machine_path, config.sqlite_read_pool_size)?;
-
-                // Spawn TTL cleanup background task
-                let ttl_cancel = spawn_ttl_cleanup_task(sqlite_state_machine.clone(), TtlCleanupConfig::default());
-                info!(node_id = config.node_id, shard_id, "TTL cleanup task started for shard");
-
-                // Spawn lease cleanup background task
-                let _lease_cancel =
-                    spawn_lease_cleanup_task(sqlite_state_machine.clone(), LeaseCleanupConfig::default());
-                info!(node_id = config.node_id, shard_id, "Lease cleanup task started for shard");
-
-                let raft = Arc::new(
-                    Raft::new(
-                        shard_node_id.into(),
-                        raft_config.clone(),
-                        base.network_factory.as_ref().clone(),
-                        log_store.as_ref().clone(),
-                        sqlite_state_machine.clone(),
-                    )
-                    .await?,
-                );
-
-                (raft, StateMachineVariant::Sqlite(sqlite_state_machine), Some(ttl_cancel))
-            }
             StorageBackend::Redb => {
                 // Single-fsync storage: shared redb for both log and state machine
                 let db_path = paths.log_path.with_extension("shared.redb");
@@ -1062,39 +1030,6 @@ async fn create_raft_instance(
                 .await?,
             );
             Ok((raft, StateMachineVariant::InMemory(state_machine), None))
-        }
-        StorageBackend::Sqlite => {
-            let log_path = data_dir.join(format!("node_{}.db", config.node_id));
-            let log_store = Arc::new(RedbLogStore::new(&log_path)?);
-
-            let state_machine_path = data_dir.join(format!("node_{}_state.db", config.node_id));
-            let sqlite_state_machine =
-                SqliteStateMachine::with_pool_size(&state_machine_path, config.sqlite_read_pool_size)?;
-
-            let sqlite_state_machine = if let Some(ref sender) = log_broadcast {
-                sqlite_state_machine.with_log_broadcast(sender.clone())
-            } else {
-                sqlite_state_machine
-            };
-
-            let ttl_cancel = spawn_ttl_cleanup_task(sqlite_state_machine.clone(), TtlCleanupConfig::default());
-            info!(node_id = config.node_id, cleanup_interval_secs = 60, batch_size = 1000, "TTL cleanup task started");
-
-            let _lease_cancel = spawn_lease_cleanup_task(sqlite_state_machine.clone(), LeaseCleanupConfig::default());
-            info!(node_id = config.node_id, cleanup_interval_secs = 10, batch_size = 100, "Lease cleanup task started");
-
-            let raft = Arc::new(
-                Raft::new(
-                    config.node_id.into(),
-                    raft_config,
-                    network_factory.as_ref().clone(),
-                    log_store.as_ref().clone(),
-                    sqlite_state_machine.clone(),
-                )
-                .await?,
-            );
-
-            Ok((raft, StateMachineVariant::Sqlite(sqlite_state_machine), Some(ttl_cancel)))
         }
         StorageBackend::Redb => {
             let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));

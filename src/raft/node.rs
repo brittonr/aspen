@@ -783,13 +783,6 @@ impl KeyValueStore for RaftNode {
                 }),
                 None => Err(KeyValueStoreError::NotFound { key: request.key }),
             },
-            StateMachineVariant::Sqlite(sm) => match sm.get_with_revision(&request.key).await {
-                Ok(Some(kv)) => Ok(ReadResult { kv: Some(kv) }),
-                Ok(None) => Err(KeyValueStoreError::NotFound { key: request.key }),
-                Err(err) => Err(KeyValueStoreError::Failed {
-                    reason: err.to_string(),
-                }),
-            },
             StateMachineVariant::Redb(sm) => match sm.get(&request.key) {
                 Ok(Some(entry)) => Ok(ReadResult {
                     kv: Some(KeyValueWithRevision {
@@ -920,34 +913,6 @@ impl KeyValueStore for RaftNode {
                     continuation_token,
                 })
             }
-            StateMachineVariant::Sqlite(sm) => {
-                // SQLite scan with pagination - returns KeyValueWithRevision directly
-                let start_key = _request.continuation_token.as_deref();
-                let all_entries = sm.scan_with_revision(&_request.prefix, start_key, Some(limit + 1)).await;
-
-                match all_entries {
-                    Ok(entries_full) => {
-                        let is_truncated = entries_full.len() > limit;
-                        let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
-
-                        let continuation_token = if is_truncated {
-                            entries.last().map(|e| e.key.clone())
-                        } else {
-                            None
-                        };
-
-                        Ok(ScanResult {
-                            count: entries.len() as u32,
-                            entries,
-                            is_truncated,
-                            continuation_token,
-                        })
-                    }
-                    Err(err) => Err(KeyValueStoreError::Failed {
-                        reason: err.to_string(),
-                    }),
-                }
-            }
             StateMachineVariant::Redb(sm) => {
                 // Redb scan with pagination
                 let start_key = _request.continuation_token.as_deref();
@@ -1018,10 +983,6 @@ impl SqlQueryExecutor for RaftNode {
                 Err(SqlQueryError::NotSupported {
                     backend: "in-memory".into(),
                 })
-            }
-            StateMachineVariant::Sqlite(sm) => {
-                // Execute SQL on SQLite state machine
-                sm.execute_sql(&request.query, &request.params, request.limit, request.timeout_ms)
             }
             StateMachineVariant::Redb(sm) => {
                 // Execute SQL on Redb state machine via DataFusion

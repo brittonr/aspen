@@ -1,16 +1,16 @@
 //! Raft log and state machine storage backends.
 //!
 //! Provides pluggable storage implementations for openraft's log and state machine,
-//! supporting both in-memory (for testing) and persistent (redb + SQLite) backends.
-//! The log storage uses redb for fast sequential append operations, while the state
-//! machine uses SQLite for ACID transactions and queryable snapshots.
+//! supporting both in-memory (for testing) and persistent (redb) backends.
+//! The unified Redb backend implements both log storage and state machine in a single
+//! database file, enabling single-fsync writes for optimal performance (~2-3ms latency).
 //!
 //! # Key Components
 //!
-//! - `StorageBackend`: Enum selecting log/state machine backend (InMemory, Sqlite, Redb)
-//! - `RedbLogStore`: Persistent append-only log backed by redb (default production)
+//! - `StorageBackend`: Enum selecting backend (InMemory or Redb)
+//! - `SharedRedbStorage`: Unified log+state machine with single-fsync writes (default production)
+//! - `RedbLogStore`: Standalone log store (for legacy/testing)
 //! - `InMemoryLogStore`: Non-durable log for testing and development
-//! - `SqliteStateMachine`: ACID-compliant state machine with connection pooling
 //! - `InMemoryStateMachine`: In-memory state machine implementation
 //! - Snapshot management with bounded in-memory snapshots
 //!
@@ -21,7 +21,6 @@
 //! - Resource bounds: Snapshot data capped to prevent unbounded memory growth
 //! - Disk space checks: Pre-flight validation before writing snapshots
 //! - Error handling: Explicit SNAFU errors for each failure mode
-//! - Connection pooling: Bounded read pool (DEFAULT_READ_POOL_SIZE = 8)
 //!
 //! # Test Coverage
 //!
@@ -41,15 +40,14 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen::raft::storage::{RedbLogStore, SqliteStateMachine, StorageBackend};
+//! use aspen::raft::storage::{RedbLogStore, StorageBackend};
+//! use aspen::raft::storage_shared::SharedRedbStorage;
 //!
-//! // Create persistent storage
-//! let log_store = RedbLogStore::new("./data/raft-log.redb").await?;
-//! let state_machine = SqliteStateMachine::new("./data/state-machine.db").await?;
+//! // Create unified Redb storage (single-fsync, production default)
+//! let storage = SharedRedbStorage::new("./data/shared.redb")?;
 //!
-//! // Or use builder with backend selection
-//! let backend = StorageBackend::Sqlite;
-//! let (log, sm) = create_storage(backend, "./data").await?;
+//! // Or use backend selection
+//! let backend = StorageBackend::Redb;
 //! ```
 
 use std::collections::BTreeMap;
@@ -109,10 +107,8 @@ use crate::utils::ensure_disk_space_available;
 
 /// Storage backend selection for Raft log and state machine.
 ///
-/// Aspen supports three storage backends:
-/// - **Sqlite**: Persistent storage using redb for logs and SQLite for state machine (default,
-///   production)
-/// - **Redb**: Single-fsync storage using shared redb for both log and state machine (optimized)
+/// Aspen supports two storage backends:
+/// - **Redb**: Single-fsync storage using shared redb for both log and state machine (default)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -121,16 +117,11 @@ pub enum StorageBackend {
     /// In-memory storage using BTreeMap. Data is lost on restart.
     /// Use for: unit tests, madsim simulations, development.
     InMemory,
-    /// Persistent storage using SQLite for state machine and redb for logs.
-    /// Default storage backend for production deployments and integration tests.
-    /// Uses redb for the append-only Raft log and SQLite for the state machine.
-    /// Write latency: ~9ms (two fsyncs: log + state machine)
-    #[default]
-    Sqlite,
     /// Single-fsync storage using shared redb for both log and state machine.
+    /// Default storage backend for production deployments.
     /// Bundles state mutations into log appends for single-fsync durability.
     /// Write latency: ~2-3ms (single fsync)
-    /// Use for: latency-sensitive production deployments.
+    #[default]
     Redb,
 }
 
@@ -140,9 +131,8 @@ impl std::str::FromStr for StorageBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "inmemory" | "in-memory" | "memory" => Ok(StorageBackend::InMemory),
-            "sqlite" | "sql" | "persistent" | "disk" => Ok(StorageBackend::Sqlite),
-            "redb" | "single-fsync" | "fast" => Ok(StorageBackend::Redb),
-            _ => Err(format!("Invalid storage backend '{}'. Valid options: inmemory, sqlite, redb", s)),
+            "redb" | "single-fsync" | "fast" | "persistent" | "disk" => Ok(StorageBackend::Redb),
+            _ => Err(format!("Invalid storage backend '{}'. Valid options: inmemory, redb", s)),
         }
     }
 }
@@ -151,7 +141,6 @@ impl std::fmt::Display for StorageBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StorageBackend::InMemory => write!(f, "inmemory"),
-            StorageBackend::Sqlite => write!(f, "sqlite"),
             StorageBackend::Redb => write!(f, "redb"),
         }
     }
@@ -1737,7 +1726,7 @@ mod tests {
     #[test]
     fn test_storage_backend_default() {
         let backend = StorageBackend::default();
-        assert_eq!(backend, StorageBackend::Sqlite);
+        assert_eq!(backend, StorageBackend::Redb);
     }
 
     #[test]
@@ -1748,25 +1737,18 @@ mod tests {
     }
 
     #[test]
-    fn test_storage_backend_from_str_sqlite() {
-        assert_eq!("sqlite".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
-        assert_eq!("sql".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
-        assert_eq!("persistent".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
-        assert_eq!("disk".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
-        assert_eq!("redb".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
-    }
-
-    #[test]
     fn test_storage_backend_from_str_redb() {
         assert_eq!("redb".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
         assert_eq!("single-fsync".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
         assert_eq!("fast".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
+        assert_eq!("persistent".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
+        assert_eq!("disk".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
     }
 
     #[test]
     fn test_storage_backend_from_str_case_insensitive() {
         assert_eq!("INMEMORY".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
-        assert_eq!("SQLite".parse::<StorageBackend>().unwrap(), StorageBackend::Sqlite);
+        assert_eq!("REDB".parse::<StorageBackend>().unwrap(), StorageBackend::Redb);
         assert_eq!("InMemory".parse::<StorageBackend>().unwrap(), StorageBackend::InMemory);
     }
 
@@ -1784,8 +1766,8 @@ mod tests {
     }
 
     #[test]
-    fn test_storage_backend_display_sqlite() {
-        assert_eq!(format!("{}", StorageBackend::Sqlite), "sqlite");
+    fn test_storage_backend_display_redb() {
+        assert_eq!(format!("{}", StorageBackend::Redb), "redb");
     }
 
     #[test]
@@ -1795,7 +1777,7 @@ mod tests {
         let parsed: StorageBackend = display.parse().unwrap();
         assert_eq!(original, parsed);
 
-        let original = StorageBackend::Sqlite;
+        let original = StorageBackend::Redb;
         let display = format!("{}", original);
         let parsed: StorageBackend = display.parse().unwrap();
         assert_eq!(original, parsed);
@@ -1803,7 +1785,7 @@ mod tests {
 
     #[test]
     fn test_storage_backend_clone() {
-        let backend = StorageBackend::Sqlite;
+        let backend = StorageBackend::Redb;
         let cloned = backend;
         assert_eq!(backend, cloned);
     }
@@ -1816,7 +1798,7 @@ mod tests {
 
     #[test]
     fn test_storage_backend_serde_roundtrip() {
-        let original = StorageBackend::Sqlite;
+        let original = StorageBackend::Redb;
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: StorageBackend = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, deserialized);

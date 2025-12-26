@@ -11,8 +11,8 @@ The codebase recently underwent a major refactoring (completed Dec 13, 2025) to 
 ## Core Technologies
 
 - **openraft**: Raft consensus algorithm for cluster-wide linearizability and fault-tolerant replication (vendored)
-- **redb**: Embedded ACID storage engine for Raft log storage (append-only, fast sequential writes)
-- **rusqlite**: SQLite-based state machine storage (ACID transactions, queryable)
+- **redb**: Embedded ACID storage engine for unified Raft log + state machine storage (single-fsync writes, ~2-3ms latency)
+- **DataFusion**: Apache DataFusion SQL query engine over Redb KV data
 - **iroh**: Peer-to-peer networking and content-addressed communication (QUIC, NAT traversal, discovery)
 - **iroh-blobs**: Content-addressed blob storage for large values
 - **iroh-docs**: CRDT-based document synchronization for real-time KV replication
@@ -32,7 +32,7 @@ The codebase recently underwent a major refactoring (completed Dec 13, 2025) to 
 
 2. **API stability during development**: Aspen is in active development with frequent architectural changes. Vendoring prevents breaking changes from upstream openraft releases from disrupting iteration.
 
-3. **Custom optimizations**: Enables performance tuning specific to Aspen's workload patterns (e.g., append-optimized log storage with redb, SQLite state machine integration).
+3. **Custom optimizations**: Enables performance tuning specific to Aspen's workload patterns (e.g., single-fsync unified log+state machine with redb).
 
 4. **Dependency isolation**: Prevents supply chain issues from upstream dependency changes that might conflict with Aspen's other dependencies (madsim, ractor, iroh).
 
@@ -61,7 +61,7 @@ Aspen is a distributed cluster system built on direct async APIs with clean sepa
 
 1. **Raft (via openraft)**: Ensures cluster-wide consensus and linearizable operations
 2. **Iroh P2P**: Handles all inter-node networking, discovery, and NAT traversal
-3. **Storage (redb + SQLite)**: Persistent log and state machine storage
+3. **Storage (redb)**: Unified log + state machine storage with single-fsync writes
 
 These components work together through direct async interfaces without actor indirection.
 
@@ -75,8 +75,8 @@ ClusterController + KeyValueStore Traits
 RaftNode (Direct Async Implementation)
          ↓
 OpenRaft 0.10.0 (vendored)
-    ├── RedbLogStore (append-only log)
-    ├── SqliteStateMachine (ACID state machine)
+    ├── SharedRedbStorage (unified log + state machine, single-fsync)
+    ├── DataFusion SQL (SQL queries over Redb KV)
     └── IrpcRaftNetwork (IRPC over Iroh)
          ↓
 IrohEndpointManager (QUIC + NAT traversal)
@@ -115,9 +115,8 @@ Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP end
 
 **Storage patterns:**
 
-- Redb for append-only Raft log (optimized for sequential writes)
-- SQLite for state machine (queryable, ACID transactions)
-- Connection pooling (r2d2) for SQLite with pool size = 10
+- SharedRedbStorage for unified log + state machine (single-fsync, ~2-3ms latency)
+- DataFusion SQL for queryable access to KV data
 - Batch operations limited to prevent unbounded memory use
 
 **Never:**
@@ -133,7 +132,7 @@ Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP end
 See `docs/architecture/` for detailed architecture documents:
 
 - `layer-architecture.md` - Analysis of FoundationDB-style layer patterns (tuples, subspaces, indexes)
-- `migration.md` - **READ THIS**: Plan for SQL layer on Redb (single-fsync architecture, ~2-3ms writes vs current ~9ms)
+- `migration.md` - Migration plan history (SQLite removal complete as of Dec 26, 2025)
 
 The project is structured into focused modules with narrow APIs:
 
@@ -141,14 +140,18 @@ The project is structured into focused modules with narrow APIs:
   - `ClusterController`: Manages cluster membership (init, add learner, change membership, get metrics, trigger snapshot)
   - `KeyValueStore`: Handles distributed key-value operations (read, write, delete, scan with pagination)
   - Contains `DeterministicClusterController` and `DeterministicKeyValueStore` in-memory implementations for testing
-- **src/raft/** (7,520 lines): Raft-based consensus implementation
+- **src/raft/** (~6,500 lines): Raft-based consensus implementation
   - `node.rs`: RaftNode that implements both ClusterController and KeyValueStore traits
-  - `storage.rs`: Redb-based log storage (append-optimized, persistent)
-  - `storage_sqlite.rs`: SQLite state machine implementation (ACID, queryable, production-ready)
+  - `storage.rs`: In-memory and standalone Redb log storage (for testing)
+  - `storage_shared.rs`: SharedRedbStorage (unified log + state machine, single-fsync, production)
   - `network.rs`: IrpcRaftNetwork for Raft RPC over Iroh QUIC
   - `madsim_network.rs`: Deterministic simulation network for testing
   - `constants.rs`: Tiger Style resource limits and timeouts
   - `types.rs`: Type configurations for openraft
+- **src/sql/**: DataFusion SQL integration over Redb KV data
+  - `provider.rs`: RedbTableProvider implementing DataFusion TableProvider
+  - `executor.rs`: RedbSqlExecutor for query execution
+  - `schema.rs`: KV table schema definitions
 - **src/cluster/** (2,889 lines): Cluster coordination and transport
   - `IrohEndpointManager`: Manages Iroh P2P endpoint lifecycle and discovery services
   - `bootstrap_simple.rs`: Node bootstrap orchestration with direct async APIs
@@ -266,13 +269,13 @@ nix develop -c cargo bench -- "kv_write"
 **Current benchmark suites:**
 
 - `kv_operations`: Synthetic benchmarks with in-memory storage (for protocol testing)
-- `production`: Production-realistic benchmarks with SQLite + Iroh networking
+- `production`: Production-realistic benchmarks with Redb + Iroh networking
 
-**Baseline metrics (production storage, SQLite + Iroh):**
+**Baseline metrics (production storage, Redb single-fsync + Iroh):**
 
-- Single-node write: ~9 ms (110 ops/sec) - includes SQLite fsync
-- Single-node read: ~10 us (100K ops/sec) - SQLite pool + ReadIndex
-- 3-node write: ~17 ms (58 ops/sec) - fsync + Iroh QUIC quorum
+- Single-node write: ~2-3 ms (350+ ops/sec) - single-fsync Redb
+- Single-node read: ~10 us (100K ops/sec) - Redb + ReadIndex
+- 3-node write: ~8-10 ms (100+ ops/sec) - single-fsync + Iroh QUIC quorum
 - 3-node read: ~36 us (27K ops/sec) - ReadIndex over network
 
 **Synthetic benchmarks (in-memory, for protocol testing only):**

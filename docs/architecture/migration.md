@@ -7,7 +7,25 @@
 | Phase 1: Single-Fsync Redb | **COMPLETE** | 2025-12-23 |
 | Phase 2: Tuple Encoding | **COMPLETE** | 2025-12-23 |
 | Phase 3: DataFusion SQL | **COMPLETE** | 2025-12-23 |
-| Phase 4: Secondary Indexes | Not Started | - |
+| Phase 4: SQLite Removal | **COMPLETE** | 2025-12-26 |
+| Phase 5: Secondary Indexes | Not Started | - |
+
+### Phase 4 Summary: SQLite Removal
+
+**Completed 2025-12-26**: Full removal of SQLite storage backend, leaving Redb as the only persistent storage option.
+
+**Changes:**
+
+- Deleted `src/raft/storage_sqlite.rs` (~4,200 lines)
+- Deleted `src/bin/sqlite_crash_helper/` test binary
+- Removed `StorageBackend::Sqlite` variant (Redb is now default)
+- Removed `StateMachineVariant::Sqlite` variant
+- Updated `NodeConfig` to remove `sqlite_*` fields, consolidated to single `redb_path`
+- Removed cargo dependencies: `rusqlite`, `r2d2`, `r2d2_sqlite`
+- Deleted 11 SQLite-specific test files and 1 benchmark
+- Added lease cleanup methods to `SharedRedbStorage` (`delete_expired_leases`, `count_expired_leases`, `count_active_leases`)
+
+**Result:** ~4,400 lines removed, simpler codebase with single-fsync architecture as the only storage option.
 
 ### Phase 1 Results
 

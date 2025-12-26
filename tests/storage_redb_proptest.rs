@@ -51,16 +51,7 @@ fn make_entry(
 /// StorageBackend FromStr -> Display roundtrip.
 #[test]
 fn test_storage_backend_fromstr_display_roundtrip() {
-    let variants = [
-        "inmemory",
-        "in-memory",
-        "memory",
-        "sqlite",
-        "sql",
-        "persistent",
-        "disk",
-        "redb",
-    ];
+    let variants = ["inmemory", "in-memory", "memory", "persistent", "disk", "redb"];
     for variant in variants {
         let parsed: StorageBackend = variant.parse().expect("Should parse");
         let displayed = parsed.to_string();
@@ -83,16 +74,7 @@ fn test_storage_backend_rejects_invalid() {
             .collect();
 
         // Skip if it accidentally matches a valid backend
-        let valid_backends = [
-            "inmemory",
-            "in-memory",
-            "memory",
-            "sqlite",
-            "sql",
-            "persistent",
-            "disk",
-            "redb",
-        ];
+        let valid_backends = ["inmemory", "in-memory", "memory", "persistent", "disk", "redb"];
         if valid_backends.contains(&s.to_lowercase().as_str()) {
             return;
         }
@@ -573,14 +555,14 @@ mod unit_tests {
     use super::*;
 
     #[test]
-    fn test_storage_backend_default_is_sqlite() {
+    fn test_storage_backend_default_is_redb() {
         let default = StorageBackend::default();
-        assert_eq!(default, StorageBackend::Sqlite);
+        assert_eq!(default, StorageBackend::Redb);
     }
 
     #[test]
     fn test_storage_backend_case_insensitive() {
-        let variants = ["INMEMORY", "InMemory", "sqlite", "SQLITE", "Sqlite"];
+        let variants = ["INMEMORY", "InMemory", "redb", "REDB", "Redb"];
         for v in variants {
             let result: Result<StorageBackend, _> = v.parse();
             assert!(result.is_ok(), "Should parse case-insensitive: {}", v);
@@ -590,10 +572,10 @@ mod unit_tests {
     #[test]
     fn test_storage_backend_debug_format() {
         let inmem = StorageBackend::InMemory;
-        let sqlite = StorageBackend::Sqlite;
+        let redb = StorageBackend::Redb;
 
         assert!(format!("{:?}", inmem).contains("InMemory"));
-        assert!(format!("{:?}", sqlite).contains("Sqlite"));
+        assert!(format!("{:?}", redb).contains("Redb"));
     }
 
     #[tokio::test]

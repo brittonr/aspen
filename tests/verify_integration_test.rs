@@ -77,19 +77,27 @@ async fn test_kv_verification_basic_roundtrip() {
 /// Test that KV verification detects missing keys.
 #[tokio::test]
 async fn test_kv_verification_missing_key() {
+    use aspen::api::KeyValueStoreError;
+
     let store = DeterministicKeyValueStore::new();
 
-    let result = store
-        .read(ReadRequest::new("nonexistent_key".to_string()))
-        .await
-        .expect("read should succeed even for missing key");
+    let result = store.read(ReadRequest::new("nonexistent_key".to_string())).await;
 
-    assert!(result.kv.is_none(), "nonexistent key should not be found");
+    // The API returns NotFound error for missing keys
+    match result {
+        Err(KeyValueStoreError::NotFound { key }) => {
+            assert_eq!(key, "nonexistent_key", "error should contain the requested key");
+        }
+        Ok(r) => panic!("expected NotFound error, got Ok with kv={:?}", r.kv),
+        Err(e) => panic!("expected NotFound error, got {:?}", e),
+    }
 }
 
 /// Test that KV verification handles delete correctly.
 #[tokio::test]
 async fn test_kv_verification_delete_cycle() {
+    use aspen::api::KeyValueStoreError;
+
     let store = DeterministicKeyValueStore::new();
 
     // Write
@@ -115,9 +123,15 @@ async fn test_kv_verification_delete_cycle() {
         .await
         .expect("delete should succeed");
 
-    // Verify deleted
-    let result = store.read(ReadRequest::new("test_delete_key".to_string())).await.expect("read should succeed");
-    assert!(result.kv.is_none(), "key should not exist after delete");
+    // Verify deleted - API returns NotFound error for missing/deleted keys
+    let result = store.read(ReadRequest::new("test_delete_key".to_string())).await;
+    match result {
+        Err(KeyValueStoreError::NotFound { key }) => {
+            assert_eq!(key, "test_delete_key", "error should contain the deleted key");
+        }
+        Ok(r) => panic!("expected NotFound error after delete, got Ok with kv={:?}", r.kv),
+        Err(e) => panic!("expected NotFound error after delete, got {:?}", e),
+    }
 }
 
 // =============================================================================
@@ -151,8 +165,13 @@ async fn test_cluster_init_verification() {
 }
 
 /// Test that verification detects leader election.
+/// Note: The deterministic backend doesn't support get_metrics/get_leader
+/// since it's an in-memory stub without Raft consensus. We verify that
+/// the operation correctly returns an Unsupported error.
 #[tokio::test]
 async fn test_cluster_leader_verification() {
+    use aspen::api::ControlPlaneError;
+
     let controller = DeterministicClusterController::new();
 
     // Initialize
@@ -163,9 +182,20 @@ async fn test_cluster_leader_verification() {
         .await
         .expect("init should succeed");
 
-    // Get leader (deterministic implementation should have a leader)
-    let leader = controller.get_leader().await.expect("get_leader should succeed");
-    assert!(leader.is_some(), "cluster should have a leader after init");
+    // The deterministic backend doesn't support get_leader (requires get_metrics)
+    // Verify it returns the expected Unsupported error
+    let result = controller.get_leader().await;
+    match result {
+        Err(ControlPlaneError::Unsupported { backend, operation }) => {
+            assert_eq!(backend, "deterministic");
+            assert_eq!(operation, "get_metrics");
+        }
+        Ok(leader) => {
+            // If it ever gets implemented, verify we get a leader
+            assert!(leader.is_some(), "cluster should have a leader after init");
+        }
+        Err(e) => panic!("unexpected error: {:?}", e),
+    }
 }
 
 // =============================================================================

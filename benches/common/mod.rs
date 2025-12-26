@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::raft::storage::RedbLogStore;
-use aspen::raft::storage_sqlite::SqliteStateMachine;
 use aspen::raft::types::NodeId;
 use aspen::raft::types::RaftMemberInfo;
 use aspen::testing::AspenRouter;
@@ -207,29 +206,6 @@ pub fn setup_redb_log_store() -> Result<(RedbLogStore, TempDir)> {
     Ok((store, temp_dir))
 }
 
-/// Setup an isolated SqliteStateMachine for benchmarking.
-///
-/// Returns the state machine and temp directory (must keep TempDir alive for cleanup).
-/// Tiger Style: RAII cleanup via TempDir.
-#[allow(dead_code)]
-pub fn setup_sqlite_state_machine() -> Result<(Arc<SqliteStateMachine>, TempDir)> {
-    let temp_dir = TempDir::new()?;
-    let db_path = temp_dir.path().join("state-machine.db");
-    let sm = SqliteStateMachine::new(&db_path)?;
-    Ok((sm, temp_dir))
-}
-
-/// Setup an isolated SqliteStateMachine with custom pool size.
-///
-/// Tiger Style: Explicit pool size parameter.
-#[allow(dead_code)]
-pub fn setup_sqlite_state_machine_with_pool(pool_size: u32) -> Result<(Arc<SqliteStateMachine>, TempDir)> {
-    let temp_dir = TempDir::new()?;
-    let db_path = temp_dir.path().join("state-machine.db");
-    let sm = SqliteStateMachine::with_pool_size(&db_path, pool_size)?;
-    Ok((sm, temp_dir))
-}
-
 // ====================================================================================
 // Value Generation Helpers
 // ====================================================================================
@@ -273,62 +249,17 @@ use aspen::node::Node;
 use aspen::node::NodeBuilder;
 use aspen::raft::storage::StorageBackend;
 
-/// Setup a single production node with SQLite storage for realistic benchmarking.
+/// Setup a single production node with Redb storage for realistic benchmarking.
 ///
 /// Unlike setup_single_node_cluster() which uses in-memory storage, this creates
 /// a real node with:
-/// - SQLite state machine (with fsync)
-/// - Redb log store (persistent)
+/// - Redb single-fsync storage (log + state machine in one transaction)
 /// - Iroh P2P networking (even for single node)
 ///
 /// Returns the Node (caller must keep temp_dir alive for cleanup).
-/// Tiger Style: Real I/O, production-like latencies.
+/// Tiger Style: Real I/O, production-like latencies (~2-3ms per write).
 #[allow(dead_code)]
 pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
-    let data_dir = temp_dir.path().join("node-1");
-
-    let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
-        .with_storage(StorageBackend::Sqlite)
-        .with_cookie("bench-cluster")
-        .with_gossip(false) // Disable gossip to avoid hanging on subscription
-        .with_mdns(false) // Disable mDNS for faster startup
-        .with_heartbeat_interval_ms(100)
-        .with_election_timeout_ms(300, 600)
-        .start()
-        .await?;
-
-    node.spawn_router();
-
-    // Initialize single-node cluster
-    let raft_node = node.raft_node();
-    let endpoint_addr = node.endpoint_addr();
-    raft_node
-        .init(InitRequest {
-            initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
-        })
-        .await?;
-
-    // Wait for leader state using OpenRaft Wait API
-    raft_node
-        .raft()
-        .wait(Some(Duration::from_secs(5)))
-        .state(ServerState::Leader, "node becomes leader")
-        .await?;
-
-    Ok(node)
-}
-
-/// Setup a single production node with Redb single-fsync storage for benchmarking.
-///
-/// Unlike SQLite which requires two fsyncs (log + state machine), this uses
-/// SharedRedbStorage which bundles both into a single transaction:
-/// - Single fsync per write (log + state in one commit)
-/// - Expected latency: ~2-3ms vs ~9ms for SQLite
-///
-/// Returns the Node (caller must keep temp_dir alive for cleanup).
-/// Tiger Style: Real I/O, optimized single-fsync latencies.
-#[allow(dead_code)]
-pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Node> {
     let data_dir = temp_dir.path().join("node-1");
 
     let mut node = NodeBuilder::new(aspen::node::NodeId(1), &data_dir)
@@ -362,10 +293,16 @@ pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Nod
     Ok(node)
 }
 
+/// Alias for setup_production_single_node (for backwards compatibility).
+#[allow(dead_code)]
+pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Node> {
+    setup_production_single_node(temp_dir).await
+}
+
 /// Setup a 3-node production cluster with real Iroh networking.
 ///
 /// Creates a fully replicated cluster with:
-/// - 3 nodes each with SQLite state machine
+/// - 3 nodes each with Redb single-fsync storage
 /// - Real Iroh QUIC connections between nodes
 /// - Node 1 as initial leader, nodes 2 and 3 as voters
 ///
@@ -375,7 +312,7 @@ pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Nod
 pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>> {
     // Node 1 (will become leader)
     let mut node1 = NodeBuilder::new(aspen::node::NodeId(1), temp_dir.path().join("node-1"))
-        .with_storage(StorageBackend::Sqlite)
+        .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
         .with_gossip(false) // Disable gossip to avoid hanging on subscription
         .with_mdns(false) // Disable mDNS for faster startup
@@ -391,7 +328,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
 
     // Node 2
     let mut node2 = NodeBuilder::new(aspen::node::NodeId(2), temp_dir.path().join("node-2"))
-        .with_storage(StorageBackend::Sqlite)
+        .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
         .with_gossip(false)
         .with_mdns(false)
@@ -407,7 +344,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
 
     // Node 3
     let mut node3 = NodeBuilder::new(aspen::node::NodeId(3), temp_dir.path().join("node-3"))
-        .with_storage(StorageBackend::Sqlite)
+        .with_storage(StorageBackend::Redb)
         .with_cookie("bench-cluster")
         .with_gossip(false)
         .with_mdns(false)

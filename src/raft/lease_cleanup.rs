@@ -1,7 +1,7 @@
 //! Background lease cleanup task for expired lease garbage collection.
 //!
 //! This module provides a background task that periodically deletes expired leases
-//! and their attached keys from the SQLite state machine. Similar to etcd's lease
+//! and their attached keys from the Redb state machine. Similar to etcd's lease
 //! expiration, when a lease expires, all keys attached to it are automatically deleted.
 //!
 //! # Architecture
@@ -28,7 +28,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::raft::storage_sqlite::SqliteStateMachine;
+use crate::raft::storage_shared::SharedRedbStorage;
 
 /// Configuration for the lease cleanup task.
 #[derive(Debug, Clone)]
@@ -53,26 +53,23 @@ impl Default for LeaseCleanupConfig {
     }
 }
 
-/// Background lease cleanup task handle.
+/// Background lease cleanup task handle for Redb storage.
 ///
 /// Returns a CancellationToken that can be used to stop the task.
-pub fn spawn_lease_cleanup_task(
-    state_machine: Arc<SqliteStateMachine>,
-    config: LeaseCleanupConfig,
-) -> CancellationToken {
+pub fn spawn_redb_lease_cleanup_task(storage: Arc<SharedRedbStorage>, config: LeaseCleanupConfig) -> CancellationToken {
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
 
     tokio::spawn(async move {
-        run_lease_cleanup_loop(state_machine, config, cancel_clone).await;
+        run_redb_lease_cleanup_loop(storage, config, cancel_clone).await;
     });
 
     cancel
 }
 
-/// Main cleanup loop.
-async fn run_lease_cleanup_loop(
-    state_machine: Arc<SqliteStateMachine>,
+/// Main cleanup loop for Redb storage.
+async fn run_redb_lease_cleanup_loop(
+    storage: Arc<SharedRedbStorage>,
     config: LeaseCleanupConfig,
     cancel: CancellationToken,
 ) {
@@ -83,24 +80,24 @@ async fn run_lease_cleanup_loop(
         interval_secs = config.cleanup_interval.as_secs(),
         batch_size = config.batch_size,
         max_batches = config.max_batches_per_run,
-        "Lease cleanup task started"
+        "Redb lease cleanup task started"
     );
 
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
-                info!("Lease cleanup task shutting down");
+                info!("Redb lease cleanup task shutting down");
                 break;
             }
             _ = ticker.tick() => {
-                run_cleanup_iteration(&state_machine, &config).await;
+                run_redb_cleanup_iteration(&storage, &config).await;
             }
         }
     }
 }
 
-/// Run a single cleanup iteration.
-async fn run_cleanup_iteration(state_machine: &SqliteStateMachine, config: &LeaseCleanupConfig) {
+/// Run a single cleanup iteration for Redb storage.
+async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseCleanupConfig) {
     let mut total_deleted: u64 = 0;
     let mut batches_run: u32 = 0;
 
@@ -111,12 +108,12 @@ async fn run_cleanup_iteration(state_machine: &SqliteStateMachine, config: &Leas
                 total_deleted,
                 batches_run,
                 max_batches = config.max_batches_per_run,
-                "Lease cleanup reached max batches limit"
+                "Redb lease cleanup reached max batches limit"
             );
             break;
         }
 
-        match state_machine.delete_expired_leases(config.batch_size) {
+        match storage.delete_expired_leases(config.batch_size) {
             Ok(deleted) => {
                 total_deleted += deleted as u64;
                 batches_run += 1;
@@ -132,7 +129,7 @@ async fn run_cleanup_iteration(state_machine: &SqliteStateMachine, config: &Leas
                 }
             }
             Err(e) => {
-                warn!(error = %e, "Lease cleanup batch failed");
+                warn!(error = %e, "Redb lease cleanup batch failed");
                 break;
             }
         }
@@ -140,18 +137,18 @@ async fn run_cleanup_iteration(state_machine: &SqliteStateMachine, config: &Leas
 
     if total_deleted > 0 {
         // Log metrics for monitoring
-        let remaining = state_machine.count_expired_leases().unwrap_or(0);
-        let active = state_machine.count_active_leases().unwrap_or(0);
+        let remaining = storage.count_expired_leases().unwrap_or(0);
+        let active = storage.count_active_leases().unwrap_or(0);
 
         info!(
             total_deleted,
             batches_run,
             remaining_expired = remaining,
             active_leases = active,
-            "Lease cleanup iteration completed"
+            "Redb lease cleanup iteration completed"
         );
     } else {
-        debug!("Lease cleanup: no expired leases to delete");
+        debug!("Redb lease cleanup: no expired leases to delete");
     }
 }
 
