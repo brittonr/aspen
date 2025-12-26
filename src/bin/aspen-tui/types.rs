@@ -255,14 +255,8 @@ impl SqlQueryResult {
         execution_time_ms: u64,
     ) -> Self {
         // Convert SqlCellValue to strings for display
-        let string_rows: Vec<Vec<String>> = rows
-            .into_iter()
-            .map(|row| {
-                row.into_iter()
-                    .map(|val| val.to_display_string())
-                    .collect()
-            })
-            .collect();
+        let string_rows: Vec<Vec<String>> =
+            rows.into_iter().map(|row| row.into_iter().map(|val| val.to_display_string()).collect()).collect();
 
         // Calculate column widths (min 5, max 40)
         let mut column_widths: Vec<usize> = columns.iter().map(|c| c.len().max(5).min(40)).collect();

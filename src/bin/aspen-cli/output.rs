@@ -300,8 +300,8 @@ impl Outputable for KvBatchReadOutput {
         for (key, value) in self.keys.iter().zip(self.values.iter()) {
             match value {
                 Some(v) => {
-                    let value_str = String::from_utf8(v.clone())
-                        .unwrap_or_else(|_| format!("<binary: {} bytes>", v.len()));
+                    let value_str =
+                        String::from_utf8(v.clone()).unwrap_or_else(|_| format!("<binary: {} bytes>", v.len()));
                     let display_value = if value_str.len() > 50 {
                         format!("{}...", &value_str[..47])
                     } else {
@@ -393,10 +393,7 @@ impl Outputable for SqlQueryOutput {
         use crate::commands::sql::OutputFormat;
 
         if self.rows.is_empty() {
-            return format!(
-                "No rows returned ({} ms)",
-                self.execution_time_ms
-            );
+            return format!("No rows returned ({} ms)", self.execution_time_ms);
         }
 
         match self.format {
@@ -411,7 +408,6 @@ impl Outputable for SqlQueryOutput {
 impl SqlQueryOutput {
     /// Format as ASCII table with borders.
     fn format_table(&self) -> String {
-
         // Calculate column widths
         let mut widths: Vec<usize> = self.columns.iter().map(|c| c.len()).collect();
 
@@ -455,11 +451,7 @@ impl SqlQueryOutput {
                 .zip(widths.iter())
                 .map(|(cell, w)| {
                     let s = cell.to_display_string();
-                    let truncated = if s.len() > 50 {
-                        format!("{}...", &s[..47])
-                    } else {
-                        s
-                    };
+                    let truncated = if s.len() > 50 { format!("{}...", &s[..47]) } else { s };
                     format!(" {:width$} ", truncated, width = w)
                 })
                 .collect::<Vec<_>>()
@@ -484,7 +476,6 @@ impl SqlQueryOutput {
 
     /// Format as delimiter-separated values.
     fn format_delimited(&self, delimiter: char) -> String {
-
         let mut output = String::new();
 
         // Header
@@ -517,7 +508,6 @@ impl SqlQueryOutput {
 
     /// Format in vertical mode (one column per line).
     fn format_vertical(&self) -> String {
-
         let mut output = String::new();
         let max_col_len = self.columns.iter().map(|c| c.len()).max().unwrap_or(0);
 

@@ -192,8 +192,7 @@ async fn sql_query(client: &AspenClient, args: QueryArgs, json: bool) -> Result<
 }
 
 async fn sql_file(client: &AspenClient, args: FileArgs, json: bool) -> Result<()> {
-    let query =
-        std::fs::read_to_string(&args.file).map_err(|e| anyhow::anyhow!("failed to read file: {}", e))?;
+    let query = std::fs::read_to_string(&args.file).map_err(|e| anyhow::anyhow!("failed to read file: {}", e))?;
 
     let config = SqlExecConfig {
         query,

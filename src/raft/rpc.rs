@@ -1024,20 +1024,14 @@ mod tests {
     #[test]
     fn test_rpc_response_fatal_error() {
         let response = RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked);
-        assert!(matches!(
-            response,
-            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
-        ));
+        assert!(matches!(response, RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)));
     }
 
     #[test]
     fn test_rpc_response_fatal_error_clone() {
         let response = RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped);
         let cloned = response.clone();
-        assert!(matches!(
-            cloned,
-            RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)
-        ));
+        assert!(matches!(cloned, RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)));
     }
 
     #[test]
@@ -1047,10 +1041,7 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: RaftRpcResponse = serde_json::from_str(&json).expect("deserialize");
 
-        assert!(matches!(
-            deserialized,
-            RaftRpcResponse::FatalError(RaftFatalErrorKind::StorageError)
-        ));
+        assert!(matches!(deserialized, RaftRpcResponse::FatalError(RaftFatalErrorKind::StorageError)));
     }
 
     #[test]
@@ -1063,10 +1054,7 @@ mod tests {
             }),
         };
 
-        assert!(matches!(
-            response.inner,
-            RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)
-        ));
+        assert!(matches!(response.inner, RaftRpcResponse::FatalError(RaftFatalErrorKind::Panicked)));
         assert!(response.timestamps.is_some());
     }
 
@@ -1082,13 +1070,9 @@ mod tests {
 
         // Use postcard for wire format testing (what we actually use)
         let bytes = postcard::to_stdvec(&original).expect("serialize");
-        let deserialized: RaftRpcResponseWithTimestamps =
-            postcard::from_bytes(&bytes).expect("deserialize");
+        let deserialized: RaftRpcResponseWithTimestamps = postcard::from_bytes(&bytes).expect("deserialize");
 
-        assert!(matches!(
-            deserialized.inner,
-            RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)
-        ));
+        assert!(matches!(deserialized.inner, RaftRpcResponse::FatalError(RaftFatalErrorKind::Stopped)));
         assert!(deserialized.timestamps.is_some());
         let ts = deserialized.timestamps.unwrap();
         assert_eq!(ts.server_recv_ms, 5000);

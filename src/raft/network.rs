@@ -654,9 +654,10 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                     error_kind = %error_kind,
                     "peer RaftCore reported fatal error for append_entries"
                 );
-                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                    format!("peer RaftCore fatal error: {}", error_kind),
-                ))))
+                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                    "peer RaftCore fatal error: {}",
+                    error_kind
+                )))))
             }
             _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -696,9 +697,10 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                     error_kind = %error_kind,
                     "peer RaftCore reported fatal error for vote"
                 );
-                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(
-                    format!("peer RaftCore fatal error: {}", error_kind),
-                ))))
+                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                    "peer RaftCore fatal error: {}",
+                    error_kind
+                )))))
             }
             _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -786,9 +788,10 @@ impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
                     error_kind = %error_kind,
                     "peer RaftCore reported fatal error for install_snapshot"
                 );
-                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
-                    format!("peer RaftCore fatal error: {}", error_kind),
-                ))))
+                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                    "peer RaftCore fatal error: {}",
+                    error_kind
+                )))))
             }
             _ => Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
