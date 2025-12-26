@@ -351,10 +351,57 @@ async fn main() -> Result<()> {
     let cli_config = build_cluster_config(&args);
 
     // Load configuration with proper precedence (env < TOML < CLI)
-    let config = load_config(args.config.as_deref(), cli_config)?;
-
-    // Validate configuration on startup (Tiger Style: fail-fast)
-    config.validate()?;
+    // Provide actionable error messages for common misconfigurations
+    let config = match load_config(args.config.as_deref(), cli_config) {
+        Ok(config) => config,
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("node_id must be non-zero") {
+                eprintln!("Error: node_id must be non-zero");
+                eprintln!();
+                eprintln!("Required configuration missing. To start an Aspen node, you must provide:");
+                eprintln!();
+                eprintln!("  1. A unique node ID (positive integer, e.g., 1, 2, 3)");
+                eprintln!("  2. A cluster cookie (shared secret for cluster authentication)");
+                eprintln!();
+                eprintln!("Examples:");
+                eprintln!();
+                eprintln!("  # Using command-line arguments:");
+                eprintln!("  aspen-node --node-id 1 --cookie my-cluster-secret");
+                eprintln!();
+                eprintln!("  # Using environment variables:");
+                eprintln!("  export ASPEN_NODE_ID=1");
+                eprintln!("  export ASPEN_COOKIE=my-cluster-secret");
+                eprintln!("  aspen-node");
+                eprintln!();
+                eprintln!("  # Using a config file:");
+                eprintln!("  aspen-node --config /path/to/config.toml");
+                eprintln!();
+                eprintln!("  Example config.toml:");
+                eprintln!("    node_id = 1");
+                eprintln!("    cookie = \"my-cluster-secret\"");
+                eprintln!("    data_dir = \"./data/node-1\"");
+                eprintln!();
+                eprintln!("For a 3-node cluster, use: nix run .#cluster");
+                std::process::exit(1);
+            } else if error_msg.contains("default cluster cookie") || error_msg.contains("UNSAFE-CHANGE-ME") {
+                eprintln!("Error: using default cluster cookie is not allowed");
+                eprintln!();
+                eprintln!("Security: You must set a unique cluster cookie to prevent");
+                eprintln!("accidental cluster merges. All nodes in a cluster share the");
+                eprintln!("same gossip topic derived from the cookie.");
+                eprintln!();
+                eprintln!("Set a unique cookie via:");
+                eprintln!("  --cookie my-cluster-secret");
+                eprintln!("  ASPEN_COOKIE=my-cluster-secret");
+                eprintln!("  cookie = \"my-cluster-secret\" in config.toml");
+                std::process::exit(1);
+            } else {
+                // For other errors, return the original error
+                return Err(e);
+            }
+        }
+    };
 
     info!(
         node_id = config.node_id,
@@ -563,6 +610,24 @@ async fn main() -> Result<()> {
         sharding = config.sharding.enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
+
+    // Generate and print cluster ticket for TUI connection
+    let cluster_ticket = {
+        use aspen::cluster::ticket::AspenClusterTicket;
+        use iroh_gossip::proto::TopicId;
+
+        let hash = blake3::hash(config.cookie.as_bytes());
+        let topic_id = TopicId::from_bytes(*hash.as_bytes());
+
+        AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id)
+    };
+
+    let ticket_str = cluster_ticket.serialize();
+    info!(ticket = %ticket_str, "cluster ticket generated");
+    println!();
+    println!("Connect with TUI:");
+    println!("  aspen-tui --ticket {}", ticket_str);
+    println!();
 
     // Wait for shutdown signal
     shutdown_signal().await;

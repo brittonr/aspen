@@ -49,6 +49,7 @@ use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use event::EventHandler;
 use ratatui::prelude::*;
+use tracing::error;
 use tracing::info;
 
 /// Default refresh interval for metrics polling (milliseconds).

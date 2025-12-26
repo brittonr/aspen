@@ -525,21 +525,21 @@ pub const MAX_SQL_TIMEOUT_MS: u32 = 30_000;
 
 /// Per-client request rate limit (requests per second).
 ///
-/// Tiger Style: Fixed limit prevents individual client abuse.
-/// 100 requests/second allows high throughput while preventing DoS.
+/// Default: Effectively unlimited (1M requests/sec).
+/// Set to a lower value (e.g., 100.0) to enable rate limiting for DoS protection.
 ///
 /// Used in:
 /// - `protocol_handlers.rs`: Per-client rate limiter
-pub const CLIENT_RPC_RATE_PER_SECOND: f64 = 100.0;
+pub const CLIENT_RPC_RATE_PER_SECOND: f64 = 1_000_000.0;
 
 /// Per-client request burst capacity.
 ///
-/// Tiger Style: Allows brief bursts for batch operations.
-/// Client can send up to this many requests before rate limiting.
+/// Default: Effectively unlimited (1M tokens).
+/// Set to a lower value (e.g., 50) to enable rate limiting for DoS protection.
 ///
 /// Used in:
 /// - `protocol_handlers.rs`: Per-client rate limiter burst
-pub const CLIENT_RPC_BURST: u64 = 50;
+pub const CLIENT_RPC_BURST: u64 = 1_000_000;
 
 /// System key prefix for internal rate limiter state.
 ///

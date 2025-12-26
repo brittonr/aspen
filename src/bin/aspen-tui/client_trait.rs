@@ -1,6 +1,7 @@
 //! Common client trait for Iroh connections.
 
 use aspen::client_rpc::NodeDescriptor;
+use aspen::client_rpc::SqlResultResponse;
 use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
@@ -46,6 +47,24 @@ pub trait ClusterClient: Send + Sync {
 
     /// Trigger a snapshot.
     async fn trigger_snapshot(&self) -> Result<()>;
+
+    /// Execute a SQL query against the cluster.
+    ///
+    /// # Arguments
+    /// * `query` - SQL query string (SELECT only)
+    /// * `consistency` - "linearizable" or "stale"
+    /// * `limit` - Maximum rows to return
+    /// * `timeout_ms` - Query timeout in milliseconds
+    async fn execute_sql(
+        &self,
+        query: String,
+        consistency: String,
+        limit: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> Result<SqlResultResponse> {
+        let _ = (query, consistency, limit, timeout_ms);
+        Err(eyre!("SQL queries not supported"))
+    }
 
     /// List all vaults (keys with "vault:" prefix).
     ///
@@ -131,6 +150,16 @@ impl ClusterClient for DisconnectedClient {
     }
 
     async fn trigger_snapshot(&self) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn execute_sql(
+        &self,
+        _query: String,
+        _consistency: String,
+        _limit: Option<u32>,
+        _timeout_ms: Option<u32>,
+    ) -> Result<SqlResultResponse> {
         Err(eyre!("Not connected to any cluster"))
     }
 
@@ -402,6 +431,24 @@ impl ClusterClient for ClientImpl {
                 Ok(())
             }
             Self::Disconnected(client) => client.trigger_snapshot().await,
+        }
+    }
+
+    async fn execute_sql(
+        &self,
+        query: String,
+        consistency: String,
+        limit: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> Result<SqlResultResponse> {
+        match self {
+            Self::Iroh(client) => {
+                client.execute_sql(query, consistency, limit, timeout_ms).await.map_err(anyhow_to_eyre)
+            }
+            Self::MultiNode(client) => {
+                client.execute_sql(query, consistency, limit, timeout_ms).await.map_err(anyhow_to_eyre)
+            }
+            Self::Disconnected(client) => client.execute_sql(query, consistency, limit, timeout_ms).await,
         }
     }
 

@@ -24,6 +24,10 @@ name = "aspen-prometheus-adapter"
 path = "src/bin/aspen-prometheus-adapter.rs"
 
 [[bin]]
+name = "aspen-cli"
+path = "src/bin/aspen-cli/main.rs"
+
+[[bin]]
 name = "aspen-fuse"
 path = "src/bin/aspen-fuse/main.rs"
 required-features = ["fuse"]
@@ -140,6 +144,7 @@ color-eyre = { version = "0.6", optional = true }
 tui-logger = { version = "0.13", features = ["tracing-support"], optional = true }
 log = { version = "0.4", optional = true }
 mime = { version = "0.3.17", optional = true }
+dirs = { version = "5", optional = true }
 
 # FUSE filesystem dependencies (optional)
 fuse-backend-rs = { version = "0.13", optional = true, default-features = false, features = ["fusedev"] }
@@ -167,7 +172,7 @@ cloud-hypervisor-client = "0.3"
 [features]
 default = []
 testing = []
-tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime"]
+tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime", "dirs"]
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)

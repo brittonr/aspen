@@ -28,6 +28,7 @@ use crate::app::ActiveView;
 use crate::app::App;
 use crate::app::InputMode;
 use crate::types::NodeStatus;
+use crate::types::SqlConsistency;
 
 /// Main draw function.
 ///
@@ -50,6 +51,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
     if app.input_mode == InputMode::Editing {
         draw_input_popup(frame, app);
     }
+
+    // Draw SQL input popup if in SQL editing mode
+    if app.input_mode == InputMode::SqlEditing {
+        draw_sql_input_popup(frame, app);
+    }
 }
 
 /// Draw the header with tab navigation.
@@ -59,6 +65,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Metrics,
         ActiveView::KeyValue,
         ActiveView::Vaults,
+        ActiveView::Sql,
         ActiveView::Logs,
         ActiveView::Help,
     ]
@@ -80,8 +87,9 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::Metrics => 1,
             ActiveView::KeyValue => 2,
             ActiveView::Vaults => 3,
-            ActiveView::Logs => 4,
-            ActiveView::Help => 5,
+            ActiveView::Sql => 4,
+            ActiveView::Logs => 5,
+            ActiveView::Help => 6,
         })
         .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().fg(Color::Yellow));
@@ -96,6 +104,7 @@ fn draw_content(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Metrics => draw_metrics_view(frame, app, area),
         ActiveView::KeyValue => draw_kv_view(frame, app, area),
         ActiveView::Vaults => draw_vaults_view(frame, app, area),
+        ActiveView::Sql => draw_sql_view(frame, app, area),
         ActiveView::Logs => draw_logs_view(frame, app, area),
         ActiveView::Help => draw_help_view(frame, area),
     }
@@ -478,6 +487,177 @@ fn draw_vault_key_detail(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
+/// Draw SQL query view.
+fn draw_sql_view(frame: &mut Frame, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(5), // Query editor
+            Constraint::Min(0),    // Results table
+            Constraint::Length(1), // Info bar
+        ])
+        .split(area);
+
+    draw_sql_editor(frame, app, chunks[0]);
+    draw_sql_results(frame, app, chunks[1]);
+    draw_sql_info_bar(frame, app, chunks[2]);
+}
+
+/// Draw SQL query editor.
+fn draw_sql_editor(frame: &mut Frame, app: &App, area: Rect) {
+    let consistency_indicator = match app.sql_state.consistency {
+        SqlConsistency::Linearizable => "[L]",
+        SqlConsistency::Stale => "[S]",
+    };
+
+    let title = format!(" SQL Query {} (Enter to edit, 'e' to execute, 'c' to toggle) ", consistency_indicator);
+
+    let query_display = if app.sql_state.query_buffer.is_empty() {
+        "-- Example: SELECT key, value FROM kv WHERE key LIKE 'config:%' LIMIT 100".to_string()
+    } else {
+        app.sql_state.query_buffer.clone()
+    };
+
+    let paragraph = Paragraph::new(query_display)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw SQL results table.
+fn draw_sql_results(frame: &mut Frame, app: &App, area: Rect) {
+    if let Some(result) = &app.sql_state.last_result {
+        if !result.success {
+            // Display error
+            let error_msg = result.error.as_deref().unwrap_or("Unknown error");
+            let paragraph = Paragraph::new(error_msg)
+                .style(Style::default().fg(Color::Red))
+                .block(Block::default().borders(Borders::ALL).title(" Error "));
+            frame.render_widget(paragraph, area);
+            return;
+        }
+
+        if result.rows.is_empty() {
+            let paragraph =
+                Paragraph::new("No results").block(Block::default().borders(Borders::ALL).title(" Results "));
+            frame.render_widget(paragraph, area);
+            return;
+        }
+
+        // Build header row
+        let header_cells: Vec<&str> = result.columns.iter().map(|c| c.as_str()).collect();
+        let header = Row::new(header_cells)
+            .style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Yellow))
+            .bottom_margin(1);
+
+        // Build data rows with selection highlight
+        let rows: Vec<Row> = result
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                let cells: Vec<String> = row
+                    .iter()
+                    .map(|cell| {
+                        // Truncate long values
+                        if cell.len() > 40 {
+                            format!("{}...", &cell[..37])
+                        } else {
+                            cell.clone()
+                        }
+                    })
+                    .collect();
+
+                let style = if i == app.sql_state.selected_row {
+                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+
+                Row::new(cells).style(style)
+            })
+            .collect();
+
+        // Calculate column widths
+        let widths: Vec<Constraint> =
+            result.column_widths.iter().map(|&w| Constraint::Length(w.min(40) as u16)).collect();
+
+        let title = format!(
+            " Results ({} rows, {} columns) [j/k navigate, h/l scroll] ",
+            result.rows.len(),
+            result.columns.len()
+        );
+
+        let table = Table::new(rows, widths)
+            .header(header)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .column_spacing(1)
+            .highlight_style(Style::default().bg(Color::DarkGray));
+
+        frame.render_widget(table, area);
+    } else {
+        // No results yet
+        let paragraph = Paragraph::new("Execute a query to see results")
+            .block(Block::default().borders(Borders::ALL).title(" Results "));
+        frame.render_widget(paragraph, area);
+    }
+}
+
+/// Draw SQL info bar with execution stats.
+fn draw_sql_info_bar(frame: &mut Frame, app: &App, area: Rect) {
+    let info = if let Some(result) = &app.sql_state.last_result {
+        if result.success {
+            let truncated = if result.is_truncated { "Yes" } else { "No" };
+            format!(
+                " Rows: {} | Time: {}ms | Truncated: {} | Consistency: {} ",
+                result.row_count,
+                result.execution_time_ms,
+                truncated,
+                app.sql_state.consistency.as_str()
+            )
+        } else {
+            format!(" Query failed | Consistency: {} ", app.sql_state.consistency.as_str())
+        }
+    } else {
+        format!(" No query executed | Consistency: {} ", app.sql_state.consistency.as_str())
+    };
+
+    let paragraph = Paragraph::new(info).style(Style::default().fg(Color::Cyan)).alignment(Alignment::Left);
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw SQL input popup for query editing.
+fn draw_sql_input_popup(frame: &mut Frame, app: &App) {
+    let area = centered_rect(80, 40, frame.area());
+
+    // Clear the area
+    frame.render_widget(Clear, area);
+
+    let title = format!(
+        " Edit SQL Query (Enter to save, Esc to cancel, Up/Down for history [{}/{}]) ",
+        if app.sql_state.history_browsing {
+            app.sql_state.history_index + 1
+        } else {
+            app.sql_state.history.len()
+        },
+        app.sql_state.history.len()
+    );
+
+    let input = Paragraph::new(app.sql_state.query_buffer.as_str())
+        .style(Style::default().fg(Color::Yellow))
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(input, area);
+
+    // Set cursor position
+    let cursor_x = area.x + (app.sql_state.query_buffer.len() as u16 % (area.width - 2)) + 1;
+    let cursor_y = area.y + (app.sql_state.query_buffer.len() as u16 / (area.width - 2)) + 1;
+    frame.set_cursor_position((cursor_x, cursor_y.min(area.y + area.height - 2)));
+}
+
 /// Draw logs view with tui-logger integration.
 fn draw_logs_view(frame: &mut Frame, app: &App, area: Rect) {
     // Create tui-logger widget
@@ -514,7 +694,7 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
             Style::default().add_modifier(Modifier::UNDERLINED),
         )]),
         Line::from("  Tab / Shift+Tab  Switch between views"),
-        Line::from("  1-5              Jump to view"),
+        Line::from("  1-6              Jump to view (1=Cluster, 2=Metrics, 3=KV, 4=Vaults, 5=SQL, 6=Logs)"),
         Line::from("  ?                Show this help"),
         Line::from("  q / Esc          Quit"),
         Line::from(""),
@@ -541,6 +721,25 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  Enter            Browse vault contents"),
         Line::from("  Backspace/Esc    Go back to vault list"),
         Line::from("  r                Refresh vaults"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "SQL View",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  Enter            Edit query"),
+        Line::from("  e                Execute query"),
+        Line::from("  c                Toggle consistency (linearizable/stale)"),
+        Line::from("  j/k              Navigate result rows"),
+        Line::from("  h/l              Scroll columns"),
+        Line::from("  Up/Down          Navigate query history (in edit mode)"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "SQL KV Table Columns",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  key, value, version, create_revision, mod_revision,"),
+        Line::from("  expires_at_ms, lease_id"),
+        Line::from("  Example: SELECT key, value FROM kv WHERE key LIKE 'vault:%'"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Logs View",
@@ -572,6 +771,7 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mode = match app.input_mode {
         InputMode::Normal => "NORMAL",
         InputMode::Editing => "EDITING",
+        InputMode::SqlEditing => "SQL EDIT",
     };
 
     let chunks = Layout::default()
@@ -583,12 +783,14 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL));
 
+    let mode_bg = match app.input_mode {
+        InputMode::Normal => Color::Green,
+        InputMode::Editing => Color::Yellow,
+        InputMode::SqlEditing => Color::Cyan,
+    };
+
     let mode_widget = Paragraph::new(mode)
-        .style(Style::default().fg(Color::Black).bg(if app.input_mode == InputMode::Editing {
-            Color::Yellow
-        } else {
-            Color::Green
-        }))
+        .style(Style::default().fg(Color::Black).bg(mode_bg))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
 

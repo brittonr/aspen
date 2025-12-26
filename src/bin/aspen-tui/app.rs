@@ -20,8 +20,13 @@ use crate::event::Event;
 use crate::iroh_client::MultiNodeClient;
 use crate::iroh_client::parse_cluster_ticket;
 use crate::types::ClusterMetrics;
+use crate::types::MAX_SQL_QUERY_SIZE;
 use crate::types::NodeInfo;
 use crate::types::NodeStatus;
+use crate::types::SqlQueryResult;
+use crate::types::SqlState;
+use crate::types::load_sql_history;
+use crate::types::save_sql_history;
 
 /// Maximum input buffer size (8KB).
 /// Tiger Style: Prevents memory issues from large paste operations.
@@ -39,6 +44,8 @@ pub enum ActiveView {
     KeyValue,
     /// Vault browser with namespace navigation.
     Vaults,
+    /// SQL query interface.
+    Sql,
     /// Log viewer.
     Logs,
     /// Help screen.
@@ -52,7 +59,8 @@ impl ActiveView {
             Self::Cluster => Self::Metrics,
             Self::Metrics => Self::KeyValue,
             Self::KeyValue => Self::Vaults,
-            Self::Vaults => Self::Logs,
+            Self::Vaults => Self::Sql,
+            Self::Sql => Self::Logs,
             Self::Logs => Self::Help,
             Self::Help => Self::Cluster,
         }
@@ -65,7 +73,8 @@ impl ActiveView {
             Self::Metrics => Self::Cluster,
             Self::KeyValue => Self::Metrics,
             Self::Vaults => Self::KeyValue,
-            Self::Logs => Self::Vaults,
+            Self::Sql => Self::Vaults,
+            Self::Logs => Self::Sql,
             Self::Help => Self::Logs,
         }
     }
@@ -77,6 +86,7 @@ impl ActiveView {
             Self::Metrics => "Metrics",
             Self::KeyValue => "Key-Value",
             Self::Vaults => "Vaults",
+            Self::Sql => "SQL",
             Self::Logs => "Logs",
             Self::Help => "Help",
         }
@@ -91,6 +101,8 @@ pub enum InputMode {
     Normal,
     /// Text input mode (for key-value operations).
     Editing,
+    /// SQL query editing mode.
+    SqlEditing,
 }
 
 /// Cluster operation request for async execution.
@@ -177,6 +189,9 @@ pub struct App {
 
     /// Currently active vault name (None = vault list view, Some = vault contents view).
     pub active_vault: Option<String>,
+
+    /// SQL view state.
+    pub sql_state: SqlState,
 }
 
 impl App {
@@ -187,6 +202,11 @@ impl App {
         // Start with disconnected client - use connect command or ticket to connect
         let client: Arc<dyn ClusterClient> =
             Arc::new(ClientImpl::Disconnected(crate::client_trait::DisconnectedClient));
+
+        // Load SQL history from disk
+        let mut sql_state = SqlState::default();
+        sql_state.history = load_sql_history();
+        sql_state.history_index = sql_state.history.len();
 
         Self {
             should_quit: false,
@@ -211,6 +231,7 @@ impl App {
             vault_keys: Vec::new(),
             selected_vault_key: 0,
             active_vault: None,
+            sql_state,
         }
     }
 
@@ -228,6 +249,11 @@ impl App {
         let multi_client =
             MultiNodeClient::new(endpoint_addrs).await.map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::MultiNode(multi_client));
+
+        // Load SQL history from disk
+        let mut sql_state = SqlState::default();
+        sql_state.history = load_sql_history();
+        sql_state.history_index = sql_state.history.len();
 
         Ok(Self {
             should_quit: false,
@@ -252,6 +278,7 @@ impl App {
             vault_keys: Vec::new(),
             selected_vault_key: 0,
             active_vault: None,
+            sql_state,
         })
     }
 
@@ -262,6 +289,11 @@ impl App {
         use crate::client_trait::DisconnectedClient;
 
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Disconnected(DisconnectedClient));
+
+        // Load SQL history from disk
+        let mut sql_state = SqlState::default();
+        sql_state.history = load_sql_history();
+        sql_state.history_index = sql_state.history.len();
 
         Self {
             should_quit: false,
@@ -289,6 +321,7 @@ impl App {
             vault_keys: Vec::new(),
             selected_vault_key: 0,
             active_vault: None,
+            sql_state,
         }
     }
 
@@ -382,7 +415,8 @@ impl App {
                         self.refresh_vaults().await;
                     }
                 }
-                KeyCode::Char('5') => self.active_view = ActiveView::Logs,
+                KeyCode::Char('5') => self.active_view = ActiveView::Sql,
+                KeyCode::Char('6') => self.active_view = ActiveView::Logs,
                 KeyCode::Char('?') => self.active_view = ActiveView::Help,
 
                 // List navigation
@@ -399,6 +433,12 @@ impl App {
                                 if self.selected_vault > 0 {
                                     self.selected_vault -= 1;
                                 }
+                            }
+                        }
+                        ActiveView::Sql => {
+                            // Navigate result rows up
+                            if self.sql_state.selected_row > 0 {
+                                self.sql_state.selected_row -= 1;
                             }
                         }
                         _ => {
@@ -425,11 +465,35 @@ impl App {
                                 }
                             }
                         }
+                        ActiveView::Sql => {
+                            // Navigate result rows down
+                            if let Some(result) = &self.sql_state.last_result {
+                                let max = result.rows.len().saturating_sub(1);
+                                if self.sql_state.selected_row < max {
+                                    self.sql_state.selected_row += 1;
+                                }
+                            }
+                        }
                         _ => {
                             let max = self.nodes.len().saturating_sub(1);
                             if self.selected_node < max {
                                 self.selected_node += 1;
                             }
+                        }
+                    }
+                }
+
+                // SQL column scrolling
+                KeyCode::Char('h') if self.active_view == ActiveView::Sql => {
+                    if self.sql_state.result_scroll_col > 0 {
+                        self.sql_state.result_scroll_col -= 1;
+                    }
+                }
+                KeyCode::Char('l') if self.active_view == ActiveView::Sql => {
+                    if let Some(result) = &self.sql_state.last_result {
+                        let max = result.columns.len().saturating_sub(1);
+                        if self.sql_state.result_scroll_col < max {
+                            self.sql_state.result_scroll_col += 1;
                         }
                     }
                 }
@@ -444,8 +508,8 @@ impl App {
                     self.init_cluster().await;
                 }
 
-                // Connection commands
-                KeyCode::Char('c') => {
+                // Connection commands (not in SQL view where 'c' toggles consistency)
+                KeyCode::Char('c') if self.active_view != ActiveView::Sql => {
                     // Connect to HTTP nodes - enter edit mode to get addresses
                     self.input_mode = InputMode::Editing;
                     self.input_buffer = "http://127.0.0.1:21001".to_string(); // Default suggestion
@@ -456,6 +520,22 @@ impl App {
                     self.input_mode = InputMode::Editing;
                     self.input_buffer.clear();
                     self.set_status("Paste Iroh cluster ticket, then press Enter");
+                }
+
+                // SQL view specific commands
+                KeyCode::Char('c') if self.active_view == ActiveView::Sql => {
+                    // Toggle consistency level
+                    self.sql_state.consistency = self.sql_state.consistency.toggle();
+                    self.set_status(&format!("Consistency: {}", self.sql_state.consistency.as_str()));
+                }
+                KeyCode::Char('e') if self.active_view == ActiveView::Sql => {
+                    // Execute query
+                    self.execute_sql_query().await;
+                }
+                KeyCode::Enter if self.active_view == ActiveView::Sql => {
+                    // Enter SQL edit mode
+                    self.input_mode = InputMode::SqlEditing;
+                    self.set_status("Editing SQL query (Enter to save, Esc to cancel, Up/Down for history)");
                 }
 
                 // Enter editing mode for KV operations
@@ -529,6 +609,38 @@ impl App {
                 KeyCode::Tab => {
                     // Switch between key and value input
                     std::mem::swap(&mut self.key_buffer, &mut self.input_buffer);
+                }
+                _ => {}
+            },
+            InputMode::SqlEditing => match key.code {
+                KeyCode::Esc => {
+                    // Cancel edit, keep buffer unchanged
+                    self.input_mode = InputMode::Normal;
+                    self.set_status("Edit cancelled");
+                }
+                KeyCode::Enter => {
+                    // Save query and exit edit mode
+                    self.input_mode = InputMode::Normal;
+                    self.set_status("Query saved (press 'e' to execute)");
+                }
+                KeyCode::Backspace => {
+                    self.sql_state.query_buffer.pop();
+                    self.sql_state.history_browsing = false;
+                }
+                KeyCode::Up => {
+                    // Navigate history (previous)
+                    self.sql_state.history_prev();
+                }
+                KeyCode::Down => {
+                    // Navigate history (next)
+                    self.sql_state.history_next();
+                }
+                KeyCode::Char(c) => {
+                    // Tiger Style: Bounded input to prevent memory issues
+                    if self.sql_state.query_buffer.len() < MAX_SQL_QUERY_SIZE {
+                        self.sql_state.query_buffer.push(c);
+                        self.sql_state.history_browsing = false;
+                    }
                 }
                 _ => {}
             },
@@ -703,6 +815,72 @@ impl App {
             }
             Err(e) => {
                 self.set_status(&format!("Write failed: {}", e));
+            }
+        }
+    }
+
+    /// Execute SQL query against the cluster.
+    async fn execute_sql_query(&mut self) {
+        let query = self.sql_state.query_buffer.trim().to_string();
+
+        // Validate query is not empty
+        if query.is_empty() {
+            self.set_status("No query to execute (press Enter to edit query first)");
+            return;
+        }
+
+        // Validate query size
+        if query.len() > MAX_SQL_QUERY_SIZE {
+            self.set_status(&format!("Query too large ({} bytes, max {})", query.len(), MAX_SQL_QUERY_SIZE));
+            return;
+        }
+
+        // Add to history and save
+        self.sql_state.add_to_history(query.clone());
+        save_sql_history(&self.sql_state.history);
+
+        // Reset result state
+        self.sql_state.selected_row = 0;
+        self.sql_state.result_scroll_col = 0;
+
+        self.set_status("Executing query...");
+
+        // Execute query
+        match self
+            .client
+            .execute_sql(
+                query,
+                self.sql_state.consistency.as_str().to_string(),
+                Some(1000), // Default limit
+                Some(5000), // Default timeout
+            )
+            .await
+        {
+            Ok(result) => {
+                if result.success {
+                    let row_count = result.row_count.unwrap_or(0);
+                    let exec_time = result.execution_time_ms.unwrap_or(0);
+                    let is_truncated = result.is_truncated.unwrap_or(false);
+
+                    self.sql_state.last_result = Some(SqlQueryResult::from_response(
+                        result.columns.unwrap_or_default(),
+                        result.rows.unwrap_or_default(),
+                        row_count,
+                        is_truncated,
+                        exec_time,
+                    ));
+
+                    let truncated_msg = if is_truncated { " (truncated)" } else { "" };
+                    self.set_status(&format!("{} rows in {}ms{}", row_count, exec_time, truncated_msg));
+                } else {
+                    let error_msg = result.error.unwrap_or_else(|| "Unknown error".to_string());
+                    self.sql_state.last_result = Some(SqlQueryResult::error(error_msg.clone()));
+                    self.set_status(&format!("Query failed: {}", error_msg));
+                }
+            }
+            Err(e) => {
+                self.sql_state.last_result = Some(SqlQueryResult::error(format!("{}", e)));
+                self.set_status(&format!("Query failed: {}", e));
             }
         }
     }

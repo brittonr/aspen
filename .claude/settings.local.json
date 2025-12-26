@@ -24,7 +24,8 @@
       "Bash(cargo tree:*)",
       "mcp__context7__resolve-library-id",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(nix flake check:*)"
     ],
     "deny": [],
     "ask": [],

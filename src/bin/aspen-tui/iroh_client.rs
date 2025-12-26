@@ -28,6 +28,7 @@ use aspen::client_rpc::RaftMetricsResponse;
 use aspen::client_rpc::ReadResultResponse;
 use aspen::client_rpc::ScanResultResponse;
 use aspen::client_rpc::SnapshotResultResponse;
+use aspen::client_rpc::SqlResultResponse;
 use aspen::client_rpc::WriteResultResponse;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
@@ -386,6 +387,30 @@ impl IrohClient {
         match response {
             ClientRpcResponse::CheckpointWalResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for CheckpointWal"),
+        }
+    }
+
+    /// Execute a SQL query against the cluster.
+    pub async fn execute_sql(
+        &self,
+        query: String,
+        consistency: String,
+        limit: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> Result<SqlResultResponse> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::ExecuteSql {
+                query,
+                params: "[]".to_string(), // Empty params array
+                consistency,
+                limit,
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SqlResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for ExecuteSql"),
         }
     }
 
@@ -832,6 +857,30 @@ impl MultiNodeClient {
         match response {
             ClientRpcResponse::CheckpointWalResult(result) => Ok(result),
             _ => anyhow::bail!("unexpected response type for CheckpointWal"),
+        }
+    }
+
+    /// Execute a SQL query against the cluster.
+    pub async fn execute_sql(
+        &self,
+        query: String,
+        consistency: String,
+        limit: Option<u32>,
+        timeout_ms: Option<u32>,
+    ) -> Result<SqlResultResponse> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::ExecuteSql {
+                query,
+                params: "[]".to_string(), // Empty params array
+                consistency,
+                limit,
+                timeout_ms,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::SqlResult(result) => Ok(result),
+            _ => anyhow::bail!("unexpected response type for ExecuteSql"),
         }
     }
 

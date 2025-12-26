@@ -78,6 +78,7 @@ use crate::client_rpc::ScanResultResponse;
 use crate::client_rpc::SequenceResultResponse;
 use crate::client_rpc::SignedCounterResultResponse;
 use crate::client_rpc::SnapshotResultResponse;
+use crate::client_rpc::SqlCellValue;
 use crate::client_rpc::SqlResultResponse;
 use crate::client_rpc::UnprotectBlobResultResponse;
 use crate::client_rpc::VaultKeysResponse;
@@ -2000,21 +2001,23 @@ async fn process_client_request(
             // The RaftNode implements this trait
             match ctx.sql_executor.execute_sql(request).await {
                 Ok(result) => {
-                    // Convert SqlValue to serde_json::Value for response
-                    let rows: Vec<Vec<serde_json::Value>> = result
+                    // Convert SqlValue to SqlCellValue for PostCard-compatible RPC transport
+                    // NOTE: serde_json::Value is NOT compatible with PostCard because
+                    // PostCard doesn't support self-describing serialization (serialize_any).
+                    use base64::Engine;
+                    let rows: Vec<Vec<SqlCellValue>> = result
                         .rows
                         .into_iter()
                         .map(|row| {
                             row.into_iter()
                                 .map(|v| match v {
-                                    SqlValue::Null => serde_json::Value::Null,
-                                    SqlValue::Integer(i) => serde_json::json!(i),
-                                    SqlValue::Real(f) => serde_json::json!(f),
-                                    SqlValue::Text(s) => serde_json::Value::String(s),
+                                    SqlValue::Null => SqlCellValue::Null,
+                                    SqlValue::Integer(i) => SqlCellValue::Integer(i),
+                                    SqlValue::Real(f) => SqlCellValue::Real(f),
+                                    SqlValue::Text(s) => SqlCellValue::Text(s),
                                     SqlValue::Blob(b) => {
-                                        // Encode blob as base64
-                                        use base64::Engine;
-                                        serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&b))
+                                        // Encode blob as base64 for safe text transport
+                                        SqlCellValue::Blob(base64::engine::general_purpose::STANDARD.encode(&b))
                                     }
                                 })
                                 .collect()

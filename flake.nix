@@ -305,12 +305,17 @@
         '';
 
         bins = let
-          bin = {name}:
+          bin = {
+            name,
+            features ? [],
+          }:
             craneLib.buildPackage (
               commonArgs
               // {
                 inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                cargoExtraArgs = "--bin ${name}";
+                cargoExtraArgs =
+                  "--bin ${name}"
+                  + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
                 doCheck = false;
               }
             );
@@ -321,6 +326,10 @@
               }
               {
                 name = "aspen-tui";
+                features = ["tui"];
+              }
+              {
+                name = "aspen-cli";
               }
             ]
           );
@@ -344,7 +353,7 @@
               devArgs
               // {
                 inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                cargoExtraArgs = "--bin aspen-tui";
+                cargoExtraArgs = "--bin aspen-tui --features tui";
                 doCheck = false;
               }
             );
@@ -445,6 +454,11 @@
               exePath = "/bin/aspen-tui";
             };
 
+            aspen-cli = flake-utils.lib.mkApp {
+              drv = bins.aspen-cli;
+              exePath = "/bin/aspen-cli";
+            };
+
             # 3-node cluster launcher
             # Usage: nix run .#cluster
             # Environment variables:
@@ -469,7 +483,62 @@
               ''}";
             };
 
-            default = self.apps.${system}.aspen-node;
+            # Kitty terminal cluster (N nodes + TUI in tabs)
+            # Usage: nix run .#kitty-cluster
+            # Opens a kitty window with node tabs + TUI tab
+            kitty-cluster = {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-kitty-cluster" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    bins.aspen-tui
+                    pkgs.kitty
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gawk
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export ASPEN_TUI_BIN="${bins.aspen-tui}/bin/aspen-tui"
+                exec ${./scripts/kitty-cluster.sh} "$@"
+              ''}";
+            };
+
+            # Default: single development node with sensible defaults
+            # Usage: nix run
+            # This starts a single-node cluster ready for experimentation.
+            # For production, use: nix run .#aspen-node -- --node-id 1 --cookie <secret>
+            # For multi-node cluster: nix run .#cluster
+            default = {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-dev" ''
+                set -e
+
+                # Generate a unique data directory for this session
+                DATA_DIR="''${ASPEN_DATA_DIR:-/tmp/aspen-dev-$$}"
+                mkdir -p "$DATA_DIR"
+
+                echo "Starting Aspen development node..."
+                echo ""
+                echo "  Node ID:    1"
+                echo "  Cookie:     dev-cookie-$USER"
+                echo "  Data dir:   $DATA_DIR"
+                echo ""
+                echo "This is a single-node development cluster."
+                echo "For production, use: nix run .#aspen-node -- --node-id 1 --cookie <secret>"
+                echo "For multi-node:      nix run .#cluster"
+                echo ""
+
+                exec ${bins.aspen-node}/bin/aspen-node \
+                  --node-id 1 \
+                  --cookie "dev-cookie-$USER" \
+                  --data-dir "$DATA_DIR" \
+                  "$@"
+              ''}";
+            };
 
             # Fuzzing commands - run with nix run .#fuzz, .#fuzz-quick, .#fuzz-intensive
             # NOTE: Must be run from the project root directory
@@ -906,6 +975,7 @@
             default = bins.aspen-node;
             aspen-node = bins.aspen-node;
             aspen-tui = bins.aspen-tui;
+            aspen-cli = bins.aspen-cli;
             netwatch = netwatch;
             vm-test-setup = vm-test-setup;
             vm-test-run = vm-test-run;
