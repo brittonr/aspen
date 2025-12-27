@@ -13,6 +13,8 @@
 #   ASPEN_STORAGE     - Storage backend: inmemory, redb (default: inmemory)
 #   ASPEN_BLOBS       - Enable blob storage: true/false (default: false)
 #   ASPEN_DOCS        - Enable iroh-docs CRDT sync: true/false (default: false)
+#   ASPEN_DHT         - Enable DHT content discovery: true/false (default: false)
+#   ASPEN_DHT_PORT    - Base DHT port (incremented per node, default: 6881)
 #   ASPEN_FOREGROUND  - Run in foreground (don't daemonize): true/false (default: true)
 
 set -eu
@@ -25,6 +27,8 @@ DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-cluster-$$}"
 STORAGE="${ASPEN_STORAGE:-inmemory}"
 BLOBS_ENABLED="${ASPEN_BLOBS:-false}"
 DOCS_ENABLED="${ASPEN_DOCS:-false}"
+DHT_ENABLED="${ASPEN_DHT:-false}"
+DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"
 FOREGROUND="${ASPEN_FOREGROUND:-true}"
 
 # Resolve script directory
@@ -121,9 +125,16 @@ start_node() {
 
     mkdir -p "$node_data_dir"
 
+    # Calculate DHT port for this node (each node gets unique port)
+    local dht_port=$((DHT_BASE_PORT + node_id - 1))
+
     RUST_LOG="$LOG_LEVEL" \
     ASPEN_BLOBS_ENABLED="$BLOBS_ENABLED" \
     ASPEN_DOCS_ENABLED="$DOCS_ENABLED" \
+    ASPEN_CONTENT_DISCOVERY_ENABLED="$DHT_ENABLED" \
+    ASPEN_CONTENT_DISCOVERY_SERVER_MODE="$DHT_ENABLED" \
+    ASPEN_CONTENT_DISCOVERY_DHT_PORT="$dht_port" \
+    ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE="$DHT_ENABLED" \
     "$ASPEN_NODE_BIN" \
         --node-id "$node_id" \
         --cookie "$COOKIE" \
@@ -268,6 +279,7 @@ print_info() {
     printf "Storage:  %s\n" "$STORAGE"
     printf "Blobs:    %s\n" "$BLOBS_ENABLED"
     printf "Docs:     %s\n" "$DOCS_ENABLED"
+    printf "DHT:      %s (ports: %d-%d)\n" "$DHT_ENABLED" "$DHT_BASE_PORT" "$((DHT_BASE_PORT + NODE_COUNT - 1))"
     printf "Data dir: %s\n" "$DATA_DIR"
     printf "Ticket:   %s/ticket.txt\n" "$DATA_DIR"
     printf "\n"
@@ -275,6 +287,15 @@ print_info() {
     printf "  %s --ticket %s cluster status\n" "$ASPEN_CLI_BIN" "$ticket"
     printf "  %s --ticket %s kv set mykey 'hello'\n" "$ASPEN_CLI_BIN" "$ticket"
     printf "  %s --ticket %s kv get mykey\n" "$ASPEN_CLI_BIN" "$ticket"
+    if [ "$BLOBS_ENABLED" = "true" ]; then
+        printf "\n"
+        printf "${BLUE}Blob storage:${NC}\n"
+        printf "  %s --ticket %s blob add /path/to/file\n" "$ASPEN_CLI_BIN" "$ticket"
+        printf "  %s --ticket %s blob list\n" "$ASPEN_CLI_BIN" "$ticket"
+        if [ "$DHT_ENABLED" = "true" ]; then
+            printf "  %s --ticket %s blob download-by-hash <hash>  # DHT lookup\n" "$ASPEN_CLI_BIN" "$ticket"
+        fi
+    fi
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
     printf "  aspen-tui --ticket %s\n" "$ticket"
@@ -466,13 +487,16 @@ main() {
             printf "  ASPEN_STORAGE     - Storage: inmemory, redb (default: inmemory)\n"
             printf "  ASPEN_BLOBS       - Enable blobs: true/false (default: false)\n"
             printf "  ASPEN_DOCS        - Enable docs: true/false (default: false)\n"
+            printf "  ASPEN_DHT         - Enable DHT content discovery: true/false (default: false)\n"
+            printf "  ASPEN_DHT_PORT    - Base DHT port (default: 6881)\n"
             printf "  ASPEN_FOREGROUND  - Run in foreground (default: true)\n"
             printf "\n"
             printf "Examples:\n"
-            printf "  %s start                     # Start 3-node cluster\n" "$0"
-            printf "  ASPEN_NODE_COUNT=5 %s start  # Start 5-node cluster\n" "$0"
-            printf "  ASPEN_DOCS=true %s start     # Start with docs sync enabled\n" "$0"
-            printf "  %s logs 2                    # Tail logs from node 2\n" "$0"
+            printf "  %s start                            # Start 3-node cluster\n" "$0"
+            printf "  ASPEN_NODE_COUNT=5 %s start         # Start 5-node cluster\n" "$0"
+            printf "  ASPEN_DOCS=true %s start            # Start with docs sync enabled\n" "$0"
+            printf "  ASPEN_BLOBS=true ASPEN_DHT=true %s  # Blobs with global DHT discovery\n" "$0"
+            printf "  %s logs 2                           # Tail logs from node 2\n" "$0"
             exit 1
             ;;
     esac

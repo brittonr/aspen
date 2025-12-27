@@ -15,6 +15,8 @@
 #   ASPEN_DNS         - Enable DNS server on node 1: true/false (default: true)
 #   ASPEN_DNS_ZONES   - DNS zones to serve (default: aspen.local)
 #   ASPEN_DNS_PORT    - DNS server port (default: 15353, avoids mDNS port 5353)
+#   ASPEN_DHT         - Enable DHT content discovery: true/false (default: true)
+#   ASPEN_DHT_PORT    - Base DHT port (incremented per node, default: 6881)
 
 set -eu
 
@@ -29,6 +31,8 @@ DOCS_ENABLED="${ASPEN_DOCS:-true}"    # Enable iroh-docs CRDT sync by default
 DNS_ENABLED="${ASPEN_DNS:-true}"      # Enable DNS server on node 1 by default
 DNS_ZONES="${ASPEN_DNS_ZONES:-aspen.local}"  # DNS zones to serve
 DNS_PORT="${ASPEN_DNS_PORT:-15353}"   # DNS port (default 15353 to avoid mDNS conflicts)
+DHT_ENABLED="${ASPEN_DHT:-true}"      # Enable DHT content discovery by default
+DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"  # Base DHT port (incremented per node)
 
 # Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
 # You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
@@ -169,6 +173,9 @@ generate_session_file() {
         local secret
         secret=$(printf '%064x' "$((1000 + id))")
 
+        # Calculate DHT port for this node (each node gets unique port)
+        local dht_port=$((DHT_BASE_PORT + id - 1))
+
         # First tab uses 'launch', subsequent tabs use 'new_tab'
         # Note: Docs namespace secret is automatically derived from cookie
         # DNS server only runs on node 1 to avoid port conflicts
@@ -176,14 +183,14 @@ generate_session_file() {
             cat >> "$session_file" << EOF
 title node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         else
             cat >> "$session_file" << EOF
 new_tab node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         fi
@@ -386,6 +393,7 @@ print_info() {
     printf "Blobs:    $BLOBS_ENABLED\n"
     printf "Docs:     $DOCS_ENABLED (namespace derived from cookie)\n"
     printf "DNS:      $DNS_ENABLED (zones: $DNS_ZONES, port: $DNS_PORT)\n"
+    printf "DHT:      $DHT_ENABLED (ports: $DHT_BASE_PORT-$((DHT_BASE_PORT + NODE_COUNT - 1)))\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
@@ -409,6 +417,15 @@ print_info() {
         printf "  nix run .#aspen-cli -- --ticket $ticket dns get api.$DNS_ZONES A\n"
         printf "  nix run .#aspen-cli -- --ticket $ticket dns scan\n"
         printf "  dig @127.0.0.1 -p $DNS_PORT api.$DNS_ZONES A\n"
+    fi
+    if [ "$BLOBS_ENABLED" = "true" ]; then
+        printf "\n"
+        printf "${BLUE}Blob storage:${NC}\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket blob add /path/to/file\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket blob list\n"
+        if [ "$DHT_ENABLED" = "true" ]; then
+            printf "  nix run .#aspen-cli -- --ticket $ticket blob download-by-hash <hash>  # DHT lookup\n"
+        fi
     fi
     printf "\n"
     printf "${BLUE}======================================${NC}\n"
