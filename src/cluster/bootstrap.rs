@@ -167,6 +167,17 @@ pub struct NodeHandle {
     /// Only present when the node initialized a new cluster (not joining existing)
     /// and token generation was requested via bootstrap configuration.
     pub root_token: Option<CapabilityToken>,
+    /// Global content discovery service.
+    ///
+    /// Enables announcing and finding blobs via the BitTorrent Mainline DHT
+    /// for cross-cluster discovery without direct federation.
+    /// None when content discovery is disabled in configuration.
+    pub content_discovery: Option<crate::cluster::content_discovery::ContentDiscoveryService>,
+    /// Content discovery service cancellation token.
+    ///
+    /// Used to gracefully shutdown the background DHT service.
+    /// None when content discovery is disabled.
+    pub content_discovery_cancel: Option<CancellationToken>,
 }
 
 impl NodeHandle {
@@ -958,6 +969,10 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let (sync_event_listener_cancel, docs_sync_service_cancel) =
         wire_docs_sync_services(&config, &docs_sync, &blob_store, &peer_manager, &iroh_manager).await;
 
+    // Initialize global content discovery if enabled
+    let (content_discovery, content_discovery_cancel) =
+        initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
+
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
@@ -982,6 +997,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         sync_event_listener_cancel,
         docs_sync_service_cancel,
         root_token: None, // Set by caller after cluster init
+        content_discovery,
+        content_discovery_cancel,
     })
 }
 
@@ -1606,6 +1623,58 @@ async fn wire_docs_sync_services(
     );
 
     (sync_event_listener_cancel, Some(docs_sync_service_cancel))
+}
+
+/// Initialize global content discovery service if enabled.
+///
+/// Content discovery uses the BitTorrent Mainline DHT to announce and
+/// find blobs across clusters without direct federation.
+///
+/// # Arguments
+/// * `config` - Node configuration with content discovery settings
+/// * `iroh_manager` - Iroh endpoint manager for network access
+/// * `shutdown` - Cancellation token inherited from parent
+///
+/// # Returns
+/// Tuple of (content_discovery_service, cancellation_token)
+/// Both are None when content discovery is disabled.
+async fn initialize_content_discovery(
+    config: &NodeConfig,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    shutdown: &CancellationToken,
+) -> Result<(Option<crate::cluster::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
+    use crate::cluster::content_discovery::ContentDiscoveryService;
+
+    if !config.content_discovery.enabled {
+        return Ok((None, None));
+    }
+
+    info!(
+        node_id = config.node_id,
+        server_mode = config.content_discovery.server_mode,
+        dht_port = config.content_discovery.dht_port,
+        "initializing global content discovery (DHT)"
+    );
+
+    // Create a child cancellation token for the content discovery service
+    let cancel = shutdown.child_token();
+
+    // Spawn the content discovery service
+    let (service, _task) = ContentDiscoveryService::spawn(
+        Arc::new(iroh_manager.endpoint().clone()),
+        iroh_manager.secret_key().clone(),
+        config.content_discovery.clone(),
+        cancel.clone(),
+    )
+    .await?;
+
+    info!(
+        node_id = config.node_id,
+        public_key = %service.public_key(),
+        "content discovery service started"
+    );
+
+    Ok((Some(service), Some(cancel)))
 }
 
 #[cfg(test)]

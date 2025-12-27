@@ -73,6 +73,7 @@ use serde::Serialize;
 use snafu::ResultExt;
 use snafu::Snafu;
 
+use crate::cluster::content_discovery::ContentDiscoveryConfig;
 use crate::raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
@@ -176,6 +177,13 @@ pub struct NodeConfig {
     /// of unknown queries to upstream DNS servers.
     #[serde(default)]
     pub dns_server: DnsServerConfig,
+
+    /// Global content discovery configuration.
+    ///
+    /// When enabled, the node participates in the BitTorrent Mainline DHT
+    /// to announce and discover blobs across clusters without direct federation.
+    #[serde(default)]
+    pub content_discovery: ContentDiscoveryConfig,
 }
 
 impl Default for NodeConfig {
@@ -200,6 +208,7 @@ impl Default for NodeConfig {
             peers: vec![],
             batch_config: default_batch_config(),
             dns_server: DnsServerConfig::default(),
+            content_discovery: ContentDiscoveryConfig::default(),
         }
     }
 }
@@ -967,6 +976,14 @@ impl NodeConfig {
                 },
                 forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED")
                     .unwrap_or_else(default_dns_forwarding),
+            },
+            content_discovery: ContentDiscoveryConfig {
+                enabled: parse_env("ASPEN_CONTENT_DISCOVERY_ENABLED").unwrap_or(false),
+                server_mode: parse_env("ASPEN_CONTENT_DISCOVERY_SERVER_MODE").unwrap_or(false),
+                bootstrap_nodes: parse_env_vec("ASPEN_CONTENT_DISCOVERY_BOOTSTRAP_NODES"),
+                dht_port: parse_env("ASPEN_CONTENT_DISCOVERY_DHT_PORT").unwrap_or(0),
+                auto_announce: parse_env("ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE").unwrap_or(false),
+                max_concurrent_queries: parse_env("ASPEN_CONTENT_DISCOVERY_MAX_CONCURRENT_QUERIES").unwrap_or(8),
             },
         }
     }

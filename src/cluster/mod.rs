@@ -97,6 +97,7 @@ use iroh_gossip::proto::TopicId;
 
 pub mod bootstrap;
 pub mod config;
+pub mod content_discovery;
 pub mod gossip_discovery;
 pub mod metadata;
 pub mod ticket;
