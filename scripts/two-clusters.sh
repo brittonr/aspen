@@ -301,10 +301,10 @@ cmd_start() {
 
     printf "${BLUE}Demo commands:${NC}\n"
     printf "  # Store a blob in Cluster A\n"
-    printf "  echo 'Hello from Cluster A!' | %s --ticket %s blobs add -\n\n" "$ASPEN_CLI_BIN" "$ticket_a"
-    printf "  # Get blob hash, then fetch from Cluster B (cross-cluster)\n"
-    printf "  %s --ticket %s blobs list\n" "$ASPEN_CLI_BIN" "$ticket_a"
-    printf "  %s --ticket %s blobs get <hash>\n\n" "$ASPEN_CLI_BIN" "$ticket_b"
+    printf "  echo 'Hello from Cluster A!' | %s --ticket %s blob add -\n\n" "$ASPEN_CLI_BIN" "$ticket_a"
+    printf "  # Get blob ticket, then download to Cluster B\n"
+    printf "  %s --ticket %s blob ticket <hash>\n" "$ASPEN_CLI_BIN" "$ticket_a"
+    printf "  %s --ticket %s blob download <blob_ticket>\n\n" "$ASPEN_CLI_BIN" "$ticket_b"
 
     printf "${BLUE}Stop clusters:${NC}\n"
     printf "  %s stop\n" "$0"
@@ -404,7 +404,7 @@ cmd_demo() {
     printf "   Data: %s\n" "$test_data"
 
     local hash
-    hash=$(echo "$test_data" | "$ASPEN_CLI_BIN" --ticket "$ticket_a" blobs add - 2>/dev/null | grep -oE '[a-z2-7]{52}' | head -1 || echo "")
+    hash=$(echo "$test_data" | "$ASPEN_CLI_BIN" -q --ticket "$ticket_a" blob add - 2>/dev/null | grep -oE '[a-f0-9]{64}' | head -1 || echo "")
 
     if [ -z "$hash" ]; then
         printf "   ${RED}Failed to add blob${NC}\n"
@@ -413,27 +413,34 @@ cmd_demo() {
 
     printf "   ${GREEN}Blob hash: %s${NC}\n\n" "$hash"
 
-    printf "2. Listing blobs in Cluster A...\n"
-    "$ASPEN_CLI_BIN" --ticket "$ticket_a" blobs list 2>/dev/null | head -5
-    printf "\n"
+    printf "2. Getting blob ticket from Cluster A...\n"
+    local blob_ticket
+    blob_ticket=$("$ASPEN_CLI_BIN" -q --ticket "$ticket_a" blob ticket "$hash" 2>/dev/null || echo "")
 
-    printf "3. Fetching blob from Cluster B (cross-cluster)...\n"
+    if [ -z "$blob_ticket" ]; then
+        printf "   ${RED}Failed to get blob ticket${NC}\n"
+        exit 1
+    fi
+
+    printf "   ${GREEN}Blob ticket: %s...${NC}\n\n" "${blob_ticket:0:50}"
+
+    printf "3. Downloading blob to Cluster B (cross-cluster)...\n"
     printf "   (This uses Iroh's content-addressed networking)\n"
 
-    # Try to fetch - may need DHT or direct connection
-    local fetched
-    fetched=$("$ASPEN_CLI_BIN" --ticket "$ticket_b" blobs get "$hash" 2>/dev/null || echo "")
+    local result
+    result=$("$ASPEN_CLI_BIN" -q --ticket "$ticket_b" blob download "$blob_ticket" 2>/dev/null || echo "")
 
-    if [ -n "$fetched" ]; then
+    if echo "$result" | grep -q "Downloaded"; then
         printf "   ${GREEN}Success!${NC}\n"
+        printf "   %s\n\n" "$result"
+
+        printf "4. Reading blob from Cluster B...\n"
+        local fetched
+        fetched=$("$ASPEN_CLI_BIN" -q --ticket "$ticket_b" blob get "$hash" 2>/dev/null || echo "")
         printf "   Retrieved: %s\n" "$fetched"
     else
-        printf "   ${YELLOW}Blob not yet discoverable across clusters${NC}\n"
-        printf "   (May need DHT discovery or direct peer connection)\n"
-        printf "\n"
-        printf "   To enable cross-cluster discovery:\n"
-        printf "   - Build with: cargo build --features global-discovery\n"
-        printf "   - Or manually connect nodes via tickets\n"
+        printf "   ${RED}Failed to download blob${NC}\n"
+        printf "   %s\n" "$result"
     fi
 
     printf "\n${GREEN}Demo complete!${NC}\n"

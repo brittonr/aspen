@@ -127,7 +127,8 @@ pub struct DeleteArgs {
 #[derive(Args)]
 pub struct DownloadArgs {
     /// Blob ticket from remote peer.
-    pub ticket: String,
+    #[arg(value_name = "BLOB_TICKET")]
+    pub blob_ticket: String,
 
     /// Optional tag to protect the downloaded blob from GC.
     #[arg(long)]
@@ -681,7 +682,7 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
 async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::DownloadBlob {
-            ticket: args.ticket,
+            ticket: args.blob_ticket,
             tag: args.tag,
         })
         .await?;
