@@ -973,6 +973,19 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let (content_discovery, content_discovery_cancel) =
         initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
 
+    // Auto-announce local blobs to DHT if enabled
+    // This runs in background and doesn't block bootstrap
+    if content_discovery.is_some() && blob_store.is_some() {
+        let config_clone = config.clone();
+        let blob_store_clone = blob_store.clone();
+        let content_discovery_clone = content_discovery.clone();
+        tokio::spawn(async move {
+            // Wait a bit for DHT to bootstrap before announcing
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
+        });
+    }
+
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
@@ -1630,6 +1643,10 @@ async fn wire_docs_sync_services(
 /// Content discovery uses the BitTorrent Mainline DHT to announce and
 /// find blobs across clusters without direct federation.
 ///
+/// When `auto_announce` is enabled in the configuration, this function
+/// will also scan the local blob store and announce all existing blobs
+/// to the DHT.
+///
 /// # Arguments
 /// * `config` - Node configuration with content discovery settings
 /// * `iroh_manager` - Iroh endpoint manager for network access
@@ -1653,6 +1670,7 @@ async fn initialize_content_discovery(
         node_id = config.node_id,
         server_mode = config.content_discovery.server_mode,
         dht_port = config.content_discovery.dht_port,
+        auto_announce = config.content_discovery.auto_announce,
         "initializing global content discovery (DHT)"
     );
 
@@ -1675,6 +1693,75 @@ async fn initialize_content_discovery(
     );
 
     Ok((Some(service), Some(cancel)))
+}
+
+/// Perform auto-announce of local blobs if enabled.
+///
+/// This function is called after the node is fully initialized.
+/// It scans the local blob store and announces all blobs to the DHT.
+///
+/// # Arguments
+/// * `config` - Node configuration
+/// * `blob_store` - Optional blob store reference
+/// * `content_discovery` - Optional content discovery service
+pub async fn auto_announce_local_blobs(
+    config: &NodeConfig,
+    blob_store: Option<&Arc<IrohBlobStore>>,
+    content_discovery: Option<&crate::cluster::content_discovery::ContentDiscoveryService>,
+) {
+    use crate::blob::BlobStore;
+
+    // Check if auto-announce is enabled
+    if !config.content_discovery.auto_announce {
+        return;
+    }
+
+    let Some(blob_store) = blob_store else {
+        warn!(node_id = config.node_id, "auto_announce enabled but blob store not available");
+        return;
+    };
+
+    let Some(discovery) = content_discovery else {
+        warn!(node_id = config.node_id, "auto_announce enabled but content discovery service not available");
+        return;
+    };
+
+    info!(node_id = config.node_id, "scanning local blobs for auto-announce");
+
+    // List all local blobs
+    match blob_store.list(10_000, None).await {
+        Ok(result) => {
+            if result.blobs.is_empty() {
+                info!(node_id = config.node_id, "no local blobs to announce");
+                return;
+            }
+
+            let blobs: Vec<_> = result.blobs.iter().map(|e| (e.hash, e.size, e.format)).collect();
+            let count = blobs.len();
+
+            info!(node_id = config.node_id, blob_count = count, "announcing local blobs to DHT");
+
+            match discovery.announce_local_blobs(blobs).await {
+                Ok(announced) => {
+                    info!(node_id = config.node_id, announced, total = count, "auto-announce complete");
+                }
+                Err(err) => {
+                    warn!(
+                        node_id = config.node_id,
+                        error = %err,
+                        "failed to auto-announce local blobs"
+                    );
+                }
+            }
+        }
+        Err(err) => {
+            warn!(
+                node_id = config.node_id,
+                error = %err,
+                "failed to list local blobs for auto-announce"
+            );
+        }
+    }
 }
 
 #[cfg(test)]

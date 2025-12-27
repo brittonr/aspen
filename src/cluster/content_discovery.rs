@@ -4,6 +4,12 @@
 //! allowing nodes to find blob providers across the global network without relying
 //! on centralized trackers.
 //!
+//! # Feature Flags
+//!
+//! - **`global-discovery`**: Enables actual DHT operations using the `mainline` crate.
+//!   Without this feature, the service logs operations but doesn't perform real DHT queries.
+//!   Enable with: `cargo build --features global-discovery`
+//!
 //! # Architecture
 //!
 //! The content discovery system uses a two-layer approach:
@@ -13,23 +19,24 @@
 //!
 //! # Design Decisions
 //!
-//! - Uses the `mainline` crate directly (v6.0.1) for DHT access
-//! - Maps BLAKE3 hashes to DHT infohashes via SHA-1 transformation
-//! - Stores signed announce records with Ed25519 signatures
+//! - Uses the `mainline` crate directly (v6.0) for DHT access when feature is enabled
+//! - Maps BLAKE3 hashes to DHT infohashes via SHA-256 truncation (20 bytes)
+//! - Uses `announce_peer` for lightweight peer announcement (IP:port only)
+//! - Uses `get_peers` to discover nodes that have announced a specific infohash
 //! - Rate-limited publishing to avoid DHT spam (1 announce per hash per 5 min)
 //! - Background republishing every 30 minutes for active content
 //!
 //! # Security
 //!
-//! - All announces are Ed25519 signed by the announcing node
-//! - Signatures are verified before accepting provider info
-//! - DHT values use BEP-0044 mutable items with signature verification
+//! - All local announces are Ed25519 signed for local verification
+//! - DHT operations use standard BitTorrent peer announcement protocol
+//! - Provider verification can be done by attempting blob download via Iroh
 //!
 //! # References
 //!
 //! - [Iroh Content Discovery Blog](https://www.iroh.computer/blog/iroh-content-discovery)
 //! - [mainline crate](https://crates.io/crates/mainline)
-//! - [BEP-0044: Storing arbitrary data](http://bittorrent.org/beps/bep_0044.html)
+//! - [BEP-0005: DHT Protocol](http://bittorrent.org/beps/bep_0005.html)
 //!
 //! # Example
 //!
@@ -72,6 +79,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
+use tracing::warn;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)
@@ -87,11 +95,10 @@ const MIN_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(5 * 60); // 5 minute
 const REPUBLISH_INTERVAL: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
 /// Maximum providers to return from a query.
-#[allow(dead_code)]
 const MAX_PROVIDERS: usize = 50;
 
-/// Timeout for DHT queries.
-#[allow(dead_code)]
+/// Timeout for DHT queries (get_peers).
+#[cfg(feature = "global-discovery")]
 const DHT_QUERY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Maximum size of a serialized announce record.
@@ -284,13 +291,148 @@ fn format_to_byte(format: BlobFormat) -> u8 {
 }
 
 // ============================================================================
+// DHT Client Wrapper (feature-gated)
+// ============================================================================
+
+/// DHT client wrapper that encapsulates the mainline crate.
+///
+/// When the `global-discovery` feature is enabled, this wraps an actual
+/// mainline::AsyncDht instance. Without the feature, it's a no-op stub.
+#[cfg(feature = "global-discovery")]
+struct DhtClient {
+    /// The async DHT client from mainline crate.
+    dht: mainline::async_dht::AsyncDht,
+}
+
+#[cfg(feature = "global-discovery")]
+impl DhtClient {
+    /// Create a new DHT client with the given configuration.
+    fn new(config: &ContentDiscoveryConfig) -> Result<Self> {
+        use mainline::Dht;
+
+        let mut builder = Dht::builder();
+
+        // Configure port if specified
+        if config.dht_port > 0 {
+            builder.port(config.dht_port);
+        }
+
+        // Configure server mode if requested
+        if config.server_mode {
+            builder.server_mode();
+        }
+
+        // Add custom bootstrap nodes if specified
+        if !config.bootstrap_nodes.is_empty() {
+            builder.extra_bootstrap(&config.bootstrap_nodes);
+        }
+
+        // Build the DHT
+        let dht = builder.build().context("failed to build DHT client")?;
+
+        info!(
+            server_mode = config.server_mode,
+            dht_port = config.dht_port,
+            bootstrap_nodes = config.bootstrap_nodes.len(),
+            "DHT client created"
+        );
+
+        Ok(Self { dht: dht.as_async() })
+    }
+
+    /// Wait for DHT bootstrap to complete.
+    async fn wait_for_bootstrap(&self) {
+        let ready = self.dht.bootstrapped().await;
+        if ready {
+            info!("DHT bootstrap complete");
+        } else {
+            warn!("DHT bootstrap may not be complete");
+        }
+    }
+
+    /// Announce a peer for the given infohash.
+    ///
+    /// The peer will be announced with the implicit port (the port the DHT
+    /// received the request from). This is typically the QUIC port used by Iroh.
+    async fn announce_peer(&self, infohash: [u8; 20]) -> Result<()> {
+        use mainline::Id;
+
+        let id = Id::from(infohash);
+
+        // Announce with implicit port (None = use source port detected by DHT nodes)
+        // This is appropriate since Iroh uses QUIC with dynamic ports
+        self.dht.announce_peer(id, None).await.context("DHT announce_peer failed")?;
+
+        debug!(infohash = hex::encode(infohash), "announced peer to DHT");
+        Ok(())
+    }
+
+    /// Get peers for the given infohash.
+    ///
+    /// Returns a stream of peer socket addresses. Each responding DHT node
+    /// returns up to 20 peers, so results accumulate as queries complete.
+    async fn get_peers(&self, infohash: [u8; 20]) -> Vec<std::net::SocketAddrV4> {
+        use futures::StreamExt;
+        use mainline::Id;
+
+        let id = Id::from(infohash);
+        let mut stream = self.dht.get_peers(id);
+        let mut all_peers = Vec::new();
+
+        // Collect peers from the stream with a timeout
+        let timeout = tokio::time::timeout(DHT_QUERY_TIMEOUT, async {
+            while let Some(peers) = stream.next().await {
+                all_peers.extend(peers);
+                if all_peers.len() >= MAX_PROVIDERS {
+                    break;
+                }
+            }
+        });
+
+        if let Err(_) = timeout.await {
+            debug!(infohash = hex::encode(infohash), peers_found = all_peers.len(), "DHT get_peers timed out");
+        }
+
+        debug!(infohash = hex::encode(infohash), peers_found = all_peers.len(), "collected peers from DHT");
+
+        all_peers
+    }
+}
+
+/// Stub DHT client when feature is disabled.
+#[cfg(not(feature = "global-discovery"))]
+struct DhtClient;
+
+#[cfg(not(feature = "global-discovery"))]
+impl DhtClient {
+    fn new(_config: &ContentDiscoveryConfig) -> Result<Self> {
+        info!("DHT client disabled (global-discovery feature not enabled)");
+        Ok(Self)
+    }
+
+    async fn wait_for_bootstrap(&self) {
+        // No-op
+    }
+
+    async fn announce_peer(&self, infohash: [u8; 20]) -> Result<()> {
+        debug!(infohash = hex::encode(infohash), "would announce to DHT (feature disabled)");
+        Ok(())
+    }
+
+    async fn get_peers(&self, infohash: [u8; 20]) -> Vec<std::net::SocketAddrV4> {
+        debug!(infohash = hex::encode(infohash), "would query DHT (feature disabled)");
+        Vec::new()
+    }
+}
+
+// ============================================================================
 // Service State
 // ============================================================================
 
 /// Tracks recent announces to prevent spam.
 struct AnnounceTracker {
-    /// Map from hash -> last announce time
-    announces: HashMap<Hash, Instant>,
+    /// Map from hash -> (last announce time, size, format) for republishing
+    announces: HashMap<Hash, (Instant, u64, BlobFormat)>,
     /// Maximum tracked announces
     max_size: usize,
 }
@@ -306,34 +448,38 @@ impl AnnounceTracker {
     /// Check if we can announce this hash (rate limiting).
     fn can_announce(&self, hash: &Hash) -> bool {
         match self.announces.get(hash) {
-            Some(last) => last.elapsed() >= MIN_ANNOUNCE_INTERVAL,
+            Some((last, _, _)) => last.elapsed() >= MIN_ANNOUNCE_INTERVAL,
             None => true,
         }
     }
 
     /// Record an announce, evicting old entries if needed.
-    fn record_announce(&mut self, hash: Hash) {
+    fn record_announce(&mut self, hash: Hash, size: u64, format: BlobFormat) {
         // Evict oldest entries if at capacity
         if self.announces.len() >= self.max_size {
             // Remove entries older than republish interval
             let cutoff = Instant::now() - REPUBLISH_INTERVAL;
-            self.announces.retain(|_, t| *t > cutoff);
+            self.announces.retain(|_, (t, _, _)| *t > cutoff);
 
             // If still at capacity, remove oldest
             if self.announces.len() >= self.max_size
-                && let Some(oldest_hash) = self.announces.iter().min_by_key(|(_, t)| *t).map(|(h, _)| *h)
+                && let Some(oldest_hash) = self.announces.iter().min_by_key(|(_, (t, _, _))| *t).map(|(h, _)| *h)
             {
                 self.announces.remove(&oldest_hash);
             }
         }
 
-        self.announces.insert(hash, Instant::now());
+        self.announces.insert(hash, (Instant::now(), size, format));
     }
 
-    /// Get hashes that need republishing.
-    fn get_stale_announces(&self) -> Vec<Hash> {
+    /// Get hashes that need republishing along with their metadata.
+    fn get_stale_announces(&self) -> Vec<(Hash, u64, BlobFormat)> {
         let cutoff = Instant::now() - REPUBLISH_INTERVAL;
-        self.announces.iter().filter(|(_, t)| **t < cutoff).map(|(h, _)| *h).collect()
+        self.announces
+            .iter()
+            .filter(|(_, (t, _, _))| *t < cutoff)
+            .map(|(h, (_, size, format))| (*h, *size, *format))
+            .collect()
     }
 }
 
@@ -351,6 +497,11 @@ enum DiscoveryCommand {
         hash: Hash,
         format: BlobFormat,
         reply: tokio::sync::oneshot::Sender<Result<Vec<ProviderInfo>>>,
+    },
+    /// Announce all local blobs (for initial sync and auto-announce).
+    AnnounceLocalBlobs {
+        blobs: Vec<(Hash, u64, BlobFormat)>,
+        reply: tokio::sync::oneshot::Sender<Result<usize>>,
     },
 }
 
@@ -440,6 +591,20 @@ impl ContentDiscoveryService {
         self.public_key
     }
 
+    /// Announce multiple local blobs to the DHT.
+    ///
+    /// This is useful for bulk announcing (e.g., on startup when auto_announce is enabled).
+    /// Returns the number of blobs successfully announced.
+    pub async fn announce_local_blobs(&self, blobs: Vec<(Hash, u64, BlobFormat)>) -> Result<usize> {
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        self.command_tx
+            .send(DiscoveryCommand::AnnounceLocalBlobs { blobs, reply: reply_tx })
+            .await
+            .context("discovery service shut down")?;
+
+        reply_rx.await.context("reply channel closed")?
+    }
+
     /// Main service loop.
     async fn run_service(
         _endpoint: Arc<Endpoint>,
@@ -451,8 +616,22 @@ impl ContentDiscoveryService {
         info!(server_mode = config.server_mode, dht_port = config.dht_port, "starting content discovery service");
 
         // Initialize DHT client
-        // Note: mainline crate integration would go here
-        // For now, we stub the DHT operations and log them
+        let dht_client = match DhtClient::new(&config) {
+            Ok(client) => {
+                // Wait for bootstrap in background (don't block service start)
+                let client = Arc::new(client);
+                let client_clone = client.clone();
+                tokio::spawn(async move {
+                    client_clone.wait_for_bootstrap().await;
+                });
+                Some(client)
+            }
+            Err(err) => {
+                warn!(error = %err, "failed to initialize DHT client, operating in stub mode");
+                None
+            }
+        };
+
         let tracker = Arc::new(RwLock::new(AnnounceTracker::new(MAX_TRACKED_ANNOUNCES)));
 
         // Republish timer
@@ -472,6 +651,7 @@ impl ContentDiscoveryService {
                             let result = Self::handle_announce(
                                 &secret_key,
                                 &tracker,
+                                dht_client.as_ref(),
                                 hash,
                                 size,
                                 format,
@@ -480,8 +660,31 @@ impl ContentDiscoveryService {
                         }
 
                         DiscoveryCommand::FindProviders { hash, format, reply } => {
-                            let result = Self::handle_find_providers(hash, format).await;
+                            let result = Self::handle_find_providers(
+                                dht_client.as_ref(),
+                                hash,
+                                format,
+                            ).await;
                             let _ = reply.send(result);
+                        }
+
+                        DiscoveryCommand::AnnounceLocalBlobs { blobs, reply } => {
+                            let mut announced = 0;
+                            for (hash, size, format) in blobs {
+                                let result = Self::handle_announce(
+                                    &secret_key,
+                                    &tracker,
+                                    dht_client.as_ref(),
+                                    hash,
+                                    size,
+                                    format,
+                                ).await;
+                                if result.is_ok() {
+                                    announced += 1;
+                                }
+                            }
+                            info!(count = announced, "bulk announced local blobs to DHT");
+                            let _ = reply.send(Ok(announced));
                         }
                     }
                 }
@@ -490,7 +693,19 @@ impl ContentDiscoveryService {
                     let stale = tracker.read().get_stale_announces();
                     if !stale.is_empty() {
                         debug!(count = stale.len(), "republishing stale announces");
-                        // TODO: Republish stale announces to DHT
+                        // Republish stale announces to DHT
+                        if let Some(ref dht) = dht_client {
+                            for (hash, _size, format) in stale {
+                                let infohash = to_dht_infohash(&hash, format);
+                                if let Err(err) = dht.announce_peer(infohash).await {
+                                    warn!(
+                                        hash = %hash.fmt_short(),
+                                        error = %err,
+                                        "failed to republish announce to DHT"
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -500,6 +715,7 @@ impl ContentDiscoveryService {
     async fn handle_announce(
         secret_key: &SecretKey,
         tracker: &Arc<RwLock<AnnounceTracker>>,
+        dht_client: Option<&Arc<DhtClient>>,
         hash: Hash,
         size: u64,
         format: BlobFormat,
@@ -510,7 +726,7 @@ impl ContentDiscoveryService {
             return Ok(()); // Silent success for rate-limited announces
         }
 
-        // Create signed announce
+        // Create signed announce for local verification
         let announce = DhtAnnounce::new(hash, size, format)?;
         let signed = SignedDhtAnnounce::sign(announce, secret_key)?;
         let bytes = signed.to_bytes()?;
@@ -522,24 +738,95 @@ impl ContentDiscoveryService {
         // Calculate DHT key
         let infohash = to_dht_infohash(&hash, format);
 
-        // TODO: Actually publish to DHT using mainline crate
-        // For now, just log the operation
-        info!(?hash, size, ?format, infohash = hex::encode(infohash), "would announce to DHT");
+        // Announce to DHT if client is available
+        if let Some(dht) = dht_client {
+            dht.announce_peer(infohash).await?;
+            info!(
+                hash = %hash.fmt_short(),
+                size,
+                format = ?format,
+                infohash = hex::encode(infohash),
+                "announced to DHT"
+            );
+        } else {
+            debug!(
+                hash = %hash.fmt_short(),
+                infohash = hex::encode(infohash),
+                "DHT announce skipped (no client)"
+            );
+        }
 
-        // Record announce
-        tracker.write().record_announce(hash);
+        // Record announce for rate limiting and republishing
+        tracker.write().record_announce(hash, size, format);
 
         Ok(())
     }
 
-    async fn handle_find_providers(hash: Hash, format: BlobFormat) -> Result<Vec<ProviderInfo>> {
+    async fn handle_find_providers(
+        dht_client: Option<&Arc<DhtClient>>,
+        hash: Hash,
+        format: BlobFormat,
+    ) -> Result<Vec<ProviderInfo>> {
         let infohash = to_dht_infohash(&hash, format);
 
-        // TODO: Actually query DHT using mainline crate
-        // For now, just log the operation and return empty
-        debug!(?hash, ?format, infohash = hex::encode(infohash), "would query DHT for providers");
+        // Query DHT if client is available
+        let peers = if let Some(dht) = dht_client {
+            dht.get_peers(infohash).await
+        } else {
+            debug!(
+                hash = %hash.fmt_short(),
+                infohash = hex::encode(infohash),
+                "DHT query skipped (no client)"
+            );
+            Vec::new()
+        };
 
-        Ok(Vec::new())
+        if peers.is_empty() {
+            debug!(
+                hash = %hash.fmt_short(),
+                format = ?format,
+                infohash = hex::encode(infohash),
+                "no providers found in DHT"
+            );
+            return Ok(Vec::new());
+        }
+
+        // Convert socket addresses to ProviderInfo
+        // Note: DHT only returns IP:port, not full provider metadata.
+        // The caller will need to connect to verify the provider has the content.
+        let now_micros = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_micros() as u64)
+            .unwrap_or(0);
+
+        let providers: Vec<ProviderInfo> = peers
+            .into_iter()
+            .take(MAX_PROVIDERS)
+            .map(|_addr| {
+                // We only have IP:port from DHT, not the Iroh PublicKey
+                // Create a placeholder PublicKey (all zeros) to indicate unknown
+                // The caller should use Iroh discovery to resolve the actual node
+                ProviderInfo {
+                    node_id: PublicKey::from_bytes(&[0u8; 32]).unwrap_or_else(|_| {
+                        // Fallback: generate a random public key as placeholder
+                        iroh::SecretKey::generate(&mut rand::rng()).public()
+                    }),
+                    blob_size: 0, // Unknown from DHT
+                    blob_format: format,
+                    discovered_at: now_micros,
+                    verified: false,
+                }
+            })
+            .collect();
+
+        info!(
+            hash = %hash.fmt_short(),
+            format = ?format,
+            provider_count = providers.len(),
+            "found providers in DHT"
+        );
+
+        Ok(providers)
     }
 }
 
@@ -629,7 +916,7 @@ mod tests {
 
         // First announce should be allowed
         assert!(tracker.can_announce(&hash));
-        tracker.record_announce(hash);
+        tracker.record_announce(hash, 1024, BlobFormat::Raw);
 
         // Immediate second announce should be blocked
         assert!(!tracker.can_announce(&hash));
@@ -643,13 +930,30 @@ mod tests {
         let hash2 = Hash::from_bytes([0x02; 32]);
         let hash3 = Hash::from_bytes([0x03; 32]);
 
-        tracker.record_announce(hash1);
-        tracker.record_announce(hash2);
+        tracker.record_announce(hash1, 100, BlobFormat::Raw);
+        tracker.record_announce(hash2, 200, BlobFormat::Raw);
         assert_eq!(tracker.announces.len(), 2);
 
         // Adding third should evict oldest
-        tracker.record_announce(hash3);
+        tracker.record_announce(hash3, 300, BlobFormat::Raw);
         assert!(tracker.announces.len() <= 2);
+    }
+
+    #[test]
+    fn test_announce_tracker_stale_announces() {
+        let mut tracker = AnnounceTracker::new(10);
+
+        let hash = Hash::from_bytes([0xAA; 32]);
+        tracker.record_announce(hash, 512, BlobFormat::HashSeq);
+
+        // Fresh announces should not be stale
+        let stale = tracker.get_stale_announces();
+        assert!(stale.is_empty());
+
+        // Check that metadata is preserved
+        let (_, size, format) = tracker.announces.get(&hash).unwrap();
+        assert_eq!(*size, 512);
+        assert_eq!(*format, BlobFormat::HashSeq);
     }
 
     #[tokio::test]
