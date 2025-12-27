@@ -452,8 +452,8 @@ pub struct DocsConfig {
     /// When enabled, committed KV operations are exported to an iroh-docs
     /// namespace for CRDT-based replication to clients.
     ///
-    /// Default: false (docs disabled).
-    #[serde(default)]
+    /// Default: true (docs enabled).
+    #[serde(default = "default_docs_enabled")]
     pub enabled: bool,
 
     /// Enable periodic full sync from state machine to docs.
@@ -503,7 +503,7 @@ pub struct DocsConfig {
 impl Default for DocsConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: default_docs_enabled(),
             enable_background_sync: default_enable_background_sync(),
             background_sync_interval_secs: default_background_sync_interval_secs(),
             in_memory: false,
@@ -511,6 +511,10 @@ impl Default for DocsConfig {
             author_secret: None,
         }
     }
+}
+
+fn default_docs_enabled() -> bool {
+    true
 }
 
 fn default_enable_background_sync() -> bool {
@@ -529,8 +533,8 @@ pub struct BlobConfig {
     /// When enabled, the node can store and retrieve blobs (large binary data)
     /// using content-addressed storage with automatic deduplication.
     ///
-    /// Default: false (blobs disabled).
-    #[serde(default)]
+    /// Default: true (blobs enabled).
+    #[serde(default = "default_blobs_enabled")]
     pub enabled: bool,
 
     /// Enable automatic offloading of large KV values to blobs.
@@ -572,13 +576,17 @@ pub struct BlobConfig {
 impl Default for BlobConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: default_blobs_enabled(),
             auto_offload: default_auto_offload(),
             offload_threshold_bytes: default_offload_threshold_bytes(),
             gc_interval_secs: default_gc_interval_secs(),
             gc_grace_period_secs: default_gc_grace_period_secs(),
         }
     }
+}
+
+fn default_blobs_enabled() -> bool {
+    true
 }
 
 fn default_auto_offload() -> bool {
