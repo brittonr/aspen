@@ -15,6 +15,7 @@ use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
+use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
@@ -98,6 +99,13 @@ pub enum Commands {
     /// Atomic counter operations.
     #[command(subcommand)]
     Counter(CounterCommand),
+
+    /// DNS record and zone management.
+    ///
+    /// Manage DNS records stored with Raft consensus and synchronized
+    /// via iroh-docs to clients for local DNS resolution.
+    #[command(subcommand)]
+    Dns(DnsCommand),
 
     /// CRDT-replicated docs namespace operations.
     #[command(subcommand)]
@@ -186,6 +194,7 @@ impl Cli {
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Dns(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lease(cmd) => cmd.run(&client, self.global.json).await,

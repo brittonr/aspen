@@ -22,17 +22,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use hickory_proto::op::ResponseCode;
-use hickory_proto::rr::rdata::CAA;
-use hickory_proto::rr::rdata::MX;
-use hickory_proto::rr::rdata::SOA;
-use hickory_proto::rr::rdata::SRV;
-use hickory_proto::rr::rdata::TXT;
 use hickory_proto::rr::LowerName;
 use hickory_proto::rr::Name;
 use hickory_proto::rr::RData;
 use hickory_proto::rr::Record;
 use hickory_proto::rr::RecordSet;
 use hickory_proto::rr::RecordType as HickoryRecordType;
+use hickory_proto::rr::rdata::CAA;
+use hickory_proto::rr::rdata::MX;
+use hickory_proto::rr::rdata::SOA;
+use hickory_proto::rr::rdata::SRV;
+use hickory_proto::rr::rdata::TXT;
 use hickory_server::authority::Authority;
 use hickory_server::authority::LookupControlFlow;
 use hickory_server::authority::LookupError;
@@ -118,8 +118,7 @@ impl AspenDnsAuthority {
             format!("{}.", zone)
         };
 
-        let name = Name::from_utf8(&zone_fqdn)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+        let name = Name::from_utf8(&zone_fqdn).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
         Ok(Self {
             client,

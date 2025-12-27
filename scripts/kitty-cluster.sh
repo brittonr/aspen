@@ -12,6 +12,9 @@
 #   ASPEN_STORAGE     - Storage backend: inmemory, redb, sqlite (default: redb)
 #   ASPEN_BLOBS       - Enable blob storage: true/false (default: true)
 #   ASPEN_DOCS        - Enable iroh-docs CRDT sync: true/false (default: true)
+#   ASPEN_DNS         - Enable DNS server on node 1: true/false (default: true)
+#   ASPEN_DNS_ZONES   - DNS zones to serve (default: aspen.local)
+#   ASPEN_DNS_PORT    - DNS server port (default: 15353, avoids mDNS port 5353)
 
 set -eu
 
@@ -23,6 +26,9 @@ DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-kitty-$$}"
 STORAGE="${ASPEN_STORAGE:-redb}"  # redb uses DataFusion SQL layer
 BLOBS_ENABLED="${ASPEN_BLOBS:-true}"  # Enable blob storage by default
 DOCS_ENABLED="${ASPEN_DOCS:-true}"    # Enable iroh-docs CRDT sync by default
+DNS_ENABLED="${ASPEN_DNS:-true}"      # Enable DNS server on node 1 by default
+DNS_ZONES="${ASPEN_DNS_ZONES:-aspen.local}"  # DNS zones to serve
+DNS_PORT="${ASPEN_DNS_PORT:-15353}"   # DNS port (default 15353 to avoid mDNS conflicts)
 
 # Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
 # You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
@@ -165,11 +171,12 @@ generate_session_file() {
 
         # First tab uses 'launch', subsequent tabs use 'new_tab'
         # Note: Docs namespace secret is automatically derived from cookie
+        # DNS server only runs on node 1 to avoid port conflicts
         if [ "$id" -eq 1 ]; then
             cat >> "$session_file" << EOF
 title node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         else
@@ -378,6 +385,7 @@ print_info() {
     printf "Storage:  $STORAGE\n"
     printf "Blobs:    $BLOBS_ENABLED\n"
     printf "Docs:     $DOCS_ENABLED (namespace derived from cookie)\n"
+    printf "DNS:      $DNS_ENABLED (zones: $DNS_ZONES, port: $DNS_PORT)\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
@@ -393,6 +401,14 @@ print_info() {
         printf "  nix run .#aspen-cli -- --ticket $ticket docs status\n"
         printf "  nix run .#aspen-cli -- --ticket $ticket docs set mykey 'hello'\n"
         printf "  nix run .#aspen-cli -- --ticket $ticket docs list\n"
+    fi
+    if [ "$DNS_ENABLED" = "true" ]; then
+        printf "\n"
+        printf "${BLUE}DNS (zone: $DNS_ZONES):${NC}\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket dns set api.$DNS_ZONES A 192.168.1.100\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket dns get api.$DNS_ZONES A\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket dns scan\n"
+        printf "  dig @127.0.0.1 -p $DNS_PORT api.$DNS_ZONES A\n"
     fi
     printf "\n"
     printf "${BLUE}======================================${NC}\n"

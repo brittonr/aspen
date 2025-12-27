@@ -3,6 +3,9 @@
 //! Supports both human-readable and JSON output formats for
 //! integration with scripts and other tools.
 
+use aspen::client_rpc::DnsRecordResponse;
+use aspen::client_rpc::DnsZoneResponse;
+
 /// Trait for types that can be output in multiple formats.
 pub trait Outputable {
     /// Convert to JSON value for structured output.
@@ -528,5 +531,262 @@ impl SqlQueryOutput {
         ));
 
         output
+    }
+}
+
+// =============================================================================
+// DNS Output Types
+// =============================================================================
+
+/// DNS record output.
+pub struct DnsRecordOutput {
+    pub domain: String,
+    pub record_type: String,
+    pub ttl_seconds: u32,
+    pub data_json: String,
+    pub updated_at_ms: u64,
+}
+
+impl DnsRecordOutput {
+    /// Create from a DnsRecordResponse.
+    pub fn from_response(resp: DnsRecordResponse) -> Self {
+        Self {
+            domain: resp.domain,
+            record_type: resp.record_type,
+            ttl_seconds: resp.ttl_seconds,
+            data_json: resp.data_json,
+            updated_at_ms: resp.updated_at_ms,
+        }
+    }
+
+    /// Format record data for human-readable output.
+    fn format_data(&self) -> String {
+        // Try to parse as JSON and format nicely
+        match serde_json::from_str::<serde_json::Value>(&self.data_json) {
+            Ok(data) => {
+                // Extract the relevant data based on record type
+                match self.record_type.as_str() {
+                    "A" => data
+                        .get("addresses")
+                        .and_then(|a| a.as_array())
+                        .map(|addrs| addrs.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    "AAAA" => data
+                        .get("addresses")
+                        .and_then(|a| a.as_array())
+                        .map(|addrs| addrs.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    "CNAME" | "PTR" => data
+                        .get("target")
+                        .and_then(|t| t.as_str())
+                        .map(String::from)
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    "TXT" => data
+                        .get("strings")
+                        .and_then(|s| s.as_array())
+                        .map(|strs| {
+                            strs.iter()
+                                .filter_map(|v| v.as_str())
+                                .map(|s| format!("\"{}\"", s))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    "MX" => data
+                        .get("records")
+                        .and_then(|r| r.as_array())
+                        .map(|records| {
+                            records
+                                .iter()
+                                .filter_map(|r| {
+                                    let priority = r.get("priority").and_then(|p| p.as_u64())?;
+                                    let exchange = r.get("exchange").and_then(|e| e.as_str())?;
+                                    Some(format!("{} {}", priority, exchange))
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    "NS" => data
+                        .get("nameservers")
+                        .and_then(|n| n.as_array())
+                        .map(|ns| ns.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                        .unwrap_or_else(|| self.data_json.clone()),
+                    _ => self.data_json.clone(),
+                }
+            }
+            Err(_) => self.data_json.clone(),
+        }
+    }
+}
+
+impl Outputable for DnsRecordOutput {
+    fn to_json(&self) -> serde_json::Value {
+        // Try to parse data_json as JSON, otherwise use as string
+        let data = serde_json::from_str::<serde_json::Value>(&self.data_json)
+            .unwrap_or_else(|_| serde_json::Value::String(self.data_json.clone()));
+
+        serde_json::json!({
+            "domain": self.domain,
+            "record_type": self.record_type,
+            "ttl_seconds": self.ttl_seconds,
+            "data": data,
+            "updated_at_ms": self.updated_at_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        format!("{:<30} {:6} IN {:5} {}", self.domain, self.ttl_seconds, self.record_type, self.format_data())
+    }
+}
+
+/// DNS records list output.
+pub struct DnsRecordsOutput {
+    pub records: Vec<DnsRecordOutput>,
+}
+
+impl DnsRecordsOutput {
+    /// Create from a list of DnsRecordResponse.
+    pub fn from_responses(responses: Vec<DnsRecordResponse>) -> Self {
+        Self {
+            records: responses.into_iter().map(DnsRecordOutput::from_response).collect(),
+        }
+    }
+}
+
+impl Outputable for DnsRecordsOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.records.len(),
+            "records": self.records.iter().map(|r| r.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.records.is_empty() {
+            return "No records found".to_string();
+        }
+
+        let mut output = format!("Found {} record(s)\n\n", self.records.len());
+
+        // Format as DNS zone file style
+        for record in &self.records {
+            output.push_str(&record.to_human());
+            output.push('\n');
+        }
+
+        output
+    }
+}
+
+/// DNS zone output.
+pub struct DnsZoneOutput {
+    pub name: String,
+    pub enabled: bool,
+    pub default_ttl: u32,
+    pub serial: u32,
+    pub last_modified_ms: u64,
+    pub description: Option<String>,
+}
+
+impl DnsZoneOutput {
+    /// Create from a DnsZoneResponse.
+    pub fn from_response(resp: DnsZoneResponse) -> Self {
+        Self {
+            name: resp.name,
+            enabled: resp.enabled,
+            default_ttl: resp.default_ttl,
+            serial: resp.serial,
+            last_modified_ms: resp.last_modified_ms,
+            description: resp.description,
+        }
+    }
+}
+
+impl Outputable for DnsZoneOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "enabled": self.enabled,
+            "default_ttl": self.default_ttl,
+            "serial": self.serial,
+            "last_modified_ms": self.last_modified_ms,
+            "description": self.description
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let status = if self.enabled { "enabled" } else { "disabled" };
+        let desc = self.description.as_deref().unwrap_or("-");
+
+        format!(
+            "Zone: {}\n\
+             ======{}\n\
+             Status:      {}\n\
+             Default TTL: {} seconds\n\
+             Serial:      {}\n\
+             Description: {}",
+            self.name,
+            "=".repeat(self.name.len()),
+            status,
+            self.default_ttl,
+            self.serial,
+            desc
+        )
+    }
+}
+
+/// DNS zones list output.
+pub struct DnsZonesOutput {
+    pub zones: Vec<DnsZoneOutput>,
+}
+
+impl DnsZonesOutput {
+    /// Create from a list of DnsZoneResponse.
+    pub fn from_responses(responses: Vec<DnsZoneResponse>) -> Self {
+        Self {
+            zones: responses.into_iter().map(DnsZoneOutput::from_response).collect(),
+        }
+    }
+}
+
+impl Outputable for DnsZonesOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.zones.len(),
+            "zones": self.zones.iter().map(|z| z.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.zones.is_empty() {
+            return "No zones configured".to_string();
+        }
+
+        let mut output = format!("Found {} zone(s)\n\n", self.zones.len());
+        output.push_str("Name                           | Status   | TTL     | Serial\n");
+        output.push_str("-------------------------------|----------|---------|----------\n");
+
+        for zone in &self.zones {
+            let status = if zone.enabled { "enabled" } else { "disabled" };
+            output.push_str(&format!(
+                "{:<30} | {:<8} | {:>7} | {}\n",
+                truncate(&zone.name, 30),
+                status,
+                zone.default_ttl,
+                zone.serial
+            ));
+        }
+
+        output
+    }
+}
+
+/// Truncate a string to max length, adding "..." if truncated.
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len - 3])
     }
 }

@@ -27,10 +27,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use hickory_server::ServerFuture;
 use hickory_server::authority::Authority;
 use hickory_server::authority::AuthorityObject;
 use hickory_server::authority::Catalog;
-use hickory_server::ServerFuture;
 use tokio::net::TcpListener;
 use tokio::net::UdpSocket;
 use tracing::error;
@@ -174,9 +174,7 @@ impl DnsProtocolServer {
             }
             Err(e) => {
                 error!(error = %e, "DNS server error");
-                Err(DnsError::ServerStart {
-                    reason: e.to_string(),
-                })
+                Err(DnsError::ServerStart { reason: e.to_string() })
             }
         }
     }

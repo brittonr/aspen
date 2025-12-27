@@ -118,12 +118,12 @@ pub trait DnsStore: Send + Sync {
 /// Provides DNS record management on top of the distributed KV store.
 /// All writes go through Raft consensus and are automatically exported
 /// to iroh-docs by the DocsExporter.
-pub struct AspenDnsStore<KV: KeyValueStore> {
+pub struct AspenDnsStore<KV: KeyValueStore + ?Sized> {
     /// The underlying key-value store.
     kv: Arc<KV>,
 }
 
-impl<KV: KeyValueStore> AspenDnsStore<KV> {
+impl<KV: KeyValueStore + ?Sized> AspenDnsStore<KV> {
     /// Create a new DNS store backed by the given KeyValueStore.
     pub fn new(kv: Arc<KV>) -> Self {
         Self { kv }
@@ -141,7 +141,7 @@ impl<KV: KeyValueStore> AspenDnsStore<KV> {
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + 'static> DnsStore for AspenDnsStore<KV> {
+impl<KV: KeyValueStore + ?Sized + 'static> DnsStore for AspenDnsStore<KV> {
     #[instrument(skip(self, record), fields(domain = %record.domain, record_type = %record.record_type()))]
     async fn set_record(&self, record: DnsRecord) -> DnsResult<()> {
         // Validate the record

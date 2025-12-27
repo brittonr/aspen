@@ -5023,6 +5023,486 @@ async fn process_client_request(
         }
 
         // =====================================================================
+        // DNS operations
+        // =====================================================================
+        ClientRpcRequest::DnsSetRecord {
+            domain,
+            record_type,
+            ttl_seconds,
+            data_json,
+        } => {
+            use crate::client_rpc::DnsRecordResponse;
+            use crate::client_rpc::DnsRecordResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsRecord;
+            use crate::dns::DnsRecordData;
+            use crate::dns::DnsStore;
+            use crate::dns::RecordType;
+
+            // Parse record type (needed for get_record later)
+            let rtype: RecordType = match record_type.parse() {
+                Ok(t) => t,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                        success: false,
+                        found: false,
+                        record: None,
+                        error: Some(format!("invalid record type: {}", record_type)),
+                    }));
+                }
+            };
+
+            // Parse record data from JSON
+            let data: DnsRecordData = match serde_json::from_str(&data_json) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                        success: false,
+                        found: false,
+                        record: None,
+                        error: Some(format!("invalid record data JSON: {}", e)),
+                    }));
+                }
+            };
+
+            // Verify parsed record type matches the data's record type
+            if data.record_type() != rtype {
+                return Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                    success: false,
+                    found: false,
+                    record: None,
+                    error: Some(format!(
+                        "record type mismatch: specified {} but data is {}",
+                        record_type,
+                        data.record_type()
+                    )),
+                }));
+            }
+
+            // Create record (record type is derived from data)
+            let record = DnsRecord::new(domain.clone(), ttl_seconds, data);
+
+            // Create DNS store and set record
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.set_record(record).await {
+                Ok(()) => {
+                    // Fetch the record to return it
+                    match dns_store.get_record(&domain, rtype).await {
+                        Ok(Some(rec)) => {
+                            let record_type = rec.record_type().to_string();
+                            let data_json = serde_json::to_string(&rec.data).unwrap_or_default();
+                            let response = DnsRecordResponse {
+                                domain: rec.domain,
+                                record_type,
+                                ttl_seconds: rec.ttl_seconds,
+                                data_json,
+                                updated_at_ms: rec.updated_at_ms,
+                            };
+                            Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                                success: true,
+                                found: true,
+                                record: Some(response),
+                                error: None,
+                            }))
+                        }
+                        _ => Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                            success: true,
+                            found: false,
+                            record: None,
+                            error: None,
+                        })),
+                    }
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsSetRecordResult(DnsRecordResultResponse {
+                    success: false,
+                    found: false,
+                    record: None,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsGetRecord { domain, record_type } => {
+            use crate::client_rpc::DnsRecordResponse;
+            use crate::client_rpc::DnsRecordResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+            use crate::dns::RecordType;
+
+            // Parse record type
+            let rtype: RecordType = match record_type.parse() {
+                Ok(t) => t,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
+                        success: false,
+                        found: false,
+                        record: None,
+                        error: Some(format!("invalid record type: {}", record_type)),
+                    }));
+                }
+            };
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.get_record(&domain, rtype).await {
+                Ok(Some(rec)) => {
+                    let record_type = rec.record_type().to_string();
+                    let data_json = serde_json::to_string(&rec.data).unwrap_or_default();
+                    let response = DnsRecordResponse {
+                        domain: rec.domain,
+                        record_type,
+                        ttl_seconds: rec.ttl_seconds,
+                        data_json,
+                        updated_at_ms: rec.updated_at_ms,
+                    };
+                    Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
+                        success: true,
+                        found: true,
+                        record: Some(response),
+                        error: None,
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
+                    success: true,
+                    found: false,
+                    record: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::DnsGetRecordResult(DnsRecordResultResponse {
+                    success: false,
+                    found: false,
+                    record: None,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsGetRecords { domain } => {
+            use crate::client_rpc::DnsRecordResponse;
+            use crate::client_rpc::DnsRecordsResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.get_records(&domain).await {
+                Ok(records) => {
+                    let responses: Vec<DnsRecordResponse> = records
+                        .into_iter()
+                        .map(|rec| {
+                            let record_type = rec.record_type().to_string();
+                            let data_json = serde_json::to_string(&rec.data).unwrap_or_default();
+                            DnsRecordResponse {
+                                domain: rec.domain,
+                                record_type,
+                                ttl_seconds: rec.ttl_seconds,
+                                data_json,
+                                updated_at_ms: rec.updated_at_ms,
+                            }
+                        })
+                        .collect();
+                    let count = responses.len() as u32;
+                    Ok(ClientRpcResponse::DnsGetRecordsResult(DnsRecordsResultResponse {
+                        success: true,
+                        records: responses,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsGetRecordsResult(DnsRecordsResultResponse {
+                    success: false,
+                    records: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsDeleteRecord { domain, record_type } => {
+            use crate::client_rpc::DnsDeleteRecordResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+            use crate::dns::RecordType;
+
+            // Parse record type
+            let rtype: RecordType = match record_type.parse() {
+                Ok(t) => t,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
+                        success: false,
+                        deleted: false,
+                        error: Some(format!("invalid record type: {}", record_type)),
+                    }));
+                }
+            };
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.delete_record(&domain, rtype).await {
+                Ok(deleted) => Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
+                    success: true,
+                    deleted,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::DnsDeleteRecordResult(DnsDeleteRecordResultResponse {
+                    success: false,
+                    deleted: false,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsResolve { domain, record_type } => {
+            use crate::client_rpc::DnsRecordResponse;
+            use crate::client_rpc::DnsRecordsResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+            use crate::dns::RecordType;
+
+            // Parse record type
+            let rtype: RecordType = match record_type.parse() {
+                Ok(t) => t,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
+                        success: false,
+                        records: vec![],
+                        count: 0,
+                        error: Some(format!("invalid record type: {}", record_type)),
+                    }));
+                }
+            };
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.resolve(&domain, rtype).await {
+                Ok(records) => {
+                    let responses: Vec<DnsRecordResponse> = records
+                        .into_iter()
+                        .map(|rec| {
+                            let record_type = rec.record_type().to_string();
+                            let data_json = serde_json::to_string(&rec.data).unwrap_or_default();
+                            DnsRecordResponse {
+                                domain: rec.domain,
+                                record_type,
+                                ttl_seconds: rec.ttl_seconds,
+                                data_json,
+                                updated_at_ms: rec.updated_at_ms,
+                            }
+                        })
+                        .collect();
+                    let count = responses.len() as u32;
+                    Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
+                        success: true,
+                        records: responses,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsResolveResult(DnsRecordsResultResponse {
+                    success: false,
+                    records: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsScanRecords { prefix, limit } => {
+            use crate::client_rpc::DnsRecordResponse;
+            use crate::client_rpc::DnsRecordsResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.scan_records(&prefix, limit).await {
+                Ok(records) => {
+                    let responses: Vec<DnsRecordResponse> = records
+                        .into_iter()
+                        .map(|rec| {
+                            let record_type = rec.record_type().to_string();
+                            let data_json = serde_json::to_string(&rec.data).unwrap_or_default();
+                            DnsRecordResponse {
+                                domain: rec.domain,
+                                record_type,
+                                ttl_seconds: rec.ttl_seconds,
+                                data_json,
+                                updated_at_ms: rec.updated_at_ms,
+                            }
+                        })
+                        .collect();
+                    let count = responses.len() as u32;
+                    Ok(ClientRpcResponse::DnsScanRecordsResult(DnsRecordsResultResponse {
+                        success: true,
+                        records: responses,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsScanRecordsResult(DnsRecordsResultResponse {
+                    success: false,
+                    records: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsSetZone {
+            name,
+            enabled,
+            default_ttl,
+            description,
+        } => {
+            use crate::client_rpc::DnsZoneResponse;
+            use crate::client_rpc::DnsZoneResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+            use crate::dns::Zone;
+
+            let mut zone = Zone::new(name.clone()).with_default_ttl(default_ttl);
+            if !enabled {
+                zone = zone.disabled();
+            }
+            if let Some(desc) = description {
+                zone = zone.with_description(desc);
+            }
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.set_zone(zone).await {
+                Ok(()) => {
+                    // Fetch the zone to return it
+                    match dns_store.get_zone(&name).await {
+                        Ok(Some(z)) => {
+                            let response = DnsZoneResponse {
+                                name: z.name,
+                                enabled: z.enabled,
+                                default_ttl: z.default_ttl,
+                                serial: z.metadata.serial,
+                                last_modified_ms: z.metadata.last_modified_ms,
+                                description: z.metadata.description,
+                            };
+                            Ok(ClientRpcResponse::DnsSetZoneResult(DnsZoneResultResponse {
+                                success: true,
+                                found: true,
+                                zone: Some(response),
+                                error: None,
+                            }))
+                        }
+                        _ => Ok(ClientRpcResponse::DnsSetZoneResult(DnsZoneResultResponse {
+                            success: true,
+                            found: false,
+                            zone: None,
+                            error: None,
+                        })),
+                    }
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsSetZoneResult(DnsZoneResultResponse {
+                    success: false,
+                    found: false,
+                    zone: None,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsGetZone { name } => {
+            use crate::client_rpc::DnsZoneResponse;
+            use crate::client_rpc::DnsZoneResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.get_zone(&name).await {
+                Ok(Some(z)) => {
+                    let response = DnsZoneResponse {
+                        name: z.name,
+                        enabled: z.enabled,
+                        default_ttl: z.default_ttl,
+                        serial: z.metadata.serial,
+                        last_modified_ms: z.metadata.last_modified_ms,
+                        description: z.metadata.description,
+                    };
+                    Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
+                        success: true,
+                        found: true,
+                        zone: Some(response),
+                        error: None,
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
+                    success: true,
+                    found: false,
+                    zone: None,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::DnsGetZoneResult(DnsZoneResultResponse {
+                    success: false,
+                    found: false,
+                    zone: None,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsListZones => {
+            use crate::client_rpc::DnsZoneResponse;
+            use crate::client_rpc::DnsZonesResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+            match dns_store.list_zones().await {
+                Ok(zones) => {
+                    let responses: Vec<DnsZoneResponse> = zones
+                        .into_iter()
+                        .map(|z| DnsZoneResponse {
+                            name: z.name,
+                            enabled: z.enabled,
+                            default_ttl: z.default_ttl,
+                            serial: z.metadata.serial,
+                            last_modified_ms: z.metadata.last_modified_ms,
+                            description: z.metadata.description,
+                        })
+                        .collect();
+                    let count = responses.len() as u32;
+                    Ok(ClientRpcResponse::DnsListZonesResult(DnsZonesResultResponse {
+                        success: true,
+                        zones: responses,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::DnsListZonesResult(DnsZonesResultResponse {
+                    success: false,
+                    zones: vec![],
+                    count: 0,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        ClientRpcRequest::DnsDeleteZone { name, delete_records } => {
+            use crate::client_rpc::DnsDeleteZoneResultResponse;
+            use crate::dns::AspenDnsStore;
+            use crate::dns::DnsStore;
+
+            let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
+
+            // TODO: Count records deleted if delete_records is true
+            // For now, we just delete the zone
+            match dns_store.delete_zone(&name, delete_records).await {
+                Ok(deleted) => Ok(ClientRpcResponse::DnsDeleteZoneResult(DnsDeleteZoneResultResponse {
+                    success: true,
+                    deleted,
+                    records_deleted: 0, // TODO: Track deleted record count
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::DnsDeleteZoneResult(DnsDeleteZoneResultResponse {
+                    success: false,
+                    deleted: false,
+                    records_deleted: 0,
+                    error: Some(format!("{}", e)),
+                })),
+            }
+        }
+
+        // =====================================================================
         // Sharding operations
         // =====================================================================
         ClientRpcRequest::GetTopology { client_version } => {

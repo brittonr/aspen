@@ -952,11 +952,7 @@ impl NodeConfig {
                 bind_addr: parse_env("ASPEN_DNS_SERVER_BIND_ADDR").unwrap_or_else(default_dns_bind_addr),
                 zones: {
                     let zones = parse_env_vec("ASPEN_DNS_SERVER_ZONES");
-                    if zones.is_empty() {
-                        default_dns_zones()
-                    } else {
-                        zones
-                    }
+                    if zones.is_empty() { default_dns_zones() } else { zones }
                 },
                 upstreams: {
                     let upstreams: Vec<SocketAddr> = parse_env_vec("ASPEN_DNS_SERVER_UPSTREAMS")

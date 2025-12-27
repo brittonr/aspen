@@ -1173,6 +1173,102 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // DNS operations - Record and zone management
+    // =========================================================================
+    /// Set a DNS record.
+    ///
+    /// Creates or updates a DNS record. The record data is JSON-encoded.
+    DnsSetRecord {
+        /// Domain name (e.g., "api.example.com").
+        domain: String,
+        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
+        record_type: String,
+        /// TTL in seconds.
+        ttl_seconds: u32,
+        /// JSON-encoded record data (format depends on record type).
+        data_json: String,
+    },
+
+    /// Get a DNS record.
+    ///
+    /// Returns the record for the specified domain and type.
+    DnsGetRecord {
+        /// Domain name.
+        domain: String,
+        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
+        record_type: String,
+    },
+
+    /// Get all DNS records for a domain.
+    ///
+    /// Returns all record types for the specified domain.
+    DnsGetRecords {
+        /// Domain name.
+        domain: String,
+    },
+
+    /// Delete a DNS record.
+    ///
+    /// Removes the record for the specified domain and type.
+    DnsDeleteRecord {
+        /// Domain name.
+        domain: String,
+        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
+        record_type: String,
+    },
+
+    /// Resolve a domain (with wildcard matching).
+    ///
+    /// Looks up DNS records using wildcard fallback.
+    DnsResolve {
+        /// Domain name to resolve.
+        domain: String,
+        /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
+        record_type: String,
+    },
+
+    /// Scan DNS records by prefix.
+    ///
+    /// Returns all records matching the domain prefix.
+    DnsScanRecords {
+        /// Domain prefix to match (empty matches all).
+        prefix: String,
+        /// Maximum results to return.
+        limit: u32,
+    },
+
+    /// Create or update a DNS zone.
+    ///
+    /// Zones provide organizational grouping for records.
+    DnsSetZone {
+        /// Zone name (e.g., "example.com").
+        name: String,
+        /// Whether the zone is enabled.
+        enabled: bool,
+        /// Default TTL for records in this zone.
+        default_ttl: u32,
+        /// Optional description.
+        description: Option<String>,
+    },
+
+    /// Get a DNS zone.
+    DnsGetZone {
+        /// Zone name.
+        name: String,
+    },
+
+    /// List all DNS zones.
+    DnsListZones,
+
+    /// Delete a DNS zone.
+    DnsDeleteZone {
+        /// Zone name.
+        name: String,
+        /// Whether to also delete all records in the zone.
+        delete_records: bool,
+    },
+
+    // =========================================================================
     // Sharding operations - Topology management
     // =========================================================================
     /// Get the current shard topology.
@@ -1467,6 +1563,36 @@ impl ClientRpcRequest {
                 action: "ticket".to_string(),
             }),
             Self::GetLeader => Some(Operation::Read { key: String::new() }),
+
+            // DNS operations
+            Self::DnsSetRecord { domain, .. } => Some(Operation::Write {
+                key: format!("dns:{domain}"),
+                value: vec![],
+            }),
+            Self::DnsDeleteRecord { domain, .. } => Some(Operation::Delete {
+                key: format!("dns:{domain}"),
+            }),
+            Self::DnsSetZone { name, .. } => Some(Operation::Write {
+                key: format!("dns:_zone:{name}"),
+                value: vec![],
+            }),
+            Self::DnsDeleteZone { name, .. } => Some(Operation::Delete {
+                key: format!("dns:_zone:{name}"),
+            }),
+            Self::DnsGetRecord { domain, .. } | Self::DnsGetRecords { domain } | Self::DnsResolve { domain, .. } => {
+                Some(Operation::Read {
+                    key: format!("dns:{domain}"),
+                })
+            }
+            Self::DnsScanRecords { prefix, .. } => Some(Operation::Read {
+                key: format!("dns:{prefix}"),
+            }),
+            Self::DnsGetZone { name } => Some(Operation::Read {
+                key: format!("dns:_zone:{name}"),
+            }),
+            Self::DnsListZones => Some(Operation::Read {
+                key: "dns:_zone:".to_string(),
+            }),
 
             // Public requests (no auth required)
             Self::GetHealth | Self::Ping | Self::GetNodeInfo | Self::GetClusterTicket | Self::GetTopology { .. } => {
@@ -1866,6 +1992,39 @@ pub enum ClientRpcResponse {
 
     /// Service update metadata result.
     ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse),
+
+    // =========================================================================
+    // DNS responses
+    // =========================================================================
+    /// DNS set record result.
+    DnsSetRecordResult(DnsRecordResultResponse),
+
+    /// DNS get record result.
+    DnsGetRecordResult(DnsRecordResultResponse),
+
+    /// DNS get records result.
+    DnsGetRecordsResult(DnsRecordsResultResponse),
+
+    /// DNS delete record result.
+    DnsDeleteRecordResult(DnsDeleteRecordResultResponse),
+
+    /// DNS resolve result.
+    DnsResolveResult(DnsRecordsResultResponse),
+
+    /// DNS scan records result.
+    DnsScanRecordsResult(DnsRecordsResultResponse),
+
+    /// DNS set zone result.
+    DnsSetZoneResult(DnsZoneResultResponse),
+
+    /// DNS get zone result.
+    DnsGetZoneResult(DnsZoneResultResponse),
+
+    /// DNS list zones result.
+    DnsListZonesResult(DnsZonesResultResponse),
+
+    /// DNS delete zone result.
+    DnsDeleteZoneResult(DnsDeleteZoneResultResponse),
 
     // =========================================================================
     // Sharding responses
@@ -3421,6 +3580,120 @@ pub struct ServiceUpdateHealthResultResponse {
 pub struct ServiceUpdateMetadataResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// DNS response types
+// =============================================================================
+
+/// DNS record response structure.
+///
+/// Contains a single DNS record in JSON format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsRecordResponse {
+    /// Domain name.
+    pub domain: String,
+    /// Record type (A, AAAA, CNAME, MX, TXT, SRV, NS, SOA, PTR, CAA).
+    pub record_type: String,
+    /// TTL in seconds.
+    pub ttl_seconds: u32,
+    /// Record data as JSON string (format depends on type).
+    pub data_json: String,
+    /// Unix timestamp when record was last updated (milliseconds).
+    pub updated_at_ms: u64,
+}
+
+/// DNS record operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsRecordResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether a record was found (for get operations).
+    pub found: bool,
+    /// The record (if found or created).
+    pub record: Option<DnsRecordResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// DNS records operation result (multiple records).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsRecordsResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of records.
+    pub records: Vec<DnsRecordResponse>,
+    /// Number of records returned.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// DNS delete record result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsDeleteRecordResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the record existed and was deleted.
+    pub deleted: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// DNS zone response structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsZoneResponse {
+    /// Zone name (e.g., "example.com").
+    pub name: String,
+    /// Whether the zone is enabled.
+    pub enabled: bool,
+    /// Default TTL for records in this zone.
+    pub default_ttl: u32,
+    /// SOA serial number.
+    pub serial: u32,
+    /// Unix timestamp of last modification (milliseconds).
+    pub last_modified_ms: u64,
+    /// Optional description.
+    pub description: Option<String>,
+}
+
+/// DNS zone operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsZoneResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether a zone was found (for get operations).
+    pub found: bool,
+    /// The zone (if found or created).
+    pub zone: Option<DnsZoneResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// DNS zones list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsZonesResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of zones.
+    pub zones: Vec<DnsZoneResponse>,
+    /// Number of zones returned.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// DNS delete zone result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DnsDeleteZoneResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the zone existed and was deleted.
+    pub deleted: bool,
+    /// Number of records deleted (if delete_records was true).
+    pub records_deleted: u32,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
