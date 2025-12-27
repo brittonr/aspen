@@ -5,6 +5,7 @@
 //!
 //! - **Server-side**: DNS record CRUD via Raft consensus
 //! - **Client-side**: Real-time DNS record sync with local cache
+//! - **DNS Protocol**: Embedded DNS server for local domain resolution
 //!
 //! # Architecture
 //!
@@ -18,9 +19,10 @@
 //! │  Raft Consensus                     │        │  iroh-docs sync             │
 //! │    ↓                                │        │    ↑                        │
 //! │  DocsExporter (existing)            │        │  P2P CRDT replication       │
-//! │    ↓                                │        │                             │
-//! │  iroh-docs namespace ─────── P2P CRDT sync ──┴─────────────────────────────┘
-//! └─────────────────────────────────────┘
+//! │    ↓                                │        │    ↓                        │
+//! │  iroh-docs namespace ─────── P2P CRDT sync ──┤  DnsProtocolServer          │
+//! └─────────────────────────────────────┘        │  (UDP/TCP :5353)            │
+//!                                                └─────────────────────────────┘
 //! ```
 //!
 //! # Key Format
@@ -119,9 +121,11 @@
 //! dns_store.set_zone(zone).await?;
 //! ```
 
+pub mod authority;
 pub mod client;
 pub mod constants;
 pub mod error;
+pub mod server;
 pub mod store;
 pub mod ticket;
 pub mod types;
@@ -167,3 +171,8 @@ pub use validation::validate_domain;
 pub use validation::validate_record;
 pub use validation::validate_ttl;
 pub use validation::wildcard_parent;
+
+// DNS protocol server types
+pub use authority::AspenDnsAuthority;
+pub use server::DnsProtocolServer;
+pub use server::DnsProtocolServerBuilder;

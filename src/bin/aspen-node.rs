@@ -75,6 +75,8 @@ use aspen::cluster::bootstrap::load_config;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
+use aspen::dns::AspenDnsClient;
+use aspen::dns::DnsProtocolServer;
 use aspen::protocol_handlers::ClientProtocolContext;
 use aspen::protocol_handlers::ClientProtocolHandler;
 use aspen::protocol_handlers::LOG_SUBSCRIBER_ALPN;
@@ -660,6 +662,32 @@ async fn main() -> Result<()> {
         sharding = config.sharding.enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
+
+    // Start DNS protocol server if enabled
+    if config.dns_server.enabled {
+        let dns_client = Arc::new(AspenDnsClient::new());
+        let dns_config = config.dns_server.clone();
+
+        match DnsProtocolServer::new(dns_config.clone(), Arc::clone(&dns_client)) {
+            Ok(dns_server) => {
+                info!(
+                    bind_addr = %dns_config.bind_addr,
+                    zones = ?dns_config.zones,
+                    forwarding = dns_config.forwarding_enabled,
+                    "DNS protocol server starting"
+                );
+
+                tokio::spawn(async move {
+                    if let Err(e) = dns_server.run().await {
+                        error!(error = %e, "DNS protocol server error");
+                    }
+                });
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to create DNS protocol server");
+            }
+        }
+    }
 
     // Generate and print cluster ticket for TUI connection
     let cluster_ticket = {

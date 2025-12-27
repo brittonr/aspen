@@ -130,6 +130,11 @@ datafusion = { version = "45", default-features = false, features = ["nested_exp
 arrow = "54"
 regex = "1.10"
 
+# DNS protocol server
+hickory-server = { version = "0.25", default-features = false, features = ["resolver"] }
+hickory-resolver = { version = "0.25", default-features = false, features = ["tokio"] }
+hickory-proto = "0.25"
+
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }
 crossterm = { version = "0.28", features = ["event-stream"], optional = true }

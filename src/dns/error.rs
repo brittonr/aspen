@@ -114,6 +114,22 @@ pub enum DnsError {
         /// The zone that is disabled.
         zone: String,
     },
+
+    /// DNS server failed to start.
+    #[snafu(display("DNS server failed to start: {reason}"))]
+    ServerStart {
+        /// Description of the server start failure.
+        reason: String,
+    },
+
+    /// Invalid domain name.
+    #[snafu(display("invalid domain '{domain}': {reason}"))]
+    InvalidDomainWithName {
+        /// The invalid domain name.
+        domain: String,
+        /// Description of why the domain is invalid.
+        reason: String,
+    },
 }
 
 /// Errors that can occur during DNS client operations.
