@@ -142,13 +142,26 @@ pub struct NodeHandle {
     /// Docs sync resources for P2P CRDT replication.
     ///
     /// Contains the SyncHandle and NamespaceId for accepting incoming
-    /// sync connections. None when docs P2P sync is disabled.
-    pub docs_sync: Option<crate::docs::DocsSyncResources>,
+    /// sync connections. Wrapped in Arc to allow sharing with DocsSyncService.
+    /// None when docs P2P sync is disabled.
+    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
     /// TTL cleanup task cancellation token.
     ///
     /// Used to gracefully shutdown the background TTL cleanup task.
     /// None when using InMemory storage (TTL cleanup only applies to SQLite).
     pub ttl_cleanup_cancel: Option<CancellationToken>,
+    /// Sync event listener cancellation token.
+    ///
+    /// Used to gracefully shutdown the background task that listens for
+    /// iroh-docs sync events and forwards RemoteInsert entries to DocsImporter.
+    /// None when docs sync or peer manager is disabled.
+    pub sync_event_listener_cancel: Option<CancellationToken>,
+    /// DocsSyncService cancellation token.
+    ///
+    /// Used to gracefully shutdown the background sync service that
+    /// periodically syncs with peer clusters.
+    /// None when docs sync is disabled.
+    pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Root token generated during cluster initialization (if requested).
     ///
     /// Only present when the node initialized a new cluster (not joining existing)
@@ -178,6 +191,18 @@ impl NodeHandle {
             if let Err(err) = rpc_server.shutdown().await {
                 error!(error = ?err, "failed to shutdown RPC server gracefully");
             }
+        }
+
+        // Shutdown sync event listener if present (before peer manager)
+        if let Some(cancel_token) = &self.sync_event_listener_cancel {
+            info!("shutting down sync event listener");
+            cancel_token.cancel();
+        }
+
+        // Shutdown DocsSyncService if present (before peer manager)
+        if let Some(cancel_token) = &self.docs_sync_service_cancel {
+            info!("shutting down docs sync service");
+            cancel_token.cancel();
         }
 
         // Shutdown peer manager if present
@@ -307,7 +332,11 @@ pub struct ShardedNodeHandle {
     /// DocsExporter cancellation token (optional).
     pub docs_exporter_cancel: Option<CancellationToken>,
     /// Docs sync resources for P2P CRDT replication (optional).
-    pub docs_sync: Option<crate::docs::DocsSyncResources>,
+    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
+    /// Sync event listener cancellation token (optional).
+    pub sync_event_listener_cancel: Option<CancellationToken>,
+    /// DocsSyncService cancellation token (optional).
+    pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Root token generated during cluster initialization (if requested).
     pub root_token: Option<CapabilityToken>,
 }
@@ -330,6 +359,18 @@ impl ShardedNodeHandle {
             if let Err(err) = gossip_discovery.shutdown().await {
                 error!(error = ?err, "failed to shutdown gossip discovery gracefully");
             }
+        }
+
+        // Shutdown sync event listener if present (before peer manager)
+        if let Some(cancel_token) = &self.sync_event_listener_cancel {
+            info!("shutting down sync event listener");
+            cancel_token.cancel();
+        }
+
+        // Shutdown DocsSyncService if present (before peer manager)
+        if let Some(cancel_token) = &self.docs_sync_service_cancel {
+            info!("shutting down docs sync service");
+            cancel_token.cancel();
         }
 
         // Shutdown peer manager if present
@@ -804,6 +845,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         log_broadcast: None,
         docs_exporter_cancel: None,
         docs_sync: None,
+        sync_event_listener_cancel: None,
+        docs_sync_service_cancel: None,
         root_token: None,
     })
 }
@@ -911,6 +954,10 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let (docs_exporter_cancel, docs_sync) =
         initialize_docs_export(&config, data_dir, log_broadcast.as_ref(), blob_store.as_ref()).await?;
 
+    // Wire up sync event listener and DocsSyncService if all components are available
+    let (sync_event_listener_cancel, docs_sync_service_cancel) =
+        wire_docs_sync_services(&config, &docs_sync, &blob_store, &peer_manager, &iroh_manager).await;
+
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
@@ -932,6 +979,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         docs_exporter_cancel,
         docs_sync,
         ttl_cleanup_cancel,
+        sync_event_listener_cancel,
+        docs_sync_service_cancel,
         root_token: None, // Set by caller after cluster init
     })
 }
@@ -1355,7 +1404,7 @@ async fn initialize_docs_export(
     data_dir: &std::path::Path,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
     blob_store: Option<&Arc<IrohBlobStore>>,
-) -> Result<(Option<CancellationToken>, Option<crate::docs::DocsSyncResources>)> {
+) -> Result<(Option<CancellationToken>, Option<Arc<crate::docs::DocsSyncResources>>)> {
     if !config.docs.enabled {
         info!(node_id = config.node_id, "DocsExporter disabled by configuration");
         return Ok((None, None));
@@ -1461,7 +1510,102 @@ async fn initialize_docs_export(
         "DocsExporter started with P2P sync enabled"
     );
 
-    Ok((Some(cancel_token), Some(docs_sync)))
+    Ok((Some(cancel_token), Some(Arc::new(docs_sync))))
+}
+
+/// Wire up docs sync services (sync event listener and DocsSyncService).
+///
+/// This function starts the background services that enable full P2P docs sync:
+/// 1. Sync Event Listener: Listens for RemoteInsert events from iroh-docs sync
+///    and forwards them to DocsImporter for priority-based import.
+/// 2. DocsSyncService: Periodically initiates outbound sync to peer clusters.
+///
+/// Both services require docs_sync, blob_store, and peer_manager to be available.
+///
+/// # Arguments
+/// * `config` - Node configuration
+/// * `docs_sync` - DocsSyncResources (if enabled)
+/// * `blob_store` - Blob store for content fetching (if enabled)
+/// * `peer_manager` - Peer manager for tracking peer connections
+/// * `iroh_manager` - Iroh endpoint manager for network access
+///
+/// # Returns
+/// Tuple of (sync_event_listener_cancel, docs_sync_service_cancel)
+async fn wire_docs_sync_services(
+    config: &NodeConfig,
+    docs_sync: &Option<Arc<crate::docs::DocsSyncResources>>,
+    blob_store: &Option<Arc<IrohBlobStore>>,
+    peer_manager: &Option<Arc<crate::docs::PeerManager>>,
+    iroh_manager: &Arc<IrohEndpointManager>,
+) -> (Option<CancellationToken>, Option<CancellationToken>) {
+    use crate::docs::DocsSyncService;
+    use tracing::debug as trace_debug;
+
+    // All three components are required for full docs sync
+    let (Some(docs_sync), Some(blob_store), Some(peer_manager)) =
+        (docs_sync.as_ref(), blob_store.as_ref(), peer_manager.as_ref())
+    else {
+        // Log what's missing for debugging
+        if docs_sync.is_none() {
+            trace_debug!(node_id = config.node_id, "docs sync services not started: docs_sync not available");
+        } else if blob_store.is_none() {
+            trace_debug!(node_id = config.node_id, "docs sync services not started: blob_store not available");
+        } else {
+            trace_debug!(node_id = config.node_id, "docs sync services not started: peer_manager not available");
+        }
+        return (None, None);
+    };
+
+    // Start sync event listener
+    // This listens for RemoteInsert events from iroh-docs sync and forwards them to DocsImporter
+    let sync_event_listener_cancel = match docs_sync
+        .spawn_sync_event_listener(peer_manager.importer().clone(), config.cookie.clone(), blob_store.clone())
+        .await
+    {
+        Ok(cancel) => {
+            info!(
+                node_id = config.node_id,
+                namespace = %docs_sync.namespace_id,
+                "sync event listener started"
+            );
+            Some(cancel)
+        }
+        Err(err) => {
+            warn!(
+                node_id = config.node_id,
+                error = %err,
+                "failed to start sync event listener"
+            );
+            None
+        }
+    };
+
+    // Start DocsSyncService for periodic outbound sync
+    // Uses PeerManager to get known peers - initially empty but peers can be added
+    // via PeerManager.add_peer() with AspenDocsTickets for cross-cluster sync.
+    let sync_service = Arc::new(DocsSyncService::new(docs_sync.clone(), iroh_manager.endpoint().clone()));
+
+    // Peer provider that extracts EndpointAddrs from PeerManager's ticket peers
+    let peer_manager_clone = peer_manager.clone();
+    let docs_sync_service_cancel = sync_service.spawn(move || {
+        // Get all connected peers from PeerManager
+        // Note: list_peers() is async but spawn() requires sync closure.
+        // We use a blocking approach that works because the closure is called
+        // from within a tokio runtime context.
+        // For now, return empty - peers need to sync with us first (inbound).
+        // TODO: Implement proper peer list extraction when we have async peer_provider support
+        let _ = peer_manager_clone;
+        Vec::new()
+    });
+
+    info!(
+        node_id = config.node_id,
+        sync_event_listener = sync_event_listener_cancel.is_some(),
+        docs_sync_service = true,
+        "docs sync services initialized"
+    );
+
+    (sync_event_listener_cancel, Some(docs_sync_service_cancel))
 }
 
 #[cfg(test)]
@@ -1673,6 +1817,14 @@ mod tests {
             let _: &CancellationToken = &handle.shutdown_token;
             let _: &TopicId = &handle.gossip_topic_id;
             let _: &Option<CancellationToken> = &handle.ttl_cleanup_cancel;
+            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &handle.blob_store;
+            let _: &Option<Arc<crate::docs::PeerManager>> = &handle.peer_manager;
+            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
+            let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
+            let _: &Option<Arc<crate::docs::DocsSyncResources>> = &handle.docs_sync;
+            let _: &Option<CapabilityToken> = &handle.root_token;
+            let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
+            let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;
         }
     }
 
@@ -1695,8 +1847,10 @@ mod tests {
             let _: &Option<Arc<crate::docs::PeerManager>> = &handle.peer_manager;
             let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
             let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
-            let _: &Option<crate::docs::DocsSyncResources> = &handle.docs_sync;
+            let _: &Option<Arc<crate::docs::DocsSyncResources>> = &handle.docs_sync;
             let _: &Option<CapabilityToken> = &handle.root_token;
+            let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
+            let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;
         }
     }
 

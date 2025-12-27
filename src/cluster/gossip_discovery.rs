@@ -275,18 +275,130 @@ impl SignedTopologyAnnouncement {
     }
 }
 
+/// Blob announcement for P2P content seeding.
+///
+/// Announces that a node has a specific blob available for download.
+/// Recipients can use iroh-blobs to fetch the content if needed.
+///
+/// Tiger Style: Fixed-size payload, explicit timestamp, versioned.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlobAnnouncement {
+    /// Protocol version for forward compatibility checking.
+    pub version: u8,
+    /// Node ID of the node offering this blob.
+    pub node_id: NodeId,
+    /// Endpoint address for downloading the blob.
+    pub endpoint_addr: EndpointAddr,
+    /// BLAKE3 hash of the blob content.
+    pub blob_hash: iroh_blobs::Hash,
+    /// Size of the blob in bytes.
+    pub blob_size: u64,
+    /// Format of the blob (Raw or HashSeq).
+    pub blob_format: iroh_blobs::BlobFormat,
+    /// Timestamp when this announcement was created (microseconds since UNIX epoch).
+    pub timestamp_micros: u64,
+    /// Optional tag for categorization (e.g., "kv-offload", "user-upload").
+    /// Max 64 bytes to limit payload size.
+    pub tag: Option<String>,
+}
+
+impl BlobAnnouncement {
+    /// Maximum tag length in bytes.
+    const MAX_TAG_LEN: usize = 64;
+
+    /// Create a new blob announcement with the current timestamp.
+    pub fn new(
+        node_id: NodeId,
+        endpoint_addr: EndpointAddr,
+        blob_hash: iroh_blobs::Hash,
+        blob_size: u64,
+        blob_format: iroh_blobs::BlobFormat,
+        tag: Option<String>,
+    ) -> Result<Self> {
+        // Validate tag length (Tiger Style: bounded strings)
+        if let Some(ref t) = tag
+            && t.len() > Self::MAX_TAG_LEN
+        {
+            anyhow::bail!("blob announcement tag too long: {} > {}", t.len(), Self::MAX_TAG_LEN);
+        }
+
+        let timestamp_micros = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .context("system time before Unix epoch")?
+            .as_micros() as u64;
+
+        Ok(Self {
+            version: GOSSIP_MESSAGE_VERSION,
+            node_id,
+            endpoint_addr,
+            blob_hash,
+            blob_size,
+            blob_format,
+            timestamp_micros,
+            tag,
+        })
+    }
+
+    /// Serialize to bytes using postcard.
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        postcard::to_stdvec(self).context("failed to serialize blob announcement")
+    }
+}
+
+/// Signed blob announcement for cryptographic verification.
+///
+/// Wraps a `BlobAnnouncement` with an Ed25519 signature from the sender's
+/// Iroh secret key. Recipients verify using the public key embedded in
+/// the announcement's `endpoint_addr.id`.
+///
+/// Tiger Style: Fixed 64-byte signature, fail-fast verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedBlobAnnouncement {
+    /// The blob announcement payload.
+    pub announcement: BlobAnnouncement,
+    /// Ed25519 signature over the serialized announcement (64 bytes).
+    pub signature: Signature,
+}
+
+impl SignedBlobAnnouncement {
+    /// Create a signed blob announcement.
+    pub fn sign(announcement: BlobAnnouncement, secret_key: &SecretKey) -> Result<Self> {
+        let announcement_bytes = announcement.to_bytes()?;
+        let signature = secret_key.sign(&announcement_bytes);
+
+        Ok(Self {
+            announcement,
+            signature,
+        })
+    }
+
+    /// Verify the signature and return the inner announcement if valid.
+    pub fn verify(&self) -> Option<&BlobAnnouncement> {
+        let announcement_bytes = self.announcement.to_bytes().ok()?;
+        let public_key = self.announcement.endpoint_addr.id;
+
+        match public_key.verify(&announcement_bytes, &self.signature) {
+            Ok(()) => Some(&self.announcement),
+            Err(_) => None,
+        }
+    }
+}
+
 /// Envelope for gossip messages supporting multiple message types.
 ///
-/// This allows peer announcements and topology announcements to share
-/// the same gossip topic while being distinguishable by type.
+/// This allows peer announcements, topology announcements, and blob announcements
+/// to share the same gossip topic while being distinguishable by type.
 ///
 /// Tiger Style: Versioned enum for forward compatibility.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::enum_variant_names)]
 enum GossipMessage {
     /// Peer endpoint address announcement.
     PeerAnnouncement(SignedPeerAnnouncement),
     /// Topology version announcement (for cache invalidation).
     TopologyAnnouncement(SignedTopologyAnnouncement),
+    /// Blob availability announcement for P2P content seeding.
+    BlobAnnouncement(SignedBlobAnnouncement),
 }
 
 impl GossipMessage {
@@ -788,6 +900,46 @@ impl GossipPeerDiscovery {
                                     announcement.term
                                 );
                             }
+                            GossipMessage::BlobAnnouncement(signed) => {
+                                // Verify signature - reject if invalid
+                                let announcement = match signed.verify() {
+                                    Some(ann) => ann,
+                                    None => {
+                                        tracing::warn!(
+                                            "rejected blob announcement with invalid signature from node_id={}",
+                                            u64::from(signed.announcement.node_id)
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                // Filter out our own announcements
+                                if u64::from(announcement.node_id) == u64::from(receiver_node_id) {
+                                    tracing::trace!("ignoring self-blob-announcement");
+                                    continue;
+                                }
+
+                                // Log the blob availability announcement
+                                // In the future, this could trigger background blob fetching
+                                // for redundancy or prefetching based on access patterns.
+                                tracing::info!(
+                                    hash = %announcement.blob_hash.fmt_short(),
+                                    size = announcement.blob_size,
+                                    format = ?announcement.blob_format,
+                                    node_id = u64::from(announcement.node_id),
+                                    tag = ?announcement.tag,
+                                    "discovered blob available from peer"
+                                );
+
+                                // TODO: Optionally trigger background blob download for redundancy
+                                // if let Some(blob_store) = &blob_store_opt {
+                                //     let provider = announcement.endpoint_addr.id;
+                                //     if !blob_store.has(&announcement.blob_hash).await.unwrap_or(false) {
+                                //         // Download in background for redundancy
+                                //         blob_store.download_from_peer(&announcement.blob_hash, provider).await;
+                                //     }
+                                // }
+                            }
                         }
                     }
                     Some(Ok(Event::NeighborUp(neighbor_id))) => {
@@ -901,6 +1053,58 @@ impl GossipPeerDiscovery {
 
         Ok(())
     }
+}
+
+/// Broadcast a blob announcement to the gossip network.
+///
+/// This announces that the local node has a blob available for P2P download.
+/// Other nodes can use this information to fetch the blob for redundancy
+/// or when they need the content.
+///
+/// # Arguments
+/// * `iroh_manager` - The Iroh endpoint manager (for gossip access)
+/// * `topic_id` - The gossip topic to broadcast on
+/// * `node_id` - Our node ID
+/// * `blob_hash` - BLAKE3 hash of the blob
+/// * `blob_size` - Size of the blob in bytes
+/// * `blob_format` - Format of the blob (Raw or HashSeq)
+/// * `tag` - Optional categorization tag
+///
+/// # Returns
+/// Ok(()) on success, Err if broadcast fails
+pub async fn broadcast_blob_announcement(
+    iroh_manager: &super::IrohEndpointManager,
+    topic_id: TopicId,
+    node_id: NodeId,
+    blob_hash: iroh_blobs::Hash,
+    blob_size: u64,
+    blob_format: iroh_blobs::BlobFormat,
+    tag: Option<String>,
+) -> Result<()> {
+    let gossip = iroh_manager.gossip().context("gossip not enabled")?;
+    let endpoint_addr = iroh_manager.node_addr().clone();
+    let secret_key = iroh_manager.secret_key();
+
+    // Create and sign the announcement
+    let announcement = BlobAnnouncement::new(node_id, endpoint_addr, blob_hash, blob_size, blob_format, tag)?;
+    let signed = SignedBlobAnnouncement::sign(announcement, secret_key)?;
+    let message = GossipMessage::BlobAnnouncement(signed);
+    let bytes = message.to_bytes()?;
+
+    // Subscribe briefly to get a sender, then broadcast
+    // Note: This creates a new subscription which may not be ideal for frequent announcements.
+    // For high-frequency blob announcements, consider caching the topic/sender.
+    let mut topic = gossip.subscribe(topic_id, vec![]).await.context("failed to subscribe to gossip topic")?;
+    topic.broadcast(bytes.into()).await.context("failed to broadcast blob announcement")?;
+
+    tracing::debug!(
+        hash = %blob_hash.fmt_short(),
+        size = blob_size,
+        format = ?blob_format,
+        "broadcast blob announcement"
+    );
+
+    Ok(())
 }
 
 /// Tiger Style: Abort tasks if dropped without explicit shutdown().
@@ -1310,5 +1514,141 @@ mod tests {
             }
             _ => panic!("expected PeerAnnouncement from legacy format"),
         }
+    }
+
+    // ========================================================================
+    // Blob Announcement Tests
+    // ========================================================================
+
+    #[test]
+    fn test_blob_announcement_sign_and_verify() {
+        let secret_key = SecretKey::from([42u8; 32]);
+        let node_id = 123u64;
+        let addr = EndpointAddr::new(secret_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([1u8; 32]);
+
+        let announcement = BlobAnnouncement::new(
+            node_id.into(),
+            addr,
+            blob_hash,
+            1024,
+            iroh_blobs::BlobFormat::Raw,
+            Some("kv-offload".to_string()),
+        )
+        .unwrap();
+
+        let signed = SignedBlobAnnouncement::sign(announcement.clone(), &secret_key).unwrap();
+
+        // Verify should succeed with correct key
+        let verified = signed.verify();
+        assert!(verified.is_some());
+        assert_eq!(verified.unwrap().node_id, announcement.node_id);
+        assert_eq!(verified.unwrap().blob_hash, blob_hash);
+        assert_eq!(verified.unwrap().blob_size, 1024);
+        assert_eq!(verified.unwrap().tag, Some("kv-offload".to_string()));
+    }
+
+    #[test]
+    fn test_blob_announcement_roundtrip() {
+        let secret_key = SecretKey::from([99u8; 32]);
+        let node_id = 456u64;
+        let addr = EndpointAddr::new(secret_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([2u8; 32]);
+
+        let announcement =
+            BlobAnnouncement::new(node_id.into(), addr, blob_hash, 2048, iroh_blobs::BlobFormat::HashSeq, None)
+                .unwrap();
+
+        let signed = SignedBlobAnnouncement::sign(announcement, &secret_key).unwrap();
+        let msg = GossipMessage::BlobAnnouncement(signed);
+
+        // Serialize and deserialize
+        let bytes = msg.to_bytes().unwrap();
+        let deserialized = GossipMessage::from_bytes(&bytes).unwrap();
+
+        match deserialized {
+            GossipMessage::BlobAnnouncement(s) => {
+                assert!(s.verify().is_some());
+                assert_eq!(s.verify().unwrap().blob_size, 2048);
+                assert_eq!(s.verify().unwrap().blob_format, iroh_blobs::BlobFormat::HashSeq);
+            }
+            _ => panic!("expected BlobAnnouncement"),
+        }
+    }
+
+    #[test]
+    fn test_blob_announcement_wrong_key_rejected() {
+        let real_key = SecretKey::from([11u8; 32]);
+        let fake_key = SecretKey::from([22u8; 32]);
+        let node_id = 789u64;
+
+        // Announcement claims to be from real_key's identity
+        let addr = EndpointAddr::new(real_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([3u8; 32]);
+        let announcement =
+            BlobAnnouncement::new(node_id.into(), addr, blob_hash, 512, iroh_blobs::BlobFormat::Raw, None).unwrap();
+
+        // But signed with fake_key (attacker trying to impersonate)
+        let signed = SignedBlobAnnouncement {
+            announcement,
+            signature: fake_key.sign(b"some message"),
+        };
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_blob_announcement_tampered_rejected() {
+        let secret_key = SecretKey::from([33u8; 32]);
+        let node_id = 333u64;
+        let addr = EndpointAddr::new(secret_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([4u8; 32]);
+
+        let announcement =
+            BlobAnnouncement::new(node_id.into(), addr, blob_hash, 4096, iroh_blobs::BlobFormat::Raw, None).unwrap();
+
+        let mut signed = SignedBlobAnnouncement::sign(announcement, &secret_key).unwrap();
+
+        // Tamper with the announcement after signing
+        signed.announcement.blob_size = 9999;
+
+        // Verification should fail (signature doesn't match modified content)
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_blob_announcement_tag_too_long() {
+        let secret_key = SecretKey::from([44u8; 32]);
+        let addr = EndpointAddr::new(secret_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([5u8; 32]);
+
+        // Tag too long (>64 bytes)
+        let long_tag = "a".repeat(65);
+        let result =
+            BlobAnnouncement::new(1u64.into(), addr, blob_hash, 1024, iroh_blobs::BlobFormat::Raw, Some(long_tag));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_blob_announcement_max_tag_length_ok() {
+        let secret_key = SecretKey::from([55u8; 32]);
+        let addr = EndpointAddr::new(secret_key.public());
+        let blob_hash = iroh_blobs::Hash::from_bytes([6u8; 32]);
+
+        // Tag at max length (exactly 64 bytes)
+        let max_tag = "a".repeat(64);
+        let result = BlobAnnouncement::new(
+            1u64.into(),
+            addr,
+            blob_hash,
+            1024,
+            iroh_blobs::BlobFormat::Raw,
+            Some(max_tag.clone()),
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().tag, Some(max_tag));
     }
 }

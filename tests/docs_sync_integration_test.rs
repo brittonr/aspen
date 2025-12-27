@@ -336,3 +336,139 @@ async fn test_bidirectional_sync() -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// DocsSyncService Integration Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_docs_sync_service_lifecycle() -> Result<()> {
+    use aspen::docs::DocsSyncService;
+
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=debug").try_init();
+
+    let temp_dir = TempDir::new()?;
+    let endpoint = create_test_endpoint().await?;
+    let docs_sync = Arc::new(create_docs_sync(&temp_dir, "test-node", true).await?);
+
+    // Create the sync service
+    let service = Arc::new(DocsSyncService::new(docs_sync.clone(), endpoint.clone()));
+
+    // Spawn with empty peer provider (simulates no peers available)
+    let cancel = service.clone().spawn(Vec::new);
+
+    // Let it run briefly
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify service is running (no panic)
+    assert!(!cancel.is_cancelled());
+
+    // Shutdown
+    cancel.cancel();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Cleanup
+    endpoint.close().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_docs_sync_service_with_peer_provider() -> Result<()> {
+    use aspen::docs::DocsSyncService;
+
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=debug").try_init();
+
+    // Set up two nodes
+    let temp_dir1 = TempDir::new()?;
+    let temp_dir2 = TempDir::new()?;
+
+    // Shared namespace
+    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand::rng());
+    let ns_secret_hex = hex::encode(ns_secret.to_bytes());
+
+    // Node 1 (server)
+    let endpoint1 = create_test_endpoint().await?;
+    let resources1 = init_docs_resources(temp_dir1.path(), true, Some(&ns_secret_hex), None)?;
+    let docs_sync1 = DocsSyncResources::from_docs_resources(resources1, "node-1");
+    docs_sync1.open_replica().await?;
+    let docs_sync1 = Arc::new(docs_sync1);
+
+    // Set up Router for node 1
+    let router1 = Router::builder(endpoint1.clone()).accept(DOCS_SYNC_ALPN, docs_sync1.protocol_handler()).spawn();
+
+    // Node 2 (client with sync service)
+    let endpoint2 = create_test_endpoint().await?;
+    let resources2 = init_docs_resources(temp_dir2.path(), true, Some(&ns_secret_hex), None)?;
+    let docs_sync2 = DocsSyncResources::from_docs_resources(resources2, "node-2");
+    docs_sync2.open_replica().await?;
+    let docs_sync2 = Arc::new(docs_sync2);
+
+    // Write data to node 1
+    let writer1 =
+        SyncHandleDocsWriter::new(docs_sync1.sync_handle.clone(), docs_sync1.namespace_id, docs_sync1.author.clone());
+    writer1.set_entry(b"sync-service-key".to_vec(), b"sync-service-value".to_vec()).await?;
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Create sync service on node 2 with peer provider that returns node 1
+    let peer_addr1 = get_endpoint_addr(&endpoint1);
+    let service = Arc::new(DocsSyncService::new(docs_sync2.clone(), endpoint2.clone()));
+
+    // Use a channel to track when peers are requested
+    let peer_requested = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let peer_requested_clone = peer_requested.clone();
+
+    let cancel = service.clone().spawn(move || {
+        peer_requested_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        vec![peer_addr1.clone()]
+    });
+
+    // Let the sync service run through at least one cycle
+    // Background sync interval is 60s by default, so we use sync_now instead
+    let sync_result = service.sync_now(get_endpoint_addr(&endpoint1)).await;
+
+    info!(?sync_result, "immediate sync completed");
+
+    // Shutdown service
+    cancel.cancel();
+
+    // Cleanup
+    router1.shutdown().await?;
+    endpoint1.close().await;
+    endpoint2.close().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_docs_sync_service_shutdown() -> Result<()> {
+    use aspen::docs::DocsSyncService;
+
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=debug").try_init();
+
+    let temp_dir = TempDir::new()?;
+    let endpoint = create_test_endpoint().await?;
+    let docs_sync = Arc::new(create_docs_sync(&temp_dir, "test-node", true).await?);
+
+    let service = Arc::new(DocsSyncService::new(docs_sync.clone(), endpoint.clone()));
+
+    // Spawn service
+    let cancel = service.clone().spawn(Vec::new);
+
+    // Verify running
+    assert!(!cancel.is_cancelled());
+
+    // Shutdown via the service method
+    service.shutdown();
+
+    // Give some time for shutdown to propagate
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Cancel token should be cancelled
+    assert!(cancel.is_cancelled());
+
+    endpoint.close().await;
+
+    Ok(())
+}

@@ -365,8 +365,8 @@ impl NodeMode {
 
     fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
         match self {
-            NodeMode::Single(h) => h.docs_sync.as_ref(),
-            NodeMode::Sharded(h) => h.docs_sync.as_ref(),
+            NodeMode::Single(h) => h.docs_sync.as_ref().map(|arc| arc.as_ref()),
+            NodeMode::Sharded(h) => h.docs_sync.as_ref().map(|arc| arc.as_ref()),
         }
     }
 
