@@ -77,6 +77,7 @@ use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
 use aspen::dns::AspenDnsClient;
 use aspen::dns::DnsProtocolServer;
+use aspen::dns::spawn_dns_sync_listener;
 use aspen::protocol_handlers::ClientProtocolContext;
 use aspen::protocol_handlers::ClientProtocolHandler;
 use aspen::protocol_handlers::LOG_SUBSCRIBER_ALPN;
@@ -667,6 +668,23 @@ async fn main() -> Result<()> {
     if config.dns_server.enabled {
         let dns_client = Arc::new(AspenDnsClient::new());
         let dns_config = config.dns_server.clone();
+
+        // Wire up DNS cache sync from iroh-docs if both docs_sync and blob_store are available
+        if let (Some(docs_sync), Some(blob_store)) = (node_mode.docs_sync(), node_mode.blob_store()) {
+            match spawn_dns_sync_listener(Arc::clone(&dns_client), docs_sync, Arc::clone(blob_store)).await {
+                Ok(_cancel_token) => {
+                    info!(
+                        namespace = %docs_sync.namespace_id,
+                        "DNS cache sync listener started - DNS records will sync from cluster"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to start DNS cache sync listener - DNS will serve static records only");
+                }
+            }
+        } else {
+            info!("DNS cache sync disabled - docs_sync or blob_store not available");
+        }
 
         match DnsProtocolServer::new(dns_config.clone(), Arc::clone(&dns_client)) {
             Ok(dns_server) => {

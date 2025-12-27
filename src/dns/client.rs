@@ -46,13 +46,16 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
+use tracing::info;
 use tracing::warn;
 
 use super::constants::DNS_KEY_PREFIX;
@@ -573,6 +576,200 @@ impl DnsClientBuilder {
             last_sync: RwLock::new(None),
         }
     }
+}
+
+/// Spawn a background task that listens to iroh-docs sync events and forwards
+/// DNS records to the AspenDnsClient.
+///
+/// This connects the iroh-docs sync layer to the DNS client cache, enabling
+/// real-time DNS record synchronization from the cluster.
+///
+/// # Architecture
+///
+/// ```text
+/// DocsSyncResources (iroh-docs P2P sync)
+///         |
+///         v
+/// sync event subscription (RemoteInsert events)
+///         |
+///         v
+/// blob_store.get_bytes() (fetch content by hash)
+///         |
+///         v
+/// AspenDnsClient.process_sync_entry() (update DNS cache)
+/// ```
+///
+/// # Arguments
+/// * `dns_client` - The DNS client to populate with records
+/// * `docs_sync` - The docs sync resources to subscribe to
+/// * `blob_store` - The blob store for fetching content by hash
+///
+/// # Returns
+/// A CancellationToken that can be used to stop the sync listener.
+///
+/// # Tiger Style
+/// - Bounded event channel (1000 events)
+/// - Filters for dns:* keys only
+/// - Non-blocking blob fetches
+/// - Graceful shutdown via CancellationToken
+pub async fn spawn_dns_sync_listener(
+    dns_client: Arc<AspenDnsClient>,
+    docs_sync: &crate::docs::DocsSyncResources,
+    blob_store: Arc<crate::blob::store::IrohBlobStore>,
+) -> anyhow::Result<CancellationToken> {
+    use crate::blob::store::BlobStore;
+    use iroh_docs::sync::Event;
+
+    // Create channel for sync events
+    let (tx, rx) = async_channel::bounded::<Event>(1000);
+
+    // Subscribe to sync events for the namespace
+    docs_sync
+        .sync_handle
+        .subscribe(docs_sync.namespace_id, tx)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to subscribe to sync events: {}", e))?;
+
+    let cancel = CancellationToken::new();
+    let cancel_clone = cancel.clone();
+    let namespace_id = docs_sync.namespace_id;
+
+    // Update status to syncing
+    dns_client.set_status(SyncStatus::Syncing).await;
+
+    tokio::spawn(async move {
+        info!(
+            namespace = %namespace_id,
+            "DNS sync listener started"
+        );
+
+        loop {
+            tokio::select! {
+                _ = cancel_clone.cancelled() => {
+                    info!(
+                        namespace = %namespace_id,
+                        "DNS sync listener shutting down"
+                    );
+                    dns_client.set_status(SyncStatus::Disconnected).await;
+                    break;
+                }
+                event = rx.recv() => {
+                    match event {
+                        Ok(Event::RemoteInsert {
+                            namespace: _,
+                            entry,
+                            from: _,
+                            should_download: _,
+                            remote_content_status: _,
+                        }) => {
+                            // Extract key from the signed entry
+                            let key = entry.key().to_vec();
+                            let key_str = String::from_utf8_lossy(&key);
+
+                            // Only process dns:* keys
+                            if !key_str.starts_with(DNS_KEY_PREFIX) {
+                                continue;
+                            }
+
+                            let content_hash = entry.content_hash();
+                            let content_len = entry.content_len();
+
+                            // Skip tombstones (empty content)
+                            if content_len == 0 {
+                                debug!(
+                                    key = %key_str,
+                                    "skipping DNS tombstone entry"
+                                );
+                                // Process as deletion
+                                if let Err(e) = dns_client.process_sync_delete(&key).await {
+                                    warn!(
+                                        key = %key_str,
+                                        error = %e,
+                                        "failed to process DNS deletion"
+                                    );
+                                }
+                                continue;
+                            }
+
+                            // Fetch content from blob store
+                            let content = match blob_store.get_bytes(&content_hash).await {
+                                Ok(Some(bytes)) => bytes.to_vec(),
+                                Ok(None) => {
+                                    debug!(
+                                        key = %key_str,
+                                        hash = %content_hash.fmt_short(),
+                                        "DNS record content not available locally, skipping"
+                                    );
+                                    continue;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        key = %key_str,
+                                        hash = %content_hash.fmt_short(),
+                                        error = %e,
+                                        "failed to fetch DNS record content"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            // Check for tombstone marker (single null byte indicates deletion)
+                            if content.len() == 1 && content[0] == 0x00 {
+                                debug!(
+                                    key = %key_str,
+                                    "processing DNS tombstone marker"
+                                );
+                                if let Err(e) = dns_client.process_sync_delete(&key).await {
+                                    warn!(
+                                        key = %key_str,
+                                        error = %e,
+                                        "failed to process DNS deletion"
+                                    );
+                                }
+                                continue;
+                            }
+
+                            // Process the DNS record
+                            match dns_client.process_sync_entry(&key, &content).await {
+                                Ok(()) => {
+                                    debug!(
+                                        key = %key_str,
+                                        content_len = content.len(),
+                                        "processed DNS sync entry"
+                                    );
+                                    // Update status to synced after first successful entry
+                                    if dns_client.status().await != SyncStatus::Synced {
+                                        dns_client.set_status(SyncStatus::Synced).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        key = %key_str,
+                                        error = %e,
+                                        "failed to process DNS sync entry"
+                                    );
+                                }
+                            }
+                        }
+                        Ok(Event::LocalInsert { .. }) => {
+                            // Ignore local inserts - we only care about remote
+                        }
+                        Err(e) => {
+                            warn!(
+                                namespace = %namespace_id,
+                                error = %e,
+                                "DNS sync event channel error, stopping listener"
+                            );
+                            dns_client.set_status(SyncStatus::Disconnected).await;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(cancel)
 }
 
 #[cfg(test)]

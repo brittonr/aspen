@@ -135,6 +135,7 @@ pub mod validation;
 pub use client::AspenDnsClient;
 pub use client::CacheStats;
 pub use client::DnsClientBuilder;
+pub use client::spawn_dns_sync_listener;
 pub use constants::DEFAULT_TTL;
 pub use constants::DNS_KEY_PREFIX;
 pub use constants::DNS_TICKET_PREFIX;
