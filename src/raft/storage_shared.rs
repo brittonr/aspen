@@ -338,8 +338,7 @@ pub struct SharedRedbStorage {
     /// Cached chain tip state for efficient appends.
     chain_tip: Arc<StdRwLock<ChainTipState>>,
     /// Optional broadcast sender for log entry notifications.
-    /// TODO: Implement log broadcast for Redb backend (Phase 2)
-    #[allow(dead_code)]
+    /// Broadcasts committed KV operations for DocsExporter and other subscribers.
     log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
     /// Pending responses computed during append() to be sent in apply().
     /// Key is log index, value is the computed AppResponse.
@@ -1607,15 +1606,55 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// This is the key to single-fsync performance. The state machine mutations
     /// are bundled into the log append transaction, so there's nothing to do here
     /// except retrieve and send the responses via the responders.
+    ///
+    /// However, this is the correct place to broadcast committed entries to subscribers
+    /// (e.g., DocsExporter) because apply() is called when entries are truly committed.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
     where
         Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
     {
+        use crate::raft::log_subscriber::KvOperation;
+
         // State was already applied during append().
         // Retrieve the computed responses and send them via responders.
         // EntryResponder<C> is a tuple: (Entry<C>, Option<ApplyResponder<C>>)
         while let Some((entry, responder_opt)) = entries.try_next().await? {
             let log_index = entry.log_id.index;
+            let log_term = entry.log_id.leader_id.term;
+
+            // Broadcast committed entry to subscribers (DocsExporter, etc.)
+            if let Some(ref sender) = self.log_broadcast {
+                // Convert entry payload to KvOperation for broadcast
+                let operation = match &entry.payload {
+                    EntryPayload::Normal(request) => KvOperation::from(request.clone()),
+                    EntryPayload::Membership(membership) => KvOperation::MembershipChange {
+                        description: format!(
+                            "membership change: voters={:?}, learners={:?}",
+                            membership.nodes().collect::<Vec<_>>(),
+                            membership.learner_ids().collect::<Vec<_>>()
+                        ),
+                    },
+                    EntryPayload::Blank => KvOperation::Noop,
+                };
+
+                let payload = LogEntryPayload {
+                    index: log_index,
+                    term: log_term,
+                    committed_at_ms: crate::utils::current_time_ms(),
+                    operation,
+                };
+
+                // Best-effort broadcast - don't fail if no receivers or channel is full
+                // Lagging receivers will get Lagged error and can request full sync
+                if let Err(e) = sender.send(payload) {
+                    tracing::debug!(
+                        log_index,
+                        error = %e,
+                        "failed to broadcast log entry (no receivers or channel dropped)"
+                    );
+                }
+            }
+
             // Respond with the pre-computed response if responder is present
             if let Some(responder) = responder_opt {
                 // Retrieve response computed during append(), fall back to default
@@ -1894,5 +1933,58 @@ mod tests {
         // Scan with prefix
         let results = storage.scan("prefix/", None, Some(5)).unwrap();
         assert_eq!(results.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_log_broadcast_on_apply() {
+        use crate::raft::log_subscriber::KvOperation;
+        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use crate::raft::log_subscriber::LogEntryPayload;
+        use crate::raft::types::AppRequest;
+        use crate::raft::types::AppTypeConfig;
+        use crate::raft::types::NodeId;
+        use futures::stream;
+        use openraft::entry::RaftEntry;
+        use openraft::storage::RaftStateMachine;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_broadcast.redb");
+
+        // Create broadcast channel
+        let (sender, mut receiver) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+
+        // Create storage with broadcast
+        let mut storage = SharedRedbStorage::with_broadcast(&db_path, Some(sender)).unwrap();
+
+        // Create a test entry using the helper function from openraft::testing
+        let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 1);
+        let entry: openraft::Entry<AppTypeConfig> = openraft::Entry::new_normal(
+            log_id,
+            AppRequest::Set {
+                key: "test_key".to_string(),
+                value: "test_value".to_string(),
+            },
+        );
+
+        // Simulate apply() being called with the entry
+        // Note: In real usage, apply() receives EntryResponder tuples
+        // For this test, we directly call the broadcast logic
+        let entries = stream::iter(vec![Ok((entry, None))]);
+        storage.apply(entries).await.unwrap();
+
+        // Verify broadcast was received
+        let payload = receiver.try_recv().expect("should receive broadcast");
+        assert_eq!(payload.index, 1);
+        assert_eq!(payload.term, 1);
+
+        // Verify the operation matches
+        match payload.operation {
+            KvOperation::Set { key, value } => {
+                assert_eq!(key, b"test_key".to_vec());
+                assert_eq!(value, b"test_value".to_vec());
+            }
+            _ => panic!("expected Set operation"),
+        }
     }
 }
