@@ -377,6 +377,15 @@ impl NodeMode {
         }
     }
 
+    #[cfg(feature = "global-discovery")]
+    fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
+        match self {
+            NodeMode::Single(h) => h.content_discovery.clone(),
+            // TODO: Add content_discovery support to ShardedNodeHandle
+            NodeMode::Sharded(_) => None,
+        }
+    }
+
     async fn shutdown(self) -> Result<()> {
         match self {
             NodeMode::Single(h) => h.shutdown().await,
@@ -583,6 +592,8 @@ async fn main() -> Result<()> {
         token_verifier,
         require_auth: args.require_token_auth,
         topology: None, // TODO: Wire up sharding topology when enabled
+        #[cfg(feature = "global-discovery")]
+        content_discovery: node_mode.content_discovery(),
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 

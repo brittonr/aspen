@@ -46,6 +46,13 @@ pub enum BlobCommand {
     /// Download a blob from a remote peer using a ticket.
     Download(DownloadArgs),
 
+    /// Download a blob by hash using DHT discovery.
+    ///
+    /// Queries the BitTorrent Mainline DHT for providers of the given hash,
+    /// then fetches the blob from the first available provider.
+    /// Requires the `global-discovery` feature on the server.
+    DownloadByHash(DownloadByHashArgs),
+
     /// Get detailed status information about a blob.
     Status(StatusArgs),
 }
@@ -129,6 +136,16 @@ pub struct DownloadArgs {
     /// Blob ticket from remote peer.
     #[arg(value_name = "BLOB_TICKET")]
     pub blob_ticket: String,
+
+    /// Optional tag to protect the downloaded blob from GC.
+    #[arg(long)]
+    pub tag: Option<String>,
+}
+
+#[derive(Args)]
+pub struct DownloadByHashArgs {
+    /// BLAKE3 hash of the blob to download (hex-encoded).
+    pub hash: String,
 
     /// Optional tag to protect the downloaded blob from GC.
     #[arg(long)]
@@ -452,6 +469,7 @@ impl BlobCommand {
             BlobCommand::Unprotect(args) => blob_unprotect(client, args, json).await,
             BlobCommand::Delete(args) => blob_delete(client, args, json).await,
             BlobCommand::Download(args) => blob_download(client, args, json).await,
+            BlobCommand::DownloadByHash(args) => blob_download_by_hash(client, args, json).await,
             BlobCommand::Status(args) => blob_status(client, args, json).await,
         }
     }
@@ -689,6 +707,33 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::DownloadBlobResult(result) => {
+            let output = DownloadBlobOutput {
+                success: result.success,
+                hash: result.hash,
+                size: result.size,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::DownloadBlobByHash {
+            hash: args.hash,
+            tag: args.tag,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::DownloadBlobByHashResult(result) => {
             let output = DownloadBlobOutput {
                 success: result.success,
                 hash: result.hash,

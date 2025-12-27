@@ -114,6 +114,7 @@ const DHT_RECORD_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 
 /// Configuration for the content discovery service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ContentDiscoveryConfig {
     /// Enable global DHT-based content discovery.
     /// Default: false (opt-in for privacy)

@@ -308,6 +308,18 @@ pub enum ClientRpcRequest {
         tag: Option<String>,
     },
 
+    /// Download a blob by hash using DHT discovery.
+    ///
+    /// Queries the BitTorrent Mainline DHT for providers of the given hash,
+    /// then fetches the blob from the first available provider.
+    /// Requires the `global-discovery` feature to be enabled.
+    DownloadBlobByHash {
+        /// BLAKE3 hash of the blob to download (hex-encoded).
+        hash: String,
+        /// Optional tag to protect the downloaded blob from GC.
+        tag: Option<String>,
+    },
+
     /// Get detailed status information about a blob.
     ///
     /// Returns size, completion status, and protection tags.
@@ -1513,7 +1525,8 @@ impl ClientRpcRequest {
             | Self::ProtectBlob { .. }
             | Self::UnprotectBlob { .. }
             | Self::DeleteBlob { .. }
-            | Self::DownloadBlob { .. } => Some(Operation::Write {
+            | Self::DownloadBlob { .. }
+            | Self::DownloadBlobByHash { .. } => Some(Operation::Write {
                 key: "_blob:".to_string(),
                 value: vec![],
             }),
@@ -1760,6 +1773,9 @@ pub enum ClientRpcResponse {
 
     /// Download blob result.
     DownloadBlobResult(DownloadBlobResultResponse),
+
+    /// Download blob by hash result.
+    DownloadBlobByHashResult(DownloadBlobResultResponse),
 
     /// Get blob status result.
     GetBlobStatusResult(GetBlobStatusResultResponse),

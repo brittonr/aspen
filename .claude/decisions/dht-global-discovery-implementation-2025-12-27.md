@@ -14,6 +14,7 @@ Implemented real BitTorrent Mainline DHT operations for global content discovery
 Added a `DhtClient` wrapper struct that encapsulates the mainline crate:
 
 **With `global-discovery` feature:**
+
 - Creates a real `mainline::AsyncDht` instance
 - Configures DHT port, server mode, and bootstrap nodes from `ContentDiscoveryConfig`
 - Implements `announce_peer(infohash)` for DHT announcements
@@ -21,17 +22,20 @@ Added a `DhtClient` wrapper struct that encapsulates the mainline crate:
 - Waits for DHT bootstrap in background (non-blocking)
 
 **Without `global-discovery` feature:**
+
 - Stub implementation that logs operations but doesn't perform real DHT queries
 - Allows the codebase to compile without the mainline dependency
 
 ### 2. Real DHT Operations
 
 **announce_peer:**
+
 - Uses mainline crate's `announce_peer` with implicit port (None)
 - The DHT nodes detect the source port automatically
 - Rate-limited to prevent spam (5-minute minimum between re-announces)
 
 **get_peers:**
+
 - Returns a stream of peer socket addresses
 - Collects results with a 30-second timeout
 - Limits results to MAX_PROVIDERS (50)
@@ -48,17 +52,20 @@ When `auto_announce = true` in `ContentDiscoveryConfig`:
 ### 4. Updated AnnounceTracker
 
 Changed internal tracking to store `(Instant, u64, BlobFormat)` tuples:
+
 - Enables proper republishing with size and format metadata
 - `get_stale_announces()` now returns full blob info for republishing
 
 ## Configuration
 
 Enable with:
+
 ```bash
 cargo build --features global-discovery
 ```
 
 Environment variables:
+
 - `ASPEN_CONTENT_DISCOVERY_ENABLED=true` - Enable content discovery
 - `ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=true` - Auto-announce local blobs
 - `ASPEN_CONTENT_DISCOVERY_SERVER_MODE=false` - DHT client vs server mode
@@ -69,6 +76,7 @@ Environment variables:
 ### Using announce_peer vs put_mutable
 
 We use `announce_peer` (BEP-0005) rather than `put_mutable` (BEP-0044) because:
+
 1. `announce_peer` is simpler - just IP:port pairs
 2. Lower overhead than storing signed mutable records
 3. Iroh handles the actual blob verification via QUIC connection
@@ -77,12 +85,14 @@ We use `announce_peer` (BEP-0005) rather than `put_mutable` (BEP-0044) because:
 ### Hash Mapping
 
 BLAKE3 (Iroh blob hash) -> 20-byte DHT infohash:
+
 - SHA-256(hash || format_byte) truncated to 20 bytes
 - Deterministic and format-sensitive (Raw vs HashSeq)
 
 ### Background Bootstrap
 
 DHT bootstrap runs in a spawned task:
+
 - Doesn't block node startup
 - Operations that occur before bootstrap may fail silently
 - 5-second delay before auto-announce gives time for bootstrap
@@ -90,6 +100,7 @@ DHT bootstrap runs in a spawned task:
 ## Testing
 
 All 8 content discovery tests pass:
+
 - `test_dht_infohash_deterministic`
 - `test_dht_infohash_format_differs`
 - `test_dht_announce_roundtrip`

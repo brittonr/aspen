@@ -1165,6 +1165,25 @@ impl NodeConfig {
         if other.dns_server.forwarding_enabled != default_dns_forwarding() {
             self.dns_server.forwarding_enabled = other.dns_server.forwarding_enabled;
         }
+        // Content discovery config merging
+        if other.content_discovery.enabled {
+            self.content_discovery.enabled = other.content_discovery.enabled;
+        }
+        if other.content_discovery.server_mode {
+            self.content_discovery.server_mode = other.content_discovery.server_mode;
+        }
+        if !other.content_discovery.bootstrap_nodes.is_empty() {
+            self.content_discovery.bootstrap_nodes = other.content_discovery.bootstrap_nodes;
+        }
+        if other.content_discovery.dht_port != 0 {
+            self.content_discovery.dht_port = other.content_discovery.dht_port;
+        }
+        if other.content_discovery.auto_announce {
+            self.content_discovery.auto_announce = other.content_discovery.auto_announce;
+        }
+        if other.content_discovery.max_concurrent_queries != 8 {
+            self.content_discovery.max_concurrent_queries = other.content_discovery.max_concurrent_queries;
+        }
     }
 
     /// Apply security defaults based on configuration.

@@ -154,6 +154,14 @@ pub struct ClientProtocolContext {
     ///
     /// When present, enables topology queries for shard-aware clients.
     pub topology: Option<Arc<tokio::sync::RwLock<crate::sharding::topology::ShardTopology>>>,
+    /// Content discovery service for DHT announcements and provider lookup (optional).
+    ///
+    /// When present, enables:
+    /// - Automatic DHT announcements when blobs are added
+    /// - DHT provider discovery for hash-only downloads
+    /// - Provider aggregation combining ticket + DHT providers
+    #[cfg(feature = "global-discovery")]
+    pub content_discovery: Option<crate::cluster::content_discovery::ContentDiscoveryService>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -1363,6 +1371,25 @@ async fn process_client_request(
                         }
                     }
 
+                    // Announce to DHT if content discovery is enabled
+                    // This runs in background to avoid blocking the response
+                    #[cfg(feature = "global-discovery")]
+                    if let Some(ref discovery) = ctx.content_discovery {
+                        let hash = result.blob_ref.hash;
+                        let size = result.blob_ref.size;
+                        let format = result.blob_ref.format;
+                        let discovery = discovery.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = discovery.announce(hash, size, format).await {
+                                tracing::debug!(
+                                    hash = %hash.fmt_short(),
+                                    error = %e,
+                                    "DHT announce failed (non-fatal)"
+                                );
+                            }
+                        });
+                    }
+
                     Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
                         success: true,
                         hash: Some(result.blob_ref.hash.to_string()),
@@ -1703,6 +1730,7 @@ async fn process_client_request(
                 }
             };
 
+            // First try the ticket's provider
             match blob_store.download(&ticket).await {
                 Ok(blob_ref) => {
                     // Apply protection tag if requested
@@ -1720,17 +1748,212 @@ async fn process_client_request(
                         error: None,
                     }))
                 }
-                Err(e) => {
-                    // HIGH-4: Log full error internally, return sanitized message to client
-                    warn!(error = %e, "blob download failed");
+                Err(ticket_error) => {
+                    // Ticket provider failed. Try DHT providers if content discovery is enabled.
+                    #[cfg(feature = "global-discovery")]
+                    if let Some(ref discovery) = ctx.content_discovery {
+                        let hash = ticket.hash();
+                        let format = ticket.format();
+
+                        debug!(
+                            hash = %hash.fmt_short(),
+                            "ticket provider failed, trying DHT providers"
+                        );
+
+                        // Query DHT for additional providers
+                        if let Ok(providers) = discovery.find_providers(hash, format).await {
+                            // Filter out the ticket provider (already tried)
+                            let ticket_provider = ticket.addr().id;
+                            let dht_providers: Vec<_> =
+                                providers.into_iter().filter(|p| p.node_id != ticket_provider).collect();
+
+                            if !dht_providers.is_empty() {
+                                info!(
+                                    hash = %hash.fmt_short(),
+                                    provider_count = dht_providers.len(),
+                                    "found additional DHT providers"
+                                );
+
+                                // Try each DHT provider
+                                for provider in &dht_providers {
+                                    debug!(
+                                        hash = %hash.fmt_short(),
+                                        provider = %provider.node_id.fmt_short(),
+                                        "attempting download from DHT provider"
+                                    );
+
+                                    if let Ok(blob_ref) = blob_store.download_from_peer(&hash, provider.node_id).await {
+                                        // Apply protection tag if requested
+                                        if let Some(ref tag_name) = tag {
+                                            let user_tag = IrohBlobStore::user_tag(tag_name);
+                                            if let Err(e) = blob_store.protect(&blob_ref.hash, &user_tag).await {
+                                                warn!(error = %e, "failed to apply tag to downloaded blob");
+                                            }
+                                        }
+
+                                        info!(
+                                            hash = %hash.fmt_short(),
+                                            provider = %provider.node_id.fmt_short(),
+                                            size = blob_ref.size,
+                                            "blob downloaded from DHT provider (after ticket failure)"
+                                        );
+
+                                        return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
+                                            success: true,
+                                            hash: Some(blob_ref.hash.to_string()),
+                                            size: Some(blob_ref.size),
+                                            error: None,
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // All providers failed (ticket + DHT)
+                    warn!(error = %ticket_error, "blob download failed from all providers");
                     Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                         success: false,
                         hash: None,
                         size: None,
-                        error: Some(sanitize_blob_error(&e)),
+                        error: Some(sanitize_blob_error(&ticket_error)),
                     }))
                 }
             }
+        }
+
+        // Download blob by hash using DHT discovery (requires global-discovery feature)
+        #[cfg(feature = "global-discovery")]
+        ClientRpcRequest::DownloadBlobByHash { hash, tag } => {
+            use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
+            };
+
+            let Some(ref discovery) = ctx.content_discovery else {
+                return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    error: Some("content discovery not enabled".to_string()),
+                }));
+            };
+
+            // Parse the hash
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        size: None,
+                        error: Some("invalid hash".to_string()),
+                    }));
+                }
+            };
+
+            // Query DHT for providers
+            let providers = match discovery.find_providers(hash, iroh_blobs::BlobFormat::Raw).await {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!(error = %e, hash = %hash.fmt_short(), "DHT provider lookup failed");
+                    return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        size: None,
+                        error: Some("provider lookup failed".to_string()),
+                    }));
+                }
+            };
+
+            if providers.is_empty() {
+                return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                    success: false,
+                    hash: Some(hash.to_string()),
+                    size: None,
+                    error: Some("no providers found".to_string()),
+                }));
+            }
+
+            info!(
+                hash = %hash.fmt_short(),
+                provider_count = providers.len(),
+                "found DHT providers"
+            );
+
+            // Try each provider until one succeeds
+            let mut last_error = None;
+            for provider in &providers {
+                debug!(
+                    hash = %hash.fmt_short(),
+                    provider = %provider.node_id.fmt_short(),
+                    "attempting download from DHT provider"
+                );
+
+                match blob_store.download_from_peer(&hash, provider.node_id).await {
+                    Ok(blob_ref) => {
+                        // Apply protection tag if requested
+                        if let Some(ref tag_name) = tag {
+                            let user_tag = IrohBlobStore::user_tag(tag_name);
+                            if let Err(e) = blob_store.protect(&blob_ref.hash, &user_tag).await {
+                                warn!(error = %e, "failed to apply tag to downloaded blob");
+                            }
+                        }
+
+                        info!(
+                            hash = %hash.fmt_short(),
+                            provider = %provider.node_id.fmt_short(),
+                            size = blob_ref.size,
+                            "blob downloaded from DHT provider"
+                        );
+
+                        return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                            success: true,
+                            hash: Some(blob_ref.hash.to_string()),
+                            size: Some(blob_ref.size),
+                            error: None,
+                        }));
+                    }
+                    Err(e) => {
+                        debug!(
+                            error = %e,
+                            provider = %provider.node_id.fmt_short(),
+                            "download from provider failed, trying next"
+                        );
+                        last_error = Some(e);
+                    }
+                }
+            }
+
+            // All providers failed
+            let error_msg =
+                last_error.map(|e| sanitize_blob_error(&e)).unwrap_or_else(|| "all providers failed".to_string());
+            warn!(hash = %hash.fmt_short(), error = %error_msg, "blob download failed from all providers");
+            Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                success: false,
+                hash: Some(hash.to_string()),
+                size: None,
+                error: Some(error_msg),
+            }))
+        }
+
+        // Fallback when global-discovery is not enabled
+        #[cfg(not(feature = "global-discovery"))]
+        ClientRpcRequest::DownloadBlobByHash { .. } => {
+            Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
+                success: false,
+                hash: None,
+                size: None,
+                error: Some("global-discovery feature not enabled".to_string()),
+            }))
         }
 
         ClientRpcRequest::GetBlobStatus { hash } => {
