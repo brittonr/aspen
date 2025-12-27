@@ -24,6 +24,8 @@ pub mod client_rpc;
 pub mod cluster;
 /// Distributed coordination primitives (barriers, elections, locks).
 pub mod coordination;
+/// DNS record management layer built on iroh-docs.
+pub mod dns;
 /// CRDT-based document synchronization using iroh-docs.
 pub mod docs;
 /// FoundationDB-style layer abstractions (tuple encoding, subspaces).
