@@ -320,6 +320,20 @@ pub enum ClientRpcRequest {
         tag: Option<String>,
     },
 
+    /// Download a blob from a specific provider using DHT mutable item lookup.
+    ///
+    /// Looks up the provider's DhtNodeAddr in the DHT using BEP-44 mutable items,
+    /// then fetches the blob directly from that provider.
+    /// Requires the `global-discovery` feature to be enabled.
+    DownloadBlobByProvider {
+        /// BLAKE3 hash of the blob to download (hex-encoded).
+        hash: String,
+        /// Public key of the provider node (hex-encoded or base32).
+        provider: String,
+        /// Optional tag to protect the downloaded blob from GC.
+        tag: Option<String>,
+    },
+
     /// Get detailed status information about a blob.
     ///
     /// Returns size, completion status, and protection tags.
@@ -1526,7 +1540,8 @@ impl ClientRpcRequest {
             | Self::UnprotectBlob { .. }
             | Self::DeleteBlob { .. }
             | Self::DownloadBlob { .. }
-            | Self::DownloadBlobByHash { .. } => Some(Operation::Write {
+            | Self::DownloadBlobByHash { .. }
+            | Self::DownloadBlobByProvider { .. } => Some(Operation::Write {
                 key: "_blob:".to_string(),
                 value: vec![],
             }),
@@ -1776,6 +1791,9 @@ pub enum ClientRpcResponse {
 
     /// Download blob by hash result.
     DownloadBlobByHashResult(DownloadBlobResultResponse),
+
+    /// Download blob by provider result.
+    DownloadBlobByProviderResult(DownloadBlobResultResponse),
 
     /// Get blob status result.
     GetBlobStatusResult(GetBlobStatusResultResponse),

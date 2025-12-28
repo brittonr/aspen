@@ -1956,6 +1956,154 @@ async fn process_client_request(
             }))
         }
 
+        // Download blob from a specific provider using DHT mutable item lookup
+        #[cfg(feature = "global-discovery")]
+        ClientRpcRequest::DownloadBlobByProvider { hash, provider, tag } => {
+            use iroh::PublicKey;
+            use iroh_blobs::BlobFormat;
+            use iroh_blobs::Hash;
+
+            use crate::blob::BlobStore;
+            use crate::blob::IrohBlobStore;
+
+            let Some(ref blob_store) = ctx.blob_store else {
+                return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    error: Some("blob store not enabled".to_string()),
+                }));
+            };
+
+            let Some(ref discovery) = ctx.content_discovery else {
+                return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    size: None,
+                    error: Some("content discovery not enabled".to_string()),
+                }));
+            };
+
+            // Parse the hash
+            let hash = match hash.parse::<Hash>() {
+                Ok(h) => h,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        size: None,
+                        error: Some("invalid hash".to_string()),
+                    }));
+                }
+            };
+
+            // Parse the provider public key
+            let provider_key = match provider.parse::<PublicKey>() {
+                Ok(k) => k,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        size: None,
+                        error: Some("invalid provider public key".to_string()),
+                    }));
+                }
+            };
+
+            // Look up the provider's DhtNodeAddr in the DHT
+            let node_addr = match discovery.find_provider_by_public_key(&provider_key, hash, BlobFormat::Raw).await {
+                Ok(Some(addr)) => addr,
+                Ok(None) => {
+                    warn!(
+                        hash = %hash.fmt_short(),
+                        provider = %provider_key.fmt_short(),
+                        "provider not found in DHT mutable items"
+                    );
+                    return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        size: None,
+                        error: Some("provider not found in DHT".to_string()),
+                    }));
+                }
+                Err(e) => {
+                    warn!(
+                        hash = %hash.fmt_short(),
+                        provider = %provider_key.fmt_short(),
+                        error = %e,
+                        "DHT mutable item lookup failed"
+                    );
+                    return Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        size: None,
+                        error: Some(format!("DHT lookup failed: {}", e)),
+                    }));
+                }
+            };
+
+            info!(
+                hash = %hash.fmt_short(),
+                provider = %provider_key.fmt_short(),
+                relay_url = ?node_addr.relay_url,
+                direct_addrs = node_addr.direct_addrs.len(),
+                "found provider in DHT, attempting download"
+            );
+
+            // Download from the provider
+            match blob_store.download_from_peer(&hash, provider_key).await {
+                Ok(blob_ref) => {
+                    // Apply protection tag if requested
+                    if let Some(ref tag_name) = tag {
+                        let user_tag = IrohBlobStore::user_tag(tag_name);
+                        if let Err(e) = blob_store.protect(&blob_ref.hash, &user_tag).await {
+                            warn!(error = %e, "failed to apply tag to downloaded blob");
+                        }
+                    }
+
+                    info!(
+                        hash = %hash.fmt_short(),
+                        provider = %provider_key.fmt_short(),
+                        size = blob_ref.size,
+                        "blob downloaded from DHT provider"
+                    );
+
+                    Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: true,
+                        hash: Some(blob_ref.hash.to_string()),
+                        size: Some(blob_ref.size),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    let error_msg = sanitize_blob_error(&e);
+                    warn!(
+                        hash = %hash.fmt_short(),
+                        provider = %provider_key.fmt_short(),
+                        error = %error_msg,
+                        "blob download from provider failed"
+                    );
+                    Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        size: None,
+                        error: Some(error_msg),
+                    }))
+                }
+            }
+        }
+
+        // Fallback when global-discovery is not enabled
+        #[cfg(not(feature = "global-discovery"))]
+        ClientRpcRequest::DownloadBlobByProvider { .. } => {
+            Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
+                success: false,
+                hash: None,
+                size: None,
+                error: Some("global-discovery feature not enabled".to_string()),
+            }))
+        }
+
         ClientRpcRequest::GetBlobStatus { hash } => {
             use iroh_blobs::Hash;
 
