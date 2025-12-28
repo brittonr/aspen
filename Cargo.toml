@@ -139,6 +139,12 @@ hickory-proto = { version = "0.25", optional = true }
 # Global content discovery via BitTorrent Mainline DHT (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
 
+# Forge: Git on Aspen (decentralized code collaboration)
+gix-object = { version = "0.46", optional = true }
+gix-hash = { version = "0.15", optional = true }
+gix-actor = { version = "0.33", optional = true }
+ssh-key = { version = "0.6", optional = true, features = ["ed25519"] }
+
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }
 crossterm = { version = "0.28", features = ["event-stream"], optional = true }
@@ -172,8 +178,10 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = ["sql", "dns"]
+default = ["sql", "dns", "forge"]
 testing = []
+# Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
+forge = ["dep:gix-object", "dep:gix-hash", "dep:gix-actor", "dep:ssh-key"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
@@ -191,7 +199,7 @@ virtiofs = ["fuse", "dep:vhost"]
 global-discovery = ["dep:mainline"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\"))"] }
 
 # Benchmarks
 [[bench]]

@@ -42,6 +42,13 @@ pub mod raft;
 /// Sharding module for horizontal scaling via key-based partitioning.
 pub mod sharding;
 pub mod simulation;
+/// Forge: Git on Aspen - decentralized code collaboration.
+///
+/// Only available with the `forge` feature enabled. Provides Git object
+/// storage, collaborative objects (issues, patches), and ref management
+/// built on Aspen's distributed primitives.
+#[cfg(feature = "forge")]
+pub mod forge;
 /// DataFusion SQL integration for Redb storage backend.
 ///
 /// Only available with the `sql` feature enabled. Provides read-only SQL
