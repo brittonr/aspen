@@ -1,3 +1,4 @@
+#![cfg(feature = "sql")]
 //! Integration tests for DataFusion SQL execution on Redb storage.
 //!
 //! These tests verify that the SQL layer correctly:

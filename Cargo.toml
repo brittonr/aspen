@@ -125,10 +125,11 @@ parking_lot = "0.12"
 # base64 is used by core modules
 base64 = "0.22"
 
-# DataFusion SQL engine (Phase 3 of migration plan)
-datafusion = { version = "45", default-features = false, features = ["nested_expressions"] }
-arrow = "54"
-regex = "1.10"
+# DataFusion SQL engine (optional, gated by 'sql' feature)
+datafusion = { version = "45", default-features = false, features = ["nested_expressions"], optional = true }
+arrow = { version = "54", optional = true }
+# regex is used for SQL validation when sql feature is enabled
+regex = { version = "1.10", optional = true }
 
 # DNS protocol server
 hickory-server = { version = "0.25", default-features = false, features = ["resolver"] }
@@ -171,8 +172,10 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = []
+default = ["sql"]
 testing = []
+# DataFusion SQL query engine for Redb storage backend
+sql = ["dep:datafusion", "dep:arrow", "dep:regex"]
 tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime", "dirs"]
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
@@ -186,7 +189,7 @@ virtiofs = ["fuse", "dep:vhost"]
 global-discovery = ["dep:mainline"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\"))"] }
 
 # Benchmarks
 [[bench]]

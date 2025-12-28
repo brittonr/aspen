@@ -39,11 +39,15 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use aspen::api::ReadRequest;
+#[cfg(feature = "sql")]
 use aspen::api::SqlConsistency;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryExecutor;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
+#[cfg(feature = "sql")]
 use criterion::BenchmarkId;
 use criterion::Criterion;
 use criterion::Throughput;
@@ -441,6 +445,7 @@ fn bench_redb_read_3node(c: &mut Criterion) {
 /// - Query goes through RaftNode.execute_sql()
 /// - Uses ReadIndex for linearizable consistency
 /// - DataFusion executes against Redb storage
+#[cfg(feature = "sql")]
 fn bench_sql_select_all_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -510,6 +515,7 @@ fn bench_sql_select_all_3node(c: &mut Criterion) {
 /// Benchmark 3-node SQL point lookup (WHERE key = 'exact').
 ///
 /// Tests filter pushdown performance for exact key matching.
+#[cfg(feature = "sql")]
 fn bench_sql_point_lookup_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -583,6 +589,7 @@ fn bench_sql_point_lookup_3node(c: &mut Criterion) {
 /// Benchmark 3-node SQL prefix scan (WHERE key LIKE 'prefix:%').
 ///
 /// Tests filter pushdown for prefix matching.
+#[cfg(feature = "sql")]
 fn bench_sql_prefix_scan_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -654,6 +661,7 @@ fn bench_sql_prefix_scan_3node(c: &mut Criterion) {
 /// Benchmark 3-node SQL COUNT(*) aggregation.
 ///
 /// Tests aggregation performance on replicated data.
+#[cfg(feature = "sql")]
 fn bench_sql_count_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -723,6 +731,7 @@ fn bench_sql_count_3node(c: &mut Criterion) {
 /// Benchmark 3-node SQL with Stale consistency (local read, no ReadIndex).
 ///
 /// Compares Linearizable vs Stale consistency overhead.
+#[cfg(feature = "sql")]
 fn bench_sql_stale_vs_linearizable_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -808,6 +817,7 @@ fn bench_sql_stale_vs_linearizable_3node(c: &mut Criterion) {
 }
 
 /// Benchmark SQL query with varying data sizes.
+#[cfg(feature = "sql")]
 fn bench_sql_data_sizes_3node(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -889,6 +899,7 @@ criterion_group!(
     bench_redb_read_3node,
 );
 
+#[cfg(feature = "sql")]
 criterion_group!(
     sql_3node_benches,
     bench_sql_select_all_3node,
@@ -899,4 +910,8 @@ criterion_group!(
     bench_sql_data_sizes_3node,
 );
 
+#[cfg(feature = "sql")]
 criterion_main!(production_benches, sql_3node_benches);
+
+#[cfg(not(feature = "sql"))]
+criterion_main!(production_benches);

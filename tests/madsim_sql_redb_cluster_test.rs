@@ -1,3 +1,4 @@
+#![cfg(feature = "sql")]
 //! 3-node SQL integration tests on Redb-backed Raft cluster.
 //!
 //! Tests validate:

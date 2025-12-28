@@ -1018,7 +1018,7 @@ impl ContentDiscoveryService {
             // This allows cross-cluster discovery with full connection info
             let node_addr = DhtNodeAddr::new(
                 secret_key.public(),
-                None, // TODO: Get relay URL from endpoint when available
+                None,               // TODO: Get relay URL from endpoint when available
                 std::iter::empty(), // TODO: Get direct addrs from endpoint when available
                 size,
                 format,

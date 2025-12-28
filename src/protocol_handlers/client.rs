@@ -81,6 +81,7 @@ use crate::client_rpc::ScanResultResponse;
 use crate::client_rpc::SequenceResultResponse;
 use crate::client_rpc::SignedCounterResultResponse;
 use crate::client_rpc::SnapshotResultResponse;
+#[cfg(feature = "sql")]
 use crate::client_rpc::SqlCellValue;
 use crate::client_rpc::SqlResultResponse;
 use crate::client_rpc::UnprotectBlobResultResponse;
@@ -121,6 +122,7 @@ pub struct ClientProtocolContext {
     /// Key-value store interface.
     pub kv_store: Arc<dyn KeyValueStore>,
     /// SQL query executor for read-only SQL queries.
+    #[cfg(feature = "sql")]
     pub sql_executor: Arc<dyn crate::api::SqlQueryExecutor>,
     /// State machine for direct reads (lease queries, etc.).
     pub state_machine: Option<crate::raft::StateMachineVariant>,
@@ -2799,116 +2801,136 @@ async fn process_client_request(
             limit,
             timeout_ms,
         } => {
-            use crate::api::SqlConsistency;
-            use crate::api::SqlQueryExecutor;
-            use crate::api::SqlQueryRequest;
-            use crate::api::SqlValue;
+            #[cfg(feature = "sql")]
+            {
+                use crate::api::SqlConsistency;
+                use crate::api::SqlQueryExecutor;
+                use crate::api::SqlQueryRequest;
+                use crate::api::SqlValue;
 
-            // Parse consistency level
-            let consistency = match consistency.to_lowercase().as_str() {
-                "stale" => SqlConsistency::Stale,
-                _ => SqlConsistency::Linearizable, // Default to linearizable
-            };
+                // Parse consistency level
+                let consistency = match consistency.to_lowercase().as_str() {
+                    "stale" => SqlConsistency::Stale,
+                    _ => SqlConsistency::Linearizable, // Default to linearizable
+                };
 
-            // Parse parameters from JSON
-            let params: Vec<SqlValue> = if params.is_empty() {
-                Vec::new()
-            } else {
-                match serde_json::from_str::<Vec<serde_json::Value>>(&params) {
-                    Ok(values) => values
-                        .into_iter()
-                        .map(|v| match v {
-                            serde_json::Value::Null => SqlValue::Null,
-                            serde_json::Value::Bool(b) => SqlValue::Integer(if b { 1 } else { 0 }),
-                            serde_json::Value::Number(n) => {
-                                if let Some(i) = n.as_i64() {
-                                    SqlValue::Integer(i)
-                                } else if let Some(f) = n.as_f64() {
-                                    SqlValue::Real(f)
-                                } else {
-                                    SqlValue::Text(n.to_string())
+                // Parse parameters from JSON
+                let params: Vec<SqlValue> = if params.is_empty() {
+                    Vec::new()
+                } else {
+                    match serde_json::from_str::<Vec<serde_json::Value>>(&params) {
+                        Ok(values) => values
+                            .into_iter()
+                            .map(|v| match v {
+                                serde_json::Value::Null => SqlValue::Null,
+                                serde_json::Value::Bool(b) => SqlValue::Integer(if b { 1 } else { 0 }),
+                                serde_json::Value::Number(n) => {
+                                    if let Some(i) = n.as_i64() {
+                                        SqlValue::Integer(i)
+                                    } else if let Some(f) = n.as_f64() {
+                                        SqlValue::Real(f)
+                                    } else {
+                                        SqlValue::Text(n.to_string())
+                                    }
                                 }
-                            }
-                            serde_json::Value::String(s) => SqlValue::Text(s),
-                            serde_json::Value::Array(_) | serde_json::Value::Object(_) => SqlValue::Text(v.to_string()),
-                        })
-                        .collect(),
+                                serde_json::Value::String(s) => SqlValue::Text(s),
+                                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                                    SqlValue::Text(v.to_string())
+                                }
+                            })
+                            .collect(),
+                        Err(e) => {
+                            return Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                                success: false,
+                                columns: None,
+                                rows: None,
+                                row_count: None,
+                                is_truncated: None,
+                                execution_time_ms: None,
+                                error: Some(format!("invalid params JSON: {}", e)),
+                            }));
+                        }
+                    }
+                };
+
+                // Build request
+                let request = SqlQueryRequest {
+                    query,
+                    params,
+                    consistency,
+                    limit,
+                    timeout_ms,
+                };
+
+                // Execute SQL query via SqlQueryExecutor trait
+                // The RaftNode implements this trait
+                match ctx.sql_executor.execute_sql(request).await {
+                    Ok(result) => {
+                        // Convert SqlValue to SqlCellValue for PostCard-compatible RPC transport
+                        // NOTE: serde_json::Value is NOT compatible with PostCard because
+                        // PostCard doesn't support self-describing serialization (serialize_any).
+                        use base64::Engine;
+                        let rows: Vec<Vec<SqlCellValue>> = result
+                            .rows
+                            .into_iter()
+                            .map(|row| {
+                                row.into_iter()
+                                    .map(|v| match v {
+                                        SqlValue::Null => SqlCellValue::Null,
+                                        SqlValue::Integer(i) => SqlCellValue::Integer(i),
+                                        SqlValue::Real(f) => SqlCellValue::Real(f),
+                                        SqlValue::Text(s) => SqlCellValue::Text(s),
+                                        SqlValue::Blob(b) => {
+                                            // Encode blob as base64 for safe text transport
+                                            SqlCellValue::Blob(base64::engine::general_purpose::STANDARD.encode(&b))
+                                        }
+                                    })
+                                    .collect()
+                            })
+                            .collect();
+
+                        let columns: Vec<String> = result.columns.into_iter().map(|c| c.name).collect();
+
+                        Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                            success: true,
+                            columns: Some(columns),
+                            rows: Some(rows),
+                            row_count: Some(result.row_count),
+                            is_truncated: Some(result.is_truncated),
+                            execution_time_ms: Some(result.execution_time_ms),
+                            error: None,
+                        }))
+                    }
                     Err(e) => {
-                        return Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                        // HIGH-4: Log full error internally, return sanitized message
+                        warn!(error = %e, "SQL query execution failed");
+                        Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
                             success: false,
                             columns: None,
                             rows: None,
                             row_count: None,
                             is_truncated: None,
                             execution_time_ms: None,
-                            error: Some(format!("invalid params JSON: {}", e)),
-                        }));
+                            // Return the error message (SQL errors are safe to show)
+                            error: Some(e.to_string()),
+                        }))
                     }
                 }
-            };
+            }
 
-            // Build request
-            let request = SqlQueryRequest {
-                query,
-                params,
-                consistency,
-                limit,
-                timeout_ms,
-            };
-
-            // Execute SQL query via SqlQueryExecutor trait
-            // The RaftNode implements this trait
-            match ctx.sql_executor.execute_sql(request).await {
-                Ok(result) => {
-                    // Convert SqlValue to SqlCellValue for PostCard-compatible RPC transport
-                    // NOTE: serde_json::Value is NOT compatible with PostCard because
-                    // PostCard doesn't support self-describing serialization (serialize_any).
-                    use base64::Engine;
-                    let rows: Vec<Vec<SqlCellValue>> = result
-                        .rows
-                        .into_iter()
-                        .map(|row| {
-                            row.into_iter()
-                                .map(|v| match v {
-                                    SqlValue::Null => SqlCellValue::Null,
-                                    SqlValue::Integer(i) => SqlCellValue::Integer(i),
-                                    SqlValue::Real(f) => SqlCellValue::Real(f),
-                                    SqlValue::Text(s) => SqlCellValue::Text(s),
-                                    SqlValue::Blob(b) => {
-                                        // Encode blob as base64 for safe text transport
-                                        SqlCellValue::Blob(base64::engine::general_purpose::STANDARD.encode(&b))
-                                    }
-                                })
-                                .collect()
-                        })
-                        .collect();
-
-                    let columns: Vec<String> = result.columns.into_iter().map(|c| c.name).collect();
-
-                    Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
-                        success: true,
-                        columns: Some(columns),
-                        rows: Some(rows),
-                        row_count: Some(result.row_count),
-                        is_truncated: Some(result.is_truncated),
-                        execution_time_ms: Some(result.execution_time_ms),
-                        error: None,
-                    }))
-                }
-                Err(e) => {
-                    // HIGH-4: Log full error internally, return sanitized message
-                    warn!(error = %e, "SQL query execution failed");
-                    Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
-                        success: false,
-                        columns: None,
-                        rows: None,
-                        row_count: None,
-                        is_truncated: None,
-                        execution_time_ms: None,
-                        // Return the error message (SQL errors are safe to show)
-                        error: Some(e.to_string()),
-                    }))
-                }
+            #[cfg(not(feature = "sql"))]
+            {
+                // Silence unused variable warnings
+                let _ = (query, params, consistency, limit, timeout_ms);
+                Ok(ClientRpcResponse::SqlResult(SqlResultResponse {
+                    success: false,
+                    columns: None,
+                    rows: None,
+                    row_count: None,
+                    is_truncated: None,
+                    execution_time_ms: None,
+                    error: Some("SQL queries not supported: compiled without 'sql' feature".into()),
+                }))
             }
         }
 

@@ -346,6 +346,7 @@ impl Outputable for KvBatchWriteOutput {
 }
 
 /// SQL query result output.
+#[cfg(feature = "sql")]
 pub struct SqlQueryOutput {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<aspen::client_rpc::SqlCellValue>>,
@@ -356,6 +357,7 @@ pub struct SqlQueryOutput {
     pub format: crate::commands::sql::OutputFormat,
 }
 
+#[cfg(feature = "sql")]
 impl Outputable for SqlQueryOutput {
     fn to_json(&self) -> serde_json::Value {
         use aspen::client_rpc::SqlCellValue;
@@ -408,6 +410,7 @@ impl Outputable for SqlQueryOutput {
     }
 }
 
+#[cfg(feature = "sql")]
 impl SqlQueryOutput {
     /// Format as ASCII table with borders.
     fn format_table(&self) -> String {

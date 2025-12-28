@@ -38,6 +38,10 @@ pub mod raft;
 pub mod sharding;
 pub mod simulation;
 /// DataFusion SQL integration for Redb storage backend.
+///
+/// Only available with the `sql` feature enabled. Provides read-only SQL
+/// query execution over Redb KV data using Apache DataFusion.
+#[cfg(feature = "sql")]
 pub mod sql;
 
 /// Testing infrastructure for deterministic multi-node Raft tests.

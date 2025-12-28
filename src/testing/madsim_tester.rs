@@ -55,16 +55,22 @@ use anyhow::Result;
 use openraft::Config;
 use openraft::Raft;
 
+#[cfg(feature = "sql")]
 use crate::api::SqlConsistency;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryError;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryRequest;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryResult;
+#[cfg(feature = "sql")]
 use crate::raft::StateMachineVariant;
 use crate::raft::madsim_network::ByzantineCorruptionMode;
 use crate::raft::madsim_network::ByzantineFailureInjector;
 use crate::raft::madsim_network::FailureInjector;
 use crate::raft::madsim_network::MadsimNetworkFactory;
 use crate::raft::madsim_network::MadsimRaftRouter;
+#[cfg(feature = "sql")]
 use crate::raft::node::RaftNode;
 use crate::raft::storage::InMemoryLogStore;
 use crate::raft::storage::InMemoryStateMachine;
@@ -507,7 +513,8 @@ enum TestNode {
     /// Redb node (for SQL testing and crash recovery with single-fsync storage).
     Redb {
         raft: Raft<AppTypeConfig>,
-        /// RaftNode wrapper for SqlQueryExecutor access.
+        /// RaftNode wrapper for SqlQueryExecutor access (only used with sql feature).
+        #[cfg(feature = "sql")]
         raft_node: Arc<RaftNode>,
         /// Shared Redb storage (implements both log and state machine).
         storage: Arc<SharedRedbStorage>,
@@ -541,6 +548,7 @@ impl TestNode {
     }
 
     /// Get the RaftNode wrapper for SQL execution (only available for Redb nodes).
+    #[cfg(feature = "sql")]
     fn raft_node(&self) -> Option<&Arc<RaftNode>> {
         match self {
             TestNode::InMemory { .. } => None,
@@ -712,7 +720,8 @@ impl AspenRaftTester {
                     // Wrap storage in Arc for StateMachineVariant and storage in TestNode
                     let storage = Arc::new(storage);
 
-                    // Create RaftNode wrapper to expose SqlQueryExecutor trait
+                    // Create RaftNode wrapper to expose SqlQueryExecutor trait (only when sql feature is enabled)
+                    #[cfg(feature = "sql")]
                     let raft_node = Arc::new(RaftNode::new(
                         node_id,
                         Arc::new(raft.clone()),
@@ -721,6 +730,7 @@ impl AspenRaftTester {
 
                     TestNode::Redb {
                         raft,
+                        #[cfg(feature = "sql")]
                         raft_node,
                         storage,
                         connected: AtomicBool::new(true),
@@ -1109,14 +1119,16 @@ impl AspenRaftTester {
                 .register_node(node_id, format!("127.0.0.1:{}", 26000 + i), raft.clone())
                 .expect("failed to re-register node");
 
-            // Wrap storage in Arc and create RaftNode wrapper
+            // Wrap storage in Arc and create RaftNode wrapper (only when sql feature is enabled)
             let storage = Arc::new(storage);
+            #[cfg(feature = "sql")]
             let raft_node =
                 Arc::new(RaftNode::new(node_id, Arc::new(raft.clone()), StateMachineVariant::Redb(storage.clone())));
 
             // Replace the node in our list
             self.nodes[i] = TestNode::Redb {
                 raft,
+                #[cfg(feature = "sql")]
                 raft_node,
                 storage,
                 connected: AtomicBool::new(true),
@@ -1285,6 +1297,7 @@ impl AspenRaftTester {
     /// let result = t.execute_sql("SELECT * FROM kv WHERE key LIKE 'user:%'").await?;
     /// assert_eq!(result.row_count, 10);
     /// ```
+    #[cfg(feature = "sql")]
     pub async fn execute_sql(&mut self, query: &str) -> Result<SqlQueryResult> {
         self.execute_sql_with_consistency(query, SqlConsistency::Linearizable).await
     }
@@ -1309,6 +1322,7 @@ impl AspenRaftTester {
     ///     SqlConsistency::Stale,
     /// ).await?;
     /// ```
+    #[cfg(feature = "sql")]
     pub async fn execute_sql_with_consistency(
         &mut self,
         query: &str,
@@ -1334,6 +1348,7 @@ impl AspenRaftTester {
     /// // Query follower with stale consistency
     /// let result = t.execute_sql_on_node(1, "SELECT * FROM kv", SqlConsistency::Stale).await?;
     /// ```
+    #[cfg(feature = "sql")]
     pub async fn execute_sql_on_node(
         &mut self,
         node_idx: usize,

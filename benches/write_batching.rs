@@ -32,8 +32,11 @@ use aspen::api::ClusterController;
 use aspen::api::ClusterNode;
 use aspen::api::InitRequest;
 use aspen::api::KeyValueStore;
+#[cfg(feature = "sql")]
 use aspen::api::SqlConsistency;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryExecutor;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
@@ -290,6 +293,7 @@ fn bench_throughput_measurement(c: &mut Criterion) {
 ///
 /// This validates that batched writes are correctly persisted by querying
 /// the data through the DataFusion SQL layer.
+#[cfg(feature = "sql")]
 fn bench_sql_verification(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
 
@@ -554,10 +558,16 @@ criterion_group!(
     batch_benches,
     bench_concurrent_throughput,
     bench_throughput_measurement,
-    bench_sql_verification,
     bench_batch_config_sweep,
     bench_latency_distribution,
     bench_real_throughput,
 );
 
+#[cfg(feature = "sql")]
+criterion_group!(sql_batch_benches, bench_sql_verification,);
+
+#[cfg(feature = "sql")]
+criterion_main!(batch_benches, sql_batch_benches);
+
+#[cfg(not(feature = "sql"))]
 criterion_main!(batch_benches);

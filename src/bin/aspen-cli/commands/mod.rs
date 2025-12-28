@@ -18,5 +18,6 @@ pub mod rwlock;
 pub mod semaphore;
 pub mod sequence;
 pub mod service;
+#[cfg(feature = "sql")]
 pub mod sql;
 pub mod verify;

@@ -36,6 +36,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+#[cfg(feature = "sql")]
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -69,14 +70,21 @@ use crate::api::ReadRequest;
 use crate::api::ReadResult;
 use crate::api::ScanRequest;
 use crate::api::ScanResult;
+#[cfg(feature = "sql")]
 use crate::api::SqlConsistency;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryError;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryExecutor;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryRequest;
+#[cfg(feature = "sql")]
 use crate::api::SqlQueryResult;
 use crate::api::WriteRequest;
 use crate::api::WriteResult;
+#[cfg(feature = "sql")]
 use crate::api::sql_validation::validate_sql_query;
+#[cfg(feature = "sql")]
 use crate::api::validate_sql_request;
 use crate::api::validate_write_command;
 use crate::raft::StateMachineVariant;
@@ -116,6 +124,7 @@ pub struct RaftNode {
     ///
     /// Lazily initialized on first SQL query to avoid startup overhead.
     /// Caches the DataFusion SessionContext for ~400µs savings per query.
+    #[cfg(feature = "sql")]
     sql_executor: OnceLock<crate::sql::RedbSqlExecutor>,
 
     /// Optional write batcher for high-throughput workloads.
@@ -135,6 +144,7 @@ impl RaftNode {
             state_machine,
             initialized: AtomicBool::new(false),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
+            #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
             write_batcher: None,
         }
@@ -166,6 +176,7 @@ impl RaftNode {
             state_machine,
             initialized: AtomicBool::new(false),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
+            #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
             write_batcher: Some(write_batcher),
         }
@@ -943,6 +954,7 @@ impl KeyValueStore for RaftNode {
     }
 }
 
+#[cfg(feature = "sql")]
 #[async_trait]
 impl SqlQueryExecutor for RaftNode {
     #[instrument(skip(self))]

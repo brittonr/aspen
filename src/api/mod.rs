@@ -53,6 +53,7 @@ use thiserror::Error;
 
 pub mod inmemory;
 pub mod pure;
+#[cfg(feature = "sql")]
 pub mod sql_validation;
 pub mod vault;
 pub use inmemory::DeterministicClusterController;
@@ -65,13 +66,19 @@ pub use vault::VaultError;
 pub use vault::is_system_key;
 pub use vault::validate_client_key;
 
+#[cfg(feature = "sql")]
 use crate::raft::constants::DEFAULT_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
 use crate::raft::constants::DEFAULT_SQL_TIMEOUT_MS;
 use crate::raft::constants::MAX_KEY_SIZE;
 use crate::raft::constants::MAX_SETMULTI_KEYS;
+#[cfg(feature = "sql")]
 use crate::raft::constants::MAX_SQL_PARAMS;
+#[cfg(feature = "sql")]
 use crate::raft::constants::MAX_SQL_QUERY_SIZE;
+#[cfg(feature = "sql")]
 use crate::raft::constants::MAX_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
 use crate::raft::constants::MAX_SQL_TIMEOUT_MS;
 use crate::raft::constants::MAX_VALUE_SIZE;
 
@@ -1494,7 +1501,7 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
 }
 
 // ============================================================================
-// SQL Query Types and Traits
+// SQL Query Types and Traits (requires 'sql' feature)
 // ============================================================================
 
 /// Consistency level for SQL read queries.
@@ -1503,6 +1510,7 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
 ///   default but has higher latency due to leader confirmation.
 /// - `Stale`: Fast local read without consistency guarantee. May return stale data if the node is
 ///   behind the leader.
+#[cfg(feature = "sql")]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum SqlConsistency {
     /// Linearizable consistency via Raft ReadIndex protocol.
@@ -1518,6 +1526,7 @@ pub enum SqlConsistency {
 ///
 /// SQLite has a dynamic type system with 5 storage classes.
 /// This enum preserves the type information from query results.
+#[cfg(feature = "sql")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SqlValue {
     /// SQL NULL value.
@@ -1533,6 +1542,7 @@ pub enum SqlValue {
 }
 
 /// Information about a result column.
+#[cfg(feature = "sql")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SqlColumnInfo {
     /// Column name (or alias if specified in query).
@@ -1542,6 +1552,7 @@ pub struct SqlColumnInfo {
 /// Request to execute a read-only SQL query.
 ///
 /// Tiger Style: All parameters have fixed bounds to prevent resource exhaustion.
+#[cfg(feature = "sql")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct SqlQueryRequest {
     /// SQL query string. Must be a SELECT statement (or WITH...SELECT for CTEs).
@@ -1563,6 +1574,7 @@ pub struct SqlQueryRequest {
 /// Result of a SQL query execution.
 ///
 /// Tiger Style: Bounded results with explicit truncation indicator.
+#[cfg(feature = "sql")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SqlQueryResult {
     /// Column metadata for the result set.
@@ -1578,6 +1590,7 @@ pub struct SqlQueryResult {
 }
 
 /// Errors that can occur during SQL query execution.
+#[cfg(feature = "sql")]
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum SqlQueryError {
     /// Query is not a valid read-only statement (contains write operations).
@@ -1641,6 +1654,7 @@ pub enum SqlQueryError {
 /// - Parameter count <= MAX_SQL_PARAMS
 /// - Limit <= MAX_SQL_RESULT_ROWS (if specified)
 /// - Timeout <= MAX_SQL_TIMEOUT_MS (if specified)
+#[cfg(feature = "sql")]
 pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryError> {
     // Check query size
     if request.query.len() > MAX_SQL_QUERY_SIZE as usize {
@@ -1680,11 +1694,13 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
 }
 
 /// Get effective limit, applying defaults and bounds.
+#[cfg(feature = "sql")]
 pub fn effective_sql_limit(request_limit: Option<u32>) -> u32 {
     request_limit.unwrap_or(DEFAULT_SQL_RESULT_ROWS).min(MAX_SQL_RESULT_ROWS)
 }
 
 /// Get effective timeout in milliseconds, applying defaults and bounds.
+#[cfg(feature = "sql")]
 pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
     request_timeout.unwrap_or(DEFAULT_SQL_TIMEOUT_MS).min(MAX_SQL_TIMEOUT_MS)
 }
@@ -1698,6 +1714,7 @@ pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
 /// 3. Keeps the KeyValueStore interface simple
 ///
 /// Tiger Style: Queries have bounded size limits to prevent resource exhaustion.
+#[cfg(feature = "sql")]
 #[async_trait]
 pub trait SqlQueryExecutor: Send + Sync {
     /// Execute a read-only SQL query against the state machine.
@@ -1726,6 +1743,7 @@ pub trait SqlQueryExecutor: Send + Sync {
 }
 
 /// Blanket implementation for `Arc<T>` where T: SqlQueryExecutor.
+#[cfg(feature = "sql")]
 #[async_trait]
 impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {

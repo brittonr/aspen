@@ -27,6 +27,7 @@ use crate::commands::rwlock::RWLockCommand;
 use crate::commands::semaphore::SemaphoreCommand;
 use crate::commands::sequence::SequenceCommand;
 use crate::commands::service::ServiceCommand;
+#[cfg(feature = "sql")]
 use crate::commands::sql::SqlCommand;
 use crate::commands::verify::VerifyCommand;
 
@@ -154,6 +155,7 @@ pub enum Commands {
     /// SQL query operations.
     ///
     /// Execute read-only SQL queries against the distributed state machine.
+    #[cfg(feature = "sql")]
     #[command(subcommand)]
     Sql(SqlCommand),
 
@@ -206,6 +208,7 @@ impl Cli {
             Commands::Semaphore(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Sequence(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Service(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "sql")]
             Commands::Sql(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Verify(cmd) => cmd.run(&client, self.global.json).await,
         }

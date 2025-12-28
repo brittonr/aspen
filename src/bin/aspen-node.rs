@@ -580,6 +580,7 @@ async fn main() -> Result<()> {
         node_id: config.node_id,
         controller: controller.clone(),
         kv_store: kv_store.clone(),
+        #[cfg(feature = "sql")]
         sql_executor: primary_raft_node.clone(),
         state_machine: Some(primary_raft_node.state_machine().clone()),
         endpoint_manager: node_mode.iroh_manager().clone(),

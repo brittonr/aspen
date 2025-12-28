@@ -20,8 +20,11 @@ use aspen::api::InitRequest;
 use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;
+#[cfg(feature = "sql")]
 use aspen::api::SqlConsistency;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryExecutor;
+#[cfg(feature = "sql")]
 use aspen::api::SqlQueryRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
@@ -267,6 +270,7 @@ async fn test_large_concurrent_write_volume() {
 // =============================================================================
 
 /// Test that batched writes are visible via SQL queries.
+#[cfg(feature = "sql")]
 #[tokio::test]
 async fn test_batched_writes_visible_via_sql() {
     let temp_dir = TempDir::new().unwrap();
@@ -327,6 +331,7 @@ async fn test_batched_writes_visible_via_sql() {
 }
 
 /// Test that SQL point lookup works on batched data.
+#[cfg(feature = "sql")]
 #[tokio::test]
 async fn test_sql_point_lookup_on_batched_data() {
     let temp_dir = TempDir::new().unwrap();
