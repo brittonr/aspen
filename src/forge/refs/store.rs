@@ -2,10 +2,25 @@
 
 use std::sync::Arc;
 
+use tokio::sync::broadcast;
+
 use crate::api::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
 use crate::forge::constants::{KV_PREFIX_REFS, MAX_REFS_PER_REPO, MAX_REF_NAME_LENGTH_BYTES};
 use crate::forge::error::{ForgeError, ForgeResult};
 use crate::forge::identity::RepoId;
+
+/// Event emitted when a ref is updated.
+#[derive(Debug, Clone)]
+pub struct RefUpdateEvent {
+    /// Repository ID.
+    pub repo_id: RepoId,
+    /// Ref name (e.g., "heads/main").
+    pub ref_name: String,
+    /// New hash the ref points to.
+    pub new_hash: blake3::Hash,
+    /// Previous hash (if known).
+    pub old_hash: Option<blake3::Hash>,
+}
 
 /// Storage for refs (branches, tags) using Raft consensus.
 ///
@@ -27,12 +42,23 @@ use crate::forge::identity::RepoId;
 /// ```
 pub struct RefStore<K: KeyValueStore + ?Sized> {
     kv: Arc<K>,
+    /// Event sender for ref updates.
+    event_tx: broadcast::Sender<RefUpdateEvent>,
 }
 
 impl<K: KeyValueStore + ?Sized> RefStore<K> {
     /// Create a new ref store.
     pub fn new(kv: Arc<K>) -> Self {
-        Self { kv }
+        let (event_tx, _) = broadcast::channel(256);
+        Self { kv, event_tx }
+    }
+
+    /// Subscribe to ref update events.
+    ///
+    /// Returns a receiver that will receive events when refs are updated.
+    /// This can be used to trigger gossip broadcasts or other side effects.
+    pub fn subscribe(&self) -> broadcast::Receiver<RefUpdateEvent> {
+        self.event_tx.subscribe()
     }
 
     /// Get a ref's current value.
@@ -83,6 +109,7 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     /// Set a ref to a new value.
     ///
     /// This goes through Raft consensus, so all nodes will agree on the update.
+    /// After successful update, emits a `RefUpdateEvent` for gossip broadcast.
     ///
     /// # Arguments
     ///
@@ -101,6 +128,9 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     ) -> ForgeResult<()> {
         self.validate_ref_name(ref_name)?;
 
+        // Get old hash for the event
+        let old_hash = self.get(repo_id, ref_name).await.ok().flatten();
+
         let key = self.ref_key(repo_id, ref_name);
         let value = hex::encode(hash.as_bytes());
 
@@ -110,6 +140,14 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
             })
             .await?;
 
+        // Emit event (ignore send errors if no subscribers)
+        let _ = self.event_tx.send(RefUpdateEvent {
+            repo_id: *repo_id,
+            ref_name: ref_name.to_string(),
+            new_hash: hash,
+            old_hash,
+        });
+
         Ok(())
     }
 
@@ -117,6 +155,7 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     ///
     /// The update only succeeds if the ref's current value matches `expected`.
     /// This enables safe concurrent updates.
+    /// After successful update, emits a `RefUpdateEvent` for gossip broadcast.
     ///
     /// # Arguments
     ///
@@ -162,6 +201,14 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
                     ForgeError::from(e)
                 }
             })?;
+
+        // Emit event (ignore send errors if no subscribers)
+        let _ = self.event_tx.send(RefUpdateEvent {
+            repo_id: *repo_id,
+            ref_name: ref_name.to_string(),
+            new_hash,
+            old_hash: expected,
+        });
 
         Ok(())
     }

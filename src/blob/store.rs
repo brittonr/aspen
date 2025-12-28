@@ -113,6 +113,16 @@ pub trait BlobStore: Send + Sync {
     /// Download a blob from a remote peer using a ticket.
     async fn download(&self, ticket: &BlobTicket) -> Result<BlobRef, BlobStoreError>;
 
+    /// Download a blob directly from a specific peer by hash.
+    ///
+    /// This is used for P2P sync when we know which peer has the blob.
+    /// Default implementation returns an error for stores that don't support P2P.
+    async fn download_from_peer(&self, hash: &Hash, _provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
+        Err(BlobStoreError::Download {
+            message: format!("P2P download not supported for hash {}", hash.to_hex()),
+        })
+    }
+
     /// List blobs with pagination.
     async fn list(&self, limit: u32, continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError>;
 }
@@ -382,6 +392,27 @@ impl BlobStore for IrohBlobStore {
         let blob_ref = BlobRef::new(hash, bytes.len() as u64, format);
 
         info!(hash = %hash, size = bytes.len(), "blob downloaded");
+        Ok(blob_ref)
+    }
+
+    #[instrument(skip(self))]
+    async fn download_from_peer(&self, hash: &Hash, provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
+        // Create downloader and download
+        let downloader = self.store.downloader(&self.endpoint);
+
+        let progress = downloader.download(HashAndFormat::raw(*hash), vec![provider]);
+
+        // Wait for completion
+        progress.await.map_err(|e| BlobStoreError::Download { message: e.to_string() })?;
+
+        // Get size and verify blob was stored
+        let bytes = self.get_bytes(hash).await?.ok_or_else(|| BlobStoreError::Download {
+            message: "blob not found after download".to_string(),
+        })?;
+
+        let blob_ref = BlobRef::new(*hash, bytes.len() as u64, BlobFormat::Raw);
+
+        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), "blob downloaded from peer");
         Ok(blob_ref)
     }
 

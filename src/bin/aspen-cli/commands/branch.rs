@@ -115,6 +115,9 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
             new_hash: args.from,
+            signer: None,      // Non-canonical refs don't require signing
+            signature: None,
+            timestamp_ms: None,
         })
         .await?;
 

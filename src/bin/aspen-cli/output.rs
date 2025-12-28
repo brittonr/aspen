@@ -813,6 +813,57 @@ fn truncate(s: &str, max_len: usize) -> String {
 // Forge output types (decentralized git)
 // =============================================================================
 
+/// Repository list output.
+pub struct RepoListOutput {
+    pub repos: Vec<RepoListItem>,
+    pub count: u32,
+}
+
+/// A single repository in a list.
+pub struct RepoListItem {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub default_branch: String,
+}
+
+impl Outputable for RepoListOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repos": self.repos.iter().map(|r| serde_json::json!({
+                "id": r.id,
+                "name": r.name,
+                "description": r.description,
+                "default_branch": r.default_branch
+            })).collect::<Vec<_>>(),
+            "count": self.count
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.repos.is_empty() {
+            return "No repositories found.".to_string();
+        }
+
+        let mut output = format!("Repositories ({}):\n", self.count);
+        for repo in &self.repos {
+            let desc = repo.description.as_deref().unwrap_or("");
+            let desc_preview = if desc.len() > 40 {
+                format!("{}...", &desc[..37])
+            } else {
+                desc.to_string()
+            };
+            output.push_str(&format!(
+                "  {} ({}) - {}\n",
+                repo.name,
+                &repo.id[..16],
+                if desc_preview.is_empty() { "-" } else { &desc_preview }
+            ));
+        }
+        output
+    }
+}
+
 /// Repository output.
 pub struct RepoOutput {
     pub id: String,

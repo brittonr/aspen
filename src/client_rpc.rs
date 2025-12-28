@@ -1409,6 +1409,12 @@ pub enum ClientRpcRequest {
         ref_name: String,
         /// Commit hash (hex-encoded).
         hash: String,
+        /// Signer's public key (hex-encoded, required for canonical refs).
+        signer: Option<String>,
+        /// Signature over the update (hex-encoded, required for canonical refs).
+        signature: Option<String>,
+        /// Timestamp in milliseconds (required for canonical refs).
+        timestamp_ms: Option<u64>,
     },
 
     /// Delete a ref.
@@ -1429,6 +1435,12 @@ pub enum ClientRpcRequest {
         expected: Option<String>,
         /// New hash.
         new_hash: String,
+        /// Signer's public key (hex-encoded, required for canonical refs).
+        signer: Option<String>,
+        /// Signature over the update (hex-encoded, required for canonical refs).
+        signature: Option<String>,
+        /// Timestamp in milliseconds (required for canonical refs).
+        timestamp_ms: Option<u64>,
     },
 
     /// List branches in a repository.

@@ -187,6 +187,102 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     }
 
     // ========================================================================
+    // Peer Tracking (Seeding)
+    // ========================================================================
+
+    /// Add a peer as a seeder for a repository.
+    ///
+    /// Seeders are nodes that have a copy of the repository and can provide
+    /// objects during P2P sync.
+    pub async fn add_seeding_peer(&self, repo_id: &RepoId, peer: iroh::PublicKey) -> ForgeResult<()> {
+        use crate::forge::constants::KV_PREFIX_SEEDING;
+
+        let key = format!("{}{}", KV_PREFIX_SEEDING, repo_id.to_hex());
+
+        // Get existing seeders
+        let mut seeders = self.get_seeding_peers(repo_id).await.unwrap_or_default();
+
+        // Add new peer if not already present
+        if !seeders.contains(&peer) {
+            seeders.push(peer);
+
+            // Serialize as JSON array of hex public keys
+            let value: Vec<String> = seeders.iter().map(|k| k.to_string()).collect();
+            let json = serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject {
+                message: e.to_string(),
+            })?;
+
+            self.kv
+                .write(crate::api::WriteRequest {
+                    command: crate::api::WriteCommand::Set { key, value: json },
+                })
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Remove a peer from the seeders list.
+    pub async fn remove_seeding_peer(&self, repo_id: &RepoId, peer: &iroh::PublicKey) -> ForgeResult<()> {
+        use crate::forge::constants::KV_PREFIX_SEEDING;
+
+        let key = format!("{}{}", KV_PREFIX_SEEDING, repo_id.to_hex());
+
+        let mut seeders = self.get_seeding_peers(repo_id).await.unwrap_or_default();
+
+        if let Some(pos) = seeders.iter().position(|k| k == peer) {
+            seeders.remove(pos);
+
+            let value: Vec<String> = seeders.iter().map(|k| k.to_string()).collect();
+            let json = serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject {
+                message: e.to_string(),
+            })?;
+
+            self.kv
+                .write(crate::api::WriteRequest {
+                    command: crate::api::WriteCommand::Set { key, value: json },
+                })
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Get all seeders for a repository.
+    pub async fn get_seeding_peers(&self, repo_id: &RepoId) -> ForgeResult<Vec<iroh::PublicKey>> {
+        use crate::forge::constants::KV_PREFIX_SEEDING;
+
+        let key = format!("{}{}", KV_PREFIX_SEEDING, repo_id.to_hex());
+
+        let result = match self
+            .kv
+            .read(crate::api::ReadRequest { key, consistency: ReadConsistency::Linearizable })
+            .await
+        {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => return Ok(vec![]),
+            Err(e) => return Err(ForgeError::from(e)),
+        };
+
+        match result.kv.map(|kv| kv.value) {
+            Some(json) => {
+                let keys: Vec<String> = serde_json::from_str(&json).map_err(|e| ForgeError::InvalidObject {
+                    message: e.to_string(),
+                })?;
+
+                let mut seeders = Vec::new();
+                for key_str in keys {
+                    if let Ok(pk) = key_str.parse() {
+                        seeders.push(pk);
+                    }
+                }
+                Ok(seeders)
+            }
+            None => Ok(vec![]),
+        }
+    }
+
+    // ========================================================================
     // High-Level Operations
     // ========================================================================
 

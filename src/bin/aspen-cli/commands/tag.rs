@@ -111,6 +111,9 @@ async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Re
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
             new_hash: args.commit,
+            signer: None,      // TODO: Add --key flag for signing
+            signature: None,
+            timestamp_ms: None,
         })
         .await?;
 

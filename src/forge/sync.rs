@@ -5,11 +5,11 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
+use iroh::PublicKey;
+
 use crate::blob::BlobStore;
-use crate::forge::constants::{FETCH_OBJECT_TIMEOUT, MAX_CONCURRENT_FETCHES, MAX_FETCH_BATCH_SIZE};
-use crate::forge::error::{ForgeError, ForgeResult};
-use crate::forge::git::GitBlobStore;
-use crate::forge::types::SignedObject;
+use crate::forge::constants::MAX_FETCH_BATCH_SIZE;
+use crate::forge::error::ForgeResult;
 
 /// Object synchronization service.
 ///
@@ -24,10 +24,14 @@ impl<B: BlobStore> SyncService<B> {
         Self { blobs }
     }
 
-    /// Fetch all objects reachable from the given commits.
+    /// Fetch all objects reachable from the given commits, trying peers if missing locally.
     ///
-    /// Walks the commit graph and fetches any missing objects.
-    pub async fn fetch_commits(&self, commits: Vec<blake3::Hash>) -> ForgeResult<FetchResult> {
+    /// Walks the commit graph and fetches any missing objects from the provided peers.
+    pub async fn fetch_commits(
+        &self,
+        commits: Vec<blake3::Hash>,
+        peers: &[PublicKey],
+    ) -> ForgeResult<FetchResult> {
         let mut result = FetchResult::default();
         let mut queue = VecDeque::from(commits);
         let mut visited = HashSet::new();
@@ -44,11 +48,16 @@ impl<B: BlobStore> SyncService<B> {
                 match self.blobs.has(&iroh_hash).await {
                     Ok(true) => {
                         result.already_present += 1;
-                        // TODO: Parse object and queue parents
+                        // TODO: Parse object and queue parents for deeper traversal
                     }
                     Ok(false) => {
-                        // TODO: Fetch from peers
-                        result.missing.push(hash);
+                        // Try to fetch from peers
+                        let fetched = self.try_fetch_from_peers(&iroh_hash, peers).await;
+                        if fetched {
+                            result.fetched += 1;
+                        } else {
+                            result.missing.push(hash);
+                        }
                     }
                     Err(e) => {
                         result.errors.push((hash, e.to_string()));
@@ -58,6 +67,38 @@ impl<B: BlobStore> SyncService<B> {
         }
 
         Ok(result)
+    }
+
+    /// Try to fetch a single object from any of the provided peers.
+    ///
+    /// Returns true if successfully fetched, false otherwise.
+    async fn try_fetch_from_peers(&self, hash: &iroh_blobs::Hash, peers: &[PublicKey]) -> bool {
+        for peer in peers {
+            match self.blobs.download_from_peer(hash, *peer).await {
+                Ok(_) => return true,
+                Err(_) => continue, // Try next peer
+            }
+        }
+        false
+    }
+
+    /// Fetch a single object from peers.
+    ///
+    /// Tries each peer in order until one succeeds.
+    pub async fn fetch_object(
+        &self,
+        hash: blake3::Hash,
+        peers: &[PublicKey],
+    ) -> ForgeResult<bool> {
+        let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+
+        // Check if we already have it
+        if self.blobs.has(&iroh_hash).await.unwrap_or(false) {
+            return Ok(true);
+        }
+
+        // Try peers
+        Ok(self.try_fetch_from_peers(&iroh_hash, peers).await)
     }
 
     /// Check which objects from a list are missing locally.
