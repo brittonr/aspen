@@ -75,8 +75,11 @@ use aspen::cluster::bootstrap::load_config;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
+#[cfg(feature = "dns")]
 use aspen::dns::AspenDnsClient;
+#[cfg(feature = "dns")]
 use aspen::dns::DnsProtocolServer;
+#[cfg(feature = "dns")]
 use aspen::dns::spawn_dns_sync_listener;
 use aspen::protocol_handlers::ClientProtocolContext;
 use aspen::protocol_handlers::ClientProtocolHandler;
@@ -677,6 +680,7 @@ async fn main() -> Result<()> {
     );
 
     // Start DNS protocol server if enabled
+    #[cfg(feature = "dns")]
     if config.dns_server.enabled {
         let dns_client = Arc::new(AspenDnsClient::new());
         let dns_config = config.dns_server.clone();

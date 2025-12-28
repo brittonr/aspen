@@ -6,6 +6,7 @@ pub mod barrier;
 pub mod blob;
 pub mod cluster;
 pub mod counter;
+#[cfg(feature = "dns")]
 pub mod dns;
 pub mod docs;
 pub mod kv;

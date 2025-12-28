@@ -5416,8 +5416,9 @@ async fn process_client_request(
         }
 
         // =====================================================================
-        // DNS operations
+        // DNS operations (only available with dns feature)
         // =====================================================================
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsSetRecord {
             domain,
             record_type,
@@ -5515,6 +5516,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsGetRecord { domain, record_type } => {
             use crate::client_rpc::DnsRecordResponse;
             use crate::client_rpc::DnsRecordResultResponse;
@@ -5569,6 +5571,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsGetRecords { domain } => {
             use crate::client_rpc::DnsRecordResponse;
             use crate::client_rpc::DnsRecordsResultResponse;
@@ -5609,6 +5612,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsDeleteRecord { domain, record_type } => {
             use crate::client_rpc::DnsDeleteRecordResultResponse;
             use crate::dns::AspenDnsStore;
@@ -5642,6 +5646,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsResolve { domain, record_type } => {
             use crate::client_rpc::DnsRecordResponse;
             use crate::client_rpc::DnsRecordsResultResponse;
@@ -5696,6 +5701,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsScanRecords { prefix, limit } => {
             use crate::client_rpc::DnsRecordResponse;
             use crate::client_rpc::DnsRecordsResultResponse;
@@ -5736,6 +5742,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsSetZone {
             name,
             enabled,
@@ -5794,6 +5801,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsGetZone { name } => {
             use crate::client_rpc::DnsZoneResponse;
             use crate::client_rpc::DnsZoneResultResponse;
@@ -5833,6 +5841,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsListZones => {
             use crate::client_rpc::DnsZoneResponse;
             use crate::client_rpc::DnsZonesResultResponse;
@@ -5870,6 +5879,7 @@ async fn process_client_request(
             }
         }
 
+        #[cfg(feature = "dns")]
         ClientRpcRequest::DnsDeleteZone { name, delete_records } => {
             use crate::client_rpc::DnsDeleteZoneResultResponse;
             use crate::dns::AspenDnsStore;
@@ -5893,6 +5903,27 @@ async fn process_client_request(
                     error: Some(format!("{}", e)),
                 })),
             }
+        }
+
+        // =====================================================================
+        // DNS fallbacks when feature is disabled
+        // =====================================================================
+        #[cfg(not(feature = "dns"))]
+        ClientRpcRequest::DnsSetRecord { .. }
+        | ClientRpcRequest::DnsGetRecord { .. }
+        | ClientRpcRequest::DnsGetRecords { .. }
+        | ClientRpcRequest::DnsDeleteRecord { .. }
+        | ClientRpcRequest::DnsResolve { .. }
+        | ClientRpcRequest::DnsScanRecords { .. }
+        | ClientRpcRequest::DnsSetZone { .. }
+        | ClientRpcRequest::DnsGetZone { .. }
+        | ClientRpcRequest::DnsListZones
+        | ClientRpcRequest::DnsDeleteZone { .. } => {
+            use crate::client_rpc::ErrorResponse;
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "DNS_NOT_SUPPORTED".to_string(),
+                message: "DNS operations not supported: compiled without 'dns' feature".to_string(),
+            }))
         }
 
         // =====================================================================

@@ -15,6 +15,7 @@ use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
+#[cfg(feature = "dns")]
 use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::kv::KvCommand;
@@ -105,6 +106,7 @@ pub enum Commands {
     ///
     /// Manage DNS records stored with Raft consensus and synchronized
     /// via iroh-docs to clients for local DNS resolution.
+    #[cfg(feature = "dns")]
     #[command(subcommand)]
     Dns(DnsCommand),
 
@@ -196,6 +198,7 @@ impl Cli {
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "dns")]
             Commands::Dns(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,

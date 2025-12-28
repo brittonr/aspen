@@ -25,6 +25,11 @@ pub mod cluster;
 /// Distributed coordination primitives (barriers, elections, locks).
 pub mod coordination;
 /// DNS record management layer built on iroh-docs.
+///
+/// Only available with the `dns` feature enabled. Provides DNS record
+/// management with CRUD operations, wildcard resolution, zone management,
+/// and a hickory-based DNS protocol server.
+#[cfg(feature = "dns")]
 pub mod dns;
 /// CRDT-based document synchronization using iroh-docs.
 pub mod docs;

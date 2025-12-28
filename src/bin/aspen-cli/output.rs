@@ -3,7 +3,9 @@
 //! Supports both human-readable and JSON output formats for
 //! integration with scripts and other tools.
 
+#[cfg(feature = "dns")]
 use aspen::client_rpc::DnsRecordResponse;
+#[cfg(feature = "dns")]
 use aspen::client_rpc::DnsZoneResponse;
 
 /// Trait for types that can be output in multiple formats.
@@ -541,6 +543,7 @@ impl SqlQueryOutput {
 // DNS Output Types
 // =============================================================================
 
+#[cfg(feature = "dns")]
 /// DNS record output.
 pub struct DnsRecordOutput {
     pub domain: String,
@@ -550,6 +553,7 @@ pub struct DnsRecordOutput {
     pub updated_at_ms: u64,
 }
 
+#[cfg(feature = "dns")]
 impl DnsRecordOutput {
     /// Create from a DnsRecordResponse.
     pub fn from_response(resp: DnsRecordResponse) -> Self {
@@ -623,6 +627,7 @@ impl DnsRecordOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 impl Outputable for DnsRecordOutput {
     fn to_json(&self) -> serde_json::Value {
         // Try to parse data_json as JSON, otherwise use as string
@@ -643,11 +648,13 @@ impl Outputable for DnsRecordOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 /// DNS records list output.
 pub struct DnsRecordsOutput {
     pub records: Vec<DnsRecordOutput>,
 }
 
+#[cfg(feature = "dns")]
 impl DnsRecordsOutput {
     /// Create from a list of DnsRecordResponse.
     pub fn from_responses(responses: Vec<DnsRecordResponse>) -> Self {
@@ -657,6 +664,7 @@ impl DnsRecordsOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 impl Outputable for DnsRecordsOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
@@ -682,6 +690,7 @@ impl Outputable for DnsRecordsOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 /// DNS zone output.
 pub struct DnsZoneOutput {
     pub name: String,
@@ -692,6 +701,7 @@ pub struct DnsZoneOutput {
     pub description: Option<String>,
 }
 
+#[cfg(feature = "dns")]
 impl DnsZoneOutput {
     /// Create from a DnsZoneResponse.
     pub fn from_response(resp: DnsZoneResponse) -> Self {
@@ -706,6 +716,7 @@ impl DnsZoneOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 impl Outputable for DnsZoneOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
@@ -739,11 +750,13 @@ impl Outputable for DnsZoneOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 /// DNS zones list output.
 pub struct DnsZonesOutput {
     pub zones: Vec<DnsZoneOutput>,
 }
 
+#[cfg(feature = "dns")]
 impl DnsZonesOutput {
     /// Create from a list of DnsZoneResponse.
     pub fn from_responses(responses: Vec<DnsZoneResponse>) -> Self {
@@ -753,6 +766,7 @@ impl DnsZonesOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 impl Outputable for DnsZonesOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
@@ -785,6 +799,7 @@ impl Outputable for DnsZonesOutput {
     }
 }
 
+#[cfg(feature = "dns")]
 /// Truncate a string to max length, adding "..." if truncated.
 fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {

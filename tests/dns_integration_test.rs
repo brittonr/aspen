@@ -1,6 +1,10 @@
 //! DNS Layer Integration Tests
 //!
 //! Tests the DNS layer with a real Aspen cluster.
+//!
+//! Only compiled when the `dns` feature is enabled.
+
+#![cfg(feature = "dns")]
 
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
