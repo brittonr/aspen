@@ -249,7 +249,7 @@ mod tests {
     use super::*;
 
     fn test_key() -> PublicKey {
-        let secret = iroh::SecretKey::generate(rand::rngs::OsRng);
+        let secret = iroh::SecretKey::generate(&mut rand::rng());
         secret.public()
     }
 

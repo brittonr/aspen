@@ -2,8 +2,11 @@
 //!
 //! This module defines the announcement types broadcast over iroh-gossip
 //! to notify peers of new commits, COB changes, and other updates.
+//!
+//! All announcements are signed with Ed25519 for authentication.
 
-use iroh::PublicKey;
+use iroh::{PublicKey, SecretKey, Signature};
+use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
 
 use crate::forge::cob::CobType;
@@ -112,20 +115,94 @@ impl ForgeTopic {
     pub fn to_topic_bytes(&self) -> [u8; 32] {
         let data = match &self.repo_id {
             Some(id) => {
-                let mut buf = [0u8; 64];
-                buf[..32].copy_from_slice(b"forge:repo:");
-                buf[11..43].copy_from_slice(&id.0);
-                blake3::hash(&buf).into()
+                // Hash "forge:repo:{repo_id}" to get deterministic topic
+                let mut buf = Vec::with_capacity(11 + 32);
+                buf.extend_from_slice(b"forge:repo:");
+                buf.extend_from_slice(&id.0);
+                *blake3::hash(&buf).as_bytes()
             }
             None => *blake3::hash(b"forge:global").as_bytes(),
         };
         data
     }
+
+    /// Convert to iroh-gossip TopicId.
+    pub fn to_topic_id(&self) -> TopicId {
+        TopicId::from_bytes(self.to_topic_bytes())
+    }
+}
+
+/// Signed announcement for cryptographic verification.
+///
+/// Wraps an `Announcement` with an Ed25519 signature from the sender's
+/// secret key. Recipients verify using the embedded public key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedAnnouncement {
+    /// The announcement payload.
+    pub announcement: Announcement,
+    /// Ed25519 signature over the serialized announcement.
+    pub signature: Signature,
+    /// Public key of the signer.
+    pub signer: PublicKey,
+    /// Timestamp in milliseconds since Unix epoch.
+    pub timestamp_ms: u64,
+}
+
+impl SignedAnnouncement {
+    /// Create and sign an announcement.
+    pub fn sign(announcement: Announcement, secret_key: &SecretKey) -> Self {
+        let announcement_bytes = announcement.to_bytes();
+        let signature = secret_key.sign(&announcement_bytes);
+        let signer = secret_key.public();
+        let timestamp_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_millis() as u64;
+
+        Self {
+            announcement,
+            signature,
+            signer,
+            timestamp_ms,
+        }
+    }
+
+    /// Verify the signature and return the inner announcement if valid.
+    pub fn verify(&self) -> Option<&Announcement> {
+        let announcement_bytes = self.announcement.to_bytes();
+
+        match self.signer.verify(&announcement_bytes, &self.signature) {
+            Ok(()) => Some(&self.announcement),
+            Err(_) => None,
+        }
+    }
+
+    /// Serialize to bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        postcard::to_allocvec(self).expect("serialization should not fail")
+    }
+
+    /// Deserialize from bytes.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
+    }
+}
+
+/// Callback trait for receiving announcements.
+///
+/// Implement this trait to handle incoming announcements from gossip.
+pub trait AnnouncementHandler: Send + Sync {
+    /// Called when a verified announcement is received.
+    fn on_announcement(&self, announcement: &Announcement, signer: &PublicKey);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_key() -> SecretKey {
+        SecretKey::generate(&mut rand::rng())
+    }
 
     #[test]
     fn test_announcement_roundtrip() {
@@ -156,5 +233,142 @@ mod tests {
         // Same repo should give same topic
         let repo2 = ForgeTopic::for_repo(RepoId::from_hash(blake3::hash(b"test")));
         assert_eq!(repo.to_topic_bytes(), repo2.to_topic_bytes());
+    }
+
+    #[test]
+    fn test_topic_id_conversion() {
+        let global = ForgeTopic::global();
+        let topic_id = global.to_topic_id();
+
+        // TopicId should be derived from topic bytes
+        assert_eq!(topic_id.as_bytes(), &global.to_topic_bytes());
+    }
+
+    #[test]
+    fn test_signed_announcement_sign_and_verify() {
+        let secret_key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let announcement = Announcement::RepoCreated {
+            repo_id,
+            name: "my-project".to_string(),
+            creator: secret_key.public(),
+        };
+
+        let signed = SignedAnnouncement::sign(announcement.clone(), &secret_key);
+
+        // Verify should succeed
+        let verified = signed.verify();
+        assert!(verified.is_some());
+        assert_eq!(verified.unwrap(), &announcement);
+        assert_eq!(signed.signer, secret_key.public());
+    }
+
+    #[test]
+    fn test_signed_announcement_roundtrip() {
+        let secret_key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let announcement = Announcement::RefUpdate {
+            repo_id,
+            ref_name: "heads/main".to_string(),
+            new_hash: [1u8; 32],
+            old_hash: Some([0u8; 32]),
+        };
+
+        let signed = SignedAnnouncement::sign(announcement, &secret_key);
+
+        // Serialize and deserialize
+        let bytes = signed.to_bytes();
+        let recovered = SignedAnnouncement::from_bytes(&bytes).expect("should deserialize");
+
+        // Verify still works after roundtrip
+        assert!(recovered.verify().is_some());
+        assert_eq!(recovered.signer, signed.signer);
+        assert_eq!(recovered.timestamp_ms, signed.timestamp_ms);
+    }
+
+    #[test]
+    fn test_signed_announcement_wrong_key_rejected() {
+        let real_key = test_key();
+        let fake_key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let announcement = Announcement::Seeding {
+            repo_id,
+            node_id: real_key.public(),
+        };
+
+        // Sign with real key but claim different signer
+        let mut signed = SignedAnnouncement::sign(announcement, &real_key);
+        signed.signer = fake_key.public(); // Tamper with signer
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_signed_announcement_tampered_rejected() {
+        let secret_key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        let announcement = Announcement::CobChange {
+            repo_id,
+            cob_type: CobType::Issue,
+            cob_id: [1u8; 32],
+            change_hash: [2u8; 32],
+        };
+
+        let mut signed = SignedAnnouncement::sign(announcement, &secret_key);
+
+        // Tamper with the announcement
+        if let Announcement::CobChange { ref mut cob_id, .. } = signed.announcement {
+            *cob_id = [99u8; 32];
+        }
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_all_announcement_types() {
+        let key = test_key();
+        let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
+
+        // Test all announcement variants can be signed and verified
+        let announcements = vec![
+            Announcement::RefUpdate {
+                repo_id,
+                ref_name: "heads/main".to_string(),
+                new_hash: [1u8; 32],
+                old_hash: None,
+            },
+            Announcement::CobChange {
+                repo_id,
+                cob_type: CobType::Patch,
+                cob_id: [2u8; 32],
+                change_hash: [3u8; 32],
+            },
+            Announcement::Seeding {
+                repo_id,
+                node_id: key.public(),
+            },
+            Announcement::Unseeding {
+                repo_id,
+                node_id: key.public(),
+            },
+            Announcement::RepoCreated {
+                repo_id,
+                name: "test".to_string(),
+                creator: key.public(),
+            },
+        ];
+
+        for announcement in announcements {
+            let signed = SignedAnnouncement::sign(announcement.clone(), &key);
+            let verified = signed.verify();
+            assert!(verified.is_some());
+            assert_eq!(verified.unwrap(), &announcement);
+        }
     }
 }

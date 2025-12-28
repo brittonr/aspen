@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_signed_object_roundtrip() {
-        let secret_key = iroh::SecretKey::generate(rand::rngs::OsRng);
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
 
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         struct TestPayload {

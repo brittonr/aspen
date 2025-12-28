@@ -429,6 +429,117 @@ impl BlobStore for IrohBlobStore {
     }
 }
 
+/// In-memory blob store for testing.
+///
+/// This is a simple hash-based store that keeps blobs in memory.
+/// Useful for unit tests that don't need full iroh-blobs functionality.
+#[derive(Default)]
+pub struct InMemoryBlobStore {
+    blobs: std::sync::RwLock<std::collections::HashMap<Hash, Bytes>>,
+}
+
+impl InMemoryBlobStore {
+    /// Create a new in-memory blob store.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[async_trait]
+impl BlobStore for InMemoryBlobStore {
+    async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError> {
+        let size = data.len() as u64;
+        if size > MAX_BLOB_SIZE {
+            return Err(BlobStoreError::TooLarge {
+                size,
+                max: MAX_BLOB_SIZE,
+            });
+        }
+
+        let hash = Hash::new(data);
+        let bytes = Bytes::copy_from_slice(data);
+
+        let was_new = {
+            let mut blobs = self.blobs.write().unwrap();
+            blobs.insert(hash, bytes).is_none()
+        };
+
+        Ok(AddBlobResult {
+            blob_ref: BlobRef::new(hash, size, BlobFormat::Raw),
+            was_new,
+        })
+    }
+
+    async fn add_path(&self, path: &Path) -> Result<AddBlobResult, BlobStoreError> {
+        let data = std::fs::read(path).map_err(|e| BlobStoreError::Storage {
+            message: format!("failed to read file: {}", e),
+        })?;
+        self.add_bytes(&data).await
+    }
+
+    async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError> {
+        let blobs = self.blobs.read().unwrap();
+        Ok(blobs.get(hash).cloned())
+    }
+
+    async fn has(&self, hash: &Hash) -> Result<bool, BlobStoreError> {
+        let blobs = self.blobs.read().unwrap();
+        Ok(blobs.contains_key(hash))
+    }
+
+    async fn status(&self, hash: &Hash) -> Result<Option<BlobStatus>, BlobStoreError> {
+        let blobs = self.blobs.read().unwrap();
+        Ok(blobs.get(hash).map(|b| BlobStatus {
+            hash: *hash,
+            size: Some(b.len() as u64),
+            complete: true,
+            tags: Vec::new(),
+        }))
+    }
+
+    async fn protect(&self, _hash: &Hash, _tag_name: &str) -> Result<(), BlobStoreError> {
+        // No-op for in-memory store
+        Ok(())
+    }
+
+    async fn unprotect(&self, _tag_name: &str) -> Result<(), BlobStoreError> {
+        // No-op for in-memory store
+        Ok(())
+    }
+
+    async fn ticket(&self, hash: &Hash) -> Result<BlobTicket, BlobStoreError> {
+        // In-memory store can't create tickets since there's no endpoint
+        Err(BlobStoreError::Storage {
+            message: format!("in-memory store cannot create tickets for {}", hash),
+        })
+    }
+
+    async fn download(&self, _ticket: &BlobTicket) -> Result<BlobRef, BlobStoreError> {
+        // In-memory store can't download from peers
+        Err(BlobStoreError::Storage {
+            message: "in-memory store cannot download from peers".to_string(),
+        })
+    }
+
+    async fn list(&self, limit: u32, _continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
+        let blobs = self.blobs.read().unwrap();
+        let entries: Vec<_> = blobs
+            .iter()
+            .take(limit as usize)
+            .map(|(hash, bytes)| BlobListEntry {
+                hash: *hash,
+                size: bytes.len() as u64,
+                format: BlobFormat::Raw,
+            })
+            .collect();
+
+        Ok(BlobListResult {
+            blobs: entries,
+            continuation_token: None,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(unused_imports)]

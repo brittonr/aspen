@@ -97,7 +97,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         };
 
         let change = CobChange::root(CobType::Issue, cob_id, op);
-        self.store_change(repo_id, change).await
+        self.store_change(repo_id, change).await?;
+
+        // Return the COB ID, not the change hash
+        Ok(cob_id)
     }
 
     /// Add a comment to an issue.
@@ -193,6 +196,91 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     }
 
     // ========================================================================
+    // Listing Operations
+    // ========================================================================
+
+    /// List all COBs of a given type in a repository.
+    ///
+    /// Scans the KV store for keys matching the COB heads prefix for the
+    /// specified repository and type, then extracts the COB IDs.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::KvOperation` if the scan fails (except NotFound, which returns empty vec)
+    pub async fn list_cobs(
+        &self,
+        repo_id: &RepoId,
+        cob_type: CobType,
+    ) -> ForgeResult<Vec<blake3::Hash>> {
+        let prefix = format!(
+            "{}{}:{}:",
+            KV_PREFIX_COB_HEADS,
+            repo_id.to_hex(),
+            cob_type.as_str()
+        );
+
+        let scan_result = match self
+            .kv
+            .scan(crate::api::ScanRequest {
+                prefix: prefix.clone(),
+                limit: None,
+                continuation_token: None,
+            })
+            .await
+        {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                // No keys found means no COBs of this type
+                return Ok(vec![]);
+            }
+            Err(e) => return Err(ForgeError::from(e)),
+        };
+
+        // Extract COB IDs from keys
+        // Key format: forge:cob:heads:{repo_id}:{cob_type}:{cob_id}
+        let cob_ids: Vec<blake3::Hash> = scan_result
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                // Strip the prefix to get the COB ID (hex-encoded)
+                let cob_id_hex = entry.key.strip_prefix(&prefix)?;
+                let bytes = hex::decode(cob_id_hex).ok()?;
+                if bytes.len() == 32 {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    Some(blake3::Hash::from_bytes(arr))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(cob_ids)
+    }
+
+    /// List all issues in a repository.
+    ///
+    /// Convenience method that calls `list_cobs` with `CobType::Issue`.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::KvOperation` if the scan fails
+    pub async fn list_issues(&self, repo_id: &RepoId) -> ForgeResult<Vec<blake3::Hash>> {
+        self.list_cobs(repo_id, CobType::Issue).await
+    }
+
+    /// List all patches in a repository.
+    ///
+    /// Convenience method that calls `list_cobs` with `CobType::Patch`.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::KvOperation` if the scan fails
+    pub async fn list_patches(&self, repo_id: &RepoId) -> ForgeResult<Vec<blake3::Hash>> {
+        self.list_cobs(repo_id, CobType::Patch).await
+    }
+
+    // ========================================================================
     // Internal Operations
     // ========================================================================
 
@@ -253,10 +341,18 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             hex::encode(cob_id.as_bytes())
         );
 
-        let result = self
+        let result = match self
             .kv
             .read(crate::api::ReadRequest { key: key.clone(), consistency: ReadConsistency::Linearizable })
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                // Key not found means no heads yet
+                return Ok(vec![]);
+            }
+            Err(e) => return Err(ForgeError::from(e)),
+        };
 
         match result.kv.map(|kv| kv.value) {
             Some(value) => {
@@ -443,8 +539,8 @@ mod tests {
     async fn create_test_store(
     ) -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let secret_key = iroh::SecretKey::generate(rand::rngs::OsRng);
+        let kv = DeterministicKeyValueStore::new();
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
         CobStore::new(blobs, kv, secret_key)
     }
 
@@ -525,5 +621,135 @@ mod tests {
             .expect("should resolve");
 
         assert!(issue.state.is_closed());
+    }
+
+    #[tokio::test]
+    async fn test_list_issues_empty() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        let issues = store.list_issues(&repo_id).await.expect("should list issues");
+        assert!(issues.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_issues_single() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        let issue_id = store
+            .create_issue(&repo_id, "Test issue", "", vec![])
+            .await
+            .expect("should create issue");
+
+        let issues = store.list_issues(&repo_id).await.expect("should list issues");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0], issue_id);
+    }
+
+    #[tokio::test]
+    async fn test_list_issues_multiple() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        let issue1 = store
+            .create_issue(&repo_id, "Issue 1", "", vec![])
+            .await
+            .expect("should create issue");
+
+        let issue2 = store
+            .create_issue(&repo_id, "Issue 2", "", vec![])
+            .await
+            .expect("should create issue");
+
+        let issue3 = store
+            .create_issue(&repo_id, "Issue 3", "", vec![])
+            .await
+            .expect("should create issue");
+
+        let issues = store.list_issues(&repo_id).await.expect("should list issues");
+        assert_eq!(issues.len(), 3);
+        assert!(issues.contains(&issue1));
+        assert!(issues.contains(&issue2));
+        assert!(issues.contains(&issue3));
+    }
+
+    #[tokio::test]
+    async fn test_list_patches_empty() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        let patches = store.list_patches(&repo_id).await.expect("should list patches");
+        assert!(patches.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_cobs_different_types_isolated() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        // Create an issue
+        let issue_id = store
+            .create_issue(&repo_id, "Test issue", "", vec![])
+            .await
+            .expect("should create issue");
+
+        // List issues should return the issue
+        let issues = store.list_issues(&repo_id).await.expect("should list issues");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0], issue_id);
+
+        // List patches should return empty (different type)
+        let patches = store.list_patches(&repo_id).await.expect("should list patches");
+        assert!(patches.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_cobs_different_repos_isolated() {
+        let store = create_test_store().await;
+        let repo_id1 = RepoId::from_hash(blake3::hash(b"repo-1"));
+        let repo_id2 = RepoId::from_hash(blake3::hash(b"repo-2"));
+
+        // Create an issue in repo 1
+        let issue_id = store
+            .create_issue(&repo_id1, "Test issue", "", vec![])
+            .await
+            .expect("should create issue");
+
+        // List issues in repo 1 should return the issue
+        let issues1 = store.list_issues(&repo_id1).await.expect("should list issues");
+        assert_eq!(issues1.len(), 1);
+        assert_eq!(issues1[0], issue_id);
+
+        // List issues in repo 2 should return empty (different repo)
+        let issues2 = store.list_issues(&repo_id2).await.expect("should list issues");
+        assert!(issues2.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_cobs_generic() {
+        let store = create_test_store().await;
+        let repo_id = test_repo_id();
+
+        // Create an issue
+        let issue_id = store
+            .create_issue(&repo_id, "Test issue", "", vec![])
+            .await
+            .expect("should create issue");
+
+        // Use generic list_cobs with CobType::Issue
+        let cobs = store
+            .list_cobs(&repo_id, CobType::Issue)
+            .await
+            .expect("should list cobs");
+        assert_eq!(cobs.len(), 1);
+        assert_eq!(cobs[0], issue_id);
+
+        // Use generic list_cobs with CobType::Patch
+        let cobs = store
+            .list_cobs(&repo_id, CobType::Patch)
+            .await
+            .expect("should list cobs");
+        assert!(cobs.is_empty());
     }
 }

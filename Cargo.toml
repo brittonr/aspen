@@ -15,10 +15,6 @@ path = "src/bin/generate_fuzz_corpus.rs"
 required-features = ["fuzzing"]
 
 [[bin]]
-name = "aspen-prometheus-adapter"
-path = "src/bin/aspen-prometheus-adapter.rs"
-
-[[bin]]
 name = "aspen-cli"
 path = "src/bin/aspen-cli/main.rs"
 

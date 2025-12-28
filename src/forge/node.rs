@@ -103,12 +103,17 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         // Check if repo already exists
         let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
-        let existing = self
+        let existing = match self
             .kv
             .read(crate::api::ReadRequest { key: key.clone(), consistency: ReadConsistency::Linearizable })
-            .await?;
+            .await
+        {
+            Ok(r) => r.kv.is_some(),
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => false,
+            Err(e) => return Err(ForgeError::from(e)),
+        };
 
-        if existing.kv.is_some() {
+        if existing {
             return Err(ForgeError::RepoAlreadyExists {
                 repo_id: repo_id.to_hex(),
             });
@@ -134,10 +139,19 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     pub async fn get_repo(&self, repo_id: &RepoId) -> ForgeResult<RepoIdentity> {
         let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
 
-        let result = self
+        let result = match self
             .kv
             .read(crate::api::ReadRequest { key, consistency: ReadConsistency::Linearizable })
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Err(ForgeError::RepoNotFound {
+                    repo_id: repo_id.to_hex(),
+                });
+            }
+            Err(e) => return Err(ForgeError::from(e)),
+        };
 
         match result.kv.map(|kv| kv.value) {
             Some(encoded) => {
@@ -161,12 +175,15 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     pub async fn repo_exists(&self, repo_id: &RepoId) -> ForgeResult<bool> {
         let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
 
-        let result = self
+        match self
             .kv
             .read(crate::api::ReadRequest { key, consistency: ReadConsistency::Linearizable })
-            .await?;
-
-        Ok(result.kv.is_some())
+            .await
+        {
+            Ok(r) => Ok(r.kv.is_some()),
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => Ok(false),
+            Err(e) => Err(ForgeError::from(e)),
+        }
     }
 
     // ========================================================================
@@ -205,8 +222,8 @@ mod tests {
 
     async fn create_test_node() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let secret_key = iroh::SecretKey::generate(rand::rngs::OsRng);
+        let kv = DeterministicKeyValueStore::new();
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
         ForgeNode::new(blobs, kv, secret_key)
     }
 

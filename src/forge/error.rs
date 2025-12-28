@@ -101,8 +101,8 @@ pub enum ForgeError {
     // Authorization Errors
     // ========================================================================
     /// Not authorized to perform operation.
-    #[snafu(display("not authorized: {message}"))]
-    NotAuthorized { message: String },
+    #[snafu(display("not authorized: {signer} cannot {action}"))]
+    NotAuthorized { signer: String, action: String },
 
     /// Invalid signature.
     #[snafu(display("invalid signature: {message}"))]

@@ -65,6 +65,7 @@ pub use constants::USER_TAG_PREFIX;
 pub use kv_integration::BlobAwareKeyValueStore;
 pub use store::BlobStore;
 pub use store::BlobStoreError;
+pub use store::InMemoryBlobStore;
 pub use store::IrohBlobStore;
 pub use types::AddBlobResult;
 pub use types::BlobListEntry;

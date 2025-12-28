@@ -52,7 +52,13 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     ) -> ForgeResult<Option<blake3::Hash>> {
         let key = self.ref_key(repo_id, ref_name);
 
-        let result = self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await?;
+        let result = match self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => return Err(ForgeError::from(e)),
+        };
 
         match result.kv.map(|kv| kv.value) {
             Some(hex_hash) => {
@@ -297,7 +303,7 @@ mod tests {
     use crate::api::DeterministicKeyValueStore;
 
     fn create_test_store() -> RefStore<DeterministicKeyValueStore> {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
+        let kv = DeterministicKeyValueStore::new();
         RefStore::new(kv)
     }
 

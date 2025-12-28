@@ -79,7 +79,7 @@ pub mod git;
 pub mod identity;
 pub mod refs;
 
-mod gossip;
+pub mod gossip;
 mod node;
 mod sync;
 
@@ -87,6 +87,7 @@ mod sync;
 pub use cob::{CobChange, CobOperation, CobStore, CobType};
 pub use error::ForgeError;
 pub use git::{GitBlobStore, GitObject, TreeEntry};
+pub use gossip::{Announcement, ForgeTopic, SignedAnnouncement};
 pub use identity::{Author, RepoId, RepoIdentity};
 pub use node::ForgeNode;
 pub use refs::RefStore;
