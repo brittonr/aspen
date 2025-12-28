@@ -128,6 +128,29 @@ pub enum ForgeError {
     NoPeersAvailable { repo_id: String },
 
     // ========================================================================
+    // Gossip Errors
+    // ========================================================================
+    /// Generic gossip operation error.
+    #[snafu(display("gossip error: {message}"))]
+    GossipError { message: String },
+
+    /// Rate limit exceeded for gossip messages.
+    #[snafu(display("gossip rate limit exceeded: {reason}"))]
+    GossipRateLimited { reason: String },
+
+    /// Failed to subscribe to gossip topic.
+    #[snafu(display("failed to subscribe to topic {topic}: {message}"))]
+    GossipTopicError { topic: String, message: String },
+
+    /// Maximum subscribed repositories exceeded.
+    #[snafu(display("maximum subscribed repos exceeded: {count} > {max}"))]
+    TooManySubscriptions { count: u32, max: u32 },
+
+    /// Gossip service not initialized.
+    #[snafu(display("gossip service not initialized"))]
+    GossipNotInitialized,
+
+    // ========================================================================
     // Storage Errors
     // ========================================================================
     /// Blob storage error.

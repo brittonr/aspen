@@ -2,8 +2,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
-
 use super::object::{BlobObject, CommitObject, GitObject, TreeEntry, TreeObject};
 use crate::blob::BlobStore;
 use crate::forge::constants::{

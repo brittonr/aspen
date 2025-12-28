@@ -133,6 +133,64 @@ pub const MAX_GOSSIP_REFS: u32 = 100;
 pub const MAX_GOSSIP_MESSAGE_SIZE_BYTES: u32 = 64 * 1024; // 64 KB
 
 // ============================================================================
+// Gossip Service Configuration
+// ============================================================================
+
+/// Interval between periodic gossip announcements (e.g., seeding heartbeats).
+///
+/// Tiger Style: Prevents gossip storms while ensuring timely discovery.
+pub const FORGE_GOSSIP_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Maximum number of announcements that can be queued for broadcast.
+///
+/// Tiger Style: Backpressure limit to prevent memory exhaustion.
+pub const FORGE_GOSSIP_MAX_QUEUED_ANNOUNCEMENTS: u32 = 1_000;
+
+/// Per-peer rate limit for incoming gossip messages (messages per minute).
+///
+/// Tiger Style: Prevents individual peers from flooding the network.
+/// Higher than cluster gossip due to more message types (refs, COBs, etc.).
+pub const FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE: u32 = 30;
+
+/// Burst capacity for per-peer rate limiting.
+///
+/// Tiger Style: Allows temporary spikes during reconnection.
+pub const FORGE_GOSSIP_PER_PEER_BURST: u32 = 10;
+
+/// Global rate limit for all incoming gossip messages (messages per minute).
+///
+/// Tiger Style: Cluster-wide protection against distributed flooding.
+pub const FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE: u32 = 20_000;
+
+/// Burst capacity for global rate limiting.
+pub const FORGE_GOSSIP_GLOBAL_BURST: u32 = 200;
+
+/// Maximum number of peers tracked in the rate limiter LRU.
+///
+/// Tiger Style: Bounds memory usage for peer tracking.
+pub const FORGE_GOSSIP_MAX_TRACKED_PEERS: usize = 512;
+
+/// Maximum number of per-repo topic subscriptions.
+///
+/// Tiger Style: Limits subscription overhead per node.
+pub const FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS: u32 = 100;
+
+/// Timeout for subscribing to a gossip topic.
+pub const FORGE_GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Maximum consecutive stream errors before giving up.
+pub const FORGE_GOSSIP_MAX_STREAM_RETRIES: u32 = 5;
+
+/// Backoff durations for stream error recovery (exponential).
+pub const FORGE_GOSSIP_STREAM_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];
+
+/// Threshold for consecutive failures before increasing announcement interval.
+pub const FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD: u32 = 3;
+
+/// Maximum announcement interval after repeated failures.
+pub const FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(60);
+
+// ============================================================================
 // Key Prefixes
 // ============================================================================
 

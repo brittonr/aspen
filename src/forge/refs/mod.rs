@@ -13,4 +13,4 @@ mod delegate;
 mod store;
 
 pub use delegate::{DelegateVerifier, MultiSigCollector, SignedRefUpdate};
-pub use store::RefStore;
+pub use store::{RefStore, RefUpdateEvent};

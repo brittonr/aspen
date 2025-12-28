@@ -81,14 +81,18 @@ pub mod refs;
 
 pub mod gossip;
 mod node;
-mod sync;
+pub mod sync;
 
 // Re-export primary types for convenient access
-pub use cob::{CobChange, CobOperation, CobStore, CobType};
+pub use cob::{CobChange, CobOperation, CobStore, CobType, CobUpdateEvent};
 pub use error::ForgeError;
 pub use git::{GitBlobStore, GitObject, TreeEntry};
-pub use gossip::{Announcement, ForgeTopic, SignedAnnouncement};
+pub use gossip::{
+    Announcement, AnnouncementCallback, ForgeAnnouncementHandler, ForgeGossipRateLimiter,
+    ForgeGossipService, ForgeTopic, SignedAnnouncement,
+};
 pub use identity::{Author, RepoId, RepoIdentity};
 pub use node::ForgeNode;
-pub use refs::RefStore;
+pub use refs::{RefStore, RefUpdateEvent};
+pub use sync::SyncService;
 pub use types::SignedObject;

@@ -3,6 +3,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
+use tokio::sync::broadcast;
+
 use super::change::{CobChange, CobOperation, CobType};
 use super::issue::Issue;
 use crate::api::{KeyValueStore, ReadConsistency};
@@ -15,21 +17,50 @@ use crate::forge::error::{ForgeError, ForgeResult};
 use crate::forge::identity::RepoId;
 use crate::forge::types::SignedObject;
 
+/// Event emitted when a COB change is stored.
+#[derive(Debug, Clone)]
+pub struct CobUpdateEvent {
+    /// Repository ID.
+    pub repo_id: RepoId,
+    /// COB type (Issue, Patch, etc.).
+    pub cob_type: CobType,
+    /// COB instance ID.
+    pub cob_id: blake3::Hash,
+    /// Hash of the new change.
+    pub change_hash: blake3::Hash,
+    /// Public key of the author.
+    pub author: iroh::PublicKey,
+    /// Timestamp in milliseconds since Unix epoch.
+    pub timestamp_ms: u64,
+}
+
 /// Storage and resolution for collaborative objects.
 pub struct CobStore<B: BlobStore, K: KeyValueStore + ?Sized> {
     blobs: Arc<B>,
     kv: Arc<K>,
     secret_key: iroh::SecretKey,
+    /// Event sender for COB updates.
+    event_tx: broadcast::Sender<CobUpdateEvent>,
 }
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// Create a new COB store.
     pub fn new(blobs: Arc<B>, kv: Arc<K>, secret_key: iroh::SecretKey) -> Self {
+        let (event_tx, _) = broadcast::channel(256);
         Self {
             blobs,
             kv,
             secret_key,
+            event_tx,
         }
+    }
+
+    /// Subscribe to COB update events.
+    ///
+    /// Returns a receiver that will receive events when COB changes are stored.
+    /// This can be used to trigger gossip broadcasts or other side effects.
+    pub fn subscribe(&self) -> broadcast::Receiver<CobUpdateEvent> {
+        self.event_tx.subscribe()
     }
 
     // ========================================================================
@@ -516,6 +547,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     // ========================================================================
 
     /// Store a change and update heads.
+    ///
+    /// After successful storage, emits a `CobUpdateEvent` for gossip broadcast.
     async fn store_change(
         &self,
         repo_id: &RepoId,
@@ -553,6 +586,16 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Update heads: remove parents, add new hash
         self.update_heads(repo_id, &change.cob_type, &change.cob_id(), &change.parents(), hash)
             .await?;
+
+        // Emit event (ignore send errors if no subscribers)
+        let _ = self.event_tx.send(CobUpdateEvent {
+            repo_id: *repo_id,
+            cob_type: change.cob_type,
+            cob_id: change.cob_id(),
+            change_hash: hash,
+            author: signed.author,
+            timestamp_ms: signed.timestamp_ms,
+        });
 
         Ok(hash)
     }

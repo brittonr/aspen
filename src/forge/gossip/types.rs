@@ -1,4 +1,4 @@
-//! Gossip announcements for Forge.
+//! Gossip announcement types for Forge.
 //!
 //! This module defines the announcement types broadcast over iroh-gossip
 //! to notify peers of new commits, COB changes, and other updates.

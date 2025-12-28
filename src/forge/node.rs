@@ -8,13 +8,14 @@ use std::sync::Arc;
 use crate::api::{KeyValueStore, ReadConsistency};
 use crate::blob::BlobStore;
 use crate::forge::cob::CobStore;
+use crate::forge::constants::KV_PREFIX_REPOS;
 use crate::forge::error::{ForgeError, ForgeResult};
 use crate::forge::git::GitBlobStore;
+use crate::forge::gossip::{AnnouncementCallback, ForgeGossipService};
 use crate::forge::identity::{RepoId, RepoIdentity};
 use crate::forge::refs::RefStore;
 use crate::forge::sync::SyncService;
 use crate::forge::types::SignedObject;
-use crate::forge::constants::KV_PREFIX_REPOS;
 
 /// Main coordinator for Forge operations.
 ///
@@ -57,6 +58,9 @@ pub struct ForgeNode<B: BlobStore, K: KeyValueStore + ?Sized> {
 
     /// Secret key for signing.
     secret_key: iroh::SecretKey,
+
+    /// Optional gossip service for real-time announcements.
+    gossip: Option<Arc<ForgeGossipService>>,
 }
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
@@ -69,7 +73,59 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             sync: SyncService::new(blobs),
             kv,
             secret_key,
+            gossip: None,
         }
+    }
+
+    /// Enable gossip integration with the given iroh-gossip instance.
+    ///
+    /// This spawns background tasks for:
+    /// - Broadcasting ref and COB updates as announcements
+    /// - Receiving announcements from other nodes
+    /// - Rate limiting incoming announcements
+    ///
+    /// # Arguments
+    ///
+    /// - `gossip`: The iroh-gossip instance to use
+    /// - `handler`: Optional callback for incoming announcements (for auto-sync)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let handler = Arc::new(ForgeAnnouncementHandler::new(sync_tx, seeding_tx));
+    /// forge.enable_gossip(gossip, Some(handler)).await?;
+    /// ```
+    pub async fn enable_gossip(
+        &mut self,
+        gossip: Arc<iroh_gossip::net::Gossip>,
+        handler: Option<Arc<dyn AnnouncementCallback>>,
+    ) -> ForgeResult<()> {
+        let service = ForgeGossipService::spawn(
+            gossip,
+            self.secret_key.clone(),
+            self.refs.subscribe(),
+            self.cobs.subscribe(),
+            handler,
+        )
+        .await
+        .map_err(|e| ForgeError::GossipError {
+            message: e.to_string(),
+        })?;
+
+        self.gossip = Some(service);
+
+        tracing::info!("forge gossip integration enabled");
+        Ok(())
+    }
+
+    /// Check if gossip is enabled.
+    pub fn has_gossip(&self) -> bool {
+        self.gossip.is_some()
+    }
+
+    /// Get the gossip service if enabled.
+    pub fn gossip(&self) -> Option<&Arc<ForgeGossipService>> {
+        self.gossip.as_ref()
     }
 
     /// Get the public key of this node.
@@ -131,6 +187,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
                 },
             })
             .await?;
+
+        // Announce repo creation via gossip if enabled
+        if let Some(ref gossip) = self.gossip {
+            if let Err(e) = gossip.announce_repo_created(&repo_id, &identity.name).await {
+                tracing::warn!(repo_id = %repo_id.to_hex(), "failed to announce repo creation: {}", e);
+            }
+        }
 
         Ok(identity)
     }
@@ -280,6 +343,72 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             }
             None => Ok(vec![]),
         }
+    }
+
+    /// Start seeding a repository.
+    ///
+    /// This will:
+    /// 1. Subscribe to the repository's gossip topic (if gossip enabled)
+    /// 2. Add ourselves to the seeders list
+    /// 3. Announce that we are seeding (if gossip enabled)
+    ///
+    /// Other nodes will receive the seeding announcement and can request
+    /// objects from us during P2P sync.
+    pub async fn start_seeding(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        // Subscribe to repo topic first
+        if let Some(ref gossip) = self.gossip {
+            gossip.subscribe_repo(repo_id).await?;
+        }
+
+        // Add ourselves as a seeder
+        self.add_seeding_peer(repo_id, self.public_key()).await?;
+
+        // Announce seeding
+        if let Some(ref gossip) = self.gossip {
+            gossip.announce_seeding(repo_id).await?;
+        }
+
+        tracing::info!(repo_id = %repo_id.to_hex(), "started seeding repository");
+        Ok(())
+    }
+
+    /// Stop seeding a repository.
+    ///
+    /// This will:
+    /// 1. Announce that we are no longer seeding (if gossip enabled)
+    /// 2. Remove ourselves from the seeders list
+    /// 3. Unsubscribe from the repository's gossip topic (if gossip enabled)
+    pub async fn stop_seeding(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        // Announce unseeding first (while still subscribed)
+        if let Some(ref gossip) = self.gossip {
+            gossip.announce_unseeding(repo_id).await?;
+        }
+
+        // Remove ourselves as a seeder
+        self.remove_seeding_peer(repo_id, &self.public_key()).await?;
+
+        // Unsubscribe from repo topic
+        if let Some(ref gossip) = self.gossip {
+            gossip.unsubscribe_repo(repo_id).await?;
+        }
+
+        tracing::info!(repo_id = %repo_id.to_hex(), "stopped seeding repository");
+        Ok(())
+    }
+
+    /// Shutdown the ForgeNode, including gossip service.
+    ///
+    /// This gracefully stops all background tasks and releases resources.
+    pub async fn shutdown(&mut self) -> ForgeResult<()> {
+        if let Some(gossip) = self.gossip.take() {
+            // Shutdown takes Arc<Self>, so we can call it directly
+            if let Err(e) = gossip.shutdown().await {
+                tracing::warn!("gossip shutdown error: {}", e);
+            }
+        }
+
+        tracing::info!("forge node shutdown complete");
+        Ok(())
     }
 
     // ========================================================================
