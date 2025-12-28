@@ -155,6 +155,237 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         self.store_change(repo_id, change).await
     }
 
+    /// Reopen a closed issue.
+    pub async fn reopen_issue(
+        &self,
+        repo_id: &RepoId,
+        issue_id: &blake3::Hash,
+    ) -> ForgeResult<blake3::Hash> {
+        let heads = self.get_heads(repo_id, CobType::Issue, issue_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Issue.to_string(),
+                cob_id: hex::encode(issue_id.as_bytes()),
+            });
+        }
+
+        let change = CobChange::new(CobType::Issue, *issue_id, heads, CobOperation::Reopen);
+
+        self.store_change(repo_id, change).await
+    }
+
+    // ========================================================================
+    // Patch Operations
+    // ========================================================================
+
+    /// Create a new patch.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::InvalidCobChange` if title exceeds limits
+    pub async fn create_patch(
+        &self,
+        repo_id: &RepoId,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        base: blake3::Hash,
+        head: blake3::Hash,
+    ) -> ForgeResult<blake3::Hash> {
+        let title = title.into();
+        let description = description.into();
+
+        // Validate
+        if title.len() as u32 > MAX_TITLE_LENGTH_BYTES {
+            return Err(ForgeError::InvalidCobChange {
+                message: format!("title too long: {} > {}", title.len(), MAX_TITLE_LENGTH_BYTES),
+            });
+        }
+
+        // Generate a unique COB ID from the content
+        let cob_id = blake3::hash(
+            &[
+                repo_id.0.as_slice(),
+                title.as_bytes(),
+                base.as_bytes(),
+                head.as_bytes(),
+                &(std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64)
+                    .to_le_bytes(),
+            ]
+            .concat(),
+        );
+
+        let op = CobOperation::CreatePatch {
+            title,
+            description,
+            base: *base.as_bytes(),
+            head: *head.as_bytes(),
+        };
+
+        let change = CobChange::root(CobType::Patch, cob_id, op);
+        self.store_change(repo_id, change).await?;
+
+        // Return the COB ID, not the change hash
+        Ok(cob_id)
+    }
+
+    /// Resolve the current state of a patch by walking its change DAG.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::CobNotFound` if the patch doesn't exist
+    /// - `ForgeError::TooManyChanges` if the DAG is too large
+    pub async fn resolve_patch(
+        &self,
+        repo_id: &RepoId,
+        patch_id: &blake3::Hash,
+    ) -> ForgeResult<super::patch::Patch> {
+        let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Patch.to_string(),
+                cob_id: hex::encode(patch_id.as_bytes()),
+            });
+        }
+
+        // Collect all changes by walking the DAG
+        let changes = self.collect_changes(heads).await?;
+
+        // Topologically sort changes (parents before children)
+        let sorted = self.topological_sort(&changes)?;
+
+        // Apply changes in order
+        let mut patch = super::patch::Patch::default();
+        for (hash, signed) in sorted {
+            patch.apply_change(
+                hash,
+                &signed.author,
+                signed.timestamp_ms,
+                &signed.payload.op,
+            );
+        }
+
+        Ok(patch)
+    }
+
+    /// Update a patch to a new head commit.
+    pub async fn update_patch(
+        &self,
+        repo_id: &RepoId,
+        patch_id: &blake3::Hash,
+        head: blake3::Hash,
+        message: Option<String>,
+    ) -> ForgeResult<blake3::Hash> {
+        let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Patch.to_string(),
+                cob_id: hex::encode(patch_id.as_bytes()),
+            });
+        }
+
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::UpdatePatch {
+                head: *head.as_bytes(),
+                message,
+            },
+        );
+
+        self.store_change(repo_id, change).await
+    }
+
+    /// Approve a patch.
+    pub async fn approve_patch(
+        &self,
+        repo_id: &RepoId,
+        patch_id: &blake3::Hash,
+        commit: blake3::Hash,
+        message: Option<String>,
+    ) -> ForgeResult<blake3::Hash> {
+        let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Patch.to_string(),
+                cob_id: hex::encode(patch_id.as_bytes()),
+            });
+        }
+
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::Approve {
+                commit: *commit.as_bytes(),
+                message,
+            },
+        );
+
+        self.store_change(repo_id, change).await
+    }
+
+    /// Merge a patch.
+    pub async fn merge_patch(
+        &self,
+        repo_id: &RepoId,
+        patch_id: &blake3::Hash,
+        commit: blake3::Hash,
+    ) -> ForgeResult<blake3::Hash> {
+        let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Patch.to_string(),
+                cob_id: hex::encode(patch_id.as_bytes()),
+            });
+        }
+
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::Merge {
+                commit: *commit.as_bytes(),
+            },
+        );
+
+        self.store_change(repo_id, change).await
+    }
+
+    /// Close a patch without merging.
+    pub async fn close_patch(
+        &self,
+        repo_id: &RepoId,
+        patch_id: &blake3::Hash,
+        reason: Option<String>,
+    ) -> ForgeResult<blake3::Hash> {
+        let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
+
+        if heads.is_empty() {
+            return Err(ForgeError::CobNotFound {
+                cob_type: CobType::Patch.to_string(),
+                cob_id: hex::encode(patch_id.as_bytes()),
+            });
+        }
+
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::Close { reason },
+        );
+
+        self.store_change(repo_id, change).await
+    }
+
     /// Resolve the current state of an issue by walking its change DAG.
     ///
     /// # Errors

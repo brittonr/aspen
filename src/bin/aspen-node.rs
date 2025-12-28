@@ -579,6 +579,17 @@ async fn main() -> Result<()> {
         })
     });
 
+    // Initialize ForgeNode if blob_store is available
+    #[cfg(feature = "forge")]
+    let forge_node = node_mode.blob_store().map(|blob_store| {
+        let secret_key = node_mode.iroh_manager().secret_key().clone();
+        Arc::new(aspen::forge::ForgeNode::new(
+            blob_store.clone(),
+            kv_store.clone(),
+            secret_key,
+        ))
+    });
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -598,6 +609,8 @@ async fn main() -> Result<()> {
         topology: None, // TODO: Wire up sharding topology when enabled
         #[cfg(feature = "global-discovery")]
         content_discovery: node_mode.content_discovery(),
+        #[cfg(feature = "forge")]
+        forge_node,
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 

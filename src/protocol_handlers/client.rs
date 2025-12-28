@@ -164,6 +164,15 @@ pub struct ClientProtocolContext {
     /// - Provider aggregation combining ticket + DHT providers
     #[cfg(feature = "global-discovery")]
     pub content_discovery: Option<crate::cluster::content_discovery::ContentDiscoveryService>,
+    /// Forge node for decentralized Git operations (optional).
+    ///
+    /// When present, enables Forge RPC operations for:
+    /// - Repository management (create, get, list)
+    /// - Git object storage (blobs, trees, commits)
+    /// - Ref management (branches, tags)
+    /// - Collaborative objects (issues, patches)
+    #[cfg(feature = "forge")]
+    pub forge_node: Option<Arc<crate::forge::ForgeNode<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -5975,6 +5984,2082 @@ async fn process_client_request(
                     }))
                 }
             }
+        }
+
+        // =====================================================================
+        // Forge operations (decentralized git)
+        // =====================================================================
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCreateRepo { name, description, default_branch } => {
+            use crate::client_rpc::{ForgeRepoInfo, ForgeRepoResultResponse};
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                    success: false,
+                    repo: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Use node's public key as the sole delegate for now
+            let public_key = forge.public_key();
+            let delegates = vec![public_key];
+            let threshold = 1u32;
+
+            match forge.create_repo(&name, delegates, threshold).await {
+                Ok(identity) => {
+                    let mut repo_info = ForgeRepoInfo {
+                        id: identity.repo_id().to_hex(),
+                        name: identity.name.clone(),
+                        description: description.clone(),
+                        default_branch: default_branch.clone().unwrap_or_else(|| "main".to_string()),
+                        delegates: identity.delegates.iter().map(|k| hex::encode(k.as_bytes())).collect(),
+                        threshold: identity.threshold,
+                        created_at_ms: identity.created_at_ms,
+                    };
+                    // Update with provided values
+                    if description.is_some() {
+                        repo_info.description = description;
+                    }
+                    if let Some(ref branch) = default_branch {
+                        repo_info.default_branch = branch.clone();
+                    }
+                    Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        success: true,
+                        repo: Some(repo_info),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge create_repo failed");
+                    Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        success: false,
+                        repo: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetRepo { repo_id } => {
+            use crate::client_rpc::{ForgeRepoInfo, ForgeRepoResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                    success: false,
+                    repo: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        success: false,
+                        repo: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.get_repo(&repo_id).await {
+                Ok(identity) => {
+                    let repo_info = ForgeRepoInfo {
+                        id: identity.repo_id().to_hex(),
+                        name: identity.name.clone(),
+                        description: identity.description.clone(),
+                        default_branch: identity.default_branch.clone(),
+                        delegates: identity.delegates.iter().map(|k| hex::encode(k.as_bytes())).collect(),
+                        threshold: identity.threshold,
+                        created_at_ms: identity.created_at_ms,
+                    };
+                    Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        success: true,
+                        repo: Some(repo_info),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_repo failed");
+                    Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        success: false,
+                        repo: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeListRepos { limit: _, offset: _ } => {
+            use crate::client_rpc::ForgeRepoListResultResponse;
+
+            let Some(ref _forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                    success: false,
+                    repos: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // TODO: Implement repo listing via KV scan
+            Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                success: true,
+                repos: vec![],
+                count: 0,
+                error: None,
+            }))
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeStoreBlob { repo_id: _, content } => {
+            use crate::client_rpc::ForgeBlobResultResponse;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    content: None,
+                    size: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            match forge.git.store_blob(content.clone()).await {
+                Ok(hash) => {
+                    Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                        success: true,
+                        hash: Some(hash.to_hex().to_string()),
+                        content: None,
+                        size: Some(content.len() as u64),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge store_blob failed");
+                    Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        content: None,
+                        size: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetBlob { hash } => {
+            use crate::client_rpc::ForgeBlobResultResponse;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                    success: false,
+                    hash: None,
+                    content: None,
+                    size: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let hash_bytes = match hex::decode(&hash) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        content: None,
+                        size: None,
+                        error: Some("invalid hash format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.git.get_blob(&hash_bytes).await {
+                Ok(content) => {
+                    let size = content.len() as u64;
+                    Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                        success: true,
+                        hash: Some(hash),
+                        content: Some(content),
+                        size: Some(size),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_blob failed");
+                    Ok(ClientRpcResponse::ForgeBlobResult(ForgeBlobResultResponse {
+                        success: false,
+                        hash: None,
+                        content: None,
+                        size: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCreateTree { repo_id: _, entries_json } => {
+            use crate::client_rpc::{ForgeTreeEntry as RpcTreeEntry, ForgeTreeResultResponse};
+            use crate::forge::TreeEntry;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                    success: false,
+                    hash: None,
+                    entries: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Parse entries from JSON
+            let rpc_entries: Vec<RpcTreeEntry> = match serde_json::from_str(&entries_json) {
+                Ok(e) => e,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: false,
+                        hash: None,
+                        entries: None,
+                        error: Some(format!("invalid entries_json: {}", e)),
+                    }));
+                }
+            };
+
+            // Convert to TreeEntry
+            let mut entries = Vec::with_capacity(rpc_entries.len());
+            for e in rpc_entries {
+                let hash_bytes = match hex::decode(&e.hash) {
+                    Ok(bytes) if bytes.len() == 32 => {
+                        let mut arr = [0u8; 32];
+                        arr.copy_from_slice(&bytes);
+                        blake3::Hash::from_bytes(arr)
+                    }
+                    _ => {
+                        return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                            success: false,
+                            hash: None,
+                            entries: None,
+                            error: Some(format!("invalid hash for entry: {}", e.name)),
+                        }));
+                    }
+                };
+                // Map mode to appropriate TreeEntry constructor
+                let entry = match e.mode {
+                    0o040000 => TreeEntry::directory(e.name, hash_bytes),
+                    0o100755 => TreeEntry::executable(e.name, hash_bytes),
+                    0o120000 => TreeEntry::symlink(e.name, hash_bytes),
+                    _ => TreeEntry::file(e.name, hash_bytes), // Default to regular file
+                };
+                entries.push(entry);
+            }
+
+            match forge.git.create_tree(&entries).await {
+                Ok(hash) => {
+                    Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: true,
+                        hash: Some(hash.to_hex().to_string()),
+                        entries: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge create_tree failed");
+                    Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: false,
+                        hash: None,
+                        entries: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetTree { hash } => {
+            use crate::client_rpc::{ForgeTreeEntry as RpcTreeEntry, ForgeTreeResultResponse};
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                    success: false,
+                    hash: None,
+                    entries: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let hash_bytes = match hex::decode(&hash) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: false,
+                        hash: None,
+                        entries: None,
+                        error: Some("invalid hash format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.git.get_tree(&hash_bytes).await {
+                Ok(tree) => {
+                    let entries: Vec<RpcTreeEntry> = tree.entries.iter().map(|e| {
+                        RpcTreeEntry {
+                            mode: e.mode,
+                            name: e.name.clone(),
+                            hash: hex::encode(e.hash),
+                        }
+                    }).collect();
+                    Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: true,
+                        hash: Some(hash),
+                        entries: Some(entries),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_tree failed");
+                    Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                        success: false,
+                        hash: None,
+                        entries: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCommit { repo_id: _, tree, parents, message } => {
+            use crate::client_rpc::{ForgeCommitInfo, ForgeCommitResultResponse};
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                    success: false,
+                    commit: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Parse tree hash
+            let tree_hash = match hex::decode(&tree) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: false,
+                        commit: None,
+                        error: Some("invalid tree hash".to_string()),
+                    }));
+                }
+            };
+
+            // Parse parent hashes
+            let mut parent_hashes = Vec::with_capacity(parents.len());
+            for p in &parents {
+                let hash_bytes = match hex::decode(p) {
+                    Ok(bytes) if bytes.len() == 32 => {
+                        let mut arr = [0u8; 32];
+                        arr.copy_from_slice(&bytes);
+                        blake3::Hash::from_bytes(arr)
+                    }
+                    _ => {
+                        return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                            success: false,
+                            commit: None,
+                            error: Some(format!("invalid parent hash: {}", p)),
+                        }));
+                    }
+                };
+                parent_hashes.push(hash_bytes);
+            }
+
+            match forge.git.commit(tree_hash, parent_hashes, &message).await {
+                Ok(commit_hash) => {
+                    // Get the commit we just created for the response
+                    let commit_info = ForgeCommitInfo {
+                        hash: commit_hash.to_hex().to_string(),
+                        tree,
+                        parents,
+                        author_name: "".to_string(), // TODO: Get from identity
+                        author_email: None,
+                        author_key: Some(hex::encode(forge.public_key().as_bytes())),
+                        message,
+                        timestamp_ms: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as u64,
+                    };
+                    Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: true,
+                        commit: Some(commit_info),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge commit failed");
+                    Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: false,
+                        commit: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetCommit { hash } => {
+            use crate::client_rpc::{ForgeCommitInfo, ForgeCommitResultResponse};
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                    success: false,
+                    commit: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let hash_bytes = match hex::decode(&hash) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: false,
+                        commit: None,
+                        error: Some("invalid hash format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.git.get_commit(&hash_bytes).await {
+                Ok(commit) => {
+                    let commit_info = ForgeCommitInfo {
+                        hash,
+                        tree: hex::encode(commit.tree),
+                        parents: commit.parents.iter().map(|p| hex::encode(p)).collect(),
+                        author_name: commit.author.name.clone(),
+                        author_email: if commit.author.email.is_empty() { None } else { Some(commit.author.email.clone()) },
+                        author_key: commit.author.public_key.as_ref().map(|pk| hex::encode(pk.as_bytes())),
+                        message: commit.message.clone(),
+                        timestamp_ms: commit.author.timestamp_ms,
+                    };
+                    Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: true,
+                        commit: Some(commit_info),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_commit failed");
+                    Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                        success: false,
+                        commit: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeLog { repo_id, ref_name, limit } => {
+            use crate::client_rpc::{ForgeCommitInfo, ForgeLogResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                    success: false,
+                    commits: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                        success: false,
+                        commits: vec![],
+                        count: 0,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            // Get ref to start from
+            let ref_name = ref_name.unwrap_or_else(|| "heads/main".to_string());
+            let start_hash = match forge.refs.get(&repo_id, &ref_name).await {
+                Ok(Some(hash)) => hash,
+                Ok(None) => {
+                    return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                        success: true,
+                        commits: vec![],
+                        count: 0,
+                        error: None,
+                    }));
+                }
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                        success: false,
+                        commits: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    }));
+                }
+            };
+
+            // Walk commit history
+            let limit = limit.unwrap_or(50).min(1000) as usize;
+            let mut commits = Vec::with_capacity(limit);
+            let mut current = Some(start_hash);
+
+            while let Some(hash) = current {
+                if commits.len() >= limit {
+                    break;
+                }
+
+                match forge.git.get_commit(&hash).await {
+                    Ok(commit) => {
+                        commits.push(ForgeCommitInfo {
+                            hash: hash.to_hex().to_string(),
+                            tree: hex::encode(commit.tree),
+                            parents: commit.parents.iter().map(|p| hex::encode(p)).collect(),
+                            author_name: commit.author.name.clone(),
+                            author_email: if commit.author.email.is_empty() { None } else { Some(commit.author.email.clone()) },
+                            author_key: commit.author.public_key.as_ref().map(|pk| hex::encode(pk.as_bytes())),
+                            message: commit.message.clone(),
+                            timestamp_ms: commit.author.timestamp_ms,
+                        });
+                        // Move to first parent for linear history
+                        current = commit.parents.first().map(|p| blake3::Hash::from_bytes(*p));
+                    }
+                    Err(_) => break,
+                }
+            }
+
+            let count = commits.len() as u32;
+            Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
+                success: true,
+                commits,
+                count,
+                error: None,
+            }))
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => {
+            use crate::client_rpc::{ForgeRefInfo, ForgeRefResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.refs.get(&repo_id, &ref_name).await {
+                Ok(Some(hash)) => {
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: true,
+                        found: true,
+                        ref_info: Some(ForgeRefInfo {
+                            name: ref_name,
+                            hash: hash.to_hex().to_string(),
+                        }),
+                        previous_hash: None,
+                        error: None,
+                    }))
+                }
+                Ok(None) => {
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: true,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_ref failed");
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeSetRef { repo_id, ref_name, hash } => {
+            use crate::client_rpc::{ForgeRefInfo, ForgeRefResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let hash_bytes = match hex::decode(&hash) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some("invalid hash format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.refs.set(&repo_id, &ref_name, hash_bytes).await {
+                Ok(()) => {
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: true,
+                        found: true,
+                        ref_info: Some(ForgeRefInfo {
+                            name: ref_name,
+                            hash,
+                        }),
+                        previous_hash: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge set_ref failed");
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeDeleteRef { repo_id, ref_name } => {
+            use crate::client_rpc::ForgeRefResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.refs.delete(&repo_id, &ref_name).await {
+                Ok(()) => {
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: true,
+                        found: true,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge delete_ref failed");
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCasRef { repo_id, ref_name, expected, new_hash } => {
+            use crate::client_rpc::{ForgeRefInfo, ForgeRefResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let expected_hash = match expected {
+                Some(ref h) => {
+                    match hex::decode(h) {
+                        Ok(bytes) if bytes.len() == 32 => {
+                            let mut arr = [0u8; 32];
+                            arr.copy_from_slice(&bytes);
+                            Some(blake3::Hash::from_bytes(arr))
+                        }
+                        _ => {
+                            return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                                success: false,
+                                found: false,
+                                ref_info: None,
+                                previous_hash: None,
+                                error: Some("invalid expected hash format".to_string()),
+                            }));
+                        }
+                    }
+                }
+                None => None,
+            };
+
+            let new_hash_bytes = match hex::decode(&new_hash) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some("invalid new_hash format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.refs.compare_and_set(&repo_id, &ref_name, expected_hash, new_hash_bytes).await {
+                Ok(()) => {
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: true,
+                        found: true,
+                        ref_info: Some(ForgeRefInfo {
+                            name: ref_name,
+                            hash: new_hash,
+                        }),
+                        previous_hash: expected,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge cas_ref failed");
+                    Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeListBranches { repo_id } => {
+            use crate::client_rpc::{ForgeRefInfo, ForgeRefListResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                    success: false,
+                    refs: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: false,
+                        refs: vec![],
+                        count: 0,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.refs.list_branches(&repo_id).await {
+                Ok(branches) => {
+                    let refs: Vec<ForgeRefInfo> = branches.into_iter().map(|(name, hash)| {
+                        ForgeRefInfo {
+                            name,
+                            hash: hash.to_hex().to_string(),
+                        }
+                    }).collect();
+                    let count = refs.len() as u32;
+                    Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: true,
+                        refs,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge list_branches failed");
+                    Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: false,
+                        refs: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeListTags { repo_id } => {
+            use crate::client_rpc::{ForgeRefInfo, ForgeRefListResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                    success: false,
+                    refs: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: false,
+                        refs: vec![],
+                        count: 0,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.refs.list_tags(&repo_id).await {
+                Ok(tags) => {
+                    let refs: Vec<ForgeRefInfo> = tags.into_iter().map(|(name, hash)| {
+                        ForgeRefInfo {
+                            name,
+                            hash: hash.to_hex().to_string(),
+                        }
+                    }).collect();
+                    let count = refs.len() as u32;
+                    Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: true,
+                        refs,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge list_tags failed");
+                    Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                        success: false,
+                        refs: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCreateIssue { repo_id, title, body, labels } => {
+            use crate::client_rpc::{ForgeIssueInfo, ForgeIssueResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                    success: false,
+                    issue: None,
+                    comments: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.cobs.create_issue(&repo_id, &title, &body, labels.clone()).await {
+                Ok(issue_id) => {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: true,
+                        issue: Some(ForgeIssueInfo {
+                            id: issue_id.to_hex().to_string(),
+                            title,
+                            body,
+                            state: "open".to_string(),
+                            labels,
+                            comment_count: 0,
+                            assignees: vec![],
+                            created_at_ms: now,
+                            updated_at_ms: now,
+                        }),
+                        comments: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge create_issue failed");
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeListIssues { repo_id, state, limit } => {
+            use crate::client_rpc::{ForgeIssueInfo, ForgeIssueListResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                    success: false,
+                    issues: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                        success: false,
+                        issues: vec![],
+                        count: 0,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.cobs.list_issues(&repo_id).await {
+                Ok(issue_ids) => {
+                    let limit = limit.unwrap_or(100).min(1000) as usize;
+                    let mut issues = Vec::with_capacity(limit.min(issue_ids.len()));
+
+                    for issue_id in issue_ids.into_iter().take(limit) {
+                        if let Ok(issue) = forge.cobs.resolve_issue(&repo_id, &issue_id).await {
+                            let state_str = match &issue.state {
+                                crate::forge::cob::IssueState::Open => "open",
+                                crate::forge::cob::IssueState::Closed { .. } => "closed",
+                            };
+
+                            // Apply state filter
+                            if let Some(ref filter) = state {
+                                if filter != state_str {
+                                    continue;
+                                }
+                            }
+
+                            issues.push(ForgeIssueInfo {
+                                id: issue_id.to_hex().to_string(),
+                                title: issue.title,
+                                body: issue.body,
+                                state: state_str.to_string(),
+                                labels: issue.labels.into_iter().collect(),
+                                comment_count: issue.comments.len() as u32,
+                                assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
+                                created_at_ms: issue.created_at_ms,
+                                updated_at_ms: issue.updated_at_ms,
+                            });
+                        }
+                    }
+
+                    let count = issues.len() as u32;
+                    Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                        success: true,
+                        issues,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge list_issues failed");
+                    Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                        success: false,
+                        issues: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetIssue { repo_id, issue_id } => {
+            use crate::client_rpc::{ForgeCommentInfo, ForgeIssueInfo, ForgeIssueResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                    success: false,
+                    issue: None,
+                    comments: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let issue_hash = match hex::decode(&issue_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some("invalid issue_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.resolve_issue(&repo_id, &issue_hash).await {
+                Ok(issue) => {
+                    let state_str = match &issue.state {
+                        crate::forge::cob::IssueState::Open => "open",
+                        crate::forge::cob::IssueState::Closed { .. } => "closed",
+                    };
+
+                    let comments: Vec<ForgeCommentInfo> = issue.comments.iter().map(|c| {
+                        ForgeCommentInfo {
+                            hash: hex::encode(c.change_hash),
+                            author: hex::encode(c.author),
+                            body: c.body.clone(),
+                            timestamp_ms: c.timestamp_ms,
+                        }
+                    }).collect();
+
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: true,
+                        issue: Some(ForgeIssueInfo {
+                            id: issue_id,
+                            title: issue.title,
+                            body: issue.body,
+                            state: state_str.to_string(),
+                            labels: issue.labels.into_iter().collect(),
+                            comment_count: comments.len() as u32,
+                            assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
+                            created_at_ms: issue.created_at_ms,
+                            updated_at_ms: issue.updated_at_ms,
+                        }),
+                        comments: Some(comments),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_issue failed");
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCommentIssue { repo_id, issue_id, body } => {
+            use crate::client_rpc::ForgeIssueResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                    success: false,
+                    issue: None,
+                    comments: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let issue_hash = match hex::decode(&issue_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some("invalid issue_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.add_comment(&repo_id, &issue_hash, &body).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: true,
+                        issue: None,
+                        comments: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge comment_issue failed");
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCloseIssue { repo_id, issue_id, reason } => {
+            use crate::client_rpc::ForgeIssueResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                    success: false,
+                    issue: None,
+                    comments: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let issue_hash = match hex::decode(&issue_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some("invalid issue_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.close_issue(&repo_id, &issue_hash, reason).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: true,
+                        issue: None,
+                        comments: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge close_issue failed");
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => {
+            use crate::client_rpc::ForgeIssueResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                    success: false,
+                    issue: None,
+                    comments: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let issue_hash = match hex::decode(&issue_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some("invalid issue_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.reopen_issue(&repo_id, &issue_hash).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: true,
+                        issue: None,
+                        comments: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge reopen_issue failed");
+                    Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                        success: false,
+                        issue: None,
+                        comments: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeCreatePatch { repo_id, title, description, base, head } => {
+            use crate::client_rpc::{ForgePatchInfo, ForgePatchResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let base_hash = match hex::decode(&base) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid base hash".to_string()),
+                    }));
+                }
+            };
+
+            let head_hash = match hex::decode(&head) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid head hash".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.create_patch(&repo_id, &title, &description, base_hash, head_hash).await {
+                Ok(patch_id) => {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: Some(ForgePatchInfo {
+                            id: patch_id.to_hex().to_string(),
+                            title,
+                            description,
+                            state: "open".to_string(),
+                            base,
+                            head,
+                            labels: vec![],
+                            revision_count: 1,
+                            approval_count: 0,
+                            assignees: vec![],
+                            created_at_ms: now,
+                            updated_at_ms: now,
+                        }),
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge create_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeListPatches { repo_id, state, limit } => {
+            use crate::client_rpc::{ForgePatchInfo, ForgePatchListResultResponse};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                    success: false,
+                    patches: vec![],
+                    count: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                        success: false,
+                        patches: vec![],
+                        count: 0,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            match forge.cobs.list_patches(&repo_id).await {
+                Ok(patch_ids) => {
+                    let limit = limit.unwrap_or(100).min(1000) as usize;
+                    let mut patches = Vec::with_capacity(limit.min(patch_ids.len()));
+
+                    for patch_id in patch_ids.into_iter().take(limit) {
+                        if let Ok(patch) = forge.cobs.resolve_patch(&repo_id, &patch_id).await {
+                            let state_str = match &patch.state {
+                                crate::forge::cob::PatchState::Open => "open",
+                                crate::forge::cob::PatchState::Merged { .. } => "merged",
+                                crate::forge::cob::PatchState::Closed { .. } => "closed",
+                            };
+
+                            // Apply state filter
+                            if let Some(ref filter) = state {
+                                if filter != state_str {
+                                    continue;
+                                }
+                            }
+
+                            patches.push(ForgePatchInfo {
+                                id: patch_id.to_hex().to_string(),
+                                title: patch.title,
+                                description: patch.description,
+                                state: state_str.to_string(),
+                                base: hex::encode(patch.base),
+                                head: hex::encode(patch.head),
+                                labels: patch.labels.into_iter().collect(),
+                                revision_count: patch.revisions.len() as u32,
+                                approval_count: patch.approvals.len() as u32,
+                                assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
+                                created_at_ms: patch.created_at_ms,
+                                updated_at_ms: patch.updated_at_ms,
+                            });
+                        }
+                    }
+
+                    let count = patches.len() as u32;
+                    Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                        success: true,
+                        patches,
+                        count,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge list_patches failed");
+                    Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                        success: false,
+                        patches: vec![],
+                        count: 0,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeGetPatch { repo_id, patch_id } => {
+            use crate::client_rpc::{ForgeCommentInfo, ForgePatchApproval, ForgePatchInfo, ForgePatchResultResponse, ForgePatchRevision};
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let patch_hash = match hex::decode(&patch_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid patch_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.resolve_patch(&repo_id, &patch_hash).await {
+                Ok(patch) => {
+                    let state_str = match &patch.state {
+                        crate::forge::cob::PatchState::Open => "open",
+                        crate::forge::cob::PatchState::Merged { .. } => "merged",
+                        crate::forge::cob::PatchState::Closed { .. } => "closed",
+                    };
+
+                    let comments: Vec<ForgeCommentInfo> = patch.comments.iter().map(|c| {
+                        ForgeCommentInfo {
+                            hash: hex::encode(c.change_hash),
+                            author: hex::encode(c.author),
+                            body: c.body.clone(),
+                            timestamp_ms: c.timestamp_ms,
+                        }
+                    }).collect();
+
+                    let revisions: Vec<ForgePatchRevision> = patch.revisions.iter().map(|r| {
+                        ForgePatchRevision {
+                            hash: hex::encode(r.change_hash),
+                            head: hex::encode(r.head),
+                            message: r.message.clone(),
+                            author: hex::encode(r.author),
+                            timestamp_ms: r.timestamp_ms,
+                        }
+                    }).collect();
+
+                    let approvals: Vec<ForgePatchApproval> = patch.approvals.iter().map(|a| {
+                        ForgePatchApproval {
+                            author: hex::encode(a.author),
+                            commit: hex::encode(a.commit),
+                            message: a.message.clone(),
+                            timestamp_ms: a.timestamp_ms,
+                        }
+                    }).collect();
+
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: Some(ForgePatchInfo {
+                            id: patch_id,
+                            title: patch.title,
+                            description: patch.description,
+                            state: state_str.to_string(),
+                            base: hex::encode(patch.base),
+                            head: hex::encode(patch.head),
+                            labels: patch.labels.into_iter().collect(),
+                            revision_count: revisions.len() as u32,
+                            approval_count: approvals.len() as u32,
+                            assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
+                            created_at_ms: patch.created_at_ms,
+                            updated_at_ms: patch.updated_at_ms,
+                        }),
+                        comments: Some(comments),
+                        revisions: Some(revisions),
+                        approvals: Some(approvals),
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge get_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeUpdatePatch { repo_id, patch_id, head, message } => {
+            use crate::client_rpc::ForgePatchResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let patch_hash = match hex::decode(&patch_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid patch_id format".to_string()),
+                    }));
+                }
+            };
+
+            let head_hash = match hex::decode(&head) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid head hash".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.update_patch(&repo_id, &patch_hash, head_hash, message).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge update_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeApprovePatch { repo_id, patch_id, commit, message } => {
+            use crate::client_rpc::ForgePatchResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let patch_hash = match hex::decode(&patch_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid patch_id format".to_string()),
+                    }));
+                }
+            };
+
+            let commit_hash = match hex::decode(&commit) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid commit hash".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.approve_patch(&repo_id, &patch_hash, commit_hash, message).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge approve_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeMergePatch { repo_id, patch_id, merge_commit } => {
+            use crate::client_rpc::ForgePatchResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let patch_hash = match hex::decode(&patch_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid patch_id format".to_string()),
+                    }));
+                }
+            };
+
+            let merge_hash = match hex::decode(&merge_commit) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid merge_commit hash".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.merge_patch(&repo_id, &patch_hash, merge_hash).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge merge_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(feature = "forge")]
+        ClientRpcRequest::ForgeClosePatch { repo_id, patch_id, reason } => {
+            use crate::client_rpc::ForgePatchResultResponse;
+            use crate::forge::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                    success: false,
+                    patch: None,
+                    comments: None,
+                    revisions: None,
+                    approvals: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("invalid repo_id: {}", e)),
+                    }));
+                }
+            };
+
+            let patch_hash = match hex::decode(&patch_id) {
+                Ok(bytes) if bytes.len() == 32 => {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&bytes);
+                    blake3::Hash::from_bytes(arr)
+                }
+                _ => {
+                    return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some("invalid patch_id format".to_string()),
+                    }));
+                }
+            };
+
+            match forge.cobs.close_patch(&repo_id, &patch_hash, reason).await {
+                Ok(_) => {
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: true,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "forge close_patch failed");
+                    Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                        success: false,
+                        patch: None,
+                        comments: None,
+                        revisions: None,
+                        approvals: None,
+                        error: Some(format!("{}", e)),
+                    }))
+                }
+            }
+        }
+
+        // Fallback for Forge operations when feature is disabled
+        #[cfg(not(feature = "forge"))]
+        ClientRpcRequest::ForgeCreateRepo { .. }
+        | ClientRpcRequest::ForgeGetRepo { .. }
+        | ClientRpcRequest::ForgeListRepos { .. }
+        | ClientRpcRequest::ForgeStoreBlob { .. }
+        | ClientRpcRequest::ForgeGetBlob { .. }
+        | ClientRpcRequest::ForgeCreateTree { .. }
+        | ClientRpcRequest::ForgeGetTree { .. }
+        | ClientRpcRequest::ForgeCommit { .. }
+        | ClientRpcRequest::ForgeGetCommit { .. }
+        | ClientRpcRequest::ForgeLog { .. }
+        | ClientRpcRequest::ForgeGetRef { .. }
+        | ClientRpcRequest::ForgeSetRef { .. }
+        | ClientRpcRequest::ForgeDeleteRef { .. }
+        | ClientRpcRequest::ForgeCasRef { .. }
+        | ClientRpcRequest::ForgeListBranches { .. }
+        | ClientRpcRequest::ForgeListTags { .. }
+        | ClientRpcRequest::ForgeCreateIssue { .. }
+        | ClientRpcRequest::ForgeListIssues { .. }
+        | ClientRpcRequest::ForgeGetIssue { .. }
+        | ClientRpcRequest::ForgeCommentIssue { .. }
+        | ClientRpcRequest::ForgeCloseIssue { .. }
+        | ClientRpcRequest::ForgeReopenIssue { .. }
+        | ClientRpcRequest::ForgeCreatePatch { .. }
+        | ClientRpcRequest::ForgeListPatches { .. }
+        | ClientRpcRequest::ForgeGetPatch { .. }
+        | ClientRpcRequest::ForgeUpdatePatch { .. }
+        | ClientRpcRequest::ForgeApprovePatch { .. }
+        | ClientRpcRequest::ForgeMergePatch { .. }
+        | ClientRpcRequest::ForgeClosePatch { .. } => {
+            use crate::client_rpc::ForgeOperationResultResponse;
+            Ok(ClientRpcResponse::ForgeOperationResult(
+                ForgeOperationResultResponse {
+                    success: false,
+                    error: Some("Forge feature not compiled into this build".to_string()),
+                },
+            ))
         }
     }
 }

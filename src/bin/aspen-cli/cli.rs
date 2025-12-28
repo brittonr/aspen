@@ -13,14 +13,18 @@ use std::time::Duration;
 use crate::client::AspenClient;
 use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
+use crate::commands::branch::BranchCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
 #[cfg(feature = "dns")]
 use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
+use crate::commands::git::GitCommand;
+use crate::commands::issue::IssueCommand;
 use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
+use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
@@ -30,6 +34,7 @@ use crate::commands::sequence::SequenceCommand;
 use crate::commands::service::ServiceCommand;
 #[cfg(feature = "sql")]
 use crate::commands::sql::SqlCommand;
+use crate::commands::tag::TagCommand;
 use crate::commands::verify::VerifyCommand;
 
 /// Command-line interface for Aspen distributed system.
@@ -94,6 +99,10 @@ pub enum Commands {
     #[command(subcommand)]
     Blob(BlobCommand),
 
+    /// Branch management for Git repositories.
+    #[command(subcommand)]
+    Branch(BranchCommand),
+
     /// Cluster management commands.
     #[command(subcommand)]
     Cluster(ClusterCommand),
@@ -114,6 +123,18 @@ pub enum Commands {
     #[command(subcommand)]
     Docs(DocsCommand),
 
+    /// Git repository operations.
+    ///
+    /// Decentralized Git with BLAKE3 content-addressing and Raft-consistent refs.
+    #[command(subcommand)]
+    Git(GitCommand),
+
+    /// Issue tracking (collaborative objects).
+    ///
+    /// Create and manage issues as immutable, content-addressed DAGs.
+    #[command(subcommand)]
+    Issue(IssueCommand),
+
     /// Key-value store operations.
     #[command(subcommand)]
     Kv(KvCommand),
@@ -125,6 +146,12 @@ pub enum Commands {
     /// Distributed lock operations.
     #[command(subcommand)]
     Lock(LockCommand),
+
+    /// Patch management (collaborative objects).
+    ///
+    /// Create and manage patches (pull requests) as immutable, content-addressed DAGs.
+    #[command(subcommand)]
+    Patch(PatchCommand),
 
     /// Peer cluster federation.
     #[command(subcommand)]
@@ -161,6 +188,10 @@ pub enum Commands {
     #[command(subcommand)]
     Sql(SqlCommand),
 
+    /// Tag management for Git repositories.
+    #[command(subcommand)]
+    Tag(TagCommand),
+
     /// Verify cluster replication (KV, docs, blobs).
     ///
     /// Run verification tests to ensure data is being replicated correctly.
@@ -196,14 +227,18 @@ impl Cli {
         match self.command {
             Commands::Barrier(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Branch(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
             #[cfg(feature = "dns")]
             Commands::Dns(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lease(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lock(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Patch(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Peer(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Queue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.json).await,
@@ -213,6 +248,7 @@ impl Cli {
             Commands::Service(cmd) => cmd.run(&client, self.global.json).await,
             #[cfg(feature = "sql")]
             Commands::Sql(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Tag(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Verify(cmd) => cmd.run(&client, self.global.json).await,
         }
     }

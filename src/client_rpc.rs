@@ -1309,6 +1309,273 @@ pub enum ClientRpcRequest {
         /// Client's current topology version (for conditional fetch).
         client_version: Option<u64>,
     },
+
+    // =========================================================================
+    // Forge operations - Decentralized Git
+    // =========================================================================
+    /// Create a new repository.
+    ForgeCreateRepo {
+        /// Repository name (1-256 bytes).
+        name: String,
+        /// Optional description (max 4096 bytes).
+        description: Option<String>,
+        /// Default branch name (default: "main").
+        default_branch: Option<String>,
+    },
+
+    /// Get repository information by ID.
+    ForgeGetRepo {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+    },
+
+    /// List repositories.
+    ForgeListRepos {
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+        /// Offset for pagination.
+        offset: Option<u32>,
+    },
+
+    /// Store a blob (file content).
+    ForgeStoreBlob {
+        /// Repository ID.
+        repo_id: String,
+        /// Blob content (max 100 MB).
+        content: Vec<u8>,
+    },
+
+    /// Get a blob by hash.
+    ForgeGetBlob {
+        /// BLAKE3 hash (hex-encoded).
+        hash: String,
+    },
+
+    /// Create a tree (directory).
+    ForgeCreateTree {
+        /// Repository ID.
+        repo_id: String,
+        /// Tree entries as JSON array of {mode, name, hash}.
+        entries_json: String,
+    },
+
+    /// Get a tree by hash.
+    ForgeGetTree {
+        /// BLAKE3 hash (hex-encoded).
+        hash: String,
+    },
+
+    /// Create a commit.
+    ForgeCommit {
+        /// Repository ID.
+        repo_id: String,
+        /// Tree hash (hex-encoded).
+        tree: String,
+        /// Parent commit hashes (hex-encoded).
+        parents: Vec<String>,
+        /// Commit message.
+        message: String,
+    },
+
+    /// Get a commit by hash.
+    ForgeGetCommit {
+        /// BLAKE3 hash (hex-encoded).
+        hash: String,
+    },
+
+    /// Get commit history from a ref.
+    ForgeLog {
+        /// Repository ID.
+        repo_id: String,
+        /// Ref name (e.g., "heads/main"). Uses default branch if not specified.
+        ref_name: Option<String>,
+        /// Maximum commits to return (default 50, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Get a ref value.
+    ForgeGetRef {
+        /// Repository ID.
+        repo_id: String,
+        /// Ref name (e.g., "heads/main", "tags/v1.0").
+        ref_name: String,
+    },
+
+    /// Set a ref value.
+    ForgeSetRef {
+        /// Repository ID.
+        repo_id: String,
+        /// Ref name.
+        ref_name: String,
+        /// Commit hash (hex-encoded).
+        hash: String,
+    },
+
+    /// Delete a ref.
+    ForgeDeleteRef {
+        /// Repository ID.
+        repo_id: String,
+        /// Ref name.
+        ref_name: String,
+    },
+
+    /// Compare-and-set a ref (for safe concurrent updates).
+    ForgeCasRef {
+        /// Repository ID.
+        repo_id: String,
+        /// Ref name.
+        ref_name: String,
+        /// Expected current hash (None = must not exist).
+        expected: Option<String>,
+        /// New hash.
+        new_hash: String,
+    },
+
+    /// List branches in a repository.
+    ForgeListBranches {
+        /// Repository ID.
+        repo_id: String,
+    },
+
+    /// List tags in a repository.
+    ForgeListTags {
+        /// Repository ID.
+        repo_id: String,
+    },
+
+    /// Create an issue.
+    ForgeCreateIssue {
+        /// Repository ID.
+        repo_id: String,
+        /// Issue title.
+        title: String,
+        /// Issue body.
+        body: String,
+        /// Labels.
+        labels: Vec<String>,
+    },
+
+    /// List issues in a repository.
+    ForgeListIssues {
+        /// Repository ID.
+        repo_id: String,
+        /// Filter by state: "open", "closed", or None for all.
+        state: Option<String>,
+        /// Maximum results (default 50, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Get issue details.
+    ForgeGetIssue {
+        /// Repository ID.
+        repo_id: String,
+        /// Issue ID (hex-encoded).
+        issue_id: String,
+    },
+
+    /// Add a comment to an issue.
+    ForgeCommentIssue {
+        /// Repository ID.
+        repo_id: String,
+        /// Issue ID.
+        issue_id: String,
+        /// Comment body.
+        body: String,
+    },
+
+    /// Close an issue.
+    ForgeCloseIssue {
+        /// Repository ID.
+        repo_id: String,
+        /// Issue ID.
+        issue_id: String,
+        /// Optional reason for closing.
+        reason: Option<String>,
+    },
+
+    /// Reopen an issue.
+    ForgeReopenIssue {
+        /// Repository ID.
+        repo_id: String,
+        /// Issue ID.
+        issue_id: String,
+    },
+
+    /// Create a patch (pull request equivalent).
+    ForgeCreatePatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch title.
+        title: String,
+        /// Patch description.
+        description: String,
+        /// Base commit hash (what we're merging into).
+        base: String,
+        /// Head commit hash (what we're merging).
+        head: String,
+    },
+
+    /// List patches in a repository.
+    ForgeListPatches {
+        /// Repository ID.
+        repo_id: String,
+        /// Filter by state: "open", "merged", "closed", or None for all.
+        state: Option<String>,
+        /// Maximum results (default 50, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Get patch details.
+    ForgeGetPatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID (hex-encoded).
+        patch_id: String,
+    },
+
+    /// Update patch head (push new commits).
+    ForgeUpdatePatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID.
+        patch_id: String,
+        /// New head commit hash.
+        head: String,
+        /// Optional update message.
+        message: Option<String>,
+    },
+
+    /// Approve a patch.
+    ForgeApprovePatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID.
+        patch_id: String,
+        /// Commit being approved.
+        commit: String,
+        /// Optional approval message.
+        message: Option<String>,
+    },
+
+    /// Merge a patch.
+    ForgeMergePatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID.
+        patch_id: String,
+        /// Merge commit hash.
+        merge_commit: String,
+    },
+
+    /// Close a patch without merging.
+    ForgeClosePatch {
+        /// Repository ID.
+        repo_id: String,
+        /// Patch ID.
+        patch_id: String,
+        /// Optional reason for closing.
+        reason: Option<String>,
+    },
 }
 
 impl ClientRpcRequest {
@@ -1620,6 +1887,64 @@ impl ClientRpcRequest {
             }),
             Self::DnsListZones => Some(Operation::Read {
                 key: "dns:_zone:".to_string(),
+            }),
+
+            // Forge operations (decentralized git)
+            Self::ForgeCreateRepo { .. } => Some(Operation::Write {
+                key: "forge:repos:".to_string(),
+                value: vec![],
+            }),
+            Self::ForgeGetRepo { repo_id } | Self::ForgeListBranches { repo_id } | Self::ForgeListTags { repo_id } => {
+                Some(Operation::Read {
+                    key: format!("forge:repos:{repo_id}"),
+                })
+            }
+            Self::ForgeListRepos { .. } => Some(Operation::Read {
+                key: "forge:repos:".to_string(),
+            }),
+            Self::ForgeStoreBlob { repo_id, .. }
+            | Self::ForgeCreateTree { repo_id, .. }
+            | Self::ForgeCommit { repo_id, .. } => Some(Operation::Write {
+                key: format!("forge:repos:{repo_id}"),
+                value: vec![],
+            }),
+            Self::ForgeGetBlob { .. } | Self::ForgeGetTree { .. } | Self::ForgeGetCommit { .. } => {
+                Some(Operation::Read {
+                    key: "forge:".to_string(),
+                })
+            }
+            Self::ForgeLog { repo_id, .. } => Some(Operation::Read {
+                key: format!("forge:repos:{repo_id}"),
+            }),
+            Self::ForgeGetRef { repo_id, .. } => Some(Operation::Read {
+                key: format!("forge:refs:{repo_id}"),
+            }),
+            Self::ForgeSetRef { repo_id, .. }
+            | Self::ForgeDeleteRef { repo_id, .. }
+            | Self::ForgeCasRef { repo_id, .. } => Some(Operation::Write {
+                key: format!("forge:refs:{repo_id}"),
+                value: vec![],
+            }),
+            Self::ForgeCreateIssue { repo_id, .. }
+            | Self::ForgeCommentIssue { repo_id, .. }
+            | Self::ForgeCloseIssue { repo_id, .. }
+            | Self::ForgeReopenIssue { repo_id, .. } => Some(Operation::Write {
+                key: format!("forge:cob:issue:{repo_id}"),
+                value: vec![],
+            }),
+            Self::ForgeListIssues { repo_id, .. } | Self::ForgeGetIssue { repo_id, .. } => Some(Operation::Read {
+                key: format!("forge:cob:issue:{repo_id}"),
+            }),
+            Self::ForgeCreatePatch { repo_id, .. }
+            | Self::ForgeUpdatePatch { repo_id, .. }
+            | Self::ForgeApprovePatch { repo_id, .. }
+            | Self::ForgeMergePatch { repo_id, .. }
+            | Self::ForgeClosePatch { repo_id, .. } => Some(Operation::Write {
+                key: format!("forge:cob:patch:{repo_id}"),
+                value: vec![],
+            }),
+            Self::ForgeListPatches { repo_id, .. } | Self::ForgeGetPatch { repo_id, .. } => Some(Operation::Read {
+                key: format!("forge:cob:patch:{repo_id}"),
             }),
 
             // Public requests (no auth required)
@@ -2065,6 +2390,48 @@ pub enum ClientRpcResponse {
     // =========================================================================
     /// Get topology result.
     TopologyResult(TopologyResultResponse),
+
+    // =========================================================================
+    // Forge responses (decentralized git)
+    // =========================================================================
+    /// Repository operation result.
+    ForgeRepoResult(ForgeRepoResultResponse),
+
+    /// Repository list result.
+    ForgeRepoListResult(ForgeRepoListResultResponse),
+
+    /// Blob operation result.
+    ForgeBlobResult(ForgeBlobResultResponse),
+
+    /// Tree operation result.
+    ForgeTreeResult(ForgeTreeResultResponse),
+
+    /// Commit operation result.
+    ForgeCommitResult(ForgeCommitResultResponse),
+
+    /// Commit log result.
+    ForgeLogResult(ForgeLogResultResponse),
+
+    /// Ref operation result.
+    ForgeRefResult(ForgeRefResultResponse),
+
+    /// Ref list result (branches or tags).
+    ForgeRefListResult(ForgeRefListResultResponse),
+
+    /// Issue operation result.
+    ForgeIssueResult(ForgeIssueResultResponse),
+
+    /// Issue list result.
+    ForgeIssueListResult(ForgeIssueListResultResponse),
+
+    /// Patch operation result.
+    ForgePatchResult(ForgePatchResultResponse),
+
+    /// Patch list result.
+    ForgePatchListResult(ForgePatchListResultResponse),
+
+    /// Generic forge operation success/error.
+    ForgeOperationResult(ForgeOperationResultResponse),
 }
 
 /// Health status response.
@@ -3749,6 +4116,332 @@ pub struct TopologyResultResponse {
     pub topology_data: Option<String>,
     /// Number of shards in the topology.
     pub shard_count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Forge response types (decentralized git)
+// =============================================================================
+
+/// Repository information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRepoInfo {
+    /// Repository ID (hex-encoded BLAKE3 hash).
+    pub id: String,
+    /// Repository name.
+    pub name: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Default branch name.
+    pub default_branch: String,
+    /// Delegate public keys (hex-encoded).
+    pub delegates: Vec<String>,
+    /// Signature threshold.
+    pub threshold: u32,
+    /// Creation timestamp (ms since epoch).
+    pub created_at_ms: u64,
+}
+
+/// Repository operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRepoResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Repository info (if found/created).
+    pub repo: Option<ForgeRepoInfo>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Repository list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRepoListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of repositories.
+    pub repos: Vec<ForgeRepoInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Blob operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeBlobResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Blob hash (hex-encoded BLAKE3).
+    pub hash: Option<String>,
+    /// Blob content (for get operations).
+    pub content: Option<Vec<u8>>,
+    /// Blob size in bytes.
+    pub size: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Tree entry information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeTreeEntry {
+    /// File mode (e.g., 0o100644 for regular file).
+    pub mode: u32,
+    /// Entry name.
+    pub name: String,
+    /// Entry hash (hex-encoded BLAKE3).
+    pub hash: String,
+}
+
+/// Tree operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeTreeResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Tree hash (hex-encoded BLAKE3).
+    pub hash: Option<String>,
+    /// Tree entries (for get operations).
+    pub entries: Option<Vec<ForgeTreeEntry>>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Commit information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeCommitInfo {
+    /// Commit hash (hex-encoded BLAKE3).
+    pub hash: String,
+    /// Tree hash.
+    pub tree: String,
+    /// Parent commit hashes.
+    pub parents: Vec<String>,
+    /// Author name.
+    pub author_name: String,
+    /// Author email.
+    pub author_email: Option<String>,
+    /// Author public key (hex-encoded).
+    pub author_key: Option<String>,
+    /// Commit message.
+    pub message: String,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Commit operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeCommitResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Commit info (if found/created).
+    pub commit: Option<ForgeCommitInfo>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Commit log result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeLogResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of commits.
+    pub commits: Vec<ForgeCommitInfo>,
+    /// Total commits returned.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Ref information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRefInfo {
+    /// Ref name (e.g., "heads/main", "tags/v1.0").
+    pub name: String,
+    /// Target hash (hex-encoded BLAKE3).
+    pub hash: String,
+}
+
+/// Ref operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRefResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the ref was found (for get/delete).
+    pub found: bool,
+    /// Ref info (if found).
+    pub ref_info: Option<ForgeRefInfo>,
+    /// Previous hash (for CAS operations).
+    pub previous_hash: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Ref list result (branches or tags).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeRefListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of refs.
+    pub refs: Vec<ForgeRefInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Comment information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeCommentInfo {
+    /// Comment hash (change ID).
+    pub hash: String,
+    /// Author public key (hex-encoded).
+    pub author: String,
+    /// Comment body.
+    pub body: String,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Issue information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeIssueInfo {
+    /// Issue ID (hex-encoded).
+    pub id: String,
+    /// Issue title.
+    pub title: String,
+    /// Issue body.
+    pub body: String,
+    /// State: "open" or "closed".
+    pub state: String,
+    /// Labels.
+    pub labels: Vec<String>,
+    /// Number of comments.
+    pub comment_count: u32,
+    /// Assignee public keys (hex-encoded).
+    pub assignees: Vec<String>,
+    /// Creation timestamp (ms since epoch).
+    pub created_at_ms: u64,
+    /// Last update timestamp (ms since epoch).
+    pub updated_at_ms: u64,
+}
+
+/// Issue operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeIssueResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Issue info (if found/created).
+    pub issue: Option<ForgeIssueInfo>,
+    /// Comments (for detailed get).
+    pub comments: Option<Vec<ForgeCommentInfo>>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Issue list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeIssueListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of issues.
+    pub issues: Vec<ForgeIssueInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Patch revision information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePatchRevision {
+    /// Revision hash.
+    pub hash: String,
+    /// Head commit hash.
+    pub head: String,
+    /// Optional revision message.
+    pub message: Option<String>,
+    /// Author public key (hex-encoded).
+    pub author: String,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Patch approval information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePatchApproval {
+    /// Approver public key (hex-encoded).
+    pub author: String,
+    /// Approved commit hash.
+    pub commit: String,
+    /// Optional approval message.
+    pub message: Option<String>,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Patch information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePatchInfo {
+    /// Patch ID (hex-encoded).
+    pub id: String,
+    /// Patch title.
+    pub title: String,
+    /// Patch description.
+    pub description: String,
+    /// State: "open", "merged", or "closed".
+    pub state: String,
+    /// Base commit hash.
+    pub base: String,
+    /// Current head commit hash.
+    pub head: String,
+    /// Labels.
+    pub labels: Vec<String>,
+    /// Number of revisions.
+    pub revision_count: u32,
+    /// Number of approvals.
+    pub approval_count: u32,
+    /// Assignee/reviewer public keys (hex-encoded).
+    pub assignees: Vec<String>,
+    /// Creation timestamp (ms since epoch).
+    pub created_at_ms: u64,
+    /// Last update timestamp (ms since epoch).
+    pub updated_at_ms: u64,
+}
+
+/// Patch operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePatchResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Patch info (if found/created).
+    pub patch: Option<ForgePatchInfo>,
+    /// Comments (for detailed get).
+    pub comments: Option<Vec<ForgeCommentInfo>>,
+    /// Revisions (for detailed get).
+    pub revisions: Option<Vec<ForgePatchRevision>>,
+    /// Approvals (for detailed get).
+    pub approvals: Option<Vec<ForgePatchApproval>>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Patch list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgePatchListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of patches.
+    pub patches: Vec<ForgePatchInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Generic forge operation result (for simple success/error responses).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeOperationResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

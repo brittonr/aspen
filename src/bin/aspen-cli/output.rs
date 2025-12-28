@@ -808,3 +808,498 @@ fn truncate(s: &str, max_len: usize) -> String {
         format!("{}...", &s[..max_len - 3])
     }
 }
+
+// =============================================================================
+// Forge output types (decentralized git)
+// =============================================================================
+
+/// Repository output.
+pub struct RepoOutput {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub default_branch: String,
+    pub delegates: Vec<String>,
+    pub threshold: u32,
+    pub created_at_ms: u64,
+}
+
+impl Outputable for RepoOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "default_branch": self.default_branch,
+            "delegates": self.delegates,
+            "threshold": self.threshold,
+            "created_at_ms": self.created_at_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let desc = self.description.as_deref().unwrap_or("-");
+        format!(
+            "Repository: {}\n\
+             ID:             {}\n\
+             Default Branch: {}\n\
+             Description:    {}\n\
+             Delegates:      {}\n\
+             Threshold:      {}",
+            self.name,
+            self.id,
+            self.default_branch,
+            desc,
+            self.delegates.len(),
+            self.threshold
+        )
+    }
+}
+
+/// Commit output.
+pub struct CommitOutput {
+    pub hash: String,
+    pub tree: String,
+    pub parents: Vec<String>,
+    pub author_name: String,
+    pub author_email: Option<String>,
+    pub message: String,
+    pub timestamp_ms: u64,
+}
+
+impl Outputable for CommitOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "hash": self.hash,
+            "tree": self.tree,
+            "parents": self.parents,
+            "author_name": self.author_name,
+            "author_email": self.author_email,
+            "message": self.message,
+            "timestamp_ms": self.timestamp_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let email = self.author_email.as_deref().unwrap_or("");
+        let author = if email.is_empty() {
+            self.author_name.clone()
+        } else {
+            format!("{} <{}>", self.author_name, email)
+        };
+        let parents = if self.parents.is_empty() {
+            String::new()
+        } else {
+            format!("\nParent: {}", self.parents.join(", "))
+        };
+        format!(
+            "commit {}\n\
+             Author: {}\n\
+             Date:   {}{}\n\n\
+             {}",
+            self.hash,
+            author,
+            self.timestamp_ms,
+            parents,
+            self.message.lines().map(|l| format!("    {}", l)).collect::<Vec<_>>().join("\n")
+        )
+    }
+}
+
+/// Commit log output.
+pub struct LogOutput {
+    pub commits: Vec<CommitOutput>,
+    pub count: u32,
+}
+
+impl Outputable for LogOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.count,
+            "commits": self.commits.iter().map(|c| c.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.commits.is_empty() {
+            return "No commits found".to_string();
+        }
+        self.commits.iter().map(|c| c.to_human()).collect::<Vec<_>>().join("\n\n")
+    }
+}
+
+/// Ref output (branch or tag).
+pub struct RefOutput {
+    pub name: String,
+    pub hash: String,
+}
+
+impl Outputable for RefOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "hash": self.hash
+        })
+    }
+
+    fn to_human(&self) -> String {
+        format!("{} -> {}", self.name, self.hash)
+    }
+}
+
+/// Ref list output (branches or tags).
+pub struct RefListOutput {
+    pub refs: Vec<RefOutput>,
+    pub count: u32,
+}
+
+impl Outputable for RefListOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.count,
+            "refs": self.refs.iter().map(|r| r.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.refs.is_empty() {
+            return "No refs found".to_string();
+        }
+        self.refs.iter().map(|r| r.to_human()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+/// Comment output.
+pub struct CommentOutput {
+    pub hash: String,
+    pub author: String,
+    pub body: String,
+    pub timestamp_ms: u64,
+}
+
+impl Outputable for CommentOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "hash": self.hash,
+            "author": self.author,
+            "body": self.body,
+            "timestamp_ms": self.timestamp_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        format!("[{}] {}: {}", &self.hash[..8], &self.author[..8], self.body)
+    }
+}
+
+/// Issue summary output (for lists).
+pub struct IssueOutput {
+    pub id: String,
+    pub title: String,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub comment_count: u32,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+}
+
+impl Outputable for IssueOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "title": self.title,
+            "state": self.state,
+            "labels": self.labels,
+            "comment_count": self.comment_count,
+            "created_at_ms": self.created_at_ms,
+            "updated_at_ms": self.updated_at_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let labels = if self.labels.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", self.labels.join(", "))
+        };
+        format!(
+            "#{} {} {}{} ({} comments)",
+            &self.id[..8],
+            self.state.to_uppercase(),
+            self.title,
+            labels,
+            self.comment_count
+        )
+    }
+}
+
+/// Issue list output.
+pub struct IssueListOutput {
+    pub issues: Vec<IssueOutput>,
+    pub count: u32,
+}
+
+impl Outputable for IssueListOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.count,
+            "issues": self.issues.iter().map(|i| i.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.issues.is_empty() {
+            return "No issues found".to_string();
+        }
+        self.issues.iter().map(|i| i.to_human()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+/// Issue detail output.
+pub struct IssueDetailOutput {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub assignees: Vec<String>,
+    pub comment_count: u32,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+    pub comments: Option<Vec<CommentOutput>>,
+}
+
+impl Outputable for IssueDetailOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "title": self.title,
+            "body": self.body,
+            "state": self.state,
+            "labels": self.labels,
+            "assignees": self.assignees,
+            "comment_count": self.comment_count,
+            "created_at_ms": self.created_at_ms,
+            "updated_at_ms": self.updated_at_ms,
+            "comments": self.comments.as_ref().map(|cs| cs.iter().map(|c| c.to_json()).collect::<Vec<_>>())
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let labels = if self.labels.is_empty() {
+            String::new()
+        } else {
+            format!("\nLabels: {}", self.labels.join(", "))
+        };
+        let assignees = if self.assignees.is_empty() {
+            String::new()
+        } else {
+            format!("\nAssignees: {}", self.assignees.iter().map(|a| &a[..8]).collect::<Vec<_>>().join(", "))
+        };
+        let comments_str = self.comments.as_ref().map(|cs| {
+            if cs.is_empty() {
+                String::new()
+            } else {
+                format!("\n\nComments:\n{}", cs.iter().map(|c| c.to_human()).collect::<Vec<_>>().join("\n"))
+            }
+        }).unwrap_or_default();
+
+        format!(
+            "Issue #{} [{}]\n\
+             =================\n\
+             Title: {}{}{}\n\n\
+             {}{}",
+            &self.id[..8],
+            self.state.to_uppercase(),
+            self.title,
+            labels,
+            assignees,
+            self.body,
+            comments_str
+        )
+    }
+}
+
+/// Patch revision output.
+pub struct RevisionOutput {
+    pub hash: String,
+    pub head: String,
+    pub message: Option<String>,
+    pub author: String,
+    pub timestamp_ms: u64,
+}
+
+/// Patch approval output.
+pub struct ApprovalOutput {
+    pub author: String,
+    pub commit: String,
+    pub message: Option<String>,
+    pub timestamp_ms: u64,
+}
+
+/// Patch summary output (for lists).
+pub struct PatchOutput {
+    pub id: String,
+    pub title: String,
+    pub state: String,
+    pub base: String,
+    pub head: String,
+    pub labels: Vec<String>,
+    pub revision_count: u32,
+    pub approval_count: u32,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+}
+
+impl Outputable for PatchOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "title": self.title,
+            "state": self.state,
+            "base": self.base,
+            "head": self.head,
+            "labels": self.labels,
+            "revision_count": self.revision_count,
+            "approval_count": self.approval_count,
+            "created_at_ms": self.created_at_ms,
+            "updated_at_ms": self.updated_at_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let labels = if self.labels.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", self.labels.join(", "))
+        };
+        format!(
+            "!{} {} {}{} ({} revisions, {} approvals)",
+            &self.id[..8],
+            self.state.to_uppercase(),
+            self.title,
+            labels,
+            self.revision_count,
+            self.approval_count
+        )
+    }
+}
+
+/// Patch list output.
+pub struct PatchListOutput {
+    pub patches: Vec<PatchOutput>,
+    pub count: u32,
+}
+
+impl Outputable for PatchListOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "count": self.count,
+            "patches": self.patches.iter().map(|p| p.to_json()).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.patches.is_empty() {
+            return "No patches found".to_string();
+        }
+        self.patches.iter().map(|p| p.to_human()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+/// Patch detail output.
+pub struct PatchDetailOutput {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub state: String,
+    pub base: String,
+    pub head: String,
+    pub labels: Vec<String>,
+    pub assignees: Vec<String>,
+    pub revision_count: u32,
+    pub approval_count: u32,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+    pub comments: Option<Vec<CommentOutput>>,
+    pub revisions: Option<Vec<RevisionOutput>>,
+    pub approvals: Option<Vec<ApprovalOutput>>,
+}
+
+impl Outputable for PatchDetailOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "state": self.state,
+            "base": self.base,
+            "head": self.head,
+            "labels": self.labels,
+            "assignees": self.assignees,
+            "revision_count": self.revision_count,
+            "approval_count": self.approval_count,
+            "created_at_ms": self.created_at_ms,
+            "updated_at_ms": self.updated_at_ms,
+            "comments": self.comments.as_ref().map(|cs| cs.iter().map(|c| c.to_json()).collect::<Vec<_>>()),
+            "revisions": self.revisions.as_ref().map(|rs| rs.iter().map(|r| {
+                serde_json::json!({
+                    "hash": r.hash,
+                    "head": r.head,
+                    "message": r.message,
+                    "author": r.author,
+                    "timestamp_ms": r.timestamp_ms
+                })
+            }).collect::<Vec<_>>()),
+            "approvals": self.approvals.as_ref().map(|as_| as_.iter().map(|a| {
+                serde_json::json!({
+                    "author": a.author,
+                    "commit": a.commit,
+                    "message": a.message,
+                    "timestamp_ms": a.timestamp_ms
+                })
+            }).collect::<Vec<_>>())
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let labels = if self.labels.is_empty() {
+            String::new()
+        } else {
+            format!("\nLabels: {}", self.labels.join(", "))
+        };
+        let assignees = if self.assignees.is_empty() {
+            String::new()
+        } else {
+            format!("\nReviewers: {}", self.assignees.iter().map(|a| &a[..8]).collect::<Vec<_>>().join(", "))
+        };
+        let approvals_str = self.approvals.as_ref().map(|as_| {
+            if as_.is_empty() {
+                String::new()
+            } else {
+                format!("\n\nApprovals ({}):\n{}", as_.len(), as_.iter().map(|a| {
+                    let msg = a.message.as_deref().unwrap_or("");
+                    format!("  {} approved {}... {}", &a.author[..8], &a.commit[..8], msg)
+                }).collect::<Vec<_>>().join("\n"))
+            }
+        }).unwrap_or_default();
+
+        format!(
+            "Patch !{} [{}]\n\
+             =================\n\
+             Title: {}\n\
+             Base:  {}...\n\
+             Head:  {}...{}{}\n\n\
+             {}{}",
+            &self.id[..8],
+            self.state.to_uppercase(),
+            self.title,
+            &self.base[..12],
+            &self.head[..12],
+            labels,
+            assignees,
+            self.description,
+            approvals_str
+        )
+    }
+}
