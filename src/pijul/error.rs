@@ -41,6 +41,10 @@ pub enum PijulError {
     #[snafu(display("failed to record change: {message}"))]
     RecordFailed { message: String },
 
+    /// Working directory output failed.
+    #[snafu(display("failed to output working directory: {message}"))]
+    OutputFailed { message: String },
+
     // ========================================================================
     // Channel Errors
     // ========================================================================

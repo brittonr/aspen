@@ -52,6 +52,8 @@ Pijul is embedded into Aspen as a native VCS format, separate from Git. Both use
 src/pijul/
 ├── mod.rs              # Module root, feature gate, re-exports
 ├── apply.rs            # ChangeDirectory, ChangeApplicator
+├── record.rs           # ChangeRecorder for creating new changes
+├── output.rs           # WorkingDirOutput for outputting files from pristine
 ├── constants.rs        # Tiger Style resource limits
 ├── error.rs            # PijulError enum (snafu-based)
 ├── types.rs            # ChangeHash, Channel, PijulRepoIdentity, etc.
@@ -185,6 +187,59 @@ impl<B: BlobStore> ChangeApplicator<B> {
 }
 ```
 
+### ChangeRecorder
+
+```rust
+/// Records changes from a working directory into Pijul patches.
+pub struct ChangeRecorder<B: BlobStore> {
+    pristine: PristineHandle,
+    changes: ChangeDirectory<B>,
+    working_dir: PathBuf,
+    algorithm: Algorithm,
+}
+
+impl<B: BlobStore> ChangeRecorder<B> {
+    pub fn new(pristine: PristineHandle, changes: ChangeDirectory<B>, working_dir: PathBuf) -> Self;
+    pub fn with_algorithm(self, algorithm: Algorithm) -> Self;
+    pub async fn record(&self, channel: &str, message: &str, author: &str) -> PijulResult<Option<RecordResult>>;
+}
+
+/// Result of recording a change.
+pub struct RecordResult {
+    pub hash: ChangeHash,
+    pub pijul_hash: libpijul::pristine::Hash,
+    pub message: String,
+    pub author: String,
+    pub num_hunks: usize,
+    pub size_bytes: usize,
+}
+```
+
+### WorkingDirOutput
+
+```rust
+/// Outputs files from pristine state to working directory.
+pub struct WorkingDirOutput<B: BlobStore> {
+    pristine: PristineHandle,
+    changes: ChangeDirectory<B>,
+    working_dir: PathBuf,
+    n_workers: usize,
+}
+
+impl<B: BlobStore> WorkingDirOutput<B> {
+    pub fn new(pristine: PristineHandle, changes: ChangeDirectory<B>, working_dir: PathBuf) -> Self;
+    pub fn with_workers(self, n_workers: usize) -> Self;
+    pub fn output(&self, channel: &str) -> PijulResult<OutputResult>;
+    pub fn output_prefix(&self, channel: &str, prefix: &str) -> PijulResult<OutputResult>;
+}
+
+/// Result of outputting files to the working directory.
+pub struct OutputResult {
+    pub conflicts: BTreeSet<Conflict>,
+    pub working_dir: PathBuf,
+}
+```
+
 ## Usage
 
 ```rust
@@ -232,13 +287,15 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] Pristine caching with configurable eviction
 - [x] Unit tests (18 passing)
 
-### Phase 3 (In Progress)
+### Phase 3 (Complete)
 - [x] ChangeDirectory - local cache bridging iroh-blobs with libpijul FileSystem
 - [x] ChangeApplicator - high-level API for applying changes to pristine
 - [x] Hash conversion between Aspen (BLAKE3) and libpijul (Blake3 variant)
-- [x] Unit tests (21 passing)
-- [ ] Record changes (working directory diffing)
-- [ ] Working directory output from pristine
+- [x] ChangeRecorder - records changes from working directory into patches
+- [x] WorkingDirOutput - outputs files from pristine to working directory
+- [x] Unit tests (26 passing)
+
+### Phase 4 (Planned)
 - [ ] PijulSyncService (P2P sync)
 - [ ] PijulAnnouncement gossip types
 - [ ] Integration tests with real Pijul changes

@@ -28,6 +28,7 @@ use std::sync::Arc;
 
 use libpijul::pristine::sanakirja::{MutTxn, Pristine, Txn};
 use libpijul::pristine::{ChannelRef, ChannelTxnT, MutTxnT, TxnT};
+use libpijul::ArcTxn;
 use parking_lot::RwLock;
 use tracing::{debug, info, instrument};
 
@@ -280,6 +281,17 @@ impl PristineHandle {
         Ok(WriteTxn {
             txn,
             repo_id: self.repo_id,
+        })
+    }
+
+    /// Start an arc-wrapped mutable transaction.
+    ///
+    /// Arc-wrapped transactions are needed for libpijul's record API
+    /// which requires shared ownership of the transaction across
+    /// multiple operations.
+    pub fn arc_txn_begin(&self) -> PijulResult<ArcTxn<MutTxn<()>>> {
+        self.pristine.arc_txn_begin().map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to begin arc transaction: {}", e),
         })
     }
 
