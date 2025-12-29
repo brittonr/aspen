@@ -2,7 +2,7 @@
 name = "aspen"
 version = "0.1.0"
 edition = "2024"
-license = "Apache-2.0 OR MIT"
+license = "GPL-2.0-or-later"
 
 [[bin]]
 name = "aspen-tui"
@@ -167,6 +167,11 @@ fuse-backend-rs = { version = "0.13", optional = true, default-features = false,
 vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
 ctrlc = { version = "3.4", optional = true }
 
+# Pijul native VCS integration (optional, GPL-2.0-or-later)
+libpijul = { version = "1.0.0-beta", optional = true }
+sanakirja = { version = "1.4", optional = true }
+zstd-seekable = { version = "0.1", optional = true }
+
 [dev-dependencies]
 # Property-based testing with Bolero (unified frontend for multiple backends)
 bolero = "0.13"
@@ -207,9 +212,11 @@ fuse = ["dep:fuse-backend-rs", "dep:ctrlc"]
 virtiofs = ["fuse", "dep:vhost"]
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline"]
+# Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
+pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\"))"] }
 
 # Benchmarks
 [[bench]]

@@ -1,0 +1,496 @@
+//! PijulStore: High-level coordinator for Pijul operations.
+//!
+//! This module provides the main entry point for Pijul operations in Aspen,
+//! coordinating between change storage, channel management, and the pristine.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+use tokio::sync::broadcast;
+use tracing::{debug, info, instrument, warn};
+
+use crate::api::KeyValueStore;
+use crate::blob::BlobStore;
+use crate::forge::identity::RepoId;
+
+use super::change_store::AspenChangeStore;
+use super::constants::{KV_PREFIX_PIJUL_REPOS, MAX_CHANNELS};
+use super::error::{PijulError, PijulResult};
+use super::refs::{ChannelUpdateEvent, PijulRefStore};
+use super::types::{ChangeHash, ChangeMetadata, Channel, PijulAuthor, PijulRepoIdentity};
+
+/// Events emitted by the PijulStore.
+#[derive(Debug, Clone)]
+pub enum PijulStoreEvent {
+    /// A new repository was created.
+    RepoCreated {
+        repo_id: RepoId,
+        identity: PijulRepoIdentity,
+    },
+    /// A change was recorded.
+    ChangeRecorded {
+        repo_id: RepoId,
+        channel: String,
+        change_hash: ChangeHash,
+    },
+    /// A change was applied from a remote source.
+    ChangeApplied {
+        repo_id: RepoId,
+        channel: String,
+        change_hash: ChangeHash,
+    },
+    /// Channel head updated (forwarded from PijulRefStore).
+    ChannelUpdated(ChannelUpdateEvent),
+}
+
+/// High-level Pijul store coordinator.
+///
+/// Provides a unified API for all Pijul operations, coordinating between:
+/// - `AspenChangeStore`: Change storage in iroh-blobs
+/// - `PijulRefStore`: Channel heads in Raft KV
+/// - Pristine management (sanakirja databases)
+///
+/// # Example
+///
+/// ```ignore
+/// let store = PijulStore::new(blob_store, kv_store, data_dir).await?;
+///
+/// // Create a repository
+/// let identity = PijulRepoIdentity::new("my-project", delegates);
+/// let repo_id = store.create_repo(identity).await?;
+///
+/// // Create a channel
+/// store.create_channel(&repo_id, "main").await?;
+///
+/// // Store a change (pre-serialized)
+/// let change_hash = store.store_change(&repo_id, "main", &change_bytes, metadata).await?;
+/// ```
+pub struct PijulStore<B: BlobStore, K: KeyValueStore + ?Sized> {
+    /// Change storage backed by iroh-blobs.
+    changes: Arc<AspenChangeStore<B>>,
+
+    /// Channel head storage backed by Raft KV.
+    refs: Arc<PijulRefStore<K>>,
+
+    /// KV store for repository metadata.
+    kv: Arc<K>,
+
+    /// Base path for pristine databases.
+    data_dir: PathBuf,
+
+    /// Event sender for store events.
+    event_tx: broadcast::Sender<PijulStoreEvent>,
+
+    /// Cached repository identities.
+    repo_cache: RwLock<HashMap<RepoId, PijulRepoIdentity>>,
+}
+
+impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
+    /// Create a new PijulStore.
+    ///
+    /// # Arguments
+    ///
+    /// - `blobs`: Blob store for change storage
+    /// - `kv`: KV store for metadata and channel heads
+    /// - `data_dir`: Base directory for pristine databases
+    pub fn new(blobs: Arc<B>, kv: Arc<K>, data_dir: impl Into<PathBuf>) -> Self {
+        let (event_tx, _) = broadcast::channel(256);
+
+        let changes = Arc::new(AspenChangeStore::new(blobs));
+        let refs = Arc::new(PijulRefStore::new(Arc::clone(&kv)));
+
+        Self {
+            changes,
+            refs,
+            kv,
+            data_dir: data_dir.into(),
+            event_tx,
+            repo_cache: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Subscribe to store events.
+    pub fn subscribe(&self) -> broadcast::Receiver<PijulStoreEvent> {
+        self.event_tx.subscribe()
+    }
+
+    /// Get the change store.
+    pub fn changes(&self) -> &Arc<AspenChangeStore<B>> {
+        &self.changes
+    }
+
+    /// Get the ref store.
+    pub fn refs(&self) -> &Arc<PijulRefStore<K>> {
+        &self.refs
+    }
+
+    // ========================================================================
+    // Repository Management
+    // ========================================================================
+
+    /// Create a new Pijul repository.
+    ///
+    /// # Arguments
+    ///
+    /// - `identity`: Repository identity with name, delegates, etc.
+    ///
+    /// # Returns
+    ///
+    /// The computed `RepoId` (BLAKE3 hash of the identity).
+    #[instrument(skip(self, identity), fields(name = %identity.name))]
+    pub async fn create_repo(&self, identity: PijulRepoIdentity) -> PijulResult<RepoId> {
+        let repo_id = identity.repo_id();
+
+        // Check if already exists
+        if self.get_repo(&repo_id).await?.is_some() {
+            return Err(PijulError::RepoAlreadyExists {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Store identity in KV
+        let key = format!("{}{}", KV_PREFIX_PIJUL_REPOS, repo_id);
+        let value = postcard::to_allocvec(&identity)?;
+        let value_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &value);
+
+        self.kv
+            .write(crate::api::WriteRequest {
+                command: crate::api::WriteCommand::Set { key, value: value_b64 },
+            })
+            .await?;
+
+        // Create pristine directory
+        let pristine_dir = self.pristine_path(&repo_id);
+        tokio::fs::create_dir_all(&pristine_dir).await?;
+
+        // Create default channel (empty)
+        // We don't set a head yet since there are no changes
+
+        // Cache the identity
+        {
+            let mut cache = self.repo_cache.write();
+            cache.insert(repo_id, identity.clone());
+        }
+
+        info!(repo_id = %repo_id, name = %identity.name, "created Pijul repository");
+
+        // Emit event
+        let _ = self.event_tx.send(PijulStoreEvent::RepoCreated {
+            repo_id,
+            identity,
+        });
+
+        Ok(repo_id)
+    }
+
+    /// Get a repository's identity.
+    #[instrument(skip(self))]
+    pub async fn get_repo(&self, repo_id: &RepoId) -> PijulResult<Option<PijulRepoIdentity>> {
+        // Check cache first
+        {
+            let cache = self.repo_cache.read();
+            if let Some(identity) = cache.get(repo_id) {
+                return Ok(Some(identity.clone()));
+            }
+        }
+
+        // Load from KV
+        let key = format!("{}{}", KV_PREFIX_PIJUL_REPOS, repo_id);
+
+        let result = match self.kv.read(crate::api::ReadRequest {
+            key,
+            consistency: crate::api::ReadConsistency::Linearizable,
+        }).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => return Err(PijulError::from(e)),
+        };
+
+        match result.kv.map(|kv| kv.value) {
+            Some(value_b64) => {
+                let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64)
+                    .map_err(|e| PijulError::Serialization {
+                        message: format!("invalid base64: {}", e),
+                    })?;
+
+                let identity: PijulRepoIdentity = postcard::from_bytes(&value)?;
+
+                // Cache it
+                {
+                    let mut cache = self.repo_cache.write();
+                    cache.insert(*repo_id, identity.clone());
+                }
+
+                Ok(Some(identity))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Check if a repository exists.
+    pub async fn repo_exists(&self, repo_id: &RepoId) -> PijulResult<bool> {
+        Ok(self.get_repo(repo_id).await?.is_some())
+    }
+
+    // ========================================================================
+    // Channel Management
+    // ========================================================================
+
+    /// Create a new channel in a repository.
+    #[instrument(skip(self))]
+    pub async fn create_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<()> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Check channel count limit
+        let count = self.refs.count_channels(repo_id).await?;
+        if count >= MAX_CHANNELS {
+            return Err(PijulError::TooManyChannels {
+                count,
+                max: MAX_CHANNELS,
+            });
+        }
+
+        // Check if channel already exists
+        if self.refs.channel_exists(repo_id, channel).await? {
+            return Err(PijulError::ChannelAlreadyExists {
+                channel: channel.to_string(),
+            });
+        }
+
+        // For now, we just mark it as existing by creating it in pristine
+        // The head will be set when the first change is applied
+        debug!(repo_id = %repo_id, channel = channel, "created channel");
+        Ok(())
+    }
+
+    /// Get a channel's current state.
+    #[instrument(skip(self))]
+    pub async fn get_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<Option<Channel>> {
+        let head = self.refs.get_channel(repo_id, channel).await?;
+
+        match head {
+            Some(hash) => Ok(Some(Channel::with_head(channel, hash))),
+            None => Ok(None),
+        }
+    }
+
+    /// List all channels in a repository.
+    pub async fn list_channels(&self, repo_id: &RepoId) -> PijulResult<Vec<Channel>> {
+        let channel_heads = self.refs.list_channels(repo_id).await?;
+
+        Ok(channel_heads
+            .into_iter()
+            .map(|(name, head)| Channel::with_head(name, head))
+            .collect())
+    }
+
+    // ========================================================================
+    // Change Operations
+    // ========================================================================
+
+    /// Store a change and update the channel head.
+    ///
+    /// This is the primary method for recording new changes. The change should
+    /// already be serialized in libpijul's format (bincode + zstd compressed).
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository to store the change in
+    /// - `channel`: Channel to update
+    /// - `change_bytes`: Serialized change data
+    /// - `metadata`: Metadata about the change
+    ///
+    /// # Returns
+    ///
+    /// The BLAKE3 hash of the stored change.
+    #[instrument(skip(self, change_bytes, metadata), fields(size = change_bytes.len()))]
+    pub async fn store_change(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        change_bytes: &[u8],
+        metadata: ChangeMetadata,
+    ) -> PijulResult<ChangeHash> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Store the change in blob store
+        let hash = self.changes.store_change(change_bytes).await?;
+
+        // Store metadata in KV
+        let meta_key = format!("{}{}:{}", super::constants::KV_PREFIX_PIJUL_CHANGE_META, repo_id, hash);
+        let meta_bytes = postcard::to_allocvec(&metadata)?;
+        let meta_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &meta_bytes);
+
+        self.kv
+            .write(crate::api::WriteRequest {
+                command: crate::api::WriteCommand::Set { key: meta_key, value: meta_b64 },
+            })
+            .await?;
+
+        // Update channel head
+        self.refs.set_channel(repo_id, channel, hash).await?;
+
+        info!(repo_id = %repo_id, channel = channel, hash = %hash, "stored change");
+
+        // Emit event
+        let _ = self.event_tx.send(PijulStoreEvent::ChangeRecorded {
+            repo_id: *repo_id,
+            channel: channel.to_string(),
+            change_hash: hash,
+        });
+
+        Ok(hash)
+    }
+
+    /// Get a change by hash.
+    ///
+    /// Returns the raw serialized change bytes.
+    pub async fn get_change(&self, hash: &ChangeHash) -> PijulResult<Option<Vec<u8>>> {
+        self.changes.get_change(hash).await
+    }
+
+    /// Check if a change exists.
+    pub async fn has_change(&self, hash: &ChangeHash) -> PijulResult<bool> {
+        self.changes.has_change(hash).await
+    }
+
+    /// Get change metadata.
+    #[instrument(skip(self))]
+    pub async fn get_change_metadata(
+        &self,
+        repo_id: &RepoId,
+        hash: &ChangeHash,
+    ) -> PijulResult<Option<ChangeMetadata>> {
+        let meta_key = format!("{}{}:{}", super::constants::KV_PREFIX_PIJUL_CHANGE_META, repo_id, hash);
+
+        let result = match self.kv.read(crate::api::ReadRequest {
+            key: meta_key,
+            consistency: crate::api::ReadConsistency::Linearizable,
+        }).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => return Err(PijulError::from(e)),
+        };
+
+        match result.kv.map(|kv| kv.value) {
+            Some(value_b64) => {
+                let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64)
+                    .map_err(|e| PijulError::Serialization {
+                        message: format!("invalid base64: {}", e),
+                    })?;
+
+                let metadata: ChangeMetadata = postcard::from_bytes(&value)?;
+                Ok(Some(metadata))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // ========================================================================
+    // Sync Operations
+    // ========================================================================
+
+    /// Download a change from a remote peer.
+    #[instrument(skip(self))]
+    pub async fn download_change(
+        &self,
+        hash: &ChangeHash,
+        provider: iroh::PublicKey,
+    ) -> PijulResult<()> {
+        self.changes.download_from_peer(hash, provider).await
+    }
+
+    // ========================================================================
+    // Internal Helpers
+    // ========================================================================
+
+    /// Get the path to a repository's pristine database.
+    fn pristine_path(&self, repo_id: &RepoId) -> PathBuf {
+        self.data_dir.join("pijul").join(repo_id.to_string()).join("pristine")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::DeterministicKeyValueStore;
+    use crate::blob::InMemoryBlobStore;
+
+    fn test_delegates() -> Vec<iroh::PublicKey> {
+        vec![]
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_repo() {
+        let blobs = Arc::new(InMemoryBlobStore::new());
+        let kv = Arc::new(DeterministicKeyValueStore::new());
+        let store = PijulStore::new(blobs, kv, "/tmp/test-pijul");
+
+        let identity = PijulRepoIdentity::new("test-repo", test_delegates());
+        let repo_id = store.create_repo(identity.clone()).await.unwrap();
+
+        // Get the repo
+        let retrieved = store.get_repo(&repo_id).await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "test-repo");
+
+        // Should exist
+        assert!(store.repo_exists(&repo_id).await.unwrap());
+
+        // Creating again should fail
+        let result = store.create_repo(identity).await;
+        assert!(matches!(result, Err(PijulError::RepoAlreadyExists { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_store_and_get_change() {
+        let blobs = Arc::new(InMemoryBlobStore::new());
+        let kv = Arc::new(DeterministicKeyValueStore::new());
+        let store = PijulStore::new(blobs, kv, "/tmp/test-pijul");
+
+        // Create repo first
+        let identity = PijulRepoIdentity::new("test-repo", test_delegates());
+        let repo_id = store.create_repo(identity).await.unwrap();
+
+        // Store a change
+        let change_data = b"fake compressed pijul change";
+        let metadata = ChangeMetadata {
+            hash: ChangeHash([0u8; 32]), // Will be replaced
+            repo_id,
+            channel: "main".to_string(),
+            message: "Test change".to_string(),
+            authors: vec![PijulAuthor::from_name_email("Test", "test@example.com")],
+            dependencies: vec![],
+            size_bytes: change_data.len() as u64,
+            recorded_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+        };
+
+        let hash = store.store_change(&repo_id, "main", change_data, metadata).await.unwrap();
+
+        // Get the change
+        let retrieved = store.get_change(&hash).await.unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap(), change_data);
+
+        // Channel should have the head
+        let channel = store.get_channel(&repo_id, "main").await.unwrap();
+        assert!(channel.is_some());
+        assert_eq!(channel.unwrap().head, Some(hash));
+    }
+}

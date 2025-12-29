@@ -49,6 +49,13 @@ pub mod simulation;
 /// built on Aspen's distributed primitives.
 #[cfg(feature = "forge")]
 pub mod forge;
+/// Pijul: Native patch-based version control.
+///
+/// Only available with the `pijul` feature enabled. Provides native Pijul
+/// integration with libpijul, using Pijul's patch-based model with commutative
+/// merges. Changes are stored in iroh-blobs for P2P distribution.
+#[cfg(feature = "pijul")]
+pub mod pijul;
 /// DataFusion SQL integration for Redb storage backend.
 ///
 /// Only available with the `sql` feature enabled. Provides read-only SQL
