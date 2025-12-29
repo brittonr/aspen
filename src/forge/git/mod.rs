@@ -15,9 +15,20 @@
 //!
 //! Unlike traditional Git which uses SHA-1, Forge uses BLAKE3 for all hashing.
 //! Objects are stored as postcard-serialized `SignedObject<GitObject>` in iroh-blobs.
+//!
+//! ## Git Bridge (optional)
+//!
+//! With the `git-bridge` feature enabled, this module also provides interoperability
+//! with standard Git repositories via the `bridge` submodule. This enables:
+//! - Bidirectional sync with GitHub, GitLab, Gitea, etc.
+//! - Hash translation between SHA-1 and BLAKE3
+//! - The `git-remote-aspen` helper for transparent git integration
 
 mod object;
 mod store;
+
+#[cfg(feature = "git-bridge")]
+pub mod bridge;
 
 pub use object::{GitObject, TreeEntry};
 pub use store::GitBlobStore;

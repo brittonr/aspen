@@ -23,6 +23,11 @@ name = "aspen-fuse"
 path = "src/bin/aspen-fuse/main.rs"
 required-features = ["fuse"]
 
+[[bin]]
+name = "git-remote-aspen"
+path = "src/bin/git-remote-aspen/main.rs"
+required-features = ["git-bridge"]
+
 [workspace]
 members = [".", "scripts/tutorial-verify"]
 
@@ -141,6 +146,12 @@ gix-hash = { version = "0.15", optional = true }
 gix-actor = { version = "0.33", optional = true }
 ssh-key = { version = "0.6", optional = true, features = ["ed25519"] }
 
+# Git bridge: interoperability with standard Git (optional)
+sha1 = { version = "0.10", optional = true }
+lru = { version = "0.12", optional = true }
+gix-pack = { version = "0.55", optional = true }
+gix-odb = { version = "0.66", optional = true }
+
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }
 crossterm = { version = "0.28", features = ["event-stream"], optional = true }
@@ -178,6 +189,8 @@ default = ["sql", "dns", "forge"]
 testing = []
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:gix-object", "dep:gix-hash", "dep:gix-actor", "dep:ssh-key"]
+# Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
+git-bridge = ["forge", "dep:sha1", "dep:lru", "dep:gix-pack", "dep:gix-odb"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
@@ -195,7 +208,7 @@ virtiofs = ["fuse", "dep:vhost"]
 global-discovery = ["dep:mainline"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\"))"] }
 
 # Benchmarks
 [[bench]]
