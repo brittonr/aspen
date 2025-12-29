@@ -135,6 +135,10 @@ pub enum PijulError {
     #[snafu(display("serialization error: {message}"))]
     Serialization { message: String },
 
+    /// Deserialization error.
+    #[snafu(display("deserialization error: {message}"))]
+    Deserialization { message: String },
+
     /// IO error.
     #[snafu(display("IO error: {message}"))]
     Io { message: String },

@@ -472,6 +472,7 @@ dependencies = [
  "bolero",
  "bolero-generator",
  "bytes",
+ "canonical-path",
  "cargo-nextest",
  "chrono",
  "clap",

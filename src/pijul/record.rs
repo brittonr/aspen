@@ -138,6 +138,31 @@ impl<B: BlobStore> ChangeRecorder<B> {
             })?
         };
 
+        // Add all files in the working directory to tracking
+        // This is equivalent to `pijul add .` and ensures new files are detected
+        {
+            use canonical_path::CanonicalPathBuf;
+
+            let repo_path = CanonicalPathBuf::canonicalize(&self.working_dir)
+                .map_err(|e| PijulError::RecordFailed {
+                    message: format!("failed to canonicalize working dir: {:?}", e),
+                })?;
+            let full = repo_path.clone();
+
+            working_copy
+                .add_prefix_rec(
+                    &arc_txn,
+                    repo_path,
+                    full,
+                    false,  // force: don't force-add ignored files
+                    1,      // threads: single-threaded
+                    0,      // salt: for conflict naming
+                )
+                .map_err(|e| PijulError::RecordFailed {
+                    message: format!("failed to add files: {:?}", e),
+                })?;
+        }
+
         // Create the record builder
         let mut builder = RecordBuilder::new();
 
@@ -204,8 +229,15 @@ impl<B: BlobStore> ChangeRecorder<B> {
                 message: format!("failed to serialize change: {:?}", e),
             })?;
 
-        // Store in blob storage
+        // Store in blob storage (for P2P distribution)
         let aspen_hash = self.changes.store_change(&change_bytes).await?;
+
+        // Also save the change file using libpijul's path format so apply_change can find it
+        change_store
+            .save_from_buf_unchecked(&change_bytes, &pijul_hash, None)
+            .map_err(|e| PijulError::Io {
+                message: format!("failed to save change file: {}", e),
+            })?;
 
         // Apply the change to the pristine
         {

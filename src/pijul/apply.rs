@@ -21,6 +21,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use libpijul::change::Change;
 use libpijul::changestore::filesystem::FileSystem as LibpijulFileSystem;
 use libpijul::pristine::{Hash, Merkle};
 use libpijul::MutTxnTExt;
@@ -65,6 +66,16 @@ pub struct ChangeDirectory<B: BlobStore> {
     repo_id: RepoId,
 }
 
+impl<B: BlobStore> Clone for ChangeDirectory<B> {
+    fn clone(&self) -> Self {
+        Self {
+            base_dir: self.base_dir.clone(),
+            blobs: Arc::clone(&self.blobs),
+            repo_id: self.repo_id,
+        }
+    }
+}
+
 impl<B: BlobStore> ChangeDirectory<B> {
     /// Create a new change directory for a repository.
     pub fn new(data_dir: &PathBuf, repo_id: RepoId, blobs: Arc<AspenChangeStore<B>>) -> Self {
@@ -92,7 +103,7 @@ impl<B: BlobStore> ChangeDirectory<B> {
     ///
     /// Uses the same layout as libpijul's FileSystem ChangeStore:
     /// `{changes_dir}/{first_2_chars}/{rest}.change`
-    fn change_path(&self, hash: &ChangeHash) -> PathBuf {
+    pub(crate) fn change_path(&self, hash: &ChangeHash) -> PathBuf {
         let hex = hash.to_hex();
         let (prefix, suffix) = hex.split_at(2.min(hex.len()));
         self.base_dir.join(prefix).join(format!("{}.change", suffix))
@@ -140,12 +151,15 @@ impl<B: BlobStore> ChangeDirectory<B> {
     }
 
     /// Store a change locally and upload to iroh-blobs.
+    ///
+    /// This stores the change in both our BLAKE3-based path format (for P2P lookup)
+    /// and libpijul's base32 path format (for apply_change to find).
     #[instrument(skip(self, bytes))]
     pub async fn store_change(&self, bytes: &[u8]) -> PijulResult<ChangeHash> {
-        // Store in blob storage first to get the hash
+        // Store in blob storage first to get our BLAKE3 hash
         let hash = self.blobs.store_change(bytes).await?;
 
-        // Cache locally
+        // Cache locally using our path format
         let path = self.change_path(&hash);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| PijulError::Io {
@@ -156,6 +170,31 @@ impl<B: BlobStore> ChangeDirectory<B> {
         std::fs::write(&path, bytes).map_err(|e| PijulError::Io {
             message: format!("failed to write change file: {}", e),
         })?;
+
+        // Also save using libpijul's path format so apply_change can find it
+        // We need to deserialize to get the pijul hash, then save with that hash
+        // We already wrote the bytes to `path`, so use that for deserialization
+        let change = Change::deserialize(
+            path.to_str().ok_or_else(|| PijulError::Io {
+                message: "change file path is not valid UTF-8".to_string(),
+            })?,
+            None,
+        )
+        .map_err(|e| {
+            PijulError::Deserialization {
+                message: format!("failed to deserialize change for hash extraction: {:?}", e),
+            }
+        })?;
+        let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
+            message: format!("failed to compute pijul hash: {:?}", e),
+        })?;
+
+        let store = self.libpijul_store();
+        store
+            .save_from_buf_unchecked(bytes, &pijul_hash, None)
+            .map_err(|e| PijulError::Io {
+                message: format!("failed to save change in libpijul format: {}", e),
+            })?;
 
         info!(hash = %hash, path = %path.display(), size = bytes.len(), "stored change");
         Ok(hash)
@@ -222,8 +261,20 @@ impl<B: BlobStore> ChangeApplicator<B> {
         // Get the libpijul change store
         let store = self.changes.libpijul_store();
 
-        // Convert hash
-        let pijul_hash = ChangeDirectory::<B>::to_pijul_hash(hash);
+        // Read the change from our storage to get the actual pijul hash
+        let our_path = self.changes.change_path(hash);
+        let change = Change::deserialize(
+            our_path.to_str().ok_or_else(|| PijulError::Io {
+                message: "change file path is not valid UTF-8".to_string(),
+            })?,
+            None,
+        )
+        .map_err(|e| PijulError::Deserialization {
+            message: format!("failed to deserialize change: {:?}", e),
+        })?;
+        let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
+            message: format!("failed to compute pijul hash: {:?}", e),
+        })?;
 
         // Start a mutable transaction
         let mut txn = self.pristine.mut_txn_begin()?;
@@ -347,7 +398,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_store_and_fetch_change() {
+    async fn test_store_invalid_change_fails() {
         let tmp = TempDir::new().unwrap();
         let blobs = Arc::new(InMemoryBlobStore::new());
         let change_store = Arc::new(AspenChangeStore::new(blobs));
@@ -355,19 +406,17 @@ mod tests {
 
         dir.ensure_dir().unwrap();
 
-        // Store a fake change
-        let change_bytes = b"fake pijul change content";
-        let hash = dir.store_change(change_bytes).await.unwrap();
+        // Storing invalid change content should fail (can't deserialize)
+        let fake_bytes = b"fake pijul change content";
+        let result = dir.store_change(fake_bytes).await;
 
-        // Should be cached locally
-        assert!(dir.has_change(&hash));
-
-        // Fetch should return immediately (cached)
-        let path = dir.fetch_change(&hash).await.unwrap();
-        assert!(path.exists());
-
-        // Verify content
-        let content = std::fs::read(&path).unwrap();
-        assert_eq!(content, change_bytes);
+        // Should fail with deserialization error
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, PijulError::Deserialization { .. }),
+            "expected Deserialization error, got: {:?}",
+            err
+        );
     }
 }

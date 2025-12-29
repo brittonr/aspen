@@ -171,6 +171,7 @@ ctrlc = { version = "3.4", optional = true }
 libpijul = { version = "1.0.0-beta", optional = true }
 sanakirja = { version = "1.4", optional = true }
 zstd-seekable = { version = "0.1", optional = true }
+canonical-path = { version = "2.0", optional = true }
 
 [dev-dependencies]
 # Property-based testing with Bolero (unified frontend for multiple backends)
@@ -213,7 +214,7 @@ virtiofs = ["fuse", "dep:vhost"]
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
-pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru"]
+pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru", "dep:canonical-path"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\"))"] }
