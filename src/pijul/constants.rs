@@ -126,6 +126,25 @@ pub const PIJUL_GOSSIP_STREAM_BACKOFF_SECS: &[u64] = &[1, 2, 4, 8, 16];
 pub const PIJUL_GOSSIP_MAX_CHANGE_HASHES: u32 = 100;
 
 // ============================================================================
+// Sync Handler Configuration
+// ============================================================================
+
+/// Maximum number of changes to request or respond with in a single batch.
+///
+/// Tiger Style: Limits memory usage during sync operations.
+pub const MAX_CHANGES_PER_REQUEST: u32 = 50;
+
+/// Timeout in seconds for downloading a change from a peer.
+///
+/// After this timeout, the download is considered failed and can be retried.
+pub const PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS: u64 = 60;
+
+/// Deduplication window in seconds for sync requests.
+///
+/// Prevents repeatedly requesting the same change within this window.
+pub const PIJUL_SYNC_REQUEST_DEDUP_SECS: u64 = 30;
+
+// ============================================================================
 // Key Prefixes
 // ============================================================================
 

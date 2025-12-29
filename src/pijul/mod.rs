@@ -62,6 +62,7 @@ pub mod apply;
 pub mod change_store;
 pub mod constants;
 pub mod error;
+pub mod handler;
 pub mod output;
 pub mod pristine;
 pub mod record;
@@ -80,6 +81,7 @@ pub use error::{PijulError, PijulResult};
 pub use gossip::{
     PijulAnnouncement, PijulAnnouncementHandler, PijulTopic, SignedPijulAnnouncement,
 };
+pub use handler::{PijulSyncHandler, PijulSyncHandlerHandle};
 pub use output::{OutputResult, WorkingDirOutput};
 pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
