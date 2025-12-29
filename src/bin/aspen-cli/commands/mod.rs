@@ -18,6 +18,8 @@ pub mod lease;
 pub mod lock;
 pub mod patch;
 pub mod peer;
+#[cfg(feature = "pijul")]
+pub mod pijul;
 pub mod queue;
 pub mod ratelimit;
 pub mod rwlock;

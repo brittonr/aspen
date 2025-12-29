@@ -270,13 +270,17 @@ mod tests {
         let large_data = vec![0u8; (MAX_CHANGE_SIZE_BYTES + 1) as usize];
         let result = store.store_change(&large_data).await;
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            PijulError::ChangeTooLarge { size, max } => {
-                assert_eq!(size, MAX_CHANGE_SIZE_BYTES + 1);
-                assert_eq!(max, MAX_CHANGE_SIZE_BYTES);
-            }
-            other => panic!("unexpected error: {:?}", other),
-        }
+        let err = result.expect_err("expected ChangeTooLarge error");
+        assert!(
+            matches!(
+                err,
+                PijulError::ChangeTooLarge { size, max }
+                if size == MAX_CHANGE_SIZE_BYTES + 1 && max == MAX_CHANGE_SIZE_BYTES
+            ),
+            "expected ChangeTooLarge with size {} and max {}, got {:?}",
+            MAX_CHANGE_SIZE_BYTES + 1,
+            MAX_CHANGE_SIZE_BYTES,
+            err
+        );
     }
 }

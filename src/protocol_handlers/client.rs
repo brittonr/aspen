@@ -8702,5 +8702,29 @@ async fn process_client_request(
                 error: Some("git-bridge feature not enabled".to_string()),
             }))
         }
+
+        // =========================================================================
+        // Pijul operations (stub - full implementation pending)
+        // =========================================================================
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulRepoInit { .. }
+        | ClientRpcRequest::PijulRepoList { .. }
+        | ClientRpcRequest::PijulRepoInfo { .. }
+        | ClientRpcRequest::PijulChannelList { .. }
+        | ClientRpcRequest::PijulChannelCreate { .. }
+        | ClientRpcRequest::PijulChannelDelete { .. }
+        | ClientRpcRequest::PijulChannelFork { .. }
+        | ClientRpcRequest::PijulChannelInfo { .. }
+        | ClientRpcRequest::PijulRecord { .. }
+        | ClientRpcRequest::PijulApply { .. }
+        | ClientRpcRequest::PijulLog { .. }
+        | ClientRpcRequest::PijulCheckout { .. } => {
+            use crate::client_rpc::ErrorResponse;
+            // TODO: Wire up PijulStore to ClientProtocolContext and implement handlers
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Pijul operations not yet implemented in server".to_string(),
+            }))
+        }
     }
 }

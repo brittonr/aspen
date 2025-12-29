@@ -27,6 +27,8 @@ use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
 use crate::commands::patch::PatchCommand;
 use crate::commands::peer::PeerCommand;
+#[cfg(feature = "pijul")]
+use crate::commands::pijul::PijulCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
 use crate::commands::rwlock::RWLockCommand;
@@ -164,6 +166,14 @@ pub enum Commands {
     #[command(subcommand)]
     Peer(PeerCommand),
 
+    /// Pijul patch-based version control.
+    ///
+    /// Manage repositories, channels, and changes with P2P distribution
+    /// via iroh-blobs and Raft-consistent channel refs.
+    #[cfg(feature = "pijul")]
+    #[command(subcommand)]
+    Pijul(PijulCommand),
+
     /// Distributed queue operations.
     #[command(subcommand)]
     Queue(QueueCommand),
@@ -248,6 +258,8 @@ impl Cli {
             Commands::Lock(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Patch(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Peer(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "pijul")]
+            Commands::Pijul(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Queue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Rwlock(cmd) => cmd.run(&client, self.global.json).await,

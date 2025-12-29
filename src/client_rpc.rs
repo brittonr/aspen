@@ -1676,6 +1676,129 @@ pub enum ClientRpcRequest {
         /// Refs to update after import.
         refs: Vec<GitBridgeRefUpdate>,
     },
+
+    // =========================================================================
+    // Pijul operations - Patch-based version control
+    // =========================================================================
+    /// Initialize a new Pijul repository.
+    #[cfg(feature = "pijul")]
+    PijulRepoInit {
+        /// Repository name.
+        name: String,
+        /// Optional description.
+        description: Option<String>,
+        /// Default channel name.
+        default_channel: String,
+    },
+
+    /// List Pijul repositories.
+    #[cfg(feature = "pijul")]
+    PijulRepoList {
+        /// Maximum results.
+        limit: u32,
+    },
+
+    /// Get Pijul repository info.
+    #[cfg(feature = "pijul")]
+    PijulRepoInfo {
+        /// Repository ID (hex-encoded).
+        repo_id: String,
+    },
+
+    /// List channels in a Pijul repository.
+    #[cfg(feature = "pijul")]
+    PijulChannelList {
+        /// Repository ID.
+        repo_id: String,
+    },
+
+    /// Create a new channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelCreate {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Delete a channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelDelete {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Fork a channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelFork {
+        /// Repository ID.
+        repo_id: String,
+        /// Source channel.
+        source: String,
+        /// Target channel name.
+        target: String,
+    },
+
+    /// Get channel info.
+    #[cfg(feature = "pijul")]
+    PijulChannelInfo {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Record changes from working directory.
+    #[cfg(feature = "pijul")]
+    PijulRecord {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Working directory path.
+        working_dir: String,
+        /// Change message.
+        message: String,
+        /// Author name.
+        author_name: Option<String>,
+        /// Author email.
+        author_email: Option<String>,
+    },
+
+    /// Apply a change to a channel.
+    #[cfg(feature = "pijul")]
+    PijulApply {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Change hash (hex-encoded BLAKE3).
+        change_hash: String,
+    },
+
+    /// Get change log for a channel.
+    #[cfg(feature = "pijul")]
+    PijulLog {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Maximum entries.
+        limit: u32,
+    },
+
+    /// Checkout pristine state to working directory.
+    #[cfg(feature = "pijul")]
+    PijulCheckout {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Output directory path.
+        output_dir: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2074,6 +2197,44 @@ impl ClientRpcRequest {
             Self::GitBridgePush { repo_id, .. } => Some(Operation::Write {
                 key: format!("forge/repos/{}/", repo_id),
                 value: Vec::new(), // Value not needed for auth check
+            }),
+
+            // Pijul operations (repository-scoped)
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoInit { .. } => Some(Operation::Write {
+                key: "pijul:repos:".to_string(),
+                value: vec![],
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoList { .. } => Some(Operation::Read {
+                key: "pijul:repos:".to_string(),
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoInfo { repo_id } => Some(Operation::Read {
+                key: format!("pijul:repos:{repo_id}"),
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulChannelList { repo_id }
+            | Self::PijulChannelInfo { repo_id, .. } => Some(Operation::Read {
+                key: format!("pijul:repos:{repo_id}"),
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulChannelCreate { repo_id, .. }
+            | Self::PijulChannelDelete { repo_id, .. }
+            | Self::PijulChannelFork { repo_id, .. } => Some(Operation::Write {
+                key: format!("pijul:repos:{repo_id}"),
+                value: vec![],
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulRecord { repo_id, .. }
+            | Self::PijulApply { repo_id, .. } => Some(Operation::Write {
+                key: format!("pijul:repos:{repo_id}"),
+                value: vec![],
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulLog { repo_id, .. }
+            | Self::PijulCheckout { repo_id, .. } => Some(Operation::Read {
+                key: format!("pijul:repos:{repo_id}"),
             }),
 
             // Public requests (no auth required)
@@ -2603,6 +2764,45 @@ pub enum ClientRpcResponse {
 
     /// Git bridge push result.
     GitBridgePush(GitBridgePushResponse),
+
+    // =========================================================================
+    // Pijul responses
+    // =========================================================================
+    /// Pijul repository result.
+    #[cfg(feature = "pijul")]
+    PijulRepoResult(PijulRepoResponse),
+
+    /// Pijul repository list result.
+    #[cfg(feature = "pijul")]
+    PijulRepoListResult(PijulRepoListResponse),
+
+    /// Pijul channel result.
+    #[cfg(feature = "pijul")]
+    PijulChannelResult(PijulChannelResponse),
+
+    /// Pijul channel list result.
+    #[cfg(feature = "pijul")]
+    PijulChannelListResult(PijulChannelListResponse),
+
+    /// Pijul record result.
+    #[cfg(feature = "pijul")]
+    PijulRecordResult(PijulRecordResponse),
+
+    /// Pijul apply result.
+    #[cfg(feature = "pijul")]
+    PijulApplyResult(PijulApplyResponse),
+
+    /// Pijul log result.
+    #[cfg(feature = "pijul")]
+    PijulLogResult(PijulLogResponse),
+
+    /// Pijul checkout result.
+    #[cfg(feature = "pijul")]
+    PijulCheckoutResult(PijulCheckoutResponse),
+
+    /// Pijul success (no payload).
+    #[cfg(feature = "pijul")]
+    PijulSuccess,
 }
 
 /// Health status response.
@@ -4855,4 +5055,122 @@ pub struct GitBridgeRefResult {
     pub success: bool,
     /// Error message if update failed.
     pub error: Option<String>,
+}
+
+// =============================================================================
+// Pijul Response Types
+// =============================================================================
+
+/// Pijul repository response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulRepoResponse {
+    /// Repository ID (hex-encoded).
+    pub id: String,
+    /// Repository name.
+    pub name: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Default channel name.
+    pub default_channel: String,
+    /// Number of channels.
+    pub channel_count: u32,
+    /// Created timestamp (ms since epoch).
+    pub created_at_ms: u64,
+}
+
+/// Pijul repository list response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulRepoListResponse {
+    /// Repositories.
+    pub repos: Vec<PijulRepoResponse>,
+    /// Total count.
+    pub count: u32,
+}
+
+/// Pijul channel response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulChannelResponse {
+    /// Channel name.
+    pub name: String,
+    /// Head change hash (hex-encoded, None if empty).
+    pub head: Option<String>,
+    /// Last updated timestamp (ms since epoch).
+    pub updated_at_ms: u64,
+}
+
+/// Pijul channel list response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulChannelListResponse {
+    /// Channels.
+    pub channels: Vec<PijulChannelResponse>,
+    /// Total count.
+    pub count: u32,
+}
+
+/// Pijul recorded change info.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulRecordedChange {
+    /// Change hash (hex-encoded BLAKE3).
+    pub hash: String,
+    /// Change message.
+    pub message: String,
+    /// Number of hunks.
+    pub hunks: u32,
+    /// Size in bytes.
+    pub size_bytes: u64,
+}
+
+/// Pijul record response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulRecordResponse {
+    /// Recorded change (None if no changes).
+    pub change: Option<PijulRecordedChange>,
+}
+
+/// Pijul apply response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulApplyResponse {
+    /// Number of operations applied.
+    pub operations: u64,
+}
+
+/// Pijul log entry.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulLogEntry {
+    /// Change hash (hex-encoded).
+    pub change_hash: String,
+    /// Change message.
+    pub message: String,
+    /// Author (name or key).
+    pub author: Option<String>,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Pijul log response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulLogResponse {
+    /// Log entries.
+    pub entries: Vec<PijulLogEntry>,
+    /// Total count.
+    pub count: u32,
+}
+
+/// Pijul checkout response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulCheckoutResponse {
+    /// Number of files written.
+    pub files_written: u32,
+    /// Number of conflicts.
+    pub conflicts: u32,
 }

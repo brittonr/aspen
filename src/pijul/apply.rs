@@ -388,10 +388,11 @@ mod tests {
         let aspen_hash = ChangeHash([42u8; 32]);
         let pijul_hash = ChangeDirectory::<InMemoryBlobStore>::to_pijul_hash(&aspen_hash);
 
-        match pijul_hash {
-            Hash::Blake3(bytes) => assert_eq!(bytes, [42u8; 32]),
-            _ => panic!("expected Blake3 hash"),
-        }
+        assert!(
+            matches!(pijul_hash, Hash::Blake3(bytes) if bytes == [42u8; 32]),
+            "expected Blake3 hash with [42u8; 32], got {:?}",
+            pijul_hash
+        );
 
         let back = ChangeDirectory::<InMemoryBlobStore>::from_pijul_hash(&pijul_hash);
         assert_eq!(back, Some(aspen_hash));
