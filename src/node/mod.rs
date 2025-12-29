@@ -55,12 +55,14 @@
 
 pub mod types;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
 use iroh::EndpointAddr;
 use iroh::protocol::Router;
+use parking_lot::RwLock;
 use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
@@ -69,6 +71,13 @@ use crate::api::KeyValueStore;
 use crate::cluster::bootstrap::NodeHandle;
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
+use crate::cluster::federation::ClusterIdentity;
+use crate::cluster::federation::FederatedId;
+use crate::cluster::federation::FederationProtocolHandler;
+use crate::cluster::federation::FederationSettings;
+use crate::cluster::federation::TrustManager;
+use crate::cluster::federation::FEDERATION_ALPN;
+use crate::cluster::federation::sync::FederationProtocolContext;
 use crate::protocol_handlers::AuthenticatedRaftProtocolHandler;
 use crate::protocol_handlers::RaftProtocolHandler;
 use crate::protocol_handlers::TrustedPeersRegistry;
@@ -248,6 +257,9 @@ impl NodeBuilder {
             handle,
             router: None,
             membership_watcher_cancel: None,
+            federation_identity: None,
+            federation_trust_manager: None,
+            federation_resource_settings: None,
         })
     }
 }
@@ -264,6 +276,12 @@ pub struct Node {
     /// Cancellation token for the membership watcher task.
     /// Used to gracefully shut down the watcher when the node shuts down.
     membership_watcher_cancel: Option<CancellationToken>,
+    /// Federation cluster identity (if federation is enabled).
+    federation_identity: Option<ClusterIdentity>,
+    /// Federation trust manager (if federation is enabled).
+    federation_trust_manager: Option<Arc<TrustManager>>,
+    /// Federation resource settings (if federation is enabled).
+    federation_resource_settings: Option<Arc<RwLock<HashMap<FederatedId, FederationSettings>>>>,
 }
 
 impl Node {
@@ -306,6 +324,23 @@ impl Node {
     /// Access the KeyValueStore interface for key-value operations.
     pub fn kv_store(&self) -> &dyn KeyValueStore {
         self.handle.raft_node.as_ref()
+    }
+
+    /// Get the federation cluster identity (if federation is enabled).
+    pub fn federation_identity(&self) -> Option<&ClusterIdentity> {
+        self.federation_identity.as_ref()
+    }
+
+    /// Get the federation trust manager (if federation is enabled).
+    pub fn federation_trust_manager(&self) -> Option<&Arc<TrustManager>> {
+        self.federation_trust_manager.as_ref()
+    }
+
+    /// Get the federation resource settings (if federation is enabled).
+    pub fn federation_resource_settings(
+        &self,
+    ) -> Option<&Arc<RwLock<HashMap<FederatedId, FederationSettings>>>> {
+        self.federation_resource_settings.as_ref()
     }
 
     /// Spawn the Iroh Router with the Raft protocol handler.
@@ -373,6 +408,82 @@ impl Node {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
             tracing::info!("registered Gossip protocol handler");
+        }
+
+        // Add federation handler if enabled
+        if self.handle.config.federation.enabled {
+            let fed_config = &self.handle.config.federation;
+
+            // Load or generate cluster identity
+            let cluster_identity = if let Some(ref key_hex) = fed_config.cluster_key {
+                // Load from config
+                match ClusterIdentity::from_hex_key(key_hex, fed_config.cluster_name.clone()) {
+                    Ok(identity) => identity,
+                    Err(e) => {
+                        tracing::error!("Invalid federation cluster_key: {}", e);
+                        tracing::warn!("Federation disabled due to invalid key");
+                        // Skip federation registration
+                        self.router = Some(builder.spawn());
+                        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
+                        return;
+                    }
+                }
+            } else {
+                // Generate a new identity
+                let identity = ClusterIdentity::generate(fed_config.cluster_name.clone());
+                tracing::info!(
+                    cluster_name = %identity.name(),
+                    cluster_key = %identity.public_key(),
+                    "Generated new federation cluster identity"
+                );
+                identity
+            };
+
+            // Create trust manager with trusted clusters from config
+            let trust_manager = Arc::new(TrustManager::new());
+            for key_hex in &fed_config.trusted_clusters {
+                if let Ok(bytes) = hex::decode(key_hex) {
+                    if bytes.len() == 32 {
+                        let mut key_bytes = [0u8; 32];
+                        key_bytes.copy_from_slice(&bytes);
+                        if let Ok(public_key) = iroh::PublicKey::from_bytes(&key_bytes) {
+                            trust_manager.add_trusted(
+                                public_key,
+                                format!("trusted-{}", &key_hex[..8]),
+                                None, // No notes for config-loaded clusters
+                            );
+                            tracing::debug!(
+                                cluster_key = %public_key,
+                                "Added trusted cluster from config"
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Create resource settings (starts empty, populated via CLI/API)
+            let resource_settings = Arc::new(RwLock::new(HashMap::new()));
+
+            // Create federation protocol context and handler
+            let context = FederationProtocolContext {
+                cluster_identity: cluster_identity.clone(),
+                trust_manager: trust_manager.clone(),
+                resource_settings: resource_settings.clone(),
+                endpoint: Arc::new(self.handle.iroh_manager.endpoint().clone()),
+            };
+            let federation_handler = FederationProtocolHandler::new(context);
+
+            builder = builder.accept(FEDERATION_ALPN, federation_handler);
+            tracing::info!(
+                cluster_name = %cluster_identity.name(),
+                cluster_key = %cluster_identity.public_key(),
+                "registered Federation protocol handler (ALPN: /aspen/federation/1)"
+            );
+
+            // Store federation components for later access
+            self.federation_identity = Some(cluster_identity);
+            self.federation_trust_manager = Some(trust_manager);
+            self.federation_resource_settings = Some(resource_settings);
         }
 
         // Spawn the router and store the handle to keep it alive

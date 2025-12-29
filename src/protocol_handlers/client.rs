@@ -8230,5 +8230,103 @@ async fn process_client_request(
                 },
             ))
         }
+
+        // =====================================================================
+        // Federation operations
+        // =====================================================================
+        ClientRpcRequest::GetFederationStatus => {
+            use crate::client_rpc::FederationStatusResponse;
+
+            // Federation is currently not fully integrated with the node,
+            // so we return a placeholder response indicating disabled status
+            Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+                enabled: false,
+                cluster_name: "unknown".to_string(),
+                cluster_key: "".to_string(),
+                dht_enabled: false,
+                gossip_enabled: false,
+                discovered_clusters: 0,
+                federated_repos: 0,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::ListDiscoveredClusters => {
+            use crate::client_rpc::DiscoveredClustersResponse;
+
+            Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
+                clusters: vec![],
+                count: 0,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::GetDiscoveredCluster { cluster_key: _ } => {
+            use crate::client_rpc::DiscoveredClusterResponse;
+
+            Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                found: false,
+                cluster_key: None,
+                name: None,
+                node_count: None,
+                capabilities: None,
+                relay_urls: None,
+                discovered_at: None,
+            }))
+        }
+
+        ClientRpcRequest::TrustCluster { cluster_key: _ } => {
+            use crate::client_rpc::TrustClusterResultResponse;
+
+            Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
+                success: false,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::UntrustCluster { cluster_key: _ } => {
+            use crate::client_rpc::UntrustClusterResultResponse;
+
+            Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+                success: false,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::FederateRepository { repo_id: _, mode: _ } => {
+            use crate::client_rpc::FederateRepositoryResultResponse;
+
+            Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+                success: false,
+                fed_id: None,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::ListFederatedRepositories => {
+            use crate::client_rpc::FederatedRepositoriesResponse;
+
+            Ok(ClientRpcResponse::FederatedRepositories(FederatedRepositoriesResponse {
+                repositories: vec![],
+                count: 0,
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::ForgeFetchFederated {
+            federated_id: _,
+            remote_cluster: _,
+        } => {
+            use crate::client_rpc::ForgeFetchFederatedResultResponse;
+
+            Ok(ClientRpcResponse::ForgeFetchResult(ForgeFetchFederatedResultResponse {
+                success: false,
+                remote_cluster: None,
+                fetched: 0,
+                already_present: 0,
+                errors: vec![],
+                error: Some("Federation not yet integrated with node runtime".to_string()),
+            }))
+        }
     }
 }

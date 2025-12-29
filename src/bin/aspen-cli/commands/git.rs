@@ -50,6 +50,17 @@ pub enum GitCommand {
 
     /// Get a blob by hash.
     GetBlob(GetBlobArgs),
+
+    /// Enable federation for a repository.
+    ///
+    /// Allows the repository to be discovered and synced by other clusters.
+    Federate(FederateArgs),
+
+    /// List federated repositories.
+    ListFederated(ListFederatedArgs),
+
+    /// Fetch a federated repository from a remote cluster.
+    FetchRemote(FetchRemoteArgs),
 }
 
 #[derive(Args)]
@@ -185,6 +196,38 @@ pub struct GetBlobArgs {
     pub output: Option<std::path::PathBuf>,
 }
 
+#[derive(Args)]
+pub struct FederateArgs {
+    /// Repository ID (hex-encoded).
+    #[arg(short, long)]
+    pub repo: String,
+
+    /// Federation mode: "public" or "allowlist".
+    #[arg(long, default_value = "public")]
+    pub mode: String,
+
+    /// Allowed cluster keys (hex-encoded, for allowlist mode).
+    #[arg(long)]
+    pub allow: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct ListFederatedArgs {
+    /// Maximum number of repositories to return.
+    #[arg(short, long, default_value = "50")]
+    pub limit: u32,
+}
+
+#[derive(Args)]
+pub struct FetchRemoteArgs {
+    /// Federated ID (format: origin_key:local_id).
+    pub fed_id: String,
+
+    /// Remote cluster public key (hex-encoded).
+    #[arg(long)]
+    pub cluster: String,
+}
+
 impl GitCommand {
     /// Execute the git command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -199,6 +242,9 @@ impl GitCommand {
             GitCommand::GetRef(args) => git_get_ref(client, args, json).await,
             GitCommand::StoreBlob(args) => git_store_blob(client, args, json).await,
             GitCommand::GetBlob(args) => git_get_blob(client, args, json).await,
+            GitCommand::Federate(args) => git_federate(client, args, json).await,
+            GitCommand::ListFederated(args) => git_list_federated(client, args, json).await,
+            GitCommand::FetchRemote(args) => git_fetch_remote(client, args, json).await,
         }
     }
 }
@@ -821,6 +867,118 @@ async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Re
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+// ============================================================================
+// Federation Commands
+// ============================================================================
+
+async fn git_federate(client: &AspenClient, args: FederateArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::FederateRepository {
+            repo_id: args.repo,
+            mode: args.mode,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederateRepositoryResult(result) => {
+            if result.success {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "federated_id": result.fed_id,
+                        })
+                    );
+                } else {
+                    println!("Repository federated successfully");
+                    if let Some(fed_id) = result.fed_id {
+                        println!("Federated ID: {}", fed_id);
+                    }
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_list_federated(client: &AspenClient, _args: ListFederatedArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ListFederatedRepositories)
+        .await?;
+
+    match response {
+        ClientRpcResponse::FederatedRepositories(result) => {
+            if result.error.is_none() {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&result.repositories)?);
+                } else {
+                    if result.repositories.is_empty() {
+                        println!("No federated repositories");
+                    } else {
+                        println!("{:<40} {:<10} {:<40}", "REPO ID", "MODE", "FEDERATED ID");
+                        println!("{}", "-".repeat(90));
+                        for repo in &result.repositories {
+                            println!("{:<40} {:<10} {:<40}", repo.repo_id, repo.mode, repo.fed_id);
+                        }
+                        println!("\nTotal: {}", result.count);
+                    }
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_fetch_remote(client: &AspenClient, args: FetchRemoteArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeFetchFederated {
+            federated_id: args.fed_id,
+            remote_cluster: args.cluster,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeFetchResult(result) => {
+            if result.success {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "remote_cluster": result.remote_cluster,
+                            "fetched": result.fetched,
+                            "already_present": result.already_present,
+                            "errors": result.errors,
+                        })
+                    );
+                } else {
+                    println!("Fetch complete from {}", result.remote_cluster.unwrap_or_else(|| "unknown".to_string()));
+                    println!("  Fetched: {}", result.fetched);
+                    println!("  Already present: {}", result.already_present);
+                    if !result.errors.is_empty() {
+                        println!("  Errors: {}", result.errors.len());
+                        for err in &result.errors {
+                            println!("    - {}", err);
+                        }
+                    }
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),

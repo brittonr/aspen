@@ -10,6 +10,7 @@ pub mod counter;
 #[cfg(feature = "dns")]
 pub mod dns;
 pub mod docs;
+pub mod federation;
 pub mod git;
 pub mod issue;
 pub mod kv;

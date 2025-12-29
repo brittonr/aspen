@@ -19,6 +19,7 @@ use crate::commands::counter::CounterCommand;
 #[cfg(feature = "dns")]
 use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
+use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
 use crate::commands::issue::IssueCommand;
 use crate::commands::kv::KvCommand;
@@ -122,6 +123,12 @@ pub enum Commands {
     /// CRDT-replicated docs namespace operations.
     #[command(subcommand)]
     Docs(DocsCommand),
+
+    /// Cross-cluster federation.
+    ///
+    /// Discover and sync with other Aspen clusters using DHT and gossip.
+    #[command(subcommand)]
+    Federation(FederationCommand),
 
     /// Git repository operations.
     ///
@@ -233,6 +240,7 @@ impl Cli {
             #[cfg(feature = "dns")]
             Commands::Dns(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Federation(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,

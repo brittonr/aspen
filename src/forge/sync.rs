@@ -29,6 +29,11 @@ impl<B: BlobStore> SyncService<B> {
         Self { blobs }
     }
 
+    /// Get access to the underlying blob store.
+    pub fn blobs(&self) -> &Arc<B> {
+        &self.blobs
+    }
+
     /// Extract all object hashes referenced by a Git object.
     ///
     /// Returns hashes that should be traversed to fully sync the object graph:

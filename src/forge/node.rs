@@ -3,10 +3,18 @@
 //! The ForgeNode ties together all Forge components and provides
 //! a unified interface for repository operations.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::api::{KeyValueStore, ReadConsistency};
 use crate::blob::BlobStore;
+use crate::cluster::federation::ClusterIdentity;
+use crate::cluster::federation::FederatedId;
+use crate::cluster::federation::FederationMode;
+use crate::cluster::federation::FederationSettings;
+use crate::cluster::federation::TrustManager;
 use crate::forge::cob::CobStore;
 use crate::forge::constants::KV_PREFIX_REPOS;
 use crate::forge::error::{ForgeError, ForgeResult};
@@ -61,6 +69,18 @@ pub struct ForgeNode<B: BlobStore, K: KeyValueStore + ?Sized> {
 
     /// Optional gossip service for real-time announcements.
     gossip: Option<Arc<ForgeGossipService>>,
+
+    /// Optional cluster identity for federation.
+    cluster_identity: Option<ClusterIdentity>,
+
+    /// Optional trust manager for federation.
+    trust_manager: Option<Arc<TrustManager>>,
+
+    /// Federation settings for repositories (shared with federation protocol handler).
+    federation_settings: Arc<RwLock<HashMap<FederatedId, FederationSettings>>>,
+
+    /// Iroh endpoint for federation connections (optional).
+    federation_endpoint: Option<Arc<iroh::Endpoint>>,
 }
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
@@ -74,6 +94,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             kv,
             secret_key,
             gossip: None,
+            cluster_identity: None,
+            trust_manager: None,
+            federation_settings: Arc::new(RwLock::new(HashMap::new())),
+            federation_endpoint: None,
         }
     }
 
@@ -437,6 +461,285 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         let ref_name = format!("heads/{}", identity.default_branch);
         self.refs.get(repo_id, &ref_name).await
     }
+
+    // ========================================================================
+    // Federation Operations
+    // ========================================================================
+
+    /// Enable federation support for this ForgeNode.
+    ///
+    /// This must be called before using any federation methods.
+    ///
+    /// # Arguments
+    ///
+    /// - `cluster_identity`: The cluster's identity for signing announcements
+    /// - `trust_manager`: Trust manager for verifying remote clusters
+    /// - `federation_settings`: Shared federation settings (from Node)
+    /// - `endpoint`: Iroh endpoint for federation connections
+    pub fn enable_federation(
+        &mut self,
+        cluster_identity: ClusterIdentity,
+        trust_manager: Arc<TrustManager>,
+        federation_settings: Arc<RwLock<HashMap<FederatedId, FederationSettings>>>,
+        endpoint: Arc<iroh::Endpoint>,
+    ) {
+        self.cluster_identity = Some(cluster_identity);
+        self.trust_manager = Some(trust_manager);
+        self.federation_settings = federation_settings;
+        self.federation_endpoint = Some(endpoint);
+
+        tracing::info!("federation enabled for ForgeNode");
+    }
+
+    /// Check if federation is enabled.
+    pub fn has_federation(&self) -> bool {
+        self.cluster_identity.is_some()
+    }
+
+    /// Get the cluster identity (if federation enabled).
+    pub fn cluster_identity(&self) -> Option<&ClusterIdentity> {
+        self.cluster_identity.as_ref()
+    }
+
+    /// Federate a repository.
+    ///
+    /// This enables cross-cluster discovery and sync for the repository.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: The repository to federate
+    /// - `mode`: Federation mode (Public or AllowList)
+    /// - `allowed_clusters`: If mode is AllowList, the allowed cluster keys
+    ///
+    /// # Returns
+    ///
+    /// The federated ID for the repository.
+    pub async fn federate_repo(
+        &self,
+        repo_id: &RepoId,
+        mode: FederationMode,
+        allowed_clusters: Vec<iroh::PublicKey>,
+    ) -> ForgeResult<FederatedId> {
+        let cluster_identity = self.cluster_identity.as_ref().ok_or_else(|| {
+            ForgeError::FederationError {
+                message: "federation not enabled".to_string(),
+            }
+        })?;
+
+        // Verify repo exists
+        let _identity = self.get_repo(repo_id).await?;
+
+        // Create federated ID using our cluster key as origin
+        let fed_id = FederatedId::new(cluster_identity.public_key(), repo_id.0);
+
+        // Create settings based on mode
+        let settings = match mode {
+            FederationMode::Public => FederationSettings::public(),
+            FederationMode::AllowList => FederationSettings::allowlist(allowed_clusters),
+            FederationMode::Disabled => FederationSettings::disabled(),
+        };
+
+        // Store in shared settings
+        {
+            let mut settings_map = self.federation_settings.write();
+            settings_map.insert(fed_id, settings);
+        }
+
+        // Announce via gossip if enabled
+        if let Some(ref gossip) = self.gossip {
+            if let Err(e) = gossip.announce_repo_created(repo_id, "federated").await {
+                tracing::warn!(repo_id = %repo_id.to_hex(), "failed to announce federation: {}", e);
+            }
+        }
+
+        tracing::info!(
+            repo_id = %repo_id.to_hex(),
+            fed_id = %fed_id.short(),
+            mode = ?mode,
+            "federated repository"
+        );
+
+        Ok(fed_id)
+    }
+
+    /// Stop federating a repository.
+    pub async fn unfederate_repo(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        let cluster_identity = self.cluster_identity.as_ref().ok_or_else(|| {
+            ForgeError::FederationError {
+                message: "federation not enabled".to_string(),
+            }
+        })?;
+
+        let fed_id = FederatedId::new(cluster_identity.public_key(), repo_id.0);
+
+        // Remove from settings
+        {
+            let mut settings_map = self.federation_settings.write();
+            settings_map.remove(&fed_id);
+        }
+
+        tracing::info!(
+            repo_id = %repo_id.to_hex(),
+            "unfederated repository"
+        );
+
+        Ok(())
+    }
+
+    /// List all federated repositories.
+    pub fn list_federated_repos(&self) -> Vec<(FederatedId, FederationSettings)> {
+        let settings = self.federation_settings.read();
+        settings.iter().map(|(k, v)| (*k, v.clone())).collect()
+    }
+
+    /// Get federation settings for a repository.
+    pub fn get_federation_settings(&self, repo_id: &RepoId) -> Option<FederationSettings> {
+        let cluster_identity = self.cluster_identity.as_ref()?;
+        let fed_id = FederatedId::new(cluster_identity.public_key(), repo_id.0);
+
+        let settings = self.federation_settings.read();
+        settings.get(&fed_id).cloned()
+    }
+
+    /// Fetch a federated repository from a remote cluster.
+    ///
+    /// This connects to the remote cluster via the federation protocol,
+    /// fetches the repository state, and syncs any missing objects.
+    ///
+    /// # Arguments
+    ///
+    /// - `fed_id`: The federated ID of the repository
+    /// - `remote_cluster`: Public key of the remote cluster to fetch from
+    ///
+    /// # Returns
+    ///
+    /// The sync result with counts of fetched/present/missing objects.
+    pub async fn fetch_federated(
+        &self,
+        fed_id: &FederatedId,
+        remote_cluster: iroh::PublicKey,
+    ) -> ForgeResult<FederatedFetchResult> {
+        use crate::cluster::federation::sync::{connect_to_cluster, sync_remote_objects};
+
+        let cluster_identity = self.cluster_identity.as_ref().ok_or_else(|| {
+            ForgeError::FederationError {
+                message: "federation not enabled".to_string(),
+            }
+        })?;
+
+        let endpoint = self.federation_endpoint.as_ref().ok_or_else(|| {
+            ForgeError::FederationError {
+                message: "federation endpoint not available".to_string(),
+            }
+        })?;
+
+        // Connect to remote cluster
+        let (connection, remote_identity) = connect_to_cluster(endpoint, cluster_identity, remote_cluster)
+            .await
+            .map_err(|e| ForgeError::FederationError {
+                message: format!("failed to connect to remote cluster: {}", e),
+            })?;
+
+        tracing::info!(
+            remote_cluster = %remote_identity.name(),
+            fed_id = %fed_id.short(),
+            "connected to remote cluster"
+        );
+
+        // Request objects for this resource (empty want_types = all, empty have_hashes = fetch all)
+        let (objects, _has_more) = sync_remote_objects(
+            &connection,
+            fed_id,
+            vec![], // want all types
+            vec![], // we don't have anything yet
+            1000,
+        )
+        .await
+        .map_err(|e| ForgeError::FederationError {
+            message: format!("failed to sync objects: {}", e),
+        })?;
+
+        let mut result = FederatedFetchResult::default();
+        result.remote_cluster = remote_identity.name().to_string();
+
+        // Store fetched objects
+        for obj in objects {
+            // Verify content hash
+            let computed_hash = blake3::hash(&obj.data);
+            if computed_hash.as_bytes() != &obj.hash {
+                tracing::warn!(
+                    expected = %hex::encode(obj.hash),
+                    computed = %computed_hash,
+                    "object hash mismatch, skipping"
+                );
+                result.errors.push(format!("hash mismatch for {}", hex::encode(&obj.hash[..8])));
+                continue;
+            }
+
+            // Store in blob store
+            let iroh_hash = iroh_blobs::Hash::from_bytes(obj.hash);
+            match self.sync.blobs().has(&iroh_hash).await {
+                Ok(true) => {
+                    result.already_present += 1;
+                }
+                Ok(false) => {
+                    // Store the object
+                    if let Err(e) = self.sync.blobs().add_bytes(&obj.data).await {
+                        result.errors.push(format!("failed to store object: {}", e));
+                    } else {
+                        result.fetched += 1;
+                    }
+                }
+                Err(e) => {
+                    result.errors.push(format!("failed to check object: {}", e));
+                }
+            }
+        }
+
+        tracing::info!(
+            fetched = result.fetched,
+            already_present = result.already_present,
+            errors = result.errors.len(),
+            "federation fetch complete"
+        );
+
+        Ok(result)
+    }
+
+    /// List remote clusters that we know are seeding a federated resource.
+    ///
+    /// This queries our discovery cache for known seeders.
+    pub fn list_remote_seeders(&self, _fed_id: &FederatedId) -> Vec<RemoteSeeder> {
+        // For now, return empty - would query FederationDiscoveryService
+        // This will be populated when we integrate with DHT discovery
+        vec![]
+    }
+}
+
+/// Result of fetching from a federated cluster.
+#[derive(Debug, Default)]
+pub struct FederatedFetchResult {
+    /// Name of the remote cluster.
+    pub remote_cluster: String,
+    /// Number of objects fetched.
+    pub fetched: usize,
+    /// Number of objects already present locally.
+    pub already_present: usize,
+    /// Errors encountered during fetch.
+    pub errors: Vec<String>,
+}
+
+/// Information about a remote cluster seeding a resource.
+#[derive(Debug, Clone)]
+pub struct RemoteSeeder {
+    /// Remote cluster public key.
+    pub cluster_key: iroh::PublicKey,
+    /// Remote cluster name (if known).
+    pub cluster_name: Option<String>,
+    /// Node public keys that can provide objects.
+    pub node_keys: Vec<iroh::PublicKey>,
+    /// Last seen timestamp.
+    pub last_seen_ms: u64,
 }
 
 #[cfg(test)]

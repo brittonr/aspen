@@ -164,6 +164,13 @@ pub enum ForgeError {
     /// Serialization error.
     #[snafu(display("serialization error: {message}"))]
     Serialization { message: String },
+
+    // ========================================================================
+    // Federation Errors
+    // ========================================================================
+    /// Federation operation error.
+    #[snafu(display("federation error: {message}"))]
+    FederationError { message: String },
 }
 
 impl From<anyhow::Error> for ForgeError {

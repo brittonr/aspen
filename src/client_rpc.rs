@@ -1588,6 +1588,52 @@ pub enum ClientRpcRequest {
         /// Optional reason for closing.
         reason: Option<String>,
     },
+
+    // =========================================================================
+    // Federation operations - Cross-cluster discovery and sync
+    // =========================================================================
+    /// Get federation status.
+    GetFederationStatus,
+
+    /// List discovered clusters.
+    ListDiscoveredClusters,
+
+    /// Get details about a discovered cluster.
+    GetDiscoveredCluster {
+        /// Cluster public key.
+        cluster_key: String,
+    },
+
+    /// Trust a cluster.
+    TrustCluster {
+        /// Cluster public key to trust.
+        cluster_key: String,
+    },
+
+    /// Untrust a cluster.
+    UntrustCluster {
+        /// Cluster public key to untrust.
+        cluster_key: String,
+    },
+
+    /// Federate a repository.
+    FederateRepository {
+        /// Repository ID.
+        repo_id: String,
+        /// Federation mode: "public" or "allowlist".
+        mode: String,
+    },
+
+    /// List federated repositories.
+    ListFederatedRepositories,
+
+    /// Fetch a federated repository from a remote cluster.
+    ForgeFetchFederated {
+        /// Federated ID (format: origin:local_id).
+        federated_id: String,
+        /// Remote cluster public key (hex-encoded).
+        remote_cluster: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -1957,6 +2003,18 @@ impl ClientRpcRequest {
             }),
             Self::ForgeListPatches { repo_id, .. } | Self::ForgeGetPatch { repo_id, .. } => Some(Operation::Read {
                 key: format!("forge:cob:patch:{repo_id}"),
+            }),
+
+            // Federation operations
+            Self::GetFederationStatus | Self::ListDiscoveredClusters | Self::GetDiscoveredCluster { .. } => {
+                Some(Operation::Read { key: String::new() })
+            }
+            Self::TrustCluster { .. }
+            | Self::UntrustCluster { .. }
+            | Self::FederateRepository { .. }
+            | Self::ListFederatedRepositories
+            | Self::ForgeFetchFederated { .. } => Some(Operation::ClusterAdmin {
+                action: "federation".to_string(),
             }),
 
             // Public requests (no auth required)
@@ -2444,6 +2502,33 @@ pub enum ClientRpcResponse {
 
     /// Generic forge operation success/error.
     ForgeOperationResult(ForgeOperationResultResponse),
+
+    // =========================================================================
+    // Federation operation responses
+    // =========================================================================
+    /// Federation status.
+    FederationStatus(FederationStatusResponse),
+
+    /// List of discovered clusters.
+    DiscoveredClusters(DiscoveredClustersResponse),
+
+    /// Single discovered cluster details.
+    DiscoveredCluster(DiscoveredClusterResponse),
+
+    /// Trust cluster result.
+    TrustClusterResult(TrustClusterResultResponse),
+
+    /// Untrust cluster result.
+    UntrustClusterResult(UntrustClusterResultResponse),
+
+    /// Federate repository result.
+    FederateRepositoryResult(FederateRepositoryResultResponse),
+
+    /// List of federated repositories.
+    FederatedRepositories(FederatedRepositoriesResponse),
+
+    /// Forge fetch federated result.
+    ForgeFetchResult(ForgeFetchFederatedResultResponse),
 }
 
 /// Health status response.
@@ -4455,5 +4540,143 @@ pub struct ForgeOperationResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
     /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Federation Response Structs
+// =============================================================================
+
+/// Federation status response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederationStatusResponse {
+    /// Whether federation is enabled.
+    pub enabled: bool,
+    /// Cluster name.
+    pub cluster_name: String,
+    /// Cluster public key (base32).
+    pub cluster_key: String,
+    /// Whether DHT discovery is enabled.
+    pub dht_enabled: bool,
+    /// Whether gossip is enabled.
+    pub gossip_enabled: bool,
+    /// Number of discovered clusters.
+    pub discovered_clusters: u32,
+    /// Number of federated repositories.
+    pub federated_repos: u32,
+    /// Error message if status retrieval failed.
+    pub error: Option<String>,
+}
+
+/// Discovered cluster info.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredClusterInfo {
+    /// Cluster public key.
+    pub cluster_key: String,
+    /// Cluster name.
+    pub name: String,
+    /// Number of nodes.
+    pub node_count: u32,
+    /// Capabilities.
+    pub capabilities: Vec<String>,
+    /// When discovered.
+    pub discovered_at: String,
+}
+
+/// List of discovered clusters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredClustersResponse {
+    /// List of discovered clusters.
+    pub clusters: Vec<DiscoveredClusterInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if retrieval failed.
+    pub error: Option<String>,
+}
+
+/// Single discovered cluster details.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredClusterResponse {
+    /// Whether the cluster was found.
+    pub found: bool,
+    /// Cluster public key.
+    pub cluster_key: Option<String>,
+    /// Cluster name.
+    pub name: Option<String>,
+    /// Number of nodes.
+    pub node_count: Option<u32>,
+    /// Capabilities.
+    pub capabilities: Option<Vec<String>>,
+    /// Relay URLs.
+    pub relay_urls: Option<Vec<String>>,
+    /// When discovered.
+    pub discovered_at: Option<String>,
+}
+
+/// Trust cluster result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustClusterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Untrust cluster result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UntrustClusterResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federate repository result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederateRepositoryResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Federated ID (if successful).
+    pub fed_id: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Federated repository info.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedRepoInfo {
+    /// Repository ID.
+    pub repo_id: String,
+    /// Federation mode.
+    pub mode: String,
+    /// Federated ID.
+    pub fed_id: String,
+}
+
+/// List of federated repositories.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedRepositoriesResponse {
+    /// List of federated repositories.
+    pub repositories: Vec<FederatedRepoInfo>,
+    /// Total count.
+    pub count: u32,
+    /// Error message if retrieval failed.
+    pub error: Option<String>,
+}
+
+/// Forge fetch federated result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeFetchFederatedResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Remote cluster name.
+    pub remote_cluster: Option<String>,
+    /// Number of objects fetched.
+    pub fetched: usize,
+    /// Number of objects already present locally.
+    pub already_present: usize,
+    /// Errors encountered during fetch.
+    pub errors: Vec<String>,
+    /// Error message if operation failed.
     pub error: Option<String>,
 }
