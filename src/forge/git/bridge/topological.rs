@@ -76,18 +76,19 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
         });
     }
 
+    // First pass: collect all hashes so we know which dependencies are internal
+    let all_hashes: HashSet<Sha1Hash> = objects.iter().map(|obj| obj.sha1).collect();
+
     // Build adjacency list and in-degree count
     let mut in_degree: HashMap<Sha1Hash, usize> = HashMap::new();
     let mut dependents: HashMap<Sha1Hash, Vec<Sha1Hash>> = HashMap::new();
     let mut object_map: HashMap<Sha1Hash, PendingObject> = HashMap::new();
-    let mut all_hashes: HashSet<Sha1Hash> = HashSet::new();
 
     for obj in objects {
-        all_hashes.insert(obj.sha1);
         in_degree.entry(obj.sha1).or_insert(0);
 
         for dep in &obj.dependencies {
-            if all_hashes.contains(dep) || object_map.contains_key(dep) {
+            if all_hashes.contains(dep) {
                 // Only count dependencies that are in our set
                 *in_degree.entry(obj.sha1).or_insert(0) += 1;
                 dependents.entry(*dep).or_default().push(obj.sha1);
@@ -131,9 +132,8 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
         }
     }
 
-    // Check for cycles
-    if result.len() < all_hashes.len() - object_map.len() {
-        // Some objects weren't processed - indicates a cycle
+    // Check for cycles - if any objects remain in object_map, we have a cycle
+    if !object_map.is_empty() {
         return Err(BridgeError::CycleDetected);
     }
 
@@ -384,15 +384,23 @@ mod tests {
 
     #[test]
     fn test_extract_commit_dependencies() {
-        let commit_content = "tree abc123abc123abc123abc123abc123abc12345\n\
-                              parent def456def456def456def456def456def45678\n\
-                              parent 111111111111111111111111111111111111\n\
-                              author Test <test@example.com> 1234567890 +0000\n\
-                              committer Test <test@example.com> 1234567890 +0000\n\
-                              \n\
-                              Commit message";
+        // SHA-1 hashes must be exactly 40 hex characters
+        let tree_hash = "a".repeat(40);
+        let parent1_hash = "b".repeat(40);
+        let parent2_hash = "c".repeat(40);
 
-        let deps = extract_commit_dependencies(commit_content).unwrap();
+        let commit_content = format!(
+            "tree {}\n\
+             parent {}\n\
+             parent {}\n\
+             author Test <test@example.com> 1234567890 +0000\n\
+             committer Test <test@example.com> 1234567890 +0000\n\
+             \n\
+             Commit message",
+            tree_hash, parent1_hash, parent2_hash
+        );
+
+        let deps = extract_commit_dependencies(&commit_content).unwrap();
         assert_eq!(deps.len(), 3); // 1 tree + 2 parents
     }
 

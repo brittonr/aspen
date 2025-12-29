@@ -66,6 +66,8 @@
 pub mod constants;
 pub mod converter;
 pub mod error;
+pub mod exporter;
+pub mod importer;
 pub mod mapping;
 pub mod sha1;
 pub mod topological;
@@ -73,6 +75,8 @@ pub mod topological;
 // Re-export primary types
 pub use converter::GitObjectConverter;
 pub use error::{BridgeError, BridgeResult};
+pub use exporter::{ExportResult, ExportedObject, GitExporter};
+pub use importer::{GitImporter, ImportResult};
 pub use mapping::{GitObjectType, HashMapping, HashMappingStore};
 pub use sha1::Sha1Hash;
 pub use topological::{
