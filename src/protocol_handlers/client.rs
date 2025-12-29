@@ -8969,13 +8969,35 @@ async fn process_client_request(
         #[cfg(feature = "pijul")]
         ClientRpcRequest::PijulChannelDelete { repo_id, name } => {
             use crate::client_rpc::ErrorResponse;
+            use crate::forge::identity::RepoId;
 
-            // Channel deletion not yet implemented in PijulStore
-            let _ = (repo_id, name);
-            Ok(ClientRpcResponse::Error(ErrorResponse {
-                code: "NOT_IMPLEMENTED".to_string(),
-                message: "Channel deletion not yet implemented".to_string(),
-            }))
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.delete_channel(&repo_id, &name).await {
+                Ok(()) => Ok(ClientRpcResponse::PijulSuccess),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
         }
 
         #[cfg(feature = "pijul")]
@@ -8984,14 +9006,40 @@ async fn process_client_request(
             source,
             target,
         } => {
-            use crate::client_rpc::ErrorResponse;
+            use crate::client_rpc::{ErrorResponse, PijulChannelResponse};
+            use crate::forge::identity::RepoId;
 
-            // Channel forking not yet implemented in PijulStore
-            let _ = (repo_id, source, target);
-            Ok(ClientRpcResponse::Error(ErrorResponse {
-                code: "NOT_IMPLEMENTED".to_string(),
-                message: "Channel forking not yet implemented".to_string(),
-            }))
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.fork_channel(&repo_id, &source, &target).await {
+                Ok(channel) => Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
+                    name: channel.name,
+                    head: channel.head.map(|h| h.to_string()),
+                    updated_at_ms: channel.updated_at_ms,
+                })),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
         }
 
         #[cfg(feature = "pijul")]

@@ -351,6 +351,90 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             .collect())
     }
 
+    /// Delete a channel from a repository.
+    ///
+    /// This removes the channel head reference from the KV store.
+    /// The changes themselves are not deleted (they may be referenced by other channels).
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name to delete
+    #[instrument(skip(self))]
+    pub async fn delete_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<()> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Check if channel exists
+        if !self.refs.channel_exists(repo_id, channel).await? {
+            return Err(PijulError::ChannelNotFound {
+                channel: channel.to_string(),
+            });
+        }
+
+        // Delete the channel
+        self.refs.delete_channel(repo_id, channel).await?;
+
+        info!(repo_id = %repo_id, channel = channel, "deleted channel");
+        Ok(())
+    }
+
+    /// Fork a channel, creating a new channel with the same head.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `source`: Source channel name to fork from
+    /// - `target`: Target channel name to create
+    #[instrument(skip(self))]
+    pub async fn fork_channel(
+        &self,
+        repo_id: &RepoId,
+        source: &str,
+        target: &str,
+    ) -> PijulResult<Channel> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Check channel count limit
+        let count = self.refs.count_channels(repo_id).await?;
+        if count >= MAX_CHANNELS {
+            return Err(PijulError::TooManyChannels {
+                count,
+                max: MAX_CHANNELS,
+            });
+        }
+
+        // Check if target already exists
+        if self.refs.channel_exists(repo_id, target).await? {
+            return Err(PijulError::ChannelAlreadyExists {
+                channel: target.to_string(),
+            });
+        }
+
+        // Get source channel's head
+        let source_head = self.refs.get_channel(repo_id, source).await?.ok_or_else(|| {
+            PijulError::ChannelNotFound {
+                channel: source.to_string(),
+            }
+        })?;
+
+        // Set target channel's head to the same value
+        self.refs.set_channel(repo_id, target, source_head).await?;
+
+        info!(repo_id = %repo_id, source = source, target = target, head = %source_head, "forked channel");
+
+        Ok(Channel::with_head(target, source_head))
+    }
+
     // ========================================================================
     // Change Operations
     // ========================================================================
