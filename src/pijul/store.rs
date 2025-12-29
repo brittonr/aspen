@@ -236,6 +236,64 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         Ok(self.get_repo(repo_id).await?.is_some())
     }
 
+    /// List all repositories.
+    ///
+    /// Returns a list of (repo_id, identity) pairs for all known repositories.
+    ///
+    /// # Arguments
+    ///
+    /// - `limit`: Maximum number of repos to return (default 100, max 1000)
+    #[instrument(skip(self))]
+    pub async fn list_repos(&self, limit: u32) -> PijulResult<Vec<(RepoId, PijulRepoIdentity)>> {
+        use crate::api::ScanRequest;
+
+        let limit = limit.min(1000);
+
+        let result = self
+            .kv
+            .scan(ScanRequest {
+                prefix: KV_PREFIX_PIJUL_REPOS.to_string(),
+                limit: Some(limit),
+                continuation_token: None,
+            })
+            .await?;
+
+        let mut repos = Vec::with_capacity(result.entries.len());
+
+        for entry in result.entries {
+            // Key format: "pijul:repos:{repo_id}"
+            let repo_id_str = entry.key.strip_prefix(KV_PREFIX_PIJUL_REPOS).unwrap_or(&entry.key);
+            let repo_id = match RepoId::from_hex(repo_id_str) {
+                Ok(id) => id,
+                Err(_) => {
+                    debug!(key = %entry.key, "skipping invalid repo_id in KV");
+                    continue;
+                }
+            };
+
+            // Decode identity
+            let value = match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &entry.value) {
+                Ok(v) => v,
+                Err(e) => {
+                    debug!(key = %entry.key, error = %e, "skipping repo with invalid base64");
+                    continue;
+                }
+            };
+
+            let identity: PijulRepoIdentity = match postcard::from_bytes(&value) {
+                Ok(id) => id,
+                Err(e) => {
+                    debug!(key = %entry.key, error = %e, "skipping repo with invalid identity");
+                    continue;
+                }
+            };
+
+            repos.push((repo_id, identity));
+        }
+
+        Ok(repos)
+    }
+
     // ========================================================================
     // Channel Management
     // ========================================================================

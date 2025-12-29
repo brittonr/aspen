@@ -173,6 +173,14 @@ pub struct ClientProtocolContext {
     /// - Collaborative objects (issues, patches)
     #[cfg(feature = "forge")]
     pub forge_node: Option<Arc<crate::forge::ForgeNode<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>>,
+    /// Pijul store for patch-based version control (optional).
+    ///
+    /// When present, enables Pijul RPC operations for:
+    /// - Repository management (init, list, info)
+    /// - Channel management (list, create, delete, fork)
+    /// - Change operations (record, apply, log, checkout)
+    #[cfg(feature = "pijul")]
+    pub pijul_store: Option<Arc<crate::pijul::PijulStore<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -8704,26 +8712,371 @@ async fn process_client_request(
         }
 
         // =========================================================================
-        // Pijul operations (stub - full implementation pending)
+        // Pijul operations
         // =========================================================================
         #[cfg(feature = "pijul")]
-        ClientRpcRequest::PijulRepoInit { .. }
-        | ClientRpcRequest::PijulRepoList { .. }
-        | ClientRpcRequest::PijulRepoInfo { .. }
-        | ClientRpcRequest::PijulChannelList { .. }
-        | ClientRpcRequest::PijulChannelCreate { .. }
-        | ClientRpcRequest::PijulChannelDelete { .. }
-        | ClientRpcRequest::PijulChannelFork { .. }
-        | ClientRpcRequest::PijulChannelInfo { .. }
-        | ClientRpcRequest::PijulRecord { .. }
-        | ClientRpcRequest::PijulApply { .. }
-        | ClientRpcRequest::PijulLog { .. }
-        | ClientRpcRequest::PijulCheckout { .. } => {
+        ClientRpcRequest::PijulRepoInit {
+            name,
+            description,
+            default_channel,
+        } => {
+            use crate::client_rpc::{ErrorResponse, PijulRepoResponse};
+            use crate::pijul::types::PijulRepoIdentity;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            // Create identity with name and default channel
+            let identity = PijulRepoIdentity {
+                name: name.clone(),
+                description,
+                default_channel: default_channel.clone(),
+                delegates: vec![], // No delegates for now
+                threshold: 0,
+                created_at_ms: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+            };
+
+            match pijul_store.create_repo(identity.clone()).await {
+                Ok(repo_id) => {
+                    // Count channels (should be 0 for new repo)
+                    let channel_count = pijul_store
+                        .list_channels(&repo_id)
+                        .await
+                        .map(|c| c.len() as u32)
+                        .unwrap_or(0);
+
+                    Ok(ClientRpcResponse::PijulRepoResult(PijulRepoResponse {
+                        id: repo_id.to_string(),
+                        name: identity.name,
+                        description: identity.description,
+                        default_channel: identity.default_channel,
+                        channel_count,
+                        created_at_ms: identity.created_at_ms,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulRepoList { limit } => {
+            use crate::client_rpc::{ErrorResponse, PijulRepoListResponse, PijulRepoResponse};
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.list_repos(limit).await {
+                Ok(repos) => {
+                    let count = repos.len() as u32;
+                    let mut response_repos = Vec::with_capacity(repos.len());
+
+                    for (repo_id, identity) in repos {
+                        let channel_count = pijul_store
+                            .list_channels(&repo_id)
+                            .await
+                            .map(|c| c.len() as u32)
+                            .unwrap_or(0);
+
+                        response_repos.push(PijulRepoResponse {
+                            id: repo_id.to_string(),
+                            name: identity.name,
+                            description: identity.description,
+                            default_channel: identity.default_channel,
+                            channel_count,
+                            created_at_ms: identity.created_at_ms,
+                        });
+                    }
+
+                    Ok(ClientRpcResponse::PijulRepoListResult(PijulRepoListResponse {
+                        repos: response_repos,
+                        count,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulRepoInfo { repo_id } => {
+            use crate::client_rpc::{ErrorResponse, PijulRepoResponse};
+            use crate::forge::identity::RepoId;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.get_repo(&repo_id).await {
+                Ok(Some(identity)) => {
+                    let channel_count = pijul_store
+                        .list_channels(&repo_id)
+                        .await
+                        .map(|c| c.len() as u32)
+                        .unwrap_or(0);
+
+                    Ok(ClientRpcResponse::PijulRepoResult(PijulRepoResponse {
+                        id: repo_id.to_string(),
+                        name: identity.name,
+                        description: identity.description,
+                        default_channel: identity.default_channel,
+                        channel_count,
+                        created_at_ms: identity.created_at_ms,
+                    }))
+                }
+                Ok(None) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "NOT_FOUND".to_string(),
+                    message: format!("Repository {} not found", repo_id),
+                })),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulChannelList { repo_id } => {
+            use crate::client_rpc::{ErrorResponse, PijulChannelListResponse, PijulChannelResponse};
+            use crate::forge::identity::RepoId;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.list_channels(&repo_id).await {
+                Ok(channels) => {
+                    let count = channels.len() as u32;
+                    let response_channels: Vec<_> = channels
+                        .into_iter()
+                        .map(|ch| PijulChannelResponse {
+                            name: ch.name,
+                            head: ch.head.map(|h| h.to_string()),
+                            updated_at_ms: ch.updated_at_ms,
+                        })
+                        .collect();
+
+                    Ok(ClientRpcResponse::PijulChannelListResult(PijulChannelListResponse {
+                        channels: response_channels,
+                        count,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulChannelCreate { repo_id, name } => {
+            use crate::client_rpc::{ErrorResponse, PijulChannelResponse};
+            use crate::forge::identity::RepoId;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.create_channel(&repo_id, &name).await {
+                Ok(()) => {
+                    let now_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+
+                    Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
+                        name,
+                        head: None,
+                        updated_at_ms: now_ms,
+                    }))
+                }
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulChannelDelete { repo_id, name } => {
             use crate::client_rpc::ErrorResponse;
-            // TODO: Wire up PijulStore to ClientProtocolContext and implement handlers
+
+            // Channel deletion not yet implemented in PijulStore
+            let _ = (repo_id, name);
             Ok(ClientRpcResponse::Error(ErrorResponse {
                 code: "NOT_IMPLEMENTED".to_string(),
-                message: "Pijul operations not yet implemented in server".to_string(),
+                message: "Channel deletion not yet implemented".to_string(),
+            }))
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulChannelFork {
+            repo_id,
+            source,
+            target,
+        } => {
+            use crate::client_rpc::ErrorResponse;
+
+            // Channel forking not yet implemented in PijulStore
+            let _ = (repo_id, source, target);
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Channel forking not yet implemented".to_string(),
+            }))
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulChannelInfo { repo_id, name } => {
+            use crate::client_rpc::{ErrorResponse, PijulChannelResponse};
+            use crate::forge::identity::RepoId;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_CONFIGURED".to_string(),
+                        message: "Pijul store not configured on this node".to_string(),
+                    }));
+                }
+            };
+
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.get_channel(&repo_id, &name).await {
+                Ok(Some(channel)) => Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
+                    name: channel.name,
+                    head: channel.head.map(|h| h.to_string()),
+                    updated_at_ms: channel.updated_at_ms,
+                })),
+                Ok(None) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "NOT_FOUND".to_string(),
+                    message: format!("Channel '{}' not found", name),
+                })),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "PIJUL_ERROR".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulRecord { .. } => {
+            use crate::client_rpc::ErrorResponse;
+
+            // Recording requires local filesystem access - complex to implement remotely
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Recording changes requires local filesystem access. Use local pijul tools.".to_string(),
+            }))
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulApply { .. } => {
+            use crate::client_rpc::ErrorResponse;
+
+            // Applying changes requires pristine access - complex to implement
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Applying changes requires pristine access. Not yet implemented.".to_string(),
+            }))
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulLog { .. } => {
+            use crate::client_rpc::ErrorResponse;
+
+            // Log traversal requires change DAG traversal - complex to implement
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Change log traversal not yet implemented.".to_string(),
+            }))
+        }
+
+        #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulCheckout { .. } => {
+            use crate::client_rpc::ErrorResponse;
+
+            // Checkout requires local filesystem access - complex to implement remotely
+            Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "NOT_IMPLEMENTED".to_string(),
+                message: "Checkout requires local filesystem access. Use local pijul tools.".to_string(),
             }))
         }
     }

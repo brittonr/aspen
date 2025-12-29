@@ -590,6 +590,20 @@ async fn main() -> Result<()> {
         ))
     });
 
+    // Initialize PijulStore if blob_store and data_dir are available
+    #[cfg(feature = "pijul")]
+    let pijul_store = node_mode
+        .blob_store()
+        .and_then(|blob_store| {
+            config.data_dir.as_ref().map(|data_dir| {
+                Arc::new(aspen::pijul::PijulStore::new(
+                    blob_store.clone(),
+                    kv_store.clone(),
+                    data_dir.clone(),
+                ))
+            })
+        });
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -611,6 +625,8 @@ async fn main() -> Result<()> {
         content_discovery: node_mode.content_discovery(),
         #[cfg(feature = "forge")]
         forge_node,
+        #[cfg(feature = "pijul")]
+        pijul_store,
     };
     let client_handler = ClientProtocolHandler::new(client_context);
 
