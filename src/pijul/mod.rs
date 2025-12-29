@@ -58,22 +58,25 @@
 //! store.sync_channel(&repo_id, "main", peer_id).await?;
 //! ```
 
+pub mod apply;
 pub mod change_store;
 pub mod constants;
 pub mod error;
+pub mod pristine;
 pub mod refs;
 pub mod store;
 pub mod types;
 
 // These modules will be implemented in subsequent phases
-// pub mod pristine;
 // pub mod sync;
 // pub mod gossip;
 
 // Re-export primary types
+pub use apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
 pub use change_store::AspenChangeStore;
 pub use constants::*;
 pub use error::{PijulError, PijulResult};
+pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
 pub use refs::{ChannelUpdateEvent, PijulRefStore};
 pub use store::{PijulStore, PijulStoreEvent};
 pub use types::*;

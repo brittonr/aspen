@@ -51,15 +51,16 @@ Pijul is embedded into Aspen as a native VCS format, separate from Git. Both use
 ```
 src/pijul/
 ├── mod.rs              # Module root, feature gate, re-exports
+├── apply.rs            # ChangeDirectory, ChangeApplicator
 ├── constants.rs        # Tiger Style resource limits
 ├── error.rs            # PijulError enum (snafu-based)
 ├── types.rs            # ChangeHash, Channel, PijulRepoIdentity, etc.
 ├── change_store.rs     # AspenChangeStore - iroh-blobs backed storage
 ├── refs.rs             # PijulRefStore - Raft KV backed channel heads
 ├── store.rs            # PijulStore - high-level coordinator
-├── pristine.rs         # [Phase 2] Sanakirja pristine wrapper
-├── sync.rs             # [Phase 2] P2P sync of changes
-└── gossip.rs           # [Phase 2] PijulAnnouncement types
+├── pristine.rs         # PristineManager - sanakirja database wrapper
+├── sync.rs             # [Phase 4] P2P sync of changes
+└── gossip.rs           # [Phase 4] PijulAnnouncement types
 ```
 
 ## Key Types
@@ -110,6 +111,80 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 }
 ```
 
+### PristineManager
+
+```rust
+/// Manages pristine databases for multiple Pijul repositories.
+pub struct PristineManager {
+    data_dir: PathBuf,
+    cache: RwLock<HashMap<String, Arc<Pristine>>>,
+    max_cached: usize,
+}
+
+impl PristineManager {
+    pub fn new(data_dir: impl Into<PathBuf>) -> Self;
+    pub fn open_or_create(&self, repo_id: &RepoId) -> PijulResult<PristineHandle>;
+    pub fn open(&self, repo_id: &RepoId) -> PijulResult<PristineHandle>;
+    pub fn exists(&self, repo_id: &RepoId) -> bool;
+    pub fn delete(&self, repo_id: &RepoId) -> PijulResult<()>;
+}
+
+/// Handle to an open pristine database.
+pub struct PristineHandle { /* ... */ }
+
+impl PristineHandle {
+    pub fn txn_begin(&self) -> PijulResult<ReadTxn>;
+    pub fn mut_txn_begin(&self) -> PijulResult<WriteTxn>;
+}
+
+/// Mutable transaction for modifying pristine state.
+pub struct WriteTxn { /* ... */ }
+
+impl WriteTxn {
+    pub fn open_or_create_channel(&mut self, name: &str) -> PijulResult<ChannelRef<MutTxn<()>>>;
+    pub fn fork_channel(&mut self, source: &str, dest: &str) -> PijulResult<ChannelRef<MutTxn<()>>>;
+    pub fn rename_channel(&mut self, old_name: &str, new_name: &str) -> PijulResult<()>;
+    pub fn drop_channel(&mut self, name: &str) -> PijulResult<bool>;
+    pub fn commit(self) -> PijulResult<()>;
+}
+```
+
+### ChangeDirectory
+
+```rust
+/// A directory-based change store bridging iroh-blobs with libpijul.
+pub struct ChangeDirectory<B: BlobStore> {
+    base_dir: PathBuf,
+    blobs: Arc<AspenChangeStore<B>>,
+    repo_id: RepoId,
+}
+
+impl<B: BlobStore> ChangeDirectory<B> {
+    pub fn new(data_dir: &PathBuf, repo_id: RepoId, blobs: Arc<AspenChangeStore<B>>) -> Self;
+    pub async fn fetch_change(&self, hash: &ChangeHash) -> PijulResult<PathBuf>;
+    pub async fn store_change(&self, bytes: &[u8]) -> PijulResult<ChangeHash>;
+    pub fn has_change(&self, hash: &ChangeHash) -> bool;
+    pub fn libpijul_store(&self) -> LibpijulFileSystem;
+}
+```
+
+### ChangeApplicator
+
+```rust
+/// Applies changes to a Pijul repository.
+pub struct ChangeApplicator<B: BlobStore> {
+    pristine: PristineHandle,
+    changes: ChangeDirectory<B>,
+}
+
+impl<B: BlobStore> ChangeApplicator<B> {
+    pub fn new(pristine: PristineHandle, changes: ChangeDirectory<B>) -> Self;
+    pub fn apply_local(&self, channel: &str, hash: &ChangeHash) -> PijulResult<ApplyResult>;
+    pub async fn fetch_and_apply(&self, channel: &str, hash: &ChangeHash) -> PijulResult<ApplyResult>;
+    pub async fn apply_changes(&self, channel: &str, hashes: &[ChangeHash]) -> PijulResult<Vec<ApplyResult>>;
+}
+```
+
 ## Usage
 
 ```rust
@@ -150,12 +225,23 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] PijulStore coordinator
 - [x] Unit tests (10 passing)
 
-### Phase 2 (Planned)
-- [ ] PristineManager (sanakirja integration)
-- [ ] Full libpijul Change serialization/deserialization
+### Phase 2 (Complete)
+- [x] PristineManager (sanakirja integration)
+- [x] PristineHandle with ReadTxn/WriteTxn wrappers
+- [x] Channel management (create, fork, rename, delete)
+- [x] Pristine caching with configurable eviction
+- [x] Unit tests (18 passing)
+
+### Phase 3 (In Progress)
+- [x] ChangeDirectory - local cache bridging iroh-blobs with libpijul FileSystem
+- [x] ChangeApplicator - high-level API for applying changes to pristine
+- [x] Hash conversion between Aspen (BLAKE3) and libpijul (Blake3 variant)
+- [x] Unit tests (21 passing)
+- [ ] Record changes (working directory diffing)
+- [ ] Working directory output from pristine
 - [ ] PijulSyncService (P2P sync)
 - [ ] PijulAnnouncement gossip types
-- [ ] Integration tests
+- [ ] Integration tests with real Pijul changes
 
 ## Dependencies
 
