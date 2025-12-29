@@ -211,6 +211,16 @@ pub struct Author {
 
     /// Unix timestamp in milliseconds when this authorship occurred.
     pub timestamp_ms: u64,
+
+    /// Timezone offset string (e.g., "+0000", "-0500").
+    /// Preserved from git author lines for SHA-1 reproducibility.
+    #[serde(default = "default_timezone")]
+    pub timezone: String,
+}
+
+/// Default timezone for backwards compatibility with existing serialized data.
+fn default_timezone() -> String {
+    "+0000".to_string()
 }
 
 impl Author {
@@ -227,6 +237,7 @@ impl Author {
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time before unix epoch")
                 .as_millis() as u64,
+            timezone: "+0000".to_string(),
         }
     }
 
@@ -240,6 +251,23 @@ impl Author {
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time before unix epoch")
                 .as_millis() as u64,
+            timezone: "+0000".to_string(),
+        }
+    }
+
+    /// Create an author with explicit name, email, and timezone.
+    pub fn with_timezone(
+        name: impl Into<String>,
+        email: impl Into<String>,
+        timestamp_ms: u64,
+        timezone: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            email: email.into(),
+            public_key: None,
+            timestamp_ms,
+            timezone: timezone.into(),
         }
     }
 }
@@ -307,5 +335,54 @@ mod tests {
         assert!(!author.name.is_empty());
         assert!(!author.email.is_empty());
         assert_eq!(author.public_key, Some(key));
+    }
+
+    #[test]
+    fn test_author_timezone_serialization() {
+        // Test that timezone field is preserved through postcard serialization
+        let author = Author::with_timezone("Test User", "test@example.com", 1234567890000, "-0500");
+
+        assert_eq!(author.timezone, "-0500");
+
+        // Serialize with postcard
+        let bytes = postcard::to_allocvec(&author).expect("should serialize");
+
+        // Deserialize
+        let recovered: Author = postcard::from_bytes(&bytes).expect("should deserialize");
+
+        // Timezone should be preserved
+        assert_eq!(recovered.timezone, "-0500", "timezone should be preserved through serialization");
+        assert_eq!(recovered.name, "Test User");
+        assert_eq!(recovered.email, "test@example.com");
+        assert_eq!(recovered.timestamp_ms, 1234567890000);
+    }
+
+    #[test]
+    fn test_author_default_timezone() {
+        // Test that missing timezone field gets the default value
+        #[derive(serde::Serialize)]
+        struct OldAuthor {
+            name: String,
+            email: String,
+            public_key: Option<PublicKey>,
+            timestamp_ms: u64,
+            // No timezone field
+        }
+
+        let old = OldAuthor {
+            name: "Test".to_string(),
+            email: "test@example.com".to_string(),
+            public_key: None,
+            timestamp_ms: 1234567890000,
+        };
+
+        // Serialize the old format
+        let bytes = postcard::to_allocvec(&old).expect("should serialize");
+
+        // Deserialize as new Author - should get default timezone
+        let author: Author = postcard::from_bytes(&bytes).expect("should deserialize");
+
+        // Should have default timezone
+        assert_eq!(author.timezone, "+0000", "missing timezone should default to +0000");
     }
 }

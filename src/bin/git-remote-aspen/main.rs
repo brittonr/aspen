@@ -44,6 +44,12 @@ use url::{AspenUrl, ConnectionTarget};
 /// RPC timeout for git bridge operations.
 const RPC_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Maximum number of retry attempts for RPC calls.
+const MAX_RETRIES: u32 = 3;
+
+/// Delay between retry attempts.
+const RETRY_DELAY: Duration = Duration::from_millis(500);
+
 /// Supported options and their current values.
 struct Options {
     /// Verbosity level (0 = quiet, 1 = normal, 2+ = verbose).
@@ -95,8 +101,32 @@ impl RpcClient {
         Ok(Self { endpoint, ticket })
     }
 
-    /// Send an RPC request.
+    /// Send an RPC request with retry logic.
     async fn send(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
+        let mut last_error = None;
+
+        for attempt in 0..MAX_RETRIES {
+            if attempt > 0 {
+                eprintln!("git-remote-aspen: retrying RPC (attempt {})", attempt + 1);
+                tokio::time::sleep(RETRY_DELAY).await;
+            }
+
+            match self.send_once(request.clone()).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    eprintln!("git-remote-aspen: RPC attempt {} failed: {}", attempt + 1, e);
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, format!("RPC failed after {} retries", MAX_RETRIES))
+        }))
+    }
+
+    /// Send a single RPC request without retry.
+    async fn send_once(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
         use aspen::client_rpc::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
         use iroh::EndpointAddr;
         use tokio::time::timeout;
@@ -344,9 +374,6 @@ impl RemoteHelper {
                     return writer.write_fetch_done();
                 }
 
-                // Write objects to git (via stdout or sideband)
-                // For now, we'd need to use git-fast-import or write a packfile
-                // This is a placeholder - actual implementation would pipe objects to git
                 if self.options.verbosity > 0 {
                     eprintln!(
                         "git-remote-aspen: received {} objects",
@@ -354,8 +381,17 @@ impl RemoteHelper {
                     );
                 }
 
-                // TODO: Actually write objects to git's object store
-                // This would use git-fast-import or direct object writing
+                // Write objects to git's object store as loose objects
+                let git_dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_string());
+                let objects_dir = std::path::Path::new(&git_dir).join("objects");
+
+                for obj in &objects {
+                    if let Err(e) = self.write_loose_object(&objects_dir, obj) {
+                        eprintln!("git-remote-aspen: failed to write object {}: {}", obj.sha1, e);
+                    } else if self.options.verbosity > 1 {
+                        eprintln!("git-remote-aspen: wrote object {} ({})", obj.sha1, obj.object_type);
+                    }
+                }
 
                 writer.write_fetch_done()
             }
@@ -366,6 +402,41 @@ impl RemoteHelper {
         }
     }
 
+    /// Write a git object as a loose object file.
+    fn write_loose_object(
+        &self,
+        objects_dir: &std::path::Path,
+        obj: &aspen::client_rpc::GitBridgeObject,
+    ) -> io::Result<()> {
+        use flate2::write::ZlibEncoder;
+        use flate2::Compression;
+        use std::io::Write as _;
+
+        // Build the full object content: "{type} {size}\0{data}"
+        let header = format!("{} {}\0", obj.object_type, obj.data.len());
+        let mut full_content = header.into_bytes();
+        full_content.extend_from_slice(&obj.data);
+
+        // Compress with zlib
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&full_content)?;
+        let compressed = encoder.finish()?;
+
+        // Write to objects/{sha1[0..2]}/{sha1[2..]}
+        let dir = objects_dir.join(&obj.sha1[0..2]);
+        let file = dir.join(&obj.sha1[2..]);
+
+        // Create directory if needed
+        std::fs::create_dir_all(&dir)?;
+
+        // Write file (skip if exists)
+        if !file.exists() {
+            std::fs::write(&file, &compressed)?;
+        }
+
+        Ok(())
+    }
+
     /// Handle the "push" command.
     async fn handle_push<W: Write>(
         &mut self,
@@ -374,6 +445,8 @@ impl RemoteHelper {
         dst: &str,
         force: bool,
     ) -> io::Result<()> {
+        use aspen::client_rpc::GitBridgeObject;
+
         let repo_id = self.url.repo_id().to_hex();
 
         if self.options.verbosity > 0 {
@@ -381,21 +454,45 @@ impl RemoteHelper {
             eprintln!("git-remote-aspen: pushing {}:{}{}", src, dst, force_str);
         }
 
-        // TODO: Read objects from local git repo
-        // This would involve:
-        // 1. Resolve src to a commit SHA-1
-        // 2. Walk the commit graph to find objects to send
-        // 3. Read object data from local .git/objects
+        let git_dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_string());
+        let git_dir = std::path::Path::new(&git_dir);
 
-        // For now, send a placeholder push
+        // Resolve src to a commit SHA-1
+        let commit_sha1 = match self.resolve_ref(git_dir, src) {
+            Ok(sha) => sha,
+            Err(e) => {
+                eprintln!("git-remote-aspen: failed to resolve {}: {}", src, e);
+                return writer.write_push_error(dst, &format!("cannot resolve {}", src));
+            }
+        };
+
+        if self.options.verbosity > 0 {
+            eprintln!("git-remote-aspen: resolved {} to {}", src, commit_sha1);
+        }
+
+        // Collect all objects reachable from the commit
+        let objects_dir = git_dir.join("objects");
+        let mut objects: Vec<GitBridgeObject> = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+
+        if let Err(e) = self.collect_objects(&objects_dir, &commit_sha1, &mut objects, &mut visited) {
+            eprintln!("git-remote-aspen: failed to collect objects: {}", e);
+            return writer.write_push_error(dst, &format!("failed to read objects: {}", e));
+        }
+
+        if self.options.verbosity > 0 {
+            eprintln!("git-remote-aspen: collected {} objects to push", objects.len());
+        }
+
+        // Send the push request
         let client = self.get_client().await?;
         let request = ClientRpcRequest::GitBridgePush {
             repo_id,
-            objects: vec![], // TODO: Populate with actual objects
+            objects,
             refs: vec![GitBridgeRefUpdate {
                 ref_name: dst.to_string(),
-                old_sha1: String::new(), // TODO: Get current remote ref value
-                new_sha1: String::new(), // TODO: Resolve src to SHA-1
+                old_sha1: String::new(), // TODO: Get current remote ref value for CAS
+                new_sha1: commit_sha1,
                 force,
             }],
         };
@@ -405,14 +502,21 @@ impl RemoteHelper {
         match response {
             ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
                 success,
-                objects_imported: _,
-                objects_skipped: _,
+                objects_imported,
+                objects_skipped,
                 ref_results,
                 error,
             }) => {
                 if !success {
                     let msg = error.unwrap_or_else(|| "unknown error".to_string());
                     return writer.write_push_error(dst, &msg);
+                }
+
+                if self.options.verbosity > 0 {
+                    eprintln!(
+                        "git-remote-aspen: imported {} objects, skipped {}",
+                        objects_imported, objects_skipped
+                    );
                 }
 
                 // Report results for each ref
@@ -432,6 +536,176 @@ impl RemoteHelper {
                 writer.write_push_error(dst, "unexpected response")
             }
         }
+    }
+
+    /// Resolve a git ref to a SHA-1 hash.
+    fn resolve_ref(&self, git_dir: &std::path::Path, refspec: &str) -> io::Result<String> {
+        // First, check if it's already a full SHA-1
+        if refspec.len() == 40 && refspec.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Ok(refspec.to_string());
+        }
+
+        // Try to resolve as a ref file
+        let ref_paths = [
+            git_dir.join(refspec),
+            git_dir.join("refs/heads").join(refspec),
+            git_dir.join("refs/tags").join(refspec),
+        ];
+
+        for path in &ref_paths {
+            if path.exists() {
+                let content = std::fs::read_to_string(path)?;
+                let sha = content.trim();
+                // Handle symbolic refs
+                if sha.starts_with("ref: ") {
+                    return self.resolve_ref(git_dir, &sha[5..]);
+                }
+                return Ok(sha.to_string());
+            }
+        }
+
+        // Try packed-refs
+        let packed_refs = git_dir.join("packed-refs");
+        if packed_refs.exists() {
+            let content = std::fs::read_to_string(&packed_refs)?;
+            for line in content.lines() {
+                if line.starts_with('#') {
+                    continue;
+                }
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let sha = parts[0];
+                    let ref_name = parts[1];
+                    if ref_name.ends_with(refspec) || ref_name == refspec {
+                        return Ok(sha.to_string());
+                    }
+                }
+            }
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("ref not found: {}", refspec),
+        ))
+    }
+
+    /// Collect all objects reachable from a commit.
+    fn collect_objects(
+        &self,
+        objects_dir: &std::path::Path,
+        sha1: &str,
+        objects: &mut Vec<aspen::client_rpc::GitBridgeObject>,
+        visited: &mut std::collections::HashSet<String>,
+    ) -> io::Result<()> {
+        if visited.contains(sha1) {
+            return Ok(());
+        }
+        visited.insert(sha1.to_string());
+
+        // Read the object
+        let (object_type, data) = self.read_loose_object(objects_dir, sha1)?;
+
+        // Recursively collect referenced objects
+        match object_type.as_str() {
+            "commit" => {
+                // Parse commit to find tree and parents
+                if let Ok(content) = std::str::from_utf8(&data) {
+                    for line in content.lines() {
+                        if line.starts_with("tree ") {
+                            let tree_sha = &line[5..];
+                            self.collect_objects(objects_dir, tree_sha, objects, visited)?;
+                        } else if line.starts_with("parent ") {
+                            let parent_sha = &line[7..];
+                            self.collect_objects(objects_dir, parent_sha, objects, visited)?;
+                        } else if line.is_empty() {
+                            break; // End of headers
+                        }
+                    }
+                }
+            }
+            "tree" => {
+                // Parse tree entries
+                let mut pos = 0;
+                while pos < data.len() {
+                    // Find space after mode
+                    let space_pos = data[pos..].iter().position(|&b| b == b' ').map(|p| pos + p);
+                    let Some(space) = space_pos else { break };
+
+                    // Find null after filename
+                    let null_pos = data[space + 1..].iter().position(|&b| b == 0).map(|p| space + 1 + p);
+                    let Some(null) = null_pos else { break };
+
+                    // Extract the 20-byte SHA-1
+                    if null + 21 > data.len() {
+                        break;
+                    }
+                    let entry_sha = hex::encode(&data[null + 1..null + 21]);
+                    self.collect_objects(objects_dir, &entry_sha, objects, visited)?;
+                    pos = null + 21;
+                }
+            }
+            "tag" => {
+                // Parse tag to find object
+                if let Ok(content) = std::str::from_utf8(&data) {
+                    for line in content.lines() {
+                        if line.starts_with("object ") {
+                            let target_sha = &line[7..];
+                            self.collect_objects(objects_dir, target_sha, objects, visited)?;
+                            break;
+                        }
+                    }
+                }
+            }
+            "blob" => {
+                // Blobs don't reference other objects
+            }
+            _ => {}
+        }
+
+        // Add this object to the list
+        objects.push(aspen::client_rpc::GitBridgeObject {
+            sha1: sha1.to_string(),
+            object_type,
+            data,
+        });
+
+        Ok(())
+    }
+
+    /// Read a loose object from git's object store.
+    fn read_loose_object(
+        &self,
+        objects_dir: &std::path::Path,
+        sha1: &str,
+    ) -> io::Result<(String, Vec<u8>)> {
+        use flate2::read::ZlibDecoder;
+        use std::io::Read;
+
+        let path = objects_dir.join(&sha1[0..2]).join(&sha1[2..]);
+        let compressed = std::fs::read(&path)?;
+
+        // Decompress
+        let mut decoder = ZlibDecoder::new(&compressed[..]);
+        let mut decompressed = Vec::new();
+        decoder.read_to_end(&mut decompressed)?;
+
+        // Parse header: "{type} {size}\0{content}"
+        let null_pos = decompressed
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+
+        let header = std::str::from_utf8(&decompressed[..null_pos])
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+
+        let space_pos = header
+            .find(' ')
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+
+        let object_type = &header[..space_pos];
+        let data = decompressed[null_pos + 1..].to_vec();
+
+        Ok((object_type.to_string(), data))
     }
 
     /// Handle the "option" command.

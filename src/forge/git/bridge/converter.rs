@@ -300,22 +300,18 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let name = rest[..email_start].trim().to_string();
         let email = rest[email_start + 1..email_end].to_string();
 
-        // Parse timestamp after email
+        // Parse timestamp and timezone after email
         let after_email = rest[email_end + 1..].trim();
-        let timestamp_ms = if let Some(space_pos) = after_email.find(' ') {
+        let (timestamp_ms, timezone) = if let Some(space_pos) = after_email.find(' ') {
             let timestamp_secs: i64 = after_email[..space_pos].parse().unwrap_or(0);
-            (timestamp_secs * 1000) as u64
+            let tz = after_email[space_pos + 1..].to_string();
+            ((timestamp_secs * 1000) as u64, tz)
         } else {
             let timestamp_secs: i64 = after_email.parse().unwrap_or(0);
-            (timestamp_secs * 1000) as u64
+            ((timestamp_secs * 1000) as u64, "+0000".to_string())
         };
 
-        Ok(Author {
-            name,
-            email,
-            public_key: None,
-            timestamp_ms,
-        })
+        Ok(Author::with_timezone(name, email, timestamp_ms, timezone))
     }
 
     /// Import a git tag to Forge format.
@@ -518,9 +514,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             self.format_git_author(&commit.committer)
         ));
 
-        // Blank line + message
+        // Blank line + message + trailing newline
         content.push('\n');
         content.push_str(&commit.message);
+        // Git commit messages always end with a newline
+        if !commit.message.ends_with('\n') {
+            content.push('\n');
+        }
 
         let content_bytes = content.into_bytes();
         let sha1 = Self::compute_sha1("commit", &content_bytes);
@@ -565,6 +565,10 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         if let Some(msg) = &tag.message {
             content.push('\n');
             content.push_str(msg);
+            // Git tag messages always end with a newline
+            if !msg.ends_with('\n') {
+                content.push('\n');
+            }
         }
 
         let content_bytes = content.into_bytes();
@@ -575,7 +579,10 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Format an Author as a git author/committer string.
     fn format_git_author(&self, author: &Author) -> String {
         let timestamp_secs = author.timestamp_ms / 1000;
-        format!("{} <{}> {} +0000", author.name, author.email, timestamp_secs)
+        format!(
+            "{} <{}> {} {}",
+            author.name, author.email, timestamp_secs, author.timezone
+        )
     }
 
     // ========================================================================

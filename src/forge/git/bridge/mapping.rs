@@ -181,13 +181,17 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
         // Fetch from KV
         let key = Self::b3_to_sha1_key(repo_id, blake3);
         let request = ReadRequest::new(key);
-        let result = self
-            .kv
-            .read(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        let result = match self.kv.read(request).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(BridgeError::KvStorage {
+                    message: e.to_string(),
+                });
+            }
+        };
 
         match result.kv {
             Some(kv) => {
@@ -215,13 +219,17 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     ) -> BridgeResult<Option<(blake3::Hash, GitObjectType)>> {
         let key = Self::sha1_to_b3_key(repo_id, sha1);
         let request = ReadRequest::new(key);
-        let result = self
-            .kv
-            .read(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        let result = match self.kv.read(request).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(BridgeError::KvStorage {
+                    message: e.to_string(),
+                });
+            }
+        };
 
         match result.kv {
             Some(kv) => {
@@ -321,13 +329,17 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
         // Check KV
         let key = Self::b3_to_sha1_key(repo_id, blake3);
         let request = ReadRequest::new(key);
-        let result = self
-            .kv
-            .read(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        let result = match self.kv.read(request).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(false);
+            }
+            Err(e) => {
+                return Err(BridgeError::KvStorage {
+                    message: e.to_string(),
+                });
+            }
+        };
 
         Ok(result.kv.is_some())
     }
@@ -336,13 +348,17 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     pub async fn has_sha1(&self, repo_id: &RepoId, sha1: &Sha1Hash) -> BridgeResult<bool> {
         let key = Self::sha1_to_b3_key(repo_id, sha1);
         let request = ReadRequest::new(key);
-        let result = self
-            .kv
-            .read(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        let result = match self.kv.read(request).await {
+            Ok(r) => r,
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
+                return Ok(false);
+            }
+            Err(e) => {
+                return Err(BridgeError::KvStorage {
+                    message: e.to_string(),
+                });
+            }
+        };
 
         Ok(result.kv.is_some())
     }

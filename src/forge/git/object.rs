@@ -305,6 +305,7 @@ mod tests {
             email: "test@example.com".to_string(),
             public_key: None,
             timestamp_ms: 0,
+            timezone: "+0000".to_string(),
         };
 
         let commit = CommitObject::new(tree, vec![parent1, parent2], author, "Merge commit");

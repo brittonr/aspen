@@ -145,7 +145,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         commit_blake3: blake3::Hash,
         known_to_remote: &HashSet<Sha1Hash>,
     ) -> BridgeResult<ExportResult> {
-        let mut objects = Vec::new();
+        // Phase 1: Walk the DAG and collect all objects (without exporting)
+        let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> = Vec::new();
         let mut visited: HashSet<blake3::Hash> = HashSet::new();
         let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
         let mut skipped = 0;
@@ -158,9 +159,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 continue;
             }
 
-            if objects.len() >= MAX_PUSH_OBJECTS {
+            if to_export.len() >= MAX_PUSH_OBJECTS {
                 return Err(BridgeError::PushTooLarge {
-                    count: objects.len(),
+                    count: to_export.len(),
                     max: MAX_PUSH_OBJECTS,
                 });
             }
@@ -183,10 +184,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 }
             }
 
-            // Fetch and convert the object
-            let exported = self.export_object(repo_id, blake3).await?;
-
-            // Queue dependencies
+            // Fetch the object (but don't export yet)
             let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
             let bytes = self
                 .blobs
@@ -201,34 +199,37 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
             let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
 
+            // Queue dependencies for processing
             match &signed.payload {
                 GitObject::Commit(commit) => {
-                    // Queue tree and parents
                     queue.push_back(commit.tree());
                     for parent in commit.parents() {
                         queue.push_back(parent);
                     }
                 }
                 GitObject::Tree(tree) => {
-                    // Queue all entries
                     for entry in &tree.entries {
                         queue.push_back(entry.hash());
                     }
                 }
                 GitObject::Tag(tag) => {
-                    // Queue target
                     queue.push_back(tag.target());
                 }
-                GitObject::Blob(_) => {
-                    // No dependencies
-                }
+                GitObject::Blob(_) => {}
             }
 
-            objects.push(exported);
+            to_export.push((blake3, signed));
         }
 
-        // Reverse to get dependency order (dependencies first)
-        objects.reverse();
+        // Phase 2: Reverse to get dependency order (blobs first, then trees, then commits)
+        to_export.reverse();
+
+        // Phase 3: Export each object in dependency order
+        let mut objects = Vec::with_capacity(to_export.len());
+        for (blake3, _signed) in to_export {
+            let exported = self.export_object(repo_id, blake3).await?;
+            objects.push(exported);
+        }
 
         Ok(ExportResult {
             objects,
@@ -278,10 +279,13 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     /// List refs with their SHA-1 hashes.
     ///
     /// For the git remote helper's "list" command.
+    /// Exports the entire commit DAG on-demand to generate SHA-1 mappings if needed.
     pub async fn list_refs(
         &self,
         repo_id: &RepoId,
     ) -> BridgeResult<Vec<(String, Option<Sha1Hash>)>> {
+        use std::collections::HashSet;
+
         let forge_refs = self
             .refs
             .list(repo_id)
@@ -293,11 +297,39 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         let mut result = Vec::with_capacity(forge_refs.len());
 
         for (name, blake3) in forge_refs {
-            let sha1 = self
-                .mapping
-                .get_sha1(repo_id, &blake3)
-                .await?
-                .map(|(h, _)| h);
+            // Try to get existing mapping first
+            let sha1 = match self.mapping.get_sha1(repo_id, &blake3).await? {
+                Some((h, _)) => Some(h),
+                None => {
+                    // No mapping exists - export the entire commit DAG to create mappings
+                    // This walks the DAG in dependency order (blobs -> trees -> commits)
+                    match self
+                        .export_commit_dag(repo_id, blake3, &HashSet::new())
+                        .await
+                    {
+                        Ok(export_result) => {
+                            // Find the SHA-1 for the commit we just exported
+                            // After export_commit_dag, the commit is last (dependencies reversed)
+                            export_result
+                                .objects
+                                .iter()
+                                .rev()
+                                .find(|obj| matches!(obj.object_type, GitObjectType::Commit))
+                                .map(|obj| obj.sha1)
+                        }
+                        Err(e) => {
+                            // Log but don't fail - ref will be listed without SHA-1
+                            tracing::warn!(
+                                ref_name = %name,
+                                blake3 = %hex::encode(blake3.as_bytes()),
+                                error = %e,
+                                "failed to export DAG for ref"
+                            );
+                            None
+                        }
+                    }
+                }
+            };
             result.push((name, sha1));
         }
 
