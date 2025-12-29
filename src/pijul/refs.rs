@@ -26,6 +26,12 @@ pub struct ChannelUpdateEvent {
     pub new_head: ChangeHash,
     /// Previous head hash (if known).
     pub old_head: Option<ChangeHash>,
+    /// Merkle root after the update (if known).
+    ///
+    /// This is set when the update comes from applying a change through
+    /// the pristine. It may be zeroed if the update came from direct
+    /// ref manipulation without pristine involvement.
+    pub merkle: [u8; 32],
 }
 
 /// Storage for Pijul channel heads using Raft consensus.
@@ -148,11 +154,15 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
         debug!(repo_id = %repo_id, channel = channel, head = %head, "set channel head");
 
         // Emit event for gossip
+        // Note: merkle is zeroed here since RefStore doesn't have pristine access.
+        // Higher-level callers (like PijulStore) that have pristine access should
+        // use set_channel_with_merkle() instead.
         let _ = self.event_tx.send(ChannelUpdateEvent {
             repo_id: *repo_id,
             channel: channel.to_string(),
             new_head: head,
             old_head,
+            merkle: [0u8; 32],
         });
 
         Ok(())

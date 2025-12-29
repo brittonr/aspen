@@ -69,16 +69,19 @@ pub mod refs;
 pub mod store;
 pub mod types;
 
-// These modules will be implemented in subsequent phases
-// pub mod sync;
-// pub mod gossip;
+pub mod gossip;
+pub mod sync;
 
 // Re-export primary types
 pub use apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
 pub use change_store::AspenChangeStore;
 pub use constants::*;
 pub use error::{PijulError, PijulResult};
+pub use gossip::{
+    PijulAnnouncement, PijulAnnouncementHandler, PijulTopic, SignedPijulAnnouncement,
+};
 pub use output::{OutputResult, WorkingDirOutput};
+pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
 pub use record::{ChangeRecorder, RecordResult};
 pub use refs::{ChannelUpdateEvent, PijulRefStore};

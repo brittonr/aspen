@@ -103,6 +103,29 @@ pub const CHANGE_CACHE_SIZE: usize = 1_000;
 pub const PRISTINE_CACHE_SIZE: usize = 16;
 
 // ============================================================================
+// Gossip Configuration
+// ============================================================================
+
+/// Maximum number of repositories to subscribe to for gossip.
+///
+/// Tiger Style: Limits gossip connection overhead.
+pub const PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS: u32 = 100;
+
+/// Timeout for subscribing to a gossip topic.
+pub const PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Maximum retries for gossip stream errors.
+pub const PIJUL_GOSSIP_MAX_STREAM_RETRIES: u32 = 10;
+
+/// Backoff durations for gossip stream retries (in seconds).
+pub const PIJUL_GOSSIP_STREAM_BACKOFF_SECS: &[u64] = &[1, 2, 4, 8, 16];
+
+/// Maximum number of change hashes in a WantChanges or HaveChanges announcement.
+///
+/// Tiger Style: Limits announcement message size.
+pub const PIJUL_GOSSIP_MAX_CHANGE_HASHES: u32 = 100;
+
+// ============================================================================
 // Key Prefixes
 // ============================================================================
 

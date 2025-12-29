@@ -54,15 +54,15 @@ src/pijul/
 ├── apply.rs            # ChangeDirectory, ChangeApplicator
 ├── record.rs           # ChangeRecorder for creating new changes
 ├── output.rs           # WorkingDirOutput for outputting files from pristine
+├── gossip.rs           # PijulAnnouncement, PijulTopic, SignedPijulAnnouncement
+├── sync.rs             # PijulSyncService - P2P gossip sync
 ├── constants.rs        # Tiger Style resource limits
 ├── error.rs            # PijulError enum (snafu-based)
 ├── types.rs            # ChangeHash, Channel, PijulRepoIdentity, etc.
 ├── change_store.rs     # AspenChangeStore - iroh-blobs backed storage
 ├── refs.rs             # PijulRefStore - Raft KV backed channel heads
 ├── store.rs            # PijulStore - high-level coordinator
-├── pristine.rs         # PristineManager - sanakirja database wrapper
-├── sync.rs             # [Phase 4] P2P sync of changes
-└── gossip.rs           # [Phase 4] PijulAnnouncement types
+└── pristine.rs         # PristineManager - sanakirja database wrapper
 ```
 
 ## Key Types
@@ -295,10 +295,20 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] WorkingDirOutput - outputs files from pristine to working directory
 - [x] Unit tests (26 passing)
 
-### Phase 4 (Planned)
-- [ ] PijulSyncService (P2P sync)
-- [ ] PijulAnnouncement gossip types
+### Phase 4 (Complete)
+- [x] PijulAnnouncement gossip types (ChannelUpdate, ChangeAvailable, Seeding, etc.)
+- [x] PijulTopic for gossip topic management
+- [x] SignedPijulAnnouncement with Ed25519 verification
+- [x] PijulSyncService (P2P sync service)
+  - Global and per-repo gossip subscriptions
+  - Automatic announcement broadcasting on channel updates
+  - WantChanges/HaveChanges for change negotiation
+- [x] Unit tests (36 passing)
+
+### Phase 5 (Planned)
 - [ ] Integration tests with real Pijul changes
+- [ ] Change fetching via iroh-blobs in response to HaveChanges
+- [ ] Conflict resolution in concurrent updates
 
 ## Dependencies
 
