@@ -328,6 +328,11 @@ impl Patch {
             CobOperation::CreateIssue { .. } => {
                 // Ignore issue creation on patches
             }
+
+            // Merge operations are handled at the store level during resolution.
+            CobOperation::MergeHeads { .. } => {
+                // Merge commits don't directly modify patch state
+            }
         }
     }
 

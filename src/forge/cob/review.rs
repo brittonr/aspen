@@ -203,6 +203,14 @@ impl Review {
             | CobOperation::Unassign { .. } => {
                 // Ignore non-review operations
             }
+
+            // Merge operations are handled at the store level during resolution.
+            // By the time we apply changes, the merge has already been processed
+            // and the resolutions have been incorporated into the topological order.
+            CobOperation::MergeHeads { .. } => {
+                // Merge commits don't directly modify review state - they just
+                // serve to unify divergent heads in the DAG.
+            }
         }
     }
 

@@ -390,6 +390,209 @@ pub fn create_delete_entries(count: usize, start_index: u64) -> Vec<(String, u64
     (0..count).map(|i| (format!("key_{}", i), start_index + i as u64)).collect()
 }
 
+// ============================================================================
+// Forge COB Generators
+// ============================================================================
+
+use aspen::forge::{CobChange, CobOperation, CobType};
+
+/// Generator for COB types.
+pub fn arbitrary_cob_type() -> impl Strategy<Value = CobType> {
+    prop_oneof![
+        Just(CobType::Issue),
+        Just(CobType::Patch),
+        Just(CobType::Review),
+        Just(CobType::Discussion),
+    ]
+}
+
+/// Generator for issue titles.
+pub fn arbitrary_issue_title() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Short titles
+        "[A-Z][a-z]{2,20}",
+        // Multi-word titles
+        "[A-Z][a-z]{2,10} [a-z]{2,10}",
+        // With numbers
+        "[A-Z][a-z]{2,10} #[0-9]{1,4}",
+    ]
+}
+
+/// Generator for issue/patch bodies.
+pub fn arbitrary_cob_body() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Short body
+        "[A-Za-z0-9 ]{10,50}",
+        // Multi-line body
+        "[A-Za-z0-9 .!?]{50,200}",
+        // Empty (valid for some operations)
+        Just("".to_string()),
+    ]
+}
+
+/// Generator for labels.
+pub fn arbitrary_label() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("bug".to_string()),
+        Just("feature".to_string()),
+        Just("enhancement".to_string()),
+        Just("documentation".to_string()),
+        Just("urgent".to_string()),
+        Just("help-wanted".to_string()),
+        "[a-z]{3,15}",
+    ]
+}
+
+/// Generator for label lists.
+pub fn arbitrary_labels() -> impl Strategy<Value = Vec<String>> {
+    prop::collection::vec(arbitrary_label(), 0..5)
+}
+
+/// Generator for comment bodies.
+pub fn arbitrary_comment_body() -> impl Strategy<Value = String> {
+    "[A-Za-z0-9 .,!?]{5,200}"
+}
+
+/// Generator for issue operations (suitable for testing Issue COBs).
+pub fn arbitrary_issue_operation() -> impl Strategy<Value = CobOperation> {
+    prop_oneof![
+        // CreateIssue (only valid as root)
+        (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels()).prop_map(
+            |(title, body, labels)| CobOperation::CreateIssue { title, body, labels }
+        ),
+        // Comment
+        arbitrary_comment_body().prop_map(|body| CobOperation::Comment { body }),
+        // Label operations
+        arbitrary_label().prop_map(|label| CobOperation::AddLabel { label }),
+        arbitrary_label().prop_map(|label| CobOperation::RemoveLabel { label }),
+        // State transitions
+        prop::option::of("[A-Za-z ]{5,50}")
+            .prop_map(|reason| CobOperation::Close { reason }),
+        Just(CobOperation::Reopen),
+        // Title/Body edits
+        arbitrary_issue_title().prop_map(|title| CobOperation::EditTitle { title }),
+        arbitrary_cob_body().prop_map(|body| CobOperation::EditBody { body }),
+        // Reactions
+        prop_oneof![
+            Just("👍".to_string()),
+            Just("👎".to_string()),
+            Just("❤️".to_string()),
+            Just("🎉".to_string()),
+        ]
+        .prop_map(|emoji| CobOperation::React { emoji }),
+    ]
+}
+
+/// Generator for non-create issue operations (for child changes).
+pub fn arbitrary_issue_child_operation() -> impl Strategy<Value = CobOperation> {
+    prop_oneof![
+        // Comment
+        arbitrary_comment_body().prop_map(|body| CobOperation::Comment { body }),
+        // Label operations
+        arbitrary_label().prop_map(|label| CobOperation::AddLabel { label }),
+        arbitrary_label().prop_map(|label| CobOperation::RemoveLabel { label }),
+        // State transitions
+        prop::option::of("[A-Za-z ]{5,50}")
+            .prop_map(|reason| CobOperation::Close { reason }),
+        Just(CobOperation::Reopen),
+        // Title/Body edits
+        arbitrary_issue_title().prop_map(|title| CobOperation::EditTitle { title }),
+        arbitrary_cob_body().prop_map(|body| CobOperation::EditBody { body }),
+        // Reactions
+        prop_oneof![
+            Just("👍".to_string()),
+            Just("👎".to_string()),
+            Just("❤️".to_string()),
+            Just("🎉".to_string()),
+        ]
+        .prop_map(|emoji| CobOperation::React { emoji }),
+    ]
+}
+
+/// Generator for a blake3 hash (random 32 bytes).
+pub fn arbitrary_blake3_hash() -> impl Strategy<Value = blake3::Hash> {
+    prop::collection::vec(any::<u8>(), 32).prop_map(|bytes| {
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        blake3::Hash::from_bytes(arr)
+    })
+}
+
+/// Generator for a linear COB change DAG (chain of changes).
+///
+/// Returns (cob_id, changes in order from root to head).
+pub fn arbitrary_cob_linear_dag(
+    max_changes: usize,
+) -> impl Strategy<Value = (blake3::Hash, Vec<CobChange>)> {
+    (1usize..=max_changes).prop_flat_map(move |count| {
+        // Generate a cob_id
+        arbitrary_blake3_hash().prop_flat_map(move |cob_id| {
+            // Generate root operation
+            (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels())
+                .prop_flat_map(move |(title, body, labels)| {
+                    // Generate child operations
+                    prop::collection::vec(arbitrary_issue_child_operation(), count.saturating_sub(1))
+                        .prop_map(move |child_ops| {
+                            let mut changes = Vec::with_capacity(count);
+
+                            // Root change
+                            let root = CobChange::root(
+                                CobType::Issue,
+                                cob_id,
+                                CobOperation::CreateIssue {
+                                    title: title.clone(),
+                                    body: body.clone(),
+                                    labels: labels.clone(),
+                                },
+                            );
+                            changes.push(root);
+
+                            // Child changes (each references the previous)
+                            let mut parent_hash = compute_change_hash(&changes[0]);
+                            for op in child_ops {
+                                let change = CobChange::new(
+                                    CobType::Issue,
+                                    cob_id,
+                                    vec![parent_hash],
+                                    op,
+                                );
+                                parent_hash = compute_change_hash(&change);
+                                changes.push(change);
+                            }
+
+                            (cob_id, changes)
+                        })
+                })
+        })
+    })
+}
+
+/// Compute a deterministic hash for a CobChange (for test purposes).
+fn compute_change_hash(change: &CobChange) -> blake3::Hash {
+    let bytes = postcard::to_allocvec(change).expect("serialization should not fail");
+    blake3::hash(&bytes)
+}
+
+/// Topology types for COB DAG generation.
+#[derive(Debug, Clone)]
+pub enum CobDagTopology {
+    /// Linear chain of N changes
+    Linear(usize),
+    /// Diamond: root -> two branches -> merge
+    Diamond,
+    /// N independent branches from root (multi-head scenario)
+    MultiHead(usize),
+}
+
+/// Generator for COB DAG topologies.
+pub fn arbitrary_cob_dag_topology() -> impl Strategy<Value = CobDagTopology> {
+    prop_oneof![
+        (2usize..20).prop_map(CobDagTopology::Linear),
+        Just(CobDagTopology::Diamond),
+        (2usize..5).prop_map(CobDagTopology::MultiHead),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

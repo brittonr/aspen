@@ -1,6 +1,10 @@
 //! Object synchronization for Forge.
 //!
 //! This module handles fetching missing objects from peers.
+//!
+//! The sync service recursively traverses Git object DAGs and COB change DAGs,
+//! fetching any missing objects from peers. It uses BFS traversal with
+//! deduplication to efficiently sync entire object graphs.
 
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
@@ -9,7 +13,8 @@ use iroh::PublicKey;
 
 use crate::blob::BlobStore;
 use crate::forge::constants::MAX_FETCH_BATCH_SIZE;
-use crate::forge::error::ForgeResult;
+use crate::forge::error::{ForgeError, ForgeResult};
+use crate::forge::{CobChange, GitObject, SignedObject};
 
 /// Object synchronization service.
 ///
@@ -22,6 +27,72 @@ impl<B: BlobStore> SyncService<B> {
     /// Create a new sync service.
     pub fn new(blobs: Arc<B>) -> Self {
         Self { blobs }
+    }
+
+    /// Extract all object hashes referenced by a Git object.
+    ///
+    /// Returns hashes that should be traversed to fully sync the object graph:
+    /// - **Commits**: tree hash + parent commit hashes
+    /// - **Trees**: all entry hashes (blobs, subtrees, submodules)
+    /// - **Tags**: target object hash
+    /// - **Blobs**: empty (blobs have no references)
+    fn extract_git_references(object: &GitObject) -> Vec<blake3::Hash> {
+        match object {
+            GitObject::Commit(c) => {
+                let mut refs = Vec::with_capacity(1 + c.parents.len());
+                refs.push(c.tree());
+                refs.extend(c.parents());
+                refs
+            }
+            GitObject::Tree(t) => t.entries.iter().map(|e| e.hash()).collect(),
+            GitObject::Tag(t) => vec![t.target()],
+            GitObject::Blob(_) => vec![],
+        }
+    }
+
+    /// Parse a stored Git object and extract all referenced hashes.
+    ///
+    /// Retrieves the object bytes from storage, deserializes to SignedObject<GitObject>,
+    /// and extracts parent/child references for DAG traversal.
+    async fn parse_git_refs(&self, iroh_hash: &iroh_blobs::Hash) -> ForgeResult<Vec<blake3::Hash>> {
+        let bytes = self
+            .blobs
+            .get_bytes(iroh_hash)
+            .await
+            .map_err(|e| ForgeError::BlobStorage {
+                message: e.to_string(),
+            })?
+            .ok_or_else(|| ForgeError::ObjectNotFound {
+                hash: iroh_hash.to_hex().to_string(),
+            })?;
+
+        let signed: SignedObject<GitObject> =
+            SignedObject::from_bytes(&bytes).map_err(|_| ForgeError::InvalidObject {
+                message: "failed to deserialize git object".to_string(),
+            })?;
+
+        Ok(Self::extract_git_references(&signed.payload))
+    }
+
+    /// Parse a stored COB change and extract parent hashes.
+    async fn parse_cob_refs(&self, iroh_hash: &iroh_blobs::Hash) -> ForgeResult<Vec<blake3::Hash>> {
+        let bytes = self
+            .blobs
+            .get_bytes(iroh_hash)
+            .await
+            .map_err(|e| ForgeError::BlobStorage {
+                message: e.to_string(),
+            })?
+            .ok_or_else(|| ForgeError::ObjectNotFound {
+                hash: iroh_hash.to_hex().to_string(),
+            })?;
+
+        let signed: SignedObject<CobChange> =
+            SignedObject::from_bytes(&bytes).map_err(|_| ForgeError::InvalidObject {
+                message: "failed to deserialize COB change".to_string(),
+            })?;
+
+        Ok(signed.payload.parents())
     }
 
     /// Fetch all objects reachable from the given commits, trying peers if missing locally.
@@ -48,13 +119,28 @@ impl<B: BlobStore> SyncService<B> {
                 match self.blobs.has(&iroh_hash).await {
                     Ok(true) => {
                         result.already_present += 1;
-                        // TODO: Parse object and queue parents for deeper traversal
+                        // Parse object and queue parents for deeper traversal
+                        if let Ok(refs) = self.parse_git_refs(&iroh_hash).await {
+                            for ref_hash in refs {
+                                if !visited.contains(&ref_hash) {
+                                    queue.push_back(ref_hash);
+                                }
+                            }
+                        }
                     }
                     Ok(false) => {
                         // Try to fetch from peers
                         let fetched = self.try_fetch_from_peers(&iroh_hash, peers).await;
                         if fetched {
                             result.fetched += 1;
+                            // Parse newly fetched object and queue its references
+                            if let Ok(refs) = self.parse_git_refs(&iroh_hash).await {
+                                for ref_hash in refs {
+                                    if !visited.contains(&ref_hash) {
+                                        queue.push_back(ref_hash);
+                                    }
+                                }
+                            }
                         } else {
                             result.missing.push(hash);
                         }
@@ -116,6 +202,70 @@ impl<B: BlobStore> SyncService<B> {
         }
 
         Ok(missing)
+    }
+
+    /// Fetch all COB changes reachable from the given heads.
+    ///
+    /// Walks the COB change DAG (following parent references) and fetches
+    /// any missing changes from the provided peers.
+    ///
+    /// This is similar to `fetch_commits` but for COB change objects rather
+    /// than Git objects.
+    pub async fn fetch_cob_changes(
+        &self,
+        heads: Vec<blake3::Hash>,
+        peers: &[PublicKey],
+    ) -> ForgeResult<FetchResult> {
+        let mut result = FetchResult::default();
+        let mut queue = VecDeque::from(heads);
+        let mut visited = HashSet::new();
+
+        while let Some(hash) = queue.pop_front() {
+            if result.fetched + result.already_present >= MAX_FETCH_BATCH_SIZE {
+                result.truncated = true;
+                break;
+            }
+
+            if visited.insert(hash) {
+                let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
+
+                match self.blobs.has(&iroh_hash).await {
+                    Ok(true) => {
+                        result.already_present += 1;
+                        // Parse change and queue parent changes for traversal
+                        if let Ok(refs) = self.parse_cob_refs(&iroh_hash).await {
+                            for ref_hash in refs {
+                                if !visited.contains(&ref_hash) {
+                                    queue.push_back(ref_hash);
+                                }
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        // Try to fetch from peers
+                        let fetched = self.try_fetch_from_peers(&iroh_hash, peers).await;
+                        if fetched {
+                            result.fetched += 1;
+                            // Parse newly fetched change and queue its parents
+                            if let Ok(refs) = self.parse_cob_refs(&iroh_hash).await {
+                                for ref_hash in refs {
+                                    if !visited.contains(&ref_hash) {
+                                        queue.push_back(ref_hash);
+                                    }
+                                }
+                            }
+                        } else {
+                            result.missing.push(hash);
+                        }
+                    }
+                    Err(e) => {
+                        result.errors.push((hash, e.to_string()));
+                    }
+                }
+            }
+        }
+
+        Ok(result)
     }
 }
 

@@ -98,6 +98,59 @@ impl CobChange {
     }
 }
 
+/// Strategy for resolving merge conflicts.
+///
+/// When a COB has multiple heads (divergent histories), this determines
+/// how conflicting changes are resolved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MergeStrategy {
+    /// Automatic merge for non-conflicting changes.
+    ///
+    /// Used when changes don't conflict (e.g., adding different labels,
+    /// different users commenting). Collections are unioned, lists are
+    /// appended in causal order.
+    Auto,
+
+    /// Last-write-wins based on timestamp.
+    ///
+    /// For conflicting scalar fields, the change with the higher timestamp
+    /// wins. If timestamps are equal, the lexicographically lower hash wins.
+    LastWriteWins,
+
+    /// Explicit user-specified resolutions.
+    ///
+    /// The user explicitly chose which value to keep for each conflicting field.
+    Explicit,
+}
+
+/// Resolution for a specific field in a merge conflict.
+///
+/// When multiple heads have different values for a scalar field (title, body, state),
+/// this specifies which change's value should be used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldResolution {
+    /// The field being resolved (e.g., "title", "body", "state").
+    pub field: String,
+
+    /// Hash of the change whose value is selected.
+    pub selected: [u8; 32],
+}
+
+impl FieldResolution {
+    /// Create a new field resolution.
+    pub fn new(field: impl Into<String>, selected: blake3::Hash) -> Self {
+        Self {
+            field: field.into(),
+            selected: *selected.as_bytes(),
+        }
+    }
+
+    /// Get the selected change hash.
+    pub fn selected(&self) -> blake3::Hash {
+        blake3::Hash::from_bytes(self.selected)
+    }
+}
+
 /// An operation on a collaborative object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CobOperation {
@@ -192,6 +245,25 @@ pub enum CobOperation {
 
     /// Unassign a user.
     Unassign { assignee: [u8; 32] },
+
+    // ========================================================================
+    // Merge Operations
+    // ========================================================================
+    /// Merge multiple concurrent heads.
+    ///
+    /// This operation is used to resolve conflicts when a COB has divergent
+    /// histories. The change that contains this operation should have all
+    /// the conflicting heads as its parents.
+    ///
+    /// Git-like behavior:
+    /// - Non-conflicting changes are merged automatically (labels, reactions, comments)
+    /// - Conflicting scalar fields (title, body, state) require explicit resolution
+    MergeHeads {
+        /// Strategy used for resolving conflicts.
+        strategy: MergeStrategy,
+        /// Explicit resolutions for conflicting fields (when strategy is Explicit).
+        resolutions: Vec<FieldResolution>,
+    },
 }
 
 /// A review comment on a specific location in the code.

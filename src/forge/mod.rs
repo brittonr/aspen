@@ -84,7 +84,10 @@ mod node;
 pub mod sync;
 
 // Re-export primary types for convenient access
-pub use cob::{CobChange, CobOperation, CobStore, CobType, CobUpdateEvent};
+pub use cob::{
+    CobChange, CobOperation, CobStore, CobType, CobUpdateEvent, ConflictReport, ConflictingValue,
+    FieldConflict, FieldResolution, MergeStrategy,
+};
 pub use error::ForgeError;
 pub use git::{GitBlobStore, GitObject, TreeEntry};
 pub use gossip::{

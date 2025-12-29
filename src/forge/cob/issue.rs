@@ -183,6 +183,14 @@ impl Issue {
             | CobOperation::RequestChanges { .. } => {
                 // Ignore patch operations on issues
             }
+
+            // Merge operations are handled at the store level during resolution.
+            // By the time we apply changes, the merge has already been processed
+            // and the resolutions have been incorporated into the topological order.
+            CobOperation::MergeHeads { .. } => {
+                // Merge commits don't directly modify issue state - they just
+                // serve to unify divergent heads in the DAG.
+            }
         }
     }
 }
