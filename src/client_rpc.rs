@@ -1643,6 +1643,39 @@ pub enum ClientRpcRequest {
         /// Remote cluster public key (hex-encoded).
         remote_cluster: String,
     },
+
+    // =========================================================================
+    // Git Bridge operations (for git-remote-aspen)
+    // =========================================================================
+    /// List refs with their SHA-1 hashes (for git remote helper "list" command).
+    GitBridgeListRefs {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+    },
+
+    /// Fetch objects for a ref (for git remote helper "fetch" command).
+    ///
+    /// Returns git objects in dependency order that the client needs.
+    GitBridgeFetch {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// SHA-1 hashes the client wants to fetch.
+        want: Vec<String>,
+        /// SHA-1 hashes the client already has (for delta computation).
+        have: Vec<String>,
+    },
+
+    /// Push objects and update refs (for git remote helper "push" command).
+    ///
+    /// Accepts git objects in raw git format and imports them into Forge.
+    GitBridgePush {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// Git objects to import (SHA-1 hash, type, raw bytes).
+        objects: Vec<GitBridgeObject>,
+        /// Refs to update after import.
+        refs: Vec<GitBridgeRefUpdate>,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2029,6 +2062,18 @@ impl ClientRpcRequest {
             | Self::ListFederatedRepositories
             | Self::ForgeFetchFederated { .. } => Some(Operation::ClusterAdmin {
                 action: "federation".to_string(),
+            }),
+
+            // Git Bridge operations (repository-scoped)
+            Self::GitBridgeListRefs { repo_id } => Some(Operation::Read {
+                key: format!("forge/repos/{}/", repo_id),
+            }),
+            Self::GitBridgeFetch { repo_id, .. } => Some(Operation::Read {
+                key: format!("forge/repos/{}/", repo_id),
+            }),
+            Self::GitBridgePush { repo_id, .. } => Some(Operation::Write {
+                key: format!("forge/repos/{}/", repo_id),
+                value: Vec::new(), // Value not needed for auth check
             }),
 
             // Public requests (no auth required)
@@ -2546,6 +2591,18 @@ pub enum ClientRpcResponse {
 
     /// Forge fetch federated result.
     ForgeFetchResult(ForgeFetchFederatedResultResponse),
+
+    // =========================================================================
+    // Git Bridge responses (for git-remote-aspen)
+    // =========================================================================
+    /// Git bridge list refs result.
+    GitBridgeListRefs(GitBridgeListRefsResponse),
+
+    /// Git bridge fetch result.
+    GitBridgeFetch(GitBridgeFetchResponse),
+
+    /// Git bridge push result.
+    GitBridgePush(GitBridgePushResponse),
 }
 
 /// Health status response.
@@ -4708,5 +4765,94 @@ pub struct ForgeFetchFederatedResultResponse {
     /// Errors encountered during fetch.
     pub errors: Vec<String>,
     /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Git Bridge types (for git-remote-aspen)
+// =============================================================================
+
+/// Git object for import/export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeObject {
+    /// SHA-1 hash (hex-encoded, 40 characters).
+    pub sha1: String,
+    /// Object type: "blob", "tree", "commit", or "tag".
+    pub object_type: String,
+    /// Raw git object content (without header).
+    pub data: Vec<u8>,
+}
+
+/// Ref update for git push.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeRefUpdate {
+    /// Ref name (e.g., "refs/heads/main").
+    pub ref_name: String,
+    /// Old SHA-1 hash (for CAS), empty string if creating.
+    pub old_sha1: String,
+    /// New SHA-1 hash.
+    pub new_sha1: String,
+    /// Force update (bypass fast-forward check).
+    pub force: bool,
+}
+
+/// Ref info for git list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeRefInfo {
+    /// Ref name (e.g., "refs/heads/main").
+    pub ref_name: String,
+    /// SHA-1 hash (hex-encoded, 40 characters).
+    pub sha1: String,
+}
+
+/// Git bridge list refs response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeListRefsResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of refs with their SHA-1 hashes.
+    pub refs: Vec<GitBridgeRefInfo>,
+    /// HEAD symref target (e.g., "refs/heads/main"), if any.
+    pub head: Option<String>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Git bridge fetch response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeFetchResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Objects in dependency order (dependencies before dependents).
+    pub objects: Vec<GitBridgeObject>,
+    /// Number of objects skipped (already in have list).
+    pub skipped: usize,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Git bridge push response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgePushResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Number of objects imported.
+    pub objects_imported: usize,
+    /// Number of objects skipped (already existed).
+    pub objects_skipped: usize,
+    /// Results for each ref update.
+    pub ref_results: Vec<GitBridgeRefResult>,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Result of a single ref update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgeRefResult {
+    /// Ref name.
+    pub ref_name: String,
+    /// Whether the update succeeded.
+    pub success: bool,
+    /// Error message if update failed.
     pub error: Option<String>,
 }

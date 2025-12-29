@@ -8356,5 +8356,53 @@ async fn process_client_request(
                 error: Some("Federation not yet integrated with node runtime".to_string()),
             }))
         }
+
+        // =====================================================================
+        // Git Bridge operations (for git-remote-aspen)
+        // =====================================================================
+        ClientRpcRequest::GitBridgeListRefs { repo_id: _ } => {
+            use crate::client_rpc::GitBridgeListRefsResponse;
+
+            // TODO: Implement using GitExporter.list_refs()
+            Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
+                success: false,
+                refs: vec![],
+                head: None,
+                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::GitBridgeFetch {
+            repo_id: _,
+            want: _,
+            have: _,
+        } => {
+            use crate::client_rpc::GitBridgeFetchResponse;
+
+            // TODO: Implement using GitExporter.export_commit_dag()
+            Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                success: false,
+                objects: vec![],
+                skipped: 0,
+                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+            }))
+        }
+
+        ClientRpcRequest::GitBridgePush {
+            repo_id: _,
+            objects: _,
+            refs: _,
+        } => {
+            use crate::client_rpc::GitBridgePushResponse;
+
+            // TODO: Implement using GitImporter.import_ref()
+            Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                success: false,
+                objects_imported: 0,
+                objects_skipped: 0,
+                ref_results: vec![],
+                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+            }))
+        }
     }
 }
