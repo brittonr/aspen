@@ -8360,48 +8360,346 @@ async fn process_client_request(
         // =====================================================================
         // Git Bridge operations (for git-remote-aspen)
         // =====================================================================
+        #[cfg(feature = "git-bridge")]
+        ClientRpcRequest::GitBridgeListRefs { repo_id } => {
+            use crate::client_rpc::{GitBridgeListRefsResponse, GitBridgeRefInfo};
+            use crate::forge::git::bridge::{GitExporter, HashMappingStore};
+            use crate::forge::identity::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
+                    success: false,
+                    refs: vec![],
+                    head: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Parse repo ID
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
+                        success: false,
+                        refs: vec![],
+                        head: None,
+                        error: Some(format!("invalid repo_id: {e}")),
+                    }));
+                }
+            };
+
+            // Create git bridge components
+            let mapping = std::sync::Arc::new(HashMappingStore::new(forge.kv().clone()));
+            let refs = std::sync::Arc::new(forge.refs.clone());
+            let exporter = GitExporter::new(
+                mapping,
+                forge.git.blobs().clone(),
+                refs,
+                forge.secret_key().clone(),
+            );
+
+            // List refs
+            match exporter.list_refs(&repo_id).await {
+                Ok(ref_list) => {
+                    let refs: Vec<GitBridgeRefInfo> = ref_list
+                        .into_iter()
+                        .filter_map(|(name, sha1)| {
+                            sha1.map(|h| GitBridgeRefInfo {
+                                ref_name: name,
+                                sha1: h.to_hex(),
+                            })
+                        })
+                        .collect();
+
+                    // Get HEAD (default branch)
+                    let head = refs.iter().find(|r| r.ref_name == "heads/main" || r.ref_name == "heads/master")
+                        .map(|r| format!("refs/{}", r.ref_name));
+
+                    Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
+                        success: true,
+                        refs,
+                        head,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    warn!(error = %e, "git bridge list_refs failed");
+                    Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
+                        success: false,
+                        refs: vec![],
+                        head: None,
+                        error: Some(format!("{e}")),
+                    }))
+                }
+            }
+        }
+
+        #[cfg(not(feature = "git-bridge"))]
         ClientRpcRequest::GitBridgeListRefs { repo_id: _ } => {
             use crate::client_rpc::GitBridgeListRefsResponse;
-
-            // TODO: Implement using GitExporter.list_refs()
             Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
                 success: false,
                 refs: vec![],
                 head: None,
-                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+                error: Some("git-bridge feature not enabled".to_string()),
             }))
         }
 
+        #[cfg(feature = "git-bridge")]
+        ClientRpcRequest::GitBridgeFetch {
+            repo_id,
+            want,
+            have,
+        } => {
+            use crate::client_rpc::{GitBridgeFetchResponse, GitBridgeObject};
+            use crate::forge::git::bridge::{GitExporter, HashMappingStore, Sha1Hash};
+            use crate::forge::identity::RepoId;
+            use std::collections::HashSet;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                    success: false,
+                    objects: vec![],
+                    skipped: 0,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Parse repo ID
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                        success: false,
+                        objects: vec![],
+                        skipped: 0,
+                        error: Some(format!("invalid repo_id: {e}")),
+                    }));
+                }
+            };
+
+            // Parse "have" hashes
+            let known_hashes: HashSet<Sha1Hash> = have
+                .iter()
+                .filter_map(|h| Sha1Hash::from_hex(h).ok())
+                .collect();
+
+            // Create git bridge components
+            let mapping = std::sync::Arc::new(HashMappingStore::new(forge.kv().clone()));
+            let refs = std::sync::Arc::new(forge.refs.clone());
+            let exporter = GitExporter::new(
+                mapping.clone(),
+                forge.git.blobs().clone(),
+                refs,
+                forge.secret_key().clone(),
+            );
+
+            // For each "want" hash, we need to find the BLAKE3 equivalent and export
+            let mut all_objects = Vec::new();
+            let mut total_skipped = 0;
+
+            for want_sha1 in &want {
+                // Look up BLAKE3 hash from SHA-1
+                let sha1 = match Sha1Hash::from_hex(want_sha1) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        warn!(sha1 = %want_sha1, error = %e, "invalid SHA-1 in want list");
+                        continue;
+                    }
+                };
+
+                let blake3 = match mapping.get_blake3(&repo_id, &sha1).await {
+                    Ok(Some((h, _))) => h,
+                    Ok(None) => {
+                        warn!(sha1 = %want_sha1, "no BLAKE3 mapping found for SHA-1");
+                        continue;
+                    }
+                    Err(e) => {
+                        warn!(sha1 = %want_sha1, error = %e, "error looking up BLAKE3 mapping");
+                        continue;
+                    }
+                };
+
+                // Export the commit DAG
+                match exporter.export_commit_dag(&repo_id, blake3, &known_hashes).await {
+                    Ok(result) => {
+                        total_skipped += result.objects_skipped;
+                        for obj in result.objects {
+                            all_objects.push(GitBridgeObject {
+                                sha1: obj.sha1.to_hex(),
+                                object_type: obj.object_type.as_str().to_string(),
+                                data: obj.content,
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "git bridge export_commit_dag failed");
+                        return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                            success: false,
+                            objects: vec![],
+                            skipped: 0,
+                            error: Some(format!("{e}")),
+                        }));
+                    }
+                }
+            }
+
+            Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
+                success: true,
+                objects: all_objects,
+                skipped: total_skipped,
+                error: None,
+            }))
+        }
+
+        #[cfg(not(feature = "git-bridge"))]
         ClientRpcRequest::GitBridgeFetch {
             repo_id: _,
             want: _,
             have: _,
         } => {
             use crate::client_rpc::GitBridgeFetchResponse;
-
-            // TODO: Implement using GitExporter.export_commit_dag()
             Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
                 success: false,
                 objects: vec![],
                 skipped: 0,
-                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+                error: Some("git-bridge feature not enabled".to_string()),
             }))
         }
 
+        #[cfg(feature = "git-bridge")]
+        ClientRpcRequest::GitBridgePush {
+            repo_id,
+            objects,
+            refs,
+        } => {
+            use crate::client_rpc::{GitBridgePushResponse, GitBridgeRefResult};
+            use crate::forge::git::bridge::{GitImporter, HashMappingStore, Sha1Hash};
+            use crate::forge::identity::RepoId;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                    success: false,
+                    objects_imported: 0,
+                    objects_skipped: 0,
+                    ref_results: vec![],
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // Parse repo ID
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                        success: false,
+                        objects_imported: 0,
+                        objects_skipped: 0,
+                        ref_results: vec![],
+                        error: Some(format!("invalid repo_id: {e}")),
+                    }));
+                }
+            };
+
+            // Create git bridge components
+            let mapping = std::sync::Arc::new(HashMappingStore::new(forge.kv().clone()));
+            let refs_store = std::sync::Arc::new(forge.refs.clone());
+            let importer = GitImporter::new(
+                mapping,
+                forge.git.blobs().clone(),
+                refs_store,
+                forge.secret_key().clone(),
+            );
+
+            // Import objects
+            let mut imported = 0;
+            let mut skipped = 0;
+
+            for obj in &objects {
+                let sha1 = match Sha1Hash::from_hex(&obj.sha1) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        warn!(sha1 = %obj.sha1, error = %e, "invalid SHA-1");
+                        continue;
+                    }
+                };
+
+                match importer.import_object_raw(&repo_id, sha1, &obj.object_type, &obj.data).await {
+                    Ok(result) => {
+                        if result.already_existed {
+                            skipped += 1;
+                        } else {
+                            imported += 1;
+                        }
+                    }
+                    Err(e) => {
+                        warn!(sha1 = %obj.sha1, error = %e, "failed to import object");
+                        return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                            success: false,
+                            objects_imported: imported,
+                            objects_skipped: skipped,
+                            ref_results: vec![],
+                            error: Some(format!("import failed: {e}")),
+                        }));
+                    }
+                }
+            }
+
+            // Update refs
+            let mut ref_results = Vec::new();
+            for ref_update in &refs {
+                let new_sha1 = match Sha1Hash::from_hex(&ref_update.new_sha1) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        ref_results.push(GitBridgeRefResult {
+                            ref_name: ref_update.ref_name.clone(),
+                            success: false,
+                            error: Some(format!("invalid SHA-1: {e}")),
+                        });
+                        continue;
+                    }
+                };
+
+                match importer.update_ref(&repo_id, &ref_update.ref_name, new_sha1).await {
+                    Ok(_) => {
+                        ref_results.push(GitBridgeRefResult {
+                            ref_name: ref_update.ref_name.clone(),
+                            success: true,
+                            error: None,
+                        });
+                    }
+                    Err(e) => {
+                        ref_results.push(GitBridgeRefResult {
+                            ref_name: ref_update.ref_name.clone(),
+                            success: false,
+                            error: Some(format!("{e}")),
+                        });
+                    }
+                }
+            }
+
+            Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                success: true,
+                objects_imported: imported,
+                objects_skipped: skipped,
+                ref_results,
+                error: None,
+            }))
+        }
+
+        #[cfg(not(feature = "git-bridge"))]
         ClientRpcRequest::GitBridgePush {
             repo_id: _,
             objects: _,
             refs: _,
         } => {
             use crate::client_rpc::GitBridgePushResponse;
-
-            // TODO: Implement using GitImporter.import_ref()
             Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
                 success: false,
                 objects_imported: 0,
                 objects_skipped: 0,
                 ref_results: vec![],
-                error: Some("Git bridge not yet integrated with node runtime".to_string()),
+                error: Some("git-bridge feature not enabled".to_string()),
             }))
         }
     }

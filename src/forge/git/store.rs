@@ -52,6 +52,13 @@ impl<B: BlobStore> GitBlobStore<B> {
         self.secret_key.public()
     }
 
+    /// Get a reference to the underlying blob store.
+    ///
+    /// Used for creating git bridge components.
+    pub fn blobs(&self) -> &Arc<B> {
+        &self.blobs
+    }
+
     // ========================================================================
     // Blob Operations
     // ========================================================================

@@ -212,6 +212,87 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             .await?
             .map(|(h, _)| h))
     }
+
+    /// Import a single object from raw content (without git header).
+    ///
+    /// This is a convenience method for the RPC handler where objects arrive
+    /// with separate type and content fields.
+    ///
+    /// Returns the BLAKE3 hash and whether the object already existed.
+    pub async fn import_object_raw(
+        &self,
+        repo_id: &RepoId,
+        sha1: Sha1Hash,
+        object_type: &str,
+        content: &[u8],
+    ) -> BridgeResult<SingleImportResult> {
+        // Check if already imported
+        if self.mapping.has_sha1(repo_id, &sha1).await? {
+            let (blake3, _) = self
+                .mapping
+                .get_blake3(repo_id, &sha1)
+                .await?
+                .ok_or_else(|| BridgeError::MappingNotFound {
+                    hash: sha1.to_hex(),
+                })?;
+            return Ok(SingleImportResult {
+                blake3,
+                already_existed: true,
+            });
+        }
+
+        // Build full git object bytes
+        let header = format!("{} {}\0", object_type, content.len());
+        let mut git_bytes = Vec::with_capacity(header.len() + content.len());
+        git_bytes.extend_from_slice(header.as_bytes());
+        git_bytes.extend_from_slice(content);
+
+        // Import
+        let blake3 = self.import_object(repo_id, &git_bytes).await?;
+
+        Ok(SingleImportResult {
+            blake3,
+            already_existed: false,
+        })
+    }
+
+    /// Update a ref to point to a new SHA-1 hash.
+    ///
+    /// The SHA-1 must already have a BLAKE3 mapping (i.e., the object must be imported).
+    pub async fn update_ref(
+        &self,
+        repo_id: &RepoId,
+        ref_name: &str,
+        sha1: Sha1Hash,
+    ) -> BridgeResult<blake3::Hash> {
+        // Get the BLAKE3 hash for the SHA-1
+        let (blake3, _) = self
+            .mapping
+            .get_blake3(repo_id, &sha1)
+            .await?
+            .ok_or_else(|| BridgeError::MappingNotFound {
+                hash: sha1.to_hex(),
+            })?;
+
+        // Update the ref
+        self.refs
+            .set(repo_id, ref_name, blake3)
+            .await
+            .map_err(|e| BridgeError::KvStorage {
+                message: e.to_string(),
+            })?;
+
+        Ok(blake3)
+    }
+}
+
+/// Result of importing a single object.
+#[derive(Debug)]
+pub struct SingleImportResult {
+    /// BLAKE3 hash of the imported object.
+    pub blake3: blake3::Hash,
+    /// Whether the object already existed (skipped).
+    pub already_existed: bool,
 }
 
 #[cfg(test)]

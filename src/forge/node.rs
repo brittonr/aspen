@@ -171,6 +171,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         &self.secret_key
     }
 
+    /// Get a reference to the KV store.
+    ///
+    /// Used for creating git bridge components (HashMappingStore).
+    pub fn kv(&self) -> &Arc<K> {
+        &self.kv
+    }
+
     // ========================================================================
     // Repository Management
     // ========================================================================

@@ -46,6 +46,15 @@ pub struct RefStore<K: KeyValueStore + ?Sized> {
     event_tx: broadcast::Sender<RefUpdateEvent>,
 }
 
+impl<K: KeyValueStore + ?Sized> Clone for RefStore<K> {
+    fn clone(&self) -> Self {
+        Self {
+            kv: Arc::clone(&self.kv),
+            event_tx: self.event_tx.clone(),
+        }
+    }
+}
+
 impl<K: KeyValueStore + ?Sized> RefStore<K> {
     /// Create a new ref store.
     pub fn new(kv: Arc<K>) -> Self {

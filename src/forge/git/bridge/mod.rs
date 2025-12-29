@@ -76,7 +76,7 @@ pub mod topological;
 pub use converter::GitObjectConverter;
 pub use error::{BridgeError, BridgeResult};
 pub use exporter::{ExportResult, ExportedObject, GitExporter};
-pub use importer::{GitImporter, ImportResult};
+pub use importer::{GitImporter, ImportResult, SingleImportResult};
 pub use mapping::{GitObjectType, HashMapping, HashMappingStore};
 pub use sha1::Sha1Hash;
 pub use topological::{
