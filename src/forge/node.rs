@@ -157,6 +157,20 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         self.secret_key.public()
     }
 
+    /// Get the secret key of this node.
+    ///
+    /// # Security
+    ///
+    /// This method exposes the node's signing key. Only use for:
+    /// - Exporting keys for offline signing
+    /// - Migration between nodes
+    /// - Backup purposes
+    ///
+    /// Never expose this key over the network or store it unencrypted.
+    pub fn secret_key(&self) -> &iroh::SecretKey {
+        &self.secret_key
+    }
+
     // ========================================================================
     // Repository Management
     // ========================================================================

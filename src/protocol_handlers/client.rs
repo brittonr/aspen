@@ -8191,6 +8191,33 @@ async fn process_client_request(
             }
         }
 
+        ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {
+            use crate::client_rpc::ForgeKeyResultResponse;
+
+            let Some(ref forge) = ctx.forge_node else {
+                return Ok(ClientRpcResponse::ForgeKeyResult(ForgeKeyResultResponse {
+                    success: false,
+                    public_key: None,
+                    secret_key: None,
+                    error: Some("Forge not enabled on this node".to_string()),
+                }));
+            };
+
+            // For now, we return the node's delegate key
+            // In the future, this could be repository-specific
+            let _ = repo_id; // TODO: Validate repo exists and user is authorized
+
+            let secret_key = forge.secret_key();
+            let public_key = secret_key.public();
+
+            Ok(ClientRpcResponse::ForgeKeyResult(ForgeKeyResultResponse {
+                success: true,
+                public_key: Some(public_key.to_string()),
+                secret_key: Some(hex::encode(secret_key.to_bytes())),
+                error: None,
+            }))
+        }
+
         // Fallback for Forge operations when feature is disabled
         #[cfg(not(feature = "forge"))]
         ClientRpcRequest::ForgeCreateRepo { .. }
@@ -8221,7 +8248,8 @@ async fn process_client_request(
         | ClientRpcRequest::ForgeUpdatePatch { .. }
         | ClientRpcRequest::ForgeApprovePatch { .. }
         | ClientRpcRequest::ForgeMergePatch { .. }
-        | ClientRpcRequest::ForgeClosePatch { .. } => {
+        | ClientRpcRequest::ForgeClosePatch { .. }
+        | ClientRpcRequest::ForgeGetDelegateKey { .. } => {
             use crate::client_rpc::ForgeOperationResultResponse;
             Ok(ClientRpcResponse::ForgeOperationResult(
                 ForgeOperationResultResponse {

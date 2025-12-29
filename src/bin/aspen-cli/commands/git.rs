@@ -51,6 +51,21 @@ pub enum GitCommand {
     /// Get a blob by hash.
     GetBlob(GetBlobArgs),
 
+    /// Create a tree object from entries.
+    ///
+    /// Trees link file names to blob hashes. Use this to build
+    /// the directory structure for a commit.
+    CreateTree(CreateTreeArgs),
+
+    /// Get a tree by hash.
+    GetTree(GetTreeArgs),
+
+    /// Export the delegate key for signing canonical refs.
+    ///
+    /// The delegate key is used to sign updates to canonical refs
+    /// like heads/main and tags/*.
+    ExportKey(ExportKeyArgs),
+
     /// Enable federation for a repository.
     ///
     /// Allows the repository to be discovered and synced by other clusters.
@@ -197,6 +212,41 @@ pub struct GetBlobArgs {
 }
 
 #[derive(Args)]
+pub struct CreateTreeArgs {
+    /// Repository ID.
+    #[arg(short, long)]
+    pub repo: String,
+
+    /// Tree entries in format "mode:name:hash" (e.g., "100644:README.md:abc123...").
+    ///
+    /// Mode values:
+    /// - 100644: Regular file
+    /// - 100755: Executable file
+    /// - 040000: Subdirectory (tree)
+    /// - 120000: Symbolic link
+    #[arg(short, long = "entry", required = true)]
+    pub entries: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct GetTreeArgs {
+    /// Tree hash (hex-encoded BLAKE3).
+    pub hash: String,
+}
+
+#[derive(Args)]
+pub struct ExportKeyArgs {
+    /// Repository ID to get the delegate key for.
+    #[arg(short, long)]
+    pub repo: String,
+
+    /// Output file for the secret key (default: stdout).
+    /// WARNING: This outputs the secret key in hex format.
+    #[arg(short, long)]
+    pub output: Option<std::path::PathBuf>,
+}
+
+#[derive(Args)]
 pub struct FederateArgs {
     /// Repository ID (hex-encoded).
     #[arg(short, long)]
@@ -242,6 +292,9 @@ impl GitCommand {
             GitCommand::GetRef(args) => git_get_ref(client, args, json).await,
             GitCommand::StoreBlob(args) => git_store_blob(client, args, json).await,
             GitCommand::GetBlob(args) => git_get_blob(client, args, json).await,
+            GitCommand::CreateTree(args) => git_create_tree(client, args, json).await,
+            GitCommand::GetTree(args) => git_get_tree(client, args, json).await,
+            GitCommand::ExportKey(args) => git_export_key(client, args, json).await,
             GitCommand::Federate(args) => git_federate(client, args, json).await,
             GitCommand::ListFederated(args) => git_list_federated(client, args, json).await,
             GitCommand::FetchRemote(args) => git_fetch_remote(client, args, json).await,
@@ -427,18 +480,36 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
         _ => anyhow::bail!("unexpected response type"),
     };
 
-    // Step 4: Collect all tree hashes we need to fetch
-    let mut tree_hashes: HashSet<String> = HashSet::new();
-    for commit in &commits {
-        tree_hashes.insert(commit.tree.clone());
-    }
+    // Step 4: Get the HEAD commit's tree to extract working directory
+    let head_tree_hash = if let Some(head_commit) = commits.first() {
+        head_commit.tree.clone()
+    } else {
+        String::new()
+    };
 
-    // Step 5: Fetch trees and collect blob hashes
+    // Step 5: Fetch trees and collect blob entries with their paths
+    // We store (hash, mode, path) for the HEAD tree to extract to working dir
+    struct FileEntry {
+        hash: String,
+        #[allow(dead_code)]
+        name: String, // Keep for potential future use (e.g., symlink targets)
+        mode: u32,
+        path: std::path::PathBuf,
+    }
+    let mut file_entries: Vec<FileEntry> = Vec::new();
     let mut blob_hashes: HashSet<String> = HashSet::new();
-    for tree_hash in &tree_hashes {
+
+    // Helper function to recursively fetch tree entries
+    async fn fetch_tree_entries(
+        client: &AspenClient,
+        tree_hash: &str,
+        base_path: &std::path::Path,
+        file_entries: &mut Vec<FileEntry>,
+        blob_hashes: &mut HashSet<String>,
+    ) -> Result<()> {
         let tree_response = client
             .send(ClientRpcRequest::ForgeGetTree {
-                hash: tree_hash.clone(),
+                hash: tree_hash.to_string(),
             })
             .await?;
 
@@ -446,20 +517,51 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
             if result.success {
                 if let Some(entries) = result.entries {
                     for entry in entries {
+                        let entry_path = base_path.join(&entry.name);
                         // Mode >= 0o100000 = blob (file), < 0o100000 = tree (directory)
                         // 0o100644 = regular file, 0o100755 = executable, 0o040000 = tree
                         if entry.mode >= 0o100000 {
-                            blob_hashes.insert(entry.hash);
+                            blob_hashes.insert(entry.hash.clone());
+                            file_entries.push(FileEntry {
+                                hash: entry.hash,
+                                name: entry.name,
+                                mode: entry.mode,
+                                path: entry_path,
+                            });
+                        } else if entry.mode == 0o040000 {
+                            // Recursively fetch subtree
+                            Box::pin(fetch_tree_entries(
+                                client,
+                                &entry.hash,
+                                &entry_path,
+                                file_entries,
+                                blob_hashes,
+                            ))
+                            .await?;
                         }
-                        // Note: For simplicity, we don't recursively fetch subtrees
                     }
                 }
             }
         }
+        Ok(())
     }
 
-    // Step 6: Fetch blobs and write to objects directory
+    // Fetch the HEAD tree entries for working directory extraction
+    if !head_tree_hash.is_empty() {
+        fetch_tree_entries(
+            client,
+            &head_tree_hash,
+            std::path::Path::new(""),
+            &mut file_entries,
+            &mut blob_hashes,
+        )
+        .await?;
+    }
+
+    // Step 7: Fetch blobs and write to both objects directory and working directory
     let objects_dir = target_dir.join(".aspen/objects");
+    let mut blob_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+
     for blob_hash in &blob_hashes {
         let blob_response = client
             .send(ClientRpcRequest::ForgeGetBlob {
@@ -474,10 +576,37 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
                     let blob_path = objects_dir.join(&blob_hash[..2]).join(&blob_hash[2..]);
                     fs::create_dir_all(blob_path.parent().unwrap())?;
                     fs::write(&blob_path, &content)?;
+
+                    // Store content for working directory extraction
+                    blob_contents.insert(blob_hash.clone(), content);
                 }
             }
         }
     }
+
+    // Step 8: Extract files to working directory
+    let mut files_extracted = 0;
+    for entry in &file_entries {
+        if let Some(content) = blob_contents.get(&entry.hash) {
+            let file_path = target_dir.join(&entry.path);
+            if let Some(parent) = file_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&file_path, content)?;
+
+            // Set executable permission if mode indicates executable
+            #[cfg(unix)]
+            if entry.mode == 0o100755 {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&file_path)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&file_path, perms)?;
+            }
+
+            files_extracted += 1;
+        }
+    }
+    let _ = files_extracted; // Silence unused warning on non-unix
 
     // Step 7: Write commits manifest
     let commits_manifest: Vec<serde_json::Value> = commits
@@ -523,14 +652,15 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
             "head": head_hash,
             "commits": commits.len(),
             "blobs": blob_hashes.len(),
+            "files": file_entries.len(),
         });
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         println!("Cloned '{}' to '{}'", repo_info.name, target_dir.display());
-        println!("  Branch: {}", branch_name);
-        println!("  HEAD:   {}", &head_hash[..16]);
+        println!("  Branch:  {}", branch_name);
+        println!("  HEAD:    {}", &head_hash[..16]);
         println!("  Commits: {}", commits.len());
-        println!("  Blobs:   {}", blob_hashes.len());
+        println!("  Files:   {}", file_entries.len());
     }
 
     Ok(())
@@ -830,6 +960,7 @@ async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, json: bool) -
 }
 
 async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Result<()> {
+    let hash = args.hash.clone();
     let response = client
         .send(ClientRpcRequest::ForgeGetBlob { hash: args.hash })
         .await?;
@@ -841,24 +972,177 @@ async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Re
                     if let Some(ref path) = args.output {
                         std::fs::write(path, &content).map_err(|e| anyhow::anyhow!("failed to write file: {}", e))?;
                         if !json {
-                            println!("Written {} bytes to {:?}", content.len(), path);
+                            println!("Wrote {} bytes to {}", content.len(), path.display());
+                        } else {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "success": true,
+                                    "hash": hash,
+                                    "size": content.len(),
+                                    "path": path.display().to_string()
+                                })
+                            );
                         }
                     } else if json {
                         println!(
                             "{}",
                             serde_json::json!({
-                                "hash": result.hash,
-                                "size": result.size,
+                                "success": true,
+                                "hash": hash,
+                                "size": content.len(),
                                 "content_base64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &content)
                             })
                         );
                     } else {
-                        // Write raw bytes to stdout
-                        use std::io::Write;
-                        std::io::stdout().write_all(&content)?;
+                        // Display content nicely like blob get does
+                        match String::from_utf8(content.clone()) {
+                            Ok(s) => print!("{}", s),
+                            Err(_) => println!("<binary: {} bytes>", content.len()),
+                        }
                     }
-                } else if !json {
-                    println!("Blob not found");
+                    Ok(())
+                } else {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "success": false,
+                                "hash": hash,
+                                "error": "blob not found"
+                            })
+                        );
+                    } else {
+                        eprintln!("Blob not found: {}", hash);
+                    }
+                    std::process::exit(1);
+                }
+            } else {
+                let error = result.error.unwrap_or_else(|| "unknown error".to_string());
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "success": false,
+                            "hash": hash,
+                            "error": error
+                        })
+                    );
+                }
+                anyhow::bail!("{}", error)
+            }
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+// ============================================================================
+// Tree Commands
+// ============================================================================
+
+async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, json: bool) -> Result<()> {
+    // Parse entries from "mode:name:hash" format
+    let mut entries = Vec::new();
+    for entry_str in &args.entries {
+        let parts: Vec<&str> = entry_str.splitn(3, ':').collect();
+        if parts.len() != 3 {
+            anyhow::bail!(
+                "invalid entry format: '{}'. Expected 'mode:name:hash' (e.g., '100644:README.md:abc123...')",
+                entry_str
+            );
+        }
+
+        let mode: u32 = parts[0].parse().map_err(|_| {
+            anyhow::anyhow!(
+                "invalid mode '{}'. Expected octal number like 100644, 100755, or 040000",
+                parts[0]
+            )
+        })?;
+        let name = parts[1].to_string();
+        let hash = parts[2].to_string();
+
+        // Validate hash is 64 hex chars
+        if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+            anyhow::bail!("invalid hash '{}': must be 64 hex characters", hash);
+        }
+
+        entries.push(serde_json::json!({
+            "mode": mode,
+            "name": name,
+            "hash": hash
+        }));
+    }
+
+    let entries_json = serde_json::to_string(&entries)?;
+
+    let response = client
+        .send(ClientRpcRequest::ForgeCreateTree {
+            repo_id: args.repo,
+            entries_json,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeTreeResult(result) => {
+            if result.success {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "success": true,
+                            "hash": result.hash,
+                            "entries": result.entries.as_ref().map(|e| e.len()).unwrap_or(0)
+                        })
+                    );
+                } else if let Some(hash) = result.hash {
+                    println!("{}", hash);
+                }
+                Ok(())
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_get_tree(client: &AspenClient, args: GetTreeArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetTree { hash: args.hash.clone() })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeTreeResult(result) => {
+            if result.success {
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "success": true,
+                            "hash": args.hash,
+                            "entries": result.entries
+                        })
+                    );
+                } else if let Some(entries) = result.entries {
+                    if entries.is_empty() {
+                        println!("(empty tree)");
+                    } else {
+                        println!("{:<8} {:<40} {}", "MODE", "NAME", "HASH");
+                        println!("{}", "-".repeat(80));
+                        for entry in entries {
+                            println!("{:0>6o}   {:<40} {}", entry.mode, entry.name, entry.hash);
+                        }
+                    }
+                } else {
+                    println!("Tree not found: {}", args.hash);
                 }
                 Ok(())
             } else {
@@ -867,6 +1151,66 @@ async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Re
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+// ============================================================================
+// Key Management Commands
+// ============================================================================
+
+async fn git_export_key(client: &AspenClient, args: ExportKeyArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetDelegateKey {
+            repo_id: args.repo.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeKeyResult(result) => {
+            if result.success {
+                if let Some(ref secret_key) = result.secret_key {
+                    if let Some(ref path) = args.output {
+                        std::fs::write(path, format!("{}\n", secret_key))
+                            .map_err(|e| anyhow::anyhow!("failed to write key file: {}", e))?;
+                        if !json {
+                            println!("Delegate key written to {}", path.display());
+                            println!("Public key: {}", result.public_key.as_deref().unwrap_or("unknown"));
+                        } else {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "success": true,
+                                    "public_key": result.public_key,
+                                    "path": path.display().to_string()
+                                })
+                            );
+                        }
+                    } else if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "success": true,
+                                "public_key": result.public_key,
+                                "secret_key": secret_key
+                            })
+                        );
+                    } else {
+                        // Print key to stdout
+                        println!("# Delegate key for repository {}", args.repo);
+                        println!("# Public key: {}", result.public_key.as_deref().unwrap_or("unknown"));
+                        println!("# WARNING: Keep this secret key secure!");
+                        println!("{}", secret_key);
+                    }
+                    Ok(())
+                } else {
+                    anyhow::bail!("delegate key not available for this repository")
+                }
+            } else {
+                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+            }
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),

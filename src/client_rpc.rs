@@ -1589,6 +1589,15 @@ pub enum ClientRpcRequest {
         reason: Option<String>,
     },
 
+    /// Get the delegate key for a repository.
+    ///
+    /// Returns the secret key used for signing canonical ref updates.
+    /// Only available to authorized users on the local node.
+    ForgeGetDelegateKey {
+        /// Repository ID.
+        repo_id: String,
+    },
+
     // =========================================================================
     // Federation operations - Cross-cluster discovery and sync
     // =========================================================================
@@ -1999,6 +2008,11 @@ impl ClientRpcRequest {
             | Self::ForgeMergePatch { repo_id, .. }
             | Self::ForgeClosePatch { repo_id, .. } => Some(Operation::Write {
                 key: format!("forge:cob:patch:{repo_id}"),
+                value: vec![],
+            }),
+            // Getting delegate key requires admin access (treated as write to prevent unauthorized access)
+            Self::ForgeGetDelegateKey { repo_id } => Some(Operation::Write {
+                key: format!("forge:admin:{repo_id}"),
                 value: vec![],
             }),
             Self::ForgeListPatches { repo_id, .. } | Self::ForgeGetPatch { repo_id, .. } => Some(Operation::Read {
@@ -2502,6 +2516,9 @@ pub enum ClientRpcResponse {
 
     /// Generic forge operation success/error.
     ForgeOperationResult(ForgeOperationResultResponse),
+
+    /// Delegate key result.
+    ForgeKeyResult(ForgeKeyResultResponse),
 
     // =========================================================================
     // Federation operation responses
@@ -4539,6 +4556,19 @@ pub struct ForgePatchListResultResponse {
 pub struct ForgeOperationResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Delegate key result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeKeyResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Public key (hex-encoded).
+    pub public_key: Option<String>,
+    /// Secret key (hex-encoded). Only returned for authorized local requests.
+    pub secret_key: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
