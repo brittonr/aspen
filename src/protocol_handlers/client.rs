@@ -9096,25 +9096,100 @@ async fn process_client_request(
         }
 
         #[cfg(feature = "pijul")]
-        ClientRpcRequest::PijulApply { .. } => {
-            use crate::client_rpc::ErrorResponse;
+        ClientRpcRequest::PijulApply { repo_id, channel, change_hash } => {
+            use crate::client_rpc::{ErrorResponse, PijulApplyResponse};
+            use crate::forge::identity::RepoId;
+            use crate::pijul::types::ChangeHash;
 
-            // Applying changes requires pristine access - complex to implement
-            Ok(ClientRpcResponse::Error(ErrorResponse {
-                code: "NOT_IMPLEMENTED".to_string(),
-                message: "Applying changes requires pristine access. Not yet implemented.".to_string(),
-            }))
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_AVAILABLE".to_string(),
+                        message: "Pijul store not initialized on this node".to_string(),
+                    }));
+                }
+            };
+
+            // Parse repo_id
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            // Parse change hash
+            let hash = match ChangeHash::from_hex(&change_hash) {
+                Ok(h) => h,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_CHANGE_HASH".to_string(),
+                        message: "Invalid change hash format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.apply_change(&repo_id, &channel, &hash).await {
+                Ok(result) => Ok(ClientRpcResponse::PijulApplyResult(PijulApplyResponse {
+                    operations: result.changes_applied,
+                })),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "APPLY_FAILED".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
         }
 
         #[cfg(feature = "pijul")]
-        ClientRpcRequest::PijulLog { .. } => {
-            use crate::client_rpc::ErrorResponse;
+        ClientRpcRequest::PijulLog { repo_id, channel, limit } => {
+            use crate::client_rpc::{ErrorResponse, PijulLogEntry, PijulLogResponse};
+            use crate::forge::identity::RepoId;
 
-            // Log traversal requires change DAG traversal - complex to implement
-            Ok(ClientRpcResponse::Error(ErrorResponse {
-                code: "NOT_IMPLEMENTED".to_string(),
-                message: "Change log traversal not yet implemented.".to_string(),
-            }))
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_AVAILABLE".to_string(),
+                        message: "Pijul store not initialized on this node".to_string(),
+                    }));
+                }
+            };
+
+            // Parse repo_id
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.get_change_log(&repo_id, &channel, limit).await {
+                Ok(metadata_list) => {
+                    let entries: Vec<PijulLogEntry> = metadata_list
+                        .into_iter()
+                        .map(|m| PijulLogEntry {
+                            change_hash: m.hash.to_hex(),
+                            message: m.message,
+                            author: m.authors.first().map(|a| a.name.clone()),
+                            timestamp_ms: m.recorded_at_ms,
+                        })
+                        .collect();
+
+                    let count = entries.len() as u32;
+                    Ok(ClientRpcResponse::PijulLogResult(PijulLogResponse { entries, count }))
+                }
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "LOG_FAILED".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
         }
 
         #[cfg(feature = "pijul")]

@@ -4,7 +4,7 @@
 //! coordinating between change storage, channel management, and the pristine.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -15,11 +15,13 @@ use crate::api::KeyValueStore;
 use crate::blob::BlobStore;
 use crate::forge::identity::RepoId;
 
+use super::apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
 use super::change_store::AspenChangeStore;
 use super::constants::{KV_PREFIX_PIJUL_REPOS, MAX_CHANNELS};
 use super::error::{PijulError, PijulResult};
+use super::pristine::PristineManager;
 use super::refs::{ChannelUpdateEvent, PijulRefStore};
-use super::types::{ChangeHash, ChangeMetadata, Channel, PijulAuthor, PijulRepoIdentity};
+use super::types::{ChangeHash, ChangeMetadata, Channel, PijulRepoIdentity};
 
 /// Events emitted by the PijulStore.
 #[derive(Debug, Clone)]
@@ -80,6 +82,9 @@ pub struct PijulStore<B: BlobStore, K: KeyValueStore + ?Sized> {
     /// Base path for pristine databases.
     data_dir: PathBuf,
 
+    /// Pristine database manager.
+    pristines: Arc<PristineManager>,
+
     /// Event sender for store events.
     event_tx: broadcast::Sender<PijulStoreEvent>,
 
@@ -97,15 +102,18 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// - `data_dir`: Base directory for pristine databases
     pub fn new(blobs: Arc<B>, kv: Arc<K>, data_dir: impl Into<PathBuf>) -> Self {
         let (event_tx, _) = broadcast::channel(256);
+        let data_dir = data_dir.into();
 
         let changes = Arc::new(AspenChangeStore::new(blobs));
         let refs = Arc::new(PijulRefStore::new(Arc::clone(&kv)));
+        let pristines = Arc::new(PristineManager::new(&data_dir));
 
         Self {
             changes,
             refs,
             kv,
-            data_dir: data_dir.into(),
+            data_dir,
+            pristines,
             event_tx,
             repo_cache: RwLock::new(HashMap::new()),
         }
@@ -559,6 +567,195 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     }
 
     // ========================================================================
+    // Apply Operations
+    // ========================================================================
+
+    /// Apply a change to a repository channel.
+    ///
+    /// This fetches the change from storage (if not cached locally) and applies
+    /// it to the pristine database, updating the channel state.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository to apply the change to
+    /// - `channel`: Channel to update
+    /// - `hash`: Hash of the change to apply
+    ///
+    /// # Returns
+    ///
+    /// The result of the apply operation including the number of operations
+    /// applied and the new merkle hash.
+    #[instrument(skip(self))]
+    pub async fn apply_change(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        hash: &ChangeHash,
+    ) -> PijulResult<ApplyResult> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get or create the pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Create the change directory for this repo
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+
+        // Create the applicator
+        let applicator = ChangeApplicator::new(pristine, change_dir);
+
+        // Fetch and apply the change
+        let result = applicator.fetch_and_apply(channel, hash).await?;
+
+        // Update channel head in refs
+        self.refs.set_channel(repo_id, channel, *hash).await?;
+
+        info!(repo_id = %repo_id, channel = channel, hash = %hash, ops = result.changes_applied, "applied change");
+
+        // Emit event
+        let _ = self.event_tx.send(PijulStoreEvent::ChangeApplied {
+            repo_id: *repo_id,
+            channel: channel.to_string(),
+            change_hash: *hash,
+        });
+
+        Ok(result)
+    }
+
+    /// Apply multiple changes in order.
+    ///
+    /// Changes are applied sequentially. If any change fails, the operation
+    /// stops and returns an error.
+    #[instrument(skip(self, hashes))]
+    pub async fn apply_changes(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        hashes: &[ChangeHash],
+    ) -> PijulResult<Vec<ApplyResult>> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get or create the pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Create the change directory for this repo
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+
+        // Create the applicator
+        let applicator = ChangeApplicator::new(pristine, change_dir);
+
+        // Apply all changes
+        let results = applicator.apply_changes(channel, hashes).await?;
+
+        // Update channel head to the last applied change
+        if let Some(last_hash) = hashes.last() {
+            self.refs.set_channel(repo_id, channel, *last_hash).await?;
+
+            // Emit event for each applied change
+            for hash in hashes {
+                let _ = self.event_tx.send(PijulStoreEvent::ChangeApplied {
+                    repo_id: *repo_id,
+                    channel: channel.to_string(),
+                    change_hash: *hash,
+                });
+            }
+        }
+
+        info!(repo_id = %repo_id, channel = channel, count = results.len(), "applied changes");
+        Ok(results)
+    }
+
+    // ========================================================================
+    // Log Operations
+    // ========================================================================
+
+    /// Get the change log for a channel.
+    ///
+    /// Returns a list of changes from the channel head back through the
+    /// dependency chain, limited by the specified count.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name
+    /// - `limit`: Maximum number of changes to return (default 100, max 1000)
+    ///
+    /// # Returns
+    ///
+    /// A list of change metadata in reverse chronological order (newest first).
+    #[instrument(skip(self))]
+    pub async fn get_change_log(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        limit: u32,
+    ) -> PijulResult<Vec<ChangeMetadata>> {
+        let limit = limit.min(1000);
+
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get channel head
+        let head = match self.refs.get_channel(repo_id, channel).await? {
+            Some(h) => h,
+            None => {
+                // Channel exists but has no changes
+                return Ok(Vec::new());
+            }
+        };
+
+        // Traverse the change DAG following dependencies
+        let mut log = Vec::with_capacity(limit as usize);
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+
+        queue.push_back(head);
+
+        while let Some(hash) = queue.pop_front() {
+            if log.len() >= limit as usize {
+                break;
+            }
+
+            if visited.contains(&hash) {
+                continue;
+            }
+            visited.insert(hash);
+
+            // Get metadata for this change
+            if let Some(meta) = self.get_change_metadata(repo_id, &hash).await? {
+                // Add dependencies to the queue for BFS traversal
+                for dep in &meta.dependencies {
+                    if !visited.contains(dep) {
+                        queue.push_back(*dep);
+                    }
+                }
+                log.push(meta);
+            } else {
+                warn!(hash = %hash, "change metadata not found in log traversal");
+            }
+        }
+
+        // Sort by recorded_at_ms descending (newest first)
+        log.sort_by(|a, b| b.recorded_at_ms.cmp(&a.recorded_at_ms));
+
+        debug!(repo_id = %repo_id, channel = channel, count = log.len(), "retrieved change log");
+        Ok(log)
+    }
+
+    // ========================================================================
     // Internal Helpers
     // ========================================================================
 
@@ -573,6 +770,7 @@ mod tests {
     use super::*;
     use crate::api::DeterministicKeyValueStore;
     use crate::blob::InMemoryBlobStore;
+    use crate::pijul::types::PijulAuthor;
 
     fn test_delegates() -> Vec<iroh::PublicKey> {
         vec![]
