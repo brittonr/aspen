@@ -210,3 +210,4 @@ fuzz/corpus/
 fuzz/artifacts/
 fuzz/target/
 fuzz/coverage/
+.config/sops/

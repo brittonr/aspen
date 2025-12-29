@@ -12,15 +12,18 @@ The codebase recently underwent a major refactoring (completed Dec 13, 2025) to 
 
 - **openraft**: Raft consensus algorithm for cluster-wide linearizability and fault-tolerant replication (vendored)
 - **redb**: Embedded ACID storage engine for unified Raft log + state machine storage (single-fsync writes, ~2-3ms latency)
-- **DataFusion**: Apache DataFusion SQL query engine over Redb KV data
+- **DataFusion**: Apache DataFusion SQL query engine over Redb KV data (optional, via `sql` feature)
 - **iroh**: Peer-to-peer networking and content-addressed communication (QUIC, NAT traversal, discovery)
 - **iroh-blobs**: Content-addressed blob storage for large values
 - **iroh-docs**: CRDT-based document synchronization for real-time KV replication
+- **mainline**: BitTorrent Mainline DHT for global content discovery (optional, via `global-discovery` feature)
+- **hickory-server**: DNS protocol server for DNS record management (optional, via `dns` feature)
+- **fuse-backend-rs**: FUSE filesystem support for mounting Aspen as a filesystem (optional, via `fuse` feature)
 - **madsim**: Deterministic simulator for distributed systems testing
 - **snafu/anyhow**: Error handling (snafu for library errors, anyhow for application errors)
 - **proptest**: Property-based testing
 - **bolero**: Unified testing framework combining fuzz testing and property-based testing (same tests run as fuzzing with libFuzzer/AFL or as property tests in CI)
-- **ratatui**: Terminal UI framework
+- **ratatui**: Terminal UI framework (optional, via `tui` feature)
 
 ## Vendored Dependencies
 
@@ -84,6 +87,8 @@ IrohEndpointManager (QUIC + NAT traversal)
     ├── DNS discovery (production)
     ├── Pkarr (DHT fallback)
     ├── Gossip (peer announcements)
+    ├── Mainline DHT (global content discovery, optional with `global-discovery` feature)
+    │   └── BEP-44 mutable items for cross-cluster discovery
     ├── iroh-blobs (content-addressed storage)
     └── iroh-docs (CRDT replication)
 ```
@@ -164,7 +169,11 @@ The project is structured into focused modules with narrow APIs:
   - Returns handle with access to both trait implementations
 - **src/bin/**:
   - `aspen-node.rs`: Full cluster node with Iroh-based client RPC (legacy HTTP API to be removed)
-  - `aspen-tui.rs`: Terminal UI for cluster monitoring and management
+  - `aspen-tui/`: Terminal UI for cluster monitoring and management (requires `tui` feature)
+  - `aspen-cli/`: Command-line client for interacting with Aspen clusters
+  - `aspen-fuse/`: FUSE filesystem implementation (requires `fuse` feature)
+  - `aspen-prometheus-adapter.rs`: Prometheus metrics adapter
+  - `generate_fuzz_corpus.rs`: Fuzzing corpus generation utility (requires `fuzzing` feature)
 
 ## Development Commands
 
@@ -245,8 +254,16 @@ target/nextest/default/junit.xml
 ### Running Scripts
 
 ```bash
-# Run Aspen cluster smoke test (3-node cluster with Raft operations)
-./scripts/aspen-cluster-smoke.sh
+# Run Aspen cluster smoke tests
+./scripts/aspen-cluster-smoke.sh          # 3-node cluster with basic operations
+./scripts/aspen-cluster-raft-smoke.sh     # Comprehensive Raft operations test (used in CI)
+
+# DNS demo
+./scripts/dns-demo.sh
+
+# Multi-cluster demos
+./scripts/cluster.sh                       # General cluster launcher
+./scripts/kitty-cluster.sh                 # Launch cluster in kitty terminal tabs
 ```
 
 ### Running Benchmarks
@@ -292,12 +309,92 @@ nix develop
 # Run commands in Nix environment without entering shell
 nix develop -c <command>
 
-# Check flake
+# Check flake (runs tests + lints)
 nix flake check
 
 # Build specific outputs
 nix build .#<output>
+
+# Code coverage
+nix run .#coverage              # Show summary
+nix run .#coverage html         # Generate HTML report and open browser
+nix run .#coverage ci           # Generate lcov.info for CI
+nix run .#coverage update       # Update .coverage-baseline.toml
+
+# Formatting
+nix fmt                         # Format all Nix files with alejandra
+nix run .#rustfmt              # Format Rust files with nightly rustfmt
+nix run .#rustfmt check        # Check Rust formatting
+
+# Fuzzing
+nix run .#fuzz                 # Parallel fuzzing (1hr/target)
+nix run .#fuzz-quick           # Quick smoke test (5min/target)
+nix run .#fuzz-overnight       # Overnight run (8hr, 4 parallel targets)
+nix run .#fuzz-intensive       # Full campaign (6hr/target, sequential)
+nix run .#fuzz-coverage        # Generate coverage report for fuzz targets
+nix run .#fuzz-corpus          # Generate seed corpus
+
+# Launch cluster demos
+nix run .#cluster              # 3-node cluster
+nix run .#kitty-cluster        # Cluster in kitty terminal tabs
 ```
+
+## Feature Flags
+
+Aspen uses Cargo feature flags to enable optional functionality:
+
+- **default**: `["sql", "dns"]` - SQL queries and DNS protocol support enabled by default
+- **sql**: DataFusion SQL query engine for Redb storage backend
+- **dns**: DNS record management layer with hickory-server protocol support
+- **tui**: Terminal UI with ratatui (required for `aspen-tui` binary)
+- **fuse**: FUSE filesystem support (required for `aspen-fuse` binary)
+- **virtiofs**: VirtioFS support for VM guests (requires `fuse` feature)
+- **global-discovery**: Global content discovery via BitTorrent Mainline DHT
+- **fuzzing**: Exposes internals for fuzz testing (dev/test only)
+- **bolero**: Bolero property-based testing (dev/test only)
+- **testing**: Test-specific utilities
+
+**Building with specific features:**
+
+```bash
+# Build with all default features
+cargo build
+
+# Build without default features
+cargo build --no-default-features
+
+# Build with specific features
+cargo build --features "tui,fuse"
+
+# Build TUI binary (requires tui feature)
+cargo build --bin aspen-tui --features tui
+
+# Build FUSE binary (requires fuse feature)
+cargo build --bin aspen-fuse --features fuse
+```
+
+## Nextest Configuration
+
+Aspen uses cargo-nextest with custom profiles defined in `.config/nextest.toml`:
+
+**Profiles:**
+
+- **default**: Standard test profile with 1 retry, 60s timeout for slow tests, fail-fast enabled
+- **quick**: Fast iteration profile - skips slow tests (proptest, chaos, multi-seed madsim, crash recovery)
+  - Usage: `cargo nextest run -P quick`
+  - Filter: Excludes `/proptest/`, `/chaos/`, `/madsim_multi/`, `/multiple_crash/`, `/buggify/`, `/real_crash/`
+- **ci**: CI profile with extended timeouts (120s) for property-based tests, fail-fast disabled
+
+**Test overrides:**
+
+- Property-based tests (`test_proptest_*`): 120s timeout, 1 retry
+- Multi-crash recovery tests: 120s timeout, 2 retries
+- BUGGIFY stress tests: 120s timeout, 2 retries
+- Subprocess crash tests (`/real_crash/`): 180s timeout, 1 retry
+
+**JUnit output:**
+
+All test runs automatically generate JUnit XML at `junit.xml` (or `target/nextest/default/junit.xml`) with failure output captured.
 
 ## Coding Style: Tiger Style
 
@@ -493,10 +590,16 @@ The codebase enforces explicit limits to prevent resource exhaustion:
 
 ## Important Notes
 
-- The codebase underwent a major architectural simplification from actor-based (ractor) to direct async APIs
+- The codebase underwent a major architectural simplification from actor-based (ractor) to direct async APIs (Dec 13, 2025)
 - All references to `RaftActor`, `RaftControlClient`, `KvServiceBuilder`, or `NodeServerHandle` in documentation are outdated
 - Keep Iroh P2P coupling as-is; it's a core infrastructure service
 - Backwards compatibility is not a concern; prioritize clean, modern solutions
 - The project contains a vendored/embedded `openraft` directory (v0.10.0) with no local modifications
 - Edition is set to `2024` in Cargo.toml (Rust 2024 edition)
 - The system is production-ready and fully functional
+- Recent additions (Dec 2025):
+  - Optional feature gates for `sql` and `dns` (both enabled by default)
+  - Global content discovery via BitTorrent Mainline DHT with BEP-44 mutable items
+  - FUSE filesystem support for mounting Aspen as a filesystem
+  - Enhanced nextest configuration with `quick` profile for fast iteration
+  - Comprehensive Nix flake apps for coverage, fuzzing, and formatting
