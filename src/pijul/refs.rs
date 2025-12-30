@@ -113,9 +113,23 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
         repo_id: &RepoId,
         channel: &str,
     ) -> PijulResult<Option<ChangeHash>> {
+        self.get_channel_with_consistency(repo_id, channel, ReadConsistency::Linearizable).await
+    }
+
+    /// Get channel head with a specific read consistency level.
+    ///
+    /// Use `ReadConsistency::Stale` for local reads that don't need to go
+    /// through the Raft leader (useful for sync handlers on follower nodes).
+    #[instrument(skip(self))]
+    pub async fn get_channel_with_consistency(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        consistency: ReadConsistency,
+    ) -> PijulResult<Option<ChangeHash>> {
         let key = self.channel_key(repo_id, channel);
 
-        let result = match self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await {
+        let result = match self.kv.read(ReadRequest { key, consistency }).await {
             Ok(r) => r,
             Err(crate::api::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(None);

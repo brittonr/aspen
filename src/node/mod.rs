@@ -492,6 +492,70 @@ impl Node {
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
     }
 
+    /// Spawn the Iroh Router with Raft and Blobs protocol handlers.
+    ///
+    /// This is similar to `spawn_router()` but additionally registers the
+    /// iroh-blobs protocol for P2P blob transfers. Use this when you need
+    /// content-addressed blob storage with P2P download support.
+    ///
+    /// # Arguments
+    ///
+    /// * `blobs_handler` - The BlobsProtocol handler from an IrohBlobStore
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let blob_store = IrohBlobStore::new(&data_dir, endpoint.clone()).await?;
+    /// node.spawn_router_with_blobs(blob_store.protocol_handler());
+    /// ```
+    pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) {
+        use crate::protocol_handlers::RAFT_ALPN;
+        use crate::protocol_handlers::RAFT_AUTH_ALPN;
+
+        let raft_core = self.handle.raft_node.raft().as_ref().clone();
+        let raft_handler = RaftProtocolHandler::new(raft_core.clone());
+
+        let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
+
+        // Always register legacy unauthenticated handler for backwards compatibility
+        builder = builder.accept(RAFT_ALPN, raft_handler);
+        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+
+        // Register authenticated handler if enabled
+        if self.handle.config.iroh.enable_raft_auth {
+            use crate::raft::membership_watcher::spawn_membership_watcher;
+
+            let our_public_key = self.handle.iroh_manager.node_addr().id;
+            let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
+
+            let watcher_cancel =
+                spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
+            self.membership_watcher_cancel = Some(watcher_cancel);
+
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core, trusted_peers);
+            builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
+            tracing::info!(
+                our_public_key = %our_public_key,
+                "registered authenticated Raft RPC protocol handler with membership sync (ALPN: raft-auth)"
+            );
+        }
+
+        // Add gossip handler if enabled
+        if let Some(gossip) = self.handle.iroh_manager.gossip() {
+            use iroh_gossip::ALPN as GOSSIP_ALPN;
+            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            tracing::info!("registered Gossip protocol handler");
+        }
+
+        // Register the blobs protocol handler
+        builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
+        tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
+
+        // Spawn the router and store the handle to keep it alive
+        self.router = Some(builder.spawn());
+        tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching (including blobs)");
+    }
+
     /// Gracefully shutdown the node.
     ///
     /// Shuts down all components in reverse order of startup:

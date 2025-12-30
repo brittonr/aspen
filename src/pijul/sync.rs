@@ -194,11 +194,33 @@ impl PijulSyncService {
     ///
     /// This enables receiving ChannelUpdate and ChangeAvailable announcements for the repo.
     ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository to subscribe to
+    /// - `bootstrap_peers`: Optional list of known peers interested in this repo
+    ///
     /// # Errors
     ///
     /// - `PijulError::TooManyChannels` if at max subscribed repos
     /// - `PijulError::SyncFailed` if subscription fails
     pub async fn subscribe_repo(&self, repo_id: &RepoId) -> PijulResult<()> {
+        self.subscribe_repo_with_peers(repo_id, vec![]).await
+    }
+
+    /// Subscribe to a repository-specific gossip topic with bootstrap peers.
+    ///
+    /// This enables receiving ChannelUpdate and ChangeAvailable announcements for the repo.
+    /// Providing bootstrap peers allows immediate gossip connectivity.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository to subscribe to
+    /// - `bootstrap_peers`: List of peer node IDs known to be interested in this repo
+    pub async fn subscribe_repo_with_peers(
+        &self,
+        repo_id: &RepoId,
+        bootstrap_peers: Vec<PublicKey>,
+    ) -> PijulResult<()> {
         let subscriptions = self.repo_subscriptions.read().await;
 
         // Check if already subscribed
@@ -221,7 +243,7 @@ impl PijulSyncService {
 
         let gossip_topic = tokio::time::timeout(
             PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(topic_id, vec![]),
+            self.gossip.subscribe(topic_id, bootstrap_peers),
         )
         .await
         .map_err(|_| PijulError::SyncFailed {
@@ -285,6 +307,7 @@ impl PijulSyncService {
             let subscriptions = self.repo_subscriptions.read().await;
 
             if let Some(sub) = subscriptions.get(repo_id) {
+                debug!(repo_id = %repo_id.to_hex(), "found subscription, broadcasting to repo topic");
                 sub.sender
                     .broadcast(bytes.into())
                     .await
@@ -293,7 +316,7 @@ impl PijulSyncService {
                     })?;
             } else {
                 // Not subscribed to this repo, skip broadcast
-                trace!(repo_id = %repo_id.to_hex(), "skipping broadcast - not subscribed to repo");
+                warn!(repo_id = %repo_id.to_hex(), subscribed_count = subscriptions.len(), "skipping broadcast - not subscribed to repo");
             }
         }
 
@@ -449,16 +472,23 @@ impl PijulSyncService {
                                 merkle: channel_event.merkle,
                             };
 
+                            info!(
+                                repo_id = %channel_event.repo_id.to_hex(),
+                                channel = %channel_event.channel,
+                                new_head = %channel_event.new_head,
+                                "received channel update event, broadcasting"
+                            );
+
                             if let Err(e) = self.broadcast(announcement).await {
                                 warn!(
                                     "failed to broadcast channel update: {}",
                                     e
                                 );
                             } else {
-                                trace!(
+                                info!(
                                     repo_id = %channel_event.repo_id.to_hex(),
                                     channel = %channel_event.channel,
-                                    "broadcast channel update announcement"
+                                    "broadcast channel update announcement successfully"
                                 );
                             }
                         }
@@ -532,20 +562,21 @@ impl PijulSyncService {
 
                             // Log based on announcement type
                             match announcement {
-                                PijulAnnouncement::ChannelUpdate { repo_id, channel, .. } => {
-                                    debug!(
+                                PijulAnnouncement::ChannelUpdate { repo_id, channel, new_head, .. } => {
+                                    info!(
                                         repo_id = %repo_id.to_hex(),
                                         channel = %channel,
-                                        signer = %signed.signer,
-                                        "received ChannelUpdate announcement"
+                                        new_head = %new_head,
+                                        signer = %signed.signer.fmt_short(),
+                                        "received ChannelUpdate announcement via gossip"
                                     );
                                 }
                                 PijulAnnouncement::ChangeAvailable { repo_id, change_hash, .. } => {
-                                    debug!(
+                                    info!(
                                         repo_id = %repo_id.to_hex(),
                                         change_hash = %change_hash,
-                                        signer = %signed.signer,
-                                        "received ChangeAvailable announcement"
+                                        signer = %signed.signer.fmt_short(),
+                                        "received ChangeAvailable announcement via gossip"
                                     );
                                 }
                                 PijulAnnouncement::Seeding { repo_id, node_id: seeder_id, .. } => {
@@ -595,11 +626,11 @@ impl PijulSyncService {
                         }
 
                         Some(Ok(iroh_gossip::api::Event::NeighborUp(neighbor))) => {
-                            debug!(topic = ?topic_id, neighbor = ?neighbor, "neighbor up");
+                            info!(repo_id = ?repo_id, neighbor = %neighbor.fmt_short(), "pijul gossip neighbor up");
                         }
 
                         Some(Ok(iroh_gossip::api::Event::NeighborDown(neighbor))) => {
-                            debug!(topic = ?topic_id, neighbor = ?neighbor, "neighbor down");
+                            info!(repo_id = ?repo_id, neighbor = %neighbor.fmt_short(), "pijul gossip neighbor down");
                         }
 
                         Some(Ok(iroh_gossip::api::Event::Lagged)) => {

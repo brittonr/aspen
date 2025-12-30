@@ -60,6 +60,10 @@ pub mod router;
 // Madsim-based deterministic testing
 pub mod madsim_tester;
 
+// Pijul multi-node testing (requires pijul feature)
+#[cfg(feature = "pijul")]
+pub mod pijul_tester;
+
 // VM-based testing modules (only available for testing)
 #[cfg(any(test, feature = "testing"))]
 pub mod fault_injection;
@@ -93,6 +97,10 @@ pub use network_utils::NetworkBridge;
 #[cfg(any(test, feature = "testing"))]
 pub use network_utils::TapDevice;
 pub use router::AspenRouter;
+#[cfg(feature = "pijul")]
+pub use pijul_tester::PijulMultiNodeTester;
+#[cfg(feature = "pijul")]
+pub use pijul_tester::PijulTestNode;
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::ManagedVm;
 #[cfg(any(test, feature = "testing"))]

@@ -361,6 +361,31 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }))
     }
 
+    /// Get a channel using local (stale) read consistency.
+    ///
+    /// This reads from the local state without requiring the Raft leader,
+    /// making it suitable for use on follower nodes in sync handlers.
+    /// The data may be slightly stale but will be eventually consistent.
+    #[instrument(skip(self))]
+    pub async fn get_channel_local(&self, repo_id: &RepoId, channel: &str) -> PijulResult<Option<Channel>> {
+        use crate::api::ReadConsistency;
+
+        // Use stale read for channel exists check too
+        let head = self.refs.get_channel_with_consistency(repo_id, channel, ReadConsistency::Stale).await?;
+
+        // If we got a head, channel exists
+        // If None, we can't distinguish between empty channel and non-existent channel with stale reads
+        // For sync purposes, treat None as "no local data to compare"
+        match head {
+            Some(h) => Ok(Some(Channel {
+                name: channel.to_string(),
+                head: Some(h),
+                updated_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+            })),
+            None => Ok(None),
+        }
+    }
+
     /// List all channels in a repository.
     pub async fn list_channels(&self, repo_id: &RepoId) -> PijulResult<Vec<Channel>> {
         let channel_heads = self.refs.list_channels(repo_id).await?;
@@ -1187,6 +1212,75 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }
 
         Ok(result)
+    }
+
+    /// Apply a downloaded change to the local pristine.
+    ///
+    /// This is a local-only operation that does NOT query Raft. It's used by
+    /// follower nodes after P2P downloading a change - the change is already
+    /// in the blob store, we just need to apply it to the local pristine.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name
+    /// - `hash`: The change hash that was just downloaded
+    ///
+    /// # Returns
+    ///
+    /// Result indicating if the change was applied, with conflict information.
+    #[instrument(skip(self))]
+    pub async fn apply_downloaded_change(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        hash: &ChangeHash,
+    ) -> PijulResult<SyncResult> {
+        // Verify the change exists in our blob store
+        if !self.changes.has_change(hash).await? {
+            return Err(PijulError::ChangeNotFound {
+                hash: hash.to_string(),
+            });
+        }
+
+        // Get or create local pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Create change directory and applicator
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+        let applicator = ChangeApplicator::new(pristine, change_dir);
+
+        // Apply the change
+        match applicator.fetch_and_apply(channel, hash).await {
+            Ok(_result) => {
+                info!(hash = %hash, channel = channel, "applied downloaded change to local pristine");
+
+                // Check for conflicts
+                let conflict_state = self.check_conflicts(repo_id, channel)?;
+                let has_conflicts = conflict_state.has_conflicts();
+
+                Ok(SyncResult {
+                    changes_fetched: 0, // Already fetched
+                    changes_applied: 1,
+                    already_synced: false,
+                    conflicts: if has_conflicts { Some(conflict_state) } else { None },
+                })
+            }
+            Err(e) => {
+                // If it's already applied, that's fine
+                if e.to_string().contains("already applied") || e.to_string().contains("ChangeIsDependency") {
+                    debug!(hash = %hash, "change already applied to pristine");
+                    Ok(SyncResult {
+                        changes_fetched: 0,
+                        changes_applied: 0,
+                        already_synced: true,
+                        conflicts: None,
+                    })
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     // ========================================================================

@@ -147,9 +147,11 @@ impl PendingRequests {
         self.requested.insert(hash, Instant::now());
     }
 
-    /// Check if we should check this channel for sync.
-    fn should_check_channel(&self, repo_id: &RepoId, channel: &str) -> bool {
-        let key = format!("{}:{}", repo_id.to_hex(), channel);
+    /// Check if we should check this channel for sync with a specific head.
+    /// Returns true if we haven't recently processed this exact head for this channel.
+    fn should_check_channel(&self, repo_id: &RepoId, channel: &str, head: &ChangeHash) -> bool {
+        // Key includes the head hash to allow different heads to be processed
+        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
         let now = Instant::now();
         let dedup_duration = Duration::from_secs(PIJUL_SYNC_REQUEST_DEDUP_SECS);
 
@@ -162,10 +164,17 @@ impl PendingRequests {
         true
     }
 
-    /// Mark a channel as checked.
-    fn mark_channel_checked(&mut self, repo_id: &RepoId, channel: &str) {
-        let key = format!("{}:{}", repo_id.to_hex(), channel);
+    /// Mark a channel+head combination as checked.
+    fn mark_channel_checked(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) {
+        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
         self.channel_checks.insert(key, Instant::now());
+    }
+
+    /// Clear the channel check mark so it can be re-checked immediately.
+    /// This should be called after a sync completes to allow retrying on failure.
+    fn clear_channel_check(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) {
+        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
+        self.channel_checks.remove(&key);
     }
 
     /// Record that a channel is waiting for a specific change.
@@ -256,7 +265,7 @@ pub struct PijulSyncHandler<B: BlobStore, K: KeyValueStore + ?Sized> {
     watched_repos: RwLock<HashSet<RepoId>>,
 }
 
-impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> {
+impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandler<B, K> {
     /// Spawn a new sync handler with its worker task.
     ///
     /// This creates the handler and starts the background worker that processes
@@ -388,17 +397,19 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
                 repo_id = %update.repo_id.to_hex(),
                 channel = %update.channel,
                 hash = %hash,
-                "syncing channel that was waiting for this change"
+                "applying downloaded change to local pristine"
             );
 
-            // Sync the channel's pristine and check for conflicts
-            match self.store.sync_and_check_conflicts(&update.repo_id, &update.channel).await {
+            // Apply the downloaded change to the local pristine.
+            // This is a local-only operation - no Raft queries needed since
+            // the change blob is already in our store and refs are replicated via Raft.
+            match self.store.apply_downloaded_change(&update.repo_id, &update.channel, hash).await {
                 Ok(result) => {
                     if result.already_synced {
                         trace!(
                             repo_id = %update.repo_id.to_hex(),
                             channel = %update.channel,
-                            "channel already synced"
+                            "change already applied to pristine"
                         );
                     } else {
                         // Log sync result
@@ -406,7 +417,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
                             repo_id = %update.repo_id.to_hex(),
                             channel = %update.channel,
                             applied = result.changes_applied,
-                            "channel synced after download"
+                            "applied change to local pristine"
                         );
 
                         // Log any conflicts detected
@@ -417,19 +428,26 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
                                     channel = %update.channel,
                                     conflict_count = conflict_state.conflict_count(),
                                     paths = ?conflict_state.conflicting_paths(),
-                                    "conflicts detected after sync"
+                                    "conflicts detected after applying change"
                                 );
                             }
                         }
                     }
+
+                    // Clear the channel check mark so subsequent announcements can be processed.
+                    // This allows rapid sequential changes to be synced correctly.
+                    self.pending.write().clear_channel_check(&update.repo_id, &update.channel, hash);
                 }
                 Err(e) => {
                     warn!(
                         repo_id = %update.repo_id.to_hex(),
                         channel = %update.channel,
                         error = %e,
-                        "failed to sync channel after download"
+                        "failed to apply change to local pristine"
                     );
+
+                    // Clear even on failure so we can retry on next announcement
+                    self.pending.write().clear_channel_check(&update.repo_id, &update.channel, hash);
                 }
             }
         }
@@ -485,16 +503,27 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
         remote_head: &ChangeHash,
         _announcer: PublicKey,
     ) {
-        // Get our current head
-        let our_head = match self.store.get_channel(repo_id, channel).await {
+        info!(
+            remote_head = %remote_head,
+            "handler: checking channel sync"
+        );
+
+        // Get our current head using local (stale) reads - this works on follower nodes
+        // without needing to go through the Raft leader
+        let our_head = match self.store.get_channel_local(repo_id, channel).await {
             Ok(Some(ch)) => ch.head,
             Ok(None) => {
-                debug!("channel doesn't exist locally, requesting head change");
+                info!(remote_head = %remote_head, "handler: channel doesn't exist locally, requesting head change");
                 // Record that this channel is waiting for the head change
                 self.pending.write().await_change(*remote_head, *repo_id, channel.to_string());
                 // Request the head change
-                if let Err(e) = self.sync_service.request_changes(repo_id, vec![*remote_head]).await {
-                    warn!(error = %e, "failed to request channel head");
+                match self.sync_service.request_changes(repo_id, vec![*remote_head]).await {
+                    Ok(()) => {
+                        info!(remote_head = %remote_head, "handler: sent WantChanges request");
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "handler: failed to request channel head");
+                    }
                 }
                 return;
             }
@@ -504,46 +533,61 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
             }
         };
 
-        match our_head {
-            Some(head) if head == *remote_head => {
-                trace!("already at remote head");
+        // Even if we have the same channel head ref, we might not have the actual change data!
+        // The ref is replicated through Raft, but the change files are stored locally.
+        // Always check if we have the change data before assuming we're synced.
+        let has_change = match self.store.has_change(remote_head).await {
+            Ok(has) => has,
+            Err(e) => {
+                warn!(error = %e, "handler: failed to check if we have the change");
+                false
             }
-            Some(head) => {
-                debug!(
-                    local_head = %head,
-                    remote_head = %remote_head,
-                    "local head differs from remote, checking if behind"
-                );
-                // We have a different head - might be behind or diverged
-                // For now, just request the remote head if we don't have it
-                match self.store.has_change(remote_head).await {
-                    Ok(false) => {
-                        debug!("requesting remote head change");
-                        // Record that this channel is waiting for the remote head
-                        self.pending.write().await_change(*remote_head, *repo_id, channel.to_string());
-                        if let Err(e) = self.sync_service.request_changes(repo_id, vec![*remote_head]).await {
-                            warn!(error = %e, "failed to request remote head");
-                        }
+        };
+
+        info!(
+            local_head = ?our_head,
+            remote_head = %remote_head,
+            has_change = has_change,
+            "handler: comparing heads"
+        );
+
+        if has_change {
+            // We have the change data
+            match our_head {
+                Some(head) if head == *remote_head => {
+                    info!("handler: already at remote head with change data");
+                }
+                Some(head) => {
+                    info!(
+                        local_head = %head,
+                        remote_head = %remote_head,
+                        "handler: have change, syncing pristine"
+                    );
+                    // We have the change but pristine might not be up to date
+                    if let Err(e) = self.store.sync_channel_pristine(repo_id, channel).await {
+                        warn!(error = %e, "handler: failed to sync channel pristine");
                     }
-                    Ok(true) => {
-                        // We have the change but pristine might not be up to date
-                        // Try to sync the pristine
-                        debug!("have remote head change, syncing pristine");
-                        if let Err(e) = self.store.sync_channel_pristine(repo_id, channel).await {
-                            warn!(error = %e, "failed to sync channel pristine");
-                        }
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "failed to check remote head existence");
+                }
+                None => {
+                    info!("handler: have change but local channel empty, syncing pristine");
+                    if let Err(e) = self.store.sync_channel_pristine(repo_id, channel).await {
+                        warn!(error = %e, "handler: failed to sync channel pristine");
                     }
                 }
             }
-            None => {
-                debug!("local channel is empty, requesting remote head");
-                // Record that this channel is waiting for the head change
-                self.pending.write().await_change(*remote_head, *repo_id, channel.to_string());
-                if let Err(e) = self.sync_service.request_changes(repo_id, vec![*remote_head]).await {
-                    warn!(error = %e, "failed to request channel head");
+            // Clear check mark so subsequent changes can be processed
+            self.pending.write().clear_channel_check(repo_id, channel, remote_head);
+        } else {
+            // We don't have the change data - need to download it
+            info!(remote_head = %remote_head, "handler: don't have change data, requesting");
+            // Record that this channel is waiting for the remote head
+            self.pending.write().await_change(*remote_head, *repo_id, channel.to_string());
+            match self.sync_service.request_changes(repo_id, vec![*remote_head]).await {
+                Ok(()) => {
+                    info!(remote_head = %remote_head, "handler: sent WantChanges request");
+                }
+                Err(e) => {
+                    warn!(error = %e, "handler: failed to request channel head");
                 }
             }
         }
@@ -591,7 +635,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
     }
 }
 
-impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncCallback for PijulSyncHandler<B, K> {
+impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallback for PijulSyncHandler<B, K> {
     fn on_announcement(&self, announcement: &PijulAnnouncement, signer: &PublicKey) {
         let repo_id = *announcement.repo_id();
 
@@ -651,15 +695,15 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncCallback for P
                 // A channel was updated - check if we're behind
                 let mut pending = self.pending.write();
 
-                if pending.should_check_channel(&repo_id, channel) {
-                    pending.mark_channel_checked(&repo_id, channel);
+                if pending.should_check_channel(&repo_id, channel, new_head) {
+                    pending.mark_channel_checked(&repo_id, channel, new_head);
                     drop(pending);
 
-                    debug!(
+                    info!(
                         repo_id = %repo_id.to_hex(),
                         channel = %channel,
                         new_head = %new_head,
-                        "received ChannelUpdate, checking if we need to sync"
+                        "handler: received ChannelUpdate, queueing sync check"
                     );
 
                     let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
@@ -668,6 +712,12 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncCallback for P
                         remote_head: *new_head,
                         announcer: *signer,
                     });
+                } else {
+                    trace!(
+                        repo_id = %repo_id.to_hex(),
+                        channel = %channel,
+                        "handler: skipping ChannelUpdate, already checked recently"
+                    );
                 }
             }
 
@@ -767,14 +817,19 @@ mod tests {
         let mut pending = PendingRequests::new();
         let repo_id = RepoId::from_hash(blake3::hash(b"test"));
         let channel = "main";
+        let head = ChangeHash([3u8; 32]);
 
         // Should initially allow
-        assert!(pending.should_check_channel(&repo_id, channel));
+        assert!(pending.should_check_channel(&repo_id, channel, &head));
 
         // Mark as checked
-        pending.mark_channel_checked(&repo_id, channel);
+        pending.mark_channel_checked(&repo_id, channel, &head);
 
-        // Should now deny
-        assert!(!pending.should_check_channel(&repo_id, channel));
+        // Should now deny same head
+        assert!(!pending.should_check_channel(&repo_id, channel, &head));
+
+        // But a different head should be allowed
+        let head2 = ChangeHash([4u8; 32]);
+        assert!(pending.should_check_channel(&repo_id, channel, &head2));
     }
 }
