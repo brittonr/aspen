@@ -56,7 +56,8 @@ use crate::protocol_handlers::ShardedRaftProtocolHandler;
 use crate::raft::StateMachineVariant;
 use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use crate::raft::log_subscriber::LogEntryPayload;
-use crate::raft::network::IrpcRaftNetworkFactory;
+// Use the type alias from cluster mod.rs which provides the concrete type
+use super::IrpcRaftNetworkFactory;
 use crate::raft::node::RaftNode;
 use crate::raft::node::RaftNodeHealth;
 use crate::raft::server::RaftRpcServer;

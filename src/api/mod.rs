@@ -118,9 +118,17 @@ pub mod inmemory;
 pub mod pure;
 #[cfg(feature = "sql")]
 pub mod sql_validation;
+pub mod transport;
 pub mod vault;
 pub use inmemory::DeterministicClusterController;
 pub use inmemory::DeterministicKeyValueStore;
+// Re-export transport traits for convenient access
+pub use transport::DiscoveredPeer;
+pub use transport::DiscoveryHandle;
+pub use transport::IrohTransportExt;
+pub use transport::NetworkTransport;
+pub use transport::PeerDiscoveredCallback;
+pub use transport::PeerDiscovery;
 // Note: RaftMetrics is no longer re-exported - use ClusterMetrics instead
 pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
@@ -220,6 +228,81 @@ impl From<NodeState> for openraft::ServerState {
             NodeState::Leader => Self::Leader,
             NodeState::Shutdown => Self::Shutdown,
         }
+    }
+}
+
+// ============================================================================
+// Core Types (shared across modules to avoid circular dependencies)
+// ============================================================================
+
+/// Type-safe node identifier for Raft cluster nodes.
+///
+/// This newtype wrapper around `u64` prevents accidental mixing with other
+/// numeric types like log indices, term numbers, or port numbers. The compiler
+/// enforces correct usage at type-check time rather than runtime.
+///
+/// # Tiger Style
+///
+/// - Zero overhead: Compiles to bare `u64`, no runtime cost
+/// - Ergonomic conversions: `From`/`Into` traits for seamless integration
+/// - String parsing: `FromStr` with explicit error handling
+/// - Ordering: Derived `PartialOrd`/`Ord` for deterministic sorting
+///
+/// # Example
+///
+/// ```ignore
+/// use aspen::api::NodeId;
+///
+/// let node_id = NodeId::new(1);
+/// let node_id: NodeId = 42.into();
+/// let node_id: NodeId = "123".parse()?;
+/// let raw: u64 = node_id.into();
+/// ```
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize
+)]
+pub struct NodeId(pub u64);
+
+impl NodeId {
+    /// Create a new `NodeId` from a raw `u64`.
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u64> for NodeId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<NodeId> for u64 {
+    fn from(value: NodeId) -> Self {
+        value.0
+    }
+}
+
+impl std::str::FromStr for NodeId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u64>().map(NodeId)
     }
 }
 
@@ -341,15 +424,18 @@ impl ClusterNode {
 
     /// Create a ClusterNode with an iroh EndpointAddr.
     ///
-    /// Internal use only - not part of the public API.
-    pub(crate) fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
+    /// This is a convenience method for creating nodes with Iroh addresses.
+    /// Primarily used in tests and internal code that works directly with
+    /// Iroh types.
+    pub fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
         Self::with_node_addr(id, NodeAddress::new(iroh_addr))
     }
 
     /// Get the node address as an iroh EndpointAddr, if available.
     ///
-    /// Internal use only - not part of the public API.
-    pub(crate) fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
+    /// This provides access to the underlying Iroh address for code that
+    /// needs to work directly with Iroh types.
+    pub fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
         self.node_addr.as_ref().map(|addr| addr.inner())
     }
 }

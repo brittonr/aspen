@@ -69,7 +69,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::cluster::IrohEndpointManager;
+use crate::api::NetworkTransport;
 use crate::raft::constants::IROH_CONNECT_TIMEOUT;
 use crate::raft::constants::IROH_STREAM_OPEN_TIMEOUT;
 use crate::raft::constants::MAX_PEERS;
@@ -311,10 +311,18 @@ impl Drop for StreamGuard {
 /// Authentication is handled by Iroh at the QUIC TLS layer - no per-stream
 /// authentication handshake is needed.
 ///
+/// # Type Parameters
+///
+/// * `T` - Transport implementation that provides Iroh endpoint access.
+///   Must implement `NetworkTransport` with Iroh-specific associated types.
+///
 /// Tiger Style: Bounded pool size (MAX_PEERS), explicit lifecycle management.
-pub struct RaftConnectionPool {
-    /// Iroh endpoint manager for creating connections.
-    endpoint_manager: Arc<IrohEndpointManager>,
+pub struct RaftConnectionPool<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+{
+    /// Transport providing endpoint access for creating connections.
+    transport: Arc<T>,
     /// Map of NodeId -> PeerConnection (bounded by MAX_PEERS).
     connections: Arc<RwLock<HashMap<NodeId, Arc<PeerConnection>>>>,
     /// Failure detector for updating connection status.
@@ -323,21 +331,24 @@ pub struct RaftConnectionPool {
     cleanup_task: AsyncMutex<Option<JoinHandle<()>>>,
 }
 
-impl RaftConnectionPool {
+impl<T> RaftConnectionPool<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+{
     /// Create a new connection pool.
     ///
     /// # Arguments
     ///
-    /// * `endpoint_manager` - Iroh endpoint manager for creating connections
+    /// * `transport` - Network transport providing endpoint access for creating connections
     /// * `failure_detector` - Failure detector for tracking node health
     ///
     /// # Security Note
     /// Connections use `RAFT_ALPN` by default for backward compatibility.
     /// When `enable_raft_auth` is configured on the node, the server also
     /// accepts `RAFT_AUTH_ALPN` for authenticated connections.
-    pub fn new(endpoint_manager: Arc<IrohEndpointManager>, failure_detector: Arc<RwLock<NodeFailureDetector>>) -> Self {
+    pub fn new(transport: Arc<T>, failure_detector: Arc<RwLock<NodeFailureDetector>>) -> Self {
         Self {
-            endpoint_manager,
+            transport,
             connections: Arc::new(RwLock::new(HashMap::new())),
             failure_detector,
             cleanup_task: AsyncMutex::new(None),
@@ -402,7 +413,7 @@ impl RaftConnectionPool {
 
             let connect_result = tokio::time::timeout(
                 IROH_CONNECT_TIMEOUT,
-                self.endpoint_manager.endpoint().connect(peer_addr.clone(), alpn),
+                self.transport.endpoint().connect(peer_addr.clone(), alpn),
             )
             .await
             .context("timeout connecting to peer")?;

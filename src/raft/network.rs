@@ -86,7 +86,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::cluster::IrohEndpointManager;
+use crate::api::NetworkTransport;
 use crate::raft::clock_drift_detection::ClockDriftDetector;
 use crate::raft::clock_drift_detection::current_time_ms;
 use crate::raft::connection_pool::RaftConnectionPool;
@@ -135,11 +135,20 @@ struct FailureDetectorUpdate {
 /// - Manual peer additions via CLI/config
 /// - Testing scenarios
 ///
+/// # Type Parameters
+///
+/// * `T` - Transport implementation that provides Iroh endpoint access.
+///   Must implement `NetworkTransport` with Iroh-specific associated types.
+///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
-#[derive(Clone)]
-pub struct IrpcRaftNetworkFactory {
+pub struct IrpcRaftNetworkFactory<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+{
+    /// Transport providing endpoint access for creating connections.
+    transport: Arc<T>,
     /// Connection pool for reusable QUIC connections.
-    connection_pool: Arc<RaftConnectionPool>,
+    connection_pool: Arc<RaftConnectionPool<T>>,
     /// Fallback map of NodeId to Iroh EndpointAddr.
     ///
     /// Used as a fallback when addresses aren't available from Raft membership.
@@ -166,12 +175,33 @@ pub struct IrpcRaftNetworkFactory {
     failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
 }
 
-impl IrpcRaftNetworkFactory {
+// Manual Clone implementation that doesn't require T: Clone.
+// All fields are Arc<...> which are always Clone regardless of T.
+impl<T> Clone for IrpcRaftNetworkFactory<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            transport: Arc::clone(&self.transport),
+            connection_pool: Arc::clone(&self.connection_pool),
+            peer_addrs: Arc::clone(&self.peer_addrs),
+            failure_detector: Arc::clone(&self.failure_detector),
+            drift_detector: Arc::clone(&self.drift_detector),
+            failure_update_tx: self.failure_update_tx.clone(),
+        }
+    }
+}
+
+impl<T> IrpcRaftNetworkFactory<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+{
     /// Create a new Raft network factory.
     ///
     /// # Arguments
     ///
-    /// * `endpoint_manager` - Iroh endpoint manager for P2P connections
+    /// * `transport` - Network transport providing endpoint access for P2P connections
     /// * `peer_addrs` - Initial peer addresses for fallback lookup
     ///
     /// # Iroh-Native Authentication
@@ -180,11 +210,11 @@ impl IrpcRaftNetworkFactory {
     /// Iroh's native NodeId verification. The client side (this factory) does
     /// not need to perform any authentication - it simply connects and the
     /// server validates the NodeId against the TrustedPeersRegistry.
-    pub fn new(endpoint_manager: Arc<IrohEndpointManager>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>) -> Self {
+    pub fn new(transport: Arc<T>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
         let connection_pool =
-            Arc::new(RaftConnectionPool::new(Arc::clone(&endpoint_manager), Arc::clone(&failure_detector)));
+            Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector)));
 
         // Start the background cleanup task for idle connections
         let pool_clone = Arc::clone(&connection_pool);
@@ -211,6 +241,7 @@ impl IrpcRaftNetworkFactory {
         });
 
         Self {
+            transport,
             connection_pool,
             peer_addrs: Arc::new(RwLock::new(peer_addrs)),
             failure_detector,
@@ -298,7 +329,7 @@ impl IrpcRaftNetworkFactory {
         target: NodeId,
         node: &RaftMemberInfo,
         shard_id: ShardId,
-    ) -> IrpcRaftNetwork {
+    ) -> IrpcRaftNetwork<T> {
         // Update the fallback cache with this address
         {
             let mut peers = self.peer_addrs.write().await;
@@ -326,8 +357,11 @@ impl IrpcRaftNetworkFactory {
     }
 }
 
-impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
-    type Network = IrpcRaftNetwork;
+impl<T> RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+{
+    type Network = IrpcRaftNetwork<T>;
 
     #[tracing::instrument(level = "debug", skip_all, fields(target = %target))]
     async fn new_client(&mut self, target: NodeId, node: &RaftMemberInfo) -> Self::Network {
@@ -368,13 +402,21 @@ impl RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory {
 /// - Connection pooling for efficient stream multiplexing
 /// - Bounded channel for failure detector updates (prevents unbounded task spawning)
 ///
+/// # Type Parameters
+///
+/// * `T` - Transport implementation that provides Iroh endpoint access.
+///   Must implement `NetworkTransport` with Iroh-specific associated types.
+///
 /// # Sharded Mode
 ///
 /// When `shard_id` is `Some`, all RPC messages are prefixed with a 4-byte
 /// big-endian shard ID. This enables routing to the correct Raft core on
 /// the remote node when using the sharded ALPN (`raft-shard`).
-pub struct IrpcRaftNetwork {
-    connection_pool: Arc<RaftConnectionPool>,
+pub struct IrpcRaftNetwork<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+{
+    connection_pool: Arc<RaftConnectionPool<T>>,
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
@@ -391,7 +433,10 @@ pub struct IrpcRaftNetwork {
     failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
 }
 
-impl IrpcRaftNetwork {
+impl<T> IrpcRaftNetwork<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+{
     /// Send an RPC request to the peer and wait for response.
     ///
     /// Tiger Style: Fail fast if peer address is unknown.
@@ -622,7 +667,10 @@ impl IrpcRaftNetwork {
 }
 
 #[allow(clippy::blocks_in_conditions)]
-impl RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork {
+impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+{
     #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn append_entries(
         &mut self,

@@ -75,7 +75,7 @@ pub struct ClientProtocolContext {
     /// Network factory for dynamic peer addition (optional).
     ///
     /// When present, enables AddPeer RPC to register peers in the network factory.
-    pub network_factory: Option<Arc<crate::raft::network::IrpcRaftNetworkFactory>>,
+    pub network_factory: Option<Arc<crate::cluster::IrpcRaftNetworkFactory>>,
     /// Token verifier for capability-based authorization.
     ///
     /// Optional during migration period. When `None`, all requests are allowed.

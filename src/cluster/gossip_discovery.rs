@@ -86,7 +86,8 @@ use crate::raft::constants::GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
 use crate::raft::constants::GOSSIP_PER_PEER_BURST;
 use crate::raft::constants::GOSSIP_PER_PEER_RATE_PER_MINUTE;
 use crate::raft::constants::GOSSIP_STREAM_BACKOFF_SECS;
-use crate::raft::network::IrpcRaftNetworkFactory;
+// Use the type alias from cluster mod.rs which provides the concrete type
+use super::IrpcRaftNetworkFactory;
 use crate::raft::pure::calculate_backoff_duration;
 use crate::raft::types::NodeId;
 use crate::sharding::topology::TopologyAnnouncement;

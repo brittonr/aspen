@@ -6,6 +6,7 @@
 //! # Type Configuration
 //!
 //! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
+//!   (defined in `api` module to avoid circular dependencies)
 //! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
@@ -25,84 +26,15 @@
 //!   - RaftMemberInfo: Construction, Default, Display
 
 use std::fmt;
-use std::num::ParseIntError;
-use std::str::FromStr;
 
 use iroh::EndpointAddr;
 use openraft::declare_raft_types;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Type-safe node identifier for Raft cluster nodes.
-///
-/// This newtype wrapper around `u64` prevents accidental mixing with other
-/// numeric types like log indices, term numbers, or port numbers. The compiler
-/// enforces correct usage at type-check time rather than runtime.
-///
-/// # Tiger Style
-///
-/// - Zero overhead: Compiles to bare `u64`, no runtime cost
-/// - Ergonomic conversions: `From`/`Into` traits for seamless integration
-/// - String parsing: `FromStr` with explicit error handling
-/// - Ordering: Derived `PartialOrd`/`Ord` for deterministic sorting
-///
-/// # Example
-///
-/// ```ignore
-/// use aspen::raft::types::NodeId;
-///
-/// let node_id = NodeId::new(1);
-/// let node_id: NodeId = 42.into();
-/// let node_id: NodeId = "123".parse()?;
-/// let raw: u64 = node_id.into();
-/// ```
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Default,
-    Serialize,
-    Deserialize
-)]
-pub struct NodeId(pub u64);
-
-impl NodeId {
-    /// Create a new `NodeId` from a raw `u64`.
-    pub fn new(id: u64) -> Self {
-        Self(id)
-    }
-}
-
-impl fmt::Display for NodeId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<u64> for NodeId {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<NodeId> for u64 {
-    fn from(value: NodeId) -> Self {
-        value.0
-    }
-}
-
-impl FromStr for NodeId {
-    type Err = ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u64>().map(NodeId)
-    }
-}
+// Re-export NodeId from api module to maintain backward compatibility.
+// NodeId is defined in api to avoid circular dependencies between raft and cluster.
+pub use crate::api::NodeId;
 
 /// Raft membership metadata containing Iroh P2P connection information.
 ///

@@ -112,6 +112,15 @@ pub use transport::IrohTransportExt;
 pub use transport::NetworkTransport;
 pub use transport::PeerDiscovery;
 
+// Type aliases for concrete transport implementations.
+// These provide the specific types used with IrohEndpointManager.
+/// Raft network factory using IrohEndpointManager as the transport.
+pub type IrpcRaftNetworkFactory = crate::raft::network::IrpcRaftNetworkFactory<IrohEndpointManager>;
+/// Raft connection pool using IrohEndpointManager as the transport.
+pub type RaftConnectionPool = crate::raft::connection_pool::RaftConnectionPool<IrohEndpointManager>;
+/// Raft network client using IrohEndpointManager as the transport.
+pub type IrpcRaftNetwork = crate::raft::network::IrpcRaftNetwork<IrohEndpointManager>;
+
 /// Controls how the node server should behave while running in deterministic
 /// simulations.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
