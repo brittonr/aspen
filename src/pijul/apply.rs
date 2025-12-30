@@ -388,6 +388,60 @@ impl<B: BlobStore> ChangeApplicator<B> {
         debug!(channel = channel, count = hashes.len(), "listed channel changes");
         Ok(hashes)
     }
+
+    /// Check for conflicts on a channel after applying changes.
+    ///
+    /// This outputs the channel's state to a temporary directory and counts
+    /// any conflicts that libpijul detects. This is useful for detecting
+    /// merge conflicts after syncing changes from multiple sources.
+    ///
+    /// # Arguments
+    ///
+    /// - `channel`: Channel name to check
+    ///
+    /// # Returns
+    ///
+    /// The number of conflicts detected.
+    #[instrument(skip(self))]
+    pub fn check_conflicts(&self, channel: &str) -> PijulResult<u32> {
+        use super::output::WorkingDirOutput;
+
+        // Create a temp directory for output
+        let temp_dir = std::env::temp_dir().join(format!(
+            "aspen-conflict-check-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&temp_dir).map_err(|e| PijulError::Io {
+            message: format!("failed to create temp directory: {}", e),
+        })?;
+
+        // Create outputter using our pristine and change directory
+        let outputter = WorkingDirOutput::new(
+            self.pristine.clone(),
+            self.changes.clone(),
+            temp_dir.clone(),
+        );
+
+        // Output and check for conflicts
+        let result = outputter.output(channel)?;
+        let conflict_count = result.conflict_count() as u32;
+
+        // Clean up temp directory
+        if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+            debug!(path = %temp_dir.display(), error = %e, "failed to clean up temp directory");
+        }
+
+        if conflict_count > 0 {
+            info!(channel = channel, conflicts = conflict_count, "conflicts detected");
+        } else {
+            debug!(channel = channel, "no conflicts");
+        }
+
+        Ok(conflict_count)
+    }
 }
 
 // ============================================================================

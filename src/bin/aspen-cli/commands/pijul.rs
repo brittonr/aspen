@@ -26,7 +26,7 @@ use aspen::client_rpc::ClientRpcResponse;
 use aspen::forge::identity::RepoId;
 use aspen::pijul::{
     AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor,
-    PristineManager,
+    PristineManager, WorkingDirectory,
 };
 
 /// Get the default cache directory for Pijul pristines.
@@ -72,6 +72,10 @@ pub enum PijulCommand {
     /// Channel (branch) management.
     #[command(subcommand)]
     Channel(ChannelCommand),
+
+    /// Working directory management.
+    #[command(subcommand)]
+    Wd(WdCommand),
 
     /// Record changes from working directory.
     Record(RecordArgs),
@@ -231,6 +235,96 @@ pub struct ChannelInfoArgs {
 
     /// Channel name.
     pub name: String,
+}
+
+// =============================================================================
+// Working Directory Commands
+// =============================================================================
+
+/// Working directory management commands.
+#[derive(Subcommand)]
+pub enum WdCommand {
+    /// Initialize a working directory linked to a repository.
+    ///
+    /// Creates a `.aspen/pijul/` metadata directory that tracks the remote
+    /// repository, current channel, and staged files.
+    Init(WdInitArgs),
+
+    /// Add files to the staging area.
+    ///
+    /// Staged files will be included in the next `pijul record` command.
+    /// Supports both files and directories (recursively adds all files).
+    Add(WdAddArgs),
+
+    /// Remove files from the staging area.
+    ///
+    /// Unstages files but does not modify them in the working directory.
+    Reset(WdResetArgs),
+
+    /// Show working directory status.
+    ///
+    /// Displays staged files, modified files, and untracked files.
+    Status(WdStatusArgs),
+}
+
+#[derive(Args)]
+pub struct WdInitArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Working directory path (default: current directory).
+    #[arg(short, long)]
+    pub path: Option<String>,
+
+    /// Initial channel to track (default: main).
+    #[arg(short, long, default_value = "main")]
+    pub channel: String,
+
+    /// Remote node address for syncing.
+    ///
+    /// Format: node_id@host:port or ticket string.
+    #[arg(long)]
+    pub remote: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WdAddArgs {
+    /// Files or directories to stage.
+    ///
+    /// Relative to the working directory root. Use "." for all files.
+    #[arg(required = true)]
+    pub paths: Vec<String>,
+
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WdResetArgs {
+    /// Files to unstage.
+    ///
+    /// If not specified, unstages all files.
+    pub paths: Vec<String>,
+
+    /// Unstage all files.
+    #[arg(long)]
+    pub all: bool,
+
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+}
+
+#[derive(Args)]
+pub struct WdStatusArgs {
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Show only staged files.
+    #[arg(long)]
+    pub staged: bool,
 }
 
 // =============================================================================
@@ -1013,6 +1107,195 @@ impl Outputable for PijulArchiveOutput {
 }
 
 // =============================================================================
+// Working Directory Output Types
+// =============================================================================
+
+/// Pijul working directory init result.
+pub struct PijulWdInitOutput {
+    pub path: String,
+    pub repo_id: String,
+    pub channel: String,
+    pub remote: Option<String>,
+}
+
+impl Outputable for PijulWdInitOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "remote": self.remote
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let remote_str = self.remote.as_deref().unwrap_or("(none)");
+        format!(
+            "Initialized Pijul working directory\n\
+             Path:    {}\n\
+             Repo:    {}\n\
+             Channel: {}\n\
+             Remote:  {}",
+            self.path,
+            &self.repo_id[..16.min(self.repo_id.len())],
+            self.channel,
+            remote_str
+        )
+    }
+}
+
+/// Pijul working directory add result.
+pub struct PijulWdAddOutput {
+    pub added: Vec<String>,
+    pub already_staged: Vec<String>,
+    pub not_found: Vec<String>,
+}
+
+impl Outputable for PijulWdAddOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "added": self.added,
+            "already_staged": self.already_staged,
+            "not_found": self.not_found
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = String::new();
+
+        if !self.added.is_empty() {
+            output.push_str(&format!("Staged {} file(s):\n", self.added.len()));
+            for path in &self.added {
+                output.push_str(&format!("  + {}\n", path));
+            }
+        }
+
+        if !self.already_staged.is_empty() {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("Already staged {} file(s):\n", self.already_staged.len()));
+            for path in &self.already_staged {
+                output.push_str(&format!("  = {}\n", path));
+            }
+        }
+
+        if !self.not_found.is_empty() {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("Not found {} file(s):\n", self.not_found.len()));
+            for path in &self.not_found {
+                output.push_str(&format!("  ? {}\n", path));
+            }
+        }
+
+        if output.is_empty() {
+            output = "No files to stage".to_string();
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
+/// Pijul working directory reset result.
+pub struct PijulWdResetOutput {
+    pub removed: Vec<String>,
+    pub not_staged: Vec<String>,
+}
+
+impl Outputable for PijulWdResetOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "removed": self.removed,
+            "not_staged": self.not_staged
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = String::new();
+
+        if !self.removed.is_empty() {
+            output.push_str(&format!("Unstaged {} file(s):\n", self.removed.len()));
+            for path in &self.removed {
+                output.push_str(&format!("  - {}\n", path));
+            }
+        }
+
+        if !self.not_staged.is_empty() {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("Not staged {} file(s):\n", self.not_staged.len()));
+            for path in &self.not_staged {
+                output.push_str(&format!("  ? {}\n", path));
+            }
+        }
+
+        if output.is_empty() {
+            output = "No files to unstage".to_string();
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
+/// Pijul working directory status output.
+pub struct PijulWdStatusOutput {
+    pub path: String,
+    pub repo_id: String,
+    pub channel: String,
+    pub staged: Vec<String>,
+    pub remote: Option<String>,
+    pub last_synced_head: Option<String>,
+}
+
+impl Outputable for PijulWdStatusOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "staged": self.staged,
+            "remote": self.remote,
+            "last_synced_head": self.last_synced_head
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = format!(
+            "Working directory: {}\n\
+             Repository: {}\n\
+             Channel:    {}\n",
+            self.path,
+            &self.repo_id[..16.min(self.repo_id.len())],
+            self.channel
+        );
+
+        if let Some(ref remote) = self.remote {
+            output.push_str(&format!("Remote:     {}\n", remote));
+        }
+
+        if let Some(ref head) = self.last_synced_head {
+            output.push_str(&format!("Last sync:  {}\n", &head[..16.min(head.len())]));
+        }
+
+        output.push('\n');
+
+        if self.staged.is_empty() {
+            output.push_str("No staged files\n");
+        } else {
+            output.push_str(&format!("Staged files ({}):\n", self.staged.len()));
+            for path in &self.staged {
+                output.push_str(&format!("  + {}\n", path));
+            }
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
+// =============================================================================
 // Command Implementation
 // =============================================================================
 
@@ -1022,6 +1305,7 @@ impl PijulCommand {
         match self {
             PijulCommand::Repo(cmd) => cmd.run(client, json).await,
             PijulCommand::Channel(cmd) => cmd.run(client, json).await,
+            PijulCommand::Wd(cmd) => cmd.run(json),
             PijulCommand::Record(args) => pijul_record(client, args, json).await,
             PijulCommand::Apply(args) => pijul_apply(client, args, json).await,
             PijulCommand::Unrecord(args) => pijul_unrecord(client, args, json).await,
@@ -1058,6 +1342,127 @@ impl ChannelCommand {
             ChannelCommand::Info(args) => channel_info(client, args, json).await,
         }
     }
+}
+
+impl WdCommand {
+    /// Execute the working directory subcommand.
+    ///
+    /// Note: Working directory commands are local-only and don't require a client connection.
+    pub fn run(self, json: bool) -> Result<()> {
+        match self {
+            WdCommand::Init(args) => wd_init(args, json),
+            WdCommand::Add(args) => wd_add(args, json),
+            WdCommand::Reset(args) => wd_reset(args, json),
+            WdCommand::Status(args) => wd_status(args, json),
+        }
+    }
+}
+
+// =============================================================================
+// Working Directory Handlers
+// =============================================================================
+
+fn wd_init(args: WdInitArgs, json: bool) -> Result<()> {
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
+
+    // Determine working directory path
+    let path = args.path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    // Initialize working directory
+    let wd = WorkingDirectory::init(&path, &repo_id, &args.channel, args.remote.clone())
+        .context("failed to initialize working directory")?;
+
+    let output = PijulWdInitOutput {
+        path: wd.root().display().to_string(),
+        repo_id: args.repo_id,
+        channel: args.channel,
+        remote: args.remote,
+    };
+    print_output(&output, json);
+
+    Ok(())
+}
+
+fn wd_add(args: WdAddArgs, json: bool) -> Result<()> {
+    // Find or open working directory
+    let start_path = args.path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd = WorkingDirectory::find(&start_path)
+        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Add files
+    let result = wd.add(&args.paths)
+        .context("failed to add files")?;
+
+    let output = PijulWdAddOutput {
+        added: result.added,
+        already_staged: result.already_staged,
+        not_found: result.not_found,
+    };
+    print_output(&output, json);
+
+    Ok(())
+}
+
+fn wd_reset(args: WdResetArgs, json: bool) -> Result<()> {
+    // Find or open working directory
+    let start_path = args.path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd = WorkingDirectory::find(&start_path)
+        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Reset files
+    let result = if args.all || args.paths.is_empty() {
+        wd.reset_all()
+            .context("failed to reset all files")?
+    } else {
+        wd.reset(&args.paths)
+            .context("failed to reset files")?
+    };
+
+    let output = PijulWdResetOutput {
+        removed: result.removed,
+        not_staged: result.not_staged,
+    };
+    print_output(&output, json);
+
+    Ok(())
+}
+
+fn wd_status(args: WdStatusArgs, json: bool) -> Result<()> {
+    // Find or open working directory
+    let start_path = args.path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd = WorkingDirectory::find(&start_path)
+        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Get staged files
+    let staged = wd.staged_files()
+        .context("failed to read staged files")?;
+
+    let config = wd.config();
+
+    let output = PijulWdStatusOutput {
+        path: wd.root().display().to_string(),
+        repo_id: config.repo_id.clone(),
+        channel: config.channel.clone(),
+        staged,
+        remote: config.remote.clone(),
+        last_synced_head: config.last_synced_head.clone(),
+    };
+    print_output(&output, json);
+
+    Ok(())
 }
 
 // =============================================================================
@@ -1720,8 +2125,12 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
     let mut total_fetched = 0u32;
     let mut total_applied = 0u32;
-    let total_conflicts = 0u32; // TODO: detect conflicts during apply
+    let mut total_conflicts = 0u32;
     let mut all_synced = true;
+
+    // Create the applicator once for all channels
+    use aspen::pijul::ChangeApplicator;
+    let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
 
     // Sync each channel
     for channel in &channels {
@@ -1795,9 +2204,6 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
         }
 
         // Apply changes to pristine
-        use aspen::pijul::ChangeApplicator;
-        let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
-
         for entry in &cluster_log {
             let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
             let change_path = change_dir.change_path(&change_hash);
@@ -1815,6 +2221,19 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
                     // Change might already be applied, or there's a conflict
                     tracing::debug!(hash = %change_hash, error = %e, "apply result");
                 }
+            }
+        }
+
+        // Check for conflicts after applying all changes to this channel
+        match applicator.check_conflicts(channel) {
+            Ok(conflicts) => {
+                total_conflicts += conflicts;
+                if conflicts > 0 {
+                    tracing::warn!(channel = %channel, conflicts = conflicts, "conflicts detected");
+                }
+            }
+            Err(e) => {
+                tracing::debug!(channel = %channel, error = %e, "failed to check conflicts");
             }
         }
 
@@ -2078,8 +2497,12 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
     let mut total_fetched = 0u32;
     let mut total_applied = 0u32;
-    let total_conflicts = 0u32;
+    let mut total_conflicts = 0u32;
     let mut all_up_to_date = true;
+
+    // Create the applicator once for all channels
+    use aspen::pijul::ChangeApplicator;
+    let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
 
     // Pull each channel
     for channel in &channels {
@@ -2153,9 +2576,6 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
         }
 
         // Apply changes to pristine
-        use aspen::pijul::ChangeApplicator;
-        let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
-
         for entry in &cluster_log {
             let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
             let change_path = change_dir.change_path(&change_hash);
@@ -2173,6 +2593,19 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
                     // Change might already be applied, or there's a conflict
                     tracing::debug!(hash = %change_hash, error = %e, "apply result");
                 }
+            }
+        }
+
+        // Check for conflicts after applying all changes to this channel
+        match applicator.check_conflicts(channel) {
+            Ok(conflicts) => {
+                total_conflicts += conflicts;
+                if conflicts > 0 {
+                    tracing::warn!(channel = %channel, conflicts = conflicts, "conflicts detected");
+                }
+            }
+            Err(e) => {
+                tracing::debug!(channel = %channel, error = %e, "failed to check conflicts");
             }
         }
 
@@ -2687,11 +3120,3 @@ async fn pijul_diff_channels(
     print_output(&output, json);
     Ok(())
 }
-
-// =============================================================================
-// Working Directory Handlers (TODO: Complete implementation)
-// =============================================================================
-// Note: Working directory commands (init, add, reset, status) require
-// the full WorkingDirectory implementation to be completed.
-// The types and constants have been added in src/pijul/working_dir.rs
-// and src/pijul/constants.rs.
