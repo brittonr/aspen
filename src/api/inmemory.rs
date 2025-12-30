@@ -121,7 +121,7 @@ impl ClusterController for DeterministicClusterController {
         Ok(self.state.lock().await.clone())
     }
 
-    async fn get_metrics(&self) -> Result<super::RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(&self) -> Result<super::ClusterMetrics, ControlPlaneError> {
         // Deterministic backend is in-memory stub without Raft consensus
         Err(ControlPlaneError::Unsupported {
             backend: "deterministic".into(),
@@ -129,9 +129,7 @@ impl ClusterController for DeterministicClusterController {
         })
     }
 
-    async fn trigger_snapshot(
-        &self,
-    ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError> {
+    async fn trigger_snapshot(&self) -> Result<Option<super::SnapshotLogId>, ControlPlaneError> {
         // Deterministic backend is in-memory stub without snapshot support
         Err(ControlPlaneError::Unsupported {
             backend: "deterministic".into(),

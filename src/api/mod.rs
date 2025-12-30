@@ -58,29 +58,109 @@ pub mod sql_validation;
 pub mod vault;
 pub use inmemory::DeterministicClusterController;
 pub use inmemory::DeterministicKeyValueStore;
-// Re-export OpenRaft types for observability
+// Re-export ServerState for use with ClusterMetrics
 pub use openraft::ServerState;
-pub use openraft::metrics::RaftMetrics;
+// Note: RaftMetrics is no longer re-exported - use ClusterMetrics instead
 pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
 pub use vault::is_system_key;
 pub use vault::validate_client_key;
 
 #[cfg(feature = "sql")]
-use crate::raft::constants::DEFAULT_SQL_RESULT_ROWS;
+use crate::constants::DEFAULT_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
-use crate::raft::constants::DEFAULT_SQL_TIMEOUT_MS;
-use crate::raft::constants::MAX_KEY_SIZE;
-use crate::raft::constants::MAX_SETMULTI_KEYS;
+use crate::constants::DEFAULT_SQL_TIMEOUT_MS;
+use crate::constants::MAX_KEY_SIZE;
+use crate::constants::MAX_SETMULTI_KEYS;
 #[cfg(feature = "sql")]
-use crate::raft::constants::MAX_SQL_PARAMS;
+use crate::constants::MAX_SQL_PARAMS;
 #[cfg(feature = "sql")]
-use crate::raft::constants::MAX_SQL_QUERY_SIZE;
+use crate::constants::MAX_SQL_QUERY_SIZE;
 #[cfg(feature = "sql")]
-use crate::raft::constants::MAX_SQL_RESULT_ROWS;
+use crate::constants::MAX_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
-use crate::raft::constants::MAX_SQL_TIMEOUT_MS;
-use crate::raft::constants::MAX_VALUE_SIZE;
+use crate::constants::MAX_SQL_TIMEOUT_MS;
+use crate::constants::MAX_VALUE_SIZE;
+
+use std::collections::BTreeMap;
+
+// ============================================================================
+// Wrapper Types (hide OpenRaft implementation details)
+// ============================================================================
+
+/// Cluster metrics wrapper that hides openraft implementation details.
+///
+/// This type provides access to commonly-needed Raft metrics without
+/// exposing the underlying openraft types in the public API.
+#[derive(Debug, Clone)]
+pub struct ClusterMetrics {
+    /// This node's ID.
+    pub id: u64,
+    /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
+    pub state: ServerState,
+    /// Current leader node ID, if known.
+    pub current_leader: Option<u64>,
+    /// Current Raft term.
+    pub current_term: u64,
+    /// Last log index in the Raft log.
+    pub last_log_index: Option<u64>,
+    /// Last applied log index (state machine is caught up to this point).
+    pub last_applied_index: Option<u64>,
+    /// Snapshot log index (state up to this point is in the snapshot).
+    pub snapshot_index: Option<u64>,
+    /// Replication progress for each follower (only populated on leader).
+    /// Maps node_id -> matched_log_index.
+    pub replication: Option<BTreeMap<u64, Option<u64>>>,
+    /// Current voting members in the cluster.
+    pub voters: Vec<u64>,
+    /// Current learner (non-voting) members in the cluster.
+    pub learners: Vec<u64>,
+}
+
+impl ClusterMetrics {
+    /// Create ClusterMetrics from openraft RaftMetrics.
+    pub(crate) fn from_openraft(metrics: &openraft::metrics::RaftMetrics<crate::raft::types::AppTypeConfig>) -> Self {
+        let membership = metrics.membership_config.membership();
+        Self {
+            id: metrics.id.0,
+            state: metrics.state,
+            current_leader: metrics.current_leader.map(|id| id.0),
+            current_term: metrics.current_term,
+            last_log_index: metrics.last_log_index,
+            last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
+            snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
+            replication: metrics.replication.as_ref().map(|repl_map| {
+                repl_map
+                    .iter()
+                    .map(|(node_id, matched)| (node_id.0, matched.as_ref().map(|log_id| log_id.index)))
+                    .collect()
+            }),
+            voters: membership.voter_ids().map(|id| id.0).collect(),
+            learners: membership.learner_ids().map(|id| id.0).collect(),
+        }
+    }
+}
+
+/// Snapshot log identifier wrapper that hides openraft implementation details.
+///
+/// Represents the position in the Raft log where a snapshot was taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapshotLogId {
+    /// The term in which this log entry was created.
+    pub term: u64,
+    /// The index of this log entry.
+    pub index: u64,
+}
+
+impl SnapshotLogId {
+    /// Create SnapshotLogId from openraft LogId.
+    pub(crate) fn from_openraft(log_id: &openraft::LogId<crate::raft::types::AppTypeConfig>) -> Self {
+        Self {
+            term: log_id.leader_id.term,
+            index: log_id.index,
+        }
+    }
+}
 
 /// Describes a node participating in the control-plane cluster.
 ///
@@ -291,13 +371,13 @@ pub trait ClusterController: Send + Sync {
     /// Returns comprehensive metrics including:
     /// - Node state (Leader/Follower/Candidate/Learner)
     /// - Current leader ID
-    /// - Term and vote information
-    /// - Log indices (last_log, last_applied, snapshot, purged)
+    /// - Current term
+    /// - Log indices (last_log, last_applied, snapshot)
     /// - Replication state (leader only)
     ///
-    /// This method provides raw OpenRaft metrics. For a simplified JSON format,
-    /// use the HTTP `/raft-metrics` endpoint.
-    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError>;
+    /// Returns a `ClusterMetrics` struct that wraps the essential metrics
+    /// without exposing OpenRaft implementation details.
+    async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError>;
 
     /// Trigger a snapshot to be taken immediately.
     ///
@@ -308,16 +388,14 @@ pub trait ClusterController: Send + Sync {
     /// - `Ok(Some(log_id))` if snapshot was created successfully
     /// - `Ok(None)` if no snapshot was needed (no logs to snapshot)
     /// - `Err(_)` if snapshot creation failed
-    async fn trigger_snapshot(
-        &self,
-    ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError>;
+    async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError>;
 
     /// Get the current leader ID, if known.
     ///
     /// Returns None if no leader is elected or leadership is unknown.
     /// This is a convenience method that extracts current_leader from metrics.
     async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
-        Ok(self.get_metrics().await?.current_leader.map(|id| id.0))
+        Ok(self.get_metrics().await?.current_leader)
     }
 
     /// Check if the cluster has been initialized.
@@ -349,13 +427,11 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).current_state().await
     }
 
-    async fn get_metrics(&self) -> Result<RaftMetrics<crate::raft::types::AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
         (**self).get_metrics().await
     }
 
-    async fn trigger_snapshot(
-        &self,
-    ) -> Result<Option<openraft::LogId<crate::raft::types::AppTypeConfig>>, ControlPlaneError> {
+    async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError> {
         (**self).trigger_snapshot().await
     }
 

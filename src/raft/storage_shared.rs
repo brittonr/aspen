@@ -408,9 +408,13 @@ impl SharedRedbStorage {
         &self.path
     }
 
-    /// Get the underlying database handle.
-    pub fn db(&self) -> &Arc<Database> {
-        &self.db
+    /// Create a SQL executor for this storage backend.
+    ///
+    /// Returns a DataFusion-based SQL executor that can query the KV data.
+    /// The executor is thread-safe and can be cached for reuse.
+    #[cfg(feature = "sql")]
+    pub fn create_sql_executor(&self) -> crate::sql::RedbSqlExecutor {
+        crate::sql::RedbSqlExecutor::new(self.db.clone())
     }
 
     /// Load chain tip state from database.

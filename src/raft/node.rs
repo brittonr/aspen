@@ -43,7 +43,6 @@ use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
 use openraft::Raft;
-use openraft::RaftMetrics;
 use openraft::ReadPolicy;
 use tokio::sync::Semaphore;
 use tracing::error;
@@ -54,10 +53,12 @@ use tracing::warn;
 use crate::api::AddLearnerRequest;
 use crate::api::ChangeMembershipRequest;
 use crate::api::ClusterController;
+use crate::api::ClusterMetrics;
 use crate::api::ClusterNode;
 use crate::api::ClusterState;
 use crate::api::ControlPlaneError;
 use crate::api::DEFAULT_SCAN_LIMIT;
+use crate::api::SnapshotLogId;
 use crate::api::DeleteRequest;
 use crate::api::DeleteResult;
 use crate::api::InitRequest;
@@ -410,13 +411,14 @@ impl ClusterController for RaftNode {
     }
 
     #[instrument(skip(self))]
-    async fn get_metrics(&self) -> Result<RaftMetrics<AppTypeConfig>, ControlPlaneError> {
+    async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
         self.ensure_initialized()?;
-        Ok(self.raft.metrics().borrow().clone())
+        let metrics = self.raft.metrics().borrow().clone();
+        Ok(ClusterMetrics::from_openraft(&metrics))
     }
 
     #[instrument(skip(self))]
-    async fn trigger_snapshot(&self) -> Result<Option<openraft::LogId<AppTypeConfig>>, ControlPlaneError> {
+    async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError> {
         self.ensure_initialized()?;
 
         // Trigger a snapshot (returns () on success)
@@ -424,9 +426,9 @@ impl ClusterController for RaftNode {
             reason: err.to_string(),
         })?;
 
-        // Get the current snapshot from metrics
+        // Get the current snapshot from metrics and convert to wrapper type
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(metrics.snapshot)
+        Ok(metrics.snapshot.as_ref().map(SnapshotLogId::from_openraft))
     }
 
     fn is_initialized(&self) -> bool {
@@ -999,7 +1001,7 @@ impl SqlQueryExecutor for RaftNode {
             StateMachineVariant::Redb(sm) => {
                 // Execute SQL on Redb state machine via DataFusion
                 // Use cached executor for ~400µs savings per query
-                let executor = self.sql_executor.get_or_init(|| crate::sql::RedbSqlExecutor::new(sm.db().clone()));
+                let executor = self.sql_executor.get_or_init(|| sm.create_sql_executor());
                 executor.execute(&request.query, &request.params, request.limit, request.timeout_ms).await
             }
         }

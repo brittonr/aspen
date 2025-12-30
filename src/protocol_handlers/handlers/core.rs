@@ -77,12 +77,13 @@ impl RequestHandler for CoreHandler {
                     .map_err(|e| anyhow::anyhow!("failed to get Raft metrics: {}", e))?;
 
                 // Extract replication progress if this node is leader
+                // ClusterMetrics already has unwrapped types (u64 instead of NodeId/LogId)
                 let replication = metrics.replication.as_ref().map(|repl_map| {
                     repl_map
                         .iter()
-                        .map(|(node_id, matched)| ReplicationProgress {
-                            node_id: node_id.0,
-                            matched_index: matched.as_ref().map(|log_id| log_id.index),
+                        .map(|(node_id, matched_index)| ReplicationProgress {
+                            node_id: *node_id,
+                            matched_index: *matched_index,
                         })
                         .collect()
                 });
@@ -90,11 +91,11 @@ impl RequestHandler for CoreHandler {
                 Ok(ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                     node_id: ctx.node_id,
                     state: format!("{:?}", metrics.state),
-                    current_leader: metrics.current_leader.map(|id| id.0),
+                    current_leader: metrics.current_leader,
                     current_term: metrics.current_term,
                     last_log_index: metrics.last_log_index,
-                    last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
-                    snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
+                    last_applied_index: metrics.last_applied_index,
+                    snapshot_index: metrics.snapshot_index,
                     replication,
                 }))
             }
@@ -128,8 +129,8 @@ impl RequestHandler for CoreHandler {
                             openraft::ServerState::Shutdown => 4,
                         };
                         let is_leader: u8 = u8::from(metrics.state == openraft::ServerState::Leader);
-                        let last_applied = metrics.last_applied.as_ref().map(|la| la.index).unwrap_or(0);
-                        let snapshot_index = metrics.snapshot.as_ref().map(|s| s.index).unwrap_or(0);
+                        let last_applied = metrics.last_applied_index.unwrap_or(0);
+                        let snapshot_index = metrics.snapshot_index.unwrap_or(0);
 
                         // Get cluster-wide request counter
                         let request_counter = {

@@ -170,7 +170,7 @@ async fn test_get_metrics_returns_valid_data() {
     let metrics = timeout(TEST_TIMEOUT, raft_node.get_metrics()).await.unwrap().unwrap();
 
     // Check basic metrics properties
-    assert_eq!(metrics.id.0, 105);
+    assert_eq!(metrics.id, 105);
     assert!(metrics.current_term > 0);
     // The node should be leader in single-node cluster
     assert!(metrics.state.is_leader(), "expected leader state, got {:?}", metrics.state);

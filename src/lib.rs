@@ -10,6 +10,8 @@
 
 #![warn(missing_docs)]
 
+/// Public API constants for size limits and timeouts.
+pub mod constants;
 /// Trait definitions for cluster management and key-value operations.
 pub mod api;
 /// Capability-based authorization system.

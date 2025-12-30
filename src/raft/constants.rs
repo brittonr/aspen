@@ -9,6 +9,20 @@
 use std::time::Duration;
 
 // ============================================================================
+// Re-exports from crate::constants (public API constants)
+// ============================================================================
+// These constants are re-exported for backward compatibility within the raft
+// module and its dependents. New code should import from crate::constants.
+
+pub use crate::constants::{MAX_KEY_SIZE, MAX_SETMULTI_KEYS, MAX_VALUE_SIZE};
+
+#[cfg(feature = "sql")]
+pub use crate::constants::{
+    DEFAULT_SQL_RESULT_ROWS, DEFAULT_SQL_TIMEOUT_MS, MAX_SQL_PARAMS, MAX_SQL_QUERY_SIZE, MAX_SQL_RESULT_ROWS,
+    MAX_SQL_TIMEOUT_MS,
+};
+
+// ============================================================================
 // Network Constants
 // ============================================================================
 
@@ -95,33 +109,8 @@ pub const MAX_PEER_COUNT: u32 = 1000;
 /// - `storage_sqlite.rs`: SQLite write batching logic
 pub const MAX_BATCH_SIZE: u32 = 1000;
 
-/// Maximum number of keys in a SetMulti operation (100 keys).
-///
-/// Tiger Style: Fixed limit on multi-key operations prevents pathological
-/// cases with unbounded key counts.
-///
-/// Used in:
-/// - `storage_sqlite.rs`: SetMulti validation
-/// - `mod.rs`: Write handler validation
-pub const MAX_SETMULTI_KEYS: u32 = 100;
-
-/// Maximum size of a single key in bytes (1 KB).
-///
-/// Tiger Style: Fixed limit prevents memory exhaustion from oversized keys.
-/// Applied to all write operations before they reach the Raft log.
-///
-/// Used in:
-/// - `mod.rs`: Write handler validation
-pub const MAX_KEY_SIZE: u32 = 1024;
-
-/// Maximum size of a single value in bytes (1 MB).
-///
-/// Tiger Style: Fixed limit prevents memory exhaustion from oversized values.
-/// Applied to all write operations before they reach the Raft log.
-///
-/// Used in:
-/// - `mod.rs`: Write handler validation
-pub const MAX_VALUE_SIZE: u32 = 1024 * 1024;
+// MAX_SETMULTI_KEYS, MAX_KEY_SIZE, MAX_VALUE_SIZE moved to crate::constants
+// (re-exported above for backward compatibility)
 
 /// Maximum number of concurrent streams per connection (100).
 ///
@@ -463,61 +452,9 @@ pub const GOSSIP_ANNOUNCE_FAILURE_THRESHOLD: u32 = 3;
 // ============================================================================
 // SQL Query Constants
 // ============================================================================
-
-/// Maximum SQL query string length (64 KB).
-///
-/// Tiger Style: Fixed limit prevents memory exhaustion from oversized queries.
-/// Most practical queries are < 10 KB; 64 KB allows for complex CTEs.
-///
-/// Used in:
-/// - `api/sql_validation.rs`: Query validation
-pub const MAX_SQL_QUERY_SIZE: u32 = 64 * 1024;
-
-/// Maximum number of query parameters (100).
-///
-/// Tiger Style: Bounded parameter count prevents pathological cases.
-/// Most queries use < 10 parameters; 100 allows for bulk IN clauses.
-///
-/// Used in:
-/// - `node.rs`: SqlQueryExecutor parameter validation
-pub const MAX_SQL_PARAMS: u32 = 100;
-
-/// Maximum rows returned from SQL query (10,000).
-///
-/// Tiger Style: Fixed limit prevents memory exhaustion from large result sets.
-/// Clients can use pagination for larger result sets.
-///
-/// Used in:
-/// - `node.rs`: SqlQueryExecutor result limiting
-/// - `storage_sqlite.rs`: Query execution row cap
-pub const MAX_SQL_RESULT_ROWS: u32 = 10_000;
-
-/// Default rows returned from SQL query (1,000).
-///
-/// Tiger Style: Reasonable default that balances utility against resource use.
-/// Applied when client doesn't specify a limit.
-///
-/// Used in:
-/// - `node.rs`: SqlQueryExecutor default limit
-pub const DEFAULT_SQL_RESULT_ROWS: u32 = 1_000;
-
-/// Default SQL query timeout in milliseconds (5 seconds).
-///
-/// Tiger Style: Explicit timeout prevents runaway queries.
-/// 5 seconds is sufficient for most indexed queries.
-///
-/// Used in:
-/// - `node.rs`: SqlQueryExecutor timeout handling
-pub const DEFAULT_SQL_TIMEOUT_MS: u32 = 5_000;
-
-/// Maximum SQL query timeout in milliseconds (30 seconds).
-///
-/// Tiger Style: Upper bound on query execution time.
-/// Prevents clients from requesting indefinite timeouts.
-///
-/// Used in:
-/// - `node.rs`: SqlQueryExecutor timeout validation
-pub const MAX_SQL_TIMEOUT_MS: u32 = 30_000;
+// SQL constants (MAX_SQL_QUERY_SIZE, MAX_SQL_PARAMS, MAX_SQL_RESULT_ROWS,
+// DEFAULT_SQL_RESULT_ROWS, DEFAULT_SQL_TIMEOUT_MS, MAX_SQL_TIMEOUT_MS) moved
+// to crate::constants (re-exported above for backward compatibility)
 
 // ============================================================================
 // Client RPC Rate Limiting Constants

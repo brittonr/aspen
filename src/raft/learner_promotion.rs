@@ -220,8 +220,8 @@ where
             .await
             .map_err(|e| PromotionError::MetricsError { source: Box::new(e) })?;
 
-        let current_voters: Vec<NodeId> = metrics.membership_config.membership().voter_ids().collect();
-        let current_learners: Vec<NodeId> = metrics.membership_config.membership().learner_ids().collect();
+        let current_voters: Vec<NodeId> = metrics.voters.iter().map(|id| NodeId(*id)).collect();
+        let current_learners: Vec<NodeId> = metrics.learners.iter().map(|id| NodeId(*id)).collect();
 
         // Verify learner exists and is actually a learner
         if current_voters.contains(&request.learner_id) {
@@ -326,17 +326,18 @@ where
     /// # Parameters
     ///
     /// * `learner_id` - ID of the learner node to verify.
-    /// * `metrics` - Current Raft metrics containing replication state.
+    /// * `metrics` - Current cluster metrics containing replication state.
     async fn verify_learner_caught_up(
         &self,
         learner_id: NodeId,
-        metrics: &openraft::metrics::RaftMetrics<crate::raft::types::AppTypeConfig>,
+        metrics: &crate::api::ClusterMetrics,
     ) -> Result<(), PromotionError> {
         // Only the leader has replication metrics
         if let Some(ref replication) = metrics.replication {
-            if let Some(matched_log_id) = replication.get(&learner_id) {
-                if let (Some(leader_last_log), Some(matched)) = (metrics.last_log_index, matched_log_id) {
-                    let lag = leader_last_log.saturating_sub(matched.index);
+            // ClusterMetrics uses u64 keys instead of NodeId
+            if let Some(matched_index) = replication.get(&learner_id.0) {
+                if let (Some(leader_last_log), Some(matched)) = (metrics.last_log_index, *matched_index) {
+                    let lag = leader_last_log.saturating_sub(matched);
                     if lag > LEARNER_LAG_THRESHOLD {
                         return Err(PromotionError::LearnerLagging { learner_id, lag });
                     }
