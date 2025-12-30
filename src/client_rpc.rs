@@ -3682,13 +3682,6 @@ impl ClientRpcResponse {
             message: message.into(),
         })
     }
-
-    /// Check if this is a NOT_IMPLEMENTED error indicating handler fallback is needed.
-    ///
-    /// Used during incremental migration to fall back to legacy process_client_request.
-    pub fn is_not_implemented(&self) -> bool {
-        matches!(self, Self::Error(ErrorResponse { code, .. }) if code == "NOT_IMPLEMENTED")
-    }
 }
 
 // =============================================================================
