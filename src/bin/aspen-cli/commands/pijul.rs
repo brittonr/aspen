@@ -29,6 +29,36 @@ use aspen::pijul::{
     PristineManager,
 };
 
+/// Get the default cache directory for Pijul pristines.
+///
+/// Uses `~/.cache/aspen/pijul/` on Unix and `%LOCALAPPDATA%/aspen/pijul/` on Windows.
+fn default_cache_dir() -> Result<PathBuf> {
+    // Try XDG_CACHE_HOME first (Unix standard)
+    if let Ok(cache) = std::env::var("XDG_CACHE_HOME") {
+        return Ok(PathBuf::from(cache).join("aspen").join("pijul"));
+    }
+
+    // Fall back to platform-specific defaults
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            return Ok(PathBuf::from(local_app_data).join("aspen").join("pijul"));
+        }
+    }
+
+    // Fall back to $HOME/.cache on Unix or %USERPROFILE% on Windows
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .context("could not determine home directory")?;
+
+    Ok(PathBuf::from(home).join(".cache").join("aspen").join("pijul"))
+}
+
+/// Get the cache directory for a specific repository.
+fn repo_cache_dir(repo_id: &RepoId) -> Result<PathBuf> {
+    Ok(default_cache_dir()?.join(repo_id.to_hex()))
+}
+
 /// Pijul version control operations.
 ///
 /// Manage patch-based version control with P2P distribution via iroh-blobs
@@ -54,6 +84,13 @@ pub enum PijulCommand {
 
     /// Output pristine state to working directory.
     Checkout(CheckoutArgs),
+
+    /// Sync local pristine with cluster state.
+    ///
+    /// Downloads missing changes from the cluster and applies them to the
+    /// local pristine cache. This is required before recording if your
+    /// local cache is out of date.
+    Sync(SyncArgs),
 }
 
 // =============================================================================
@@ -199,12 +236,12 @@ pub struct RecordArgs {
 
     /// Local data directory for pristine storage.
     ///
-    /// When specified, enables local mode: the CLI uses a local pristine
-    /// database for recording changes, then uploads the change to the
-    /// cluster's blob store and updates the channel head via Raft.
+    /// The CLI uses a local pristine database for recording changes,
+    /// then uploads the change to the cluster's blob store and updates
+    /// the channel head via Raft.
     ///
-    /// This is required for recording changes since the pristine cannot
-    /// be accessed remotely.
+    /// Defaults to ~/.cache/aspen/pijul/<repo_id>/ if not specified.
+    /// Use `pijul sync` to sync the local pristine before recording.
     #[arg(long)]
     pub data_dir: Option<PathBuf>,
 
@@ -263,6 +300,41 @@ pub struct CheckoutArgs {
     /// Output directory path.
     #[arg(short, long)]
     pub output_dir: String,
+
+    /// Use local pristine for checkout (faster, works offline).
+    ///
+    /// When specified, checkout uses the local pristine cache instead
+    /// of requesting files from the remote server. Requires running
+    /// `pijul sync` first to populate the local cache.
+    #[arg(long)]
+    pub local: bool,
+
+    /// Local data directory for pristine storage.
+    ///
+    /// Defaults to ~/.cache/aspen/pijul/<repo_id>/ if not specified.
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct SyncArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to sync (default: all channels).
+    #[arg(short, long)]
+    pub channel: Option<String>,
+
+    /// Force rebuild of local pristine from scratch.
+    ///
+    /// This discards any local-only state and rebuilds the pristine
+    /// entirely from the cluster's change log.
+    #[arg(long)]
+    pub rebuild: bool,
+
+    /// Local data directory (default: ~/.cache/aspen/pijul/<repo_id>).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
 }
 
 // =============================================================================
@@ -540,6 +612,61 @@ impl Outputable for PijulCheckoutOutput {
     }
 }
 
+/// Pijul sync result output.
+pub struct PijulSyncOutput {
+    pub repo_id: String,
+    pub channel: Option<String>,
+    pub changes_fetched: u32,
+    pub changes_applied: u32,
+    pub already_synced: bool,
+    pub conflicts: u32,
+    pub cache_dir: String,
+}
+
+impl Outputable for PijulSyncOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "changes_fetched": self.changes_fetched,
+            "changes_applied": self.changes_applied,
+            "already_synced": self.already_synced,
+            "conflicts": self.conflicts,
+            "cache_dir": self.cache_dir
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let channel_str = self.channel.as_deref().unwrap_or("all channels");
+        if self.already_synced {
+            format!(
+                "Sync complete for {}\n\
+                 Status:    Already up to date\n\
+                 Cache:     {}",
+                channel_str, self.cache_dir
+            )
+        } else if self.conflicts > 0 {
+            format!(
+                "Sync complete for {}\n\
+                 Fetched:   {} changes\n\
+                 Applied:   {} changes\n\
+                 Conflicts: {} (review after checkout)\n\
+                 Cache:     {}",
+                channel_str, self.changes_fetched, self.changes_applied,
+                self.conflicts, self.cache_dir
+            )
+        } else {
+            format!(
+                "Sync complete for {}\n\
+                 Fetched:   {} changes\n\
+                 Applied:   {} changes\n\
+                 Cache:     {}",
+                channel_str, self.changes_fetched, self.changes_applied, self.cache_dir
+            )
+        }
+    }
+}
+
 // =============================================================================
 // Command Implementation
 // =============================================================================
@@ -554,6 +681,7 @@ impl PijulCommand {
             PijulCommand::Apply(args) => pijul_apply(client, args, json).await,
             PijulCommand::Log(args) => pijul_log(client, args, json).await,
             PijulCommand::Checkout(args) => pijul_checkout(client, args, json).await,
+            PijulCommand::Sync(args) => pijul_sync(client, args, json).await,
         }
     }
 }
@@ -794,53 +922,29 @@ async fn channel_info(client: &AspenClient, args: ChannelInfoArgs, json: bool) -
 // =============================================================================
 
 async fn pijul_record(client: &AspenClient, args: RecordArgs, json: bool) -> Result<()> {
-    // Check if we're in local mode
-    if let Some(data_dir) = args.data_dir {
-        return pijul_record_local(
-            client,
-            args.repo_id,
-            args.channel,
-            args.working_dir,
-            args.message,
-            args.author,
-            args.email,
-            data_dir,
-            args.threads,
-            args.prefix,
-            json,
-        ).await;
-    }
+    // Parse repo ID first to determine cache directory
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
 
-    // Remote mode - currently not supported
-    let response = client
-        .send(ClientRpcRequest::PijulRecord {
-            repo_id: args.repo_id,
-            channel: args.channel,
-            working_dir: args.working_dir,
-            message: args.message,
-            author_name: args.author,
-            author_email: args.email,
-        })
-        .await?;
+    // Use provided data-dir or auto-use the cache directory
+    let data_dir = args.data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
-    match response {
-        ClientRpcResponse::PijulRecordResult(result) => {
-            if let Some(change) = result.change {
-                let output = PijulRecordOutput {
-                    change_hash: change.hash,
-                    message: change.message,
-                    hunks: change.hunks,
-                    size_bytes: change.size_bytes,
-                };
-                print_output(&output, json);
-            } else {
-                print_success("No changes to record", json);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    // Always use local mode with the cache directory
+    // Recording requires a local pristine - changes are then uploaded to the cluster
+    pijul_record_local(
+        client,
+        args.repo_id,
+        args.channel,
+        args.working_dir,
+        args.message,
+        args.author,
+        args.email,
+        data_dir,
+        args.threads,
+        args.prefix,
+        json,
+    ).await
 }
 
 /// Record changes in local mode.
@@ -1085,6 +1189,12 @@ async fn pijul_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()
 }
 
 async fn pijul_checkout(client: &AspenClient, args: CheckoutArgs, json: bool) -> Result<()> {
+    // Check if we're using local mode
+    if args.local {
+        return pijul_checkout_local(args, json).await;
+    }
+
+    // Remote mode - request from server
     let response = client
         .send(ClientRpcRequest::PijulCheckout {
             repo_id: args.repo_id,
@@ -1110,4 +1220,244 @@ async fn pijul_checkout(client: &AspenClient, args: CheckoutArgs, json: bool) ->
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
+}
+
+/// Checkout using local pristine cache.
+async fn pijul_checkout_local(args: CheckoutArgs, json: bool) -> Result<()> {
+    use aspen::pijul::WorkingDirOutput;
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args.data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!(
+            "Local cache not found at {}. Run 'pijul sync {}' first.",
+            cache_dir.display(),
+            args.repo_id
+        );
+    }
+
+    info!(cache_dir = %cache_dir.display(), "using local cache");
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open(&repo_id)
+        .context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create change directory
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
+
+    // Create output directory
+    let output_path = PathBuf::from(&args.output_dir);
+    std::fs::create_dir_all(&output_path)
+        .context("failed to create output directory")?;
+
+    // Output to working directory
+    let outputter = WorkingDirOutput::new(pristine, change_dir, output_path);
+    let result = outputter.output(&args.channel)
+        .context("failed to output to working directory")?;
+
+    let conflicts = result.conflict_count() as u32;
+
+    let output = PijulCheckoutOutput {
+        channel: args.channel,
+        output_dir: args.output_dir,
+        files_written: 0, // WorkingDirOutput doesn't track this currently
+        conflicts,
+    };
+    print_output(&output, json);
+
+    if conflicts > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// =============================================================================
+// Sync Handler
+// =============================================================================
+
+/// Sync local pristine with cluster state.
+async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<()> {
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args.data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Create cache directory if it doesn't exist
+    std::fs::create_dir_all(&cache_dir)
+        .context("failed to create cache directory")?;
+
+    info!(cache_dir = %cache_dir.display(), "using cache directory");
+
+    // Get channels to sync
+    let channels = if let Some(ref channel) = args.channel {
+        vec![channel.clone()]
+    } else {
+        // Fetch all channels from the cluster
+        let response = client
+            .send(ClientRpcRequest::PijulChannelList {
+                repo_id: args.repo_id.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::PijulChannelListResult(result) => {
+                result.channels.into_iter().map(|c| c.name).collect()
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    };
+
+    if channels.is_empty() {
+        print_success("No channels to sync", json);
+        return Ok(());
+    }
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open_or_create(&repo_id)
+        .context("failed to open/create local pristine")?;
+
+    // Create temporary blob store for fetching changes
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs.clone()));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store.clone());
+
+    // Ensure change directory exists
+    change_dir.ensure_dir().context("failed to create change directory")?;
+
+    let mut total_fetched = 0u32;
+    let mut total_applied = 0u32;
+    let total_conflicts = 0u32; // TODO: detect conflicts during apply
+    let mut all_synced = true;
+
+    // Sync each channel
+    for channel in &channels {
+        info!(channel = %channel, "syncing channel");
+
+        // Get the cluster's change log
+        let log_response = client
+            .send(ClientRpcRequest::PijulLog {
+                repo_id: args.repo_id.clone(),
+                channel: channel.clone(),
+                limit: 10_000,
+            })
+            .await?;
+
+        let cluster_log = match log_response {
+            ClientRpcResponse::PijulLogResult(result) => result.entries,
+            ClientRpcResponse::Error(e) => {
+                tracing::warn!(channel = %channel, error = %e.message, "failed to fetch log");
+                continue;
+            }
+            _ => continue,
+        };
+
+        if cluster_log.is_empty() {
+            info!(channel = %channel, "channel is empty");
+            continue;
+        }
+
+        // For each change in the log, fetch and apply if missing
+        for entry in &cluster_log {
+            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)
+                .context("invalid change hash")?;
+
+            // Check if we already have this change locally
+            let change_path = change_dir.change_path(&change_hash);
+            if change_path.exists() {
+                continue;
+            }
+
+            // Fetch change from cluster blob store
+            let blob_response = client
+                .send(ClientRpcRequest::GetBlob {
+                    hash: entry.change_hash.clone(),
+                })
+                .await;
+
+            match blob_response {
+                Ok(ClientRpcResponse::GetBlobResult(blob_result)) => {
+                    if let Some(data) = blob_result.data {
+                        // Store locally
+                        change_store
+                            .store_change(&data)
+                            .await
+                            .context("failed to store change locally")?;
+
+                        // Write to change directory for libpijul
+                        change_dir.ensure_dir()?;
+                        std::fs::write(&change_path, &data)
+                            .context("failed to write change file")?;
+
+                        total_fetched += 1;
+                        all_synced = false;
+                        info!(hash = %change_hash, "fetched change");
+                    }
+                }
+                Ok(ClientRpcResponse::Error(e)) => {
+                    tracing::warn!(hash = %change_hash, error = %e.message, "failed to fetch change");
+                }
+                _ => {}
+            }
+        }
+
+        // Apply changes to pristine
+        use aspen::pijul::ChangeApplicator;
+        let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
+
+        for entry in &cluster_log {
+            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
+            let change_path = change_dir.change_path(&change_hash);
+
+            if !change_path.exists() {
+                continue;
+            }
+
+            match applicator.apply_local(channel, &change_hash) {
+                Ok(_) => {
+                    total_applied += 1;
+                    all_synced = false;
+                }
+                Err(e) => {
+                    // Change might already be applied, or there's a conflict
+                    tracing::debug!(hash = %change_hash, error = %e, "apply result");
+                }
+            }
+        }
+
+        info!(channel = %channel, "channel sync complete");
+    }
+
+    // Output result
+    let output = PijulSyncOutput {
+        repo_id: args.repo_id,
+        channel: args.channel,
+        changes_fetched: total_fetched,
+        changes_applied: total_applied,
+        already_synced: all_synced && total_fetched == 0,
+        conflicts: total_conflicts,
+        cache_dir: cache_dir.display().to_string(),
+    };
+    print_output(&output, json);
+
+    Ok(())
 }

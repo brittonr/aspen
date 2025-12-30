@@ -103,7 +103,7 @@ impl<B: BlobStore> ChangeDirectory<B> {
     ///
     /// Uses the same layout as libpijul's FileSystem ChangeStore:
     /// `{changes_dir}/{first_2_chars}/{rest}.change`
-    pub(crate) fn change_path(&self, hash: &ChangeHash) -> PathBuf {
+    pub fn change_path(&self, hash: &ChangeHash) -> PathBuf {
         let hex = hash.to_hex();
         let (prefix, suffix) = hex.split_at(2.min(hex.len()));
         self.base_dir.join(prefix).join(format!("{}.change", suffix))
