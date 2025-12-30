@@ -463,8 +463,7 @@ impl FederationDiscoveryService {
         let relay_urls: Vec<String> = self
             .endpoint
             .addr()
-            .relay_urls
-            .iter()
+            .relay_urls()
             .map(|u| u.to_string())
             .collect();
 
