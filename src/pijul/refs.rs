@@ -2,6 +2,14 @@
 //!
 //! This module implements Pijul channel (branch) head storage using Aspen's
 //! Raft KV store, ensuring strong consistency across the cluster.
+//!
+//! ## Empty Channels
+//!
+//! Channels can exist without a head (before any changes are recorded).
+//! We use the sentinel value "EMPTY" to represent this state:
+//! - Key doesn't exist → channel doesn't exist
+//! - Value is "EMPTY" → channel exists but has no head
+//! - Value is hex hash → channel has that head
 
 use std::sync::Arc;
 
@@ -14,6 +22,9 @@ use crate::forge::identity::RepoId;
 use super::constants::{KV_PREFIX_PIJUL_CHANNELS, MAX_CHANNELS, MAX_CHANNEL_NAME_LENGTH_BYTES};
 use super::error::{PijulError, PijulResult};
 use super::types::ChangeHash;
+
+/// Sentinel value for channels that exist but have no head yet.
+const EMPTY_CHANNEL_MARKER: &str = "EMPTY";
 
 /// Event emitted when a channel head is updated.
 #[derive(Debug, Clone)]
@@ -91,7 +102,11 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     ///
     /// # Returns
     ///
-    /// The change hash the channel head points to, or `None` if the channel doesn't exist.
+    /// The change hash the channel head points to, or `None` if the channel
+    /// has no head (either doesn't exist or is empty).
+    ///
+    /// Use [`channel_exists`] to distinguish between a non-existent channel
+    /// and an empty channel.
     #[instrument(skip(self))]
     pub async fn get_channel(
         &self,
@@ -109,6 +124,10 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
         };
 
         match result.kv.map(|kv| kv.value) {
+            Some(value) if value == EMPTY_CHANNEL_MARKER => {
+                debug!(repo_id = %repo_id, channel = channel, "channel exists but is empty");
+                Ok(None)
+            }
             Some(hex_hash) => {
                 let hash = ChangeHash::from_hex(&hex_hash).map_err(|e| PijulError::InvalidChange {
                     message: format!("invalid channel head hash: {}", e),
@@ -118,6 +137,35 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
             }
             None => Ok(None),
         }
+    }
+
+    /// Create an empty channel (without a head).
+    ///
+    /// This creates a channel marker so that `channel_exists` returns true,
+    /// but `get_channel` returns `None` until a change is applied.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name (e.g., "main")
+    #[instrument(skip(self))]
+    pub async fn create_empty_channel(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+    ) -> PijulResult<()> {
+        self.validate_channel_name(channel)?;
+
+        let key = self.channel_key(repo_id, channel);
+
+        self.kv
+            .write(WriteRequest {
+                command: WriteCommand::Set { key, value: EMPTY_CHANNEL_MARKER.to_string() },
+            })
+            .await?;
+
+        debug!(repo_id = %repo_id, channel = channel, "created empty channel");
+        Ok(())
     }
 
     /// Set a channel's head to a new value.
@@ -233,9 +281,9 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     ///
     /// # Returns
     ///
-    /// A list of (channel_name, head_hash) tuples.
+    /// A list of (channel_name, head_hash) tuples. Empty channels have `None` as head.
     #[instrument(skip(self))]
-    pub async fn list_channels(&self, repo_id: &RepoId) -> PijulResult<Vec<(String, ChangeHash)>> {
+    pub async fn list_channels(&self, repo_id: &RepoId) -> PijulResult<Vec<(String, Option<ChangeHash>)>> {
         let prefix = format!("{}{}:", KV_PREFIX_PIJUL_CHANNELS, repo_id);
 
         let result = self
@@ -252,22 +300,34 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
             // Extract channel name from key
             let channel_name = kv.key.strip_prefix(&prefix).unwrap_or(&kv.key).to_string();
 
-            // Parse hash
-            let hash = ChangeHash::from_hex(&kv.value).map_err(|e| PijulError::InvalidChange {
-                message: format!("invalid channel head hash: {}", e),
-            })?;
+            // Parse hash (or None if empty channel marker)
+            let head = if kv.value == EMPTY_CHANNEL_MARKER {
+                None
+            } else {
+                Some(ChangeHash::from_hex(&kv.value).map_err(|e| PijulError::InvalidChange {
+                    message: format!("invalid channel head hash: {}", e),
+                })?)
+            };
 
-            channels.push((channel_name, hash));
+            channels.push((channel_name, head));
         }
 
         debug!(repo_id = %repo_id, count = channels.len(), "listed channels");
         Ok(channels)
     }
 
-    /// Check if a channel exists.
+    /// Check if a channel exists (including empty channels).
+    ///
+    /// Returns `true` if the channel exists, even if it has no head yet.
     #[instrument(skip(self))]
     pub async fn channel_exists(&self, repo_id: &RepoId, channel: &str) -> PijulResult<bool> {
-        Ok(self.get_channel(repo_id, channel).await?.is_some())
+        let key = self.channel_key(repo_id, channel);
+
+        match self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await {
+            Ok(result) => Ok(result.kv.is_some()),
+            Err(crate::api::KeyValueStoreError::NotFound { .. }) => Ok(false),
+            Err(e) => Err(PijulError::from(e)),
+        }
     }
 
     /// Count channels for a repository.
@@ -365,6 +425,38 @@ mod tests {
         let names: Vec<_> = channels.iter().map(|(n, _)| n.as_str()).collect();
         assert!(names.contains(&"main"));
         assert!(names.contains(&"develop"));
+
+        // Verify heads are present
+        for (name, head) in &channels {
+            assert!(head.is_some(), "channel {} should have a head", name);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_empty_channel() {
+        let kv = Arc::new(DeterministicKeyValueStore::new());
+        let store = PijulRefStore::new(kv);
+
+        let repo_id = test_repo_id();
+
+        // Create an empty channel
+        store.create_empty_channel(&repo_id, "empty").await.unwrap();
+
+        // Channel should exist
+        assert!(store.channel_exists(&repo_id, "empty").await.unwrap());
+
+        // But get_channel should return None (no head)
+        assert!(store.get_channel(&repo_id, "empty").await.unwrap().is_none());
+
+        // List should include it with None head
+        let channels = store.list_channels(&repo_id).await.unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].0, "empty");
+        assert!(channels[0].1.is_none());
+
+        // Setting a head should work
+        store.set_channel(&repo_id, "empty", test_hash()).await.unwrap();
+        assert_eq!(store.get_channel(&repo_id, "empty").await.unwrap(), Some(test_hash()));
     }
 
     #[tokio::test]

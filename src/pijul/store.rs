@@ -173,8 +173,9 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         let pristine_dir = self.pristine_path(&repo_id);
         tokio::fs::create_dir_all(&pristine_dir).await?;
 
-        // Create default channel (empty)
-        // We don't set a head yet since there are no changes
+        // Create the default channel (empty, no head yet)
+        let default_channel = identity.default_channel.clone();
+        self.refs.create_empty_channel(&repo_id, &default_channel).await?;
 
         // Cache the identity
         {
@@ -182,7 +183,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             cache.insert(repo_id, identity.clone());
         }
 
-        info!(repo_id = %repo_id, name = %identity.name, "created Pijul repository");
+        info!(repo_id = %repo_id, name = %identity.name, default_channel = %default_channel, "created Pijul repository");
 
         // Emit event
         let _ = self.event_tx.send(PijulStoreEvent::RepoCreated {
@@ -332,21 +333,32 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             });
         }
 
-        // For now, we just mark it as existing by creating it in pristine
-        // The head will be set when the first change is applied
-        debug!(repo_id = %repo_id, channel = channel, "created channel");
+        // Create the empty channel in the ref store
+        self.refs.create_empty_channel(repo_id, channel).await?;
+
+        info!(repo_id = %repo_id, channel = channel, "created channel");
         Ok(())
     }
 
     /// Get a channel's current state.
+    ///
+    /// Returns `Some(Channel)` if the channel exists (with or without a head),
+    /// or `None` if the channel doesn't exist.
     #[instrument(skip(self))]
     pub async fn get_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<Option<Channel>> {
+        // First check if channel exists
+        if !self.refs.channel_exists(repo_id, channel).await? {
+            return Ok(None);
+        }
+
+        // Channel exists, get its head (may be None for empty channels)
         let head = self.refs.get_channel(repo_id, channel).await?;
 
-        match head {
-            Some(hash) => Ok(Some(Channel::with_head(channel, hash))),
-            None => Ok(None),
-        }
+        Ok(Some(Channel {
+            name: channel.to_string(),
+            head,
+            updated_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+        }))
     }
 
     /// List all channels in a repository.
@@ -355,7 +367,11 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         Ok(channel_heads
             .into_iter()
-            .map(|(name, head)| Channel::with_head(name, head))
+            .map(|(name, head)| Channel {
+                name,
+                head,
+                updated_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+            })
             .collect())
     }
 
@@ -428,19 +444,29 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             });
         }
 
-        // Get source channel's head
-        let source_head = self.refs.get_channel(repo_id, source).await?.ok_or_else(|| {
-            PijulError::ChannelNotFound {
+        // Check source channel exists
+        if !self.refs.channel_exists(repo_id, source).await? {
+            return Err(PijulError::ChannelNotFound {
                 channel: source.to_string(),
+            });
+        }
+
+        // Get source channel's head (may be None for empty channels)
+        let source_head = self.refs.get_channel(repo_id, source).await?;
+
+        // Create target channel with the same head (or empty if source is empty)
+        match source_head {
+            Some(head) => {
+                self.refs.set_channel(repo_id, target, head).await?;
+                info!(repo_id = %repo_id, source = source, target = target, head = %head, "forked channel");
+                Ok(Channel::with_head(target, head))
             }
-        })?;
-
-        // Set target channel's head to the same value
-        self.refs.set_channel(repo_id, target, source_head).await?;
-
-        info!(repo_id = %repo_id, source = source, target = target, head = %source_head, "forked channel");
-
-        Ok(Channel::with_head(target, source_head))
+            None => {
+                self.refs.create_empty_channel(repo_id, target).await?;
+                info!(repo_id = %repo_id, source = source, target = target, "forked empty channel");
+                Ok(Channel::new(target))
+            }
+        }
     }
 
     // ========================================================================
